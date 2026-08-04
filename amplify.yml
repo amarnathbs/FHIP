@@ -4,7 +4,12 @@ frontend:
     preBuild:
       commands:
         - npm ci
-        - npx playwright install --with-deps chromium
+        # Amplify's build image is Amazon Linux (no apt-get), so Playwright's
+        # --with-deps flag (which only knows apt-based distros) fails outright.
+        # Install Chromium's runtime shared libraries via yum instead, then
+        # install just the browser binary (no --with-deps).
+        - yum install -y atk at-spi2-atk cups-libs gtk3 libXcomposite libXcursor libXdamage libXext libXi libXrandr libXScrnSaver libXtst pango alsa-lib nss nspr mesa-libgbm
+        - npx playwright install chromium
     build:
       commands:
         - npm run build
