@@ -1,0 +1,36 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# testing
+/coverage
+/test-results
+/playwright-report
+
+# env
+.env
+.env.local
+.env*.local
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# personal working documents / reviews / test artifacts — not app source
+/*.docx
+~$*.docx
+/User tests/
+
+# local Claude Code tool state (developer-machine-specific, not app config)
+/.claude/
+.env.local.example
