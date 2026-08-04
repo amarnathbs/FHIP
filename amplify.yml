@@ -8,7 +8,7 @@ frontend:
         # --with-deps flag (which only knows apt-based distros) fails outright.
         # Install Chromium's runtime shared libraries via yum instead, then
         # install just the browser binary (no --with-deps).
-        - yum install -y atk at-spi2-atk cups-libs gtk3 libXcomposite libXcursor libXdamage libXext libXi libXrandr libXScrnSaver libXtst pango alsa-lib nss nspr mesa-libgbm
+        - sudo yum install -y atk at-spi2-atk cups-libs gtk3 libXcomposite libXcursor libXdamage libXext libXi libXrandr libXScrnSaver libXtst pango alsa-lib nss nspr mesa-libgbm
         - npx playwright install chromium
     build:
       commands:
