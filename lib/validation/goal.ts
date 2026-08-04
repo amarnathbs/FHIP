@@ -1,0 +1,36 @@
+import { z } from 'zod';
+
+export const goalSchema = z.object({
+  goal_name: z.string().min(1),
+  goal_type: z.string().min(1),
+  goal_category: z.string().optional(),
+  description: z.string().optional(),
+  household_id: z.string().uuid().optional(),
+  owner_member_id: z.string().uuid().optional(),
+  beneficiary_member_id: z.string().uuid().optional(),
+  country_code: z.enum(['AU', 'IN']).optional(),
+  currency_code: z.enum(['AUD', 'INR']),
+  target_amount: z.number().min(0),
+  target_amount_basis: z.enum(['today_value', 'future_value']).optional(),
+  minimum_target_amount: z.number().min(0).optional(),
+  stretch_target_amount: z.number().min(0).optional(),
+  current_amount: z.number().min(0).optional(),
+  current_amount_date: z.string().date().optional(),
+  target_date: z.string().date().optional(),
+  target_date_flexibility: z.enum(['fixed', 'flexible', 'indicative']).optional(),
+  planned_contribution_amount: z.number().min(0).optional(),
+  contribution_frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off']).optional(),
+  contribution_start_date: z.string().date().optional(),
+  annual_contribution_growth_pct: z.number().optional(),
+  user_priority: z.number().int().min(1).max(5).optional(),
+  importance_type: z.enum(['essential', 'important', 'aspirational']).optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+  inflation_adjusted: z.boolean().optional(),
+  inflation_category: z.string().optional(),
+  review_frequency: z.enum(['monthly', 'quarterly', 'half_yearly', 'annually', 'custom']).optional(),
+  next_review_date: z.string().date().optional(),
+  linked_liability_id: z.string().uuid().optional(),
+  notes: z.string().optional(),
+});
+
+export type GoalInput = z.infer<typeof goalSchema>;

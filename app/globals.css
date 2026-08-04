@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Print / PDF-ready layout for Module 9 report previews (spec section 15.1).
+   Scoped to .report-print-root so it never affects any other page. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 18mm 14mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .report-print-root {
+    color: #000;
+  }
+
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  table {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}
