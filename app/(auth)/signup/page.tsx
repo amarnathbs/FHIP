@@ -12,19 +12,45 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setSubmitting(false);
     if (error) {
       setError(error.message);
       return;
     }
+    // A null session means email confirmation is required before the account
+    // is usable — stay on this page and tell the user to check their inbox,
+    // instead of navigating to a protected route that will just bounce them
+    // to /login with no explanation.
+    if (!data.session) {
+      setConfirmationSent(true);
+      return;
+    }
     router.push('/onboarding');
     router.refresh();
+  }
+
+  if (confirmationSent) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+        <h1 className="text-2xl font-semibold text-trust">Check your email</h1>
+        <p className="mt-4 text-sm text-gray-600">
+          We&apos;ve sent a confirmation link to <span className="font-medium">{email}</span>.
+          Follow the link in that email to activate your account, then log in below.
+        </p>
+        <p className="mt-4 text-sm text-gray-500">
+          <Link href="/login" className="text-trust underline">
+            Go to log in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
