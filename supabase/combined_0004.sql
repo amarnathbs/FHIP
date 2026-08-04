@@ -1,0 +1,338 @@
+-- Financial Data Grid: master item catalogue + owner/master-item linkage + category-specific columns.
+-- Replaces the sequential "one item at a time" capture with a pre-populated, spreadsheet-style grid.
+
+create table master_financial_items (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,          -- income|expense|asset|liability|investment|retirement|insurance
+  item_key text not null,
+  item_label text not null,
+  sort_order int not null default 0,
+  is_active boolean default true,
+  unique (category, item_key)
+);
+
+alter table master_financial_items enable row level security;
+create policy "read master items" on master_financial_items for select using (true);
+
+create index idx_master_financial_items_category on master_financial_items(category, sort_order);
+
+-- Owner is common to every register; allowed values enforced via check constraint.
+-- master_item_key links a saved row back to its master item; null = user-defined custom row.
+-- unique(user_id, master_item_key) lets an upsert resolve to "the row for this master item"
+-- for a single POST call, while multiple NULLs (custom rows) stay unconstrained — Postgres
+-- unique constraints never treat NULL as equal to NULL, so any number of custom rows is fine.
+
+alter table income_sources
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column net_amount numeric(18,2) check (net_amount >= 0),
+  add column is_taxable boolean not null default true,
+  add column notes text,
+  add constraint uq_income_sources_user_master unique (user_id, master_item_key);
+
+alter table expense_items
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column is_essential boolean not null default false,
+  add column notes text,
+  add constraint uq_expense_items_user_master unique (user_id, master_item_key);
+
+alter table assets
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column purchase_price numeric(18,2) check (purchase_price >= 0),
+  add column purchase_date date,
+  add column notes text,
+  add constraint uq_assets_user_master unique (user_id, master_item_key);
+
+alter table liabilities
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column lender text,
+  add column notes text,
+  add constraint uq_liabilities_user_master unique (user_id, master_item_key);
+
+alter table investments
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column institution text,
+  add column cost_base numeric(18,2) check (cost_base >= 0),
+  add column annual_contribution numeric(18,2) check (annual_contribution >= 0),
+  add column risk_profile text check (risk_profile in ('conservative','balanced','growth','high_growth','unknown')),
+  add column notes text,
+  add constraint uq_investments_user_master unique (user_id, master_item_key);
+
+alter table retirement_accounts
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column employer_contribution numeric(18,2) check (employer_contribution >= 0),
+  add column personal_contribution numeric(18,2) check (personal_contribution >= 0),
+  add column contribution_frequency text,
+  add column target_retirement_age int check (target_retirement_age > 0 and target_retirement_age < 120),
+  add column notes text,
+  add constraint uq_retirement_accounts_user_master unique (user_id, master_item_key);
+
+alter table insurance_policies
+  add column owner text not null default 'self'
+    check (owner in ('self','spouse','joint','child','family_trust','company','smsf','other')),
+  add column master_item_key text,
+  add column provider text,
+  add column notes text,
+  add constraint uq_insurance_policies_user_master unique (user_id, master_item_key);
+-- Master financial item catalogue for the tabular data-entry grid.
+-- item_key is stable and referenced by user rows; only add/deprecate (is_active), never rename.
+
+insert into master_financial_items (category, item_key, item_label, sort_order) values
+-- Income --------------------------------------------------------------
+('income', 'employment_salary', 'Employment Salary', 10),
+('income', 'bonus', 'Bonus', 20),
+('income', 'commission', 'Commission', 30),
+('income', 'overtime', 'Overtime', 40),
+('income', 'director_fees', 'Director Fees', 50),
+('income', 'consulting_income', 'Consulting Income', 60),
+('income', 'business_income', 'Business Income', 70),
+('income', 'self_employed_income', 'Self-employed Income', 80),
+('income', 'partnership_distribution', 'Partnership Distribution', 90),
+('income', 'trust_distribution', 'Trust Distribution', 100),
+('income', 'rental_income', 'Rental Income', 110),
+('income', 'airbnb_income', 'Airbnb Income', 120),
+('income', 'interest_income', 'Interest Income', 130),
+('income', 'dividend_income', 'Dividend Income', 140),
+('income', 'managed_fund_distribution', 'Managed Fund Distribution', 150),
+('income', 'capital_gains', 'Capital Gains', 160),
+('income', 'government_pension', 'Government Pension', 170),
+('income', 'age_pension', 'Age Pension', 180),
+('income', 'disability_pension', 'Disability Pension', 190),
+('income', 'child_support_received', 'Child Support Received', 200),
+('income', 'family_tax_benefit', 'Family Tax Benefit', 210),
+('income', 'super_pension', 'Super Pension', 220),
+('income', 'annuity_income', 'Annuity Income', 230),
+('income', 'overseas_income', 'Overseas Income', 240),
+('income', 'royalty_income', 'Royalty Income', 250),
+('income', 'other_regular_income', 'Other Regular Income', 260),
+('income', 'other_one_off_income', 'Other One-off Income', 270),
+
+-- Expenses -------------------------------------------------------------
+('expense', 'mortgage', 'Mortgage', 10),
+('expense', 'rent', 'Rent', 20),
+('expense', 'body_corporate', 'Body Corporate', 30),
+('expense', 'council_rates', 'Council Rates', 40),
+('expense', 'water_rates', 'Water Rates', 50),
+('expense', 'home_insurance', 'Home Insurance', 60),
+('expense', 'contents_insurance', 'Contents Insurance', 70),
+('expense', 'property_maintenance', 'Property Maintenance', 80),
+('expense', 'electricity', 'Electricity', 90),
+('expense', 'gas', 'Gas', 100),
+('expense', 'water', 'Water', 110),
+('expense', 'internet', 'Internet', 120),
+('expense', 'mobile_phone', 'Mobile Phone', 130),
+('expense', 'home_phone', 'Home Phone', 140),
+('expense', 'streaming_services', 'Streaming Services', 150),
+('expense', 'cloud_storage', 'Cloud Storage', 160),
+('expense', 'security_monitoring', 'Security Monitoring', 170),
+('expense', 'groceries', 'Groceries', 180),
+('expense', 'takeaway_food', 'Takeaway Food', 190),
+('expense', 'restaurants', 'Restaurants', 200),
+('expense', 'coffee', 'Coffee', 210),
+('expense', 'school_fees', 'School Fees', 220),
+('expense', 'childcare', 'Childcare', 230),
+('expense', 'books', 'Books', 240),
+('expense', 'uniforms', 'Uniforms', 250),
+('expense', 'tutoring', 'Tutoring', 260),
+('expense', 'health_insurance', 'Health Insurance', 270),
+('expense', 'medical', 'Medical', 280),
+('expense', 'dental', 'Dental', 290),
+('expense', 'optical', 'Optical', 300),
+('expense', 'pharmacy', 'Pharmacy', 310),
+('expense', 'gym', 'Gym', 320),
+('expense', 'personal_trainer', 'Personal Trainer', 330),
+('expense', 'sports', 'Sports', 340),
+('expense', 'entertainment', 'Entertainment', 350),
+('expense', 'subscriptions', 'Subscriptions', 360),
+('expense', 'travel', 'Travel', 370),
+('expense', 'holiday_savings', 'Holiday Savings', 380),
+('expense', 'fuel', 'Fuel', 390),
+('expense', 'public_transport', 'Public Transport', 400),
+('expense', 'parking', 'Parking', 410),
+('expense', 'tolls', 'Tolls', 420),
+('expense', 'vehicle_insurance', 'Vehicle Insurance', 430),
+('expense', 'vehicle_registration', 'Vehicle Registration', 440),
+('expense', 'vehicle_maintenance', 'Vehicle Maintenance', 450),
+('expense', 'car_loan_repayments', 'Car Loan Repayments', 460),
+('expense', 'life_insurance', 'Life Insurance', 470),
+('expense', 'income_protection', 'Income Protection', 480),
+('expense', 'tpd_insurance', 'TPD Insurance', 490),
+('expense', 'pet_expenses', 'Pet Expenses', 500),
+('expense', 'pet_insurance', 'Pet Insurance', 510),
+('expense', 'clothing', 'Clothing', 520),
+('expense', 'hairdresser', 'Hairdresser', 530),
+('expense', 'beauty', 'Beauty', 540),
+('expense', 'laundry', 'Laundry', 550),
+('expense', 'gifts', 'Gifts', 560),
+('expense', 'donations', 'Donations', 570),
+('expense', 'professional_membership', 'Professional Membership', 580),
+('expense', 'accounting_fees', 'Accounting Fees', 590),
+('expense', 'legal_fees', 'Legal Fees', 600),
+('expense', 'bank_fees', 'Bank Fees', 610),
+('expense', 'credit_card_fees', 'Credit Card Fees', 620),
+('expense', 'loan_interest', 'Loan Interest', 630),
+('expense', 'tax_payments', 'Tax Payments', 640),
+('expense', 'business_expenses', 'Business Expenses', 650),
+('expense', 'other_household_expenses', 'Other Household Expenses', 660),
+('expense', 'emergency_fund_saving', 'Emergency Fund Saving', 670),
+('expense', 'miscellaneous', 'Miscellaneous', 680),
+
+-- Assets -----------------------------------------------------------------
+('asset', 'wallet_cash', 'Wallet Cash', 10),
+('asset', 'savings_account', 'Savings Account', 20),
+('asset', 'cheque_account', 'Cheque Account', 30),
+('asset', 'offset_account', 'Offset Account', 40),
+('asset', 'term_deposits', 'Term Deposits', 50),
+('asset', 'foreign_currency', 'Foreign Currency', 60),
+('asset', 'gold', 'Gold', 70),
+('asset', 'silver', 'Silver', 80),
+('asset', 'cryptocurrency', 'Cryptocurrency', 90),
+('asset', 'shares', 'Shares', 100),
+('asset', 'etfs', 'ETFs', 110),
+('asset', 'managed_funds', 'Managed Funds', 120),
+('asset', 'bonds', 'Bonds', 130),
+('asset', 'private_equity', 'Private Equity', 140),
+('asset', 'business_ownership', 'Business Ownership', 150),
+('asset', 'partnership_interest', 'Partnership Interest', 160),
+('asset', 'smsf_balance', 'SMSF Balance', 170),
+('asset', 'industry_super', 'Industry Super', 180),
+('asset', 'retail_super', 'Retail Super', 190),
+('asset', 'defined_benefit', 'Defined Benefit', 200),
+('asset', 'investment_property', 'Investment Property', 210),
+('asset', 'principal_residence', 'Principal Residence', 220),
+('asset', 'holiday_home', 'Holiday Home', 230),
+('asset', 'vacant_land', 'Vacant Land', 240),
+('asset', 'commercial_property', 'Commercial Property', 250),
+('asset', 'farm', 'Farm', 260),
+('asset', 'motor_vehicle', 'Motor Vehicle', 270),
+('asset', 'motorcycle', 'Motorcycle', 280),
+('asset', 'boat', 'Boat', 290),
+('asset', 'caravan', 'Caravan', 300),
+('asset', 'collectables', 'Collectables', 310),
+('asset', 'jewellery', 'Jewellery', 320),
+('asset', 'art', 'Art', 330),
+('asset', 'watches', 'Watches', 340),
+('asset', 'wine_collection', 'Wine Collection', 350),
+('asset', 'intellectual_property', 'Intellectual Property', 360),
+('asset', 'loans_receivable', 'Loans Receivable', 370),
+('asset', 'trust_assets', 'Trust Assets', 380),
+('asset', 'other_assets', 'Other Assets', 390),
+
+-- Liabilities --------------------------------------------------------------
+('liability', 'home_loan', 'Home Loan', 10),
+('liability', 'investment_loan', 'Investment Loan', 20),
+('liability', 'construction_loan', 'Construction Loan', 30),
+('liability', 'personal_loan', 'Personal Loan', 40),
+('liability', 'car_loan', 'Car Loan', 50),
+('liability', 'motorcycle_loan', 'Motorcycle Loan', 60),
+('liability', 'boat_loan', 'Boat Loan', 70),
+('liability', 'education_loan', 'Education Loan', 80),
+('liability', 'hecs_help', 'HECS / HELP', 90),
+('liability', 'credit_card', 'Credit Card', 100),
+('liability', 'store_card', 'Store Card', 110),
+('liability', 'margin_loan', 'Margin Loan', 120),
+('liability', 'business_loan', 'Business Loan', 130),
+('liability', 'tax_debt', 'Tax Debt', 140),
+('liability', 'ato_payment_plan', 'ATO Payment Plan', 150),
+('liability', 'family_loan', 'Family Loan', 160),
+('liability', 'private_loan', 'Private Loan', 170),
+('liability', 'buy_now_pay_later', 'Buy Now Pay Later', 180),
+('liability', 'medical_loan', 'Medical Loan', 190),
+('liability', 'mortgage_offset_facility', 'Mortgage Offset Facility', 200),
+('liability', 'line_of_credit', 'Line of Credit', 210),
+('liability', 'guarantees', 'Guarantees', 220),
+('liability', 'other_liabilities', 'Other Liabilities', 230),
+
+-- Investments ----------------------------------------------------------
+('investment', 'australian_shares', 'Australian Shares', 10),
+('investment', 'international_shares', 'International Shares', 20),
+('investment', 'etfs', 'ETFs', 30),
+('investment', 'managed_funds', 'Managed Funds', 40),
+('investment', 'index_funds', 'Index Funds', 50),
+('investment', 'bonds', 'Bonds', 60),
+('investment', 'government_bonds', 'Government Bonds', 70),
+('investment', 'corporate_bonds', 'Corporate Bonds', 80),
+('investment', 'cash_investments', 'Cash Investments', 90),
+('investment', 'high_interest_savings', 'High Interest Savings', 100),
+('investment', 'term_deposits', 'Term Deposits', 110),
+('investment', 'property', 'Property', 120),
+('investment', 'commercial_property', 'Commercial Property', 130),
+('investment', 'reits', 'REITs', 140),
+('investment', 'private_equity', 'Private Equity', 150),
+('investment', 'angel_investments', 'Angel Investments', 160),
+('investment', 'venture_capital', 'Venture Capital', 170),
+('investment', 'cryptocurrency', 'Cryptocurrency', 180),
+('investment', 'gold', 'Gold', 190),
+('investment', 'silver', 'Silver', 200),
+('investment', 'commodities', 'Commodities', 210),
+('investment', 'collectibles', 'Collectibles', 220),
+('investment', 'options', 'Options', 230),
+('investment', 'futures', 'Futures', 240),
+('investment', 'forex', 'Forex', 250),
+('investment', 'business_investment', 'Business Investment', 260),
+('investment', 'partnership_investment', 'Partnership Investment', 270),
+('investment', 'trust_investment', 'Trust Investment', 280),
+('investment', 'smsf_investments', 'SMSF Investments', 290),
+('investment', 'education_fund', 'Education Fund', 300),
+('investment', 'children_investment', 'Children Investment', 310),
+('investment', 'other_investments', 'Other Investments', 320),
+
+-- Retirement -------------------------------------------------------------
+('retirement', 'industry_super', 'Industry Super', 10),
+('retirement', 'retail_super', 'Retail Super', 20),
+('retirement', 'smsf', 'SMSF', 30),
+('retirement', 'defined_benefit', 'Defined Benefit', 40),
+('retirement', 'employer_contributions', 'Employer Contributions', 50),
+('retirement', 'salary_sacrifice', 'Salary Sacrifice', 60),
+('retirement', 'personal_concessional', 'Personal Concessional', 70),
+('retirement', 'non_concessional', 'Non-Concessional', 80),
+('retirement', 'spouse_contribution', 'Spouse Contribution', 90),
+('retirement', 'government_co_contribution', 'Government Co-Contribution', 100),
+('retirement', 'transition_to_retirement', 'Transition to Retirement', 110),
+('retirement', 'allocated_pension', 'Allocated Pension', 120),
+('retirement', 'account_based_pension', 'Account Based Pension', 130),
+('retirement', 'annuity', 'Annuity', 140),
+('retirement', 'overseas_pension', 'Overseas Pension', 150),
+('retirement', 'retirement_savings', 'Retirement Savings', 160),
+('retirement', 'other_retirement_assets', 'Other Retirement Assets', 170),
+
+-- Insurance --------------------------------------------------------------
+('insurance', 'life_insurance', 'Life Insurance', 10),
+('insurance', 'income_protection', 'Income Protection', 20),
+('insurance', 'tpd', 'TPD', 30),
+('insurance', 'trauma_insurance', 'Trauma Insurance', 40),
+('insurance', 'private_health_insurance', 'Private Health Insurance', 50),
+('insurance', 'hospital_cover', 'Hospital Cover', 60),
+('insurance', 'extras_cover', 'Extras Cover', 70),
+('insurance', 'home_insurance', 'Home Insurance', 80),
+('insurance', 'contents_insurance', 'Contents Insurance', 90),
+('insurance', 'landlord_insurance', 'Landlord Insurance', 100),
+('insurance', 'building_insurance', 'Building Insurance', 110),
+('insurance', 'motor_vehicle_insurance', 'Motor Vehicle Insurance', 120),
+('insurance', 'motorcycle_insurance', 'Motorcycle Insurance', 130),
+('insurance', 'boat_insurance', 'Boat Insurance', 140),
+('insurance', 'caravan_insurance', 'Caravan Insurance', 150),
+('insurance', 'travel_insurance', 'Travel Insurance', 160),
+('insurance', 'business_insurance', 'Business Insurance', 170),
+('insurance', 'professional_indemnity', 'Professional Indemnity', 180),
+('insurance', 'public_liability', 'Public Liability', 190),
+('insurance', 'cyber_insurance', 'Cyber Insurance', 200),
+('insurance', 'pet_insurance', 'Pet Insurance', 210),
+('insurance', 'loan_protection', 'Loan Protection', 220),
+('insurance', 'mortgage_insurance', 'Mortgage Insurance', 230),
+('insurance', 'income_continuation', 'Income Continuation', 240),
+('insurance', 'funeral_insurance', 'Funeral Insurance', 250),
+('insurance', 'other_insurance', 'Other Insurance', 260)
+
+on conflict (category, item_key) do nothing;
