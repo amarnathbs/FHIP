@@ -132,6 +132,35 @@ select
   (select id from benchmark_datasets where dataset_name = c.dataset_name and version = '1.0'),
   c.cohort_code, c.country_code, null, c.urban_rural, c.age_band, null, c.household_type, c.life_stage, null, null, c.dependant_band, null, false, c.cohort_tier, null, c.cohort_description
 from (values
+  ('AU household wealth distribution', 'AU_YOUNG_FAMILY_1DEP', 'AU', null, 'AGE_25_34', 'couple_with_kids', 'young_family', '1', 3, 'Australian young family, age 25-34, couple with children (1 dependant)'),
+  ('AU household wealth distribution', 'AU_YOUNG_FAMILY_3PLUSDEP', 'AU', null, 'AGE_25_34', 'couple_with_kids', 'young_family', '3+', 3, 'Australian young family, age 25-34, couple with children (3 or more dependants)'),
+  ('AU household wealth distribution', 'AU_ESTABLISHED_FAMILY_1DEP', 'AU', null, 'AGE_45_54', 'couple_with_kids', 'established_family', '1', 3, 'Australian established family, age 45-54, couple with children (1 dependant)'),
+  ('AU household wealth distribution', 'AU_ESTABLISHED_FAMILY_3PLUSDEP', 'AU', null, 'AGE_45_54', 'couple_with_kids', 'established_family', '3+', 3, 'Australian established family, age 45-54, couple with children (3 or more dependants)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_URBAN_YOUNG_FAMILY_1DEP', 'IN', 'urban', 'AGE_25_34', 'couple_with_kids', 'young_family', '1', 3, 'Urban Indian young family, age 25-34, couple with children (1 dependant)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_URBAN_YOUNG_FAMILY_3PLUSDEP', 'IN', 'urban', 'AGE_25_34', 'couple_with_kids', 'young_family', '3+', 3, 'Urban Indian young family, age 25-34, couple with children (3 or more dependants)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_URBAN_ESTABLISHED_FAMILY_1DEP', 'IN', 'urban', 'AGE_45_54', 'couple_with_kids', 'established_family', '1', 3, 'Urban Indian established family, age 45-54, couple with children (1 dependant)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_URBAN_ESTABLISHED_FAMILY_3PLUSDEP', 'IN', 'urban', 'AGE_45_54', 'couple_with_kids', 'established_family', '3+', 3, 'Urban Indian established family, age 45-54, couple with children (3 or more dependants)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_RURAL_YOUNG_FAMILY_1DEP', 'IN', 'rural', 'AGE_25_34', 'couple_with_kids', 'young_family', '1', 3, 'Rural Indian young family, age 25-34, couple with children (1 dependant)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_RURAL_YOUNG_FAMILY_3PLUSDEP', 'IN', 'rural', 'AGE_25_34', 'couple_with_kids', 'young_family', '3+', 3, 'Rural Indian young family, age 25-34, couple with children (3 or more dependants)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_RURAL_ESTABLISHED_FAMILY_1DEP', 'IN', 'rural', 'AGE_45_54', 'couple_with_kids', 'established_family', '1', 3, 'Rural Indian established family, age 45-54, couple with children (1 dependant)'),
+  ('India household consumption expenditure (rural/urban)', 'IN_RURAL_ESTABLISHED_FAMILY_3PLUSDEP', 'IN', 'rural', 'AGE_45_54', 'couple_with_kids', 'established_family', '3+', 3, 'Rural Indian established family, age 45-54, couple with children (3 or more dependants)')
+) as c(dataset_name, cohort_code, country_code, urban_rural, age_band, household_type, life_stage, dependant_band, cohort_tier, cohort_description)
+on conflict (cohort_code) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- 3. Benchmark values for all 18 dependant-band cohort variants (11 metrics
+-- x 18 cohorts = 198 rows). Computed from the anchors documented above;
+-- see header comment for the full derivation.
+-- ---------------------------------------------------------------------------
+insert into benchmark_values (dataset_id, cohort_id, metric_definition_id, statistic_type, value_numeric, unit, original_currency, base_date, is_derived, derivation_method, confidence_score, effective_from)
+select
+  (select id from benchmark_datasets where dataset_name = 'FHIP dependant-band household benchmark model' and version = '1.0'),
+  (select id from benchmark_cohorts where cohort_code = v.cohort_code),
+  (select id from benchmark_metric_definitions where metric_code = v.metric_code),
+  'mean', v.value_numeric, v.unit, v.currency, current_date, true,
+  'FHIP-derived: childless-baseline (50/30/20 + 25% housing guideline) plus a real, country-specific per-dependant expense delta (AU: Canstar Blue 2024 cost-of-children survey; India: MoSPI HCES 2023-24 per-capita MPCE scaled by a modified equivalence-scale child weight). See migration header for full citations.',
+  55, current_date
+from (values
   ('AU_YOUNG_FAMILY_1DEP', 'essential_expense_ratio', 43.4, 'percentage', 'AUD'),
   ('AU_YOUNG_FAMILY_1DEP', 'housing_cost_ratio', 25, 'percentage', 'AUD'),
   ('AU_YOUNG_FAMILY_1DEP', 'discretionary_expense_ratio', 24.6, 'percentage', 'AUD'),
