@@ -4,11 +4,11 @@ import type { GoalPayload } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from '@/lib/engines/goalAffordability';
 
 const STATUS_COPY: Record<string, { label: string; color: string }> = {
-  comfortable: { label: 'Comfortable', color: '#0B6E4F' },
-  manageable: { label: 'Manageable', color: '#0E9F8E' },
-  tight: { label: 'Tight', color: '#D98A00' },
-  overallocated: { label: 'Overallocated', color: '#C0392B' },
-  deficit: { label: 'Deficit', color: '#C0392B' },
+  comfortable: { label: 'Comfortable', color: '#0F6B41' },
+  manageable: { label: 'Manageable', color: '#198754' },
+  tight: { label: 'Tight', color: '#B7791F' },
+  overallocated: { label: 'Overallocated', color: '#C7362F' },
+  deficit: { label: 'Deficit', color: '#C7362F' },
   insufficient_data: { label: 'Insufficient data', color: '#9CA3AF' },
 };
 

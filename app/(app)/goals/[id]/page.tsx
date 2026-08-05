@@ -31,13 +31,13 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
     <AppShell>
       <div className="space-y-8">
         <div>
-          <Link href="/goals" className="text-xs text-gray-500 hover:underline">
+          <Link href="/goals" className="text-xs text-muted hover:underline">
             ← Back to Goals
           </Link>
           <div className="mt-2 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-trust">{goal.goalName}</h1>
-              <p className="text-gray-500">
+              <p className="text-muted">
                 {goal.goalType.replace(/_/g, ' ')} · {goal.countryCode ?? '—'} · {goal.currencyCode} · Priority {goal.userPriority}/5
               </p>
             </div>
@@ -45,7 +45,7 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <SectionCard title="Progress & Forecast">
-          <div className="flex justify-between text-sm text-gray-500">
+          <div className="flex justify-between text-sm text-muted">
             <span>{formatMoney(goal.currentAmount, currency)}</span>
             <span>{formatMoney(base.targetAmountFuture, currency)}</span>
           </div>

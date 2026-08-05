@@ -661,7 +661,7 @@ const FRESHNESS_LABELS: Record<string, string> = {
   insurance: 'Insurance',
 };
 
-function buildDataQuality(source: ReportSourceData): BuiltSection {
+export function buildDataQuality(source: Pick<ReportSourceData, 'dashboard' | 'dataFreshness'>): BuiltSection {
   const d = source.dashboard;
   const hasFlags: Record<string, boolean> = {
     income: d.hasIncome,

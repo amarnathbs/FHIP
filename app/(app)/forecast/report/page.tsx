@@ -219,7 +219,7 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
           </div>
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
-              <thead className="text-left text-xs uppercase text-gray-500">
+              <thead className="text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="py-1 pr-3">Category</th>
                   <th className="py-1 pr-3">Result</th>
@@ -251,7 +251,7 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="text-left text-xs uppercase text-gray-500">
+              <thead className="text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="py-1 pr-3">Category</th>
                   <th className="py-1 pr-3">Start Value</th>
@@ -365,7 +365,7 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
               </div>
               <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-sm">
-                <thead className="text-left text-xs uppercase text-gray-500">
+                <thead className="text-left text-xs uppercase text-muted">
                   <tr>
                     <th className="py-1 pr-3">Scenario</th>
                     <th className="py-1 pr-3">In 1 year</th>
@@ -397,7 +397,7 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
         <SectionCard title="Forecast Assumptions" className="report-section report-page-break">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
-              <thead className="text-left text-xs uppercase text-gray-500">
+              <thead className="text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="py-1 pr-3">Assumption</th>
                   <th className="py-1 pr-3">Value</th>
@@ -414,7 +414,7 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
                       {a.unit ? ` ${a.unit}` : a.valueType === 'percentage' ? '%' : ''}
                     </td>
                     <td className="py-2 pr-3 capitalize">{a.sourceType.replace(/_/g, ' ')}</td>
-                    <td className="py-2 text-xs text-gray-500">{a.sourceReference ?? '—'}</td>
+                    <td className="py-2 text-xs text-muted">{a.sourceReference ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

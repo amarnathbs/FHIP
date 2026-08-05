@@ -36,7 +36,7 @@ export default async function GoalsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Financial Goals</h1>
-            <p className="mt-1 text-gray-500">Turn your financial aspirations and obligations into measurable, trackable plans.</p>
+            <p className="mt-1 text-muted">Turn your financial aspirations and obligations into measurable, trackable plans.</p>
           </div>
           <Link href="/goals/new" className="rounded bg-trust px-4 py-2 text-sm text-white">
             Create a goal

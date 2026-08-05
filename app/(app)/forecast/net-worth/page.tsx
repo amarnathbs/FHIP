@@ -30,7 +30,7 @@ export default async function ForecastNetWorthPage({ searchParams }: { searchPar
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Net Worth Forecast</h1>
-            <p className="mt-1 text-gray-500">Deterministic monthly net worth projection for the selected scenario.</p>
+            <p className="mt-1 text-muted">Deterministic monthly net worth projection for the selected scenario.</p>
           </div>
           <ScenarioSwitcher scenarios={scenarios} activeScenarioId={activeScenario.id} />
         </div>

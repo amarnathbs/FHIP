@@ -24,7 +24,7 @@ export default async function ForecastAssumptionsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Forecast Assumptions</h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted">
             Every projection is built on these editable assumptions. Country and platform defaults apply until you override
             one — overrides are visible everywhere they&apos;re used, per assumption.
           </p>

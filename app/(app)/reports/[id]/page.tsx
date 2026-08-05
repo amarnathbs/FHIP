@@ -22,7 +22,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     <AppShell>
       <div className="space-y-6">
         <div className="no-print flex items-center justify-between">
-          <Link href="/reports" className="text-xs text-gray-500 hover:underline">
+          <Link href="/reports" className="text-xs text-muted hover:underline">
             ← Back to Reports
           </Link>
           <ReportActions reportId={id} />

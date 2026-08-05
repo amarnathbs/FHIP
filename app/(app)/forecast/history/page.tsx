@@ -20,7 +20,7 @@ export default async function ForecastHistoryPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Forecast History</h1>
-          <p className="mt-1 text-gray-500">Every forecast run is kept so you can compare how projections have changed over time.</p>
+          <p className="mt-1 text-muted">Every forecast run is kept so you can compare how projections have changed over time.</p>
         </div>
         <SectionCard title="Runs">
           <ForecastHistoryList initialRuns={runs} />

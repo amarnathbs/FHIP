@@ -36,7 +36,7 @@ export default async function ForecastOverviewPage({ searchParams }: { searchPar
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Forecast Overview</h1>
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-muted">
               Deterministic monthly projections of your future financial position. Net worth, goal, investment, debt, retirement,
               cross-border and resilience forecasts are on their own pages under Forecasting — this page tracks net worth,
               variance against your original forecast, and scenario comparison.

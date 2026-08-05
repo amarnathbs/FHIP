@@ -18,7 +18,7 @@ export default async function RecommendationsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Recommended Actions</h1>
-          <p className="mt-1 text-gray-500">Rule-based suggestions generated from your recorded data, forecasts and variance history.</p>
+          <p className="mt-1 text-muted">Rule-based suggestions generated from your recorded data, forecasts and variance history.</p>
         </div>
         <RecommendationsPanel isPremiumUser={planTier === 'premium'} />
       </div>

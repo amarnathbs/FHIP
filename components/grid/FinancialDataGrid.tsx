@@ -81,7 +81,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
-export function FinancialDataGrid({ config }: { config: GridConfig }) {
+export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subNav?: React.ReactNode }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -247,17 +247,19 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
   if (!rows) {
     return (
       <AppShell>
-        <p className="text-gray-500">Loading...</p>
+        {subNav}
+        <p className="text-muted">Loading...</p>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
+      {subNav}
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold text-trust">{config.title}</h1>
-          <p className="mt-1 text-gray-500">{config.description}</p>
+          <p className="mt-1 text-muted">{config.description}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -277,7 +279,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
         {/* Desktop table */}
         <div className="hidden overflow-x-auto rounded-card border bg-white md:block">
           <table className="w-full text-sm">
-            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-gray-500">
+            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
               <tr>
                 <th className="w-10 px-3 py-2"></th>
                 <th className="px-3 py-2">Item</th>
@@ -293,7 +295,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
             </thead>
             <tbody>
               {visibleRows.map((row) => (
-                <tr key={row.key} className={`border-b last:border-0 ${!row.included ? 'text-gray-400' : ''}`}>
+                <tr key={row.key} className={`border-b last:border-0 ${!row.included ? 'text-muted' : ''}`}>
                   <td className="px-3 py-2">
                     <input
                       type="checkbox"
@@ -398,7 +400,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
           {visibleRows.map((row) => (
             <div key={row.key} className="rounded-card border bg-white p-3">
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-gray-900">
+                <label className="flex items-center gap-2 font-medium text-ink">
                   <input
                     type="checkbox"
                     checked={row.included}
@@ -432,7 +434,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
               {row.included && row.expanded && (
                 <div className="mt-3 space-y-2">
                   <div>
-                    <label className="block text-xs text-gray-500">Owner</label>
+                    <label className="block text-xs text-muted">Owner</label>
                     <select
                       value={row.owner}
                       onChange={(e) => handleFieldChange(row.key, 'owner', e.target.value)}
@@ -447,7 +449,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
                   </div>
                   {config.fields.map((f) => (
                     <div key={f.name}>
-                      <label className="block text-xs text-gray-500">{f.label}</label>
+                      <label className="block text-xs text-muted">{f.label}</label>
                       {f.type === 'checkbox' ? (
                         <input
                           type="checkbox"
@@ -481,7 +483,7 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
                     </div>
                   ))}
                   <div>
-                    <label className="block text-xs text-gray-500">Currency</label>
+                    <label className="block text-xs text-muted">Currency</label>
                     <select
                       value={row.currency_code}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
@@ -508,24 +510,24 @@ export function FinancialDataGrid({ config }: { config: GridConfig }) {
 
         <div className="grid grid-cols-2 gap-3 rounded-card border bg-gray-50 p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
           <div>
-            <p className="text-gray-500">Active items</p>
-            <p className="font-semibold text-gray-900">{included.length}</p>
+            <p className="text-muted">Active items</p>
+            <p className="font-semibold text-ink">{included.length}</p>
           </div>
           <div>
-            <p className="text-gray-500">{config.isFlow ? 'Total annual value' : 'Total value'}</p>
-            <p className="font-semibold text-gray-900">{formatMoney(total, defaultCurrency)}</p>
+            <p className="text-muted">{config.isFlow ? 'Total annual value' : 'Total value'}</p>
+            <p className="font-semibold text-ink">{formatMoney(total, defaultCurrency)}</p>
           </div>
           <div>
-            <p className="text-gray-500">Missing fields</p>
-            <p className="font-semibold text-gray-900">{missingRequiredCount}</p>
+            <p className="text-muted">Missing fields</p>
+            <p className="font-semibold text-ink">{missingRequiredCount}</p>
           </div>
           <div>
-            <p className="text-gray-500">Warnings</p>
-            <p className="font-semibold text-gray-900">{totalWarnings}</p>
+            <p className="text-muted">Warnings</p>
+            <p className="font-semibold text-ink">{totalWarnings}</p>
           </div>
           <div>
-            <p className="text-gray-500">Completion</p>
-            <p className="font-semibold text-gray-900">{completion}%</p>
+            <p className="text-muted">Completion</p>
+            <p className="font-semibold text-ink">{completion}%</p>
           </div>
         </div>
       </div>

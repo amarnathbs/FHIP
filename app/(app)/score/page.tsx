@@ -39,7 +39,7 @@ export default async function ScorePage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Financial Health Score</h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted">
             One clear measure of your overall financial position, explained component by component.
           </p>
         </div>
@@ -50,22 +50,22 @@ export default async function ScorePage() {
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Change vs last month</p>
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-xs text-muted">Change vs last month</p>
+              <p className="text-lg font-semibold text-ink">
                 {payload.scoreChange !== null ? `${payload.scoreChange >= 0 ? '+' : ''}${payload.scoreChange.toFixed(1)}` : '—'}
               </p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Data confidence</p>
-              <p className="text-lg font-semibold text-gray-900">{payload.dataConfidence.toFixed(0)}%</p>
+              <p className="text-xs text-muted">Data confidence</p>
+              <p className="text-lg font-semibold text-ink">{payload.dataConfidence.toFixed(0)}%</p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Model version</p>
-              <p className="text-lg font-semibold text-gray-900">{payload.modelVersion}</p>
+              <p className="text-xs text-muted">Model version</p>
+              <p className="text-lg font-semibold text-ink">{payload.modelVersion}</p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Last calculated</p>
-              <p className="text-lg font-semibold text-gray-900">{new Date().toLocaleDateString('en-AU')}</p>
+              <p className="text-xs text-muted">Last calculated</p>
+              <p className="text-lg font-semibold text-ink">{new Date().toLocaleDateString('en-AU')}</p>
             </div>
             {payload.dataConfidence < 70 && (
               <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-4">
@@ -106,7 +106,7 @@ export default async function ScorePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Link href="/financial-twin" className="block rounded-card border bg-white p-4 hover:border-trust">
               <p className="font-medium text-trust">Benchmark Comparison</p>
-              <p className="mt-1 text-sm text-gray-500">See how your score compares to households like yours in your Financial Twin.</p>
+              <p className="mt-1 text-sm text-muted">See how your score compares to households like yours in your Financial Twin.</p>
             </Link>
             <LockedFeatureCard
               title="AI Commentary"

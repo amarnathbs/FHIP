@@ -18,9 +18,9 @@ export function ReportDebtBarChart({ rows, currency }: { rows: { debtType: strin
 }
 
 const STATUS_COLORS: Record<'good' | 'caution' | 'risk' | 'neutral', string> = {
-  good: '#0E9F8E',
-  caution: '#D98A00',
-  risk: '#C0392B',
+  good: '#198754',
+  caution: '#B7791F',
+  risk: '#C7362F',
   neutral: '#9CA3AF',
 };
 
@@ -79,10 +79,10 @@ export function CashFlowWaterfallChart({
         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatMoneyWhole(v, currency)} width={80} />
         <Tooltip formatter={(v: number) => formatMoneyWhole(v, currency)} />
-        <Bar dataKey="Income" stackId="flow" fill="#1F4E79" />
-        <Bar dataKey="Expenses" stackId="flow" fill="#C0392B" />
-        <Bar dataKey="Debt" stackId="flow" fill="#D98A00" />
-        <Bar dataKey="Surplus" stackId="flow" fill="#0E9F8E" />
+        <Bar dataKey="Income" stackId="flow" fill="#2563EB" />
+        <Bar dataKey="Expenses" stackId="flow" fill="#C7362F" />
+        <Bar dataKey="Debt" stackId="flow" fill="#B7791F" />
+        <Bar dataKey="Surplus" stackId="flow" fill="#198754" />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -190,8 +190,8 @@ export interface RiskRow {
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#8E1F0B',
-  high: '#C0392B',
-  medium: '#D98A00',
+  high: '#C7362F',
+  medium: '#B7791F',
   low: '#9CA3AF',
 };
 
@@ -235,7 +235,7 @@ export function ScoreTrendChart({ data }: { data: { month: string; value: number
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={30} />
         <Tooltip formatter={(v: number) => `${v}/100`} />
-        <Line type="monotone" dataKey="value" stroke="#1F4E79" strokeWidth={2} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="value" stroke="#2563EB" strokeWidth={2} dot={{ r: 3 }} />
       </LineChart>
     </ResponsiveContainer>
   );

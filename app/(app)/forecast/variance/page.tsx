@@ -31,7 +31,7 @@ const STATUS_CLASS: Record<string, string> = {
   slightly_behind: 'bg-caution/10 text-caution',
   at_risk: 'bg-caution/10 text-caution',
   significantly_off_track: 'bg-risk/10 text-risk',
-  insufficient_data: 'bg-gray-100 text-gray-500',
+  insufficient_data: 'bg-gray-100 text-muted',
 };
 
 function fmt(value: number | null, currency: 'AUD' | 'INR') {
@@ -59,7 +59,7 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Forecast Variance Report</h1>
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-muted">
               Compares where you were expected to be by the comparison date with where you actually are — it does not compare
               today&apos;s position directly with a future target. The actual and forecast amounts use the same comparison date.
             </p>
@@ -73,7 +73,7 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
         >
           <div className="overflow-x-auto">
             <table data-testid="forecast-variance-table" className="w-full min-w-[900px] text-sm">
-              <thead className="text-left text-xs uppercase text-gray-500">
+              <thead className="text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="py-1 pr-3">Category</th>
                   <th className="py-1 pr-3">Start Value</th>
@@ -116,7 +116,7 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-xs text-gray-400">
+          <p className="mt-4 text-xs text-muted">
             A favourable variance does not automatically mean the final target will be achieved; an unfavourable variance does not
             automatically mean the final target is impossible. Rows with no forecast history yet show &quot;Insufficient Data&quot; —
             generate a forecast for that category first to establish a baseline.

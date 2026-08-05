@@ -32,7 +32,7 @@ export default async function ReportsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Reports</h1>
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-muted">
               A structured monthly review of your financial position, financial health, progress, risks and next areas to review.
             </p>
           </div>
@@ -43,8 +43,8 @@ export default async function ReportsPage() {
           <SectionCard title="Latest Report">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-medium text-gray-900">{latest.title}</p>
-                <p className="text-xs text-gray-500">
+                <p className="font-medium text-ink">{latest.title}</p>
+                <p className="text-xs text-muted">
                   Generated {latest.generated_at ? new Date(latest.generated_at).toLocaleDateString('en-AU') : '—'} · Status: {latest.status}
                 </p>
               </div>
@@ -54,20 +54,20 @@ export default async function ReportsPage() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
-                <p className="text-xs text-gray-500">Financial Health Score</p>
-                <p className="text-lg font-semibold text-gray-900">{scoreMetric?.currentText ?? '—'}</p>
+                <p className="text-xs text-muted">Financial Health Score</p>
+                <p className="text-lg font-semibold text-ink">{scoreMetric?.currentText ?? '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Net worth</p>
-                <p className="text-lg font-semibold text-gray-900">{netWorthMetric?.currentText ?? formatMoney(0, currency)}</p>
+                <p className="text-xs text-muted">Net worth</p>
+                <p className="text-lg font-semibold text-ink">{netWorthMetric?.currentText ?? formatMoney(0, currency)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Data completeness</p>
-                <p className="text-lg font-semibold text-gray-900">{latest.data_completeness_pct?.toFixed(0) ?? '—'}%</p>
+                <p className="text-xs text-muted">Data completeness</p>
+                <p className="text-lg font-semibold text-ink">{latest.data_completeness_pct?.toFixed(0) ?? '—'}%</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Reporting currency</p>
-                <p className="text-lg font-semibold text-gray-900">{latest.reporting_currency}</p>
+                <p className="text-xs text-muted">Reporting currency</p>
+                <p className="text-lg font-semibold text-ink">{latest.reporting_currency}</p>
               </div>
             </div>
           </SectionCard>
@@ -82,7 +82,7 @@ export default async function ReportsPage() {
         </SectionCard>
 
         <SectionCard title="Export Centre" description="Report exports (PDF, CSV) require a premium plan. In-app viewing and browser printing are available to everyone.">
-          <p className="text-sm text-gray-500">Open a report to request an export or print it.</p>
+          <p className="text-sm text-muted">Open a report to request an export or print it.</p>
         </SectionCard>
       </div>
     </AppShell>

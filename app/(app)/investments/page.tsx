@@ -5,10 +5,5 @@ import { investmentGridConfig } from '@/lib/grid/configs';
 import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 
 export default function InvestmentsPage() {
-  return (
-    <div>
-      <InvestmentsSubNav />
-      <FinancialDataGrid config={investmentGridConfig} />
-    </div>
-  );
+  return <FinancialDataGrid config={investmentGridConfig} subNav={<InvestmentsSubNav />} />;
 }

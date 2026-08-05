@@ -120,6 +120,23 @@ const FRESHNESS_TABLES: { category: string; table: string }[] = [
   { category: 'insurance', table: 'insurance_policies' },
 ];
 
+// Extracted so callers that only need per-category freshness (e.g. a
+// dashboard "data quality" tile) aren't forced to pay for the rest of
+// resolveReportSourceData's much heavier report-assembly queries.
+export async function loadDataFreshness(userId: string, client?: SupabaseServerClient): Promise<Record<string, string | null>> {
+  const supabase = client ?? (await createClient());
+  const freshnessResults = await Promise.all(
+    FRESHNESS_TABLES.map(({ table }) =>
+      supabase.from(table).select('updated_at').eq('user_id', userId).eq('is_active', true).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    )
+  );
+  const dataFreshness: Record<string, string | null> = {};
+  FRESHNESS_TABLES.forEach(({ category }, i) => {
+    dataFreshness[category] = (freshnessResults[i].data?.updated_at as string) ?? null;
+  });
+  return dataFreshness;
+}
+
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
@@ -173,15 +190,7 @@ export async function resolveReportSourceData(
     : null;
   const previousActiveGoalsCount = prevGoalSnapshots ? prevGoalSnapshots.length : null;
 
-  const freshnessResults = await Promise.all(
-    FRESHNESS_TABLES.map(({ table }) =>
-      supabase.from(table).select('updated_at').eq('user_id', userId).eq('is_active', true).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-    )
-  );
-  const dataFreshness: Record<string, string | null> = {};
-  FRESHNESS_TABLES.forEach(({ category }, i) => {
-    dataFreshness[category] = (freshnessResults[i].data?.updated_at as string) ?? null;
-  });
+  const dataFreshness = await loadDataFreshness(userId, supabase);
 
   const planTier = await getPlanTier(userId);
 

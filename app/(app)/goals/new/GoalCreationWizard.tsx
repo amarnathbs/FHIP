@@ -119,7 +119,7 @@ export function GoalCreationWizard() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex flex-wrap gap-2">
         {STEPS.map((s, i) => (
-          <span key={s} className={`rounded-full px-3 py-1 text-xs ${i === step ? 'bg-trust text-white' : 'bg-gray-100 text-gray-500'}`}>
+          <span key={s} className={`rounded-full px-3 py-1 text-xs ${i === step ? 'bg-trust text-white' : 'bg-gray-100 text-muted'}`}>
             {i + 1}. {s}
           </span>
         ))}
@@ -128,10 +128,10 @@ export function GoalCreationWizard() {
       <div className="rounded-card border bg-white p-6">
         {step === 0 && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">What are you saving or planning for?</h2>
+            <h2 className="text-lg font-semibold text-ink">What are you saving or planning for?</h2>
             {Object.entries(grouped).map(([category, types]) => (
               <div key={category}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{category.replace(/_/g, ' ')}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{category.replace(/_/g, ' ')}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {types.map((t) => (
                     <button
@@ -158,7 +158,7 @@ export function GoalCreationWizard() {
 
         {step === 1 && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Define the goal</h2>
+            <h2 className="text-lg font-semibold text-ink">Define the goal</h2>
             <div>
               <label className="block text-sm text-gray-600">Goal name</label>
               <input
@@ -213,7 +213,7 @@ export function GoalCreationWizard() {
 
         {step === 2 && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Define the target</h2>
+            <h2 className="text-lg font-semibold text-ink">Define the target</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600">Target amount (today&apos;s money)</label>
@@ -247,7 +247,7 @@ export function GoalCreationWizard() {
 
         {step === 3 && (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Contribution plan</h2>
+            <h2 className="text-lg font-semibold text-ink">Contribution plan</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600">Planned contribution</label>
@@ -287,22 +287,22 @@ export function GoalCreationWizard() {
 
         {step === 4 && (
           <div className="space-y-3 text-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Review</h2>
+            <h2 className="text-lg font-semibold text-ink">Review</h2>
             <p>
-              <span className="text-gray-500">Goal:</span> {form.goal_name || '—'}
+              <span className="text-muted">Goal:</span> {form.goal_name || '—'}
             </p>
             <p>
-              <span className="text-gray-500">Target:</span> {form.currency_code} {form.target_amount.toLocaleString()}
+              <span className="text-muted">Target:</span> {form.currency_code} {form.target_amount.toLocaleString()}
               {form.target_date && ` by ${form.target_date}`}
             </p>
             <p>
-              <span className="text-gray-500">Current amount:</span> {form.currency_code} {form.current_amount.toLocaleString()}
+              <span className="text-muted">Current amount:</span> {form.currency_code} {form.current_amount.toLocaleString()}
             </p>
             <p>
-              <span className="text-gray-500">Contribution:</span> {form.currency_code} {form.planned_contribution_amount.toLocaleString()}{' '}
+              <span className="text-muted">Contribution:</span> {form.currency_code} {form.planned_contribution_amount.toLocaleString()}{' '}
               {form.contribution_frequency}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted">
               Your estimated progress, funding gap, required contribution and forecast completion date will be calculated
               from the assumptions shown once this goal is saved — this is an estimate, not a guarantee.
             </p>

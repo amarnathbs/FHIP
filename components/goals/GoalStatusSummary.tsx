@@ -2,10 +2,10 @@ import { formatMoney } from '@/lib/engines/money';
 import type { GoalPayload } from '@/lib/services/goalsData';
 
 const STATUS_CONFIG = [
-  { key: 'on_track', label: 'On Track', color: '#0E9F8E', codes: ['on_track', 'ahead_of_track'] },
-  { key: 'at_risk', label: 'At Risk', color: '#D98A00', codes: ['at_risk'] },
-  { key: 'off_track', label: 'Off Track', color: '#C0392B', codes: ['off_track'] },
-  { key: 'achieved', label: 'Achieved', color: '#1F4E79', codes: ['fully_funded'] },
+  { key: 'on_track', label: 'On Track', color: '#198754', codes: ['on_track', 'ahead_of_track'] },
+  { key: 'at_risk', label: 'At Risk', color: '#B7791F', codes: ['at_risk'] },
+  { key: 'off_track', label: 'Off Track', color: '#C7362F', codes: ['off_track'] },
+  { key: 'achieved', label: 'Achieved', color: '#2563EB', codes: ['fully_funded'] },
 ] as const;
 
 export function GoalStatusSummary({ goals, currency }: { goals: GoalPayload[]; currency: 'AUD' | 'INR' }) {

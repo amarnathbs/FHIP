@@ -5,9 +5,9 @@ import type { DnaDriver, DnaTrait } from '@/lib/engines/financialDna';
 import type { Archetype, DnaHistoryPoint } from '@/lib/services/financialDnaData';
 
 const LEVEL_COLOR: Record<DnaTrait['level'], string> = {
-  low: '#C0392B',
-  moderate: '#D98A00',
-  high: '#0E9F8E',
+  low: '#C7362F',
+  moderate: '#B7791F',
+  high: '#198754',
 };
 
 const LEVEL_LABEL: Record<DnaTrait['level'], string> = { low: 'Low', moderate: 'Moderate', high: 'High' };

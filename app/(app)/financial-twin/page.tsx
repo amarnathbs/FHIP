@@ -26,7 +26,7 @@ export default async function FinancialTwinPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Financial Twin™</h1>
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-muted">
               See how your household compares with a similar synthetic peer profile, an indicative healthy planning range, and your
               own projected future position.
             </p>
@@ -47,7 +47,7 @@ export default async function FinancialTwinPage() {
 
         {runs.length > 1 && (
           <SectionCard title="History">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted">
               {runs.length} Financial Twin runs recorded.{' '}
               <Link href="/financial-twin/history" className="text-trust hover:underline">
                 View history

@@ -3,10 +3,10 @@ import type { ResilienceRisk, RiskSeverity } from '@/lib/engines/resilience';
 
 const SEVERITY_ORDER: Record<RiskSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 const SEVERITY_COLOR: Record<RiskSeverity, string> = {
-  critical: '#C0392B',
-  high: '#E06A1B',
-  medium: '#D98A00',
-  low: '#6C5CE7',
+  critical: '#C7362F',
+  high: '#C25A24',
+  medium: '#B7791F',
+  low: '#5B677A',
 };
 const SEVERITY_LABEL: Record<RiskSeverity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 

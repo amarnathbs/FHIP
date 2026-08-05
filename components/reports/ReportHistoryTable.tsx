@@ -2,14 +2,14 @@ import Link from 'next/link';
 import type { ReportRow } from '@/lib/services/reportsData';
 
 const STATUS_COLOR: Record<string, string> = {
-  ready: '#0E9F8E',
-  published: '#1F4E79',
-  revised: '#D98A00',
+  ready: '#198754',
+  published: '#2563EB',
+  revised: '#B7791F',
   superseded: '#9CA3AF',
-  failed: '#C0392B',
+  failed: '#C7362F',
   archived: '#9CA3AF',
   draft: '#9CA3AF',
-  generating: '#D98A00',
+  generating: '#B7791F',
 };
 
 const TYPE_LABELS: Record<string, string> = {

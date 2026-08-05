@@ -4,15 +4,15 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { formatMoney, formatMoneyWhole } from '@/lib/engines/money';
 
 const PALETTE = [
-  '#1F4E79', // trust navy
-  '#0E9F8E', // progress teal
-  '#D98A00', // caution amber
-  '#C0392B', // risk red
-  '#6C5CE7',
-  '#00B894',
-  '#E17055',
-  '#0984E3',
-  '#B2BEC3',
+  '#2563EB', // primary blue
+  '#198754', // positive
+  '#B7791F', // attention
+  '#C7362F', // risk
+  '#6D5BD0', // AI/alternative-scenario purple
+  '#0E7490', // information teal
+  '#C25A24', // secondary warm accent
+  '#4C6EF5', // secondary blue accent
+  '#9CA3AF', // neutral grey
 ];
 
 export function TrendLineChart({

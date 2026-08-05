@@ -186,7 +186,14 @@ for (const selected of selectedCases) {
 
     test('opens every Forecasting sub-page without losing the authenticated session', async ({ page }) => {
       for (const label of FORECASTING_NAV_LINKS) {
-        await page.getByTestId(TEST_IDS.forecastNav).click();
+        // The persistent sidebar's Forecasting group (unlike the old
+        // floating dropdown) stays expanded after a selection instead of
+        // auto-closing, so the trigger is a toggle — only click it if it's
+        // not already open, or the second iteration onward would close it.
+        const trigger = page.getByTestId(TEST_IDS.forecastNav);
+        if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+          await trigger.click();
+        }
         const link = page.getByRole('menuitem', { name: new RegExp(`^${label}$`, 'i') });
         await expect(link).toBeVisible();
         await link.click();

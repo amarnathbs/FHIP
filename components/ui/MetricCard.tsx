@@ -12,16 +12,16 @@ export function MetricCard({
   status?: 'good' | 'caution' | 'risk' | 'neutral';
 }) {
   const ring = {
-    good: 'ring-progress',
-    caution: 'ring-caution',
+    good: 'ring-positive',
+    caution: 'ring-attention',
     risk: 'ring-risk',
-    neutral: 'ring-gray-200',
+    neutral: 'ring-line',
   }[status];
   return (
-    <div className={`rounded-card border bg-white p-6 shadow-sm ring-1 ${ring}`} title={tooltip}>
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p>
-      {trend && <p className="mt-1 text-sm text-gray-500">{trend}</p>}
+    <div className={`rounded-card border border-line bg-white p-6 shadow-sm ring-1 ${ring}`} title={tooltip}>
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tabular-nums text-ink">{value}</p>
+      {trend && <p className="mt-1 text-sm text-muted">{trend}</p>}
     </div>
   );
 }

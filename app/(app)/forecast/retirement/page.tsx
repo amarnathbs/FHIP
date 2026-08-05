@@ -25,7 +25,7 @@ export default async function ForecastRetirementPage({ searchParams }: { searchP
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Retirement Forecast</h1>
-            <p className="mt-1 text-gray-500">Retirement readiness projection for the selected scenario.</p>
+            <p className="mt-1 text-muted">Retirement readiness projection for the selected scenario.</p>
           </div>
           <ScenarioSwitcher scenarios={scenarios} activeScenarioId={activeScenario.id} />
         </div>

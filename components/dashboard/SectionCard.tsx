@@ -10,9 +10,9 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-card border bg-white p-6${className ? ` ${className}` : ''}`}>
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-      {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+    <section className={`rounded-card border border-line bg-white p-6${className ? ` ${className}` : ''}`}>
+      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -21,9 +21,9 @@ export function SectionCard({
 export function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900">{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      <p className="text-xs text-muted">{label}</p>
+      <p className="text-lg font-semibold tabular-nums text-ink">{value}</p>
+      {sub && <p className="text-xs text-muted">{sub}</p>}
     </div>
   );
 }

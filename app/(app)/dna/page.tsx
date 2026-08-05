@@ -43,7 +43,7 @@ export default async function FinancialDnaPage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Financial DNA™</h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted">
             Your current financial pattern, explained — not a permanent label, and not a judgment.
           </p>
         </div>
@@ -79,7 +79,7 @@ export default async function FinancialDnaPage() {
             {primaryArchetype && HEALTH_SCORE_LINKS[primaryArchetype.profile_code] && (
               <SectionCard title="Link to Your Financial Health Score">
                 <p className="text-sm text-gray-600">{HEALTH_SCORE_LINKS[primaryArchetype.profile_code]}</p>
-                <p className="mt-2 text-xs text-gray-400">
+                <p className="mt-2 text-xs text-muted">
                   Financial DNA describes your financial pattern; Financial Health Score measures your financial
                   health. A profile is not inherently good or bad — see your full breakdown on the Score page.
                 </p>

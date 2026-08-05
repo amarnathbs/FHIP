@@ -12,11 +12,11 @@ const TRACK_LABEL: Record<string, string> = {
 };
 
 const TRACK_COLOR: Record<string, string> = {
-  ahead_of_track: '#0B6E4F',
-  on_track: '#0E9F8E',
-  at_risk: '#D98A00',
-  off_track: '#C0392B',
-  fully_funded: '#1F4E79',
+  ahead_of_track: '#0F6B41',
+  on_track: '#198754',
+  at_risk: '#B7791F',
+  off_track: '#C7362F',
+  fully_funded: '#2563EB',
   unable_to_assess: '#9CA3AF',
 };
 

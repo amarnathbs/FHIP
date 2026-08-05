@@ -63,6 +63,15 @@ export async function matchCohort(household: TwinHouseholdContext, supabase: Sup
       .select('id, cohort_code, country_code, region_code, urban_rural, age_band, income_band, household_type, life_stage, housing_tenure, employment_type, dependant_band, financial_dna_code, cross_border_flag, cohort_tier, sample_size, cohort_description, dataset_id')
       .eq('country_code', household.countryOfResidence);
 
+  // Households are matched to the cohort tagged with their own number of
+  // dependants wherever the cohort library distinguishes it (today: the
+  // tier-3 life-stage cohorts, seeded across 0/1/2/3+ bands — see migration
+  // 0023). Filtering on this at every tier keeps a 1-dependant and a
+  // 3-dependant household in the same life-stage cohort from silently
+  // sharing one peer benchmark, which they did before dependant_band was
+  // wired in here.
+  const depBand = dependantBand(household.dependantsCount);
+
   // Tier 1: country + age + income + household type + life stage + tenure + region
   if (household.ageBand && household.housingTenure && household.residenceType && household.residenceType !== 'unspecified') {
     const { data } = await base()
@@ -72,6 +81,7 @@ export async function matchCohort(household: TwinHouseholdContext, supabase: Sup
       .eq('life_stage', household.lifeStage)
       .eq('housing_tenure', household.housingTenure)
       .eq('urban_rural', household.residenceType)
+      .eq('dependant_band', depBand)
       .limit(1);
     if (data && data.length > 0) return buildResult(data[0] as BenchmarkCohortRow, 1);
   }
@@ -83,11 +93,26 @@ export async function matchCohort(household: TwinHouseholdContext, supabase: Sup
       .eq('income_band', household.incomeBand)
       .eq('household_type', household.householdTypeCode)
       .eq('life_stage', household.lifeStage)
+      .eq('dependant_band', depBand)
       .limit(1);
     if (data && data.length > 0) return buildResult(data[0] as BenchmarkCohortRow, 2);
   }
 
-  // Tier 3: country + age + household type + life stage
+  // Tier 3: country + age + household type + life stage + dependant band
+  if (household.ageBand) {
+    const { data } = await base()
+      .eq('age_band', household.ageBand)
+      .eq('household_type', household.householdTypeCode)
+      .eq('life_stage', household.lifeStage)
+      .eq('dependant_band', depBand)
+      .limit(1);
+    if (data && data.length > 0) return buildResult(data[0] as BenchmarkCohortRow, 3);
+  }
+
+  // Tier 3b: same as tier 3 but without the dependant-band constraint - a
+  // genuine fallback for life-stage/household-type combinations the
+  // dependant-band seed doesn't cover (e.g. retiree/pre-retiree cohorts),
+  // rather than dropping all the way to the much broader tier 4.
   if (household.ageBand) {
     const { data } = await base()
       .eq('age_band', household.ageBand)

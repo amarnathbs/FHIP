@@ -18,15 +18,26 @@ async function signUpAndOnboard(page: Page, email: string, password: string) {
   await page.getByRole('button', { name: /continue/i }).click(); // countries -> goals
   await page.getByRole('button', { name: /continue/i }).click(); // goals -> review
   await page.getByRole('button', { name: /finish/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  // Dev-mode /dashboard renders have been observed taking 10-17s of pure
+  // application-code time under load in this environment (Turbopack +
+  // "Slow filesystem detected" warning) — well within the ballpark of the
+  // file's default 20s expect timeout, but close enough to the edge to be
+  // worth its own headroom here specifically.
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 45_000 });
 }
 
 const USER_AUTH = path.join(__dirname, '.auth-nav-user.json');
 const ADMIN_AUTH = path.join(__dirname, '.auth-nav-admin.json');
 
+// Matches AppShell.tsx's NAV_GROUPS flattened to top-level labels: group
+// headings ("Your finances" etc.) aren't interactive so don't appear here;
+// "Forecasting" is a dropdown trigger (button), everything else is a link.
 const REQUIRED_ORDER = [
   'Dashboard',
-  'Input Data',
+  'Income',
+  'Expenses',
+  'Assets',
+  'Liabilities',
   'Investments',
   'Insurance',
   'Goals',
@@ -35,7 +46,24 @@ const REQUIRED_ORDER = [
   'Resilience',
   'Twin / Benchmark',
   'Forecasting',
+  'Recommendations',
   'Reports',
+];
+
+const FORECASTING_SUBITEMS = [
+  'Overview',
+  'Net Worth',
+  'Retirement',
+  'Goal Forecasts',
+  'Debt Reduction',
+  'Investment Growth',
+  'Cross-Border',
+  'Financial Resilience',
+  'Forecast Variance',
+  'Consolidated Report',
+  'Scenarios',
+  'Assumptions',
+  'Forecast History',
 ];
 
 // Playwright treats each distinct combination of describe-level test.use()
@@ -86,7 +114,12 @@ test.describe('Desktop navigation', () => {
   test('renders the required top-level order (non-admin, no Admin item)', async ({ page }) => {
     await page.goto('/dashboard');
     const nav = page.getByRole('navigation', { name: 'Main' });
-    const labels = (await nav.locator(':scope > a, :scope > button, :scope > div > button').allTextContents()).map((l) => l.trim());
+    // Top-level entries are one <li> deep inside each group's <div><ul>; the
+    // Forecasting sub-items live two levels deeper (li > ul > li > a) so
+    // this selector's fixed depth naturally excludes them.
+    const labels = (
+      await nav.locator(':scope > div > ul > li > a, :scope > div > ul > li > button').allTextContents()
+    ).map((l) => l.trim());
     expect(labels).toEqual(REQUIRED_ORDER);
   });
 
@@ -97,47 +130,45 @@ test.describe('Desktop navigation', () => {
     await expect(page.getByText(/welcome/i)).toBeVisible();
   });
 
-  test('Input Data dropdown contains exactly Income, Expenses, Assets, Liabilities', async ({ page }) => {
+  test('the "Your finances" group contains exactly Income, Expenses, Assets, Liabilities, Investments, Insurance', async ({
+    page,
+  }) => {
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Input Data' }).click();
-    const menu = page.getByRole('menu', { name: 'Input Data' });
-    await expect(menu).toBeVisible();
-    const items = (await menu.getByRole('menuitem').allTextContents()).map((t) => t.trim());
-    expect(items).toEqual(['Income', 'Expenses', 'Assets', 'Liabilities']);
+    const group = page.getByRole('navigation', { name: 'Main' }).locator('div').filter({ hasText: 'Your finances' }).first();
+    const items = (await group.getByRole('link').allTextContents()).map((t) => t.trim());
+    expect(items).toEqual(['Income', 'Expenses', 'Assets', 'Liabilities', 'Investments', 'Insurance']);
   });
 
   for (const item of ['Income', 'Expenses', 'Assets', 'Liabilities']) {
-    test(`Input Data > ${item} opens the correct existing page`, async ({ page }) => {
+    test(`${item} opens the correct existing page`, async ({ page }) => {
       await page.goto('/dashboard');
-      await page.getByRole('button', { name: 'Input Data' }).click();
-      await page.getByRole('menuitem', { name: item }).click();
+      await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: item }).click();
       await expect(page).toHaveURL(new RegExp(`/${item.toLowerCase()}`));
     });
   }
 
-  test('Input Data is highlighted when a child route is active', async ({ page }) => {
+  test('the active link is highlighted via aria-current when its route is active', async ({ page }) => {
     await page.goto('/expenses');
-    await expect(page.getByRole('button', { name: 'Input Data' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Expenses' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
   });
 
-  test('the dropdown opens and closes correctly using a mouse (including click outside)', async ({ page }) => {
+  test('the Forecasting dropdown opens and closes on click', async ({ page }) => {
     await page.goto('/dashboard');
-    const trigger = page.getByRole('button', { name: 'Input Data' });
-    const menu = page.getByRole('menu', { name: 'Input Data' });
+    const trigger = page.getByRole('button', { name: 'Forecasting' });
+    const menu = page.getByRole('menu', { name: 'Forecasting' });
     await trigger.click();
     await expect(menu).toBeVisible();
     await trigger.click();
     await expect(menu).toBeHidden();
-    await trigger.click();
-    await expect(menu).toBeVisible();
-    await page.mouse.click(10, 400);
-    await expect(menu).toBeHidden();
   });
 
-  test('the dropdown opens using Enter and Space from the keyboard', async ({ page }) => {
+  test('the Forecasting dropdown opens using Enter and Space from the keyboard', async ({ page }) => {
     await page.goto('/dashboard');
-    const trigger = page.getByRole('button', { name: 'Input Data' });
-    const menu = page.getByRole('menu', { name: 'Input Data' });
+    const trigger = page.getByRole('button', { name: 'Forecasting' });
+    const menu = page.getByRole('menu', { name: 'Forecasting' });
     await trigger.focus();
     await page.keyboard.press('Enter');
     await expect(menu).toBeVisible();
@@ -149,10 +180,10 @@ test.describe('Desktop navigation', () => {
     await expect(menu).toBeVisible();
   });
 
-  test('Escape closes the dropdown and returns focus to the trigger', async ({ page }) => {
+  test('Escape closes the Forecasting dropdown and returns focus to the trigger', async ({ page }) => {
     await page.goto('/dashboard');
-    const trigger = page.getByRole('button', { name: 'Input Data' });
-    const menu = page.getByRole('menu', { name: 'Input Data' });
+    const trigger = page.getByRole('button', { name: 'Forecasting' });
+    const menu = page.getByRole('menu', { name: 'Forecasting' });
     await trigger.click();
     await expect(menu).toBeVisible();
     await page.keyboard.press('Escape');
@@ -160,12 +191,23 @@ test.describe('Desktop navigation', () => {
     await expect(trigger).toBeFocused();
   });
 
-  test('selecting a submenu item closes the dropdown', async ({ page }) => {
+  test('the Forecasting dropdown lists all 13 items in order', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Input Data' }).click();
-    await page.getByRole('menuitem', { name: 'Assets' }).click();
-    await expect(page).toHaveURL(/\/assets/);
-    await expect(page.locator('#input-data-menu')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Forecasting' }).click();
+    const items = (await page.getByRole('menu', { name: 'Forecasting' }).getByRole('menuitem').allTextContents()).map((t) =>
+      t.trim()
+    );
+    expect(items).toEqual(FORECASTING_SUBITEMS);
+  });
+
+  test('selecting a submenu item navigates and keeps the Forecasting group expanded', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Forecasting' }).click();
+    await page.getByRole('menuitem', { name: 'Assumptions' }).click();
+    await expect(page).toHaveURL(/\/forecast\/assumptions/);
+    // A persistent sidebar (unlike the old floating top-bar dropdown) has no
+    // overlay-conflict reason to force-close after navigating into it.
+    await expect(page.getByRole('menu', { name: 'Forecasting' })).toBeVisible();
   });
 
   test('direct child-route URLs and a browser refresh continue to work', async ({ page }) => {
@@ -190,7 +232,7 @@ test.describe('Desktop navigation', () => {
     { label: 'DNA', urlPattern: /\/dna/ },
     { label: 'Resilience', urlPattern: /\/resilience/ },
     { label: 'Twin / Benchmark', urlPattern: /\/financial-twin/ },
-    { label: 'Forecasting', urlPattern: /\/goals/ },
+    { label: 'Recommendations', urlPattern: /\/recommendations/ },
     { label: 'Reports', urlPattern: /\/reports/ },
   ];
   for (const { label, urlPattern } of OTHER_PAGES) {
@@ -220,7 +262,7 @@ test.describe('Admin navigation', () => {
 
   test('Admin item is visible for an admin user and opens the existing admin page', async ({ page }) => {
     await page.goto('/dashboard');
-    const adminLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin' });
+    const adminLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin', exact: true });
     await expect(adminLink).toBeVisible();
     await adminLink.click();
     await expect(page).toHaveURL(/\/admin\/benchmarks/);
@@ -243,24 +285,23 @@ test.describe('Mobile / tablet navigation', () => {
     expect(labels).toEqual(REQUIRED_ORDER);
   });
 
-  test('Input Data expands and collapses as an accordion showing exactly the four items', async ({ page }) => {
+  test('Forecasting expands and collapses as an accordion showing all 13 items', async ({ page }) => {
     await page.goto('/dashboard');
     await page.getByRole('button', { name: 'Open menu' }).click();
-    const inputDataToggle = page.locator('#mobile-nav-panel').getByRole('button', { name: 'Input Data' });
-    await inputDataToggle.click();
-    const group = page.locator('#mobile-input-data-group');
+    const toggle = page.locator('#mobile-nav-panel').getByRole('button', { name: 'Forecasting' });
+    await toggle.click();
+    const group = page.locator('#mobile-forecasting-group');
     await expect(group).toBeVisible();
-    const items = (await group.getByRole('link').allTextContents()).map((t) => t.trim());
-    expect(items).toEqual(['Income', 'Expenses', 'Assets', 'Liabilities']);
-    await inputDataToggle.click();
+    const items = (await group.getByRole('menuitem').allTextContents()).map((t) => t.trim());
+    expect(items).toEqual(FORECASTING_SUBITEMS);
+    await toggle.click();
     await expect(group).toHaveCount(0);
   });
 
   test('selecting a route closes the mobile menu', async ({ page }) => {
     await page.goto('/dashboard');
     await page.getByRole('button', { name: 'Open menu' }).click();
-    await page.locator('#mobile-nav-panel').getByRole('button', { name: 'Input Data' }).click();
-    await page.getByRole('link', { name: 'Income' }).click();
+    await page.locator('#mobile-nav-panel').getByRole('link', { name: 'Income' }).click();
     await expect(page).toHaveURL(/\/income/);
     await expect(page.locator('#mobile-nav-panel')).toHaveCount(0);
   });

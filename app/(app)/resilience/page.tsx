@@ -46,7 +46,7 @@ export default async function ResiliencePage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Financial Resilience™</h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted">
             How well your household could absorb a financial shock — job loss, an unexpected bill, or a market
             downturn — today.
           </p>
@@ -58,22 +58,22 @@ export default async function ResiliencePage() {
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Change vs last month</p>
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-xs text-muted">Change vs last month</p>
+              <p className="text-lg font-semibold text-ink">
                 {payload.scoreChange !== null ? `${payload.scoreChange >= 0 ? '+' : ''}${payload.scoreChange.toFixed(1)}` : '—'}
               </p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Confidence</p>
-              <p className="text-lg font-semibold text-gray-900">{payload.confidence.toFixed(0)}%</p>
+              <p className="text-xs text-muted">Confidence</p>
+              <p className="text-lg font-semibold text-ink">{payload.confidence.toFixed(0)}%</p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Model version</p>
-              <p className="text-lg font-semibold text-gray-900">{payload.modelVersion}</p>
+              <p className="text-xs text-muted">Model version</p>
+              <p className="text-lg font-semibold text-ink">{payload.modelVersion}</p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-gray-500">Last calculated</p>
-              <p className="text-lg font-semibold text-gray-900">{new Date().toLocaleDateString('en-AU')}</p>
+              <p className="text-xs text-muted">Last calculated</p>
+              <p className="text-lg font-semibold text-ink">{new Date().toLocaleDateString('en-AU')}</p>
             </div>
             {payload.confidence < 70 && (
               <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-4">

@@ -25,7 +25,7 @@ export default async function ForecastGoalsPage({ searchParams }: { searchParams
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-trust">Goal Forecasts</h1>
-            <p className="mt-1 text-gray-500">
+            <p className="mt-1 text-muted">
               Projected completion date and required monthly contribution for each active goal, for the selected scenario. Goal-to-investment
               tagging and allocation are managed on the{' '}
               <a href="/goals" className="text-trust underline">

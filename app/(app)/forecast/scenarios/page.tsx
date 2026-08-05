@@ -21,7 +21,7 @@ export default async function ForecastScenariosPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Forecast Scenarios</h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted">
             Every forecast runs against a scenario. Add conservative, optimistic or stress scenarios to compare outcomes —
             scenario-specific assumption overrides are coming in a later phase; for now each scenario uses your profile-level
             assumptions.
