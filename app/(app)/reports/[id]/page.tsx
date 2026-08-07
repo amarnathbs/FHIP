@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AppShell } from '@/components/ui/AppShell';
 import { getReport, recordAccessEvent } from '@/lib/services/reportsData';
+import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
 import { ReportActions } from '@/components/reports/ReportActions';
 
@@ -17,6 +18,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const result = await getReport(user.id, id);
   if (!result) notFound();
   await recordAccessEvent(user.id, id, 'viewed');
+  const content = await loadReportContent('en', supabase);
 
   return (
     <AppShell>
@@ -34,7 +36,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
 
-        <ReportPreview report={result.report} sections={result.sections} currency={result.report.reporting_currency as 'AUD' | 'INR'} />
+        <ReportPreview
+          report={result.report}
+          sections={result.sections}
+          currency={result.report.reporting_currency as 'AUD' | 'INR'}
+          content={content}
+        />
       </div>
     </AppShell>
   );

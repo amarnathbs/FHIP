@@ -10,6 +10,7 @@
 import { buildExplanation } from './explain';
 import { addMonthsToDateString, firstOfMonth, projectInvestmentMonth, projectLoanMonth, round2 } from './monthlyPrimitives';
 import { getAssumptionValue } from './assumptions';
+import { bandFor, type ScoreBand } from '../scoring';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
 
 export interface ResilienceCalculatorInput {
@@ -38,6 +39,19 @@ const DEFAULT_INVESTMENT_RETURN = 7;
 const DEFAULT_RETIREMENT_RETURN = 6.5;
 const DEFAULT_LIABILITY_RATE = 6;
 const RECOVERY_EMERGENCY_FUND_MONTHS_THRESHOLD = 6;
+
+// FHIP-FC-RES-002 — Resilience Health status band, distinct from
+// resilience.ts's own overall-score bands (highly_resilient/resilient/
+// moderately_vulnerable/vulnerable/fragile, which band a 0-100 weighted
+// score, not months of runway). "Critical" isn't a min-months tier here —
+// it's whenever the forecast actually projects the balance hitting zero
+// (see below), months-of-runway only distinguishes Strong/Moderate/Weak for
+// households that never deplete within the horizon.
+const RESILIENCE_HEALTH_BANDS: ScoreBand[] = [
+  { min: 6, band: 'strong', label: 'Strong' },
+  { min: 3, band: 'moderate', label: 'Moderate' },
+  { min: 0, band: 'weak', label: 'Weak' },
+];
 
 export function runResilienceForecast(input: ResilienceCalculatorInput): { results: ForecastResultRow[]; explanations: ForecastExplanationRow[] } {
   const results: ForecastResultRow[] = [];
@@ -133,7 +147,15 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
   );
   const retirementImpact = round2(input.openingRetirement - input.baselineRetirementAtStart);
 
-  const narrativeParts: string[] = [`Scenario: ${input.scenarioLabel}.`];
+  const openingEmergencyFundMonths = input.monthlyEssentialExpenses > 0 ? input.openingLiquidAssets / input.monthlyEssentialExpenses : null;
+  const resilienceHealth =
+    depletionMonth !== null
+      ? { band: 'critical', label: 'Critical' }
+      : openingEmergencyFundMonths !== null
+        ? bandFor(openingEmergencyFundMonths, RESILIENCE_HEALTH_BANDS)
+        : { band: 'unknown', label: 'Not available' };
+
+  const narrativeParts: string[] = [`Scenario: ${input.scenarioLabel}.`, `Resilience Health: ${resilienceHealth.label}.`];
   if (netWorthImpact !== 0) {
     narrativeParts.push(`Immediate net worth impact from the shock: ${netWorthImpact.toLocaleString()}.`);
   }
@@ -171,6 +193,8 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
         retirementImpact,
         depletionMonth,
         recoveryMonth,
+        resilienceHealthBand: resilienceHealth.band,
+        resilienceHealthLabel: resilienceHealth.label,
       },
       formula:
         'Liquid assets grow/draw by monthly surplus (or shortfall) at the cash return rate; depletion = first month liquid assets <= 0; recovery = first month after the shock ends with positive cash flow and >= 6 months of essential expenses in liquid reserves',

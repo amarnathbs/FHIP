@@ -65,7 +65,15 @@ export function AllocationPieChart({
   return (
     <ResponsiveContainer width="100%" height={220}>
       <PieChart>
-        <Pie data={nonZero} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={80} label>
+        <Pie
+          data={nonZero}
+          dataKey="value"
+          nameKey="label"
+          cx="50%"
+          cy="50%"
+          outerRadius={80}
+          label={(entry: { value?: number }) => fmt(entry.value ?? 0, currency)}
+        >
           {nonZero.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
           ))}

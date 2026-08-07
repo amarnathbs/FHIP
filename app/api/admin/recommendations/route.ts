@@ -26,9 +26,23 @@ export async function POST(req: Request) {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
-  const required = ['recommendation_code', 'forecast_category', 'sub_category', 'scenario_name', 'forecast_status', 'severity', 'action_type', 'action_title_template', 'action_content_template'];
+  const required = ['recommendation_code', 'sub_category', 'scenario_name', 'severity', 'action_type', 'action_title_template', 'action_content_template'];
   for (const field of required) {
     if (!body[field]) return bad(`${field} is required`, 422);
+  }
+  // trigger_type-conditional fields — mirrors migration 0025's
+  // action_recommendation_master_trigger_fields_check (forecast_category +
+  // forecast_status for the original forecast-triggered rows; pillar_code +
+  // score_band for Phase 3a's Health Score-triggered rows).
+  const triggerType = body.trigger_type ?? 'forecast_variance';
+  if (triggerType === 'forecast_variance') {
+    if (!body.forecast_category) return bad('forecast_category is required', 422);
+    if (!body.forecast_status) return bad('forecast_status is required', 422);
+  } else if (triggerType === 'score_pillar') {
+    if (!body.pillar_code) return bad('pillar_code is required', 422);
+    if (!body.score_band) return bad('score_band is required', 422);
+  } else {
+    return bad('trigger_type must be forecast_variance or score_pillar', 422);
   }
   const client = adminClient();
   const { conditions, ...masterFields } = body;

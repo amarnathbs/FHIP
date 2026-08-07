@@ -12,12 +12,17 @@ interface Condition {
 interface Recommendation {
   id: string;
   recommendation_code: string;
-  forecast_category: string;
+  trigger_type: 'forecast_variance' | 'score_pillar';
+  // Null exactly when trigger_type is the other kind (migration 0025's
+  // action_recommendation_master_trigger_fields_check).
+  forecast_category: string | null;
+  forecast_status: string | null;
+  pillar_code: string | null;
+  score_band: string | null;
   sub_category: string;
   scenario_name: string;
   scenario_description: string | null;
   variance_result: string | null;
-  forecast_status: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   action_type: string;
   action_title_template: string;
@@ -43,6 +48,14 @@ const CATEGORIES = ['net_worth', 'retirement', 'goal', 'debt', 'investment_growt
 const STATUSES = ['ahead_of_plan', 'on_track', 'slightly_behind', 'at_risk', 'significantly_off_track', 'review_required'];
 const RESULTS = ['favourable', 'unfavourable', 'neutral'];
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
+const TRIGGER_TYPES: { value: Recommendation['trigger_type']; label: string }[] = [
+  { value: 'forecast_variance', label: 'Forecast variance (Recommendations page)' },
+  { value: 'score_pillar', label: 'Health Score pillar (Free/Paid report)' },
+];
+// Matches healthScore.ts's ComponentCode — the 10 Financial Health Score pillars.
+const PILLAR_CODES = ['cash_flow', 'savings', 'emergency_fund', 'debt', 'net_worth', 'investment', 'retirement', 'insurance', 'resilience', 'behaviour'];
+// Matches health_score_config's scoreBands — shared by every pillar.
+const SCORE_BANDS = ['excellent', 'good', 'fair', 'needs_attention', 'critical'];
 const UPLOAD_TYPES: { value: string; label: string }[] = [
   { value: 'master', label: 'Master (recommendations)' },
   { value: 'conditions', label: 'Conditions' },
@@ -52,12 +65,15 @@ const UPLOAD_TYPES: { value: string; label: string }[] = [
 
 const emptyForm = () => ({
   recommendation_code: '',
+  trigger_type: 'forecast_variance' as Recommendation['trigger_type'],
   forecast_category: 'net_worth',
+  forecast_status: 'on_track',
+  pillar_code: 'cash_flow',
+  score_band: 'needs_attention',
   sub_category: 'overall_variance',
   scenario_name: '',
   scenario_description: '',
   variance_result: '',
-  forecast_status: 'on_track',
   severity: 'medium' as Recommendation['severity'],
   action_type: '',
   action_title_template: '',
@@ -123,12 +139,15 @@ export function AdminRecommendationsClient() {
     setEditingId(rec.id);
     setForm({
       recommendation_code: rec.recommendation_code,
-      forecast_category: rec.forecast_category,
+      trigger_type: rec.trigger_type,
+      forecast_category: rec.forecast_category ?? 'net_worth',
+      forecast_status: rec.forecast_status ?? 'on_track',
+      pillar_code: rec.pillar_code ?? 'cash_flow',
+      score_band: rec.score_band ?? 'needs_attention',
       sub_category: rec.sub_category,
       scenario_name: rec.scenario_name,
       scenario_description: rec.scenario_description ?? '',
       variance_result: rec.variance_result ?? '',
-      forecast_status: rec.forecast_status,
       severity: rec.severity,
       action_type: rec.action_type,
       action_title_template: rec.action_title_template,
@@ -169,14 +188,20 @@ export function AdminRecommendationsClient() {
     const conditions = form.conditions
       .filter((c) => c.field_name.trim() !== '')
       .map((c) => ({ condition_group: c.condition_group, field_name: c.field_name.trim(), operator: c.operator, comparison_value: c.comparison_value.trim() === '' ? null : c.comparison_value.trim() }));
+    const isPillar = form.trigger_type === 'score_pillar';
     const payload = {
       recommendation_code: form.recommendation_code,
-      forecast_category: form.forecast_category,
+      trigger_type: form.trigger_type,
+      // Only the fields for the selected trigger_type are sent — the other
+      // pair goes null, matching migration 0025's mutually-exclusive check.
+      forecast_category: isPillar ? null : form.forecast_category,
+      forecast_status: isPillar ? null : form.forecast_status,
+      pillar_code: isPillar ? form.pillar_code : null,
+      score_band: isPillar ? form.score_band : null,
       sub_category: form.sub_category,
       scenario_name: form.scenario_name,
       scenario_description: form.scenario_description || null,
       variance_result: form.variance_result || null,
-      forecast_status: form.forecast_status,
       severity: form.severity,
       action_type: form.action_type,
       action_title_template: form.action_title_template,
@@ -272,21 +297,53 @@ export function AdminRecommendationsClient() {
             onChange={(e) => setForm((f) => ({ ...f, recommendation_code: e.target.value }))}
           />
           <input className="rounded border px-2 py-1.5 text-sm" placeholder="Scenario name" value={form.scenario_name} onChange={(e) => setForm((f) => ({ ...f, scenario_name: e.target.value }))} />
-          <select className="rounded border px-2 py-1.5 text-sm" value={form.forecast_category} onChange={(e) => setForm((f) => ({ ...f, forecast_category: e.target.value }))}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
+          <select
+            className="rounded border px-2 py-1.5 text-sm sm:col-span-2"
+            value={form.trigger_type}
+            onChange={(e) => setForm((f) => ({ ...f, trigger_type: e.target.value as Recommendation['trigger_type'] }))}
+          >
+            {TRIGGER_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
+          {form.trigger_type === 'score_pillar' ? (
+            <>
+              <select className="rounded border px-2 py-1.5 text-sm" value={form.pillar_code} onChange={(e) => setForm((f) => ({ ...f, pillar_code: e.target.value }))}>
+                {PILLAR_CODES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select className="rounded border px-2 py-1.5 text-sm" value={form.score_band} onChange={(e) => setForm((f) => ({ ...f, score_band: e.target.value }))}>
+                {SCORE_BANDS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <>
+              <select className="rounded border px-2 py-1.5 text-sm" value={form.forecast_category} onChange={(e) => setForm((f) => ({ ...f, forecast_category: e.target.value }))}>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select className="rounded border px-2 py-1.5 text-sm" value={form.forecast_status} onChange={(e) => setForm((f) => ({ ...f, forecast_status: e.target.value }))}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <input className="rounded border px-2 py-1.5 text-sm" placeholder="sub_category / signal" value={form.sub_category} onChange={(e) => setForm((f) => ({ ...f, sub_category: e.target.value }))} />
-          <select className="rounded border px-2 py-1.5 text-sm" value={form.forecast_status} onChange={(e) => setForm((f) => ({ ...f, forecast_status: e.target.value }))}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
           <select className="rounded border px-2 py-1.5 text-sm" value={form.variance_result} onChange={(e) => setForm((f) => ({ ...f, variance_result: e.target.value }))}>
             <option value="">(no variance_result condition)</option>
             {RESULTS.map((r) => (
@@ -425,7 +482,9 @@ export function AdminRecommendationsClient() {
               <div key={rec.id} className="rounded border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{rec.forecast_category}</span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                      {rec.trigger_type === 'score_pillar' ? `pillar: ${rec.pillar_code}` : rec.forecast_category}
+                    </span>
                     <span className="ml-2 rounded-full bg-gray-50 px-2 py-0.5 text-xs text-gray-500">{rec.sub_category}</span>
                     <span
                       className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${rec.is_active ? 'bg-progress/10 text-progress' : 'bg-gray-100 text-gray-500'}`}
@@ -435,7 +494,8 @@ export function AdminRecommendationsClient() {
                     {rec.is_premium && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Premium</span>}
                     <p className="mt-1 font-semibold text-gray-900">{rec.action_title_template}</p>
                     <p className="text-xs text-gray-400">
-                      {rec.recommendation_code} · {rec.forecast_status} · priority {rec.priority_score} · {rec.conditions.length} condition(s)
+                      {rec.recommendation_code} · {rec.trigger_type === 'score_pillar' ? rec.score_band : rec.forecast_status} · priority {rec.priority_score} ·{' '}
+                      {rec.conditions.length} condition(s)
                     </p>
                   </div>
                   <div className="flex gap-2">

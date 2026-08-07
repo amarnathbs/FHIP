@@ -6,11 +6,13 @@ interface NetWorthVariance {
   baselineDate: string | null;
   baselineNetWorth: number | null;
   actualNetWorth: number;
+  comparisonDate?: string;
   actualIncreaseSinceBaseline: number | null;
   monthsSinceBaseline: number | null;
   originalForecastNetWorthToday: number | null;
   variance: number | null;
   variancePercentage: number | null;
+  baselineJustEstablished?: boolean;
 }
 
 export function NetWorthVarianceCard({ variance, currency }: { variance: NetWorthVariance; currency: 'AUD' | 'INR' }) {
@@ -22,12 +24,26 @@ export function NetWorthVarianceCard({ variance, currency }: { variance: NetWort
     );
   }
 
+  if (variance.baselineJustEstablished) {
+    return (
+      <SectionCard
+        title="Actual vs Original Forecast"
+        description={`Baseline established on ${variance.baselineDate}.`}
+      >
+        <p className="text-sm text-gray-500">
+          No elapsed comparison period exists yet — performance tracking against this baseline will be available once a later
+          comparison date exists (e.g. after your next monthly dashboard update).
+        </p>
+      </SectionCard>
+    );
+  }
+
   const isAhead = variance.variance !== null && variance.variance >= 0;
 
   return (
     <SectionCard
       title="Actual vs Original Forecast"
-      description={`Comparing today against the original forecast baselined on ${variance.baselineDate} (${variance.monthsSinceBaseline} month${variance.monthsSinceBaseline === 1 ? '' : 's'} ago).`}
+      description={`Comparing ${variance.comparisonDate ?? 'today'} against the original forecast baselined on ${variance.baselineDate} (${variance.monthsSinceBaseline} month${variance.monthsSinceBaseline === 1 ? '' : 's'} ago).`}
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Baseline net worth" value={variance.baselineNetWorth !== null ? formatMoney(variance.baselineNetWorth, currency) : '—'} />

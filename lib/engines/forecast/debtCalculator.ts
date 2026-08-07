@@ -10,8 +10,10 @@
 // completed run for a liability IS the retained original plan, the same
 // mechanism goal and net-worth forecasts already rely on.
 import { buildExplanation } from './explain';
-import { addMonthsToDateString, firstOfMonth, projectLoanMonth, round2 } from './monthlyPrimitives';
+import { addMonthsToDateString, firstOfMonth, interestOnlyPayment, levelPaymentForPayoff, projectLoanMonth, round2 } from './monthlyPrimitives';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
+
+export type DebtRiskLevel = 'high' | 'medium' | 'low';
 
 export interface DebtCalculatorInputEntry {
   id: string;
@@ -21,6 +23,12 @@ export interface DebtCalculatorInputEntry {
   monthlyRepayment: number;
   debtType: string;
   currency: string;
+  // Added for FHIP-FC-DEBT-001/002/003's risk ranking — all three are
+  // already on the liabilities table, this calculator just didn't read them
+  // before. All optional/nullable since older rows may not have them set.
+  interestRateType?: 'fixed' | 'variable' | null;
+  fixedRateExpiry?: string | null; // ISO date
+  creditLimit?: number | null; // relevant for revolving debt types (credit cards, BNPL)
 }
 
 export interface DebtCalculatorInput {
@@ -49,6 +57,29 @@ function projectPayoff(openingBalance: number, annualRatePercent: number, repaym
     if (payoffMonth === null && balance <= 0) payoffMonth = m;
   }
   return { payoffMonth, totalInterest: round2(totalInterest) };
+}
+
+function monthsUntil(baselineDate: string, targetDate: string): number {
+  const base = new Date(baselineDate + 'T00:00:00Z');
+  const target = new Date(targetDate + 'T00:00:00Z');
+  return (target.getUTCFullYear() - base.getUTCFullYear()) * 12 + (target.getUTCMonth() - base.getUTCMonth());
+}
+
+// FHIP-FC-DEBT-003 — deterministic risk ranking. "High" covers the cases
+// where the current trajectory or a known upcoming change could materially
+// worsen the debt (balance actually growing, a fixed rate about to reset, or
+// a revolving balance close to its limit); "Medium" flags a variable rate
+// with none of the above triggers (exposed to rate rises but no imminent
+// known event); everything else is "Low".
+function assessDebtRisk(liability: DebtCalculatorInputEntry, baselineDate: string, isNegativeAmortization: boolean): DebtRiskLevel {
+  if (isNegativeAmortization) return 'high';
+  if (liability.fixedRateExpiry) {
+    const monthsToExpiry = monthsUntil(baselineDate, liability.fixedRateExpiry);
+    if (monthsToExpiry >= 0 && monthsToExpiry <= 12) return 'high';
+  }
+  if (liability.creditLimit && liability.creditLimit > 0 && liability.currentBalance / liability.creditLimit > 0.8) return 'high';
+  if (liability.interestRateType === 'variable') return 'medium';
+  return 'low';
 }
 
 export function runDebtForecast(input: DebtCalculatorInput): { results: ForecastResultRow[]; explanations: ForecastExplanationRow[] } {
@@ -123,19 +154,41 @@ export function runDebtForecast(input: DebtCalculatorInput): { results: Forecast
 
     const rateNarrative = ` A 1% rate rise would add approximately ${round2(higherRate.totalInterest - totalInterest)} in total interest; a 1% rate cut would save approximately ${round2(totalInterest - lowerRate.totalInterest)}.`;
 
+    // FHIP-FC-DEBT-001/002/003 — negative amortisation, risk ranking, and
+    // payoff alternatives. isNegativeAmortization checks the FIRST month's
+    // repayment against that month's accruing interest+fees (the balance's
+    // own trajectory over the loop above already reflects this correctly —
+    // see monthlyPrimitives.ts's projectLoanMonth — this is purely about
+    // detecting/flagging it, not fixing broken math).
+    const firstMonthInterestFees = liability.currentBalance > 0 ? interestOnlyPayment(liability.currentBalance, liability.annualInterestRatePercent) : 0;
+    const isNegativeAmortization = liability.currentBalance > 0 && liability.monthlyRepayment < firstMonthInterestFees;
+    const riskLevel = assessDebtRisk(liability, input.baselineDate, isNegativeAmortization);
+    const curePayment = liability.currentBalance > 0 ? interestOnlyPayment(liability.currentBalance, liability.annualInterestRatePercent) : 0;
+    const payoffPayment3yr = levelPaymentForPayoff(liability.currentBalance, liability.annualInterestRatePercent, 36);
+    const payoffPayment5yr = levelPaymentForPayoff(liability.currentBalance, liability.annualInterestRatePercent, 60);
+
+    const riskNarrative = isNegativeAmortization
+      ? ` This debt's current repayment does not cover accruing interest, so the balance is growing rather than reducing — a payment of at least ${round2(curePayment)}/month would stop it from growing further; ${round2(payoffPayment3yr)}/month would clear it in 3 years, ${round2(payoffPayment5yr)}/month in 5 years.`
+      : '';
+
     explanations.push(
       buildExplanation({
         entityType: 'liability',
         entityId: liability.id,
         explanationType: 'debt_payoff_forecast',
         title: `${liability.name} — payoff forecast`,
-        narrative: payoffNarrative + acceleratedNarrative + rateNarrative,
+        narrative: payoffNarrative + acceleratedNarrative + rateNarrative + riskNarrative,
         inputs: {
           currentBalance: liability.currentBalance,
           annualInterestRatePercent: liability.annualInterestRatePercent,
           monthlyRepayment: liability.monthlyRepayment,
           payoffMonth,
           totalInterest: round2(totalInterest),
+          isNegativeAmortization,
+          riskLevel,
+          curePayment,
+          payoffPayment3yr,
+          payoffPayment5yr,
           additionalMonthlyRepayment: input.additionalMonthlyRepayment || null,
           acceleratedPayoffMonth: accelerated?.payoffMonth ?? null,
           acceleratedTotalInterest: accelerated?.totalInterest ?? null,

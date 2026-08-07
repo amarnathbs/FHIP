@@ -19,7 +19,14 @@ import type { ForecastType, MonthlyForecastOutput } from './types';
 // alone would let a stale pre-fix run get served forever after a calculator
 // bug fix, since the inputs (and therefore the hash) never changed, only the
 // code that turns them into a result.
-export const FORECAST_ENGINE_VERSION = 'forecast-1.5.0';
+// Bumped for Forecasting Engine P1 fixes (FHIP-FC-RET-001, FHIP-FC-GOAL-001,
+// FHIP-FC-INV-001/002, FHIP-FC-DEBT-001/002/003, FHIP-FC-RES-001/002,
+// FHIP-FC-SCN-001/002, FHIP-FC-REC-001/002) — runForecast()'s idempotency
+// check scopes reuse to this exact version (see forecastData.ts), so users
+// with an already-cached run under the old version get a genuinely fresh
+// computation reflecting these fixes on their next visit, rather than
+// silently reusing pre-fix output because their input data didn't change.
+export const FORECAST_ENGINE_VERSION = 'forecast-1.6.0';
 
 // Registry of calculators — all 7 non-Premium forecast types from the
 // roadmap are now registered (Premium/Monte Carlo simulation is explicitly

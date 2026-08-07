@@ -51,6 +51,18 @@ export function CashFlowWaterfallChart({
   monthlySurplus: number;
   currency: 'AUD' | 'INR';
 }) {
+  // Nothing recorded at all (no income, no expenses, no debt repayments) —
+  // every other chart in this file shows an explicit "no data" message
+  // rather than rendering a chart with nothing in it; the deficit
+  // special-case below only covers the "recorded but negative" scenario,
+  // not this one.
+  if (grossMonthlyIncome === 0 && netMonthlyIncome === 0 && totalMonthlyExpenses === 0 && debtMonthlyRepayments === 0) {
+    return (
+      <div className="flex h-48 items-center justify-center rounded-card border border-dashed bg-gray-50 px-4 text-center text-sm text-gray-500">
+        No cash flow data recorded yet.
+      </div>
+    );
+  }
   // Debt repayments are tracked separately from totalMonthlyExpenses
   // (dashboard.ts) but must still appear as their own visible bucket here —
   // otherwise the two bars don't sum to net income and a real repayment
@@ -248,6 +260,11 @@ export interface BulletRow {
   healthyMin: number | null;
   healthyMax: number | null;
   comparisonStatus: string | null;
+  // Caller-supplied, unit-aware formatted string (e.g. "$45,000", "12.5%",
+  // "3.2 months") — the caller has the metric's unit and currency in scope,
+  // this component doesn't. Falls back to a plain grouped number (no
+  // currency symbol, no unit) only if the caller doesn't supply one.
+  displayValue?: string;
 }
 
 function bulletStatus(status: string | null): 'good' | 'caution' | 'risk' | 'neutral' {
@@ -278,7 +295,9 @@ export function BulletChart({ rows }: { rows: BulletRow[] }) {
           <div key={i}>
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-gray-900">{r.label}</span>
-              <span style={{ color: STATUS_COLORS[status] }}>{r.userValue !== null ? r.userValue.toLocaleString() : 'Not available'}</span>
+              <span style={{ color: STATUS_COLORS[status] }}>
+                {r.displayValue ?? (r.userValue !== null ? r.userValue.toLocaleString() : 'Not available')}
+              </span>
             </div>
             <div className="relative mt-1 h-3 w-full rounded-full bg-gray-100">
               {healthyLeft !== null && healthyWidth !== null && (

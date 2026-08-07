@@ -5,6 +5,11 @@ import { buildResilienceInput } from '@/lib/services/resilienceData';
 import { computeResilience } from '@/lib/engines/resilience';
 import { computeGoalAffordability, type AffordabilityResult } from '@/lib/engines/goalAffordability';
 import {
+  computeAllocatedMonthlyContribution,
+  type AllocatedContributionInvestment,
+  type AllocatedContributionRetirementAccount,
+} from '@/lib/services/goalFundingAllocation';
+import {
   computeAllScenarios,
   MODEL_VERSION,
   type GoalRecord,
@@ -45,6 +50,7 @@ export interface GoalFundingSourceRow {
   source_type: string;
   linked_asset_id: string | null;
   linked_investment_id: string | null;
+  linked_retirement_id: string | null;
   allocated_amount: number;
   allocation_percentage: number | null;
   currency_code: string | null;
@@ -70,6 +76,7 @@ export interface GoalPayload {
   currentAmount: number;
   plannedContributionAmount: number;
   contributionFrequency: string;
+  allocatedMonthlyContribution: number;
   annualContributionGrowthPct: number;
   inflationAdjusted: boolean;
   nextReviewDate: string | null;
@@ -129,7 +136,7 @@ async function loadFundingSourcesByGoal(
   const supabase = client ?? (await createClient());
   const { data } = await supabase
     .from('goal_funding_sources')
-    .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, allocated_amount, allocation_percentage, currency_code')
+    .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
     .eq('user_id', userId)
     .eq('is_active', true)
     .in('goal_id', goalIds);
@@ -195,13 +202,20 @@ async function buildExtrasForGoal(
   return extras;
 }
 
-function toGoalRecord(row: Record<string, unknown>): GoalRecord {
+// allocatedMonthlyContribution (Forecasting P1 fix FHIP-FC-GOAL-001) is the
+// sum of this goal's active funding sources' own recurring contribution
+// (a linked investment's/retirement account's contribution x its
+// allocation_percentage) — previously never added, so a goal funded solely
+// through an allocated investment forecast with $0/month required despite
+// real money flowing toward it every month.
+function toGoalRecord(row: Record<string, unknown>, allocatedMonthlyContribution = 0): GoalRecord {
   return {
     targetAmount: Number(row.target_amount),
     targetAmountBasis: row.target_amount_basis as 'today_value' | 'future_value',
     currentAmount: Number(row.current_amount ?? 0),
     targetDate: (row.target_date as string) ?? null,
-    plannedContributionAmount: toMonthly(Number(row.planned_contribution_amount ?? 0), row.contribution_frequency as Frequency),
+    plannedContributionAmount:
+      toMonthly(Number(row.planned_contribution_amount ?? 0), row.contribution_frequency as Frequency) + allocatedMonthlyContribution,
     annualContributionGrowthPct: Number(row.annual_contribution_growth_pct ?? 0) / 100,
     inflationAdjusted: Boolean(row.inflation_adjusted),
     inflationCategory: (row.inflation_category as string) ?? 'general',
@@ -211,10 +225,52 @@ function toGoalRecord(row: Record<string, unknown>): GoalRecord {
   };
 }
 
+// Batch-fetches the investments/retirement accounts referenced by any
+// funding source across every goal being loaded, keyed by id — avoids one
+// query per goal for what's usually a handful of distinct linked records.
+async function loadLinkedContributionSources(
+  userId: string,
+  fundingSourcesByGoal: Map<string, GoalFundingSourceRow[]>,
+  client: SupabaseServerClient
+): Promise<{
+  investmentsById: Map<string, AllocatedContributionInvestment>;
+  retirementAccountsById: Map<string, AllocatedContributionRetirementAccount>;
+}> {
+  const investmentIds = new Set<string>();
+  const retirementIds = new Set<string>();
+  for (const sources of fundingSourcesByGoal.values()) {
+    for (const s of sources) {
+      if (s.source_type === 'investment' && s.linked_investment_id) investmentIds.add(s.linked_investment_id);
+      if (s.source_type === 'retirement' && s.linked_retirement_id) retirementIds.add(s.linked_retirement_id);
+    }
+  }
+  const investmentsById = new Map<string, AllocatedContributionInvestment>();
+  const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
+  if (investmentIds.size > 0) {
+    const { data } = await client.from('investments').select('id, annual_contribution').eq('user_id', userId).in('id', Array.from(investmentIds));
+    for (const row of data ?? []) investmentsById.set(row.id as string, { annualContribution: (row.annual_contribution as number) ?? null });
+  }
+  if (retirementIds.size > 0) {
+    const { data } = await client
+      .from('retirement_accounts')
+      .select('id, employer_contribution, personal_contribution, contribution_frequency')
+      .eq('user_id', userId)
+      .in('id', Array.from(retirementIds));
+    for (const row of data ?? [])
+      retirementAccountsById.set(row.id as string, {
+        employerContribution: (row.employer_contribution as number) ?? null,
+        personalContribution: (row.personal_contribution as number) ?? null,
+        contributionFrequency: (row.contribution_frequency as string) ?? null,
+      });
+  }
+  return { investmentsById, retirementAccountsById };
+}
+
 export interface SingleGoalForecastInputs {
   goalRecord: GoalRecord;
   extras: GoalExtras;
   config: GoalPlanningConfig;
+  allocatedMonthlyContribution: number;
 }
 
 // Builds the inputs for one goal's forecast without persisting — used by the
@@ -236,7 +292,21 @@ export async function buildGoalForecastInputs(userId: string, goalId: string): P
   const reportingCurrency = (profileRes.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
 
   const extras = await buildExtrasForGoal(userId, row, dashboard.essentialMonthlyExpenses, reportingCurrency);
-  return { goalRecord: toGoalRecord(row), extras, config };
+
+  const fundingSourcesByGoal = await loadFundingSourcesByGoal(userId, [goalId], supabase);
+  const { investmentsById, retirementAccountsById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
+  const allocatedMonthlyContribution = computeAllocatedMonthlyContribution(
+    (fundingSourcesByGoal.get(goalId) ?? []).map((s) => ({
+      sourceType: s.source_type,
+      linkedInvestmentId: s.linked_investment_id,
+      linkedRetirementId: s.linked_retirement_id,
+      allocationPercentage: s.allocation_percentage,
+    })),
+    investmentsById,
+    retirementAccountsById
+  );
+
+  return { goalRecord: toGoalRecord(row, allocatedMonthlyContribution), extras, config, allocatedMonthlyContribution };
 }
 
 // Pure computation, no persistence — safe to call from anywhere that just
@@ -282,11 +352,24 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
     loadFundingSourcesByGoal(userId, goalIds, supabase),
     loadMilestonesByGoal(userId, goalIds, supabase),
   ]);
+  const { investmentsById, retirementAccountsById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
 
   const today = new Date();
   const goals: GoalPayload[] = [];
   for (const row of rawGoals) {
-    const goalRecord = toGoalRecord(row);
+    const goalId = row.id as string;
+    const fundingSources = fundingSourcesByGoal.get(goalId) ?? [];
+    const allocatedMonthlyContribution = computeAllocatedMonthlyContribution(
+      fundingSources.map((s) => ({
+        sourceType: s.source_type,
+        linkedInvestmentId: s.linked_investment_id,
+        linkedRetirementId: s.linked_retirement_id,
+        allocationPercentage: s.allocation_percentage,
+      })),
+      investmentsById,
+      retirementAccountsById
+    );
+    const goalRecord = toGoalRecord(row, allocatedMonthlyContribution);
     const extras = await buildExtrasForGoal(userId, row, dashboard.essentialMonthlyExpenses, reportingCurrency, supabase);
     const forecasts = computeAllScenarios(goalRecord, extras, config, today);
 
@@ -310,12 +393,18 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
       currentAmount: Number(row.current_amount ?? 0),
       plannedContributionAmount: Number(row.planned_contribution_amount ?? 0),
       contributionFrequency: row.contribution_frequency as string,
+      // Sum of active funding sources' own recurring contribution, allocated
+      // by percentage (FHIP-FC-GOAL-001) — display-only; the forecast itself
+      // already includes this (see toGoalRecord above), it's surfaced here
+      // so the UI can show why a goal with no direct planned contribution is
+      // still progressing.
+      allocatedMonthlyContribution,
       annualContributionGrowthPct: Number(row.annual_contribution_growth_pct ?? 0),
       inflationAdjusted: Boolean(row.inflation_adjusted),
       nextReviewDate: (row.next_review_date as string) ?? null,
       forecasts,
       milestones: milestonesByGoal.get(row.id as string) ?? [],
-      fundingSources: fundingSourcesByGoal.get(row.id as string) ?? [],
+      fundingSources,
     });
   }
 
@@ -323,7 +412,7 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
   const totalTargetAmount = activeGoals.reduce((sum, g) => sum + g.forecasts.base.targetAmountFuture, 0);
   const totalCurrentAmount = activeGoals.reduce((sum, g) => sum + g.currentAmount, 0);
   const totalMonthlyContribution = activeGoals.reduce(
-    (sum, g) => sum + toMonthly(g.plannedContributionAmount, g.contributionFrequency as Frequency),
+    (sum, g) => sum + toMonthly(g.plannedContributionAmount, g.contributionFrequency as Frequency) + g.allocatedMonthlyContribution,
     0
   );
   const onTrackCount = activeGoals.filter((g) => ['on_track', 'ahead_of_track'].includes(g.forecasts.base.trackStatus)).length;
@@ -470,7 +559,7 @@ export async function loadGoalDetail(userId: string, goalId: string): Promise<Go
     supabase.from('user_goals').select('*').eq('id', goalId).eq('user_id', userId).single(),
     supabase
       .from('goal_funding_sources')
-      .select('id, source_type, linked_asset_id, linked_investment_id, allocated_amount, allocation_percentage, currency_code')
+      .select('id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
       .eq('goal_id', goalId)
       .eq('user_id', userId)
       .eq('is_active', true),
@@ -512,6 +601,7 @@ export async function loadGoalDetail(userId: string, goalId: string): Promise<Go
     currentAmount: Number(row.current_amount ?? 0),
     plannedContributionAmount: Number(row.planned_contribution_amount ?? 0),
     contributionFrequency: row.contribution_frequency,
+    allocatedMonthlyContribution: inputs.allocatedMonthlyContribution,
     annualContributionGrowthPct: Number(row.annual_contribution_growth_pct ?? 0),
     inflationAdjusted: Boolean(row.inflation_adjusted),
     nextReviewDate: row.next_review_date ?? null,

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseServerClient } from './dashboardData';
+import { getFxRateAudInr } from './dashboardData';
 import { computeDashboard, type DashboardSummary, computeInsuranceAdequacy } from '@/lib/engines/dashboard';
 import { toMonthly } from '@/lib/engines/money';
 import { loadHealthScore, type HealthScorePayload } from './healthScoreData';
@@ -186,17 +187,18 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
 // itself needs — reuses computeDashboard directly (the same engine
 // loadDashboard uses) so this module never recalculates a financial ratio.
 async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClient): Promise<DashboardSummary> {
-  const [profile, income, expenses, assets, liabilities, investments, retirement, insurance, goals, snapshots] = await Promise.all([
+  const [profile, income, expenses, assets, liabilities, investments, retirement, insurance, goals, snapshots, fxRateAudInr] = await Promise.all([
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
     supabase.from('income_sources').select('amount, net_amount, frequency, master_item_key, employer_name').eq('user_id', userId).eq('is_active', true),
     supabase.from('expense_items').select('expense_name, amount, frequency, is_essential, master_item_key, expense_category').eq('user_id', userId).eq('is_active', true),
-    supabase.from('assets').select('current_value, asset_class, country_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, interest_rate_type, fixed_rate_expiry, credit_limit, country_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('investments').select('current_value, cost_base, investment_type, country_code, annual_contribution, institution').eq('user_id', userId).eq('is_active', true),
-    supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('assets').select('current_value, asset_class, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('investments').select('current_value, cost_base, investment_type, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days').eq('user_id', userId).eq('is_active', true),
     supabase.from('user_goals').select('goal_name, target_amount, current_amount, currency_code, target_date, priority, status').eq('user_id', userId).eq('status', 'active'),
     supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
+    getFxRateAudInr(supabase),
   ]);
   const currency = (profile.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
   return computeDashboard(
@@ -211,7 +213,8 @@ async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClie
       goals: goals.data ?? [],
       snapshots: snapshots.data ?? [],
     },
-    currency
+    currency,
+    fxRateAudInr
   );
 }
 

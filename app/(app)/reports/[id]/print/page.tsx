@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getReport, getReportByRenderToken } from '@/lib/services/reportsData';
+import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
 
 // Bare print view — no AppShell chrome, no nav, no action buttons. Opened
@@ -28,10 +29,16 @@ export default async function ReportPrintPage({
     if (!user) redirect('/login');
     notFound();
   }
+  const content = await loadReportContent('en', supabase);
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <ReportPreview report={result.report} sections={result.sections} currency={result.report.reporting_currency as 'AUD' | 'INR'} />
+      <ReportPreview
+        report={result.report}
+        sections={result.sections}
+        currency={result.report.reporting_currency as 'AUD' | 'INR'}
+        content={content}
+      />
     </div>
   );
 }

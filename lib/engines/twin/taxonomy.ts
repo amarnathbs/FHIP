@@ -2,6 +2,7 @@
 // Every displayed comparison must be traceable to exactly one benchmark class
 // (spec section 1) so observed peer data, statutory thresholds and FHIP
 // planning targets are never blended without disclosure.
+import { ageFromDob } from '@/lib/engines/age';
 
 export type BenchmarkClass = 'observed_market' | 'regulatory_statutory' | 'fhip_planning' | 'platform_peer';
 
@@ -95,12 +96,11 @@ export function ageToAgeBand(age: number): AgeBand | null {
   return band?.code ?? null;
 }
 
+// Delegates to the shared lib/engines/age.ts helper (consolidated from 3
+// previously-identical duplicate implementations) — dateOfBirth is required
+// here, so the shared helper's null branch never triggers.
 export function ageFromDateOfBirth(dateOfBirth: string, asOf: Date = new Date()): number {
-  const dob = new Date(dateOfBirth);
-  let age = asOf.getFullYear() - dob.getFullYear();
-  const monthDiff = asOf.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && asOf.getDate() < dob.getDate())) age -= 1;
-  return age;
+  return ageFromDob(dateOfBirth, asOf) as number;
 }
 
 // ---------------------------------------------------------------------------

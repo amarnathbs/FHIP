@@ -93,6 +93,30 @@ export function projectLoanMonth(input: LoanMonthInput): LoanMonthResult {
   };
 }
 
+// Forecasting P1 fix FHIP-FC-DEBT-001/002/003 — "cure payment" is the
+// payment that exactly covers this month's accruing interest and fees (so
+// the balance stops growing, without reducing it) — the same terms already
+// isolated inside projectLoanMonth, just returned directly rather than
+// derived from a full month projection.
+export function interestOnlyPayment(balance: number, annualRatePercent: number, fees = 0): number {
+  return round2((balance * (annualRatePercent / 100)) / 12 + fees);
+}
+
+// Standard level-payment (PMT) annuity formula, using this module's existing
+// nominal annualRate/12 monthly-rate convention (matching projectLoanMonth
+// above) rather than monthlyCompoundRate's geometric convention (used only
+// for investment growth) — "what fixed monthly payment pays this balance off
+// in exactly `months` months". Returns the current repayment-equivalent (0)
+// when the balance is already paid off, and Infinity if the rate is 0 and
+// months is 0 (guarded — months is always >=1 in practice, but this keeps
+// the function total rather than returning NaN on a degenerate input).
+export function levelPaymentForPayoff(balance: number, annualRatePercent: number, months: number): number {
+  if (balance <= 0 || months <= 0) return 0;
+  const r = annualRatePercent / 100 / 12;
+  if (r === 0) return round2(balance / months);
+  return round2((balance * r) / (1 - Math.pow(1 + r, -months)));
+}
+
 export function addMonthsToDateString(isoDate: string, months: number): string {
   const d = new Date(isoDate + 'T00:00:00Z');
   d.setUTCMonth(d.getUTCMonth() + months);

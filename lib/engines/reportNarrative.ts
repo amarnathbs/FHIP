@@ -1,4 +1,4 @@
-import { formatMoney } from './money';
+import { formatMoneyWhole } from './money';
 
 export type MovementFormat = 'currency' | 'percentage_point' | 'ratio' | 'count' | 'months';
 export type MovementDirection = 'positive' | 'negative' | 'neutral' | 'contextual';
@@ -22,7 +22,7 @@ export interface MetricMovement {
 function formatValue(value: number, format: MovementFormat, currency: 'AUD' | 'INR'): string {
   switch (format) {
     case 'currency':
-      return formatMoney(value, currency);
+      return formatMoneyWhole(value, currency);
     case 'percentage_point':
       return `${value.toFixed(1)}%`;
     case 'ratio':
@@ -100,7 +100,7 @@ export function computeMetricMovement(params: {
   let displayText: string;
   switch (format) {
     case 'currency':
-      displayText = `${sign}${formatMoney(Math.abs(changeAbsolute), currency)}`;
+      displayText = `${sign}${formatMoneyWhole(Math.abs(changeAbsolute), currency)}`;
       break;
     case 'percentage_point':
       displayText = `${sign}${Math.abs(changeAbsolute).toFixed(1)} percentage points`;

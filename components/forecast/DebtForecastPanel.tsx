@@ -12,12 +12,24 @@ interface ForecastExplanationRow {
     totalInterest: number;
     acceleratedPayoffMonth: number | null;
     acceleratedTotalInterest: number | null;
+    // FHIP-FC-DEBT-001/002/003
+    isNegativeAmortization?: boolean;
+    riskLevel?: 'high' | 'medium' | 'low';
+    curePayment?: number;
+    payoffPayment3yr?: number;
+    payoffPayment5yr?: number;
   };
 }
 interface RunDetail {
   run: { id: string };
   explanations: ForecastExplanationRow[];
 }
+
+const RISK_LABEL: Record<string, { label: string; className: string }> = {
+  high: { label: 'High Risk', className: 'bg-risk/10 text-risk' },
+  medium: { label: 'Medium Risk', className: 'bg-caution/10 text-caution' },
+  low: { label: 'Low Risk', className: 'bg-progress/10 text-progress' },
+};
 
 export function DebtForecastPanel({
   liabilities,
@@ -90,7 +102,14 @@ export function DebtForecastPanel({
             const inputs = explanation?.calculation_inputs;
             return (
               <div key={liability.id} className="rounded border p-4">
-                <p className="text-sm font-semibold text-gray-800">{liability.name}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-800">{liability.name}</p>
+                  {inputs?.riskLevel && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${RISK_LABEL[inputs.riskLevel]?.className ?? ''}`}>
+                      {RISK_LABEL[inputs.riskLevel]?.label ?? inputs.riskLevel}
+                    </span>
+                  )}
+                </div>
                 {inputs && (
                   <div className="mt-2 flex flex-wrap gap-6 text-sm">
                     <span>Payoff: {inputs.payoffMonth === null ? 'beyond horizon' : inputs.payoffMonth === 0 ? 'already paid off' : `month ${inputs.payoffMonth}`}</span>
@@ -98,6 +117,16 @@ export function DebtForecastPanel({
                     {inputs.acceleratedPayoffMonth !== null && inputs.acceleratedPayoffMonth !== undefined && (
                       <span>With extra repayment: month {inputs.acceleratedPayoffMonth}</span>
                     )}
+                  </div>
+                )}
+                {inputs?.isNegativeAmortization && (
+                  <div className="mt-3 rounded border border-risk/30 bg-risk/5 p-3 text-sm">
+                    <p className="font-semibold text-risk">Balance is growing — repayment doesn&apos;t cover accruing interest</p>
+                    <div className="mt-1 flex flex-wrap gap-6 text-xs text-gray-700">
+                      {inputs.curePayment !== undefined && <span>Stop growth: {formatMoney(inputs.curePayment, liability.currency)}/mo</span>}
+                      {inputs.payoffPayment3yr !== undefined && <span>Clear in 3yr: {formatMoney(inputs.payoffPayment3yr, liability.currency)}/mo</span>}
+                      {inputs.payoffPayment5yr !== undefined && <span>Clear in 5yr: {formatMoney(inputs.payoffPayment5yr, liability.currency)}/mo</span>}
+                    </div>
                   </div>
                 )}
                 {explanation && <p className="mt-2 text-xs text-gray-500">{explanation.explanation_text}</p>}

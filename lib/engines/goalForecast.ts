@@ -8,6 +8,7 @@ import {
   addMonths,
   monthsBetween,
 } from './goalMath';
+import { formatMoneyWhole } from './money';
 
 export const MODEL_VERSION = 'goals-1.0.0';
 
@@ -329,7 +330,7 @@ function educationForecast(goal: GoalRecord, assumption: ScenarioAssumption, tod
     fundingGapAtTargetDate: Math.max(0, targetAmountFuture - goal.currentAmount),
     progressPct: targetAmountFuture > 0 ? (goal.currentAmount / targetAmountFuture) * 100 : 0,
     trackStatus: 'unable_to_assess',
-    explanation: `Cost in today's money is $${goal.targetAmount.toFixed(0)}; estimated cost at completion is $${targetAmountFuture.toFixed(0)} using a ${(assumption.costInflation * 100).toFixed(1)}% education-cost inflation assumption.`,
+    explanation: `Cost in today's money is ${formatMoneyWhole(goal.targetAmount, goal.currencyCode)}; estimated cost at completion is ${formatMoneyWhole(targetAmountFuture, goal.currencyCode)} using a ${(assumption.costInflation * 100).toFixed(1)}% education-cost inflation assumption.`,
     currentValue: { costInToday: goal.targetAmount, educationInflation: assumption.costInflation },
   };
 }

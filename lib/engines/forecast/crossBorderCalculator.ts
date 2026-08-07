@@ -14,6 +14,7 @@
 import { buildExplanation } from './explain';
 import { addMonthsToDateString, firstOfMonth, monthlyCompoundRate, projectInvestmentMonth, projectLoanMonth, round2 } from './monthlyPrimitives';
 import { getAssumptionValue } from './assumptions';
+import { convertToReportingCurrency, type SupportedCurrency } from '@/lib/engines/fx';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
 
 export interface CrossBorderCalculatorInput {
@@ -38,10 +39,13 @@ const DEFAULT_RETIREMENT_RETURN = 6.5;
 const DEFAULT_LIABILITY_RATE = 6;
 const DEFAULT_FX_RATE_AUD_INR = 56;
 
-function convertToReporting(localAmount: number, foreignCurrency: 'AUD' | 'INR', fxRateAudInr: number): number {
+function convertToReporting(localAmount: number, foreignCurrency: SupportedCurrency, fxRateAudInr: number): number {
   // foreignCurrency is whichever isn't the reporting currency, so exactly
-  // one of these two directions applies for a given forecast run.
-  return foreignCurrency === 'INR' ? localAmount / fxRateAudInr : localAmount * fxRateAudInr;
+  // one of these two directions applies for a given forecast run. Delegates
+  // to the shared lib/engines/fx.ts helper (also used by the dashboard
+  // aggregation engine) rather than duplicating the conversion formula.
+  const reportingCurrency: SupportedCurrency = foreignCurrency === 'INR' ? 'AUD' : 'INR';
+  return convertToReportingCurrency(localAmount, foreignCurrency, reportingCurrency, fxRateAudInr);
 }
 
 export function runCrossBorderForecast(input: CrossBorderCalculatorInput): { results: ForecastResultRow[]; explanations: ForecastExplanationRow[] } {

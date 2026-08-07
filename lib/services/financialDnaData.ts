@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { ageFromDob } from '@/lib/engines/age';
 import {
   classifyFinancialDna,
   MODEL_VERSION,
@@ -10,16 +11,6 @@ import {
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
-}
-
-function ageFromDob(dob: string | null): number | null {
-  if (!dob) return null;
-  const birth = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
 }
 
 export interface DnaHistoryPoint {

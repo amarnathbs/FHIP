@@ -62,6 +62,62 @@ export async function checkFundingAllocation(
   return evaluateAllocation(existingAllocatedPct, pct);
 }
 
+// Forecasting P1 fix FHIP-FC-GOAL-001 — a goal funded (wholly or partly) by
+// an allocated share of a linked investment's/retirement account's own
+// recurring contribution previously forecasted with $0/month required,
+// because nothing ever multiplied the linked record's contribution by the
+// funding source's allocation_percentage. This sums that flow across every
+// active funding source for one goal — callers add the result on top of
+// user_goals.planned_contribution_amount before it reaches a forecast
+// calculator; it is NOT written back to plannedContributionAmount's own
+// display value, which stays "what the user directly plans to contribute".
+export interface AllocatedContributionFundingSource {
+  sourceType: string;
+  linkedInvestmentId: string | null;
+  linkedRetirementId: string | null;
+  allocationPercentage: number | null;
+}
+export interface AllocatedContributionInvestment {
+  annualContribution: number | null;
+}
+export interface AllocatedContributionRetirementAccount {
+  employerContribution: number | null;
+  personalContribution: number | null;
+  contributionFrequency: string | null;
+}
+
+const RETIREMENT_CONTRIBUTION_FREQUENCY_TO_MONTHLY: Record<string, number> = {
+  weekly: 52 / 12,
+  fortnightly: 26 / 12,
+  monthly: 1,
+  quarterly: 1 / 3,
+  annually: 1 / 12,
+};
+
+export function computeAllocatedMonthlyContribution(
+  fundingSources: AllocatedContributionFundingSource[],
+  investmentsById: Map<string, AllocatedContributionInvestment>,
+  retirementAccountsById: Map<string, AllocatedContributionRetirementAccount>
+): number {
+  let total = 0;
+  for (const source of fundingSources) {
+    const pct = source.allocationPercentage;
+    if (pct === null || pct === undefined) continue; // fixed-amount sources carry no recurring-contribution signal
+    if (source.sourceType === 'investment' && source.linkedInvestmentId) {
+      const inv = investmentsById.get(source.linkedInvestmentId);
+      if (inv) total += ((inv.annualContribution ?? 0) / 12) * (pct / 100);
+    } else if (source.sourceType === 'retirement' && source.linkedRetirementId) {
+      const acc = retirementAccountsById.get(source.linkedRetirementId);
+      if (acc) {
+        const factor = RETIREMENT_CONTRIBUTION_FREQUENCY_TO_MONTHLY[acc.contributionFrequency ?? 'monthly'] ?? 1;
+        const monthly = ((acc.employerContribution ?? 0) + (acc.personalContribution ?? 0)) * factor;
+        total += monthly * (pct / 100);
+      }
+    }
+  }
+  return total;
+}
+
 // Resolves the live allocated_amount for a percentage-based funding source
 // against its linked asset/investment's current value, so allocations stay
 // correct as the underlying balance changes rather than going stale.

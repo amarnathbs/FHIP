@@ -2,8 +2,20 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 
 const STEPS = ['Profile', 'Household', 'Countries & Currency', 'Goals', 'Review'] as const;
+
+// Client-side hints only — lib/validation/profile.ts's Zod refine is the
+// authoritative check. This is the primary account holder's own DOB, so the
+// adult bounds apply (not the wider household-member bounds).
+function isoDateYearsAgo(years: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+const DOB_MIN_DATE = isoDateYearsAgo(MAX_PLAUSIBLE_AGE);
+const DOB_MAX_DATE = isoDateYearsAgo(MIN_PLAUSIBLE_AGE);
 
 type FormState = {
   full_name: string;
@@ -137,6 +149,8 @@ export function OnboardingWizard() {
               type="date"
               value={form.date_of_birth}
               onChange={(e) => update({ date_of_birth: e.target.value })}
+              min={DOB_MIN_DATE}
+              max={DOB_MAX_DATE}
               className="mt-1 w-full rounded border px-3 py-2"
             />
           </div>

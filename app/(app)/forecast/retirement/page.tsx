@@ -4,6 +4,7 @@ import { AppShell } from '@/components/ui/AppShell';
 import { loadDashboard } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext } from '@/lib/services/forecastData';
 import { RetirementForecastPanel } from '@/components/forecast/RetirementForecastPanel';
+import { RetirementTimingSettings } from '@/components/forecast/RetirementTimingSettings';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 
 export default async function ForecastRetirementPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
@@ -14,7 +15,7 @@ export default async function ForecastRetirementPage({ searchParams }: { searchP
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [summary, { scenarios, activeScenario }] = await Promise.all([
+  const [summary, { scenarios, activeScenario, profile }] = await Promise.all([
     loadDashboard(user.id, supabase),
     resolveForecastPageContext(user.id, scenario, supabase),
   ]);
@@ -29,6 +30,11 @@ export default async function ForecastRetirementPage({ searchParams }: { searchP
           </div>
           <ScenarioSwitcher scenarios={scenarios} activeScenarioId={activeScenario.id} />
         </div>
+        <RetirementTimingSettings
+          initialRetirementAge={profile.retirement_age ?? null}
+          initialRetirementDate={profile.retirement_date ?? null}
+          initialOverrideMonths={profile.retirement_timing_override_months ?? null}
+        />
         <RetirementForecastPanel currency={summary.currency} currentBalance={summary.totalRetirement} scenarioId={activeScenario.id} />
       </div>
     </AppShell>

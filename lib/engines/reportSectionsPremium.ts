@@ -7,9 +7,8 @@
 import type { ReportSourceData, PremiumSourceData } from '@/lib/services/reportSnapshotResolver';
 import type { PremiumSectionCode } from './reportEligibility';
 import type { BuiltSection } from './reportSections';
-import { formatMoney } from './money';
+import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
-import { categoryLabel } from './reportCopy';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -206,7 +205,7 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
   const byType = new Map<string, { type: string; label: string; value: number; count: number }>();
   const byCountry = new Map<string, { country: string; value: number; count: number }>();
   for (const r of rows) {
-    const t = byType.get(r.investment_type) ?? { type: r.investment_type, label: categoryLabel(r.investment_type), value: 0, count: 0 };
+    const t = byType.get(r.investment_type) ?? { type: r.investment_type, label: source.content.categoryLabel(r.investment_type), value: 0, count: 0 };
     t.value += r.current_value;
     t.count += 1;
     byType.set(r.investment_type, t);
@@ -234,7 +233,7 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
     },
     narrativeText:
       largestSharePct !== null
-        ? `Your recorded investment holdings total ${formatMoney(totalCurrentValue, source.currency)}, with ${byTypeArr[0].label} representing approximately ${largestSharePct.toFixed(0)}% of the total. Concentration in a single investment type is not automatically negative, but it may increase sensitivity to conditions affecting that type specifically.`
+        ? `Your recorded investment holdings total ${formatMoneyWhole(totalCurrentValue, source.currency)}, with ${byTypeArr[0].label} representing approximately ${largestSharePct.toFixed(0)}% of the total. Concentration in a single investment type is not automatically negative, but it may increase sensitivity to conditions affecting that type specifically.`
         : null,
     chartData: { byType: byTypeArr, byCountry: byCountryArr },
     sourceReferences: {},
@@ -294,7 +293,7 @@ function buildInsuranceAnalysis(source: ReportSourceData, premium: PremiumSource
   const byType = new Map<string, { type: string; label: string; unit: string; coverAmount: number; monthlyPremium: number; count: number }>();
   for (const r of rows) {
     const unit = COVER_UNIT[r.cover_type] ?? 'lump_sum';
-    const t = byType.get(r.cover_type) ?? { type: r.cover_type, label: categoryLabel(r.cover_type), unit, coverAmount: 0, monthlyPremium: 0, count: 0 };
+    const t = byType.get(r.cover_type) ?? { type: r.cover_type, label: source.content.categoryLabel(r.cover_type), unit, coverAmount: 0, monthlyPremium: 0, count: 0 };
     if (unit !== 'no_lump_sum') t.coverAmount += r.cover_amount;
     t.monthlyPremium += monthlyOf(r.premium, r.premium_frequency);
     t.count += 1;
@@ -309,7 +308,7 @@ function buildInsuranceAnalysis(source: ReportSourceData, premium: PremiumSource
     displayOrder: 20,
     sectionStatus: 'included',
     sectionData: { policies: rows, byType: byTypeArr, totalMonthlyPremium },
-    narrativeText: `Your household has ${rows.length} recorded insurance ${rows.length === 1 ? 'policy' : 'policies'} covering ${byTypeArr.map((t) => t.label).join(', ')}, for approximately ${formatMoney(totalMonthlyPremium, source.currency)} per month in premiums combined. Cover amounts are shown separately by type below because lump-sum, monthly-benefit and policy-based cover are not directly comparable.`,
+    narrativeText: `Your household has ${rows.length} recorded insurance ${rows.length === 1 ? 'policy' : 'policies'} covering ${byTypeArr.map((t) => t.label).join(', ')}, for approximately ${formatMoneyWhole(totalMonthlyPremium, source.currency)} per month in premiums combined. Cover amounts are shown separately by type below because lump-sum, monthly-benefit and policy-based cover are not directly comparable.`,
     chartData: { byType: byTypeArr },
     sourceReferences: {},
     confidenceLevel: null,
@@ -514,16 +513,22 @@ function buildPersonalActionPlan(source: ReportSourceData): BuiltSection {
     module: string;
   }[] = [];
 
-  for (const rec of source.healthScore?.recommendations ?? []) {
-    const component = source.healthScore?.components.find((c) => c.code === rec.componentCode);
+  // Real recommendation-engine matches (action_recommendation_master, Report
+  // v3 Phase 3a) — blends pillar-triggered and forecast-triggered rows.
+  // Replaces the old direct sourcing from healthScore.recommendations, which
+  // bypassed the admin-editable library entirely; pillar-sourced items still
+  // carry the underlying component's currentValue/benchmarkValue so the gap
+  // display below is unchanged for those.
+  for (const rec of source.actionRecommendations) {
+    const component = rec.pillarCode ? source.healthScore?.components.find((c) => c.code === rec.pillarCode) : undefined;
     items.push({
-      priority: rec.priority,
+      priority: rec.severity === 'critical' || rec.severity === 'high' ? 'high' : rec.severity === 'medium' ? 'medium' : 'low',
       title: rec.title,
-      gapDescription: rec.explanation,
+      gapDescription: rec.content,
       currentValue: component?.currentValue ?? null,
       targetValue: component?.benchmarkValue ?? null,
-      reviewStep: MODULE_REVIEW_STEP[rec.componentCode] ?? 'Review the relevant section of the platform.',
-      module: rec.componentCode,
+      reviewStep: (rec.pillarCode && MODULE_REVIEW_STEP[rec.pillarCode]) || 'Review the relevant section of the platform.',
+      module: rec.pillarCode ?? rec.forecastCategory ?? 'general',
     });
   }
   for (const act of source.resilience?.actions ?? []) {

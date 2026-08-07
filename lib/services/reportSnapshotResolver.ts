@@ -11,6 +11,8 @@ import { listTwinRuns, getTwinRunDetail, type StoredTwinDetail } from '@/lib/ser
 import { getPlanTier, type PlanTier } from '@/lib/services/entitlements';
 import type { CommitmentRow } from '@/lib/engines/resilience';
 import { buildForecastReportData, type ForecastReportData } from '@/lib/services/forecastReportData';
+import { loadReportContent, type ReportContent } from '@/lib/services/reportContentData';
+import { buildReportActionMatches, type ReportActionItem } from '@/lib/services/recommendationsData';
 
 export interface ReportProfile {
   fullName: string | null;
@@ -108,6 +110,13 @@ export interface ReportSourceData {
   planTier: PlanTier;
   premium: PremiumSourceData | null; // null for free-tier users — Premium-only queries are skipped entirely, not just hidden
   commitments: CommitmentRow[]; // light query, loaded for every tier — powers the 90-day commitment timeline in both Free and Premium reports
+  content: ReportContent; // report_content_library, replacing reportCopy.ts's hardcoded constants (Report v3 Phase 3a)
+  // Real recommendation-engine matches (action_recommendation_master, filtered
+  // to include_in_monthly_report=true) — pillar-triggered signals for every
+  // tier, plus forecast-category signals too when planTier === 'premium'
+  // (Report v3 Phase 3a). Replaces reportSections.ts's/reportSectionsPremium.ts's
+  // old ad hoc sourcing from healthScore.recommendations directly.
+  actionRecommendations: ReportActionItem[];
 }
 
 const FRESHNESS_TABLES: { category: string; table: string }[] = [
@@ -163,7 +172,7 @@ export async function resolveReportSourceData(
     supabase.from('households').select('household_name, household_type, dependants_count').eq('user_id', userId).maybeSingle(),
   ]);
 
-  const [dashboard, healthScore, resilience, dna, goals, financialTwin, commitmentsRes] = await Promise.all([
+  const [dashboard, healthScore, resilience, dna, goals, financialTwin, commitmentsRes, content] = await Promise.all([
     loadDashboard(userId, supabase),
     loadHealthScore(userId, supabase).catch(() => null),
     loadResilience(userId, supabase).catch(() => null),
@@ -175,6 +184,8 @@ export async function resolveReportSourceData(
     // previously gated behind planTier === 'premium', which meant Free
     // reports could never show this even though the Free spec calls for it).
     supabase.from('future_financial_commitments').select('amount, due_date, is_mandatory').eq('user_id', userId).eq('is_active', true),
+    // Small table (~40-60 active rows), one query per report generation.
+    loadReportContent('en', supabase),
   ]);
   const commitments = (commitmentsRes.data as CommitmentRow[]) ?? [];
 
@@ -193,6 +204,14 @@ export async function resolveReportSourceData(
   const dataFreshness = await loadDataFreshness(userId, supabase);
 
   const planTier = await getPlanTier(userId);
+
+  // Kicked off alongside the premium block below rather than awaited inline —
+  // pillar signals for every tier, plus forecast-category signals too when
+  // Premium (which already resolves a forecast profile/scenario via
+  // buildForecastReportData below, so this adds no new side effect; Free-tier
+  // report generation never touches forecast data today, and this
+  // deliberately doesn't change that).
+  const actionRecommendationsPromise = buildReportActionMatches(userId, { includeForecastSignals: planTier === 'premium' }, supabase).catch(() => []);
 
   // Premium-only queries are skipped entirely for free-tier users rather than
   // just hidden in the UI, to avoid paying for data a free report never renders.
@@ -266,6 +285,8 @@ export async function resolveReportSourceData(
     };
   }
 
+  const actionRecommendations = await actionRecommendationsPromise;
+
   return {
     userId,
     reportMonth: month,
@@ -291,6 +312,8 @@ export async function resolveReportSourceData(
     planTier,
     premium,
     commitments,
+    content,
+    actionRecommendations,
   };
 }
 
@@ -308,7 +331,7 @@ export function buildEligibilityInput(source: ReportSourceData): EligibilityInpu
     hasFinancialTwin: source.financialTwin !== null,
     countriesInUseCount: d.countriesInUse.length,
     hasActions:
-      (source.healthScore?.recommendations.length ?? 0) > 0 ||
+      source.actionRecommendations.length > 0 ||
       (source.resilience?.actions.length ?? 0) > 0 ||
       source.goals.goals.some((g) => g.forecasts.base.requiredMonthlyContribution !== null),
   };

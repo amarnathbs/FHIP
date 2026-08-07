@@ -3,7 +3,7 @@ import { computeSectionEligibility, type SectionCode, type FreeSectionCode, type
 import { computeMetricMovement, scoreMovementNarrative, overallocationNarrative, firstReportMessage } from './reportNarrative';
 import { generateGoalInsights } from './goalInsights';
 import { computeKeyInsights } from './reportInsights';
-import { formatMoney } from './money';
+import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
 
 export interface BuiltSection {
@@ -139,7 +139,7 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
   // emergency-fund target-zone bar (Page 2/5). 3-6 months mirrors the
   // healthScore.ts emergency_fund component's own scoring brackets (4-6
   // months scores well), not a new planning assumption.
-  const fmt = (n: number) => formatMoney(n, currency);
+  const fmt = (n: number) => formatMoneyWhole(n, currency);
   // totalMonthlyExpenses deliberately excludes debt repayments (tracked
   // separately in dashboard.ts) — the waterfall and narrative must always
   // show debt as its own bucket so the visible numbers actually sum to net
@@ -314,7 +314,7 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
       status === 'included'
         ? {
             allocation: d.netWorthAllocation,
-            summary: `Your recorded assets total ${formatMoney(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoney(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoney(d.netWorth, source.currency)}.`,
+            summary: `Your recorded assets total ${formatMoneyWhole(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoneyWhole(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoneyWhole(d.netWorth, source.currency)}.`,
           }
         : null,
     sourceReferences: { financialSnapshotMonth: source.reportMonth },
@@ -508,7 +508,7 @@ function buildCommitmentsTimeline(source: ReportSourceData): BuiltSection {
     sectionStatus: 'included',
     sectionData: { commitments: upcoming, total },
     narrativeText: hasUpcoming
-      ? `${upcoming.length} recorded upcoming ${upcoming.length === 1 ? 'commitment totals' : 'commitments total'} ${formatMoney(total, source.currency)} over the next 90 days.`
+      ? `${upcoming.length} recorded upcoming ${upcoming.length === 1 ? 'commitment totals' : 'commitments total'} ${formatMoneyWhole(total, source.currency)} over the next 90 days.`
       : 'No material upcoming commitments were recorded for the next 90 days.',
     chartData: hasUpcoming ? { commitments: upcoming } : null,
     sourceReferences: {},
@@ -622,10 +622,23 @@ function buildCrossBorder(source: ReportSourceData, status: SectionStatus, reaso
   };
 }
 
+// Severity (action_recommendation_master's 4-value vocabulary) collapses to
+// this section's 3-value priority the same way reportSectionsPremium.ts's
+// buildPersonalActionPlan does — critical and high both read as "high" here,
+// there's no separate "review immediately" tier in this section's UI.
+function severityToPriority(severity: 'low' | 'medium' | 'high' | 'critical'): string {
+  return severity === 'critical' || severity === 'high' ? 'high' : severity === 'medium' ? 'medium' : 'low';
+}
+
 function buildActions(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
   const items: { priority: string; title: string; reason: string; relatedModule: string }[] = [];
-  for (const rec of source.healthScore?.recommendations ?? []) {
-    items.push({ priority: rec.priority, title: rec.title, reason: rec.explanation, relatedModule: 'score' });
+  // Real recommendation-engine matches (action_recommendation_master, Report
+  // v3 Phase 3a) — pillar-triggered for every tier, plus forecast-triggered
+  // too on Premium. Replaces the old direct sourcing from
+  // healthScore.recommendations, which bypassed the admin-editable library
+  // entirely.
+  for (const rec of source.actionRecommendations) {
+    items.push({ priority: severityToPriority(rec.severity), title: rec.title, reason: rec.content, relatedModule: rec.pillarCode ?? rec.forecastCategory ?? 'recommendations' });
   }
   for (const act of source.resilience?.actions ?? []) {
     items.push({ priority: act.priority, title: act.title, reason: act.explanation, relatedModule: act.relatedModule });

@@ -97,3 +97,7 @@ export function matchRecommendations(context: EvaluationContext, library: Recomm
 export function renderRecommendationTitle(rec: Pick<RecommendationMasterRow, 'actionTitleTemplate'>, context: EvaluationContext): string {
   return renderTemplate(rec.actionTitleTemplate, context) ?? rec.actionTitleTemplate;
 }
+
+export function renderRecommendationContent(rec: Pick<RecommendationMasterRow, 'actionContentTemplate'>, context: EvaluationContext): string {
+  return renderTemplate(rec.actionContentTemplate, context) ?? rec.actionContentTemplate;
+}

@@ -46,7 +46,14 @@ export async function renderReportToPdf(reportId: string, exportId: string): Pro
         () => {
           const svgs = document.querySelectorAll('.recharts-wrapper svg');
           if (svgs.length === 0) return true;
-          return Array.from(svgs).every((svg) => (svg as SVGSVGElement).getBBox().width > 0);
+          // Both dimensions, not just width — a chart can lay out with a
+          // non-zero width but a still-collapsing height during the
+          // ResizeObserver pass, which would otherwise pass this check
+          // while still rendering as a flat/blank strip in the PDF.
+          return Array.from(svgs).every((svg) => {
+            const box = (svg as SVGSVGElement).getBBox();
+            return box.width > 0 && box.height > 0;
+          });
         },
         { timeout: 5000 }
       )

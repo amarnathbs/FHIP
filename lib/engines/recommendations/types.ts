@@ -9,6 +9,13 @@ export type ForecastCategory = 'net_worth' | 'retirement' | 'goal' | 'debt' | 'i
 
 export type ForecastStatus = 'ahead_of_plan' | 'on_track' | 'slightly_behind' | 'at_risk' | 'significantly_off_track' | 'review_required';
 
+// A row is either forecast-variance-triggered (the original 542-row imported
+// library — forecastCategory/forecastStatus populated, pillarCode/scoreBand
+// null) or score-pillar-triggered (Phase 3a's Health Score-driven rows —
+// pillarCode/scoreBand populated, forecastCategory/forecastStatus null). See
+// migration 0025's action_recommendation_master_trigger_fields_check.
+export type TriggerType = 'forecast_variance' | 'score_pillar';
+
 export type VarianceResultValue = 'favourable' | 'unfavourable' | 'neutral';
 
 export type ConditionOperator = 'equals' | 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in' | 'is_null' | 'is_not_null';
@@ -26,12 +33,16 @@ export interface RecommendationCondition {
 export interface RecommendationMasterRow {
   id: string;
   recommendationCode: string;
-  forecastCategory: ForecastCategory;
+  triggerType: TriggerType;
+  // Null exactly when triggerType is the other kind — see TriggerType's note.
+  forecastCategory: ForecastCategory | null;
+  forecastStatus: ForecastStatus | null;
+  pillarCode: string | null;
+  scoreBand: string | null;
   subCategory: string;
   scenarioName: string;
   scenarioDescription: string | null;
   varianceResult: VarianceResultValue | null;
-  forecastStatus: ForecastStatus;
   severity: 'low' | 'medium' | 'high' | 'critical';
   actionType: string;
   actionTitleTemplate: string;

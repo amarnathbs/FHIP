@@ -12,6 +12,8 @@ interface ForecastExplanationRow {
     retirementImpact: number;
     depletionMonth: number | null;
     recoveryMonth: number | null;
+    resilienceHealthBand?: string;
+    resilienceHealthLabel?: string;
   };
 }
 interface RunDetail {
@@ -23,6 +25,14 @@ const SCENARIO_OPTIONS: { value: StressScenarioType | 'none'; label: string }[] 
   { value: 'none', label: 'Baseline (no stress)' },
   ...(Object.keys(STRESS_SCENARIO_LABELS) as StressScenarioType[]).map((key) => ({ value: key, label: STRESS_SCENARIO_LABELS[key] })),
 ];
+
+const RESILIENCE_HEALTH_CLASS: Record<string, string> = {
+  strong: 'bg-progress/10 text-progress',
+  moderate: 'bg-caution/10 text-caution',
+  weak: 'bg-caution/10 text-caution',
+  critical: 'bg-risk/10 text-risk',
+  unknown: 'bg-gray-100 text-gray-500',
+};
 
 export function ResilienceForecastPanel({ currency, scenarioId }: { currency: 'AUD' | 'INR'; scenarioId?: string }) {
   const [scenario, setScenario] = useState<StressScenarioType | 'none'>('none');
@@ -79,7 +89,12 @@ export function ResilienceForecastPanel({ currency, scenarioId }: { currency: 'A
 
       {inputs && (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {inputs.resilienceHealthLabel && (
+            <span className={`mt-4 inline-block rounded-full px-3 py-1 text-sm font-semibold ${RESILIENCE_HEALTH_CLASS[inputs.resilienceHealthBand ?? 'unknown']}`}>
+              Resilience Health: {inputs.resilienceHealthLabel}
+            </span>
+          )}
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Net worth impact" value={formatMoney(inputs.netWorthImpact, currency)} />
             <Stat label="Retirement impact" value={formatMoney(inputs.retirementImpact, currency)} />
             <Stat label="Emergency-fund depletion" value={inputs.depletionMonth === null ? 'Not projected' : `Month ${inputs.depletionMonth}`} />

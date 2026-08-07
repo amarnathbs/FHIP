@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard } from '@/lib/services/dashboardData';
+import { loadDashboard, getLatestSnapshotAsOf, type LatestSnapshot } from '@/lib/services/dashboardData';
 import { resolveAssumptions, getAssumptionValue, type RawForecastAssumption, type RawGlobalAssumption } from '@/lib/engines/forecast/assumptions';
 import { runForecastCalculation, computeForecastInputHash, isForecastTypeSupported, FORECAST_ENGINE_VERSION } from '@/lib/engines/forecast/engine';
 import type { NetWorthCalculatorInput, PlannedFinancialEvent } from '@/lib/engines/forecast/netWorthCalculator';
@@ -11,8 +11,12 @@ import type { RetirementCalculatorInput, RetirementTargetMethod } from '@/lib/en
 import type { CrossBorderCalculatorInput } from '@/lib/engines/forecast/crossBorderCalculator';
 import type { ResilienceCalculatorInput } from '@/lib/engines/forecast/resilienceCalculator';
 import { applyStressScenario, type StressScenarioType, type StressScenarioParams } from '@/lib/engines/resilienceStress';
+import { computeAccessibleLiquidResources, type CommitmentRow } from '@/lib/engines/resilience';
 import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast/types';
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
+import { isPlausibleDob } from '@/lib/engines/age';
+import { toMonthly, type Frequency } from '@/lib/engines/money';
+import { computeAllocatedMonthlyContribution, type AllocatedContributionInvestment, type AllocatedContributionRetirementAccount } from '@/lib/services/goalFundingAllocation';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -354,17 +358,33 @@ async function buildCalculatorInput(
   resilienceOptions: ResilienceRunOptions
 ): Promise<CalculatorInputResult> {
   if (forecastType === 'resilience') {
-    const dashboard = await loadDashboard(userId, supabase);
+    // Forecasting P1 fix FHIP-FC-RES-001 — commitments were previously
+    // hardcoded to [] here (never queried), and openingLiquidAssets used the
+    // raw liquidAssets bucket instead of the same accessible-after-
+    // commitments figure applyStressScenario already computes internally
+    // (computeAccessibleLiquidResources, shared with the current-state
+    // resilience score in resilience.ts) — together these could show a
+    // cash-rich household as already depleted at the start of a stress
+    // scenario. Real commitments + the already-tested accessible figure
+    // fixes both without inventing new calculation logic.
+    const [dashboard, commitmentsRes] = await Promise.all([
+      loadDashboard(userId, supabase),
+      supabase.from('future_financial_commitments').select('amount, due_date, is_mandatory').eq('user_id', userId).eq('is_active', true),
+    ]);
+    const commitments = (commitmentsRes.data ?? []) as CommitmentRow[];
     const scenario = resilienceOptions.stressScenario;
-    const shockResult = scenario ? applyStressScenario(dashboard, scenario, [], resilienceOptions.stressParams) : null;
+    const shockResult = scenario ? applyStressScenario(dashboard, scenario, commitments, resilienceOptions.stressParams) : null;
     const shocked = shockResult?.shockedDashboard ?? dashboard;
+    const openingLiquidAssets = shockResult
+      ? shockResult.after.accessibleLiquidResources
+      : computeAccessibleLiquidResources(dashboard, commitments).accessible;
 
     const input: ResilienceCalculatorInput = {
       baselineDate,
       months,
       assumptions,
       currency: dashboard.currency,
-      openingLiquidAssets: shocked.liquidAssets,
+      openingLiquidAssets,
       openingOtherAssets: shocked.totalAssets - shocked.liquidAssets,
       openingInvestments: shocked.totalInvestments,
       openingRetirement: shocked.totalRetirement,
@@ -472,15 +492,41 @@ async function buildCalculatorInput(
     }, 0);
     const currency = accounts[0]?.currency_code ?? profile.base_currency;
 
+    // Forecasting P1 fix FHIP-FC-RET-001 — timing hierarchy:
+    // (1) forecast_profiles.retirement_date -> months = explicit date diff (most precise;
+    //     stands alone, does NOT require a DOB — knowing the exact retirement date already
+    //     gives months-until-retirement with no need to derive current age at all. An
+    //     earlier version of this fix incorrectly gated this tier behind DOB being present,
+    //     which defeated its purpose as an independent, more-precise signal — caught live
+    //     testing TC003 (no DOB on file, retirement_date alone was silently ignored).
+    // (2) DOB (plausible) + retirement_age -> existing age-based calculation, computed inside
+    //     the calculator itself (no override passed)
+    // (3) forecast_profiles.retirement_timing_override_months -> manual fallback, used only
+    //     when there's no retirement_date AND no plausible DOB to derive currentAge from
+    // (4) none of the above -> monthsUntilRetirement stays null; the calculator already
+    //     surfaces "could not be projected" rather than failing
     const dobRaw = dobResult.data?.date_of_birth as string | null | undefined;
+    const baselineAsOf = new Date(baselineDate + 'T00:00:00Z');
+    const dobPlausible = isPlausibleDob(dobRaw ?? null, baselineAsOf);
     let currentAge: number | null = null;
-    if (dobRaw) {
+    if (dobRaw && dobPlausible) {
       const dob = new Date(dobRaw + 'T00:00:00Z');
-      const baseline = new Date(baselineDate + 'T00:00:00Z');
-      currentAge = (baseline.getUTCFullYear() - dob.getUTCFullYear()) + (baseline.getUTCMonth() - dob.getUTCMonth()) / 12;
+      currentAge = (baselineAsOf.getUTCFullYear() - dob.getUTCFullYear()) + (baselineAsOf.getUTCMonth() - dob.getUTCMonth()) / 12;
     }
     const retirementAge = profile.retirement_age ?? getAssumptionValue(assumptions, 'retirement_age', 65);
-    const monthsUntilRetirement = currentAge !== null ? Math.max(0, Math.round((retirementAge - currentAge) * 12)) : null;
+
+    let monthsUntilRetirementOverride: number | null = null;
+    if (profile.retirement_date) {
+      const target = new Date(profile.retirement_date + 'T00:00:00Z');
+      monthsUntilRetirementOverride = Math.max(
+        0,
+        (target.getUTCFullYear() - baselineAsOf.getUTCFullYear()) * 12 + (target.getUTCMonth() - baselineAsOf.getUTCMonth())
+      );
+    } else if (currentAge === null && profile.retirement_timing_override_months != null) {
+      monthsUntilRetirementOverride = Math.max(0, profile.retirement_timing_override_months);
+    }
+    const monthsUntilRetirement =
+      monthsUntilRetirementOverride ?? (currentAge !== null ? Math.max(0, Math.round((retirementAge - currentAge) * 12)) : null);
     const effectiveMonths =
       monthsUntilRetirement !== null
         ? Math.max(months, Math.min(MAX_FORECAST_MONTHS, monthsUntilRetirement + RETIREMENT_POST_RETIREMENT_BUFFER_MONTHS))
@@ -496,6 +542,7 @@ async function buildCalculatorInput(
       monthlyContribution,
       currentAge,
       retirementAge,
+      monthsUntilRetirementOverride,
       targetMethod: retirementOptions.targetMethod,
       targetCorpus: retirementOptions.targetCorpus,
       desiredAnnualIncome: retirementOptions.desiredAnnualIncome,
@@ -506,9 +553,13 @@ async function buildCalculatorInput(
   }
 
   if (forecastType === 'debt') {
+    // interest_rate_type/fixed_rate_expiry/credit_limit added for
+    // FHIP-FC-DEBT-001/002/003's risk ranking — already existed on
+    // liabilities (used elsewhere, e.g. dashboard.ts's variable-rate/
+    // credit-utilization ratios), just weren't selected here before.
     const { data: liabilities, error } = await supabase
       .from('liabilities')
-      .select('id, liability_name, balance, interest_rate, monthly_repayment, debt_type, currency_code')
+      .select('id, liability_name, balance, interest_rate, monthly_repayment, debt_type, currency_code, interest_rate_type, fixed_rate_expiry, credit_limit')
       .eq('user_id', userId)
       .eq('is_active', true);
     if (error) throw new Error(error.message);
@@ -525,39 +576,108 @@ async function buildCalculatorInput(
         monthlyRepayment: l.monthly_repayment ?? 0,
         debtType: l.debt_type,
         currency: l.currency_code,
+        interestRateType: l.interest_rate_type ?? null,
+        fixedRateExpiry: l.fixed_rate_expiry ?? null,
+        creditLimit: l.credit_limit ?? null,
       })),
     };
     return { input, effectiveMonths: months };
   }
 
   if (forecastType === 'goal') {
+    // Forecasting P1 fix FHIP-FC-GOAL-001 — contribution_frequency wasn't
+    // even selected here before (planned_contribution_amount was treated as
+    // already-monthly regardless of its actual frequency), and funding
+    // sources' allocated share of a linked investment/retirement account's
+    // own contribution was never added — same bug/fix as
+    // goalsData.ts's toGoalRecord()/computeGoalsPagePayload(), mirrored here
+    // for this persisted-run code path.
     const { data: goals, error } = await supabase
       .from('user_goals')
-      .select('id, goal_name, current_amount, target_amount, target_date, currency_code, planned_contribution_amount')
+      .select('id, goal_name, current_amount, target_amount, target_date, currency_code, planned_contribution_amount, contribution_frequency')
       .eq('user_id', userId)
       .eq('status', 'active');
     if (error) throw new Error(error.message);
+    const goalIds = (goals ?? []).map((g) => g.id as string);
+
+    const fundingSourcesByGoal = new Map<string, { source_type: string; linked_investment_id: string | null; linked_retirement_id: string | null; allocation_percentage: number | null }[]>();
+    if (goalIds.length > 0) {
+      const { data: sources } = await supabase
+        .from('goal_funding_sources')
+        .select('goal_id, source_type, linked_investment_id, linked_retirement_id, allocation_percentage')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .in('goal_id', goalIds);
+      for (const s of sources ?? []) {
+        const list = fundingSourcesByGoal.get(s.goal_id as string) ?? [];
+        list.push(s);
+        fundingSourcesByGoal.set(s.goal_id as string, list);
+      }
+    }
+    const investmentIds = new Set<string>();
+    const retirementIds = new Set<string>();
+    for (const list of fundingSourcesByGoal.values()) {
+      for (const s of list) {
+        if (s.source_type === 'investment' && s.linked_investment_id) investmentIds.add(s.linked_investment_id);
+        if (s.source_type === 'retirement' && s.linked_retirement_id) retirementIds.add(s.linked_retirement_id);
+      }
+    }
+    const investmentsById = new Map<string, AllocatedContributionInvestment>();
+    const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
+    if (investmentIds.size > 0) {
+      const { data } = await supabase.from('investments').select('id, annual_contribution').eq('user_id', userId).in('id', Array.from(investmentIds));
+      for (const row of data ?? []) investmentsById.set(row.id, { annualContribution: row.annual_contribution ?? null });
+    }
+    if (retirementIds.size > 0) {
+      const { data } = await supabase
+        .from('retirement_accounts')
+        .select('id, employer_contribution, personal_contribution, contribution_frequency')
+        .eq('user_id', userId)
+        .in('id', Array.from(retirementIds));
+      for (const row of data ?? [])
+        retirementAccountsById.set(row.id, {
+          employerContribution: row.employer_contribution ?? null,
+          personalContribution: row.personal_contribution ?? null,
+          contributionFrequency: row.contribution_frequency ?? null,
+        });
+    }
+
     const input: GoalCalculatorInput = {
       baselineDate,
       months,
       assumptions,
-      goals: (goals ?? []).map((g) => ({
-        id: g.id,
-        name: g.goal_name,
-        currentAmount: g.current_amount ?? 0,
-        targetAmount: g.target_amount,
-        targetDate: g.target_date,
-        monthlyContribution: g.planned_contribution_amount ?? 0,
-        currency: g.currency_code,
-      })),
+      goals: (goals ?? []).map((g) => {
+        const allocated = computeAllocatedMonthlyContribution(
+          (fundingSourcesByGoal.get(g.id as string) ?? []).map((s) => ({
+            sourceType: s.source_type,
+            linkedInvestmentId: s.linked_investment_id,
+            linkedRetirementId: s.linked_retirement_id,
+            allocationPercentage: s.allocation_percentage,
+          })),
+          investmentsById,
+          retirementAccountsById
+        );
+        return {
+          id: g.id,
+          name: g.goal_name,
+          currentAmount: g.current_amount ?? 0,
+          targetAmount: g.target_amount,
+          targetDate: g.target_date,
+          monthlyContribution: toMonthly(g.planned_contribution_amount ?? 0, (g.contribution_frequency as Frequency) ?? 'monthly') + allocated,
+          currency: g.currency_code,
+        };
+      }),
     };
     return { input, effectiveMonths: months };
   }
 
   if (forecastType === 'investment') {
+    // master_item_key added for FHIP-FC-INV-001/002 — see
+    // investmentCalculator.ts's resolveAssetClass() for why it's the
+    // reliable asset-class signal rather than investment_type.
     const { data: investments, error } = await supabase
       .from('investments')
-      .select('id, investment_name, current_value, currency_code, investment_type, annual_contribution')
+      .select('id, investment_name, current_value, currency_code, investment_type, master_item_key, annual_contribution')
       .eq('user_id', userId)
       .eq('is_active', true);
     if (error) throw new Error(error.message);
@@ -571,6 +691,7 @@ async function buildCalculatorInput(
         currentValue: inv.current_value,
         monthlyContribution: (inv.annual_contribution ?? 0) / 12,
         investmentType: inv.investment_type,
+        masterItemKey: inv.master_item_key ?? null,
         currency: inv.currency_code,
       })),
     };
@@ -805,19 +926,22 @@ export interface NetWorthVariance {
   baselineDate: string | null;
   baselineNetWorth: number | null;
   actualNetWorth: number;
+  comparisonDate: string;
   actualIncreaseSinceBaseline: number | null;
   monthsSinceBaseline: number | null;
   originalForecastNetWorthToday: number | null;
   variance: number | null;
   variancePercentage: number | null;
+  baselineJustEstablished: boolean;
+  forecastHorizonExceeded: boolean;
 }
 
 // Spec section 13.6: "Actual increase since baseline", "Original forecast
 // net worth today", "Variance" — compares the earliest completed net_worth
 // run for this profile+scenario (the retained "Original" forecast, per
-// spec 3.1's three-path model) against the live current net worth from
-// dashboard.ts. Every later run stays untouched in forecast_runs, so
-// "Original" always means the first one ever completed, not the most recent.
+// spec 3.1's three-path model) against actual net worth from dashboard.ts.
+// Every later run stays untouched in forecast_runs, so "Original" always
+// means the first one ever completed, not the most recent.
 export async function getNetWorthVariance(
   userId: string,
   profileId: string,
@@ -825,8 +949,9 @@ export async function getNetWorthVariance(
   client?: SupabaseServerClient
 ): Promise<NetWorthVariance> {
   const supabase = client ?? (await createClient());
+  const today = new Date().toISOString().slice(0, 10);
 
-  const [originalRunResult, dashboard] = await Promise.all([
+  const [originalRunResult, dashboard, snapshot] = await Promise.all([
     supabase
       .from('forecast_runs')
       .select('*')
@@ -839,9 +964,17 @@ export async function getNetWorthVariance(
       .limit(1)
       .maybeSingle(),
     loadDashboard(userId, supabase),
+    getLatestSnapshotAsOf(userId, today, supabase),
   ]);
 
-  const actualNetWorth = dashboard.netWorth;
+  // Prefer the latest recorded monthly snapshot (a committed, dated figure)
+  // over live/present-moment dashboard data — this is what makes "today's
+  // actual" a real, disclosed comparison date rather than the moment the
+  // page happened to load. Falls back to live dashboard data when no
+  // snapshot has been recorded yet (e.g. a brand-new user's very first
+  // session, before loadDashboard's own upsert has run).
+  const comparisonDate = snapshot?.snapshot_month ?? today;
+  const actualNetWorth = snapshot?.net_worth ?? dashboard.netWorth;
   const originalRun = originalRunResult.data;
   if (!originalRun) {
     return {
@@ -850,33 +983,43 @@ export async function getNetWorthVariance(
       baselineDate: null,
       baselineNetWorth: null,
       actualNetWorth,
+      comparisonDate,
       actualIncreaseSinceBaseline: null,
       monthsSinceBaseline: null,
       originalForecastNetWorthToday: null,
       variance: null,
       variancePercentage: null,
+      baselineJustEstablished: false,
+      forecastHorizonExceeded: false,
     };
   }
 
-  const [firstPeriodResult, todayPeriodResult, lastPeriodResult] = await Promise.all([
+  const monthsSinceBaseline = Math.max(0, monthsBetweenDates(originalRun.baseline_date, comparisonDate));
+
+  const [firstPeriodResult, comparisonPeriodResult, lastPeriodResult] = await Promise.all([
     supabase.from('forecast_results').select('opening_value').eq('forecast_run_id', originalRun.id).eq('period_number', 1).maybeSingle(),
     supabase
       .from('forecast_results')
-      .select('closing_value')
+      .select('closing_value, period_number')
       .eq('forecast_run_id', originalRun.id)
-      .eq('period_number', Math.max(1, monthsBetweenDates(originalRun.baseline_date, new Date().toISOString().slice(0, 10))))
+      .eq('period_number', Math.max(1, monthsSinceBaseline))
       .maybeSingle(),
-    supabase.from('forecast_results').select('closing_value').eq('forecast_run_id', originalRun.id).order('period_number', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('forecast_results').select('closing_value, period_number').eq('forecast_run_id', originalRun.id).order('period_number', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const baselineNetWorth = firstPeriodResult.data?.opening_value ?? null;
-  const monthsSinceBaseline = Math.max(0, monthsBetweenDates(originalRun.baseline_date, new Date().toISOString().slice(0, 10)));
-  // If today is beyond the original run's forecast horizon, the closest
-  // available comparison is its final projected period rather than nothing.
-  const originalForecastNetWorthToday = monthsSinceBaseline === 0 ? baselineNetWorth : (todayPeriodResult.data?.closing_value ?? lastPeriodResult.data?.closing_value ?? null);
+  const baselineJustEstablished = monthsSinceBaseline === 0;
+  // Never silently substitute the final/long-term period for a same-date
+  // lookup — only fall back to it when the comparison date genuinely falls
+  // beyond this run's forecast horizon, and disclose that via the flag
+  // rather than presenting the final value as if it were same-date.
+  const forecastHorizonExceeded = !baselineJustEstablished && comparisonPeriodResult.data === null && lastPeriodResult.data !== null;
+  const originalForecastNetWorthToday = baselineJustEstablished
+    ? baselineNetWorth
+    : (comparisonPeriodResult.data?.closing_value ?? lastPeriodResult.data?.closing_value ?? null);
 
   const actualIncreaseSinceBaseline = baselineNetWorth !== null ? round2(actualNetWorth - baselineNetWorth) : null;
-  const variance = originalForecastNetWorthToday !== null ? round2(actualNetWorth - originalForecastNetWorthToday) : null;
+  const variance = !baselineJustEstablished && originalForecastNetWorthToday !== null ? round2(actualNetWorth - originalForecastNetWorthToday) : null;
   const variancePercentage = variance !== null && originalForecastNetWorthToday ? round2((variance / originalForecastNetWorthToday) * 100) : null;
 
   return {
@@ -885,11 +1028,14 @@ export async function getNetWorthVariance(
     baselineDate: originalRun.baseline_date,
     baselineNetWorth,
     actualNetWorth,
+    comparisonDate,
     actualIncreaseSinceBaseline,
     monthsSinceBaseline,
     originalForecastNetWorthToday,
     variance,
     variancePercentage,
+    baselineJustEstablished,
+    forecastHorizonExceeded,
   };
 }
 
@@ -942,6 +1088,7 @@ export type VarianceStatus =
   | 'slightly_behind'
   | 'at_risk'
   | 'significantly_off_track'
+  | 'baseline_established'
   | 'insufficient_data';
 
 export interface CategoryVariance {
@@ -949,6 +1096,12 @@ export interface CategoryVariance {
   hasOriginal: boolean;
   baselineDate: string | null;
   comparisonDate: string;
+  // The date financial_snapshots data was actually current as of, when a
+  // snapshot informed actualTillDate (net_worth only, today) — distinct from
+  // comparisonDate (which the snapshot date normally becomes) and distinct
+  // from "report generated at" (kept separately by callers). Null when no
+  // snapshot backed the actual value (live/present-moment data was used).
+  dataLastUpdated: string | null;
   startValue: number | null;
   forecastTillDate: number | null;
   actualTillDate: number | null;
@@ -960,6 +1113,11 @@ export interface CategoryVariance {
   revisedForecast: number | null;
   finalTargetGap: number | null;
   primaryDriver: string | null;
+  // True only when the comparison date fell beyond the original forecast
+  // run's horizon and forecastTillDate had to fall back to the final
+  // projected period — callers must disclose this rather than presenting
+  // the final period as if it were a genuine same-date value.
+  forecastHorizonExceeded: boolean;
 }
 
 // Debt is the one category where a lower actual balance is favourable
@@ -974,8 +1132,10 @@ const HIGHER_IS_BETTER: Record<VarianceForecastCategory, boolean> = {
   investment: true,
 };
 
-function statusFromSignedPercentage(signedPct: number | null): VarianceStatus {
-  if (signedPct === null) return 'insufficient_data';
+// Percentage-driven bands only — callers must handle baseline-established
+// (no elapsed comparison period) and zero-denominator cases themselves
+// before reaching here, since those aren't expressible as a percentage.
+function statusFromSignedPercentage(signedPct: number): VarianceStatus {
   if (signedPct >= 10) return 'significantly_ahead';
   if (signedPct >= 3) return 'ahead_of_plan';
   if (signedPct >= -3) return 'on_track';
@@ -984,14 +1144,32 @@ function statusFromSignedPercentage(signedPct: number | null): VarianceStatus {
   return 'significantly_off_track';
 }
 
+// Zero forecast denominator (e.g. a debt forecast to be fully repaid, or a
+// goal with no target) means a percentage is genuinely Not Applicable, but
+// that is not the same as "no data" — the sign/magnitude of the signed
+// variance still tells us whether the actual position is favourable,
+// unfavourable, or exactly on target.
+function statusFromZeroDenominator(signedVariance: number): VarianceStatus {
+  if (Math.abs(signedVariance) < 1) return 'on_track'; // both sides genuinely zero, e.g. debt target achieved
+  return signedVariance > 0 ? 'ahead_of_plan' : 'significantly_off_track';
+}
+
 async function getCurrentActualValue(
   userId: string,
   category: VarianceForecastCategory,
   profile: { base_currency: 'AUD' | 'INR' },
   assumptions: ResolvedAssumptionSet,
-  supabase: SupabaseServerClient
+  supabase: SupabaseServerClient,
+  snapshot: LatestSnapshot | null
 ): Promise<{ actual: number; target: number | null }> {
   if (category === 'net_worth' || category === 'retirement' || category === 'debt' || category === 'investment') {
+    // net_worth prefers the resolved comparison-date snapshot (a committed,
+    // dated figure) over live present-moment data — this is what makes the
+    // comparison genuinely "same date" rather than nominal. The other three
+    // categories have no per-category historical snapshot to draw on (see
+    // financial_snapshots' columns), so they remain live/present-moment,
+    // consistent with comparisonDate itself falling back to "today" for them.
+    if (category === 'net_worth' && snapshot) return { actual: snapshot.net_worth, target: null };
     const dashboard = await loadDashboard(userId, supabase);
     if (category === 'net_worth') return { actual: dashboard.netWorth, target: null };
     if (category === 'retirement') return { actual: dashboard.totalRetirement, target: null };
@@ -1027,10 +1205,15 @@ async function getCurrentActualValue(
 
 // Spec's consolidated variance table (5 rows: Net Worth, Retirement, Goals,
 // Debt, Cross-Border). Compares the earliest completed run for this
-// category+scenario (the retained "Original" forecast) against live actual
-// data, at a given comparison date — defaults to today, but accepts a fixed
-// historical date so the 10 historical test cases can be backtested against
-// 2026-07-31 rather than whatever "today" happens to be when the test runs.
+// category+scenario (the retained "Original" forecast) against actual data
+// AT THE SAME COMPARISON DATE. The comparison date is resolved from the
+// latest recorded financial_snapshots row on or before the requested date
+// (or today, if no date is requested) — not simply "today" — so a report
+// generated at 11pm doesn't silently compare against a forecast value for a
+// different moment than the actual data reflects. An explicit
+// `comparisonDate` override (used by the 10 historical backtest cases and
+// `/forecast/variance?date=`) still resolves through the same snapshot
+// lookup, so the "actual" side stays anchored to a real recorded date too.
 export async function getForecastVariance(
   userId: string,
   profileId: string,
@@ -1040,9 +1223,9 @@ export async function getForecastVariance(
   client?: SupabaseServerClient
 ): Promise<CategoryVariance> {
   const supabase = client ?? (await createClient());
-  const effectiveComparisonDate = comparisonDate ?? new Date().toISOString().slice(0, 10);
+  const requestedDate = comparisonDate ?? new Date().toISOString().slice(0, 10);
 
-  const [profileResult, originalRunResult] = await Promise.all([
+  const [profileResult, originalRunResult, snapshot] = await Promise.all([
     supabase.from('forecast_profiles').select('base_currency, country_code').eq('id', profileId).single(),
     supabase
       .from('forecast_runs')
@@ -1055,10 +1238,20 @@ export async function getForecastVariance(
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
+    getLatestSnapshotAsOf(userId, requestedDate, supabase),
   ]);
+  // Ground the comparison date to a real recorded snapshot date when one
+  // exists at/before the requested date; otherwise fall back to the
+  // requested date itself (no snapshot yet — e.g. a brand-new user whose
+  // dashboard hasn't been loaded this month). dataLastUpdated is only set
+  // when a snapshot actually backed the comparison, so callers can
+  // distinguish "grounded in recorded data" from "live/present-moment".
+  const effectiveComparisonDate = snapshot?.snapshot_month ?? requestedDate;
+  const dataLastUpdated = snapshot?.snapshot_month ?? null;
+
   const profile = profileResult.data ?? { base_currency: 'AUD' as const, country_code: null };
   const assumptions = await loadResolvedAssumptions(userId, profileId, scenarioId, profile.country_code, supabase);
-  const { actual: actualTillDate, target: liveTarget } = await getCurrentActualValue(userId, category, profile, assumptions, supabase);
+  const { actual: actualTillDate, target: liveTarget } = await getCurrentActualValue(userId, category, profile, assumptions, supabase, snapshot);
 
   const originalRun = originalRunResult.data;
   if (!originalRun) {
@@ -1067,6 +1260,7 @@ export async function getForecastVariance(
       hasOriginal: false,
       baselineDate: null,
       comparisonDate: effectiveComparisonDate,
+      dataLastUpdated,
       startValue: null,
       forecastTillDate: null,
       actualTillDate,
@@ -1078,10 +1272,12 @@ export async function getForecastVariance(
       revisedForecast: null,
       finalTargetGap: null,
       primaryDriver: null,
+      forecastHorizonExceeded: false,
     };
   }
 
   const monthsSinceBaseline = Math.max(0, monthsBetweenDates(originalRun.baseline_date, effectiveComparisonDate));
+  const baselineJustEstablished = monthsSinceBaseline === 0;
 
   const [firstPeriodRows, comparisonPeriodRows, lastPeriodRows] = await Promise.all([
     supabase.from('forecast_results').select('opening_value').eq('forecast_run_id', originalRun.id).eq('period_number', 1),
@@ -1098,26 +1294,78 @@ export async function getForecastVariance(
   const finalPeriodNumber = lastPeriodRows.data?.[0]?.period_number ?? null;
   const finalPeriodRows = (lastPeriodRows.data ?? []).filter((r) => r.period_number === finalPeriodNumber);
 
-  // If the comparison date IS the baseline date, the forecast "as at today"
-  // is trivially the starting value itself — period 1's closing value
+  // If the comparison date IS the baseline date, the forecast "as at that
+  // date" is trivially the starting value itself — period 1's closing value
   // already has a month of assumed growth baked in and would otherwise
-  // manufacture a spurious variance on a same-day comparison. If the
-  // comparison date is beyond the original run's horizon, fall back to its
-  // final projected period rather than treating it as "no data."
-  const forecastTillDate =
-    monthsSinceBaseline === 0
-      ? startValue
-      : comparisonRows.length > 0
-        ? comparisonRows.reduce((sum, r) => sum + (r.closing_value ?? 0), 0)
-        : finalPeriodRows.reduce((sum, r) => sum + (r.closing_value ?? 0), 0);
+  // manufacture a spurious variance on a same-day comparison (this case is
+  // short-circuited to 'baseline_established' below regardless). Otherwise,
+  // use the exact same-period value — NEVER silently substitute the
+  // final/long-term period just because that lookup came up empty; only
+  // fall back to it, with forecastHorizonExceeded disclosed, when the
+  // comparison date genuinely exceeds this run's forecast horizon.
+  const forecastHorizonExceeded = !baselineJustEstablished && comparisonRows.length === 0 && finalPeriodRows.length > 0;
+  const forecastTillDate = baselineJustEstablished
+    ? startValue
+    : comparisonRows.length > 0
+      ? comparisonRows.reduce((sum, r) => sum + (r.closing_value ?? 0), 0)
+      : finalPeriodRows.reduce((sum, r) => sum + (r.closing_value ?? 0), 0);
   const revisedForecast = finalPeriodRows.length > 0 ? finalPeriodRows.reduce((sum, r) => sum + (r.closing_value ?? 0), 0) : null;
   const finalTarget = liveTarget ?? (finalPeriodRows[0]?.target_value ?? null);
+  const finalTargetGap = finalTarget !== null && revisedForecast !== null ? round2(finalTarget - revisedForecast) : null;
 
   const rawVariance = round2(actualTillDate - forecastTillDate);
   const signedVariance = HIGHER_IS_BETTER[category] ? rawVariance : -rawVariance;
+
+  // Baseline just established: no elapsed comparison period exists yet, so
+  // a near-zero variance reflects "nothing has happened yet", not genuine
+  // on-track performance — never let this reach statusFromSignedPercentage.
+  if (baselineJustEstablished) {
+    return {
+      forecastCategory: category,
+      hasOriginal: true,
+      baselineDate: originalRun.baseline_date,
+      comparisonDate: effectiveComparisonDate,
+      dataLastUpdated,
+      startValue: round2(startValue),
+      forecastTillDate: round2(forecastTillDate),
+      actualTillDate,
+      varianceAmount: rawVariance,
+      variancePercentage: null,
+      result: null,
+      status: 'baseline_established',
+      finalTarget,
+      revisedForecast,
+      finalTargetGap,
+      primaryDriver: `A baseline was established as at ${effectiveComparisonDate}. Performance tracking will be available once a later comparison period exists.`,
+      forecastHorizonExceeded: false,
+    };
+  }
+
+  // Zero forecast denominator (e.g. a debt due to be fully repaid, or a
+  // goal/target of zero): a percentage is genuinely Not Applicable, but the
+  // signed variance itself still says whether the actual position is
+  // favourable, unfavourable, or exactly on target — this must not collapse
+  // into "insufficient_data", which means something else entirely (no
+  // original forecast at all, handled above).
   const variancePercentage = forecastTillDate !== 0 ? round2((signedVariance / Math.abs(forecastTillDate)) * 100) : null;
-  const result: VarianceResult = Math.abs(variancePercentage ?? 0) < 1 ? 'neutral' : signedVariance >= 0 ? 'favourable' : 'unfavourable';
-  const finalTargetGap = finalTarget !== null && revisedForecast !== null ? round2(finalTarget - revisedForecast) : null;
+  // Neutral banding matches statusFromSignedPercentage's own "on track"
+  // (-3% to +3%) center once a percentage exists; below 1% of a large
+  // forecast value is a rounding-level difference, not a real variance. The
+  // zero-denominator branch has no percentage to band against, so it falls
+  // back to the same $1 absolute threshold statusFromZeroDenominator uses.
+  const result: VarianceResult =
+    variancePercentage !== null
+      ? Math.abs(variancePercentage) < 1
+        ? 'neutral'
+        : signedVariance >= 0
+          ? 'favourable'
+          : 'unfavourable'
+      : Math.abs(signedVariance) < 1
+        ? 'neutral'
+        : signedVariance >= 0
+          ? 'favourable'
+          : 'unfavourable';
+  const status: VarianceStatus = variancePercentage !== null ? statusFromSignedPercentage(variancePercentage) : statusFromZeroDenominator(signedVariance);
 
   const primaryDriver =
     result === 'favourable'
@@ -1131,16 +1379,18 @@ export async function getForecastVariance(
     hasOriginal: true,
     baselineDate: originalRun.baseline_date,
     comparisonDate: effectiveComparisonDate,
+    dataLastUpdated,
     startValue: round2(startValue),
     forecastTillDate: round2(forecastTillDate),
     actualTillDate,
     varianceAmount: rawVariance,
     variancePercentage,
     result,
-    status: statusFromSignedPercentage(variancePercentage),
+    status,
     finalTarget,
     revisedForecast,
     finalTargetGap,
     primaryDriver,
+    forecastHorizonExceeded,
   };
 }

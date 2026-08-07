@@ -11,6 +11,7 @@ import { requiredMonthlyContribution } from '../goalMath';
 import { buildExplanation } from './explain';
 import { addMonthsToDateString, firstOfMonth, monthlyCompoundRate, projectInvestmentMonth, round2 } from './monthlyPrimitives';
 import { getAssumptionValue } from './assumptions';
+import { formatMoneyWhole } from '../money';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
 
 export type RetirementTargetMethod = 'target_corpus' | 'desired_income' | 'expense_replacement';
@@ -22,8 +23,16 @@ export interface RetirementCalculatorInput {
   currency: string;
   currentBalance: number;
   monthlyContribution: number;
-  currentAge: number | null; // null when date_of_birth isn't recorded
+  currentAge: number | null; // null when date_of_birth isn't recorded or isn't plausible
   retirementAge: number;
+  // Forecasting P1 fix FHIP-FC-RET-001 — set by the caller when a higher- or
+  // equal-priority timing signal is available: an explicit retirement_date
+  // (tier 1, takes priority over the age-based calculation below) or a
+  // manual "months until retirement" fallback for when no DOB is on file at
+  // all (tier 3/4 collapsed into one field — see migration 0028). Left
+  // undefined/null to fall back to the existing currentAge/retirementAge
+  // calculation (tier 2).
+  monthsUntilRetirementOverride?: number | null;
   targetMethod: RetirementTargetMethod;
   targetCorpus?: number; // target_corpus method
   desiredAnnualIncome?: number; // desired_income method
@@ -71,7 +80,8 @@ export function runRetirementForecast(input: RetirementCalculatorInput): { resul
   const returnRate = getAssumptionValue(input.assumptions, 'retirement', DEFAULT_RETIREMENT_RETURN);
   const withdrawalRate = getAssumptionValue(input.assumptions, 'withdrawal_rate', 4);
 
-  const monthsUntilRetirement = input.currentAge !== null ? Math.max(0, Math.round((input.retirementAge - input.currentAge) * 12)) : null;
+  const monthsUntilRetirement =
+    input.monthsUntilRetirementOverride ?? (input.currentAge !== null ? Math.max(0, Math.round((input.retirementAge - input.currentAge) * 12)) : null);
   const yearsToRetirement = monthsUntilRetirement !== null ? monthsUntilRetirement / 12 : null;
   const requiredCorpus = resolveRequiredCorpus(input, withdrawalRate, yearsToRetirement);
   const desiredAnnualIncomeAtRetirement =
@@ -139,23 +149,26 @@ export function runRetirementForecast(input: RetirementCalculatorInput): { resul
       : null;
   const contributionGap = requiredContribution !== null ? round2(Math.max(0, requiredContribution - input.monthlyContribution)) : null;
 
+  const currency = input.currency as 'AUD' | 'INR';
   const narrativeParts: string[] = [];
   if (monthsUntilRetirement === null) {
     narrativeParts.push('Retirement age could not be projected because no date of birth is on file — this forecast shows the accumulation trajectory only.');
   } else {
     narrativeParts.push(
-      `Projected retirement balance at age ${input.retirementAge} (in ${Math.round(monthsUntilRetirement / 12)} years) is ${balanceAtRetirement.toLocaleString()}.`
+      `Projected retirement balance at age ${input.retirementAge} (in ${Math.round(monthsUntilRetirement / 12)} years) is ${formatMoneyWhole(balanceAtRetirement, currency)}.`
     );
   }
   if (requiredCorpus !== null) {
-    narrativeParts.push(`Required retirement corpus under the ${input.targetMethod.replace('_', ' ')} method is ${requiredCorpus.toLocaleString()}.`);
+    narrativeParts.push(`Required retirement corpus under the ${input.targetMethod.replace('_', ' ')} method is ${formatMoneyWhole(requiredCorpus, currency)}.`);
     narrativeParts.push(
       fundingGap !== null && fundingGap > 0
-        ? `This leaves a funding gap of approximately ${fundingGap.toLocaleString()}.`
+        ? `This leaves a funding gap of approximately ${formatMoneyWhole(fundingGap, currency)}.`
         : 'The current trajectory is projected to fully fund this target.'
     );
     if (contributionGap && contributionGap > 0) {
-      narrativeParts.push(`Closing the gap would require an additional ${contributionGap.toLocaleString()}/month, on top of the current ${input.monthlyContribution}/month.`);
+      narrativeParts.push(
+        `Closing the gap would require an additional ${formatMoneyWhole(contributionGap, currency)}/month, on top of the current ${formatMoneyWhole(input.monthlyContribution, currency)}/month.`
+      );
     }
   } else {
     narrativeParts.push('A funding gap could not be calculated — the selected target method is missing a required input.');

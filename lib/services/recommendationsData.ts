@@ -16,7 +16,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext, getForecastVariance, type VarianceForecastCategory, type VarianceStatus } from '@/lib/services/forecastData';
-import { matchRecommendations } from '@/lib/engines/recommendations/matcher';
+import { loadHealthScore } from '@/lib/services/healthScoreData';
+import type { ComponentResult as HealthScoreComponentResult } from '@/lib/engines/healthScore';
+import { matchRecommendations, renderRecommendationTitle, renderRecommendationContent } from '@/lib/engines/recommendations/matcher';
 import type {
   EvaluationContext,
   RecommendationMatch,
@@ -61,7 +63,10 @@ const CATEGORY_TO_SIGNAL: Record<VarianceForecastCategory, string> = {
 // needed for "ahead" vs "significantly ahead" — the action is the same:
 // maintain course) — fold it in rather than leaving those users unmatched.
 function toLibraryStatus(status: VarianceStatus): ForecastStatus | null {
-  if (status === 'insufficient_data') return null;
+  // baseline_established means a forecast baseline exists but no elapsed
+  // comparison period does yet — there's no performance signal to recommend
+  // against, same as insufficient_data (no baseline at all).
+  if (status === 'insufficient_data' || status === 'baseline_established') return null;
   if (status === 'significantly_ahead') return 'ahead_of_plan';
   return status;
 }
@@ -136,16 +141,68 @@ export async function buildCategorySignals(
   return { signals, profileId: profile.id, scenarioId };
 }
 
+// Pillar signals — one per scored Health Score component (10 today), parallel
+// to buildCategorySignals()'s per-category forecast-variance signals but
+// driven by healthScore.ts's own statusBand instead of a forecast run. Every
+// component shares the same 5-band vocabulary (excellent/good/fair/
+// needs_attention/critical — see health_score_config.scoreBands), so
+// pillar_code + score_band alone is enough for a condition row to target
+// "this pillar in this band" (mirrors forecast_category + forecast_status).
+// Used by the Free/Paid report's action sections (Phase 3a), NOT by the
+// Forecasting Engine's own recommendation run, which is why this is a
+// separate function rather than folded into buildCategorySignals().
+// Pure component->signal mapping, split out from buildPillarSignals() so it's
+// unit-testable against synthetic ComponentResult[] input without needing a
+// live Supabase client (buildCategorySignals has no equivalent pure seam and
+// so has none of its own logic unit-tested — this keeps buildPillarSignals's
+// one real branch, the treatment-skip, covered).
+export function pillarSignalsFromComponents(components: HealthScoreComponentResult[], countryCode: string | null): EvaluationContext[] {
+  const signals: EvaluationContext[] = [];
+  for (const c of components) {
+    // 'not_applicable'/'missing_data' components carry statusBand='unknown'
+    // (see healthScore.ts's missingComponent()) — there's no real score to
+    // recommend against, same reasoning as toLibraryStatus()'s null-skip for
+    // categories with no forecast baseline yet.
+    if (c.treatment !== 'scored') continue;
+    signals.push({
+      pillar_code: c.code,
+      score_band: c.statusBand,
+      pillar_label: c.label,
+      pillar_score: c.rawScore,
+      data_completeness: c.dataCompleteness,
+      country_code: countryCode,
+    });
+  }
+  return signals;
+}
+
+export async function buildPillarSignals(userId: string, client?: SupabaseServerClient): Promise<EvaluationContext[]> {
+  const supabase = client ?? (await createClient());
+  const [healthScore, profileRes] = await Promise.all([
+    loadHealthScore(userId, supabase),
+    supabase.from('user_profiles').select('country_of_residence').eq('user_id', userId).maybeSingle(),
+  ]);
+  const countryCode = (profileRes.data?.country_of_residence as string | null) ?? null;
+
+  return pillarSignalsFromComponents(healthScore.components, countryCode);
+}
+
 function mapMasterRow(row: Record<string, unknown>): RecommendationMasterRow {
   return {
     id: row.id as string,
     recommendationCode: row.recommendation_code as string,
-    forecastCategory: row.forecast_category as ForecastCategory,
+    triggerType: (row.trigger_type as RecommendationMasterRow['triggerType']) ?? 'forecast_variance',
+    // Null on the trigger_type this row ISN'T (see migration 0025's
+    // action_recommendation_master_trigger_fields_check) — cast rather than
+    // defaulted so a null genuinely means null, not a made-up category.
+    forecastCategory: (row.forecast_category as ForecastCategory | null) ?? null,
+    forecastStatus: (row.forecast_status as ForecastStatus | null) ?? null,
+    pillarCode: (row.pillar_code as string | null) ?? null,
+    scoreBand: (row.score_band as string | null) ?? null,
     subCategory: row.sub_category as string,
     scenarioName: row.scenario_name as string,
     scenarioDescription: (row.scenario_description as string) ?? null,
     varianceResult: (row.variance_result as RecommendationMasterRow['varianceResult']) ?? null,
-    forecastStatus: row.forecast_status as ForecastStatus,
     severity: row.severity as RecommendationMasterRow['severity'],
     actionType: row.action_type as string,
     actionTitleTemplate: row.action_title_template as string,
@@ -172,14 +229,21 @@ function mapMasterRow(row: Record<string, unknown>): RecommendationMasterRow {
 // so this doesn't quietly break again once the library grows).
 const PAGE_SIZE = 1000;
 
-async function fetchAllMasterRows(client: SupabaseServerClient): Promise<Record<string, unknown>[]> {
+// 'include_in_forecasting' selects the original 542-row forecast-triggered
+// library (Recommendations page); 'include_in_monthly_report' selects
+// whichever rows — forecast- or pillar-triggered — an admin has flagged for
+// the Free/Paid report's action sections (Phase 3a). Same table, same shape,
+// different context flag, same as the two boolean columns were designed for.
+type LibraryContext = 'include_in_forecasting' | 'include_in_monthly_report';
+
+async function fetchAllMasterRows(client: SupabaseServerClient, context: LibraryContext): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await client
       .from('action_recommendation_master')
       .select('*')
       .eq('is_active', true)
-      .eq('include_in_forecasting', true)
+      .eq(context, true)
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(error.message);
     all.push(...(data ?? []));
@@ -210,8 +274,8 @@ async function fetchAllConditionRows(client: SupabaseServerClient): Promise<RawC
   return all;
 }
 
-async function loadActiveLibrary(client: SupabaseServerClient): Promise<RecommendationWithConditions[]> {
-  const [masterRows, conditionRows] = await Promise.all([fetchAllMasterRows(client), fetchAllConditionRows(client)]);
+async function loadActiveLibrary(client: SupabaseServerClient, context: LibraryContext = 'include_in_forecasting'): Promise<RecommendationWithConditions[]> {
+  const [masterRows, conditionRows] = await Promise.all([fetchAllMasterRows(client, context), fetchAllConditionRows(client)]);
 
   const conditionsByCode = new Map<string, RecommendationCondition[]>();
   for (const row of conditionRows) {
@@ -288,6 +352,126 @@ export async function runRecommendationEvaluation(
   }
 
   return { runId: run.id, matches };
+}
+
+// Free/Paid Report v3, Phase 3a — the report's own "priority actions" (Free)
+// and "personal action plan" (Premium) sections used to be built from ad hoc
+// local logic in reportSections.ts/reportSectionsPremium.ts, completely
+// separate from this engine. This is the report-facing counterpart to
+// runRecommendationEvaluation(): same matcher, but (a) reads the
+// include_in_monthly_report library instead of include_in_forecasting, (b)
+// always blends in pillar signals, (c) optionally blends in forecast-category
+// signals too (Premium only — Free-tier report generation never resolves a
+// forecast profile/scenario today, and doing so here would newly
+// auto-create one as a side effect for users who've never touched
+// Forecasting; Premium report generation already does this via
+// buildForecastReportData, so no new side effect there), and (d) renders
+// title/content templates inline (evaluatedImpactText is the only thing
+// pre-rendered by matchRecommendations) since the report has no live client
+// to re-render them against a context later, unlike RecommendationsPanel.
+export interface ReportActionItem {
+  id: string;
+  code: string;
+  title: string;
+  content: string;
+  severity: RecommendationMasterRow['severity'];
+  priorityScore: number;
+  isPremium: boolean;
+  pillarCode: string | null;
+  forecastCategory: ForecastCategory | null;
+}
+
+export async function buildReportActionMatches(
+  userId: string,
+  options: { includeForecastSignals: boolean },
+  client?: SupabaseServerClient
+): Promise<ReportActionItem[]> {
+  const supabase = client ?? (await createClient());
+
+  const signalListPromises: Promise<EvaluationContext[]>[] = [buildPillarSignals(userId, supabase)];
+  if (options.includeForecastSignals) {
+    signalListPromises.push(buildCategorySignals(userId, undefined, supabase).then((r) => r.signals));
+  }
+  const [signalLists, library] = await Promise.all([Promise.all(signalListPromises), loadActiveLibrary(supabase, 'include_in_monthly_report')]);
+  const signals = signalLists.flat();
+
+  const seen = new Set<string>();
+  const items: ReportActionItem[] = [];
+  for (const signal of signals) {
+    for (const m of matchRecommendations(signal, library)) {
+      if (seen.has(m.recommendation.id)) continue;
+      seen.add(m.recommendation.id);
+      items.push({
+        id: m.recommendation.id,
+        code: m.recommendation.recommendationCode,
+        title: renderRecommendationTitle(m.recommendation, signal),
+        content: renderRecommendationContent(m.recommendation, signal),
+        severity: m.recommendation.severity,
+        priorityScore: m.recommendation.priorityScore,
+        isPremium: m.recommendation.isPremium,
+        pillarCode: m.recommendation.pillarCode,
+        forecastCategory: m.recommendation.forecastCategory,
+      });
+    }
+  }
+  items.sort((a, b) => b.priorityScore - a.priorityScore);
+  return items;
+}
+
+// Forecasting P1 fix FHIP-FC-REC-001/002 — the Forecasting Report had no
+// recommendations wired in at all ("major functional gap" per the review).
+// Near-identical shape to buildReportActionMatches() above, but: signals
+// from buildCategorySignals() only (this report is forecast-specific, no
+// pillar signals), library scoped to include_in_forecasting (not
+// include_in_monthly_report), non-persisting (no user_recommendation_runs
+// row — this report can be viewed/PDF-rendered repeatedly, unlike the
+// Recommendations page's explicit "run" action), and deduped by actionType
+// as well as by id — the "non-conflicting" requirement, since two rows
+// sharing an actionType are effectively the same real-world action
+// triggered by different signals. Capped at 5 (top priority).
+export async function buildForecastReportActionMatches(
+  userId: string,
+  requestedScenarioId: string | undefined,
+  client?: SupabaseServerClient
+): Promise<ReportActionItem[]> {
+  const supabase = client ?? (await createClient());
+  const [{ signals }, library] = await Promise.all([
+    buildCategorySignals(userId, requestedScenarioId, supabase),
+    loadActiveLibrary(supabase, 'include_in_forecasting'),
+  ]);
+
+  const seen = new Set<string>();
+  const candidates: { item: ReportActionItem; actionType: string }[] = [];
+  for (const signal of signals) {
+    for (const m of matchRecommendations(signal, library)) {
+      if (seen.has(m.recommendation.id)) continue;
+      seen.add(m.recommendation.id);
+      candidates.push({
+        actionType: m.recommendation.actionType,
+        item: {
+          id: m.recommendation.id,
+          code: m.recommendation.recommendationCode,
+          title: renderRecommendationTitle(m.recommendation, signal),
+          content: renderRecommendationContent(m.recommendation, signal),
+          severity: m.recommendation.severity,
+          priorityScore: m.recommendation.priorityScore,
+          isPremium: m.recommendation.isPremium,
+          pillarCode: m.recommendation.pillarCode,
+          forecastCategory: m.recommendation.forecastCategory,
+        },
+      });
+    }
+  }
+  candidates.sort((a, b) => b.item.priorityScore - a.item.priorityScore);
+
+  const seenActionTypes = new Set<string>();
+  const deduped: ReportActionItem[] = [];
+  for (const c of candidates) {
+    if (seenActionTypes.has(c.actionType)) continue;
+    seenActionTypes.add(c.actionType);
+    deduped.push(c.item);
+  }
+  return deduped.slice(0, 5);
 }
 
 export interface StoredRecommendationMatch {

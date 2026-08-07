@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { resolveForecastPageContext, getForecastVariance, type VarianceForecastCategory, type CategoryVariance } from '@/lib/services/forecastData';
-import { formatMoney } from '@/lib/engines/money';
+import { formatMoneyWhole } from '@/lib/engines/money';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 
 const CATEGORIES: { key: VarianceForecastCategory; label: string }[] = [
@@ -21,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
   slightly_behind: 'Slightly Behind',
   at_risk: 'At Risk',
   significantly_off_track: 'Significantly Off Track',
+  baseline_established: 'Baseline Established',
   insufficient_data: 'Insufficient Data',
 };
 
@@ -31,11 +32,12 @@ const STATUS_CLASS: Record<string, string> = {
   slightly_behind: 'bg-caution/10 text-caution',
   at_risk: 'bg-caution/10 text-caution',
   significantly_off_track: 'bg-risk/10 text-risk',
+  baseline_established: 'bg-gray-100 text-muted',
   insufficient_data: 'bg-gray-100 text-muted',
 };
 
 function fmt(value: number | null, currency: 'AUD' | 'INR') {
-  return value === null ? '—' : formatMoney(value, currency);
+  return value === null ? '—' : formatMoneyWhole(value, currency);
 }
 
 export default async function ForecastVariancePage({ searchParams }: { searchParams: Promise<{ scenario?: string; date?: string }> }) {
@@ -69,7 +71,7 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
 
         <SectionCard
           title="Consolidated Variance"
-          description={`Comparison date: ${variances[0]?.comparisonDate ?? '—'}. For net worth, retirement, goals and cross-border wealth, a higher actual value is generally favourable; for debt, a lower actual balance is favourable.`}
+          description={`Comparison date: ${variances[0]?.comparisonDate ?? '—'}${variances[0]?.dataLastUpdated ? ` (data last updated ${variances[0].dataLastUpdated})` : ' (live data — no recorded snapshot yet)'}. For net worth, retirement, goals and cross-border wealth, a higher actual value is generally favourable; for debt, a lower actual balance is favourable.`}
         >
           <div className="overflow-x-auto">
             <table data-testid="forecast-variance-table" className="w-full min-w-[900px] text-sm">
@@ -97,6 +99,7 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
                       <td className="py-2 pr-3">{fmt(v.startValue, currency)}</td>
                       <td data-testid="variance-forecast" className="py-2 pr-3">
                         {fmt(v.forecastTillDate, currency)}
+                        {v.forecastHorizonExceeded ? <sup className="ml-0.5 text-caution">†</sup> : null}
                       </td>
                       <td data-testid="variance-actual" className="py-2 pr-3">
                         {fmt(v.actualTillDate, currency)}
@@ -119,7 +122,11 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
           <p className="mt-4 text-xs text-muted">
             A favourable variance does not automatically mean the final target will be achieved; an unfavourable variance does not
             automatically mean the final target is impossible. Rows with no forecast history yet show &quot;Insufficient Data&quot; —
-            generate a forecast for that category first to establish a baseline.
+            generate a forecast for that category first to establish a baseline. Rows showing &quot;Baseline Established&quot; have a
+            forecast but no elapsed comparison period yet — performance tracking becomes available once a later comparison date exists.
+            {variances.some((v) => v.forecastHorizonExceeded)
+              ? ' † The comparison date is beyond that category’s original forecast horizon — Forecast Till Date shows the final projected period, not a same-date value.'
+              : ''}
           </p>
         </SectionCard>
       </div>

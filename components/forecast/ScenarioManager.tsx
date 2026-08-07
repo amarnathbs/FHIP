@@ -8,6 +8,10 @@ interface ScenarioRow {
   scenario_type: string;
   description: string | null;
   is_default: boolean;
+  // FHIP-FC-SCN-001/002 — undefined when the page didn't compute a diff for
+  // this row (e.g. Base itself); present for every non-Base scenario.
+  isConfigured?: boolean;
+  whatChanged?: string | null;
 }
 
 const SCENARIO_TYPES = ['base', 'conservative', 'optimistic', 'custom', 'stress'] as const;
@@ -35,7 +39,10 @@ export function ScenarioManager({ initialScenarios }: { initialScenarios: Scenar
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not create scenario');
-      setScenarios((prev) => [...prev, json.data]);
+      // A newly created scenario has no assumption overrides yet by
+      // definition — flagged Not configured until one is added on the
+      // Assumptions page.
+      setScenarios((prev) => [...prev, { ...json.data, isConfigured: false, whatChanged: null }]);
       setName('');
       setDescription('');
     } catch (e) {
@@ -53,6 +60,7 @@ export function ScenarioManager({ initialScenarios }: { initialScenarios: Scenar
             <th className="py-1">Scenario</th>
             <th className="py-1">Type</th>
             <th className="py-1">Description</th>
+            <th className="py-1">What changed</th>
             <th className="py-1"></th>
           </tr>
         </thead>
@@ -62,6 +70,13 @@ export function ScenarioManager({ initialScenarios }: { initialScenarios: Scenar
               <td className="py-2 font-medium text-gray-800">{s.scenario_name}</td>
               <td className="py-2 capitalize text-gray-600">{s.scenario_type}</td>
               <td className="py-2 text-gray-500">{s.description ?? '—'}</td>
+              <td className="py-2 text-gray-500">
+                {s.isConfigured === false ? (
+                  <span className="rounded-full bg-caution/10 px-2 py-0.5 text-xs font-semibold text-caution">Not configured</span>
+                ) : (
+                  (s.whatChanged ?? '—')
+                )}
+              </td>
               <td className="py-2 text-right">{s.is_default && <span className="rounded-full bg-trust/10 px-2 py-0.5 text-xs font-semibold text-trust">Default</span>}</td>
             </tr>
           ))}

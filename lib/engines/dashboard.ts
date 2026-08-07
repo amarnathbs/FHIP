@@ -1,4 +1,5 @@
 import { toMonthly, type Frequency } from './money';
+import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -24,6 +25,7 @@ export interface AssetRow {
   current_value: number;
   asset_class: string;
   country_code?: string | null;
+  currency_code?: string | null;
 }
 export interface LiabilityRow {
   balance: number;
@@ -34,6 +36,7 @@ export interface LiabilityRow {
   fixed_rate_expiry?: string | null;
   credit_limit?: number | null;
   country_code?: string | null;
+  currency_code?: string | null;
 }
 export interface InvestmentRow {
   current_value: number;
@@ -42,6 +45,7 @@ export interface InvestmentRow {
   country_code: string | null;
   annual_contribution: number | null;
   institution?: string | null;
+  currency_code?: string | null;
 }
 export interface RetirementRow {
   current_balance: number;
@@ -49,6 +53,7 @@ export interface RetirementRow {
   personal_contribution: number | null;
   contribution_frequency: Frequency | null;
   country_code?: string | null;
+  currency_code?: string | null;
 }
 export interface InsuranceRow {
   policy_name: string;
@@ -317,7 +322,31 @@ function ratio(
   return { key, label, value, format, benchmarkLabel, status };
 }
 
-export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR'): DashboardSummary {
+// Matches crossBorderCalculator.ts's DEFAULT_FX_RATE_AUD_INR and the
+// forecast_global_assumptions seed row — used only when no live rate is
+// supplied, so single-currency households (the vast majority of callers)
+// are entirely unaffected.
+const DEFAULT_FX_RATE_AUD_INR = 56;
+
+function toSupportedCurrency(code: string | null | undefined): SupportedCurrency | null {
+  return code === 'AUD' || code === 'INR' ? code : null;
+}
+
+export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR', fxRateAudInr: number = DEFAULT_FX_RATE_AUD_INR): DashboardSummary {
+  // Converts a row's own-currency amount to the household's reporting
+  // currency before it enters totalAssets/totalInvestments/totalRetirement/
+  // totalLiabilities (and the allocation chart, which must stay consistent
+  // with those totals). Rows with no currency_code, or one this app doesn't
+  // recognise, are assumed to already be in the reporting currency — this
+  // keeps every existing single-currency household byte-for-byte unchanged.
+  // Per-country breakdowns (assetsByCountry etc., below) deliberately do NOT
+  // go through this — the cross-border report section shows those "as
+  // recorded, in each country's own currency" by design.
+  function reportingValue(rowCurrencyCode: string | null | undefined, amount: number): number {
+    const rowCurrency = toSupportedCurrency(rowCurrencyCode);
+    if (!rowCurrency) return amount;
+    return convertToReportingCurrency(amount, rowCurrency, currency, fxRateAudInr);
+  }
   const grossMonthlyIncome = sumMonthly(input.income, 'amount', 'frequency');
   const netMonthlyIncome = input.income.reduce((sum, r) => {
     const monthly = toMonthly(r.net_amount ?? r.amount, r.frequency);
@@ -350,7 +379,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR')
     'frequency'
   );
   const totalMonthlyExpenses = essentialMonthlyExpenses + lifestyleMonthlyExpenses;
-  const debtMonthlyRepayments = input.liabilities.reduce((sum, r) => sum + (r.monthly_repayment ?? 0), 0);
+  // Same reporting-currency conversion as the balance totals above — a
+  // foreign-currency liability's repayment must not be added raw into a
+  // reporting-currency cash-flow figure (monthlySurplus, disposableIncome).
+  const debtMonthlyRepayments = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
 
   const incomeForSurplus = netMonthlyIncome || grossMonthlyIncome;
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
@@ -388,17 +420,17 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR')
       ? Array.from(employerMap.values()).reduce((sum, v) => sum + (v / activeIncomeTotal) ** 2, 0)
       : null;
 
-  const totalAssets = input.assets.reduce((sum, r) => sum + r.current_value, 0);
-  const totalInvestments = input.investments.reduce((sum, r) => sum + r.current_value, 0);
-  const totalRetirement = input.retirement.reduce((sum, r) => sum + r.current_balance, 0);
-  const totalLiabilities = input.liabilities.reduce((sum, r) => sum + r.balance, 0);
+  const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
+  const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
+  const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
+  const totalLiabilities = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
 
   const allocationMap = new Map<AllocationBucket, number>();
   const addAlloc = (bucket: AllocationBucket, value: number) =>
     allocationMap.set(bucket, (allocationMap.get(bucket) ?? 0) + value);
-  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class), a.current_value);
-  for (const i of input.investments) addAlloc(bucketInvestmentType(i.investment_type), i.current_value);
+  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class), reportingValue(a.currency_code, a.current_value));
+  for (const i of input.investments) addAlloc(bucketInvestmentType(i.investment_type), reportingValue(i.currency_code, i.current_value));
   if (totalRetirement > 0) addAlloc('super', totalRetirement);
   const netWorthAllocation: AllocationSlice[] = Array.from(allocationMap.entries()).map(([bucket, value]) => ({
     bucket,
