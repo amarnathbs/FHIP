@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,7 +36,10 @@ export default function LoginPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
       <h1 className="text-2xl font-semibold text-trust">Log in</h1>
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <div className="mt-6">
+        <OAuthButtons />
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="email" className="block text-sm text-gray-600">Email</label>
           <input
