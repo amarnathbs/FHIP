@@ -20,6 +20,20 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // `origin` above comes from the raw incoming request URL — behind AWS
+      // Amplify's proxy/load-balancer hosting, that can reflect the Next.js
+      // server's own internal address (e.g. localhost) rather than the
+      // public domain the visitor actually used. `x-forwarded-host` is the
+      // header the proxy sets to the real public host, so prefer it outside
+      // local dev — this is Supabase's own documented pattern for exactly
+      // this class of deployment. See
+      // https://supabase.com/docs/guides/auth/server-side/nextjs
+      const forwardedHost = request.headers.get('x-forwarded-host');
+      const forwardedProto = request.headers.get('x-forwarded-proto') ?? 'https';
+      const isLocalEnv = process.env.NODE_ENV === 'development';
+      if (!isLocalEnv && forwardedHost) {
+        return NextResponse.redirect(`${forwardedProto}://${forwardedHost}${next}`);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
