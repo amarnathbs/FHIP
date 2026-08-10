@@ -138,26 +138,6 @@
 }
 .eyebrowOnDark { color: #7cddd3; }
 
-/* preview banner */
-.previewBanner {
-  background: #fef3e2;
-  color: #7a4b0a;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-align: center;
-  padding: 0.55rem 1rem;
-  border-bottom: 1px solid #f0d9ae;
-}
-@media (prefers-color-scheme: dark) {
-  .previewBanner { background: #2b2210; color: #f0c56b; border-bottom-color: #4a3a15; }
-}
-:global(html[data-theme='dark']) .previewBanner {
-  background: #2b2210; color: #f0c56b; border-bottom-color: #4a3a15;
-}
-:global(html[data-theme='light']) .previewBanner {
-  background: #fef3e2; color: #7a4b0a; border-bottom-color: #f0d9ae;
-}
-
 /* masthead */
 .mastheadStrip {
   background: var(--navy-ink);

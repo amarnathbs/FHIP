@@ -1,15 +1,16 @@
 'use client';
 
-// Staged design preview of the FHIP landing page recommendation (Option 1
-// "Financial Health Discovery" hybrid, per
-// `FHIP_Landing_Page_Design_Options_Review_Pack.docx`). Lives at
-// /preview-landing rather than replacing the live "/" root — see
-// app/(marketing)/preview-landing/page.tsx. Pricing and legal/security copy
-// are the doc's own proposed placeholders, not approved figures; the banner
-// below and the on-page disclosure copy both say so explicitly.
+// FHIP public landing page (Option 1 "Financial Health Discovery" hybrid,
+// per `FHIP_Landing_Page_Design_Options_Review_Pack.docx`). Promoted to the
+// live "/" root on 2026-08-10 after review — see app/(marketing)/page.tsx.
+// Originally staged at /preview-landing for review; that route has been
+// removed now that this is the canonical public page. Pricing shown here is
+// still an indicative figure pending final commercial approval (the page's
+// own copy says so in the pricing section) — only the wording/legal review
+// gate has been cleared, not final pricing.
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import styles from './PreviewLandingPage.module.css';
+import styles from './LandingPage.module.css';
 
 const BASE_ALT_POINTS: [number, number][] = [
   [0, 175],
@@ -254,11 +255,6 @@ export default function PreviewLandingPage() {
 
   return (
     <div className={styles.page} ref={containerRef}>
-      <div className={styles.previewBanner}>
-        Design preview &mdash; pricing, security and legal claims below are proposed placeholders pending business
-        and legal approval. This is not the public FHIP site.
-      </div>
-
       <div className={styles.mastheadStrip}>
         <div className={styles.wrap}>Financial Health Intelligence Platform &mdash; Australia &amp; cross-border households</div>
       </div>
@@ -592,7 +588,6 @@ export default function PreviewLandingPage() {
                 Free and Premium
               </p>
               <h2>Start with clarity. Upgrade when you want deeper planning.</h2>
-              <p style={{ marginLeft: 'auto', marginRight: 'auto' }}>Prices shown are indicative until final commercial approval.</p>
             </div>
             <div className={styles.reveal}>
               <PricingCards />
