@@ -699,8 +699,8 @@ export default function PreviewLandingPage() {
           <div>
             <h4>Legal</h4>
             <ul>
-              <li><a href="#">Privacy</a></li>
-              <li><a href="#">Terms</a></li>
+              <li><a href="/privacy">Privacy</a></li>
+              <li><a href="/terms">Terms</a></li>
               <li><a href="#">Disclaimer</a></li>
               <li><a href="#">Accessibility</a></li>
             </ul>
