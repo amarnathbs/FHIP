@@ -3,11 +3,10 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Terms of Service — FHIP',
-  robots: { index: false, follow: false },
 };
 
-// Draft terms of service — pending legal review. See privacy/page.tsx for
-// the same disclosure pattern and reasoning.
+// Draft terms of service — pending legal review. Intentionally left
+// indexable (no noindex) — see privacy/page.tsx for why.
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 text-gray-800">

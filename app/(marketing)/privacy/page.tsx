@@ -3,10 +3,15 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — FHIP',
-  robots: { index: false, follow: false },
 };
 
-// Draft privacy policy — pending legal review. Content here is derived from
+// Draft privacy policy — pending legal review. Intentionally left indexable
+// (no noindex) — Facebook's App Review Privacy Policy URL validation checks
+// for a noindex/nofollow robots tag as a signal the page isn't a genuine
+// public document and rejects it on that basis, which is exactly what
+// blocked this page initially. Legal/terms pages are meant to be publicly
+// discoverable anyway, unlike the design-preview pages elsewhere in this
+// app that legitimately needed to stay hidden. Content here is derived from
 // the already-user-approved Security section copy on the landing page
 // (components/marketing/LandingPage.tsx), extended into full paragraph
 // form, not invented from scratch. Exists as a real, reachable page
