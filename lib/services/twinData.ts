@@ -30,12 +30,14 @@ export interface TwinInsuranceRow {
 export interface TwinInvestmentRow {
   current_value: number;
   investment_type: string;
+  master_item_key?: string | null;
   country_code: string | null;
   currency_code: string | null;
 }
 export interface TwinLiabilityRow {
   balance: number;
   debt_type: string;
+  master_item_key?: string | null;
   interest_rate: number | null;
   country_code: string | null;
   currency_code: string | null;
@@ -43,6 +45,7 @@ export interface TwinLiabilityRow {
 export interface TwinAssetRow {
   current_value: number;
   asset_class: string;
+  master_item_key?: string | null;
   country_code: string | null;
   currency_code: string | null;
 }
@@ -94,9 +97,9 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true),
       supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
       supabase.from('insurance_policies').select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days').eq('user_id', userId).eq('is_active', true),
-      supabase.from('investments').select('current_value, investment_type, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-      supabase.from('liabilities').select('balance, debt_type, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-      supabase.from('assets').select('current_value, asset_class, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+      supabase.from('investments').select('current_value, investment_type, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+      supabase.from('liabilities').select('balance, debt_type, master_item_key, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+      supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
     ]);
 
@@ -191,9 +194,9 @@ async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClie
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
     supabase.from('income_sources').select('amount, net_amount, frequency, master_item_key, employer_name').eq('user_id', userId).eq('is_active', true),
     supabase.from('expense_items').select('expense_name, amount, frequency, is_essential, master_item_key, expense_category').eq('user_id', userId).eq('is_active', true),
-    supabase.from('assets').select('current_value, asset_class, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('investments').select('current_value, cost_base, investment_type, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('investments').select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days').eq('user_id', userId).eq('is_active', true),
     supabase.from('user_goals').select('goal_name, target_amount, current_amount, currency_code, target_date, priority, status').eq('user_id', userId).eq('status', 'active'),

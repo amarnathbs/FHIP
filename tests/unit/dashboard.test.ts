@@ -82,3 +82,72 @@ describe('computeDashboard currency-aware aggregation', () => {
     expect(d.totalAssets).toBe(5000);
   });
 });
+
+// FHIP 50-User E2E cycle finding: asset_class/investment_type/debt_type
+// (lib/validation/asset.ts etc.) are never collected by the real grid UI
+// (lib/grid/configs.ts) — every row created through the live app leaves
+// them at their Zod default 'other'. Before this fix, liquidAssets (and
+// therefore emergencyFundMonths, liquidAssetRatio, propertyConcentration,
+// goodDebt/badDebt, creditUtilization) silently read 0 for every real
+// user, not just synthetic test data — confirmed by tracing
+// bucketAssetClass()/bucketInvestmentType()'s literal-string checks
+// against a field the grid never sets, and by the fact GOOD_DEBT_TYPES
+// already listed catalog-style keys ('investment_loan', 'hecs_help') that
+// don't even exist in debt_type's own 6-value enum. master_item_key is
+// the field the grid actually populates.
+describe('computeDashboard master_item_key-based classification (grid never sets asset_class/investment_type/debt_type)', () => {
+  it('classifies liquidAssets from master_item_key when asset_class is left at its default "other"', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        assets: [
+          { current_value: 7000, asset_class: 'other', master_item_key: 'savings_account' },
+          { current_value: 250, asset_class: 'other', master_item_key: 'wallet_cash' },
+        ],
+        expenses: [{ expense_name: 'Rent', amount: 2000, frequency: 'monthly', is_essential: true }],
+      },
+      'AUD'
+    );
+    expect(d.liquidAssets).toBe(7250);
+    expect(d.emergencyFundMonths).toBeCloseTo(7250 / 2000, 6);
+  });
+
+  it('still classifies via the coarse asset_class value when master_item_key is absent (custom/legacy rows)', () => {
+    const d = computeDashboard({ ...EMPTY, assets: [{ current_value: 500, asset_class: 'cash' }] }, 'AUD');
+    expect(d.liquidAssets).toBe(500);
+  });
+
+  it('classifies investment cash-equivalents (e.g. term deposits) into liquidAssets via master_item_key', () => {
+    const d = computeDashboard(
+      { ...EMPTY, investments: [{ current_value: 10000, cost_base: 10000, investment_type: 'other', master_item_key: 'term_deposits', country_code: null, annual_contribution: 0 }] },
+      'AUD'
+    );
+    expect(d.liquidAssets).toBe(10000);
+  });
+
+  it('classifies good vs bad debt from master_item_key, not the always-"other" debt_type', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        liabilities: [
+          { balance: 400000, interest_rate: 6, monthly_repayment: 2400, debt_type: 'other', master_item_key: 'home_loan' },
+          { balance: 5000, interest_rate: 20, monthly_repayment: 200, debt_type: 'other', master_item_key: 'credit_card' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.goodDebt).toBe(400000);
+    expect(d.badDebt).toBe(5000);
+  });
+
+  it('detects a revolving credit-card liability via master_item_key for creditUtilization', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        liabilities: [{ balance: 2000, interest_rate: 19, monthly_repayment: 100, debt_type: 'other', master_item_key: 'credit_card', credit_limit: 10000 }],
+      },
+      'AUD'
+    );
+    expect(d.creditUtilization).toBeCloseTo(0.2, 6);
+  });
+});

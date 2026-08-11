@@ -24,6 +24,7 @@ export interface ExpenseRow {
 export interface AssetRow {
   current_value: number;
   asset_class: string;
+  master_item_key?: string | null;
   country_code?: string | null;
   currency_code?: string | null;
 }
@@ -32,6 +33,7 @@ export interface LiabilityRow {
   interest_rate: number | null;
   monthly_repayment: number;
   debt_type: string;
+  master_item_key?: string | null;
   interest_rate_type?: 'fixed' | 'variable' | null;
   fixed_rate_expiry?: string | null;
   credit_limit?: number | null;
@@ -42,6 +44,7 @@ export interface InvestmentRow {
   current_value: number;
   cost_base: number | null;
   investment_type: string;
+  master_item_key?: string | null;
   country_code: string | null;
   annual_contribution: number | null;
   institution?: string | null;
@@ -149,14 +152,86 @@ export type AllocationBucket =
   | 'gold'
   | 'other';
 
-function bucketAssetClass(assetClass: string): AllocationBucket {
+// asset_class (lib/validation/asset.ts) is a 5-value enum ('cash'|'property'|
+// 'vehicle'|'business'|'other') that the real grid UI (lib/grid/configs.ts)
+// never actually collects — every row created through the live app leaves it
+// at its Zod default ('other'), same root cause already fixed for the
+// Forecasting Engine's investment-return mapping (see
+// lib/engines/forecast/investmentCalculator.ts's MASTER_ITEM_TO_ASSET_CLASS
+// comment: "master_item_key is the reliable asset-class signal — the grid
+// always sets it; investment_type/asset_class/debt_type it does not
+// collect at all"). Without this, liquidAssets was silently 0 for every
+// real user (never just this test's synthetic data), which cascades into
+// emergencyFundMonths, liquidAssetRatio and propertyConcentration always
+// reading 0 too. Keyed from the same master_financial_items catalogue
+// (supabase/seed_master_items.sql, 'asset' category, 39 items).
+const MASTER_ASSET_ITEM_TO_BUCKET: Record<string, AllocationBucket> = {
+  wallet_cash: 'cash',
+  savings_account: 'cash',
+  cheque_account: 'cash',
+  offset_account: 'cash',
+  term_deposits: 'cash',
+  foreign_currency: 'cash',
+  principal_residence: 'property',
+  investment_property: 'property',
+  holiday_home: 'property',
+  vacant_land: 'property',
+  commercial_property: 'property',
+  farm: 'property',
+  business_ownership: 'business',
+  partnership_interest: 'business',
+  gold: 'gold',
+  silver: 'gold',
+  cryptocurrency: 'crypto',
+  shares: 'shares',
+  etfs: 'shares',
+  managed_funds: 'shares',
+  bonds: 'fixed_income',
+};
+
+export function bucketAssetClass(assetClass: string, masterItemKey?: string | null): AllocationBucket {
+  const fromCatalog = masterItemKey ? MASTER_ASSET_ITEM_TO_BUCKET[masterItemKey] : undefined;
+  if (fromCatalog) return fromCatalog;
   if (assetClass === 'cash') return 'cash';
   if (assetClass === 'property') return 'property';
   if (assetClass === 'business') return 'business';
   return 'other';
 }
 
-function bucketInvestmentType(type: string): AllocationBucket {
+// Same root cause and fix pattern as MASTER_ASSET_ITEM_TO_BUCKET above.
+// investment_type (lib/validation/investment.ts) is likewise never
+// collected by the grid. Keyed from master_financial_items' 'investment'
+// category (32 items) — the type-string checks below (kept as a secondary
+// fallback for rows set directly via the API rather than the grid) already
+// assumed catalog-style plural keys like 'etfs'/'managed_funds', not the
+// singular Zod enum values ('etf'/'managed_fund'), which was itself a sign
+// this mapping was written for master_item_key and just never wired to it.
+const MASTER_INVESTMENT_ITEM_TO_BUCKET: Record<string, AllocationBucket> = {
+  cash_investments: 'cash',
+  high_interest_savings: 'cash',
+  term_deposits: 'cash',
+  property: 'property',
+  commercial_property: 'property',
+  reits: 'property',
+  bonds: 'fixed_income',
+  government_bonds: 'fixed_income',
+  corporate_bonds: 'fixed_income',
+  gold: 'gold',
+  silver: 'gold',
+  cryptocurrency: 'crypto',
+  business_investment: 'business',
+  partnership_investment: 'business',
+  shares: 'shares',
+  etfs: 'shares',
+  managed_funds: 'shares',
+  index_funds: 'shares',
+  australian_shares: 'shares',
+  international_shares: 'shares',
+};
+
+export function bucketInvestmentType(type: string, masterItemKey?: string | null): AllocationBucket {
+  const fromCatalog = masterItemKey ? MASTER_INVESTMENT_ITEM_TO_BUCKET[masterItemKey] : undefined;
+  if (fromCatalog) return fromCatalog;
   if (['cash_investments', 'high_interest_savings', 'term_deposits'].includes(type)) return 'cash';
   if (['property', 'commercial_property', 'reits'].includes(type)) return 'property';
   if (['bonds', 'government_bonds', 'corporate_bonds'].includes(type)) return 'fixed_income';
@@ -168,6 +243,21 @@ function bucketInvestmentType(type: string): AllocationBucket {
   )
     return 'shares';
   return 'other';
+}
+
+// debt_type (lib/validation/liability.ts) has the same never-collected-by-
+// the-grid problem — GOOD_DEBT_TYPES below already contained catalog-style
+// keys ('investment_loan', 'hecs_help') that don't even exist in debt_type's
+// own 6-value Zod enum, a strong sign this was always meant to check
+// master_item_key. 'mortgage' (the Zod enum spelling) is kept alongside
+// 'home_loan' (the catalog spelling) so a row set either way still counts.
+const GOOD_DEBT_MASTER_ITEMS = new Set(['home_loan', 'investment_loan', 'construction_loan', 'education_loan', 'hecs_help', 'business_loan']);
+export function isGoodDebt(debtType: string, masterItemKey?: string | null): boolean {
+  if (masterItemKey) return GOOD_DEBT_MASTER_ITEMS.has(masterItemKey) || debtType === 'mortgage';
+  return debtType === 'mortgage' || GOOD_DEBT_MASTER_ITEMS.has(debtType);
+}
+export function isCreditCardDebt(debtType: string, masterItemKey?: string | null): boolean {
+  return masterItemKey === 'credit_card' || masterItemKey === 'store_card' || debtType === 'credit_card';
 }
 
 function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): number {
@@ -429,8 +519,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const allocationMap = new Map<AllocationBucket, number>();
   const addAlloc = (bucket: AllocationBucket, value: number) =>
     allocationMap.set(bucket, (allocationMap.get(bucket) ?? 0) + value);
-  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class), reportingValue(a.currency_code, a.current_value));
-  for (const i of input.investments) addAlloc(bucketInvestmentType(i.investment_type), reportingValue(i.currency_code, i.current_value));
+  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class, a.master_item_key), reportingValue(a.currency_code, a.current_value));
+  for (const i of input.investments) addAlloc(bucketInvestmentType(i.investment_type, i.master_item_key), reportingValue(i.currency_code, i.current_value));
   if (totalRetirement > 0) addAlloc('super', totalRetirement);
   const netWorthAllocation: AllocationSlice[] = Array.from(allocationMap.entries()).map(([bucket, value]) => ({
     bucket,
@@ -438,7 +528,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   }));
 
   const liabilityTypeMap = new Map<string, number>();
-  for (const l of input.liabilities) liabilityTypeMap.set(l.debt_type, (liabilityTypeMap.get(l.debt_type) ?? 0) + l.balance);
+  for (const l of input.liabilities) {
+    const key = l.master_item_key ?? l.debt_type;
+    liabilityTypeMap.set(key, (liabilityTypeMap.get(key) ?? 0) + l.balance);
+  }
   const liabilityByType = Array.from(liabilityTypeMap.entries()).map(([debtType, balance]) => ({ debtType, balance }));
 
   // Cross-border rollups — reuses the country_code already recorded on each
@@ -476,15 +569,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // disagreed with the report copy's stated definition.
   const debtServiceRatio = incomeForSurplus > 0 ? debtMonthlyRepayments / incomeForSurplus : null;
   const liabilitiesWithPayoff = input.liabilities.map((l) => ({
-    debtType: l.debt_type,
+    debtType: l.master_item_key ?? l.debt_type,
     balance: l.balance,
     monthsToPayoff: estimateMonthsToPayoff(l.balance, l.interest_rate, l.monthly_repayment),
   }));
-  const GOOD_DEBT_TYPES = new Set(['mortgage', 'investment_loan', 'education_loan', 'hecs_help', 'business_loan']);
   let goodDebt = 0;
   let badDebt = 0;
   for (const l of input.liabilities) {
-    if (GOOD_DEBT_TYPES.has(l.debt_type)) goodDebt += l.balance;
+    if (isGoodDebt(l.debt_type, l.master_item_key)) goodDebt += l.balance;
     else badDebt += l.balance;
   }
 
@@ -501,7 +593,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     .filter((l) => l.fixed_rate_expiry && l.fixed_rate_expiry <= in12MonthsStr)
     .reduce((sum, l) => sum + l.balance, 0);
   const creditCardLiabilities = input.liabilities.filter(
-    (l) => l.debt_type === 'credit_card' && (l.credit_limit ?? null) !== null
+    (l) => isCreditCardDebt(l.debt_type, l.master_item_key) && (l.credit_limit ?? null) !== null
   );
   const totalCreditLimit = creditCardLiabilities.reduce((sum, l) => sum + (l.credit_limit ?? 0), 0);
   const creditUtilization =
@@ -515,7 +607,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   let investmentDiversificationScore: number | null = null;
   if (input.investments.length > 0 && totalInvestments > 0) {
     const byType = new Map<string, number>();
-    for (const i of input.investments) byType.set(i.investment_type, (byType.get(i.investment_type) ?? 0) + i.current_value);
+    for (const i of input.investments) {
+      const key = i.master_item_key ?? i.investment_type;
+      byType.set(key, (byType.get(key) ?? 0) + i.current_value);
+    }
     const hhi = Array.from(byType.values()).reduce((sum, v) => sum + (v / totalInvestments) ** 2, 0);
     investmentDiversificationScore = Math.round((1 - hhi) * 100);
   }

@@ -1,4 +1,5 @@
 import type { TwinSourceData } from '@/lib/services/twinData';
+import { bucketAssetClass, bucketInvestmentType } from '@/lib/engines/dashboard';
 
 export interface MetricValueResult {
   value: number | null;
@@ -6,6 +7,40 @@ export interface MetricValueResult {
 }
 
 const NOT_COMPARABLE = 'Insufficient data recorded for this metric.';
+
+// asset_class/investment_type/debt_type are never collected by the real
+// grid UI (lib/grid/configs.ts) — every row leaves them at the Zod
+// default 'other' (same root cause as dashboard.ts's liquidAssets bug,
+// fixed alongside this one). master_item_key is the reliable signal.
+// Reuses dashboard.ts's bucketAssetClass/bucketInvestmentType rather than
+// a second, parallel mapping — keeps the Twin's allocation reads
+// consistent with the Dashboard's (Report_Assertions A008: displayed
+// totals/allocations must reconcile across modules).
+const MORTGAGE_MASTER_ITEMS = new Set(['home_loan', 'investment_loan', 'construction_loan']);
+function isMortgageLikeDebt(debtType: string, masterItemKey?: string | null): boolean {
+  if (masterItemKey) return MORTGAGE_MASTER_ITEMS.has(masterItemKey);
+  return debtType === 'mortgage';
+}
+const SHORT_TERM_MASTER_ITEMS = new Set(['credit_card', 'store_card', 'buy_now_pay_later']);
+function isShortTermDebt(debtType: string, masterItemKey?: string | null): boolean {
+  if (masterItemKey) return SHORT_TERM_MASTER_ITEMS.has(masterItemKey);
+  return debtType === 'credit_card' || debtType === 'personal_loan';
+}
+// Deliberately excludes ambiguous catalog items (family_loan, tax_debt,
+// ato_payment_plan, guarantees, margin_loan, other_liabilities) rather than
+// guessing — conservative under-count is safer than the prior behaviour,
+// which counted every liability (via debt_type's always-'other' default)
+// as unsecured, mortgages included.
+const UNSECURED_MASTER_ITEMS = new Set(['personal_loan', 'credit_card', 'store_card', 'buy_now_pay_later', 'medical_loan', 'education_loan', 'hecs_help', 'private_loan']);
+function isUnsecuredDebt(debtType: string, masterItemKey?: string | null): boolean {
+  if (masterItemKey) return UNSECURED_MASTER_ITEMS.has(masterItemKey);
+  return debtType === 'personal_loan' || debtType === 'credit_card' || debtType === 'student_loan';
+}
+const VEHICLE_MASTER_ITEMS = new Set(['motor_vehicle', 'motorcycle', 'boat', 'caravan']);
+function isVehicleAsset(assetClass: string, masterItemKey?: string | null): boolean {
+  if (masterItemKey) return VEHICLE_MASTER_ITEMS.has(masterItemKey);
+  return assetClass === 'vehicle';
+}
 
 function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
@@ -86,7 +121,7 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
     d.totalMonthlyExpenses + d.debtMonthlyRepayments > 0 ? d.liquidAssets / (d.totalMonthlyExpenses + d.debtMonthlyRepayments) : null
   );
   const shortTermLiabilities = source.rawLiabilities
-    .filter((l) => l.debt_type === 'credit_card' || l.debt_type === 'personal_loan')
+    .filter((l) => isShortTermDebt(l.debt_type, l.master_item_key))
     .reduce((sum, l) => sum + l.balance, 0);
   set('liquid_net_worth', d.liquidAssets - shortTermLiabilities);
   const nearLiquidCoverage = resilienceComponentValue(source, 'liquidity', 'coverageMonths');
@@ -97,8 +132,7 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
   set('debt_to_income', d.debtToIncome, 'No income recorded to compare against debt.');
   set('debt_service_ratio', d.debtServiceRatio !== null ? d.debtServiceRatio * 100 : null);
   set('debt_to_asset_ratio', totalAssetBase > 0 ? (d.totalLiabilities / totalAssetBase) * 100 : null, 'No assets recorded to compare against debt.');
-  const UNSECURED_DEBT_TYPES = new Set(['personal_loan', 'credit_card', 'student_loan', 'other']);
-  const unsecuredBalance = source.rawLiabilities.filter((l) => UNSECURED_DEBT_TYPES.has(l.debt_type)).reduce((sum, l) => sum + l.balance, 0);
+  const unsecuredBalance = source.rawLiabilities.filter((l) => isUnsecuredDebt(l.debt_type, l.master_item_key)).reduce((sum, l) => sum + l.balance, 0);
   set('unsecured_debt_ratio', annualNetIncomeBase > 0 ? (unsecuredBalance / annualNetIncomeBase) * 100 : null);
   const HIGH_INTEREST_THRESHOLD = 10;
   const liabilitiesWithRate = source.rawLiabilities.filter((l) => l.interest_rate !== null);
@@ -109,8 +143,8 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
     'No interest rate recorded on any liability.'
   );
   set('credit_utilization', d.creditUtilization !== null ? d.creditUtilization * 100 : null, 'No credit limit recorded on any revolving credit liability.');
-  const mortgageBalance = source.rawLiabilities.filter((l) => l.debt_type === 'mortgage').reduce((sum, l) => sum + l.balance, 0);
-  const propertyValue = source.rawAssets.filter((a) => a.asset_class === 'property').reduce((sum, a) => sum + a.current_value, 0);
+  const mortgageBalance = source.rawLiabilities.filter((l) => isMortgageLikeDebt(l.debt_type, l.master_item_key)).reduce((sum, l) => sum + l.balance, 0);
+  const propertyValue = source.rawAssets.filter((a) => bucketAssetClass(a.asset_class, a.master_item_key) === 'property').reduce((sum, a) => sum + a.current_value, 0);
   set(
     'home_loan_lvr',
     propertyValue > 0 ? (mortgageBalance / propertyValue) * 100 : null,
@@ -129,7 +163,7 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
   set('property_concentration', d.propertyConcentration !== null ? d.propertyConcentration * 100 : null);
   const businessValue = d.netWorthAllocation.find((a) => a.bucket === 'business')?.value ?? 0;
   set('productive_asset_ratio', totalAssetBase > 0 ? ((d.totalInvestments + d.totalRetirement + businessValue) / totalAssetBase) * 100 : null);
-  const vehicleValue = source.rawAssets.filter((a) => a.asset_class === 'vehicle').reduce((sum, a) => sum + a.current_value, 0);
+  const vehicleValue = source.rawAssets.filter((a) => isVehicleAsset(a.asset_class, a.master_item_key)).reduce((sum, a) => sum + a.current_value, 0);
   set('depreciating_asset_ratio', totalAssetBase > 0 ? (vehicleValue / totalAssetBase) * 100 : null);
   set('net_worth_growth_12m', growthPct(netWorthSeries), 'Fewer than two monthly snapshots recorded.');
 
@@ -138,7 +172,7 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
   set('investable_assets_ratio', totalAssetBase > 0 ? (d.totalInvestments / totalAssetBase) * 100 : null);
   const largestHolding = source.rawInvestments.length > 0 ? Math.max(...source.rawInvestments.map((i) => i.current_value)) : 0;
   set('largest_holding_concentration', d.totalInvestments > 0 ? (largestHolding / d.totalInvestments) * 100 : null, 'No investments recorded.');
-  const distinctInvestmentTypes = new Set(source.rawInvestments.filter((i) => i.current_value > 0).map((i) => i.investment_type));
+  const distinctInvestmentTypes = new Set(source.rawInvestments.filter((i) => i.current_value > 0).map((i) => i.master_item_key ?? i.investment_type));
   set('asset_class_diversification', source.rawInvestments.length > 0 ? distinctInvestmentTypes.size : null, 'No investments recorded.');
   const investmentsWithCountry = source.rawInvestments.filter((i) => i.country_code);
   const homeCountryInvestmentValue = investmentsWithCountry
@@ -152,7 +186,7 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
       : null,
     'No investment records the country it is held in.'
   );
-  const cryptoValue = source.rawInvestments.filter((i) => i.investment_type === 'cryptocurrency').reduce((sum, i) => sum + i.current_value, 0);
+  const cryptoValue = source.rawInvestments.filter((i) => bucketInvestmentType(i.investment_type, i.master_item_key) === 'crypto').reduce((sum, i) => sum + i.current_value, 0);
   set('speculative_asset_ratio', d.totalInvestments > 0 ? (cryptoValue / d.totalInvestments) * 100 : null, 'No investments recorded.');
   set('portfolio_cost_ratio', null, 'Investment fee data is not currently captured.');
 

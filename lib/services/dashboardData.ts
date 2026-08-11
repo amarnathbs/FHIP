@@ -65,15 +65,15 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
         .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category')
         .eq('user_id', userId)
         .eq('is_active', true),
-      supabase.from('assets').select('current_value, asset_class, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+      supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase
         .from('liabilities')
-        .select('balance, interest_rate, monthly_repayment, debt_type, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code')
+        .select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase
         .from('investments')
-        .select('current_value, cost_base, investment_type, country_code, annual_contribution, institution, currency_code')
+        .select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase
