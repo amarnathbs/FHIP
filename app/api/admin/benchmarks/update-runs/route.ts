@@ -1,7 +1,7 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
-export async function GET() {
+export const GET = adminRoute(async () => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient()
@@ -10,4 +10,4 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(100);
   return error ? bad(error.message) : ok(data);
-}
+});

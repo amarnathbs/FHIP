@@ -1,7 +1,7 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
-export async function GET(req: Request) {
+export const GET = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const url = new URL(req.url);
@@ -14,9 +14,9 @@ export async function GET(req: Request) {
   if (metricCode) query = query.eq('benchmark_metric_definitions.metric_code', metricCode);
   const { data, error } = await query;
   return error ? bad(error.message) : ok(data);
-}
+});
 
-export async function POST(req: Request) {
+export const POST = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
@@ -25,4 +25,4 @@ export async function POST(req: Request) {
   }
   const { data, error } = await adminClient().from('benchmark_target_ranges').insert(body).select('*').single();
   return error ? bad(error.message) : ok(data);
-}
+});

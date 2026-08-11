@@ -1,7 +1,7 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
-export async function GET() {
+export const GET = adminRoute(async () => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient()
@@ -9,9 +9,9 @@ export async function GET() {
     .select('*, benchmark_sources(source_name, publisher, citation_text)')
     .order('created_at', { ascending: false });
   return error ? bad(error.message) : ok(data);
-}
+});
 
-export async function POST(req: Request) {
+export const POST = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
@@ -24,4 +24,4 @@ export async function POST(req: Request) {
     .select('*')
     .single();
   return error ? bad(error.message) : ok(data);
-}
+});

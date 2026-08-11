@@ -1,7 +1,7 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PUT = adminRoute(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const { user, forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
@@ -13,4 +13,4 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
   const { data, error } = await adminClient().from('benchmark_sources').update(patch).eq('id', id).select('*').single();
   return error ? bad(error.message) : ok(data);
-}
+});

@@ -23,3 +23,26 @@ export async function requireAdmin(): Promise<{ user: User | null; forbidden: Re
 export function adminClient() {
   return createAdminClient();
 }
+
+// Wraps an admin route handler so any thrown error (most notably
+// createAdminClient() throwing synchronously on a missing/misconfigured
+// env var, but also any other unexpected exception) becomes a normal JSON
+// error response instead of an uncaught crash. Without this, an uncaught
+// throw inside a route handler skips straight past Next.js's ability to
+// send a response body at all — on Amplify's hosting compute this surfaces
+// to the browser as an empty-body 500 with no error text (CloudFront
+// synthesizes its own generic error page), which is indistinguishable from
+// a dozen other causes. Every admin/benchmarks route should be wrapped in
+// this so a misconfiguration is diagnosable from the Network tab alone.
+export function adminRoute<Args extends unknown[]>(
+  handler: (...args: Args) => Promise<Response>
+): (...args: Args) => Promise<Response> {
+  return async (...args: Args) => {
+    try {
+      return await handler(...args);
+    } catch (err) {
+      console.error('Admin route error:', err);
+      return bad(err instanceof Error ? err.message : 'Unexpected server error', 500);
+    }
+  };
+}

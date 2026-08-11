@@ -1,7 +1,7 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
-export async function GET(req: Request) {
+export const GET = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const url = new URL(req.url);
@@ -14,12 +14,12 @@ export async function GET(req: Request) {
   if (datasetId) query = query.eq('dataset_id', datasetId);
   const { data, error } = await query;
   return error ? bad(error.message) : ok(data);
-}
+});
 
 // "Import" here means a direct structured insert (spec's admin import
 // workflow) rather than a file-upload parser — rows are validated the same
 // way a single manual entry would be.
-export async function POST(req: Request) {
+export const POST = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
@@ -31,4 +31,4 @@ export async function POST(req: Request) {
   }
   const { data, error } = await adminClient().from('benchmark_values').insert(rows).select('*');
   return error ? bad(error.message) : ok({ imported: data?.length ?? 0, rows: data });
-}
+});
