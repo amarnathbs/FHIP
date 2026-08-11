@@ -255,10 +255,6 @@ export default function PreviewLandingPage() {
 
   return (
     <div className={styles.page} ref={containerRef}>
-      <div className={styles.mastheadStrip}>
-        <div className={styles.wrap}>Financial Health Intelligence Platform &mdash; Australia &amp; cross-border households</div>
-      </div>
-
       <header className={styles.siteHeader}>
         <div className={`${styles.wrap} ${styles.headerBar} ${compact ? styles.compact : ''}`}>
           <a href="#top" className={styles.logo} aria-label="FHIP home">

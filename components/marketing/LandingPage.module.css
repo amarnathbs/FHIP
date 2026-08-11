@@ -138,17 +138,6 @@
 }
 .eyebrowOnDark { color: #7cddd3; }
 
-/* masthead */
-.mastheadStrip {
-  background: var(--navy-ink);
-  color: #c7d3e6;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-.mastheadStrip .wrap { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-
 .siteHeader {
   position: sticky;
   top: 0;
