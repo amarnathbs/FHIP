@@ -1,0 +1,349 @@
+{
+  "currency": "INR",
+  "grossMonthlyIncome": 424000,
+  "netMonthlyIncome": 356105,
+  "passiveMonthlyIncome": 38000,
+  "activeMonthlyIncome": 386000,
+  "essentialMonthlyExpenses": 81100,
+  "coreSurvivalMonthlyExpenses": 66500,
+  "lifestyleMonthlyExpenses": 7250,
+  "debtMonthlyRepayments": 190000,
+  "totalMonthlyExpenses": 88350,
+  "monthlySurplus": 77755,
+  "savingsRate": 0.218348520801449,
+  "operatingCashFlow": 275005,
+  "disposableIncome": 85005,
+  "cashFlowRatio": 0.2793425543380636,
+  "topExpenses": [
+    {
+      "name": "Mortgage",
+      "monthlyAmount": 40000
+    },
+    {
+      "name": "Groceries",
+      "monthlyAmount": 18000
+    },
+    {
+      "name": "School Fees",
+      "monthlyAmount": 13000
+    },
+    {
+      "name": "Fuel",
+      "monthlyAmount": 4500
+    },
+    {
+      "name": "Restaurants",
+      "monthlyAmount": 4500
+    }
+  ],
+  "topIncome": [
+    {
+      "name": "Employment Salary",
+      "monthlyAmount": 227500
+    },
+    {
+      "name": "Employment Salary",
+      "monthlyAmount": 158500
+    },
+    {
+      "name": "Rental Income",
+      "monthlyAmount": 38000
+    }
+  ],
+  "incomeSourceCount": 3,
+  "largestIncomeSharePct": 0.5365566037735849,
+  "discretionaryRatio": 0.020359163729798794,
+  "employerConcentration": 0.5159769389782276,
+  "hasInvestments": true,
+  "hasRetirement": true,
+  "hasInsurance": true,
+  "totalAssets": 41758000,
+  "totalAssetsCombined": 52369000,
+  "totalInvestments": 405000,
+  "totalRetirement": 10206000,
+  "totalLiabilities": 14500000,
+  "netWorth": 37869000,
+  "netWorthAllocation": [
+    {
+      "bucket": "cash",
+      "value": 258000
+    },
+    {
+      "bucket": "property",
+      "value": 38500000
+    },
+    {
+      "bucket": "other",
+      "value": 3000000
+    },
+    {
+      "bucket": "shares",
+      "value": 300000
+    },
+    {
+      "bucket": "fixed_income",
+      "value": 105000
+    },
+    {
+      "bucket": "super",
+      "value": 10206000
+    }
+  ],
+  "liabilityByType": [
+    {
+      "debtType": "home_loan",
+      "balance": 5000000
+    },
+    {
+      "debtType": "investment_loan",
+      "balance": 5000000
+    },
+    {
+      "debtType": "guarantees",
+      "balance": 4500000
+    }
+  ],
+  "liquidAssetRatio": 0.004926578701139987,
+  "propertyConcentration": 0.7351677519143004,
+  "assetsByCountry": [
+    {
+      "countryCode": "IN",
+      "value": 41758000
+    }
+  ],
+  "liabilitiesByCountry": [],
+  "retirementByCountry": [
+    {
+      "countryCode": "IN",
+      "value": 10206000
+    }
+  ],
+  "countriesInUse": [
+    "IN"
+  ],
+  "liquidAssets": 258000,
+  "emergencyFundMonths": 3.181257706535142,
+  "averageInterestRate": 0.05896551724137931,
+  "debtToIncome": 2.8498427672955975,
+  "debtServiceRatio": 0.5335504977464511,
+  "liabilitiesWithPayoff": [
+    {
+      "debtType": "home_loan",
+      "balance": 5000000,
+      "monthsToPayoff": 105
+    },
+    {
+      "debtType": "investment_loan",
+      "balance": 5000000,
+      "monthsToPayoff": 97
+    },
+    {
+      "debtType": "guarantees",
+      "balance": 4500000,
+      "monthsToPayoff": 50
+    }
+  ],
+  "goodDebt": 10000000,
+  "badDebt": 4500000,
+  "variableRateDebtBalance": 10000000,
+  "variableRateDebtRatio": 0.6896551724137931,
+  "upcomingRateResetBalance12m": 0,
+  "creditUtilization": null,
+  "investmentCostBase": 345000,
+  "investmentUnrealisedGain": 60000,
+  "investmentDiversificationScore": 38,
+  "investmentByCountry": [
+    {
+      "countryCode": "IN",
+      "value": 405000
+    }
+  ],
+  "institutionConcentration": null,
+  "dividendMonthlyIncome": 0,
+  "dividendYield": 0,
+  "rentalMonthlyIncome": 38000,
+  "retirementEmployerMonthlyContribution": 6500,
+  "retirementPersonalMonthlyContribution": 4000,
+  "investmentAnnualContribution": 90000,
+  "investmentContributionRate": 0.021061203858412546,
+  "retirementContributionRate": 0.029485685401777567,
+  "retirementEmployerContributionRate": 0.01825304334395754,
+  "insuranceByType": [
+    {
+      "coverType": "life_insurance",
+      "coverAmount": 10000000,
+      "annualPremium": 26400
+    },
+    {
+      "coverType": "hospital_cover",
+      "coverAmount": 0,
+      "annualPremium": 33600
+    },
+    {
+      "coverType": "income_protection",
+      "coverAmount": 90000,
+      "annualPremium": 13200
+    },
+    {
+      "coverType": "home_insurance",
+      "coverAmount": 9000000,
+      "annualPremium": 18000
+    },
+    {
+      "coverType": "motor_vehicle_insurance",
+      "coverAmount": 7000000,
+      "annualPremium": 15600
+    }
+  ],
+  "totalAnnualPremium": 106800,
+  "upcomingRenewals": [
+    {
+      "policyName": "Life Insurance",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Hospital Cover",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Income Protection",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Home Insurance",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Motor Vehicle Insurance",
+      "renewalDate": "2027-06-30"
+    }
+  ],
+  "incomeProtectionWaitingPeriodDays": null,
+  "ratios": [
+    {
+      "key": "savings_rate",
+      "label": "Savings Rate",
+      "value": 0.218348520801449,
+      "format": "percent",
+      "benchmarkLabel": ">20%",
+      "status": "good"
+    },
+    {
+      "key": "expense_ratio",
+      "label": "Expense Ratio",
+      "value": 0.2481009814520998,
+      "format": "percent",
+      "benchmarkLabel": "<80%",
+      "status": "good"
+    },
+    {
+      "key": "debt_to_income",
+      "label": "Debt-to-Income",
+      "value": 2.8498427672955975,
+      "format": "multiple",
+      "benchmarkLabel": "<3x",
+      "status": "good"
+    },
+    {
+      "key": "debt_service_ratio",
+      "label": "Debt Service Ratio",
+      "value": 0.5335504977464511,
+      "format": "percent",
+      "benchmarkLabel": "<35%",
+      "status": "risk"
+    },
+    {
+      "key": "net_worth_ratio",
+      "label": "Net Worth Ratio",
+      "value": 0.7231186388894193,
+      "format": "percent",
+      "benchmarkLabel": ">60%",
+      "status": "good"
+    },
+    {
+      "key": "liquidity_ratio",
+      "label": "Liquidity Ratio",
+      "value": 2.9202037351443124,
+      "format": "months",
+      "benchmarkLabel": ">6 months",
+      "status": "risk"
+    },
+    {
+      "key": "investment_ratio",
+      "label": "Investment Ratio",
+      "value": 0.2026198705340946,
+      "format": "percent",
+      "benchmarkLabel": "Varies by age",
+      "status": "neutral"
+    },
+    {
+      "key": "emergency_fund_ratio",
+      "label": "Emergency Fund Ratio",
+      "value": 3.181257706535142,
+      "format": "months",
+      "benchmarkLabel": "6-12 months",
+      "status": "caution"
+    },
+    {
+      "key": "passive_income_ratio",
+      "label": "Passive Income Ratio",
+      "value": 0.08962264150943396,
+      "format": "percent",
+      "benchmarkLabel": ">20%",
+      "status": "risk"
+    },
+    {
+      "key": "financial_independence_ratio",
+      "label": "Financial Independence Ratio",
+      "value": 0.43010752688172044,
+      "format": "percent",
+      "benchmarkLabel": "100%",
+      "status": "risk"
+    }
+  ],
+  "snapshots": [
+    {
+      "snapshot_month": "2026-08-01",
+      "net_worth": 37869000,
+      "monthly_income": 424000,
+      "monthly_expenses": 278350,
+      "monthly_surplus": 77755,
+      "savings_rate": 0.2183,
+      "total_assets": 52369000,
+      "total_liabilities": 14500000
+    }
+  ],
+  "goals": [
+    {
+      "goal_name": "Emergency Fund",
+      "target_amount": 600000,
+      "current_amount": 320000,
+      "currency_code": "INR",
+      "target_date": "2027-12-31",
+      "priority": "high",
+      "status": "active"
+    },
+    {
+      "goal_name": "Child Education",
+      "target_amount": 3500000,
+      "current_amount": 450000,
+      "currency_code": "INR",
+      "target_date": "2034-12-31",
+      "priority": "medium",
+      "status": "active"
+    },
+    {
+      "goal_name": "Debt Reduction",
+      "target_amount": 1500000,
+      "current_amount": 120000,
+      "currency_code": "INR",
+      "target_date": "2029-12-31",
+      "priority": "medium",
+      "status": "active"
+    }
+  ],
+  "hasIncome": true,
+  "hasExpenses": true,
+  "hasAssets": true,
+  "hasLiabilities": true
+}

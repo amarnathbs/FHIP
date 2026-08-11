@@ -1,0 +1,686 @@
+{
+  "goals": [
+    {
+      "id": "a9588685-86e5-53e5-a156-2ee72ce986f7",
+      "goalName": "Emergency Fund",
+      "goalType": "Emergency Fund",
+      "goalCategory": "emergency_fund",
+      "forecastLogicKey": "generic",
+      "description": null,
+      "status": "active",
+      "ownerMemberId": null,
+      "beneficiaryMemberId": null,
+      "countryCode": null,
+      "currencyCode": "INR",
+      "userPriority": 3,
+      "importanceType": "important",
+      "targetAmount": 600000,
+      "targetDate": "2027-12-31",
+      "targetDateFlexibility": "fixed",
+      "currentAmount": 320000,
+      "plannedContributionAmount": 12000,
+      "contributionFrequency": "monthly",
+      "allocatedMonthlyContribution": 0,
+      "annualContributionGrowthPct": 0,
+      "inflationAdjusted": true,
+      "nextReviewDate": null,
+      "forecasts": {
+        "conservative": {
+          "targetAmountOriginal": 600000,
+          "targetAmountFuture": 628162.0811506028,
+          "currentAmount": 320000,
+          "projectedTargetDateValue": 523059.6023249482,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 18487.18103551411,
+          "forecastFundingPct": 83.26825480564845,
+          "currentMonthlyContribution": 12000,
+          "fundingGapAtTargetDate": 308162.0811506028,
+          "progressPct": 50.942266272083295,
+          "trackStatus": "off_track",
+          "explanation": "Target of $628162, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "base": {
+          "targetAmountOriginal": 600000,
+          "targetAmountFuture": 620082.875129567,
+          "currentAmount": 320000,
+          "projectedTargetDateValue": 537245.2283714511,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 17033.28402379267,
+          "forecastFundingPct": 86.64087494098158,
+          "currentMonthlyContribution": 12000,
+          "fundingGapAtTargetDate": 300082.875129567,
+          "progressPct": 51.60600507361789,
+          "trackStatus": "off_track",
+          "explanation": "Target of $620083, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "optimistic": {
+          "targetAmountOriginal": 600000,
+          "targetAmountFuture": 612029.9006200453,
+          "currentAmount": 320000,
+          "projectedTargetDateValue": 551842.6507534352,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 15599.840360569548,
+          "forecastFundingPct": 90.16596251169517,
+          "currentMonthlyContribution": 12000,
+          "fundingGapAtTargetDate": 292029.90062004526,
+          "progressPct": 52.28502719814983,
+          "trackStatus": "at_risk",
+          "explanation": "Target of $612030, based on your current contribution plan.",
+          "currentValue": {}
+        }
+      },
+      "milestones": [],
+      "fundingSources": []
+    },
+    {
+      "id": "2c6a518f-788f-542c-951b-7c237acd9a8b",
+      "goalName": "Home Deposit",
+      "goalType": "Home Deposit / Major Purchase",
+      "goalCategory": "home_deposit",
+      "forecastLogicKey": "generic",
+      "description": null,
+      "status": "active",
+      "ownerMemberId": null,
+      "beneficiaryMemberId": null,
+      "countryCode": null,
+      "currencyCode": "INR",
+      "userPriority": 3,
+      "importanceType": "important",
+      "targetAmount": 5000000,
+      "targetDate": "2030-12-31",
+      "targetDateFlexibility": "fixed",
+      "currentAmount": 600000,
+      "plannedContributionAmount": 22000,
+      "contributionFrequency": "monthly",
+      "allocatedMonthlyContribution": 0,
+      "annualContributionGrowthPct": 0,
+      "inflationAdjusted": true,
+      "nextReviewDate": null,
+      "forecasts": {
+        "conservative": {
+          "targetAmountOriginal": 5000000,
+          "targetAmountFuture": 5803787.731407281,
+          "currentAmount": 600000,
+          "projectedTargetDateValue": 1848271.2389669605,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 94882.30032554045,
+          "forecastFundingPct": 31.845948275554843,
+          "currentMonthlyContribution": 22000,
+          "fundingGapAtTargetDate": 5203787.731407281,
+          "progressPct": 10.33807623171832,
+          "trackStatus": "off_track",
+          "explanation": "Target of $5803788, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "base": {
+          "targetAmountOriginal": 5000000,
+          "targetAmountFuture": 5564678.624583969,
+          "currentAmount": 600000,
+          "projectedTargetDateValue": 1989478.614493656,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 84396.49847096567,
+          "forecastFundingPct": 35.75190498341483,
+          "currentMonthlyContribution": 22000,
+          "fundingGapAtTargetDate": 4964678.624583969,
+          "progressPct": 10.782293830038705,
+          "trackStatus": "off_track",
+          "explanation": "Target of $5564679, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "optimistic": {
+          "targetAmountOriginal": 5000000,
+          "targetAmountFuture": 5333220.266098169,
+          "currentAmount": 600000,
+          "projectedTargetDateValue": 2143869.54727815,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 74678.31305649651,
+          "forecastFundingPct": 40.1984062219621,
+          "currentMonthlyContribution": 22000,
+          "fundingGapAtTargetDate": 4733220.266098169,
+          "progressPct": 11.250238506255533,
+          "trackStatus": "off_track",
+          "explanation": "Target of $5333220, based on your current contribution plan.",
+          "currentValue": {}
+        }
+      },
+      "milestones": [],
+      "fundingSources": []
+    },
+    {
+      "id": "cdc41ec6-5069-508e-ab08-1d032f04a098",
+      "goalName": "Debt Reduction",
+      "goalType": "Debt Reduction",
+      "goalCategory": "debt_payoff",
+      "forecastLogicKey": "generic",
+      "description": null,
+      "status": "active",
+      "ownerMemberId": null,
+      "beneficiaryMemberId": null,
+      "countryCode": null,
+      "currencyCode": "INR",
+      "userPriority": 3,
+      "importanceType": "important",
+      "targetAmount": 1500000,
+      "targetDate": "2029-12-31",
+      "targetDateFlexibility": "fixed",
+      "currentAmount": 120000,
+      "plannedContributionAmount": 20000,
+      "contributionFrequency": "monthly",
+      "allocatedMonthlyContribution": 0,
+      "annualContributionGrowthPct": 0,
+      "inflationAdjusted": true,
+      "nextReviewDate": null,
+      "forecasts": {
+        "conservative": {
+          "targetAmountOriginal": 1500000,
+          "targetAmountFuture": 1682257.3134513858,
+          "currentAmount": 120000,
+          "projectedTargetDateValue": 954823.0280003116,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 37601.54197148647,
+          "forecastFundingPct": 56.75844119478719,
+          "currentMonthlyContribution": 20000,
+          "fundingGapAtTargetDate": 1562257.3134513858,
+          "progressPct": 7.13327259988564,
+          "trackStatus": "off_track",
+          "explanation": "Target of $1682257, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "base": {
+          "targetAmountOriginal": 1500000,
+          "targetAmountFuture": 1628686.4267075032,
+          "currentAmount": 120000,
+          "projectedTargetDateValue": 1000758.7988087328,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 34579.61022688477,
+          "forecastFundingPct": 61.44576281831197,
+          "currentMonthlyContribution": 20000,
+          "fundingGapAtTargetDate": 1508686.4267075032,
+          "progressPct": 7.367900783859782,
+          "trackStatus": "off_track",
+          "explanation": "Target of $1628686, based on your current contribution plan.",
+          "currentValue": {}
+        },
+        "optimistic": {
+          "targetAmountOriginal": 1500000,
+          "targetAmountFuture": 1576321.2609157152,
+          "currentAmount": 120000,
+          "projectedTargetDateValue": 1049536.056768809,
+          "projectedCompletionDate": null,
+          "requiredMonthlyContribution": 31731.071265536662,
+          "forecastFundingPct": 66.58135513309725,
+          "currentMonthlyContribution": 20000,
+          "fundingGapAtTargetDate": 1456321.2609157152,
+          "progressPct": 7.612661389232909,
+          "trackStatus": "off_track",
+          "explanation": "Target of $1576321, based on your current contribution plan.",
+          "currentValue": {}
+        }
+      },
+      "milestones": [],
+      "fundingSources": []
+    }
+  ],
+  "summary": {
+    "activeGoalsCount": 3,
+    "totalTargetAmount": 7813447.92642104,
+    "totalCurrentAmount": 1040000,
+    "overallProgressPct": 13.310384990002403,
+    "totalMonthlyContribution": 54000,
+    "onTrackCount": 0,
+    "atRiskCount": 0,
+    "offTrackCount": 3,
+    "achievedCount": 0,
+    "nextGoalDue": {
+      "goalId": "a9588685-86e5-53e5-a156-2ee72ce986f7",
+      "goalName": "Emergency Fund",
+      "targetDate": "2027-12-31"
+    }
+  },
+  "affordability": {
+    "status": "overallocated",
+    "monthlySurplus": 2030,
+    "totalPlannedGoalContributions": 54000,
+    "unallocatedAmount": 0,
+    "overallocatedAmount": 51970,
+    "usageRatio": 26.600985221674875,
+    "warning": "Your planned goal contributions exceed your estimated monthly surplus by $51970."
+  },
+  "modelVersion": "goals-1.0.0",
+  "goalTypes": [
+    {
+      "type_key": "starter_emergency_fund",
+      "category": "foundation",
+      "type_label": "Starter Emergency Fund",
+      "forecast_logic_key": "emergency_fund",
+      "default_priority": 5,
+      "default_importance_type": "essential",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "full_emergency_fund",
+      "category": "foundation",
+      "type_label": "Full Emergency Fund",
+      "forecast_logic_key": "emergency_fund",
+      "default_priority": 4,
+      "default_importance_type": "essential",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "cash_reserve",
+      "category": "foundation",
+      "type_label": "Cash Reserve",
+      "forecast_logic_key": "emergency_fund",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "tax_payment_reserve",
+      "category": "foundation",
+      "type_label": "Tax Payment Reserve",
+      "forecast_logic_key": "generic",
+      "default_priority": 4,
+      "default_importance_type": "essential",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "insurance_premium_reserve",
+      "category": "foundation",
+      "type_label": "Insurance Premium Reserve",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "pay_off_credit_card",
+      "category": "debt",
+      "type_label": "Pay Off Credit Card",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 5,
+      "default_importance_type": "essential",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "pay_off_personal_loan",
+      "category": "debt",
+      "type_label": "Pay Off Personal Loan",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "pay_off_car_loan",
+      "category": "debt",
+      "type_label": "Pay Off Car Loan",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "reduce_mortgage",
+      "category": "debt",
+      "type_label": "Reduce Home Mortgage",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "pay_off_education_loan",
+      "category": "debt",
+      "type_label": "Pay Off Education Loan",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "become_debt_free",
+      "category": "debt",
+      "type_label": "Become Debt Free",
+      "forecast_logic_key": "debt_payoff",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "first_home_deposit",
+      "category": "property",
+      "type_label": "First Home Deposit",
+      "forecast_logic_key": "home_deposit",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "upgrade_home_deposit",
+      "category": "property",
+      "type_label": "Upgrade Home Deposit",
+      "forecast_logic_key": "home_deposit",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "investment_property_deposit",
+      "category": "property",
+      "type_label": "Investment Property Deposit",
+      "forecast_logic_key": "home_deposit",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "property_purchase",
+      "category": "property",
+      "type_label": "Property Purchase",
+      "forecast_logic_key": "home_deposit",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "renovation",
+      "category": "property",
+      "type_label": "Renovation",
+      "forecast_logic_key": "major_purchase",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "overseas_property_purchase",
+      "category": "property",
+      "type_label": "Overseas Property Purchase",
+      "forecast_logic_key": "home_deposit",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "property"
+    },
+    {
+      "type_key": "start_investing",
+      "category": "investment",
+      "type_label": "Start Investing",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "investment_portfolio_target",
+      "category": "investment",
+      "type_label": "Investment Portfolio Target",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "passive_income_target",
+      "category": "investment",
+      "type_label": "Passive Income Target",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "financial_independence_target",
+      "category": "investment",
+      "type_label": "Financial Independence Target",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "diversified_assets_target",
+      "category": "investment",
+      "type_label": "Build Diversified Assets",
+      "forecast_logic_key": "generic",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "business_investment",
+      "category": "investment",
+      "type_label": "Business Investment",
+      "forecast_logic_key": "business",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "business_startup",
+      "category": "investment",
+      "type_label": "Business Startup Capital",
+      "forecast_logic_key": "business",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "retirement_balance_target",
+      "category": "retirement",
+      "type_label": "Retirement Balance Target",
+      "forecast_logic_key": "retirement",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "additional_retirement_contribution",
+      "category": "retirement",
+      "type_label": "Additional Retirement Contribution",
+      "forecast_logic_key": "retirement",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "early_retirement",
+      "category": "retirement",
+      "type_label": "Early Retirement",
+      "forecast_logic_key": "retirement",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "superannuation_goal",
+      "category": "retirement",
+      "type_label": "Superannuation Goal",
+      "forecast_logic_key": "retirement",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "ppf_goal",
+      "category": "retirement",
+      "type_label": "PPF Goal",
+      "forecast_logic_key": "retirement",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "nps_goal",
+      "category": "retirement",
+      "type_label": "NPS Goal",
+      "forecast_logic_key": "retirement",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "school_fees",
+      "category": "family_education",
+      "type_label": "School Fees",
+      "forecast_logic_key": "education",
+      "default_priority": 4,
+      "default_importance_type": "essential",
+      "default_inflation_category": "education"
+    },
+    {
+      "type_key": "university_education",
+      "category": "family_education",
+      "type_label": "University Education",
+      "forecast_logic_key": "education",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "education"
+    },
+    {
+      "type_key": "overseas_education",
+      "category": "family_education",
+      "type_label": "Overseas Education",
+      "forecast_logic_key": "education",
+      "default_priority": 4,
+      "default_importance_type": "important",
+      "default_inflation_category": "education"
+    },
+    {
+      "type_key": "childcare_reserve",
+      "category": "family_education",
+      "type_label": "Childcare Reserve",
+      "forecast_logic_key": "education",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "education"
+    },
+    {
+      "type_key": "wedding",
+      "category": "family_education",
+      "type_label": "Wedding",
+      "forecast_logic_key": "major_purchase",
+      "default_priority": 3,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "family_support",
+      "category": "family_education",
+      "type_label": "Family Support",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "support_relatives_overseas",
+      "category": "family_education",
+      "type_label": "Support Relatives Overseas",
+      "forecast_logic_key": "cross_border",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "holiday",
+      "category": "lifestyle",
+      "type_label": "Holiday",
+      "forecast_logic_key": "major_purchase",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "vehicle_purchase",
+      "category": "lifestyle",
+      "type_label": "Vehicle Purchase",
+      "forecast_logic_key": "major_purchase",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "major_household_purchase",
+      "category": "lifestyle",
+      "type_label": "Major Household Purchase",
+      "forecast_logic_key": "major_purchase",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "sabbatical",
+      "category": "lifestyle",
+      "type_label": "Sabbatical",
+      "forecast_logic_key": "generic",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "relocation",
+      "category": "lifestyle",
+      "type_label": "Relocation",
+      "forecast_logic_key": "generic",
+      "default_priority": 2,
+      "default_importance_type": "aspirational",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "immigration_visa_costs",
+      "category": "lifestyle",
+      "type_label": "Immigration or Visa Costs",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "medical_procedure",
+      "category": "health",
+      "type_label": "Medical Procedure",
+      "forecast_logic_key": "generic",
+      "default_priority": 4,
+      "default_importance_type": "essential",
+      "default_inflation_category": "medical"
+    },
+    {
+      "type_key": "health_reserve",
+      "category": "health",
+      "type_label": "Health Reserve",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "medical"
+    },
+    {
+      "type_key": "aged_care_reserve",
+      "category": "health",
+      "type_label": "Aged Care Reserve",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "medical"
+    },
+    {
+      "type_key": "home_repair_emergency_reserve",
+      "category": "health",
+      "type_label": "Home Repair Emergency Reserve",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    },
+    {
+      "type_key": "custom_goal",
+      "category": "custom",
+      "type_label": "Custom Goal",
+      "forecast_logic_key": "generic",
+      "default_priority": 3,
+      "default_importance_type": "important",
+      "default_inflation_category": "general"
+    }
+  ]
+}

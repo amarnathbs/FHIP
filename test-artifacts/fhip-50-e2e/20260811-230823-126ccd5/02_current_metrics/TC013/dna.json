@@ -1,0 +1,446 @@
+{
+  "status": "indicative",
+  "primaryProfileCode": "future_ready_professional",
+  "primaryScore": 100,
+  "secondaryProfileCode": "property_focused_investor",
+  "secondaryScore": 98.14,
+  "confidence": 66.45125,
+  "confidenceBand": "moderate",
+  "confidenceLabel": "Moderate",
+  "profileChanged": false,
+  "candidates": [
+    {
+      "code": "future_ready_professional",
+      "score": 100,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "age",
+          "value": 35,
+          "score": 100,
+          "weight": 2
+        },
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 100,
+          "weight": 3
+        },
+        {
+          "metric": "retirementContributionRate",
+          "value": 0.09032740731990628,
+          "score": 100,
+          "weight": 2
+        },
+        {
+          "metric": "debtServiceRatio",
+          "value": 0.23625302699190834,
+          "score": 100,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "property_focused_investor",
+      "score": 98.14,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "propertyConcentration",
+          "value": 0.8283955588793649,
+          "score": 100,
+          "weight": 4
+        },
+        {
+          "metric": "debtToIncome",
+          "value": 2.477829942618675,
+          "score": 92.54042775169536,
+          "weight": 2
+        },
+        {
+          "metric": "liquidAssetRatio",
+          "value": 0.0023010987746649027,
+          "score": 100,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "wealth_builder",
+      "score": 97.53,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 100,
+          "weight": 3
+        },
+        {
+          "metric": "investmentContributionRate",
+          "value": 0.024609690311657117,
+          "score": 93.97931416431055,
+          "weight": 3
+        },
+        {
+          "metric": "netWorthGrowthPct",
+          "value": null,
+          "score": null,
+          "weight": 2
+        },
+        {
+          "metric": "debtServiceRatio",
+          "value": 0.23625302699190834,
+          "score": 100,
+          "weight": 2
+        },
+        {
+          "metric": "investmentDiversificationScore",
+          "value": 38,
+          "score": 96.66666666666667,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "financial_stabiliser",
+      "score": 90.22,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 75.80590876320602,
+          "weight": 3
+        },
+        {
+          "metric": "emergencyFundMonths",
+          "value": 0.4581901489117984,
+          "score": 100,
+          "weight": 3
+        },
+        {
+          "metric": "essentialExpenseRatio",
+          "value": 0.4296851928415333,
+          "score": 97.18740771366133,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "lifestyle_optimiser",
+      "score": 72.78,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "discretionaryRatio",
+          "value": 0.030023822180221683,
+          "score": 61.43197459717452,
+          "weight": 3
+        },
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 65.99367366894387,
+          "weight": 3
+        },
+        {
+          "metric": "emergencyFundMonths",
+          "value": 0.4581901489117984,
+          "score": 100,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "debt_constrained_builder",
+      "score": 63.76,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "debtServiceRatio",
+          "value": 0.23625302699190834,
+          "score": 82.50046569106283,
+          "weight": 4
+        },
+        {
+          "metric": "propertyConcentration",
+          "value": 0.8283955588793649,
+          "score": 0,
+          "weight": 2
+        },
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 53.8112803661206,
+          "weight": 2
+        },
+        {
+          "metric": "emergencyFundMonths",
+          "value": 0.4581901489117984,
+          "score": 100,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "cash_rich_accumulator",
+      "score": 60.84,
+      "eligible": true,
+      "exclusionReason": null,
+      "dimensionScores": [
+        {
+          "metric": "liquidAssetRatio",
+          "value": 0.0023010987746649027,
+          "score": 66.97347983662198,
+          "weight": 3
+        },
+        {
+          "metric": "emergencyFundMonths",
+          "value": 0.4581901489117984,
+          "score": 43.05460099274533,
+          "weight": 3
+        },
+        {
+          "metric": "debtServiceRatio",
+          "value": 0.23625302699190834,
+          "score": 0,
+          "weight": 2
+        },
+        {
+          "metric": "savingsRate",
+          "value": 0.3040379579863367,
+          "score": 100,
+          "weight": 2
+        },
+        {
+          "metric": "investmentContributionRate",
+          "value": 0.024609690311657117,
+          "score": 100,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "code": "retirement_focused_preserver",
+      "score": 0,
+      "eligible": false,
+      "exclusionReason": "Life-stage criteria not met for this profile.",
+      "dimensionScores": []
+    }
+  ],
+  "drivers": [
+    {
+      "type": "classification",
+      "metricCode": "age",
+      "metricValue": 35,
+      "thresholdValue": 40,
+      "contribution": null,
+      "explanation": "Your career stage and income capacity suggest significant future wealth-building potential."
+    },
+    {
+      "type": "classification",
+      "metricCode": "savings_rate",
+      "metricValue": 0.3040379579863367,
+      "thresholdValue": 0.12,
+      "contribution": null,
+      "explanation": "Your current savings rate is 30%."
+    }
+  ],
+  "strengths": [
+    {
+      "type": "strength",
+      "metricCode": "age",
+      "metricValue": 35,
+      "thresholdValue": null,
+      "contribution": null,
+      "explanation": "Time available for compounding is one of your biggest financial advantages right now."
+    },
+    {
+      "type": "strength",
+      "metricCode": "debt_service_ratio",
+      "metricValue": 0.23625302699190834,
+      "thresholdValue": null,
+      "contribution": null,
+      "explanation": "Manageable debt levels leave room to direct more income toward long-term goals."
+    }
+  ],
+  "risks": [
+    {
+      "type": "risk",
+      "metricCode": "retirement_contribution_rate",
+      "metricValue": 0.09032740731990628,
+      "thresholdValue": null,
+      "contribution": null,
+      "explanation": "Delaying investment action reduces the benefit of long-term compounding."
+    }
+  ],
+  "actions": [
+    {
+      "code": "automate_contributions",
+      "title": "Automate wealth-building contributions",
+      "explanation": "Consider automating regular contributions to investments or retirement accounts to capture time in the market.",
+      "priority": "high",
+      "relatedModule": "investments",
+      "relatedMetric": "investment_contribution_rate",
+      "estimatedEffect": "More consistent long-term wealth accumulation."
+    },
+    {
+      "code": "protect_income",
+      "title": "Establish protection for your income",
+      "explanation": "Consider reviewing income protection cover, since your future earning capacity is a major financial asset.",
+      "priority": "medium",
+      "relatedModule": "insurance",
+      "relatedMetric": "has_income_protection",
+      "estimatedEffect": "Reduced risk to your long-term plans from an income interruption."
+    }
+  ],
+  "traits": [
+    {
+      "code": "savings_discipline",
+      "label": "Savings discipline",
+      "level": "high",
+      "direction": "unknown",
+      "value": 0.3040379579863367,
+      "targetRangeLabel": "15%+ of net income",
+      "explanation": "You are currently saving 30% of net income each month."
+    },
+    {
+      "code": "spending_control",
+      "label": "Spending control",
+      "level": "high",
+      "direction": "unknown",
+      "value": 0.030023822180221683,
+      "targetRangeLabel": "under 30% of net income",
+      "explanation": "Discretionary spending is 3% of your net income."
+    },
+    {
+      "code": "debt_dependence",
+      "label": "Debt dependence",
+      "level": "moderate",
+      "direction": "unknown",
+      "value": 0.23625302699190834,
+      "targetRangeLabel": "under 15% of net income",
+      "explanation": "Debt repayments use 24% of your net monthly income."
+    },
+    {
+      "code": "liquidity_strength",
+      "label": "Liquidity strength",
+      "level": "low",
+      "direction": "unknown",
+      "value": 0.4581901489117984,
+      "targetRangeLabel": "4-6 months of essential expenses",
+      "explanation": "Liquid assets currently cover 0.5 months of essential expenses."
+    },
+    {
+      "code": "investment_orientation",
+      "label": "Investment orientation",
+      "level": "low",
+      "direction": "unknown",
+      "value": 0.024609690311657117,
+      "targetRangeLabel": "8%+ of net income",
+      "explanation": "You contribute 2% of net income to investments."
+    },
+    {
+      "code": "property_concentration",
+      "label": "Property concentration",
+      "level": "high",
+      "direction": "unknown",
+      "value": 0.8283955588793649,
+      "targetRangeLabel": "depends on your goals",
+      "explanation": "Property represents 83% of your total assets."
+    },
+    {
+      "code": "retirement_preparation",
+      "label": "Retirement preparation",
+      "level": "high",
+      "direction": "unknown",
+      "value": 0.09032740731990628,
+      "targetRangeLabel": "9%+ of net income",
+      "explanation": "Employer and personal retirement contributions total 9% of net income."
+    },
+    {
+      "code": "financial_momentum",
+      "label": "Financial momentum",
+      "level": "moderate",
+      "direction": "unknown",
+      "value": null,
+      "targetRangeLabel": "positive over time",
+      "explanation": "Not enough history yet to show a trend."
+    }
+  ],
+  "dataCompletenessPct": 100,
+  "modelVersion": "dna-1.0.0",
+  "archetypes": {
+    "cash_rich_accumulator": {
+      "profile_code": "cash_rich_accumulator",
+      "profile_name": "Cash-Rich Accumulator",
+      "short_description": "Strong liquidity and disciplined saving, with limited exposure to growth investments.",
+      "long_description": "Your current financial pattern most closely resembles a Cash-Rich Accumulator. You hold a significant share of your financial assets in cash and deposits, carry little debt, and maintain strong emergency reserves. This gives you real resilience against short-term shocks, though it may mean your long-term wealth grows more slowly than it could.",
+      "icon": "piggy-bank"
+    },
+    "wealth_builder": {
+      "profile_code": "wealth_builder",
+      "profile_name": "Wealth Builder",
+      "short_description": "Disciplined saving and regular investing, building net worth steadily over time.",
+      "long_description": "Your current financial pattern most closely resembles a Wealth Builder. You save and invest consistently, keep debt under control, and your net worth is trending upward. This is a strong long-term compounding position, provided diversification and protection keep pace with your growing wealth.",
+      "icon": "trending-up"
+    },
+    "lifestyle_optimiser": {
+      "profile_code": "lifestyle_optimiser",
+      "profile_name": "Lifestyle Optimiser",
+      "short_description": "Strong income supporting a rich lifestyle today, with room to build long-term savings momentum.",
+      "long_description": "Your current financial pattern most closely resembles a Lifestyle Optimiser. Your income supports a comfortable, flexible lifestyle, with discretionary spending making up a large share of your budget. Building a stronger automatic savings habit would help convert more of today's income into long-term wealth.",
+      "icon": "sparkles"
+    },
+    "property_focused_investor": {
+      "profile_code": "property_focused_investor",
+      "profile_name": "Property-Focused Investor",
+      "short_description": "Wealth concentrated in property, supported by mortgage leverage.",
+      "long_description": "Your current financial pattern most closely resembles a Property-Focused Investor. You have built a significant share of your wealth through property, supported by mortgage leverage. Your balance sheet has strong asset backing, but your liquid assets and investment diversification are relatively limited.",
+      "icon": "home"
+    },
+    "debt_constrained_builder": {
+      "profile_code": "debt_constrained_builder",
+      "profile_name": "Debt-Constrained Builder",
+      "short_description": "Reasonable income currently absorbed by debt repayments, limiting monthly flexibility.",
+      "long_description": "Your current financial pattern most closely resembles a Debt-Constrained Builder. A significant share of your income is currently directed toward debt repayments, limiting the cash available for saving and investing. Reducing high-cost debt is likely to unlock the fastest improvement in your financial position.",
+      "icon": "link"
+    },
+    "future_ready_professional": {
+      "profile_code": "future_ready_professional",
+      "profile_name": "Future-Ready Professional",
+      "short_description": "Strong earning capacity and healthy habits, with time on your side for compounding.",
+      "long_description": "Your current financial pattern most closely resembles a Future-Ready Professional. Your income capacity, savings habits and manageable debt put you in a strong position to build significant wealth over time, even if your accumulated net worth is still developing.",
+      "icon": "graduation-cap"
+    },
+    "financial_stabiliser": {
+      "profile_code": "financial_stabiliser",
+      "profile_name": "Financial Stabiliser",
+      "short_description": "Focused on building basic financial stability and a foundation to grow from.",
+      "long_description": "Your current financial pattern most closely resembles a Financial Stabiliser. Your household is working to establish stable cash flow and a basic financial buffer. Small, consistent changes to essential spending and emergency savings tend to produce the fastest improvement from here.",
+      "icon": "life-buoy"
+    },
+    "retirement_focused_preserver": {
+      "profile_code": "retirement_focused_preserver",
+      "profile_name": "Retirement-Focused Preserver",
+      "short_description": "Focused on preserving capital and sustaining income through retirement.",
+      "long_description": "Your current financial pattern most closely resembles a Retirement-Focused Preserver. Your focus has shifted from accumulation to preserving capital and generating sustainable income, typically supported by retirement savings and reduced debt.",
+      "icon": "shield"
+    }
+  },
+  "history": [
+    {
+      "profile_month": "2026-08-01",
+      "primary_profile_code": "future_ready_professional",
+      "secondary_profile_code": "property_focused_investor",
+      "confidence_score": 66.45
+    }
+  ]
+}

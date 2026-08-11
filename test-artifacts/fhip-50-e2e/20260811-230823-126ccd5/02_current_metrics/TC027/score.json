@@ -1,0 +1,274 @@
+{
+  "overallScore": 75.933,
+  "roundedScore": 76,
+  "statusBand": "good",
+  "statusLabel": "Good",
+  "dataConfidence": 90,
+  "riskOverrideApplied": false,
+  "riskOverrideReason": null,
+  "components": [
+    {
+      "code": "cash_flow",
+      "label": "Cash Flow Health",
+      "rawScore": 100,
+      "weight": 0.15,
+      "weightedContribution": 15.789,
+      "statusBand": "excellent",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Your household retains 50% of net income after expenses.",
+      "currentValue": {
+        "monthlyIncome": 274520,
+        "monthlyExpenses": 137400,
+        "cashFlowMargin": 0.49949001894215356,
+        "deficitMonths": 0,
+        "incomeSourceCount": 3
+      },
+      "benchmarkValue": {
+        "targetMargin": 0.15
+      }
+    },
+    {
+      "code": "savings",
+      "label": "Savings Behaviour",
+      "rawScore": 100,
+      "weight": 0.12,
+      "weightedContribution": 12.632,
+      "statusBand": "excellent",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Total savings rate (monthly surplus plus employer retirement contributions) is 52%.",
+      "currentValue": {
+        "cashSavingsRate": 0.49949001894215356,
+        "investmentContributionRate": 0.027320413813201223,
+        "retirementContributionRate": 0.03824857933848171,
+        "retirementEmployerContributionRate": 0.02367769197144106,
+        "totalSavingsRate": 0.5231677109135946,
+        "monthlySavedAmount": 137120,
+        "savingsStreakMonths": 1
+      },
+      "benchmarkValue": {
+        "targetSavingsRate": 0.2
+      }
+    },
+    {
+      "code": "emergency_fund",
+      "label": "Emergency Fund & Liquidity",
+      "rawScore": 60,
+      "weight": 0.12,
+      "weightedContribution": 7.579,
+      "statusBand": "fair",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Your liquid cash covers 3.1 months of essential expenses.",
+      "currentValue": {
+        "balance": 258000,
+        "essentialMonthlyExpenses": 82600,
+        "months": 3.123486682808717,
+        "fundingGap": 320200
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 7,
+        "targetBalance": 578200
+      }
+    },
+    {
+      "code": "debt",
+      "label": "Debt Health",
+      "rawScore": 85,
+      "weight": 0.15,
+      "weightedContribution": 13.421,
+      "statusBand": "excellent",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Debt repayments are 17.5% of net monthly income.",
+      "currentValue": {
+        "totalDebt": 5000000,
+        "goodDebt": 5000000,
+        "badDebt": 0,
+        "debtServiceRatio": 0.17485064840448783,
+        "debtToIncome": 1.2820512820512822,
+        "averageInterestRate": 0.084
+      },
+      "benchmarkValue": {
+        "targetDebtServiceRatio": 0.15,
+        "targetDebtToIncome": 3
+      }
+    },
+    {
+      "code": "net_worth",
+      "label": "Net Worth & Asset Position",
+      "rawScore": 80,
+      "weight": 0.1,
+      "weightedContribution": 8.421,
+      "statusBand": "good",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Net worth is 71% of total assets.",
+      "currentValue": {
+        "netWorth": 12199000,
+        "totalAssets": 17199000,
+        "netWorthRatio": 0.7092854235711379,
+        "concentration": 0.6977149834292692
+      },
+      "benchmarkValue": {
+        "targetNetWorthRatio": 0.6
+      }
+    },
+    {
+      "code": "investment",
+      "label": "Investment Health",
+      "rawScore": 44.2,
+      "weight": 0.08,
+      "weightedContribution": 3.722,
+      "statusBand": "needs_attention",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Diversification score is 38/100 across your investment holdings.",
+      "currentValue": {
+        "portfolioValue": 405000,
+        "diversificationScore": 38,
+        "annualContribution": 90000,
+        "unrealisedGain": 60000
+      },
+      "benchmarkValue": {
+        "targetDiversificationScore": 70
+      }
+    },
+    {
+      "code": "retirement",
+      "label": "Retirement Readiness",
+      "rawScore": 67,
+      "weight": 0.1,
+      "weightedContribution": 7.053,
+      "statusBand": "fair",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Retirement balance is 78% of a rough age-based guideline.",
+      "currentValue": {
+        "currentBalance": 4536000,
+        "contributionRate": 0.03230769230769231,
+        "employerMonthly": 6500,
+        "personalMonthly": 4000
+      },
+      "benchmarkValue": {
+        "targetBalance": 5850000,
+        "targetMultiple": 1.5,
+        "targetContributionRate": 0.12
+      }
+    },
+    {
+      "code": "insurance",
+      "label": "Insurance & Protection",
+      "rawScore": 50,
+      "weight": 0.08,
+      "weightedContribution": 4.211,
+      "statusBand": "needs_attention",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "currentValue": {
+        "totalAnnualPremium": 91200,
+        "hasLife": false,
+        "hasIncomeProtection": true,
+        "lifeCover": 0
+      },
+      "benchmarkValue": {
+        "targetLifeCover": 39000000
+      }
+    },
+    {
+      "code": "resilience",
+      "label": "Financial Resilience",
+      "rawScore": 59,
+      "weight": 0.05,
+      "weightedContribution": 3.105,
+      "statusBand": "fair",
+      "dataCompleteness": 97,
+      "treatment": "scored",
+      "explanation": "Your Financial Resilience score is 59/100 (Moderately Vulnerable). The main resilience risk identified is no life insurance with dependants.",
+      "currentValue": {
+        "resilienceScore": 59,
+        "resilienceBand": "moderately_vulnerable",
+        "resilienceConfidence": 97
+      },
+      "benchmarkValue": {}
+    },
+    {
+      "code": "behaviour",
+      "label": "Financial Management Behaviour",
+      "rawScore": null,
+      "weight": 0.05,
+      "weightedContribution": 0,
+      "statusBand": "unknown",
+      "dataCompleteness": 0,
+      "treatment": "missing_data",
+      "explanation": "Complete the check-in checklist to calculate this.",
+      "currentValue": {},
+      "benchmarkValue": {}
+    }
+  ],
+  "recommendations": [
+    {
+      "componentCode": "investment",
+      "priority": "medium",
+      "title": "Improve Investment Health",
+      "explanation": "Diversification score is 38/100 across your investment holdings.",
+      "estimatedScoreImprovement": 3.4,
+      "estimatedFinancialBenefit": null
+    },
+    {
+      "componentCode": "emergency_fund",
+      "priority": "medium",
+      "title": "Improve Emergency Fund & Liquidity",
+      "explanation": "Your liquid cash covers 3.1 months of essential expenses.",
+      "estimatedScoreImprovement": 3.2,
+      "estimatedFinancialBenefit": 320200
+    },
+    {
+      "componentCode": "insurance",
+      "priority": "medium",
+      "title": "Improve Insurance & Protection",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "estimatedScoreImprovement": 2.9,
+      "estimatedFinancialBenefit": null
+    },
+    {
+      "componentCode": "retirement",
+      "priority": "low",
+      "title": "Improve Retirement Readiness",
+      "explanation": "Retirement balance is 78% of a rough age-based guideline.",
+      "estimatedScoreImprovement": 1.9,
+      "estimatedFinancialBenefit": null
+    },
+    {
+      "componentCode": "resilience",
+      "priority": "medium",
+      "title": "Improve Financial Resilience",
+      "explanation": "Your Financial Resilience score is 59/100 (Moderately Vulnerable). The main resilience risk identified is no life insurance with dependants.",
+      "estimatedScoreImprovement": 1.4,
+      "estimatedFinancialBenefit": null
+    }
+  ],
+  "positiveContributors": [
+    "Your household retains 50% of net income after expenses.",
+    "Debt repayments are 17.5% of net monthly income.",
+    "Total savings rate (monthly surplus plus employer retirement contributions) is 52%.",
+    "Net worth is 71% of total assets."
+  ],
+  "reductions": [
+    "Complete the check-in checklist to calculate this.",
+    "Diversification score is 38/100 across your investment holdings.",
+    "No life insurance recorded despite having dependants.",
+    "Your Financial Resilience score is 59/100 (Moderately Vulnerable). The main resilience risk identified is no life insurance with dependants."
+  ],
+  "modelVersion": "fhs-2.0.0",
+  "previousScore": null,
+  "scoreChange": null,
+  "history": [
+    {
+      "score_month": "2026-08-01",
+      "rounded_score": 76
+    }
+  ]
+}

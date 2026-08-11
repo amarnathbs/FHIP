@@ -1,0 +1,197 @@
+{
+  "overallScore": 59,
+  "roundedScore": 59,
+  "statusBand": "moderately_vulnerable",
+  "statusLabel": "Moderately Vulnerable",
+  "confidence": 91,
+  "riskOverrideApplied": true,
+  "riskOverrideReason": "Having dependants with no life insurance caps the score until cover is reviewed.",
+  "components": [
+    {
+      "code": "emergency_fund",
+      "label": "Emergency Fund Adequacy",
+      "rawScore": 32,
+      "weight": 0.25,
+      "weightedContribution": 8,
+      "statusBand": "fragile",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible cash covers 1.4 months of essential expenses.",
+      "currentValue": {
+        "accessibleResources": 7250,
+        "committed90d": 0,
+        "essentialMonths": 1.3776722090261282,
+        "coreSurvivalMonths": 2.169035153328347
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 6
+      }
+    },
+    {
+      "code": "liquidity",
+      "label": "Liquidity Strength",
+      "rawScore": 65,
+      "weight": 0.15,
+      "weightedContribution": 9.75,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible liquid resources cover 1.3 months of your total monthly obligations (30/90-day coverage).",
+      "currentValue": {
+        "accessibleResources": 7250,
+        "monthlyObligations": 5567.5,
+        "coverageMonths": 1.3022002694207453
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 3
+      }
+    },
+    {
+      "code": "income_resilience",
+      "label": "Income Resilience",
+      "rawScore": 67.5,
+      "weight": 0.15,
+      "weightedContribution": 10.125,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "3 income source(s) recorded, with employer concentration factored in.",
+      "currentValue": {
+        "incomeSourceCount": 3,
+        "employerConcentration": 1,
+        "passiveIncomeRatio": 0.1312883435582822
+      },
+      "benchmarkValue": {
+        "targetSources": 2
+      }
+    },
+    {
+      "code": "insurance_protection",
+      "label": "Insurance & Protection",
+      "rawScore": 40,
+      "weight": 0.2,
+      "weightedContribution": 8,
+      "statusBand": "vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "currentValue": {
+        "hasLife": false,
+        "hasIncomeProtection": true,
+        "lifeCover": 0,
+        "waitingPeriodDays": null
+      },
+      "benchmarkValue": {
+        "targetLifeCover": 978000
+      }
+    },
+    {
+      "code": "debt_pressure",
+      "label": "Debt & Commitment Pressure",
+      "rawScore": 100,
+      "weight": 0.15,
+      "weightedContribution": 15,
+      "statusBand": "highly_resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No liabilities recorded — no debt-servicing pressure.",
+      "currentValue": {
+        "totalDebt": 0
+      },
+      "benchmarkValue": {}
+    },
+    {
+      "code": "concentration_risk",
+      "label": "Concentration & Exposure Risk",
+      "rawScore": 82,
+      "weight": 0.1,
+      "weightedContribution": 8.2,
+      "statusBand": "resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Property makes up 0% of your asset base.",
+      "currentValue": {
+        "propertyConcentration": 0,
+        "institutionConcentration": null,
+        "countryConcentration": 1
+      },
+      "benchmarkValue": {
+        "targetPropertyConcentration": 0.5
+      }
+    }
+  ],
+  "risks": [
+    {
+      "code": "low_emergency_fund",
+      "category": "liquidity",
+      "severity": "high",
+      "title": "Emergency fund below recommended minimum",
+      "explanation": "Accessible cash covers 1.4 months of essential expenses, below the 3-month minimum.",
+      "metricValue": 1.3776722090261282,
+      "thresholdValue": 3
+    },
+    {
+      "code": "income_concentration",
+      "category": "income",
+      "severity": "high",
+      "title": "High income concentration",
+      "explanation": "A single income source or employer accounts for most household income.",
+      "metricValue": 1,
+      "thresholdValue": 0.7
+    },
+    {
+      "code": "no_life_insurance",
+      "category": "insurance",
+      "severity": "high",
+      "title": "No life insurance with dependants",
+      "explanation": "You have dependants but no life insurance cover recorded.",
+      "metricValue": 0,
+      "thresholdValue": null
+    }
+  ],
+  "actions": [
+    {
+      "code": "build_emergency_fund",
+      "title": "Build your emergency fund",
+      "explanation": "Accessible cash covers 1.4 months of essential expenses.",
+      "priority": "high",
+      "relatedModule": "assets",
+      "relatedMetric": "emergency_fund"
+    },
+    {
+      "code": "review_insurance",
+      "title": "Review your insurance cover",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "priority": "medium",
+      "relatedModule": "insurance",
+      "relatedMetric": "insurance_protection"
+    },
+    {
+      "code": "improve_liquidity",
+      "title": "Improve short-term liquidity",
+      "explanation": "Accessible liquid resources cover 1.3 months of your total monthly obligations (30/90-day coverage).",
+      "priority": "low",
+      "relatedModule": "assets",
+      "relatedMetric": "liquidity"
+    },
+    {
+      "code": "diversify_income",
+      "title": "Review your income-interruption readiness",
+      "explanation": "3 income source(s) recorded, with employer concentration factored in.",
+      "priority": "low",
+      "relatedModule": "income",
+      "relatedMetric": "income_resilience"
+    }
+  ],
+  "accessibleLiquidResources": 7250,
+  "committedCash90d": 0,
+  "modelVersion": "resilience-1.0.0",
+  "previousScore": null,
+  "scoreChange": null,
+  "history": [
+    {
+      "score_month": "2026-08-01",
+      "rounded_score": 59
+    }
+  ]
+}

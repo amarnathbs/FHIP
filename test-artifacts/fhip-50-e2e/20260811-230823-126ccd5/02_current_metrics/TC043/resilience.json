@@ -1,0 +1,185 @@
+{
+  "overallScore": 59,
+  "roundedScore": 59,
+  "statusBand": "moderately_vulnerable",
+  "statusLabel": "Moderately Vulnerable",
+  "confidence": 97,
+  "riskOverrideApplied": true,
+  "riskOverrideReason": "Having dependants with no life insurance caps the score until cover is reviewed.",
+  "components": [
+    {
+      "code": "emergency_fund",
+      "label": "Emergency Fund Adequacy",
+      "rawScore": 100,
+      "weight": 0.25,
+      "weightedContribution": 25,
+      "statusBand": "highly_resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible cash covers 16.9 months of essential expenses.",
+      "currentValue": {
+        "accessibleResources": 1408000,
+        "committed90d": 0,
+        "essentialMonths": 16.89262147570486,
+        "coreSurvivalMonths": 21.172932330827066
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 6
+      }
+    },
+    {
+      "code": "liquidity",
+      "label": "Liquidity Strength",
+      "rawScore": 100,
+      "weight": 0.15,
+      "weightedContribution": 15,
+      "statusBand": "highly_resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible liquid resources cover 6.7 months of your total monthly obligations (30/90-day coverage).",
+      "currentValue": {
+        "accessibleResources": 1408000,
+        "monthlyObligations": 210500,
+        "coverageMonths": 6.688836104513064
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 3
+      }
+    },
+    {
+      "code": "income_resilience",
+      "label": "Income Resilience",
+      "rawScore": 73.25,
+      "weight": 0.15,
+      "weightedContribution": 10.987,
+      "statusBand": "resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "3 income source(s) recorded, with employer concentration factored in.",
+      "currentValue": {
+        "incomeSourceCount": 3,
+        "employerConcentration": 0.654320987654321,
+        "passiveIncomeRatio": 0.009931245225362872
+      },
+      "benchmarkValue": {
+        "targetSources": 2
+      }
+    },
+    {
+      "code": "insurance_protection",
+      "label": "Insurance & Protection",
+      "rawScore": 40,
+      "weight": 0.2,
+      "weightedContribution": 8,
+      "statusBand": "vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "currentValue": {
+        "hasLife": false,
+        "hasIncomeProtection": true,
+        "lifeCover": 0,
+        "waitingPeriodDays": null
+      },
+      "benchmarkValue": {
+        "targetLifeCover": 65450000
+      }
+    },
+    {
+      "code": "debt_pressure",
+      "label": "Debt & Commitment Pressure",
+      "rawScore": 66.5,
+      "weight": 0.15,
+      "weightedContribution": 9.975,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Debt repayments are 30% of net income, with 87% on variable rates.",
+      "currentValue": {
+        "debtServiceRatio": 0.2962303474231602,
+        "variableRateDebtRatio": 0.8673469387755102,
+        "upcomingRateResetBalance12m": 0,
+        "creditUtilization": null
+      },
+      "benchmarkValue": {
+        "targetDebtServiceRatio": 0.15
+      }
+    },
+    {
+      "code": "concentration_risk",
+      "label": "Concentration & Exposure Risk",
+      "rawScore": 82,
+      "weight": 0.1,
+      "weightedContribution": 8.2,
+      "statusBand": "resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Property makes up 28% of your asset base.",
+      "currentValue": {
+        "propertyConcentration": 0.28344001700640103,
+        "institutionConcentration": null,
+        "countryConcentration": 1
+      },
+      "benchmarkValue": {
+        "targetPropertyConcentration": 0.5
+      }
+    }
+  ],
+  "risks": [
+    {
+      "code": "no_life_insurance",
+      "category": "insurance",
+      "severity": "high",
+      "title": "No life insurance with dependants",
+      "explanation": "You have dependants but no life insurance cover recorded.",
+      "metricValue": 0,
+      "thresholdValue": null
+    },
+    {
+      "code": "variable_rate_exposure",
+      "category": "debt",
+      "severity": "medium",
+      "title": "High variable-rate debt exposure",
+      "explanation": "87% of rate-tracked debt is on variable rates, exposed to rate rises.",
+      "metricValue": 0.8673469387755102,
+      "thresholdValue": 0.7
+    }
+  ],
+  "actions": [
+    {
+      "code": "review_insurance",
+      "title": "Review your insurance cover",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "priority": "medium",
+      "relatedModule": "insurance",
+      "relatedMetric": "insurance_protection"
+    },
+    {
+      "code": "reduce_debt_pressure",
+      "title": "Reduce debt and commitment pressure",
+      "explanation": "Debt repayments are 30% of net income, with 87% on variable rates.",
+      "priority": "low",
+      "relatedModule": "liabilities",
+      "relatedMetric": "debt_pressure"
+    },
+    {
+      "code": "diversify_income",
+      "title": "Review your income-interruption readiness",
+      "explanation": "3 income source(s) recorded, with employer concentration factored in.",
+      "priority": "low",
+      "relatedModule": "income",
+      "relatedMetric": "income_resilience"
+    }
+  ],
+  "accessibleLiquidResources": 1408000,
+  "committedCash90d": 0,
+  "modelVersion": "resilience-1.0.0",
+  "previousScore": null,
+  "scoreChange": null,
+  "history": [
+    {
+      "score_month": "2026-08-01",
+      "rounded_score": 59
+    }
+  ]
+}

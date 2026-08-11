@@ -1,0 +1,188 @@
+{
+  "overallScore": 61.938,
+  "roundedScore": 62,
+  "statusBand": "moderately_vulnerable",
+  "statusLabel": "Moderately Vulnerable",
+  "confidence": 91,
+  "riskOverrideApplied": false,
+  "riskOverrideReason": null,
+  "components": [
+    {
+      "code": "emergency_fund",
+      "label": "Emergency Fund Adequacy",
+      "rawScore": 32,
+      "weight": 0.25,
+      "weightedContribution": 8,
+      "statusBand": "fragile",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible cash covers 2.0 months of essential expenses.",
+      "currentValue": {
+        "accessibleResources": 7250,
+        "committed90d": 0,
+        "essentialMonths": 2.01949860724234,
+        "coreSurvivalMonths": 2.2342064714946073
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 6
+      }
+    },
+    {
+      "code": "liquidity",
+      "label": "Liquidity Strength",
+      "rawScore": 65,
+      "weight": 0.15,
+      "weightedContribution": 9.75,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible liquid resources cover 1.9 months of your total monthly obligations (30/90-day coverage).",
+      "currentValue": {
+        "accessibleResources": 7250,
+        "monthlyObligations": 3895,
+        "coverageMonths": 1.8613607188703467
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 3
+      }
+    },
+    {
+      "code": "income_resilience",
+      "label": "Income Resilience",
+      "rawScore": 53.25,
+      "weight": 0.15,
+      "weightedContribution": 7.988,
+      "statusBand": "vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "2 income source(s) recorded, with employer concentration factored in.",
+      "currentValue": {
+        "incomeSourceCount": 2,
+        "employerConcentration": 0.8660856626634075,
+        "passiveIncomeRatio": 0
+      },
+      "benchmarkValue": {
+        "targetSources": 2
+      }
+    },
+    {
+      "code": "insurance_protection",
+      "label": "Insurance & Protection",
+      "rawScore": 65,
+      "weight": 0.2,
+      "weightedContribution": 13,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Insurance recorded, but no life cover found.",
+      "currentValue": {
+        "hasLife": false,
+        "hasIncomeProtection": true,
+        "lifeCover": 0,
+        "waitingPeriodDays": null
+      },
+      "benchmarkValue": {
+        "targetLifeCover": 582000
+      }
+    },
+    {
+      "code": "debt_pressure",
+      "label": "Debt & Commitment Pressure",
+      "rawScore": 100,
+      "weight": 0.15,
+      "weightedContribution": 15,
+      "statusBand": "highly_resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No liabilities recorded — no debt-servicing pressure.",
+      "currentValue": {
+        "totalDebt": 0
+      },
+      "benchmarkValue": {}
+    },
+    {
+      "code": "concentration_risk",
+      "label": "Concentration & Exposure Risk",
+      "rawScore": 82,
+      "weight": 0.1,
+      "weightedContribution": 8.2,
+      "statusBand": "resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Property makes up 0% of your asset base.",
+      "currentValue": {
+        "propertyConcentration": 0,
+        "institutionConcentration": null,
+        "countryConcentration": 1
+      },
+      "benchmarkValue": {
+        "targetPropertyConcentration": 0.5
+      }
+    }
+  ],
+  "risks": [
+    {
+      "code": "low_emergency_fund",
+      "category": "liquidity",
+      "severity": "high",
+      "title": "Emergency fund below recommended minimum",
+      "explanation": "Accessible cash covers 2.0 months of essential expenses, below the 3-month minimum.",
+      "metricValue": 2.01949860724234,
+      "thresholdValue": 3
+    },
+    {
+      "code": "income_concentration",
+      "category": "income",
+      "severity": "high",
+      "title": "High income concentration",
+      "explanation": "A single income source or employer accounts for most household income.",
+      "metricValue": 0.8660856626634075,
+      "thresholdValue": 0.7
+    }
+  ],
+  "actions": [
+    {
+      "code": "build_emergency_fund",
+      "title": "Build your emergency fund",
+      "explanation": "Accessible cash covers 2.0 months of essential expenses.",
+      "priority": "high",
+      "relatedModule": "assets",
+      "relatedMetric": "emergency_fund"
+    },
+    {
+      "code": "diversify_income",
+      "title": "Review your income-interruption readiness",
+      "explanation": "2 income source(s) recorded, with employer concentration factored in.",
+      "priority": "medium",
+      "relatedModule": "income",
+      "relatedMetric": "income_resilience"
+    },
+    {
+      "code": "improve_liquidity",
+      "title": "Improve short-term liquidity",
+      "explanation": "Accessible liquid resources cover 1.9 months of your total monthly obligations (30/90-day coverage).",
+      "priority": "low",
+      "relatedModule": "assets",
+      "relatedMetric": "liquidity"
+    },
+    {
+      "code": "review_insurance",
+      "title": "Review your insurance cover",
+      "explanation": "Insurance recorded, but no life cover found.",
+      "priority": "low",
+      "relatedModule": "insurance",
+      "relatedMetric": "insurance_protection"
+    }
+  ],
+  "accessibleLiquidResources": 7250,
+  "committedCash90d": 0,
+  "modelVersion": "resilience-1.0.0",
+  "previousScore": null,
+  "scoreChange": null,
+  "history": [
+    {
+      "score_month": "2026-08-01",
+      "rounded_score": 62
+    }
+  ]
+}

@@ -1,0 +1,327 @@
+{
+  "currency": "AUD",
+  "grossMonthlyIncome": 34000,
+  "netMonthlyIncome": 34000,
+  "passiveMonthlyIncome": 34000,
+  "activeMonthlyIncome": 0,
+  "essentialMonthlyExpenses": 1450,
+  "coreSurvivalMonthlyExpenses": 1300,
+  "lifestyleMonthlyExpenses": 755,
+  "debtMonthlyRepayments": 2400,
+  "totalMonthlyExpenses": 2205,
+  "monthlySurplus": 29395,
+  "savingsRate": 0.8645588235294117,
+  "operatingCashFlow": 32550,
+  "disposableIncome": 30150,
+  "cashFlowRatio": 6.383279044516829,
+  "topExpenses": [
+    {
+      "name": "Groceries",
+      "monthlyAmount": 650
+    },
+    {
+      "name": "Family Support / Remittances Sent Overseas",
+      "monthlyAmount": 450
+    },
+    {
+      "name": "Restaurants",
+      "monthlyAmount": 260
+    },
+    {
+      "name": "Fuel",
+      "monthlyAmount": 250
+    },
+    {
+      "name": "Council Rates",
+      "monthlyAmount": 180
+    }
+  ],
+  "topIncome": [
+    {
+      "name": "Overseas Income",
+      "monthlyAmount": 30000
+    },
+    {
+      "name": "Age Pension",
+      "monthlyAmount": 2200
+    },
+    {
+      "name": "Super Pension",
+      "monthlyAmount": 1800
+    }
+  ],
+  "incomeSourceCount": 3,
+  "largestIncomeSharePct": 0.8823529411764706,
+  "discretionaryRatio": 0.022205882352941176,
+  "employerConcentration": null,
+  "hasInvestments": true,
+  "hasRetirement": true,
+  "hasInsurance": true,
+  "totalAssets": 873801.724137931,
+  "totalAssetsCombined": 1379055.1724137932,
+  "totalInvestments": 12150,
+  "totalRetirement": 493103.4482758621,
+  "totalLiabilities": 380000,
+  "netWorth": 999055.1724137932,
+  "netWorthAllocation": [
+    {
+      "bucket": "cash",
+      "value": 7250
+    },
+    {
+      "bucket": "property",
+      "value": 866551.724137931
+    },
+    {
+      "bucket": "shares",
+      "value": 9000
+    },
+    {
+      "bucket": "fixed_income",
+      "value": 3150
+    },
+    {
+      "bucket": "super",
+      "value": 493103.4482758621
+    }
+  ],
+  "liabilityByType": [
+    {
+      "debtType": "home_loan",
+      "balance": 380000
+    }
+  ],
+  "liquidAssetRatio": 0.005257222586178443,
+  "propertyConcentration": 0.6283662477558348,
+  "assetsByCountry": [
+    {
+      "countryCode": "AU",
+      "value": 727250
+    },
+    {
+      "countryCode": "IN",
+      "value": 8500000
+    }
+  ],
+  "liabilitiesByCountry": [],
+  "retirementByCountry": [
+    {
+      "countryCode": "AU",
+      "value": 450000
+    },
+    {
+      "countryCode": "IN",
+      "value": 2500000
+    }
+  ],
+  "countriesInUse": [
+    "AU",
+    "IN"
+  ],
+  "liquidAssets": 7250,
+  "emergencyFundMonths": 5,
+  "averageInterestRate": 0.059,
+  "debtToIncome": 0.9313725490196079,
+  "debtServiceRatio": 0.07058823529411765,
+  "liabilitiesWithPayoff": [
+    {
+      "debtType": "home_loan",
+      "balance": 380000,
+      "monthsToPayoff": 159
+    }
+  ],
+  "goodDebt": 380000,
+  "badDebt": 0,
+  "variableRateDebtBalance": 380000,
+  "variableRateDebtRatio": 1,
+  "upcomingRateResetBalance12m": 0,
+  "creditUtilization": null,
+  "investmentCostBase": 10350,
+  "investmentUnrealisedGain": 1800,
+  "investmentDiversificationScore": 38,
+  "investmentByCountry": [
+    {
+      "countryCode": "AU",
+      "value": 12150
+    }
+  ],
+  "institutionConcentration": null,
+  "dividendMonthlyIncome": 0,
+  "dividendYield": 0,
+  "rentalMonthlyIncome": 0,
+  "retirementEmployerMonthlyContribution": 41700,
+  "retirementPersonalMonthlyContribution": 350,
+  "investmentAnnualContribution": 3000,
+  "investmentContributionRate": 0.007352941176470588,
+  "retirementContributionRate": 1.236764705882353,
+  "retirementEmployerContributionRate": 1.2264705882352942,
+  "insuranceByType": [
+    {
+      "coverType": "life_insurance",
+      "coverAmount": 700000,
+      "annualPremium": 1020
+    },
+    {
+      "coverType": "private_health_insurance",
+      "coverAmount": 0,
+      "annualPremium": 2160
+    },
+    {
+      "coverType": "home_insurance",
+      "coverAmount": 650000,
+      "annualPremium": 1140
+    },
+    {
+      "coverType": "travel_insurance",
+      "coverAmount": 450000,
+      "annualPremium": 960
+    }
+  ],
+  "totalAnnualPremium": 5280,
+  "upcomingRenewals": [
+    {
+      "policyName": "Life Insurance",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Private Health Insurance",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Home Insurance",
+      "renewalDate": "2027-06-30"
+    },
+    {
+      "policyName": "Travel Insurance",
+      "renewalDate": "2027-06-30"
+    }
+  ],
+  "incomeProtectionWaitingPeriodDays": null,
+  "ratios": [
+    {
+      "key": "savings_rate",
+      "label": "Savings Rate",
+      "value": 0.8645588235294117,
+      "format": "percent",
+      "benchmarkLabel": ">20%",
+      "status": "good"
+    },
+    {
+      "key": "expense_ratio",
+      "label": "Expense Ratio",
+      "value": 0.06485294117647059,
+      "format": "percent",
+      "benchmarkLabel": "<80%",
+      "status": "good"
+    },
+    {
+      "key": "debt_to_income",
+      "label": "Debt-to-Income",
+      "value": 0.9313725490196079,
+      "format": "multiple",
+      "benchmarkLabel": "<3x",
+      "status": "good"
+    },
+    {
+      "key": "debt_service_ratio",
+      "label": "Debt Service Ratio",
+      "value": 0.07058823529411765,
+      "format": "percent",
+      "benchmarkLabel": "<35%",
+      "status": "good"
+    },
+    {
+      "key": "net_worth_ratio",
+      "label": "Net Worth Ratio",
+      "value": 0.7244490230692678,
+      "format": "percent",
+      "benchmarkLabel": ">60%",
+      "status": "good"
+    },
+    {
+      "key": "liquidity_ratio",
+      "label": "Liquidity Ratio",
+      "value": 3.2879818594104306,
+      "format": "months",
+      "benchmarkLabel": ">6 months",
+      "status": "caution"
+    },
+    {
+      "key": "investment_ratio",
+      "label": "Investment Ratio",
+      "value": 0.3663765296579867,
+      "format": "percent",
+      "benchmarkLabel": "Varies by age",
+      "status": "neutral"
+    },
+    {
+      "key": "emergency_fund_ratio",
+      "label": "Emergency Fund Ratio",
+      "value": 5,
+      "format": "months",
+      "benchmarkLabel": "6-12 months",
+      "status": "caution"
+    },
+    {
+      "key": "passive_income_ratio",
+      "label": "Passive Income Ratio",
+      "value": 1,
+      "format": "percent",
+      "benchmarkLabel": ">20%",
+      "status": "good"
+    },
+    {
+      "key": "financial_independence_ratio",
+      "label": "Financial Independence Ratio",
+      "value": 15.419501133786849,
+      "format": "percent",
+      "benchmarkLabel": "100%",
+      "status": "good"
+    }
+  ],
+  "snapshots": [
+    {
+      "snapshot_month": "2026-08-01",
+      "net_worth": 999055.17,
+      "monthly_income": 34000,
+      "monthly_expenses": 4605,
+      "monthly_surplus": 29395,
+      "savings_rate": 0.8646,
+      "total_assets": 1379055.17,
+      "total_liabilities": 380000
+    }
+  ],
+  "goals": [
+    {
+      "goal_name": "Emergency Fund",
+      "target_amount": 18000,
+      "current_amount": 10000,
+      "currency_code": "AUD",
+      "target_date": "2027-12-31",
+      "priority": "high",
+      "status": "active"
+    },
+    {
+      "goal_name": "Retirement",
+      "target_amount": 800000,
+      "current_amount": 250000,
+      "currency_code": "AUD",
+      "target_date": "2025-12-31",
+      "priority": "high",
+      "status": "active"
+    },
+    {
+      "goal_name": "Debt Reduction",
+      "target_amount": 50000,
+      "current_amount": 5000,
+      "currency_code": "AUD",
+      "target_date": "2029-12-31",
+      "priority": "medium",
+      "status": "active"
+    }
+  ],
+  "hasIncome": true,
+  "hasExpenses": true,
+  "hasAssets": true,
+  "hasLiabilities": true
+}

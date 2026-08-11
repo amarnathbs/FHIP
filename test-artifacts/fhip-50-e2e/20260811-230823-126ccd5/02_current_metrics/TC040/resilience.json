@@ -1,0 +1,210 @@
+{
+  "overallScore": 59,
+  "roundedScore": 59,
+  "statusBand": "moderately_vulnerable",
+  "statusLabel": "Moderately Vulnerable",
+  "confidence": 97,
+  "riskOverrideApplied": true,
+  "riskOverrideReason": "Having dependants with no life insurance caps the score until cover is reviewed.",
+  "components": [
+    {
+      "code": "emergency_fund",
+      "label": "Emergency Fund Adequacy",
+      "rawScore": 58,
+      "weight": 0.25,
+      "weightedContribution": 14.5,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible cash covers 3.5 months of essential expenses.",
+      "currentValue": {
+        "accessibleResources": 258000,
+        "committed90d": 0,
+        "essentialMonths": 3.4584450402144773,
+        "coreSurvivalMonths": 3.8796992481203008
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 6
+      }
+    },
+    {
+      "code": "liquidity",
+      "label": "Liquidity Strength",
+      "rawScore": 65,
+      "weight": 0.15,
+      "weightedContribution": 9.75,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Accessible liquid resources cover 2.0 months of your total monthly obligations (30/90-day coverage).",
+      "currentValue": {
+        "accessibleResources": 258000,
+        "monthlyObligations": 130450,
+        "coverageMonths": 1.9777692602529704
+      },
+      "benchmarkValue": {
+        "recommendedMonths": 3
+      }
+    },
+    {
+      "code": "income_resilience",
+      "label": "Income Resilience",
+      "rawScore": 62,
+      "weight": 0.15,
+      "weightedContribution": 9.3,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "2 income source(s) recorded, with employer concentration factored in.",
+      "currentValue": {
+        "incomeSourceCount": 2,
+        "employerConcentration": 0.5160452692036754,
+        "passiveIncomeRatio": 0
+      },
+      "benchmarkValue": {
+        "targetSources": 2
+      }
+    },
+    {
+      "code": "insurance_protection",
+      "label": "Insurance & Protection",
+      "rawScore": 40,
+      "weight": 0.2,
+      "weightedContribution": 8,
+      "statusBand": "vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "currentValue": {
+        "hasLife": false,
+        "hasIncomeProtection": true,
+        "lifeCover": 0,
+        "waitingPeriodDays": null
+      },
+      "benchmarkValue": {
+        "targetLifeCover": 52920000
+      }
+    },
+    {
+      "code": "debt_pressure",
+      "label": "Debt & Commitment Pressure",
+      "rawScore": 84.5,
+      "weight": 0.15,
+      "weightedContribution": 12.675,
+      "statusBand": "resilient",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Debt repayments are 13% of net income, with 100% on variable rates.",
+      "currentValue": {
+        "debtServiceRatio": 0.13207495253556392,
+        "variableRateDebtRatio": 1,
+        "upcomingRateResetBalance12m": 0,
+        "creditUtilization": null
+      },
+      "benchmarkValue": {
+        "targetDebtServiceRatio": 0.15
+      }
+    },
+    {
+      "code": "concentration_risk",
+      "label": "Concentration & Exposure Risk",
+      "rawScore": 57,
+      "weight": 0.1,
+      "weightedContribution": 5.7,
+      "statusBand": "moderately_vulnerable",
+      "dataCompleteness": 100,
+      "treatment": "scored",
+      "explanation": "Property makes up 67% of your asset base.",
+      "currentValue": {
+        "propertyConcentration": 0.6680398597116295,
+        "institutionConcentration": null,
+        "countryConcentration": 1
+      },
+      "benchmarkValue": {
+        "targetPropertyConcentration": 0.5
+      }
+    }
+  ],
+  "risks": [
+    {
+      "code": "no_life_insurance",
+      "category": "insurance",
+      "severity": "high",
+      "title": "No life insurance with dependants",
+      "explanation": "You have dependants but no life insurance cover recorded.",
+      "metricValue": 0,
+      "thresholdValue": null
+    },
+    {
+      "code": "variable_rate_exposure",
+      "category": "debt",
+      "severity": "medium",
+      "title": "High variable-rate debt exposure",
+      "explanation": "100% of rate-tracked debt is on variable rates, exposed to rate rises.",
+      "metricValue": 1,
+      "thresholdValue": 0.7
+    },
+    {
+      "code": "property_concentration",
+      "category": "concentration",
+      "severity": "medium",
+      "title": "High property concentration",
+      "explanation": "Property makes up 67% of your asset base.",
+      "metricValue": 0.6680398597116295,
+      "thresholdValue": 0.6
+    }
+  ],
+  "actions": [
+    {
+      "code": "review_insurance",
+      "title": "Review your insurance cover",
+      "explanation": "No life insurance recorded despite having dependants.",
+      "priority": "medium",
+      "relatedModule": "insurance",
+      "relatedMetric": "insurance_protection"
+    },
+    {
+      "code": "diversify_exposure",
+      "title": "Reduce concentration risk",
+      "explanation": "Property makes up 67% of your asset base.",
+      "priority": "medium",
+      "relatedModule": "investments",
+      "relatedMetric": "concentration_risk"
+    },
+    {
+      "code": "build_emergency_fund",
+      "title": "Build your emergency fund",
+      "explanation": "Accessible cash covers 3.5 months of essential expenses.",
+      "priority": "medium",
+      "relatedModule": "assets",
+      "relatedMetric": "emergency_fund"
+    },
+    {
+      "code": "diversify_income",
+      "title": "Review your income-interruption readiness",
+      "explanation": "2 income source(s) recorded, with employer concentration factored in.",
+      "priority": "medium",
+      "relatedModule": "income",
+      "relatedMetric": "income_resilience"
+    },
+    {
+      "code": "improve_liquidity",
+      "title": "Improve short-term liquidity",
+      "explanation": "Accessible liquid resources cover 2.0 months of your total monthly obligations (30/90-day coverage).",
+      "priority": "low",
+      "relatedModule": "assets",
+      "relatedMetric": "liquidity"
+    }
+  ],
+  "accessibleLiquidResources": 258000,
+  "committedCash90d": 0,
+  "modelVersion": "resilience-1.0.0",
+  "previousScore": null,
+  "scoreChange": null,
+  "history": [
+    {
+      "score_month": "2026-08-01",
+      "rounded_score": 59
+    }
+  ]
+}
