@@ -22,15 +22,16 @@ const PROVIDERS = [
       </svg>
     ),
   },
-  {
-    id: 'facebook' as const,
-    label: 'Facebook',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <path fill="#1877F2" d="M18 9a9 9 0 1 0-10.4 8.89v-6.29H5.31V9h2.29V7.02c0-2.26 1.35-3.51 3.41-3.51.99 0 2.02.18 2.02.18v2.22h-1.14c-1.12 0-1.47.7-1.47 1.41V9h2.5l-.4 2.6h-2.1v6.29A9 9 0 0 0 18 9Z" />
-      </svg>
-    ),
-  },
+  // Facebook temporarily removed (2026-08-11) — Meta's App Domains /
+  // OAuth redirect validation kept rejecting the flow ("Can't load URL:
+  // domain isn't included in app's domains") on the return leg from
+  // Facebook's consent screen, even with every domain involved
+  // (financialhealthplatform.com, app.financialhealthplatform.com, and
+  // the Supabase project domain) correctly added and saved. Google and
+  // LinkedIn were unaffected by this and both work end-to-end. Re-add
+  // the entry below (with its icon, preserved in git history at this
+  // commit) once the Meta-side issue is resolved — no other code
+  // changes needed, this list is the only place a provider is toggled.
   {
     id: 'linkedin_oidc' as const,
     label: 'LinkedIn',
