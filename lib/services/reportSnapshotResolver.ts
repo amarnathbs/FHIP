@@ -203,7 +203,7 @@ export async function resolveReportSourceData(
 
   const dataFreshness = await loadDataFreshness(userId, supabase);
 
-  const planTier = await getPlanTier(userId);
+  const planTier = await getPlanTier(userId, supabase);
 
   // Kicked off alongside the premium block below rather than awaited inline —
   // pillar signals for every tier, plus forecast-category signals too when

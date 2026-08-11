@@ -27,11 +27,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const format = body?.format as ExportFormat | undefined;
   if (!format || !['pdf', 'print', 'csv'].includes(format)) return bad('Invalid export format', 422);
 
-  if (requiresPremiumEntitlement(format) && !(await canExportReports(user.id))) {
+  const supabase = await createClient();
+
+  if (requiresPremiumEntitlement(format) && !(await canExportReports(user.id, supabase))) {
     return bad('Exporting reports requires a premium plan. You can still view and print this report.', 403);
   }
 
-  const supabase = await createClient();
   const isImplemented = isExportFormatImplemented(format);
 
   const { data: exportRow, error: insertError } = await supabase
