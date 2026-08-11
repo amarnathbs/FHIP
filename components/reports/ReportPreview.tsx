@@ -187,7 +187,8 @@ export function ReportPreview({
     <div className="report-print-root space-y-6">
       {/* Page 1 — Purpose and how to read this report */}
       <div className="report-section rounded-card border bg-white p-8 text-center">
-        <p className="text-xs uppercase tracking-wide text-gray-400">Financial Health Intelligence Platform™</p>
+        <img src="/images/fhip-logo-lockup.png" alt="FHIP" className="mx-auto h-10 w-auto" />
+        <p className="mt-3 text-xs uppercase tracking-wide text-gray-400">Financial Health Intelligence Platform™</p>
         <h1 className="mt-2 text-2xl font-bold text-trust">{reportTitle}</h1>
         {householdName && <p className="mt-2 text-sm font-medium text-gray-700">Prepared for: {householdName}</p>}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-gray-500">

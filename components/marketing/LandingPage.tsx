@@ -262,7 +262,8 @@ export default function PreviewLandingPage() {
       <header className={styles.siteHeader}>
         <div className={`${styles.wrap} ${styles.headerBar} ${compact ? styles.compact : ''}`}>
           <a href="#top" className={styles.logo} aria-label="FHIP home">
-            FHIP <small>Financial Health Intelligence Platform</small>
+            <img src="/images/fhip-logo-lockup.png" alt="FHIP" className={styles.logoMark} />
+            <small>Financial Health Intelligence Platform</small>
           </a>
           <nav className={styles.primaryNav} aria-label="Primary">
             <a href="#how-it-works">How it works</a>

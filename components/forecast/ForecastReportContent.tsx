@@ -175,7 +175,18 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
   return (
     <div className="report-print-root space-y-6">
-      {/* Page 1 — Purpose / how to read */}
+      {/* Page 1 — Cover */}
+      <div className="report-section rounded-card border bg-white p-8 text-center">
+        <img src="/images/fhip-logo-lockup.png" alt="FHIP" className="mx-auto h-10 w-auto" />
+        <p className="mt-3 text-xs uppercase tracking-wide text-gray-400">Financial Health Intelligence Platform™</p>
+        <h1 className="mt-2 text-2xl font-bold text-trust">Consolidated Forecasting Report</h1>
+        <p className="mt-2 text-sm text-gray-500">
+          Scenario: <span className="font-medium text-gray-700">{data.scenarioName}</span> &middot; Generated {generatedAtLabel}
+        </p>
+        <p className="mt-2 text-xs font-medium text-gray-400">Confidential — prepared for personal use</p>
+      </div>
+
+      {/* Page 1 continued — Purpose / how to read */}
       <SectionCard title="About this report" className="report-section report-page-break">
         <p className="text-justify text-sm text-gray-600">
           This report consolidates every Forecasting Engine category — net worth, retirement, goals, debt, investments,

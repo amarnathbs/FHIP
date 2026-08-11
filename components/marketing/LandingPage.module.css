@@ -168,8 +168,8 @@
 .headerBar.compact { padding-top: 0.7rem; padding-bottom: 0.7rem; }
 .logo {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.6rem;
   font-family: var(--font-newsreader), serif;
   font-weight: 700;
   font-size: 1.35rem;
@@ -177,6 +177,11 @@
   letter-spacing: -0.01em;
   white-space: nowrap;
   text-decoration: none;
+}
+.logoMark {
+  height: 2.15rem;
+  width: auto;
+  display: block;
 }
 .logo small {
   font-family: var(--font-inter), sans-serif;

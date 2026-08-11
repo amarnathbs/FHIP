@@ -138,7 +138,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // `aria-controls` resolve unpredictably.
   const renderSidebar = (scope: 'desktop' | 'mobile') => (
     <>
-      <div className="flex h-16 items-center px-5">
+      <div className="flex h-16 items-center gap-2 px-5">
+        {/* The mark's outline elements are dark navy, close to bg-nav's own
+            #0F2747 — a small white chip keeps it legible against the dark
+            sidebar without needing a separate light-background asset. */}
+        <span className="flex h-8 w-8 items-center justify-center rounded bg-white/95 p-1">
+          <img src="/images/fhip-icon-32.png" alt="" className="h-full w-full object-contain" />
+        </span>
         <span className="text-lg font-semibold text-white">FHIP</span>
       </div>
       <nav aria-label="Main" className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
@@ -263,7 +269,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile top bar + hamburger trigger */}
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-line bg-white px-4 lg:hidden">
-        <span className="text-lg font-semibold text-primary">FHIP</span>
+        <span className="flex items-center gap-2">
+          <img src="/images/fhip-icon-32.png" alt="" className="h-7 w-7 object-contain" />
+          <span className="text-lg font-semibold text-primary">FHIP</span>
+        </span>
         <button
           type="button"
           data-testid="mobile-menu-trigger"
