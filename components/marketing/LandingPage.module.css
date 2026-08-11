@@ -166,6 +166,12 @@
   letter-spacing: -0.01em;
   white-space: nowrap;
   text-decoration: none;
+  /* The logo mark added real pixel width the old text-only wordmark didn't
+     have — without this, the flex row below shrinks the nav links first,
+     and their labels wrap mid-phrase ("How it" / "works") instead of the
+     row just tightening. Keep the logo itself full-size and let other
+     elements give way. */
+  flex-shrink: 0;
 }
 .logoMark {
   height: 2.15rem;
@@ -180,7 +186,11 @@
   color: var(--muted);
   display: none;
 }
-@media (min-width: 860px) { .logo small { display: inline; } }
+/* Raised from 860px: below 980px the nav links are hidden anyway (see
+   .primaryNav below), but between 980-1180px both the tagline and the full
+   nav were competing for the same shrinking space — this keeps the
+   tagline hidden until there's room for it alongside a comfortable nav. */
+@media (min-width: 1180px) { .logo small { display: inline; } }
 
 .primaryNav {
   display: none;
@@ -188,12 +198,14 @@
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--muted);
+  flex-shrink: 0;
 }
-.primaryNav a { text-decoration: none; padding: 0.25rem 0; }
+.primaryNav a { text-decoration: none; padding: 0.25rem 0; white-space: nowrap; }
 .primaryNav a:hover { color: var(--ink); }
 @media (min-width: 980px) { .primaryNav { display: flex; } }
+@media (min-width: 980px) and (max-width: 1180px) { .primaryNav { gap: 1.1rem; } }
 
-.headerActions { display: flex; align-items: center; gap: 0.75rem; }
+.headerActions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
 .btn {
   display: inline-flex;
   align-items: center;
