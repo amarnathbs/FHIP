@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 D:/FHIP
+
+
+ Test Files  12 passed (12)
+      Tests  110 passed (110)
+   Start at  23:08:50
+   Duration  6.65s (transform 2.68s, setup 0ms, import 6.35s, tests 478ms, environment 4ms)
+
