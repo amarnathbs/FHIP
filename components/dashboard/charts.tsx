@@ -38,7 +38,7 @@ export function TrendLineChart({
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmt(v, currency)} width={80} />
         <Tooltip formatter={(v: number) => fmt(v, currency)} />
-        <Line type="monotone" dataKey="value" stroke={PALETTE[0]} strokeWidth={2} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="value" stroke={PALETTE[0]} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -73,6 +73,7 @@ export function AllocationPieChart({
           cy="50%"
           outerRadius={80}
           label={(entry: { value?: number }) => fmt(entry.value ?? 0, currency)}
+          isAnimationActive={false}
         >
           {nonZero.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
@@ -112,7 +113,7 @@ export function GroupedBarChart({
         <Tooltip formatter={(v: number) => fmt(v, currency)} />
         <Legend />
         {seriesKeys.map((key, i) => (
-          <Bar key={key} dataKey={key} fill={PALETTE[i % PALETTE.length]} />
+          <Bar key={key} dataKey={key} fill={PALETTE[i % PALETTE.length]} isAnimationActive={false} />
         ))}
       </BarChart>
     </ResponsiveContainer>

@@ -91,10 +91,10 @@ export function CashFlowWaterfallChart({
         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatMoneyWhole(v, currency)} width={80} />
         <Tooltip formatter={(v: number) => formatMoneyWhole(v, currency)} />
-        <Bar dataKey="Income" stackId="flow" fill="#2563EB" />
-        <Bar dataKey="Expenses" stackId="flow" fill="#C7362F" />
-        <Bar dataKey="Debt" stackId="flow" fill="#B7791F" />
-        <Bar dataKey="Surplus" stackId="flow" fill="#198754" />
+        <Bar dataKey="Income" stackId="flow" fill="#2563EB" isAnimationActive={false} />
+        <Bar dataKey="Expenses" stackId="flow" fill="#C7362F" isAnimationActive={false} />
+        <Bar dataKey="Debt" stackId="flow" fill="#B7791F" isAnimationActive={false} />
+        <Bar dataKey="Surplus" stackId="flow" fill="#198754" isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -247,7 +247,7 @@ export function ScoreTrendChart({ data }: { data: { month: string; value: number
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={30} />
         <Tooltip formatter={(v: number) => `${v}/100`} />
-        <Line type="monotone" dataKey="value" stroke="#2563EB" strokeWidth={2} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="value" stroke="#2563EB" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
