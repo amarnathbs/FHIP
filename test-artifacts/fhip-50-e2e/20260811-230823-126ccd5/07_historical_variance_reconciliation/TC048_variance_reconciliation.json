@@ -1,0 +1,76 @@
+{
+  "userId": "8e3a0e58-4e89-41b3-ae2d-dc987f8af675",
+  "snapshotCount": 60,
+  "checks": [
+    {
+      "Metric": "Start Net Worth",
+      "Actual": 297611.55,
+      "Expected": 297611.55,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "End Net Worth",
+      "Actual": 686006.9,
+      "Expected": 686006.8999999999,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "5Y Net Worth Change",
+      "Actual": 388395.35000000003,
+      "Expected": 388395.3499999999,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "Start Monthly Surplus",
+      "Actual": 13159.79,
+      "Expected": 13159.79,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "End Monthly Surplus",
+      "Actual": 17590.42,
+      "Expected": 17590.42,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "Surplus Change",
+      "Actual": 4430.629999999997,
+      "Expected": 4430.63,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "Months with Deficit",
+      "Actual": 0,
+      "Expected": 0,
+      "Pass": true,
+      "Diff": 0
+    },
+    {
+      "Metric": "Minimum Emergency Fund Months",
+      "Actual": null,
+      "Expected": 4.6505915074,
+      "Pass": "NOT_RECONCILABLE",
+      "Diff": null
+    },
+    {
+      "Metric": "Maximum Emergency Fund Months",
+      "Actual": null,
+      "Expected": 6.9640753575,
+      "Pass": "NOT_RECONCILABLE",
+      "Diff": null
+    },
+    {
+      "Metric": "Months with Event",
+      "Actual": null,
+      "Expected": 2,
+      "Pass": "NOT_RECONCILABLE",
+      "Diff": null
+    }
+  ]
+}
