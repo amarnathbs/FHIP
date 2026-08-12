@@ -76,7 +76,18 @@ export function validateRow(category: GridCategory, row: GridRow, valueField: st
   return warnings;
 }
 
+// Returns the set of (lowercased, trimmed) custom item names that collide —
+// either with another custom row, or with a master-catalog item already
+// offered in the same category — so the caller can block the save rather
+// than just warn about it (a duplicate name is ambiguous in reports/exports,
+// not merely unusual).
 export function findDuplicateCustomNames(rows: GridRow[]): Set<string> {
+  const masterLabels = new Set<string>();
+  for (const r of rows) {
+    if (r.is_custom) continue;
+    const key = r.item_label.trim().toLowerCase();
+    if (key) masterLabels.add(key);
+  }
   const seen = new Map<string, number>();
   for (const r of rows) {
     if (!r.is_custom) continue;
@@ -85,6 +96,8 @@ export function findDuplicateCustomNames(rows: GridRow[]): Set<string> {
     seen.set(key, (seen.get(key) ?? 0) + 1);
   }
   const duplicates = new Set<string>();
-  for (const [key, count] of seen) if (count > 1) duplicates.add(key);
+  for (const [key, count] of seen) {
+    if (count > 1 || masterLabels.has(key)) duplicates.add(key);
+  }
   return duplicates;
 }

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { loadGoalDetail } from '@/lib/services/goalsData';
@@ -28,7 +27,6 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
   const displayProgress = Math.min(100, base.progressPct);
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div>
           <Link href="/goals" className="text-xs text-muted hover:underline">
@@ -85,10 +83,8 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
               are never generated or altered by AI. Progress, funding gap, required contribution and completion date are
               estimates based on the assumptions shown — not a guarantee this goal will be achieved.
             </p>
-            <p>Model version: goals-1.0.0</p>
           </div>
         </details>
       </div>
-    </AppShell>
   );
 }

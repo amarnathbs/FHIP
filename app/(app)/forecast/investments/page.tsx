@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { resolveForecastPageContext } from '@/lib/services/forecastData';
 import { EntityForecastPanel } from '@/components/forecast/EntityForecastPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
@@ -24,7 +23,6 @@ export default async function ForecastInvestmentsPage({ searchParams }: { search
   }));
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -42,6 +40,5 @@ export default async function ForecastInvestmentsPage({ searchParams }: { search
           scenarioId={activeScenario.id}
         />
       </div>
-    </AppShell>
   );
 }

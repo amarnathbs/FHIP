@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { resolveForecastPageContext } from '@/lib/services/forecastData';
 import { DebtForecastPanel } from '@/components/forecast/DebtForecastPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
@@ -20,7 +19,6 @@ export default async function ForecastDebtPage({ searchParams }: { searchParams:
   const liabilityEntities = (liabilitiesResult.data ?? []).map((l) => ({ id: l.id, name: l.liability_name, currency: l.currency_code as 'AUD' | 'INR' }));
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -31,6 +29,5 @@ export default async function ForecastDebtPage({ searchParams }: { searchParams:
         </div>
         <DebtForecastPanel liabilities={liabilityEntities} scenarioId={activeScenario.id} />
       </div>
-    </AppShell>
   );
 }

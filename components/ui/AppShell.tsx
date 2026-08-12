@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type NavLink = { type: 'link'; label: string; href: string };
 type NavDropdown = { type: 'dropdown'; id: string; label: string; items: { label: string; href: string }[] };
@@ -95,6 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting group only if the initial page load lands
   // inside it; thereafter the user's own expand/collapse choice persists
   // across navigation (a persistent sidebar, unlike the old floating
@@ -255,7 +257,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </nav>
       <div className="border-t border-white/10 p-3">
-        <button onClick={signOut} className="block w-full rounded px-3 py-2 text-left text-sm text-white/70 hover:bg-white/5 hover:text-white">
+        <button
+          onClick={() => setSignOutConfirmOpen(true)}
+          className="block w-full rounded px-3 py-2 text-left text-sm text-white/70 hover:bg-white/5 hover:text-white"
+        >
           Sign out
         </button>
       </div>
@@ -299,6 +304,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="px-4 py-8 lg:ml-[248px] lg:px-8">
         <div className="mx-auto max-w-[1480px]">{children}</div>
       </main>
+
+      <ConfirmDialog
+        open={signOutConfirmOpen}
+        title="Sign out?"
+        message="You'll need to sign back in to see your dashboard and data."
+        confirmLabel="Sign out"
+        cancelLabel="Stay signed in"
+        onConfirm={() => {
+          setSignOutConfirmOpen(false);
+          void signOut();
+        }}
+        onCancel={() => setSignOutConfirmOpen(false)}
+      />
     </div>
   );
 }

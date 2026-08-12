@@ -12,6 +12,12 @@ export const profileSchema = z.object({
   secondary_country: z.enum(['AU', 'IN']).nullable().optional(),
   preferred_currency: z.enum(['AUD', 'INR']),
   employment_status: z.string().optional(),
+  // User-set opt-out so the completion score can tell "genuinely doesn't
+  // apply to this household" apart from "not entered yet" — see migration
+  // 0029 and healthScore.ts's 'not_applicable' treatment.
+  not_applicable_investments: z.boolean().optional(),
+  not_applicable_retirement: z.boolean().optional(),
+  not_applicable_insurance: z.boolean().optional(),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

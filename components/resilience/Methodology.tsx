@@ -1,4 +1,4 @@
-export function Methodology({ modelVersion, confidence }: { modelVersion: string; confidence: number }) {
+export function Methodology({ confidence }: { confidence: number }) {
   return (
     <details className="rounded-card border bg-white p-6">
       <summary className="cursor-pointer text-sm font-medium text-gray-800">How this was calculated</summary>
@@ -14,7 +14,6 @@ export function Methodology({ modelVersion, confidence }: { modelVersion: string
           Future Financial Commitments register. Components with insufficient data are excluded from scoring (not
           scored as zero) and weights are re-distributed across the components that could be calculated.
         </p>
-        <p>Model version: {modelVersion}</p>
         <p>Confidence in this calculation: {confidence.toFixed(0)}%</p>
         <p className="text-xs text-gray-400">
           This information is educational only and does not constitute personal financial product advice.

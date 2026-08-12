@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { getOrCreateForecastProfile, ensureDefaultScenario, getResolvedAssumptions } from '@/lib/services/forecastData';
 import { AssumptionsTable } from '@/components/forecast/AssumptionsTable';
@@ -20,7 +19,6 @@ export default async function ForecastAssumptionsPage() {
     .sort((a, b) => a.category.localeCompare(b.category) || a.key.localeCompare(b.key));
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Forecast Assumptions</h1>
@@ -33,6 +31,5 @@ export default async function ForecastAssumptionsPage() {
           <AssumptionsTable initialAssumptions={rows} scenarioId={scenario.scenario_name} />
         </SectionCard>
       </div>
-    </AppShell>
   );
 }

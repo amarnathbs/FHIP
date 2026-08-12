@@ -89,6 +89,7 @@ export const investmentGridConfig: GridConfig = {
   description: 'Shares, funds, property and other investments outside super.',
   nameField: 'investment_name',
   valueField: 'current_value',
+  notApplicable: { profileField: 'not_applicable_investments', label: "I don't have any investments" },
   fields: [
     { name: 'institution', label: 'Institution', type: 'text' },
     { name: 'current_value', label: 'Current Value', type: 'number', step: '0.01', required: true },
@@ -118,6 +119,7 @@ export const retirementGridConfig: GridConfig = {
   description: 'Superannuation, EPF, PPF, NPS and other retirement accounts.',
   nameField: 'account_name',
   valueField: 'current_balance',
+  notApplicable: { profileField: 'not_applicable_retirement', label: "I don't have any retirement savings" },
   fields: [
     { name: 'current_balance', label: 'Current Balance', type: 'number', step: '0.01', required: true },
     { name: 'employer_contribution', label: 'Employer Contribution', type: 'number', step: '0.01' },
@@ -143,6 +145,7 @@ export const insuranceGridConfig: GridConfig = {
   valueField: 'premium',
   isFlow: true,
   frequencyField: 'premium_frequency',
+  notApplicable: { profileField: 'not_applicable_insurance', label: "I don't have any insurance" },
   fields: [
     { name: 'provider', label: 'Provider', type: 'text' },
     { name: 'cover_amount', label: 'Cover Amount', type: 'number', step: '0.01', required: true },

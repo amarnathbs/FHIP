@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { loadDashboard } from '@/lib/services/dashboardData';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import { loadResilience } from '@/lib/services/resilienceData';
@@ -62,7 +61,6 @@ export default async function DashboardPage() {
   const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness });
 
   return (
-    <AppShell>
       <div className="space-y-10">
         {/* Context bar */}
         <div>
@@ -143,6 +141,5 @@ export default async function DashboardPage() {
           <FutureModulesSection />
         </div>
       </div>
-    </AppShell>
   );
 }

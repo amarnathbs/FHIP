@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { getReport, recordAccessEvent } from '@/lib/services/reportsData';
 import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
@@ -21,7 +20,6 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const content = await loadReportContent('en', supabase);
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="no-print flex items-center justify-between">
           <Link href="/reports" className="text-xs text-muted hover:underline">
@@ -43,6 +41,5 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           content={content}
         />
       </div>
-    </AppShell>
   );
 }

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
@@ -36,7 +35,6 @@ export default async function ScorePage() {
   }));
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Financial Health Score</h1>
@@ -49,7 +47,7 @@ export default async function ScorePage() {
           <div className="lg:col-span-1">
             <HealthScoreGauge score={payload.overallScore} statusLabel={payload.statusLabel} statusBand={payload.statusBand} />
           </div>
-          <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Change vs last month</p>
               <p className="text-lg font-semibold text-ink">
@@ -61,22 +59,18 @@ export default async function ScorePage() {
               <p className="text-lg font-semibold text-ink">{payload.dataConfidence.toFixed(0)}%</p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-muted">Model version</p>
-              <p className="text-lg font-semibold text-ink">{payload.modelVersion}</p>
-            </div>
-            <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Last calculated</p>
               <p className="text-lg font-semibold text-ink">{formatDateShort(new Date(), currency)}</p>
             </div>
             {payload.dataConfidence < 70 && (
-              <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-4">
+              <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-3">
                 This score is provisional because important financial information is missing. Complete more of your
                 data (Income, Expenses, Assets, Liabilities, Investments, Retirement, Insurance) for a more reliable
                 result.
               </div>
             )}
             {payload.riskOverrideApplied && (
-              <div className="col-span-2 rounded-card border border-risk bg-red-50 p-4 text-sm text-risk sm:col-span-4">
+              <div className="col-span-2 rounded-card border border-risk bg-red-50 p-4 text-sm text-risk sm:col-span-3">
                 {payload.riskOverrideReason}
               </div>
             )}
@@ -116,6 +110,5 @@ export default async function ScorePage() {
           </div>
         </div>
       </div>
-    </AppShell>
   );
 }

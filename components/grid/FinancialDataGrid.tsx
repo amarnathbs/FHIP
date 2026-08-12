@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppShell } from '@/components/ui/AppShell';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
@@ -67,9 +66,10 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
   };
 }
 
-function isRowSaveable(row: Row, config: GridConfig): boolean {
+function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): boolean {
   if (config.frequencyField && !row[config.frequencyField]) return false;
   if (!row.currency_code) return false;
+  if (row.is_custom && duplicates.has(row.item_label.trim().toLowerCase())) return false;
   const value = row[config.valueField];
   return value !== '' && value !== undefined && value !== null;
 }
@@ -86,6 +86,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState<'AUD' | 'INR'>('AUD');
+  const [notApplicable, setNotApplicable] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
   rowsRef.current = rows;
@@ -96,11 +97,17 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
       const [masterItems, savedRecords, profile] = await Promise.all([
         fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
-        fetchJson<{ preferred_currency: 'AUD' | 'INR' | null }>('/api/user/profile').catch(() => null),
+        fetchJson<{
+          preferred_currency: 'AUD' | 'INR' | null;
+          not_applicable_investments?: boolean;
+          not_applicable_retirement?: boolean;
+          not_applicable_insurance?: boolean;
+        }>('/api/user/profile').catch(() => null),
       ]);
       if (cancelled) return;
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
+      if (config.notApplicable) setNotApplicable(Boolean(profile?.[config.notApplicable.profileField]));
 
       const byMasterKey = new Map(savedRecords.filter((r) => r.master_item_key).map((r) => [r.master_item_key!, r]));
       const merged = masterItems
@@ -142,7 +149,10 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     // not a no-op). The actual API call now lives in a plain async function,
     // which Strict Mode does not double-invoke.
     const row = rowsRef.current?.find((r) => r.key === key);
-    if (!row || !isRowSaveable(row, config)) return;
+    // Recomputed from the ref (not the memoized `duplicates` from render
+    // scope) so a save fired after the 600ms debounce always checks against
+    // the latest row names, not a stale snapshot from when scheduleSave() was called.
+    if (!row || !isRowSaveable(row, config, findDuplicateCustomNames(rowsRef.current ?? []))) return;
 
     const body: Record<string, unknown> = { owner: row.owner, currency_code: row.currency_code };
     body[config.nameField] = row.item_label;
@@ -183,6 +193,16 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   function handleFieldChange(key: string, field: string, value: unknown) {
     updateRow(key, { [field]: value } as Partial<Row>);
     scheduleSave(key);
+  }
+
+  async function handleNotApplicableToggle(checked: boolean) {
+    if (!config.notApplicable) return;
+    setNotApplicable(checked);
+    await fetchJson('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [config.notApplicable.profileField]: checked }),
+    }).catch(() => setNotApplicable(!checked)); // best effort; revert the toggle if the save failed
   }
 
   function addCustomRow() {
@@ -236,31 +256,58 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     return false;
   }).length;
 
+  // Duplicate custom names are a hard-blocking error (isRowSaveable rejects
+  // them, so nothing gets persisted while the name collides) — kept in a
+  // separate map from the soft warnings below so it can be styled and worded
+  // distinctly ("this name is taken" vs. "double-check this value").
+  const errorsByRow = new Map<string, string>();
+  for (const r of included) {
+    if (r.is_custom && duplicates.has(r.item_label.trim().toLowerCase())) {
+      errorsByRow.set(r.key, 'This name is already used for another item — choose a different name to save it.');
+    }
+  }
+
   const warningsByRow = new Map<string, string[]>();
   for (const r of included) {
     const warnings = validateRow(config.category, r, config.valueField);
-    if (r.is_custom && duplicates.has(r.item_label.trim().toLowerCase())) warnings.push('Duplicate item name');
     if (warnings.length) warningsByRow.set(r.key, warnings);
   }
   const totalWarnings = Array.from(warningsByRow.values()).reduce((s, w) => s + w.length, 0);
 
   if (!rows) {
     return (
-      <AppShell>
+      <>
         {subNav}
         <p className="text-muted">Loading...</p>
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell>
+    <>
       {subNav}
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold text-trust">{config.title}</h1>
           <p className="mt-1 text-muted">{config.description}</p>
         </div>
+
+        {config.notApplicable && (
+          <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={notApplicable}
+              onChange={(e) => handleNotApplicableToggle(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-ink">{config.notApplicable.label}</span>
+              <span className="block text-xs text-muted">
+                This excludes {config.title} from your Financial Health Score instead of counting it as missing data.
+              </span>
+            </span>
+          </label>
+        )}
 
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -311,10 +358,13 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                         disabled={!row.included}
                         placeholder="Custom item name"
                         onChange={(e) => handleFieldChange(row.key, 'item_label', e.target.value)}
-                        className="w-full rounded border px-2 py-1 disabled:bg-gray-50"
+                        className={`w-full rounded border px-2 py-1 disabled:bg-gray-50 ${errorsByRow.has(row.key) ? 'border-risk' : ''}`}
                       />
                     ) : (
                       row.item_label
+                    )}
+                    {errorsByRow.has(row.key) && (
+                      <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
                     )}
                     {warningsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
@@ -413,7 +463,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       disabled={!row.included}
                       placeholder="Custom item name"
                       onChange={(e) => handleFieldChange(row.key, 'item_label', e.target.value)}
-                      className="rounded border px-2 py-1 disabled:bg-gray-50"
+                      className={`rounded border px-2 py-1 disabled:bg-gray-50 ${errorsByRow.has(row.key) ? 'border-risk' : ''}`}
                     />
                   ) : (
                     row.item_label
@@ -428,6 +478,9 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   </button>
                 )}
               </div>
+              {errorsByRow.has(row.key) && (
+                <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
+              )}
               {warningsByRow.has(row.key) && (
                 <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
               )}
@@ -531,6 +584,6 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
           </div>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

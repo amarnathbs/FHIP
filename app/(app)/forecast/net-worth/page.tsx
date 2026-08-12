@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { loadDashboard } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext, listForecastRuns, getForecastRunDetail } from '@/lib/services/forecastData';
 import { RunForecastPanel } from '@/components/forecast/RunForecastPanel';
@@ -25,7 +24,6 @@ export default async function ForecastNetWorthPage({ searchParams }: { searchPar
   const currentNetWorth = summary.totalAssets + summary.totalInvestments + summary.totalRetirement - summary.totalLiabilities;
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -36,6 +34,5 @@ export default async function ForecastNetWorthPage({ searchParams }: { searchPar
         </div>
         <RunForecastPanel currency={summary.currency} currentNetWorth={currentNetWorth} initialDetail={initialDetail} scenarioId={activeScenario.id} />
       </div>
-    </AppShell>
   );
 }

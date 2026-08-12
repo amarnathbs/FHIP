@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { listTwinRuns } from '@/lib/services/financialTwinService';
 import { formatDateShort } from '@/lib/engines/date';
@@ -19,7 +18,6 @@ export default async function FinancialTwinHistoryPage() {
   const runs = await listTwinRuns(user.id);
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-trust">Financial Twin History</h1>
         <SectionCard title="Past runs">
@@ -42,6 +40,5 @@ export default async function FinancialTwinHistoryPage() {
           </div>
         </SectionCard>
       </div>
-    </AppShell>
   );
 }

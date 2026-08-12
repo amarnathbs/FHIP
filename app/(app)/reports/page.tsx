@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
@@ -28,7 +27,6 @@ export default async function ReportsPage() {
   const netWorthMetric = metrics.find((m) => m.label === 'Net worth');
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -86,6 +84,5 @@ export default async function ReportsPage() {
           <p className="text-sm text-muted">Open a report to request an export or print it.</p>
         </SectionCard>
       </div>
-    </AppShell>
   );
 }

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { resolveForecastPageContext, getForecastVariance, type VarianceForecastCategory, type CategoryVariance } from '@/lib/services/forecastData';
 import { formatMoneyWhole } from '@/lib/engines/money';
@@ -56,7 +55,6 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
   );
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -130,6 +128,5 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
           </p>
         </SectionCard>
       </div>
-    </AppShell>
   );
 }

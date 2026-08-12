@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { loadGoalsPage } from '@/lib/services/goalsData';
 import { generateGoalInsights } from '@/lib/engines/goalInsights';
@@ -31,7 +30,6 @@ export default async function GoalsPage() {
   const insights = generateGoalInsights(payload.goals, payload.summary, payload.affordability, currency);
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -84,6 +82,5 @@ export default async function GoalsPage() {
           </div>
         </div>
       </div>
-    </AppShell>
   );
 }

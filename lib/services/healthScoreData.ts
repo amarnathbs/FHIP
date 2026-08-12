@@ -34,7 +34,11 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
   const supabase = client ?? (await createClient());
 
   const [profileRes, householdRes, checkInsRes, configRes] = await Promise.all([
-    supabase.from('user_profiles').select('date_of_birth, employment_status').eq('user_id', userId).single(),
+    supabase
+      .from('user_profiles')
+      .select('date_of_birth, employment_status, not_applicable_investments, not_applicable_retirement, not_applicable_insurance')
+      .eq('user_id', userId)
+      .single(),
     supabase.from('households').select('dependants_count').eq('user_id', userId).maybeSingle(),
     supabase.from('health_check_ins').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('health_score_config').select('config').eq('is_active', true).single(),
@@ -56,6 +60,11 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
     checkIns: (checkInsRes.data as CheckIns | null) ?? null,
     resilienceResult,
     config,
+    notApplicable: {
+      investments: profileRes.data?.not_applicable_investments ?? false,
+      retirement: profileRes.data?.not_applicable_retirement ?? false,
+      insurance: profileRes.data?.not_applicable_insurance ?? false,
+    },
   };
 }
 

@@ -60,6 +60,17 @@ export interface HealthScoreInput {
   // Module 6's config/data couldn't be loaded.
   resilienceResult: ResilienceResult | null;
   config: HealthScoreConfig;
+  // User-set "not applicable to me" opt-outs (migration 0029) — lets these
+  // three components be excluded from both scoring and the dataConfidence
+  // denominator instead of counting as missing data. Scoped to the three
+  // categories where genuine inapplicability is plausible; cash flow,
+  // savings, debt, and net worth are derived from income/expenses/assets/
+  // liabilities, which aren't optional for any household.
+  notApplicable: {
+    investments: boolean;
+    retirement: boolean;
+    insurance: boolean;
+  };
 }
 
 export interface Recommendation {
@@ -97,6 +108,26 @@ function missingComponent(code: ComponentCode, label: string, weight: number, re
     dataCompleteness: 0,
     treatment: 'missing_data',
     explanation: reason,
+    currentValue: {},
+    benchmarkValue: {},
+  };
+}
+
+// Distinct from missingComponent: the user has explicitly said this category
+// doesn't apply to them (e.g. "I don't have insurance"), not that they simply
+// haven't entered data yet. Excluded from the dataConfidence denominator in
+// computeHealthScore, unlike 'missing_data'.
+function notApplicableComponent(code: ComponentCode, label: string, weight: number): ComponentResult {
+  return {
+    code,
+    label,
+    rawScore: null,
+    weight,
+    weightedContribution: 0,
+    statusBand: 'not_applicable',
+    dataCompleteness: 100,
+    treatment: 'not_applicable',
+    explanation: `Marked as not applicable to you — excluded from your score.`,
     currentValue: {},
     benchmarkValue: {},
   };
@@ -376,6 +407,9 @@ function scoreNetWorth(input: HealthScoreInput, bands: ScoreBand[]): ComponentRe
 function scoreInvestment(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.investment;
+  if (input.notApplicable.investments) {
+    return notApplicableComponent('investment', 'Investment Health', weight);
+  }
   if (!d.hasInvestments) {
     return missingComponent('investment', 'Investment Health', weight, 'Add investments to calculate this, or this may genuinely be zero if you invest only through super.');
   }
@@ -408,6 +442,9 @@ function scoreInvestment(input: HealthScoreInput, bands: ScoreBand[]): Component
 function scoreRetirement(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.retirement;
+  if (input.notApplicable.retirement) {
+    return notApplicableComponent('retirement', 'Retirement Readiness', weight);
+  }
   if (!d.hasRetirement) {
     return missingComponent('retirement', 'Retirement Readiness', weight, 'Add retirement accounts to calculate this.');
   }
@@ -468,6 +505,9 @@ function scoreRetirement(input: HealthScoreInput, bands: ScoreBand[]): Component
 function scoreInsurance(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.insurance;
+  if (input.notApplicable.insurance) {
+    return notApplicableComponent('insurance', 'Insurance & Protection', weight);
+  }
   const engaged = hasEngaged(d);
   if (!d.hasInsurance) {
     if (engaged && input.dependantsCount === 0) {
@@ -646,8 +686,15 @@ export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
   const roundedScore = Math.round(overallScore);
   const { band, label } = bandFor(roundedScore, bands);
 
+  // Components marked 'not_applicable' are excluded from the denominator too
+  // (not just the numerator) — the user has confirmed the category doesn't
+  // apply, so it shouldn't drag down confidence the way genuinely missing
+  // data does.
+  const applicableComponents = components.filter((c) => c.treatment !== 'not_applicable');
   const dataConfidence = clamp(
-    (components.filter((c) => c.treatment === 'scored').length / components.length) * 100
+    applicableComponents.length > 0
+      ? (applicableComponents.filter((c) => c.treatment === 'scored').length / applicableComponents.length) * 100
+      : 100
   );
 
   const positiveContributors = components
@@ -657,7 +704,7 @@ export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
     .map((c) => c.explanation);
 
   const reductions = components
-    .filter((c) => c.treatment !== 'scored' || (c.rawScore !== null && c.rawScore < 70))
+    .filter((c) => c.treatment === 'not_applicable' ? false : c.treatment !== 'scored' || (c.rawScore !== null && c.rawScore < 70))
     .sort((a, b) => (a.rawScore ?? 0) - (b.rawScore ?? 0))
     .slice(0, 4)
     .map((c) => c.explanation);

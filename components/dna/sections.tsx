@@ -223,7 +223,7 @@ export function HistoryTimeline({ history, archetypes }: { history: DnaHistoryPo
   );
 }
 
-export function Methodology({ modelVersion, dataCompletenessPct }: { modelVersion: string; dataCompletenessPct: number }) {
+export function Methodology({ dataCompletenessPct }: { dataCompletenessPct: number }) {
   return (
     <details className="rounded-card border bg-white p-6">
       <summary className="cursor-pointer text-sm font-medium text-gray-800">How this was calculated</summary>
@@ -235,7 +235,6 @@ export function Methodology({ modelVersion, dataCompletenessPct }: { modelVersio
           investment behaviour, liquidity, retirement preparation, income capacity and protection planning). The
           highest-scoring eligible profile becomes your primary Financial DNA.
         </p>
-        <p>Model version: {modelVersion}</p>
         <p>Data completeness used in this calculation: {dataCompletenessPct.toFixed(0)}%</p>
         <p className="text-xs text-gray-400">
           This information is educational only and does not constitute personal financial product advice.

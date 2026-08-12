@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { loadDashboard } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext } from '@/lib/services/forecastData';
 import { CrossBorderForecastPanel } from '@/components/forecast/CrossBorderForecastPanel';
@@ -20,7 +19,6 @@ export default async function ForecastCrossBorderPage({ searchParams }: { search
   ]);
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -31,6 +29,5 @@ export default async function ForecastCrossBorderPage({ searchParams }: { search
         </div>
         <CrossBorderForecastPanel currency={summary.currency} scenarioId={activeScenario.id} />
       </div>
-    </AppShell>
   );
 }

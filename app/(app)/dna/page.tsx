@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
 import {
@@ -42,7 +41,6 @@ export default async function FinancialDnaPage() {
   const secondaryArchetype = payload.secondaryProfileCode ? payload.archetypes[payload.secondaryProfileCode] ?? null : null;
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Financial DNA™</h1>
@@ -92,11 +90,10 @@ export default async function FinancialDnaPage() {
 
             <DnaWhatIfSimulator archetypes={payload.archetypes} />
             <HistoryTimeline history={payload.history} archetypes={payload.archetypes} />
-            <Methodology modelVersion={payload.modelVersion} dataCompletenessPct={payload.dataCompletenessPct} />
+            <Methodology dataCompletenessPct={payload.dataCompletenessPct} />
             <QuestionnairePlaceholder />
           </>
         )}
       </div>
-    </AppShell>
   );
 }

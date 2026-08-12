@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { listTwinRuns, getTwinRunDetail } from '@/lib/services/financialTwinService';
 import { GenerateTwinButton } from '@/components/financial-twin/GenerateTwinButton';
@@ -21,7 +20,6 @@ export default async function FinancialTwinPage() {
   const latest = runs.length > 0 ? await getTwinRunDetail(user.id, runs[0].id) : null;
 
   return (
-    <AppShell>
       <div className="space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -56,6 +54,5 @@ export default async function FinancialTwinPage() {
           </SectionCard>
         )}
       </div>
-    </AppShell>
   );
 }

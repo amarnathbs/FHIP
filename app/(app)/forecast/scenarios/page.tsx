@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { getOrCreateForecastProfile, ensureDefaultScenario, listScenarios, getResolvedAssumptions } from '@/lib/services/forecastData';
 import { diffScenarioAssumptions, isScenarioConfigured, summarizeWhatChanged } from '@/lib/engines/forecast/scenarioDiff';
@@ -32,7 +31,6 @@ export default async function ForecastScenariosPage() {
   );
 
   return (
-    <AppShell>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-trust">Forecast Scenarios</h1>
@@ -46,6 +44,5 @@ export default async function ForecastScenariosPage() {
           <ScenarioManager initialScenarios={scenariosWithDiff} />
         </SectionCard>
       </div>
-    </AppShell>
   );
 }
