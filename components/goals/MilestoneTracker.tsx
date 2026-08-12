@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 import type { GoalMilestoneRow } from '@/lib/services/goalsData';
 
 const emptyForm = { milestone_name: '', target_amount: '', target_date: '' };
@@ -64,7 +65,7 @@ export function MilestoneTracker({ goalId, initial, currency }: { goalId: string
                   <p className={`font-medium ${m.status === 'achieved' ? 'text-progress' : 'text-gray-800'}`}>{m.milestone_name}</p>
                   <p className="text-xs text-gray-500">
                     {formatMoney(m.target_amount, currency)}
-                    {m.target_date && ` · ${new Date(m.target_date).toLocaleDateString('en-AU')}`}
+                    {m.target_date && ` · ${formatDateShort(m.target_date, currency)}`}
                   </p>
                 </div>
                 {m.status === 'achieved' ? (

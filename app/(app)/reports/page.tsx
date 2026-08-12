@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { AppShell } from '@/components/ui/AppShell';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 import { listReports, getReport } from '@/lib/services/reportsData';
 import { GenerateReportButton } from '@/components/reports/GenerateReportButton';
 import { ReportHistoryTable } from '@/components/reports/ReportHistoryTable';
@@ -45,7 +46,7 @@ export default async function ReportsPage() {
               <div>
                 <p className="font-medium text-ink">{latest.title}</p>
                 <p className="text-xs text-muted">
-                  Generated {latest.generated_at ? new Date(latest.generated_at).toLocaleDateString('en-AU') : '—'} · Status: {latest.status}
+                  Generated {latest.generated_at ? formatDateShort(latest.generated_at, currency) : '—'} · Status: {latest.status}
                 </p>
               </div>
               <Link href={`/reports/${latest.id}`} className="rounded border px-3 py-1.5 text-sm text-trust hover:border-trust">
@@ -78,7 +79,7 @@ export default async function ReportsPage() {
         )}
 
         <SectionCard title="Report History">
-          <ReportHistoryTable reports={reports} />
+          <ReportHistoryTable reports={reports} currency={currency} />
         </SectionCard>
 
         <SectionCard title="Export Centre" description="Report exports (PDF, CSV) require a premium plan. In-app viewing and browser printing are available to everyone.">

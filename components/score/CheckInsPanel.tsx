@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
+import { formatDateShort } from '@/lib/engines/date';
 
 interface CheckIns {
   goals_reviewed_at: string | null;
@@ -35,7 +36,7 @@ function isRecent(d: string | null): boolean {
   return new Date(d) >= oneYearAgo;
 }
 
-export function CheckInsPanel({ initial }: { initial: Partial<CheckIns> | null }) {
+export function CheckInsPanel({ initial, currency }: { initial: Partial<CheckIns> | null; currency: 'AUD' | 'INR' }) {
   const [state, setState] = useState<Partial<CheckIns>>(initial ?? {});
   const [saving, setSaving] = useState(false);
 
@@ -68,7 +69,7 @@ export function CheckInsPanel({ initial }: { initial: Partial<CheckIns> | null }
               <div>
                 <p className="text-gray-700">{f.label}</p>
                 <p className={`text-xs ${recent ? 'text-progress' : 'text-gray-400'}`}>
-                  {value ? new Date(value).toLocaleDateString('en-AU') : 'Not recorded'}
+                  {value ? formatDateShort(value, currency) : 'Not recorded'}
                 </p>
               </div>
               <button

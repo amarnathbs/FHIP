@@ -13,6 +13,7 @@ import { ActionPlan } from '@/components/resilience/ActionPlan';
 import { CommitmentsManager, type Commitment } from '@/components/resilience/CommitmentsManager';
 import { StressTestPanel } from '@/components/resilience/StressTestPanel';
 import { Methodology } from '@/components/resilience/Methodology';
+import { formatDateShort } from '@/lib/engines/date';
 
 export default async function ResiliencePage() {
   const supabase = await createClient();
@@ -73,7 +74,7 @@ export default async function ResiliencePage() {
             </div>
             <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Last calculated</p>
-              <p className="text-lg font-semibold text-ink">{new Date().toLocaleDateString('en-AU')}</p>
+              <p className="text-lg font-semibold text-ink">{formatDateShort(new Date(), currency)}</p>
             </div>
             {payload.confidence < 70 && (
               <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-4">

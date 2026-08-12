@@ -1,4 +1,5 @@
 import { formatMoneyWhole } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { HealthScoreGauge } from '@/components/score/HealthScoreGauge';
@@ -1249,7 +1250,7 @@ export function ReportPreview({
                   <tr key={i} className="border-t">
                     <td className="py-1">{row.area}</td>
                     <td className="py-1 capitalize">{row.status}</td>
-                    <td className="py-1">{row.lastUpdated ? new Date(row.lastUpdated).toLocaleDateString('en-AU') : 'Not provided'}</td>
+                    <td className="py-1">{row.lastUpdated ? formatDateShort(row.lastUpdated, currency) : 'Not provided'}</td>
                     <td className="py-1">{row.reportTreatment}</td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 
 export interface Commitment {
   id: string;
@@ -82,7 +83,7 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
                 <div>
                   <p className="font-medium text-gray-800">{c.commitment_name}</p>
                   <p className="text-xs text-gray-500">
-                    {new Date(c.due_date).toLocaleDateString('en-AU')} · {c.category} · {c.is_mandatory ? 'Mandatory' : 'Optional'}
+                    {formatDateShort(c.due_date, currency)} · {c.category} · {c.is_mandatory ? 'Mandatory' : 'Optional'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

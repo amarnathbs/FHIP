@@ -11,6 +11,7 @@ import { ExplanationPanel } from '@/components/score/ExplanationPanel';
 import { WhatIfSimulator } from '@/components/score/WhatIfSimulator';
 import { CheckInsPanel } from '@/components/score/CheckInsPanel';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
+import { formatDateShort } from '@/lib/engines/date';
 
 export default async function ScorePage() {
   const supabase = await createClient();
@@ -65,7 +66,7 @@ export default async function ScorePage() {
             </div>
             <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Last calculated</p>
-              <p className="text-lg font-semibold text-ink">{new Date().toLocaleDateString('en-AU')}</p>
+              <p className="text-lg font-semibold text-ink">{formatDateShort(new Date(), currency)}</p>
             </div>
             {payload.dataConfidence < 70 && (
               <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-4">
@@ -99,7 +100,7 @@ export default async function ScorePage() {
 
         <WhatIfSimulator currency={currency} />
 
-        <CheckInsPanel initial={checkIns} />
+        <CheckInsPanel initial={checkIns} currency={currency} />
 
         <div>
           <h2 className="mb-3 text-lg font-semibold text-gray-800">Coming up next</h2>

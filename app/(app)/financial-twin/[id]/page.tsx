@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { AppShell } from '@/components/ui/AppShell';
 import { getTwinRunDetail } from '@/lib/services/financialTwinService';
 import { TwinDetailView } from '@/components/financial-twin/TwinDetailView';
+import { formatDateShort } from '@/lib/engines/date';
 
 export default async function FinancialTwinRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,7 +22,7 @@ export default async function FinancialTwinRunPage({ params }: { params: Promise
   return (
     <AppShell>
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-trust">Financial Twin™ — {new Date(twin.createdAt).toLocaleDateString('en-AU')}</h1>
+        <h1 className="text-2xl font-semibold text-trust">Financial Twin™ — {formatDateShort(twin.createdAt, currency)}</h1>
         <TwinDetailView twin={twin} currency={currency} />
       </div>
     </AppShell>

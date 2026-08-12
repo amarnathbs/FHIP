@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 import type { GoalContributionRow } from '@/lib/services/goalsData';
 
 const TYPE_OPTIONS = [
@@ -74,7 +75,7 @@ export function ContributionHistory({
             <div key={c.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
               <div>
                 <p className="font-medium text-gray-800">
-                  {new Date(c.contribution_date).toLocaleDateString('en-AU')} · {c.contribution_type.replace(/_/g, ' ')}
+                  {formatDateShort(c.contribution_date, currency)} · {c.contribution_type.replace(/_/g, ' ')}
                 </p>
                 {c.contribution_status === 'reversed' && <p className="text-xs text-gray-400">Reversed</p>}
               </div>

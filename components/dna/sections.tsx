@@ -3,6 +3,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import type { DnaDriver, DnaTrait } from '@/lib/engines/financialDna';
 import type { Archetype, DnaHistoryPoint } from '@/lib/services/financialDnaData';
+import { formatDateShort } from '@/lib/engines/date';
 
 const LEVEL_COLOR: Record<DnaTrait['level'], string> = {
   low: '#C7362F',
@@ -21,6 +22,7 @@ export function HeroCard({
   profileChanged,
   previousProfileCode,
   archetypes,
+  currency,
 }: {
   archetype: Archetype | null;
   secondaryArchetype: Archetype | null;
@@ -31,6 +33,7 @@ export function HeroCard({
   profileChanged: boolean;
   previousProfileCode: string | null;
   archetypes: Record<string, Archetype>;
+  currency: 'AUD' | 'INR';
 }) {
   if (!archetype) return null;
   return (
@@ -53,7 +56,7 @@ export function HeroCard({
         )}
         <span>
           <span className="text-gray-500">Last calculated: </span>
-          <span className="font-semibold text-gray-900">{new Date().toLocaleDateString('en-AU')}</span>
+          <span className="font-semibold text-gray-900">{formatDateShort(new Date(), currency)}</span>
         </span>
         <span>
           <span className="text-gray-500">Profile status: </span>

@@ -34,6 +34,9 @@ export default async function FinancialDnaPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const { data: profile } = await supabase.from('user_profiles').select('preferred_currency').eq('user_id', user.id).single();
+  const currency = (profile?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
+
   const payload = await loadFinancialDna(user.id);
   const primaryArchetype = payload.primaryProfileCode ? payload.archetypes[payload.primaryProfileCode] ?? null : null;
   const secondaryArchetype = payload.secondaryProfileCode ? payload.archetypes[payload.secondaryProfileCode] ?? null : null;
@@ -62,6 +65,7 @@ export default async function FinancialDnaPage() {
               profileChanged={payload.profileChanged}
               previousProfileCode={null}
               archetypes={payload.archetypes}
+              currency={currency}
             />
 
             {payload.dataCompletenessPct < 100 && (

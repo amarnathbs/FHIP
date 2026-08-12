@@ -2,6 +2,7 @@ import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { ForecastReportData } from '@/lib/services/forecastReportData';
 import { ReportTrendChart, ReportAllocationChart, ReportScenarioBarChart, ReportVarianceBarChart } from '@/components/forecast/ForecastReportCharts';
+import { formatDateTimeShort } from '@/lib/engines/date';
 
 // The Consolidated Forecasting Report's body — extracted so both the
 // interactive page (app/(app)/forecast/report/page.tsx, wrapped in AppShell
@@ -148,7 +149,7 @@ function RunSummary({
 
 export function ForecastReportContent({ data }: { data: ForecastReportData }) {
   const { currency, dashboard } = data;
-  const generatedAtLabel = new Date(data.generatedAt).toLocaleString();
+  const generatedAtLabel = formatDateTimeShort(data.generatedAt, currency);
 
   // Sections and variance rows are shown only where the user actually has
   // data for them — a category with nothing recorded is omitted entirely

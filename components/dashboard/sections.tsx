@@ -4,6 +4,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { SectionCard, Stat } from './SectionCard';
 import { TrendLineChart, AllocationPieChart } from './charts';
 import { formatMoney } from '@/lib/engines/money';
+import { formatDateShort } from '@/lib/engines/date';
 import { percentChange, type DashboardSummary, type AllocationBucket } from '@/lib/engines/dashboard';
 
 function titleCase(s: string): string {
@@ -402,7 +403,7 @@ export function FinancialTimelineSection({ summary }: { summary: DashboardSummar
           {summary.upcomingRenewals.map((r, i) => (
             <li key={i} className="flex justify-between border-b py-1 last:border-0">
               <span className="text-gray-700">{r.policyName}</span>
-              <span className="font-medium text-gray-900">{new Date(r.renewalDate).toLocaleDateString('en-AU')}</span>
+              <span className="font-medium text-gray-900">{formatDateShort(r.renewalDate, summary.currency)}</span>
             </li>
           ))}
         </ul>

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReportRow } from '@/lib/services/reportsData';
+import { formatDateShort } from '@/lib/engines/date';
 
 const STATUS_COLOR: Record<string, string> = {
   ready: '#198754',
@@ -19,7 +20,7 @@ const TYPE_LABELS: Record<string, string> = {
   net_worth: 'Net Worth',
 };
 
-export function ReportHistoryTable({ reports }: { reports: ReportRow[] }) {
+export function ReportHistoryTable({ reports, currency }: { reports: ReportRow[]; currency: 'AUD' | 'INR' }) {
   if (reports.length === 0) {
     return <p className="text-sm text-gray-500">No reports generated yet.</p>;
   }
@@ -40,7 +41,7 @@ export function ReportHistoryTable({ reports }: { reports: ReportRow[] }) {
           <tr key={r.id} className="border-t">
             <td className="py-2">{new Date(r.report_month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</td>
             <td className="py-2">{TYPE_LABELS[r.report_type_code] ?? r.report_type_code}</td>
-            <td className="py-2">{r.generated_at ? new Date(r.generated_at).toLocaleDateString('en-AU') : '—'}</td>
+            <td className="py-2">{r.generated_at ? formatDateShort(r.generated_at, currency) : '—'}</td>
             <td className="py-2">
               <span
                 className="rounded-full px-2 py-0.5 text-xs font-semibold text-white"

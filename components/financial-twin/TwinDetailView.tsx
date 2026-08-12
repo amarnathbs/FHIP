@@ -3,6 +3,7 @@ import { METRIC_CATALOGUE, getMetricDefinition } from '@/lib/engines/twin/metric
 import { METRIC_CATEGORY_LABEL, COMPARISON_STATUS_LABEL, COHORT_TIER_LABEL, BENCHMARK_CLASS_LABEL, percentileInterpretation, type MetricCategory, type ComparisonStatus, type BenchmarkClass } from '@/lib/engines/twin/taxonomy';
 import type { StoredTwinDetail } from '@/lib/services/financialTwinService';
 import { Stat } from '@/components/dashboard/SectionCard';
+import { formatDateShort } from '@/lib/engines/date';
 
 const STATUS_COLOR: Record<ComparisonStatus, string> = {
   materially_ahead: 'text-green-700 bg-green-50',
@@ -39,7 +40,7 @@ export function TwinDetailView({ twin, currency }: { twin: StoredTwinDetail; cur
             </p>
             <p className="mt-1 text-xs text-gray-500">
               Cohort tier: {twin.cohortTier ? COHORT_TIER_LABEL[twin.cohortTier as 1 | 2 | 3 | 4 | 5] : '—'} · Generated{' '}
-              {new Date(twin.createdAt).toLocaleDateString('en-AU')}
+              {formatDateShort(twin.createdAt, currency)}
             </p>
           </div>
         </div>

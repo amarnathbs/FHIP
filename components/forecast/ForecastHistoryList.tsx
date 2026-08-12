@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { formatDateTimeShort } from '@/lib/engines/date';
 
 interface RunRow {
   id: string;
@@ -23,7 +24,7 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Failed',
 };
 
-export function ForecastHistoryList({ initialRuns }: { initialRuns: RunRow[] }) {
+export function ForecastHistoryList({ initialRuns, currency }: { initialRuns: RunRow[]; currency: 'AUD' | 'INR' }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ results: ForecastResultRow[] } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,7 +65,7 @@ export function ForecastHistoryList({ initialRuns }: { initialRuns: RunRow[] }) 
         {initialRuns.map((run) => (
           <Fragment key={run.id}>
             <tr className="border-t">
-              <td className="py-2">{new Date(run.created_at).toLocaleString()}</td>
+              <td className="py-2">{formatDateTimeShort(run.created_at, currency)}</td>
               <td className="py-2 capitalize">{run.forecast_type.replace(/_/g, ' ')}</td>
               <td className="py-2">
                 {STATUS_LABEL[run.status] ?? run.status}
