@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
@@ -99,10 +98,10 @@ export default async function ScorePage() {
         <div>
           <h2 className="mb-3 text-lg font-semibold text-gray-800">Coming up next</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Link href="/financial-twin" className="block rounded-card border bg-white p-4 hover:border-trust">
-              <p className="font-medium text-trust">Benchmark Comparison</p>
-              <p className="mt-1 text-sm text-muted">See how your score compares to households like yours in your Financial Twin.</p>
-            </Link>
+            <LockedFeatureCard
+              title="Score Benchmark Comparison"
+              description="See how your overall Financial Health Score compares to households like yours. Your Financial Twin already benchmarks individual metrics (savings rate, net worth, debt, retirement) — this adds the composite score itself."
+            />
             <LockedFeatureCard
               title="AI Commentary"
               description="A plain-English summary of your results, generated from the calculated score — never calculated by AI itself. Arrives with Module 10 (AI Coach)."

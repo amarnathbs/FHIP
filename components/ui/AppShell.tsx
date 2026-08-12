@@ -50,7 +50,10 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'Expenses', href: '/expenses' },
       { type: 'link', label: 'Assets', href: '/assets' },
       { type: 'link', label: 'Liabilities', href: '/liabilities' },
-      { type: 'link', label: 'Investments', href: '/investments' },
+      // Retirement isn't its own sidebar entry — it's reached via the
+      // in-page tab on this grid (InvestmentsSubNav) — so the label makes
+      // that explicit rather than implying only Investments lives here.
+      { type: 'link', label: 'Investment & Retirement', href: '/investments' },
       { type: 'link', label: 'Insurance', href: '/insurance' },
     ],
   },
@@ -102,9 +105,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // across navigation (a persistent sidebar, unlike the old floating
   // top-bar dropdown, has no overlay-conflict reason to force-close it).
   const [openDropdown, setOpenDropdown] = useState<string | null>(() => (pathname.startsWith('/forecast') ? 'forecasting' : null));
-  // Only one dropdown entry exists in the nav today (Forecasting), so a
-  // single ref is sufficient to return focus to its trigger on Escape.
-  const forecastingTriggerRef = useRef<HTMLButtonElement>(null);
+  // Multi-item groups (Your finances, Plan & improve, Review & share) are
+  // collapsible via their header, same idea as the Forecasting dropdown but
+  // one level up — collapsing the section, not just one entry inside it.
+  // All expanded by default; a group only enters this set once the user
+  // explicitly collapses it, and stays collapsed across navigation the same
+  // way openDropdown does (this sidebar persists across routes — see
+  // app/(app)/layout.tsx — so plain useState is enough, no storage needed).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  function toggleGroup(label: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+  // Keyed by dropdown entry id so Escape can return focus to whichever
+  // dropdown's trigger was open — generic even though only Forecasting uses
+  // it today, so a future second dropdown doesn't need this refactored again.
+  const dropdownTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -150,10 +170,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <span className="text-lg font-semibold text-white">FHIP</span>
       </div>
       <nav aria-label="Main" className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => {
+          // Skip the group header when it would just repeat a single item's
+          // own label right above it (the Forecasting group: header
+          // "FORECASTING" directly above a dropdown button also labelled
+          // "Forecasting" read as the same word shown twice in a row) — that
+          // one entry's own button already carries the heading styling
+          // (see the `redundantHeader ? 'uppercase tracking-wide' : ''`
+          // below) and its own openDropdown collapse, so it doesn't need
+          // this separate group-level collapse mechanism too.
+          const redundantHeader = group.items.length === 1 && group.items[0].label === group.label;
+          const collapsible = !redundantHeader && group.items.length > 1;
+          const groupSlug = group.label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const isCollapsed = collapsedGroups.has(group.label);
+          return (
           <div key={group.label}>
-            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">{group.label}</p>
-            <ul className="space-y-0.5">
+            {redundantHeader ? null : collapsible ? (
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                aria-expanded={!isCollapsed}
+                aria-controls={`${scope}-navgroup-${groupSlug}`}
+                className="flex w-full items-center justify-between px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/70"
+              >
+                {group.label}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} aria-hidden="true" />
+              </button>
+            ) : (
+              <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">{group.label}</p>
+            )}
+            {(!collapsible || !isCollapsed) && (
+            <ul id={collapsible ? `${scope}-navgroup-${groupSlug}` : undefined} className="space-y-0.5">
               {group.items.map((entry) =>
                 entry.type === 'link' ? (
                   <li key={entry.label}>
@@ -173,12 +220,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     onKeyDown={(e) => {
                       if (e.key === 'Escape' && openDropdown === entry.id) {
                         setOpenDropdown(null);
-                        forecastingTriggerRef.current?.focus();
+                        dropdownTriggerRefs.current[entry.id]?.focus();
                       }
                     }}
                   >
                     <button
-                      ref={forecastingTriggerRef}
+                      ref={(el) => {
+                        dropdownTriggerRefs.current[entry.id] = el;
+                      }}
                       type="button"
                       data-testid={entry.id === 'forecasting' ? 'nav-forecasting' : undefined}
                       aria-expanded={openDropdown === entry.id}
@@ -187,7 +236,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       onClick={() => setOpenDropdown((o) => (o === entry.id ? null : entry.id))}
                       className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${
                         dropdownActive(entry) ? 'font-semibold text-white' : 'text-white/70 hover:text-white'
-                      }`}
+                      } ${redundantHeader ? 'uppercase tracking-wide' : ''}`}
                     >
                       {entry.label}
                       <ChevronDown className={`h-4 w-4 transition-transform ${openDropdown === entry.id ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -223,8 +272,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 )
               )}
             </ul>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {isAdmin && (
           <div>
