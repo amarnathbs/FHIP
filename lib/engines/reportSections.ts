@@ -357,9 +357,16 @@ function buildHealthScore(source: ReportSourceData, status: SectionStatus, reaso
             // component) instead of the report showing an unexplained
             // blank/dash for an unscored pillar. `whatItMeasures` is a fixed,
             // generic definition (same for every household); `explanation`
-            // is the engine's own household-specific "meaning" sentence;
-            // `areaToReview` links to the matching component-level
-            // recommendation the score engine already generated, where one exists.
+            // is the engine's own household-specific "meaning" sentence.
+            // `areaToReview` used to read hs.recommendations[].explanation,
+            // but that field is always a verbatim copy of c.explanation
+            // (healthScore.ts's recommendation builder), so it rendered the
+            // exact same sentence twice under two different labels. It now
+            // pulls the pillar-triggered content-library match (Report v3
+            // Phase 3a, same library backing the Priority Actions section)
+            // instead, which is genuinely distinct, actionable text — and
+            // is simply omitted when the library has no matching row for
+            // this pillar/band rather than falling back to a duplicate.
             pillars: hs.components.map((c) => ({
               code: c.code,
               label: c.label,
@@ -368,7 +375,9 @@ function buildHealthScore(source: ReportSourceData, status: SectionStatus, reaso
               explanation: c.explanation,
               treatment: c.treatment,
               whatItMeasures: PILLAR_WHAT_IT_MEASURES[c.code] ?? null,
-              areaToReview: isConcernBand(c.statusBand) ? (hs.recommendations.find((r) => r.componentCode === c.code)?.explanation ?? null) : null,
+              areaToReview: isConcernBand(c.statusBand)
+                ? (source.actionRecommendations.find((r) => r.pillarCode === c.code)?.content ?? null)
+                : null,
             })),
           }
         : null,

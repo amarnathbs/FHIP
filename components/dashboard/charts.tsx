@@ -48,10 +48,12 @@ export function AllocationPieChart({
   slices,
   currency,
   roundToWhole = false,
+  height = 200,
 }: {
   slices: { label: string; value: number }[];
   currency: 'AUD' | 'INR';
   roundToWhole?: boolean;
+  height?: number;
 }) {
   const fmt = roundToWhole ? formatMoneyWhole : formatMoney;
   const nonZero = slices.filter((s) => s.value > 0);
@@ -73,9 +75,9 @@ export function AllocationPieChart({
   // no information.
   return (
     <div>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={height}>
         <PieChart>
-          <Pie data={nonZero} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={80} isAnimationActive={false}>
+          <Pie data={nonZero} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={Math.round(height * 0.4)} isAnimationActive={false}>
             {nonZero.map((_, i) => (
               <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
             ))}
@@ -105,11 +107,13 @@ export function GroupedBarChart({
   seriesKeys,
   currency,
   roundToWhole = false,
+  height = 240,
 }: {
   data: Record<string, string | number>[];
   seriesKeys: string[];
   currency: 'AUD' | 'INR';
   roundToWhole?: boolean;
+  height?: number;
 }) {
   const fmt = roundToWhole ? formatMoneyWhole : formatMoney;
   if (data.length === 0) {
@@ -120,7 +124,7 @@ export function GroupedBarChart({
     );
   }
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data}>
         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmt(v, currency)} width={80} />

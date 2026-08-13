@@ -216,8 +216,18 @@ export function ReportPreview({
         <p className="mt-4 text-justify text-xs text-gray-400">{content.page1Disclaimer}</p>
       </div>
 
-      {/* Page 2 — Your financial health in one page */}
-      <div className="report-page-break space-y-6">
+      {/* Your financial health in one page. Free-tier section groups below
+          (through "Priority actions...") no longer force their own physical
+          page via report-page-break — with 8 groups of varying length, a
+          hard break at every boundary regardless of how full the page
+          already was is exactly what produced the "many pages show empty
+          space" complaint (e.g. a 2-card group starting a fresh page when
+          the previous page still had two-thirds of its height free). Letting
+          content flow naturally and only break where it doesn't fit removes
+          that structural whitespace; report-section's break-inside:avoid on
+          every card still prevents an individual card/chart from splitting
+          mid-content. */}
+      <div className="space-y-6">
         {isFirstReport && (
           <p className="report-section text-center text-xs font-semibold uppercase tracking-wide text-trust">Current baseline</p>
         )}
@@ -227,6 +237,7 @@ export function ReportPreview({
               score={healthScore.sectionData.roundedScore as number}
               statusLabel={healthScore.sectionData.statusLabel as string}
               statusBand={healthScore.sectionData.statusBand as string}
+              compact
             />
             <div className="rounded-card border bg-white p-6">
               <p className="text-sm text-gray-600">{content.scoreGaugeExplanation}</p>
@@ -277,8 +288,8 @@ export function ReportPreview({
         </div>
       </div>
 
-      {/* Page 3 — Money coming in and going out */}
-      <div className="report-page-break space-y-6">
+      {/* Money coming in and going out */}
+      <div className="space-y-6">
         <p className="report-section text-sm text-gray-600">
           This section explains how money moves through your household each month. It separates income, living costs, financial
           commitments and one-off expenses so you can see which categories have the greatest effect on your available surplus.
@@ -337,8 +348,8 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 4 — What you own and owe */}
-      <div className="report-page-break space-y-6">
+      {/* What you own and owe */}
+      <div className="space-y-6">
         <p className="report-section text-sm text-gray-600">
           This section brings together the assets you own and the debts you owe. It helps you understand your estimated net worth,
           how accessible your wealth is and whether a large proportion of your financial position depends on one asset, investment
@@ -387,6 +398,47 @@ export function ReportPreview({
                 />
               </div>
             </SectionCard>
+            {/* Specific asset/debt notes — previously their own forced
+                report-page-break group (old Page 5), which was frequently a
+                near-empty physical page on its own (only 1-3 short cards).
+                Folded into this page's flow instead; report-section's
+                break-inside:avoid still keeps each card intact if it does
+                spill onto the next physical page. */}
+            <p className="report-section text-sm text-gray-600">
+              The following notes highlight specific aspects of your assets and debts most likely to affect financial
+              resilience — how much of your wealth is readily accessible, how concentrated it is, and how your debt is
+              secured.
+            </p>
+            <SectionCard title="Liquid versus illiquid assets" className="report-section">
+              <p className="text-sm text-gray-600">{content.netWorthDefinition('liquidVsIlliquid')}</p>
+              {netWorth.sectionData.liquidAssetRatio != null && (
+                <p className="mt-2 text-sm text-gray-600">
+                  Although your household&apos;s total assets are {fmt(netWorth.sectionData.totalAssets)}, approximately{' '}
+                  {(Number(netWorth.sectionData.liquidAssetRatio) * 100).toFixed(0)}% is currently classified as readily
+                  accessible or liquid.
+                </p>
+              )}
+            </SectionCard>
+            {netWorth.sectionData.propertyConcentration != null && Number(netWorth.sectionData.propertyConcentration) > 0 && (
+              <SectionCard title="Property concentration" className="report-section">
+                <p className="text-sm text-gray-600">{content.netWorthDefinition('propertyConcentration')}</p>
+                <p className="mt-2 text-sm text-gray-600">
+                  Property represents approximately {(Number(netWorth.sectionData.propertyConcentration) * 100).toFixed(0)}%
+                  of your recorded total assets.
+                </p>
+              </SectionCard>
+            )}
+            {Number(netWorth.sectionData.totalRetirement ?? 0) > 0 && (
+              <SectionCard title="Retirement assets" className="report-section">
+                <p className="text-sm text-gray-600">{content.netWorthDefinition('retirementAssets')}</p>
+              </SectionCard>
+            )}
+            {((netWorth.sectionData.liabilityByType as unknown[]) ?? []).length > 0 && (
+              <SectionCard title="Secured and unsecured debt" className="report-section">
+                <p className="text-sm text-gray-600">{content.netWorthDefinition('securedDebt')}</p>
+                <p className="mt-2 text-sm text-gray-600">{content.netWorthDefinition('unsecuredDebt')}</p>
+              </SectionCard>
+            )}
           </>
         )}
         {netWorth?.sectionStatus !== 'included' && netWorth && (
@@ -426,50 +478,8 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 5 — Specific notes on assets and debts. Only rendered when
-          there's net-worth data to discuss — otherwise this would be an
-          orphan page with just an intro paragraph. */}
-      {netWorth?.sectionStatus === 'included' && (
-        <div className="report-page-break space-y-6">
-          <p className="report-section text-sm text-gray-600">
-            The following notes highlight specific aspects of your assets and debts most likely to affect financial resilience — how
-            much of your wealth is readily accessible, how concentrated it is, and how your debt is secured.
-          </p>
-          <SectionCard title="Liquid versus illiquid assets" className="report-section">
-            <p className="text-sm text-gray-600">{content.netWorthDefinition('liquidVsIlliquid')}</p>
-            {netWorth.sectionData.liquidAssetRatio != null && (
-              <p className="mt-2 text-sm text-gray-600">
-                Although your household&apos;s total assets are {fmt(netWorth.sectionData.totalAssets)}, approximately{' '}
-                {(Number(netWorth.sectionData.liquidAssetRatio) * 100).toFixed(0)}% is currently classified as readily accessible or
-                liquid.
-              </p>
-            )}
-          </SectionCard>
-          {netWorth.sectionData.propertyConcentration != null && Number(netWorth.sectionData.propertyConcentration) > 0 && (
-            <SectionCard title="Property concentration" className="report-section">
-              <p className="text-sm text-gray-600">{content.netWorthDefinition('propertyConcentration')}</p>
-              <p className="mt-2 text-sm text-gray-600">
-                Property represents approximately {(Number(netWorth.sectionData.propertyConcentration) * 100).toFixed(0)}% of your
-                recorded total assets.
-              </p>
-            </SectionCard>
-          )}
-          {Number(netWorth.sectionData.totalRetirement ?? 0) > 0 && (
-            <SectionCard title="Retirement assets" className="report-section">
-              <p className="text-sm text-gray-600">{content.netWorthDefinition('retirementAssets')}</p>
-            </SectionCard>
-          )}
-          {((netWorth.sectionData.liabilityByType as unknown[]) ?? []).length > 0 && (
-            <SectionCard title="Secured and unsecured debt" className="report-section">
-              <p className="text-sm text-gray-600">{content.netWorthDefinition('securedDebt')}</p>
-              <p className="mt-2 text-sm text-gray-600">{content.netWorthDefinition('unsecuredDebt')}</p>
-            </SectionCard>
-          )}
-        </div>
-      )}
-
-      {/* Page 6 — Emergency fund and core figures */}
-      <div className="report-page-break space-y-6">
+      {/* Emergency fund and core figures */}
+      <div className="space-y-6">
         {emergencyFundChart && (
           <SectionCard title="Emergency-fund target" className="report-section">
             <TargetZoneBar
@@ -517,10 +527,16 @@ export function ReportPreview({
                 meaning={content.coreFigureDefinition('debtServiceRatio')}
               />
               <MetricExplainer
+                // The full sentence used to be crammed into `value`, which
+                // MetricExplainer renders as a large bold heading — fine for
+                // "$3,602", not for a sentence that then wraps across 4
+                // lines at that size and duplicates what "X of Y" already
+                // says. Every sibling metric on this page keeps `meaning`
+                // as the fixed generic definition; this one now matches.
                 label="Goals on track"
                 value={
                   goals
-                    ? `${(goals.sectionData.summary as { onTrackCount: number }).onTrackCount} of ${(goals.sectionData.summary as { activeGoalsCount: number }).activeGoalsCount} active goals are currently on track.`
+                    ? `${(goals.sectionData.summary as { onTrackCount: number }).onTrackCount} of ${(goals.sectionData.summary as { activeGoalsCount: number }).activeGoalsCount}`
                     : '—'
                 }
                 meaning={content.coreFigureDefinition('goalsOnTrack')}
@@ -530,8 +546,8 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 7 — Score pillars */}
-      <div className="report-page-break space-y-6">
+      {/* Score pillars */}
+      <div className="space-y-6">
         <p className="report-section text-sm text-gray-600">
           Your overall score is formed from several financial-health pillars. Each pillar measures a different part of your
           household&apos;s position. Reviewing the pillars separately helps explain why the total score is strong, moderate or weak.
@@ -545,14 +561,15 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 8 — Resilience, Financial DNA and Goals */}
-      <div className="report-page-break space-y-6">
+      {/* Resilience, Financial DNA and Goals */}
+      <div className="space-y-6">
         {resilience?.sectionStatus === 'included' && (
           <div className="report-section grid gap-6 sm:grid-cols-2">
             <ResilienceGauge
               score={resilience.sectionData.roundedScore as number}
               statusLabel={resilience.sectionData.statusLabel as string}
               statusBand={resilience.sectionData.statusBand as string}
+              compact
             />
             <div className="rounded-card border bg-white p-6">
               <h2 className="text-lg font-semibold text-gray-900">Key risks</h2>
@@ -637,8 +654,8 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 9 — Priority actions, goal forecasts and near-term commitments */}
-      <div className="report-page-break space-y-6">
+      {/* Priority actions, goal forecasts and near-term commitments */}
+      <div className="space-y-6">
         <p className="report-section text-sm text-gray-600">
           The following shows where the greatest opportunity lies to improve your financial position, the outlook for your recorded
           goals, and commitments due in the next 90 days.

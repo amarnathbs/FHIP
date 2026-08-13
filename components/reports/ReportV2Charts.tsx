@@ -8,13 +8,19 @@ import { AllocationPieChart, GroupedBarChart } from '@/components/dashboard/char
 // reuse the generic recharts primitives directly; only build something new
 // here when the spec's visual has no existing equivalent.
 
+// Report charts render smaller than their dashboard defaults (160/180 vs
+// 200/240) — the report packs these two-to-a-page next to another card, and
+// the dashboard's full size left disproportionate whitespace at report scale
+// (per user feedback: "many pages show empty space... graphs are too big").
+// The dashboard keeps its own defaults; only the report wrappers pass a
+// shorter height.
 export function ReportAllocationChart({ slices, currency }: { slices: { label: string; value: number }[]; currency: 'AUD' | 'INR' }) {
-  return <AllocationPieChart slices={slices} currency={currency} roundToWhole />;
+  return <AllocationPieChart slices={slices} currency={currency} roundToWhole height={160} />;
 }
 
 export function ReportDebtBarChart({ rows, currency }: { rows: { debtType: string; balance: number }[]; currency: 'AUD' | 'INR' }) {
   const data = rows.map((r) => ({ label: r.debtType, Balance: r.balance }));
-  return <GroupedBarChart data={data} seriesKeys={['Balance']} currency={currency} roundToWhole />;
+  return <GroupedBarChart data={data} seriesKeys={['Balance']} currency={currency} roundToWhole height={180} />;
 }
 
 const STATUS_COLORS: Record<'good' | 'caution' | 'risk' | 'neutral', string> = {
@@ -98,7 +104,7 @@ export function CashFlowWaterfallChart({
   ];
   return (
     <div>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={160}>
         <BarChart data={data}>
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatMoneyWhole(v, currency)} width={80} />
@@ -184,23 +190,29 @@ export interface PillarRow {
 // Per the spec, every pillar shows 4 distinct things: what it measures
 // (generic, fixed), current score, meaning (household-specific), and one
 // area to review.
+// Two columns at report width (>=640px — same breakpoint already proven out
+// by the report's other side-by-side chart pairs) roughly halves this
+// section's vertical height versus one full-width column, which was the
+// single largest contributor to page overflow with all 10 pillars stacked.
+// Tighter spacing (pb-3/space-y-3 vs the previous pb-4/space-y-4) trims
+// further without dropping any of the 4 required lines per pillar.
 export function PillarBars({ pillars }: { pillars: PillarRow[] }) {
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
       {pillars.map((p) => {
         const status = p.treatment === 'missing_data' || p.score === null ? 'neutral' : statusFromBand(p.statusBand);
         return (
-          <div key={p.code} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+          <div key={p.code} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-gray-900">{p.label}</span>
               <span style={{ color: STATUS_COLORS[status] }}>{p.score !== null ? `${Math.round(p.score)}/100` : 'Not available'}</span>
             </div>
-            <div className="mt-1 h-2 w-full rounded-full bg-gray-100">
+            <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
               {p.score !== null && (
-                <div className="h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.score))}%`, background: STATUS_COLORS[status] }} />
+                <div className="h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.score))}%`, background: STATUS_COLORS[status] }} />
               )}
             </div>
-            {p.whatItMeasures && <p className="mt-2 text-xs text-gray-500">{p.whatItMeasures}</p>}
+            {p.whatItMeasures && <p className="mt-1.5 text-xs text-gray-500">{p.whatItMeasures}</p>}
             <p className="mt-1 text-xs text-gray-700">{p.explanation}</p>
             {p.areaToReview && (
               <p className="mt-1 text-xs text-gray-500">

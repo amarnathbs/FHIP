@@ -44,6 +44,35 @@
     page-break-before: always;
   }
 
+  /* Compaction pass (user feedback: "many pages show empty space... graphs
+     are too big, even the score is shown very large"). SectionCard and the
+     page-level spacing utilities are shared across the whole app (dashboard,
+     score, resilience, goals pages all use the same p-6/gap-6/space-y-6
+     classes) so they can't be changed at the component level without
+     shrinking those live pages too — these overrides are scoped to
+     .report-print-root and only take effect under print/PDF rendering,
+     leaving every other page's on-screen sizing untouched. !important is
+     needed because a plain-class print rule and the original Tailwind
+     utility have equal selector specificity. */
+  .report-print-root .p-8 {
+    padding: 1.25rem !important;
+  }
+  .report-print-root .p-6 {
+    padding: 1rem !important;
+  }
+  .report-print-root .gap-6 {
+    gap: 1rem !important;
+  }
+  .report-print-root .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+  .report-print-root .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+  .report-print-root .mt-4 {
+    margin-top: 0.75rem !important;
+  }
+
   table {
     break-inside: avoid;
   }
