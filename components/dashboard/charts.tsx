@@ -62,27 +62,41 @@ export function AllocationPieChart({
       </div>
     );
   }
+  // The legend is rendered as plain HTML below the chart rather than
+  // recharts' built-in <Legend/> (and the pie's inline value labels are
+  // dropped entirely) — with 6+ slices the built-in legend wraps to 2-3
+  // lines inside the same fixed-height SVG box the pie's own edge labels
+  // are drawn in, and the two collide (e.g. a value label landing on top
+  // of a wrapped legend entry). An HTML legend reserves its own space in
+  // normal document flow instead of sharing the canvas, and folding the
+  // value into each legend row means dropping the inline pie labels loses
+  // no information.
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <PieChart>
-        <Pie
-          data={nonZero}
-          dataKey="value"
-          nameKey="label"
-          cx="50%"
-          cy="50%"
-          outerRadius={80}
-          label={(entry: { value?: number }) => fmt(entry.value ?? 0, currency)}
-          isAnimationActive={false}
-        >
-          {nonZero.map((_, i) => (
-            <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(v: number) => fmt(v, currency)} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
+    <div>
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie data={nonZero} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={80} isAnimationActive={false}>
+            {nonZero.map((_, i) => (
+              <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(v: number) => fmt(v, currency)} />
+        </PieChart>
+      </ResponsiveContainer>
+      <ul className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+        {nonZero.map((s, i) => (
+          <li key={s.label} className="flex items-center gap-1.5 text-sm">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+              aria-hidden="true"
+            />
+            <span className="text-gray-700">{s.label}</span>
+            <span className="text-gray-500">{fmt(s.value, currency)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

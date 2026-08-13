@@ -241,50 +241,159 @@ export function ReportPreview({
           </SectionCard>
         )}
 
-        {cashFlowChart && (
-          <SectionCard title="Where your monthly income goes" className="report-section">
-            <CashFlowWaterfallChart
-              grossMonthlyIncome={cashFlowChart.grossMonthlyIncome}
-              netMonthlyIncome={cashFlowChart.netMonthlyIncome}
-              totalMonthlyExpenses={cashFlowChart.totalMonthlyExpenses}
-              debtMonthlyRepayments={cashFlowChart.debtMonthlyRepayments}
-              monthlySurplus={cashFlowChart.monthlySurplus}
-              currency={currency}
-            />
-            <p className="mt-2 text-justify text-sm text-gray-600">{cashFlowChart.summary}</p>
+        {/* "Where your monthly income goes" and "How much you own compared
+            with what you owe" side by side — both are compact charts that
+            previously each consumed a full-width section for no reason. */}
+        <div className="report-section grid gap-6 sm:grid-cols-2">
+          {cashFlowChart && (
+            <SectionCard title="Where your monthly income goes">
+              <CashFlowWaterfallChart
+                grossMonthlyIncome={cashFlowChart.grossMonthlyIncome}
+                netMonthlyIncome={cashFlowChart.netMonthlyIncome}
+                totalMonthlyExpenses={cashFlowChart.totalMonthlyExpenses}
+                debtMonthlyRepayments={cashFlowChart.debtMonthlyRepayments}
+                monthlySurplus={cashFlowChart.monthlySurplus}
+                currency={currency}
+              />
+              <p className="mt-2 text-justify text-sm text-gray-600">{cashFlowChart.summary}</p>
+            </SectionCard>
+          )}
+          {netWorth?.sectionStatus === 'included' && (
+            <SectionCard title="How much you own compared with what you owe">
+              <ReportDebtBarChart
+                // netWorth.sectionData.totalAssets is already the all-inclusive
+                // figure (property/cash/other + investments + retirement) — do
+                // not add investments/retirement again here, that would
+                // triple-count them.
+                rows={[
+                  { debtType: 'Total assets', balance: Number(netWorth.sectionData.totalAssets ?? 0) },
+                  { debtType: 'Total liabilities', balance: Number(netWorth.sectionData.totalLiabilities ?? 0) },
+                ]}
+                currency={currency}
+              />
+              <p className="mt-2 text-sm text-gray-600">{netWorth.chartData?.summary as string}</p>
+            </SectionCard>
+          )}
+        </div>
+      </div>
+
+      {/* Page 3 — Money coming in and going out */}
+      <div className="report-page-break space-y-6">
+        <p className="report-section text-sm text-gray-600">
+          This section explains how money moves through your household each month. It separates income, living costs, financial
+          commitments and one-off expenses so you can see which categories have the greatest effect on your available surplus.
+        </p>
+        {cashFlow?.sectionStatus === 'included' && (
+          <>
+            <div className="report-section grid gap-6 sm:grid-cols-2">
+              {((cashFlow.sectionData.topIncome as { name: string; monthlyAmount: number }[]) ?? []).length > 0 && (
+                <SectionCard title="Income by source">
+                  <ReportAllocationChart
+                    slices={(cashFlow.sectionData.topIncome as { name: string; monthlyAmount: number }[]).map((e) => ({ label: e.name, value: e.monthlyAmount }))}
+                    currency={currency}
+                  />
+                  {cashFlow.chartData?.largestIncomeSummary != null && (
+                    <p className="mt-2 text-sm text-gray-600">{cashFlow.chartData.largestIncomeSummary as string}</p>
+                  )}
+                </SectionCard>
+              )}
+              <SectionCard title="Expense categories">
+                <ReportAllocationChart
+                  slices={((cashFlow.sectionData.topExpenses as { name: string; monthlyAmount: number }[]) ?? []).map((e) => ({ label: e.name, value: e.monthlyAmount }))}
+                  currency={currency}
+                />
+                {cashFlow.chartData?.largestExpenseSummary != null && (
+                  <p className="mt-2 text-sm text-gray-600">{cashFlow.chartData.largestExpenseSummary as string}</p>
+                )}
+              </SectionCard>
+            </div>
+            <SectionCard title="How income and expenses are classified" className="report-section">
+              <div className="space-y-3 text-sm text-gray-600">
+                <p>{content.cashflowDefinition('grossVsNet')}</p>
+                <p>{content.cashflowDefinition('essentialVsDiscretionary')}</p>
+                <p>{content.cashflowDefinition('fixedCommitments')}</p>
+                <p>{content.cashflowDefinition('debtRepayments')}</p>
+                {Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? (
+                  <p>{content.cashflowDefinition('monthlySurplus')}</p>
+                ) : (
+                  <p>{content.cashflowDefinition('monthlyDeficit')}</p>
+                )}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Stat label="Gross income" value={fmt(cashFlow.sectionData.grossMonthlyIncome)} />
+                <Stat label="Net income" value={fmt(cashFlow.sectionData.netMonthlyIncome)} />
+                <Stat label="Essential expenses" value={fmt(cashFlow.sectionData.essentialMonthlyExpenses)} />
+                <Stat label="Discretionary expenses" value={fmt(cashFlow.sectionData.lifestyleMonthlyExpenses)} />
+                <Stat label="Debt repayments" value={fmt(cashFlow.sectionData.debtMonthlyRepayments)} />
+                <Stat label={Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? 'Surplus' : 'Deficit'} value={fmt(cashFlow.sectionData.monthlySurplus)} />
+              </div>
+            </SectionCard>
+          </>
+        )}
+        {cashFlow?.sectionStatus !== 'included' && cashFlow && (
+          <SectionCard title={cashFlow.sectionTitle} className="report-section">
+            <Unavailable text={cashFlow.limitationText} />
           </SectionCard>
         )}
+      </div>
 
+      {/* Page 4 — What you own and owe */}
+      <div className="report-page-break space-y-6">
+        <p className="report-section text-sm text-gray-600">
+          This section brings together the assets you own and the debts you owe. It helps you understand your estimated net worth,
+          how accessible your wealth is and whether a large proportion of your financial position depends on one asset, investment
+          or property market.
+        </p>
         {netWorth?.sectionStatus === 'included' && (
-          <SectionCard title="How much you own compared with what you owe" className="report-section">
-            <ReportDebtBarChart
-              // netWorth.sectionData.totalAssets is already the all-inclusive
-              // figure (property/cash/other + investments + retirement) — do
-              // not add investments/retirement again here, that would
-              // triple-count them.
-              rows={[
-                { debtType: 'Total assets', balance: Number(netWorth.sectionData.totalAssets ?? 0) },
-                { debtType: 'Total liabilities', balance: Number(netWorth.sectionData.totalLiabilities ?? 0) },
-              ]}
-              currency={currency}
-            />
-            <p className="mt-2 text-sm text-gray-600">{netWorth.chartData?.summary as string}</p>
+          <>
+            <div className="report-section grid gap-6 sm:grid-cols-2">
+              <SectionCard title="Where your wealth is held">
+                <ReportAllocationChart
+                  slices={((netWorth.sectionData.netWorthAllocation as { bucket: string; value: number }[]) ?? []).map((a) => ({ label: content.categoryLabel(a.bucket), value: a.value }))}
+                  currency={currency}
+                />
+              </SectionCard>
+              {((netWorth.sectionData.liabilityByType as { debtType: string; balance: number }[]) ?? []).length > 0 && (
+                <SectionCard title="Debt by type">
+                  <ReportDebtBarChart
+                    rows={(netWorth.sectionData.liabilityByType as { debtType: string; balance: number }[]).map((r) => ({ debtType: content.categoryLabel(r.debtType), balance: r.balance }))}
+                    currency={currency}
+                  />
+                </SectionCard>
+              )}
+            </div>
+            <SectionCard title="Net worth" className="report-section">
+              <p className="text-sm text-gray-600">{content.netWorthDefinition('netWorth')}</p>
+              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Stat label="Total assets" value={fmt(netWorth.sectionData.totalAssets)} />
+                <Stat label="— Property, cash & other" value={fmt(netWorth.sectionData.coreAssets)} />
+                <Stat label="— Investments" value={fmt(netWorth.sectionData.totalInvestments)} />
+                <Stat label="— Retirement" value={fmt(netWorth.sectionData.totalRetirement)} />
+                <Stat label="Total liabilities" value={fmt(netWorth.sectionData.totalLiabilities)} />
+                <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
+              </div>
+              <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
+              {/* Same assets-vs-liabilities comparison as the Page 2 chart,
+                  reused here as the "visual representation" companion to
+                  this section's own numeric Stat grid — anchored to the Net
+                  Worth deep-dive rather than only appearing on Page 2. */}
+              <div className="mt-4">
+                <ReportDebtBarChart
+                  rows={[
+                    { debtType: 'Total assets', balance: Number(netWorth.sectionData.totalAssets ?? 0) },
+                    { debtType: 'Total liabilities', balance: Number(netWorth.sectionData.totalLiabilities ?? 0) },
+                  ]}
+                  currency={currency}
+                />
+              </div>
+            </SectionCard>
+          </>
+        )}
+        {netWorth?.sectionStatus !== 'included' && netWorth && (
+          <SectionCard title={netWorth.sectionTitle} className="report-section">
+            <Unavailable text={netWorth.limitationText} />
           </SectionCard>
         )}
-
-        {emergencyFundChart && (
-          <SectionCard title="Emergency-fund target" className="report-section">
-            <TargetZoneBar
-              value={emergencyFundChart.months}
-              targetMin={emergencyFundChart.targetMin}
-              targetMax={emergencyFundChart.targetMax}
-              displayMax={12}
-              unit="months"
-            />
-            {emergencyFundChart.summary && <p className="mt-2 text-justify text-sm text-gray-600">{emergencyFundChart.summary}</p>}
-          </SectionCard>
-        )}
-
         {(strengths.length > 0 || attentionAreas.length > 0) && (
           <SectionCard title="Strengths and areas to review" className="report-section">
             {strengths.length > 0 && (
@@ -313,6 +422,64 @@ export function ReportPreview({
                 </div>
               </div>
             )}
+          </SectionCard>
+        )}
+      </div>
+
+      {/* Page 5 — Specific notes on assets and debts. Only rendered when
+          there's net-worth data to discuss — otherwise this would be an
+          orphan page with just an intro paragraph. */}
+      {netWorth?.sectionStatus === 'included' && (
+        <div className="report-page-break space-y-6">
+          <p className="report-section text-sm text-gray-600">
+            The following notes highlight specific aspects of your assets and debts most likely to affect financial resilience — how
+            much of your wealth is readily accessible, how concentrated it is, and how your debt is secured.
+          </p>
+          <SectionCard title="Liquid versus illiquid assets" className="report-section">
+            <p className="text-sm text-gray-600">{content.netWorthDefinition('liquidVsIlliquid')}</p>
+            {netWorth.sectionData.liquidAssetRatio != null && (
+              <p className="mt-2 text-sm text-gray-600">
+                Although your household&apos;s total assets are {fmt(netWorth.sectionData.totalAssets)}, approximately{' '}
+                {(Number(netWorth.sectionData.liquidAssetRatio) * 100).toFixed(0)}% is currently classified as readily accessible or
+                liquid.
+              </p>
+            )}
+          </SectionCard>
+          {netWorth.sectionData.propertyConcentration != null && Number(netWorth.sectionData.propertyConcentration) > 0 && (
+            <SectionCard title="Property concentration" className="report-section">
+              <p className="text-sm text-gray-600">{content.netWorthDefinition('propertyConcentration')}</p>
+              <p className="mt-2 text-sm text-gray-600">
+                Property represents approximately {(Number(netWorth.sectionData.propertyConcentration) * 100).toFixed(0)}% of your
+                recorded total assets.
+              </p>
+            </SectionCard>
+          )}
+          {Number(netWorth.sectionData.totalRetirement ?? 0) > 0 && (
+            <SectionCard title="Retirement assets" className="report-section">
+              <p className="text-sm text-gray-600">{content.netWorthDefinition('retirementAssets')}</p>
+            </SectionCard>
+          )}
+          {((netWorth.sectionData.liabilityByType as unknown[]) ?? []).length > 0 && (
+            <SectionCard title="Secured and unsecured debt" className="report-section">
+              <p className="text-sm text-gray-600">{content.netWorthDefinition('securedDebt')}</p>
+              <p className="mt-2 text-sm text-gray-600">{content.netWorthDefinition('unsecuredDebt')}</p>
+            </SectionCard>
+          )}
+        </div>
+      )}
+
+      {/* Page 6 — Emergency fund and core figures */}
+      <div className="report-page-break space-y-6">
+        {emergencyFundChart && (
+          <SectionCard title="Emergency-fund target" className="report-section">
+            <TargetZoneBar
+              value={emergencyFundChart.months}
+              targetMin={emergencyFundChart.targetMin}
+              targetMax={emergencyFundChart.targetMax}
+              displayMax={12}
+              unit="months"
+            />
+            {emergencyFundChart.summary && <p className="mt-2 text-justify text-sm text-gray-600">{emergencyFundChart.summary}</p>}
           </SectionCard>
         )}
 
@@ -363,139 +530,7 @@ export function ReportPreview({
         )}
       </div>
 
-      {/* Page 3 — Money coming in and going out */}
-      <div className="report-page-break space-y-6">
-        <p className="report-section text-sm text-gray-600">
-          This section explains how money moves through your household each month. It separates income, living costs, financial
-          commitments and one-off expenses so you can see which categories have the greatest effect on your available surplus.
-        </p>
-        {cashFlow?.sectionStatus === 'included' && (
-          <>
-            {((cashFlow.sectionData.topIncome as { name: string; monthlyAmount: number }[]) ?? []).length > 0 && (
-              <SectionCard title="Income by source" className="report-section">
-                <ReportAllocationChart
-                  slices={(cashFlow.sectionData.topIncome as { name: string; monthlyAmount: number }[]).map((e) => ({ label: e.name, value: e.monthlyAmount }))}
-                  currency={currency}
-                />
-                {cashFlow.chartData?.largestIncomeSummary != null && (
-                  <p className="mt-2 text-sm text-gray-600">{cashFlow.chartData.largestIncomeSummary as string}</p>
-                )}
-              </SectionCard>
-            )}
-            <SectionCard title="Expense categories" className="report-section">
-              <ReportAllocationChart
-                slices={((cashFlow.sectionData.topExpenses as { name: string; monthlyAmount: number }[]) ?? []).map((e) => ({ label: e.name, value: e.monthlyAmount }))}
-                currency={currency}
-              />
-              {cashFlow.chartData?.largestExpenseSummary != null && (
-                <p className="mt-2 text-sm text-gray-600">{cashFlow.chartData.largestExpenseSummary as string}</p>
-              )}
-            </SectionCard>
-            <SectionCard title="How income and expenses are classified" className="report-section">
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>{content.cashflowDefinition('grossVsNet')}</p>
-                <p>{content.cashflowDefinition('essentialVsDiscretionary')}</p>
-                <p>{content.cashflowDefinition('fixedCommitments')}</p>
-                <p>{content.cashflowDefinition('debtRepayments')}</p>
-                {Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? (
-                  <p>{content.cashflowDefinition('monthlySurplus')}</p>
-                ) : (
-                  <p>{content.cashflowDefinition('monthlyDeficit')}</p>
-                )}
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Stat label="Gross income" value={fmt(cashFlow.sectionData.grossMonthlyIncome)} />
-                <Stat label="Net income" value={fmt(cashFlow.sectionData.netMonthlyIncome)} />
-                <Stat label="Essential expenses" value={fmt(cashFlow.sectionData.essentialMonthlyExpenses)} />
-                <Stat label="Discretionary expenses" value={fmt(cashFlow.sectionData.lifestyleMonthlyExpenses)} />
-                <Stat label="Debt repayments" value={fmt(cashFlow.sectionData.debtMonthlyRepayments)} />
-                <Stat label={Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? 'Surplus' : 'Deficit'} value={fmt(cashFlow.sectionData.monthlySurplus)} />
-              </div>
-            </SectionCard>
-          </>
-        )}
-        {cashFlow?.sectionStatus !== 'included' && cashFlow && (
-          <SectionCard title={cashFlow.sectionTitle} className="report-section">
-            <Unavailable text={cashFlow.limitationText} />
-          </SectionCard>
-        )}
-      </div>
-
-      {/* Page 4 — What you own and owe */}
-      <div className="report-page-break space-y-6">
-        <p className="report-section text-sm text-gray-600">
-          This section brings together the assets you own and the debts you owe. It helps you understand your estimated net worth,
-          how accessible your wealth is and whether a large proportion of your financial position depends on one asset, investment
-          or property market.
-        </p>
-        {netWorth?.sectionStatus === 'included' && (
-          <>
-            <SectionCard title="Where your wealth is held" className="report-section">
-              <ReportAllocationChart
-                slices={((netWorth.sectionData.netWorthAllocation as { bucket: string; value: number }[]) ?? []).map((a) => ({ label: content.categoryLabel(a.bucket), value: a.value }))}
-                currency={currency}
-              />
-            </SectionCard>
-            {((netWorth.sectionData.liabilityByType as { debtType: string; balance: number }[]) ?? []).length > 0 && (
-              <SectionCard title="Debt by type" className="report-section">
-                <ReportDebtBarChart
-                  rows={(netWorth.sectionData.liabilityByType as { debtType: string; balance: number }[]).map((r) => ({ debtType: content.categoryLabel(r.debtType), balance: r.balance }))}
-                  currency={currency}
-                />
-              </SectionCard>
-            )}
-            <SectionCard title="Net worth" className="report-section">
-              <p className="text-sm text-gray-600">{content.netWorthDefinition('netWorth')}</p>
-              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Stat label="Total assets" value={fmt(netWorth.sectionData.totalAssets)} />
-                <Stat label="— Property, cash & other" value={fmt(netWorth.sectionData.coreAssets)} />
-                <Stat label="— Investments" value={fmt(netWorth.sectionData.totalInvestments)} />
-                <Stat label="— Retirement" value={fmt(netWorth.sectionData.totalRetirement)} />
-                <Stat label="Total liabilities" value={fmt(netWorth.sectionData.totalLiabilities)} />
-                <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
-              </div>
-              <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
-            </SectionCard>
-            <SectionCard title="Liquid versus illiquid assets" className="report-section">
-              <p className="text-sm text-gray-600">{content.netWorthDefinition('liquidVsIlliquid')}</p>
-              {netWorth.sectionData.liquidAssetRatio != null && (
-                <p className="mt-2 text-sm text-gray-600">
-                  Although your household&apos;s total assets are {fmt(netWorth.sectionData.totalAssets)}, approximately{' '}
-                  {(Number(netWorth.sectionData.liquidAssetRatio) * 100).toFixed(0)}% is currently classified as readily accessible or
-                  liquid.
-                </p>
-              )}
-            </SectionCard>
-            {netWorth.sectionData.propertyConcentration != null && Number(netWorth.sectionData.propertyConcentration) > 0 && (
-              <SectionCard title="Property concentration" className="report-section">
-                <p className="text-sm text-gray-600">{content.netWorthDefinition('propertyConcentration')}</p>
-                <p className="mt-2 text-sm text-gray-600">
-                  Property represents approximately {(Number(netWorth.sectionData.propertyConcentration) * 100).toFixed(0)}% of your
-                  recorded total assets.
-                </p>
-              </SectionCard>
-            )}
-            {Number(netWorth.sectionData.totalRetirement ?? 0) > 0 && (
-              <SectionCard title="Retirement assets" className="report-section">
-                <p className="text-sm text-gray-600">{content.netWorthDefinition('retirementAssets')}</p>
-              </SectionCard>
-            )}
-            {((netWorth.sectionData.liabilityByType as unknown[]) ?? []).length > 0 && (
-              <SectionCard title="Secured and unsecured debt" className="report-section">
-                <p className="text-sm text-gray-600">{content.netWorthDefinition('securedDebt')}</p>
-                <p className="mt-2 text-sm text-gray-600">{content.netWorthDefinition('unsecuredDebt')}</p>
-              </SectionCard>
-            )}
-          </>
-        )}
-        {netWorth?.sectionStatus !== 'included' && netWorth && (
-          <SectionCard title={netWorth.sectionTitle} className="report-section">
-            <Unavailable text={netWorth.limitationText} />
-          </SectionCard>
-        )}
-      </div>
-
-      {/* Page 5 — Score and financial resilience */}
+      {/* Page 7 — Score pillars */}
       <div className="report-page-break space-y-6">
         <p className="report-section text-sm text-gray-600">
           Your overall score is formed from several financial-health pillars. Each pillar measures a different part of your
@@ -508,6 +543,10 @@ export function ReportPreview({
             <PillarBars pillars={(healthScore.chartData?.pillars as PillarRow[]) ?? []} />
           </SectionCard>
         )}
+      </div>
+
+      {/* Page 8 — Resilience, Financial DNA and Goals */}
+      <div className="report-page-break space-y-6">
         {resilience?.sectionStatus === 'included' && (
           <div className="report-section grid gap-6 sm:grid-cols-2">
             <ResilienceGauge
@@ -538,15 +577,6 @@ export function ReportPreview({
             <p className="mt-1 text-justify text-xs text-gray-500">{financialDna.narrativeText}</p>
           </SectionCard>
         )}
-      </div>
-
-      {/* Page 6 — Goals and your next three actions */}
-      <div className="report-page-break space-y-6">
-        <p className="report-section text-sm text-gray-600">
-          Financial health is not measured only by today&apos;s balances. It also considers whether your current income, savings,
-          assets and commitments are supporting the goals that matter to your household. This section shows the current progress of
-          your recorded goals and the review actions with the greatest potential to improve financial resilience or goal readiness.
-        </p>
         {goals && (
           <SectionCard title={goals.sectionTitle} className="report-section">
             {((goals.sectionData.goals as { goalName: string; progressPct: number; targetDate: string | null }[]) ?? []).length > 0 ? (
@@ -605,7 +635,14 @@ export function ReportPreview({
             )}
           </SectionCard>
         )}
+      </div>
 
+      {/* Page 9 — Priority actions, goal forecasts and near-term commitments */}
+      <div className="report-page-break space-y-6">
+        <p className="report-section text-sm text-gray-600">
+          The following shows where the greatest opportunity lies to improve your financial position, the outlook for your recorded
+          goals, and commitments due in the next 90 days.
+        </p>
         {actions && (actions.sectionData.actions as unknown[])?.length > 0 && (
           <SectionCard title="Your priority actions" className="report-section">
             <div className="space-y-3">
@@ -1259,13 +1296,15 @@ export function ReportPreview({
             {dataQualityRows.some((r) => r.status === 'stale') && <p className="mt-3 text-justify text-xs text-gray-500">{content.dataQualityDefinition('stale')}</p>}
           </SectionCard>
         )}
-      </div>
 
-      {/* Final page — methodology and disclaimer. Always the last page of the
-          report, after any Premium continuation pages, rather than sitting
-          between the free and Premium content. */}
-      {methodology && (
-        <div className="report-page-break space-y-6">
+        {/* Methodology and disclaimer — combined onto the same physical page
+            as Data Quality rather than its own separate report-page-break
+            group (both are short enough to fit on one page together; forcing
+            a hard break between them just to fit compact content used to
+            cost a whole extra page for no reason). Always the last page of
+            the report, after any Premium continuation pages, rather than
+            sitting between the free and Premium content. */}
+        {methodology && (
           <SectionCard title={methodology.sectionTitle} className="report-section">
             <p className="text-xs text-gray-500">{content.dataQualityDefinition('versions')}</p>
             <p className="mt-2 text-xs text-gray-500">
@@ -1275,12 +1314,9 @@ export function ReportPreview({
               {methodology.sectionData.templateVersion as string}
             </p>
             <p className="mt-4 text-justify text-xs text-gray-500">{content.fullDisclaimer}</p>
-            <p className="mt-4 text-xs text-gray-400">
-              Report ID: {report.id} · Version {report.version_number} · Status: {report.status}
-            </p>
           </SectionCard>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

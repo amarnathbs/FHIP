@@ -85,18 +85,39 @@ export function CashFlowWaterfallChart({
       </div>
     );
   }
+  // Unlike the pie charts (which get a legend from recharts), a stacked bar
+  // chart has no built-in color key at all — nothing told the reader which
+  // segment color was income vs. expenses vs. debt vs. surplus. Same plain-
+  // HTML legend pattern as AllocationPieChart, colors matched 1:1 to the
+  // <Bar> fills below.
+  const WATERFALL_LEGEND = [
+    { label: 'Income', color: '#2563EB' },
+    { label: 'Essential & discretionary expenses', color: '#C7362F' },
+    { label: 'Debt repayments', color: '#B7791F' },
+    { label: 'Surplus', color: '#198754' },
+  ];
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={data}>
-        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatMoneyWhole(v, currency)} width={80} />
-        <Tooltip formatter={(v: number) => formatMoneyWhole(v, currency)} />
-        <Bar dataKey="Income" stackId="flow" fill="#2563EB" isAnimationActive={false} />
-        <Bar dataKey="Expenses" stackId="flow" fill="#C7362F" isAnimationActive={false} />
-        <Bar dataKey="Debt" stackId="flow" fill="#B7791F" isAnimationActive={false} />
-        <Bar dataKey="Surplus" stackId="flow" fill="#198754" isAnimationActive={false} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data}>
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatMoneyWhole(v, currency)} width={80} />
+          <Tooltip formatter={(v: number) => formatMoneyWhole(v, currency)} />
+          <Bar dataKey="Income" stackId="flow" fill="#2563EB" isAnimationActive={false} />
+          <Bar dataKey="Expenses" stackId="flow" fill="#C7362F" isAnimationActive={false} />
+          <Bar dataKey="Debt" stackId="flow" fill="#B7791F" isAnimationActive={false} />
+          <Bar dataKey="Surplus" stackId="flow" fill="#198754" isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+      <ul className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+        {WATERFALL_LEGEND.map((item) => (
+          <li key={item.label} className="flex items-center gap-1.5 text-sm">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
+            <span className="text-gray-700">{item.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
