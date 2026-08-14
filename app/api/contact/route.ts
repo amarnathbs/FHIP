@@ -14,45 +14,55 @@ const MESSAGE_MAX = 5000;
 const RECIPIENT_EMAIL = 'kingkongpark2908@gmail.com';
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== 'object') return bad('Invalid request body.');
+  // Whole handler wrapped — an uncaught exception in a Next.js Route Handler
+  // produces a bare empty-body 500 in production (error detail is masked by
+  // design), which left callers (and this route's own debugging) with no
+  // signal at all about what actually failed. Same pattern already used by
+  // app/api/reports/[id]/revise/route.ts.
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return bad('Invalid request body.');
 
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const email = typeof body.email === 'string' ? body.email.trim() : '';
-  const message = typeof body.message === 'string' ? body.message.trim() : '';
-  // Honeypot: a real visitor never sees or fills this field (hidden via CSS
-  // in the form, not just visually — see ContactForm.tsx); a bot filling
-  // every input on the page will fill it. Silently report success rather
-  // than a validation error so the bot gets no signal its submission was
-  // dropped.
-  const website = typeof body.website === 'string' ? body.website.trim() : '';
-  if (website) return ok({ submitted: true });
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    // Honeypot: a real visitor never sees or fills this field (hidden via
+    // CSS in the form, not just visually — see ContactForm.tsx); a bot
+    // filling every input on the page will fill it. Silently report success
+    // rather than a validation error so the bot gets no signal its
+    // submission was dropped.
+    const website = typeof body.website === 'string' ? body.website.trim() : '';
+    if (website) return ok({ submitted: true });
 
-  if (!name) return bad('Please enter your name.');
-  if (name.length > NAME_MAX) return bad('Name is too long.');
-  if (!email || !EMAIL_RE.test(email)) return bad('Please enter a valid email address.');
-  if (email.length > EMAIL_MAX) return bad('Email is too long.');
-  if (!message) return bad('Please enter a message.');
-  if (message.length > MESSAGE_MAX) return bad(`Message is too long (max ${MESSAGE_MAX} characters).`);
+    if (!name) return bad('Please enter your name.');
+    if (name.length > NAME_MAX) return bad('Name is too long.');
+    if (!email || !EMAIL_RE.test(email)) return bad('Please enter a valid email address.');
+    if (email.length > EMAIL_MAX) return bad('Email is too long.');
+    if (!message) return bad('Please enter a message.');
+    if (message.length > MESSAGE_MAX) return bad(`Message is too long (max ${MESSAGE_MAX} characters).`);
 
-  const admin = createAdminClient();
-  const { data: row, error: insertError } = await admin
-    .from('contact_submissions')
-    .insert({ name, email, message })
-    .select('id')
-    .single();
-  if (insertError) return bad('Could not save your message right now. Please try again shortly.', 500);
+    const admin = createAdminClient();
+    const { data: row, error: insertError } = await admin
+      .from('contact_submissions')
+      .insert({ name, email, message })
+      .select('id')
+      .single();
+    if (insertError) return bad(`Could not save your message right now: ${insertError.message}`, 500);
 
-  const emailSent = await sendContactNotification({ name, email, message }).catch(() => false);
-  if (emailSent) {
-    await admin.from('contact_submissions').update({ email_sent: true }).eq('id', row.id);
+    const emailSent = await sendContactNotification({ name, email, message }).catch(() => false);
+    if (emailSent && row) {
+      await admin.from('contact_submissions').update({ email_sent: true }).eq('id', row.id);
+    }
+
+    // The submission is durably stored either way — a Resend outage or a
+    // missing RESEND_API_KEY should not turn into a failure the visitor
+    // sees; it just means email_sent stays false for that row until someone
+    // checks contact_submissions directly.
+    return ok({ submitted: true });
+  } catch (e) {
+    console.error('Unhandled error in POST /api/contact:', e);
+    return bad(e instanceof Error ? e.message : 'Could not send your message right now.', 500);
   }
-
-  // The submission is durably stored either way — a Resend outage or a
-  // missing RESEND_API_KEY should not turn into a failure the visitor sees;
-  // it just means email_sent stays false for that row until someone checks
-  // contact_submissions directly.
-  return ok({ submitted: true });
 }
 
 async function sendContactNotification(input: { name: string; email: string; message: string }): Promise<boolean> {
