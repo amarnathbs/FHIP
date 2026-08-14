@@ -12,6 +12,23 @@ frontend:
         - npx playwright install chromium
     build:
       commands:
+        # Root cause of "env var visible in Amplify console but process.env
+        # shows undefined at runtime": per AWS's own Amplify Hosting docs
+        # ("Making environment variables accessible to server-side
+        # runtimes"), a Next.js server component/route handler has NO
+        # access to console-configured environment variables by default —
+        # only NEXT_PUBLIC_* vars get inlined automatically (at compile
+        # time, which is why those "worked" while every server-only secret
+        # silently didn't, across multiple redeploys — no redeploy fixes
+        # this, only build-script changes do). Everything else must be
+        # explicitly written into .env.production so it ships inside the
+        # deployed artifact and Next.js's own runtime env-loading picks it
+        # up. Add new server-only var names to this grep list as they're
+        # introduced (SUPABASE_SERVICE_ROLE_KEY/CRON_SECRET/APP_BASE_URL
+        # were already broken before RESEND_API_KEY/CONTACT_FROM_EMAIL
+        # surfaced the same gap for the Contact page).
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL >> .env.production
+        - env | grep -e NEXT_PUBLIC_ >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
