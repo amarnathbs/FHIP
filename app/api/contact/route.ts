@@ -13,27 +13,6 @@ const EMAIL_MAX = 320;
 const MESSAGE_MAX = 5000;
 const RECIPIENT_EMAIL = 'kingkongpark2908@gmail.com';
 
-// TEMPORARY — deployment diagnostic only, to be removed once the production
-// env-var propagation issue is resolved. Reports presence/length only, never
-// the actual secret values, so this is safe to hit publicly in the interim.
-export async function GET() {
-  const report = (v: string | undefined) => (v ? { present: true, length: v.length } : { present: false });
-  return ok({
-    NEXT_PUBLIC_SUPABASE_URL: report(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    SUPABASE_SERVICE_ROLE_KEY: report(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    RESEND_API_KEY: report(process.env.RESEND_API_KEY),
-    CONTACT_FROM_EMAIL: report(process.env.CONTACT_FROM_EMAIL),
-    // Added to check blast radius, not just this route: CRON_SECRET is the
-    // same "server-only, no NEXT_PUBLIC_ prefix" shape as the vars above,
-    // and gates app/api/reports/cron/monthly-generate — if it's equally
-    // absent at runtime, the scheduled monthly report job has likely been
-    // silently failing in production too, unrelated to the contact form.
-    CRON_SECRET: report(process.env.CRON_SECRET),
-    NODE_ENV: process.env.NODE_ENV ?? null,
-    AWS_REGION: process.env.AWS_REGION ?? null,
-  });
-}
-
 export async function POST(req: Request) {
   // Whole handler wrapped — an uncaught exception in a Next.js Route Handler
   // produces a bare empty-body 500 in production (error detail is masked by
