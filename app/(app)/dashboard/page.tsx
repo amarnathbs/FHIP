@@ -78,6 +78,13 @@ export default async function DashboardPage() {
         <section>
           <div className="relative">
             <HealthScoreGauge score={healthScore.overallScore} statusLabel={healthScore.statusLabel} statusBand={healthScore.statusBand} />
+            {healthScore.dataConfidence < 70 && (
+              <div className="mt-3 rounded-card border border-dashed bg-gray-50 p-4 text-center text-sm text-gray-600">
+                This score is provisional because important financial information is missing. Complete more of
+                your data (Income, Expenses, Assets, Liabilities, Investments, Retirement, Insurance) for a more
+                reliable result.
+              </div>
+            )}
             <Link href="/score" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
               View full breakdown →
             </Link>
