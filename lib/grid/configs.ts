@@ -11,6 +11,7 @@ export const incomeGridConfig: GridConfig = {
   valueField: 'amount',
   isFlow: true,
   frequencyField: 'frequency',
+  reviewSection: 'income',
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
     { name: 'net_amount', label: 'Net Amount', type: 'number', step: '0.01' },
@@ -30,6 +31,7 @@ export const expenseGridConfig: GridConfig = {
   valueField: 'amount',
   isFlow: true,
   frequencyField: 'frequency',
+  reviewSection: 'expenses',
   fields: [
     { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
@@ -45,6 +47,7 @@ export const assetGridConfig: GridConfig = {
   description: 'Cash, property, vehicles and other things you own.',
   nameField: 'asset_name',
   valueField: 'current_value',
+  reviewSection: 'assets',
   fields: [
     { name: 'current_value', label: 'Current Market Value', type: 'number', step: '0.01', required: true },
     { name: 'purchase_price', label: 'Purchase Price', type: 'number', step: '0.01' },
@@ -61,6 +64,7 @@ export const liabilityGridConfig: GridConfig = {
   description: 'Mortgages, loans, credit cards and anything else you owe.',
   nameField: 'liability_name',
   valueField: 'balance',
+  reviewSection: 'liabilities',
   zeroConfirmation: {
     section: 'liabilities',
     question: 'Do you currently have any debts or financial liabilities?',
@@ -94,6 +98,7 @@ export const investmentGridConfig: GridConfig = {
   description: 'Shares, funds, property and other investments outside super.',
   nameField: 'investment_name',
   valueField: 'current_value',
+  reviewSection: 'investments',
   notApplicable: { profileField: 'not_applicable_investments', label: "I don't have any investments" },
   fields: [
     { name: 'institution', label: 'Institution', type: 'text' },
@@ -124,6 +129,7 @@ export const retirementGridConfig: GridConfig = {
   description: 'Superannuation, EPF, PPF, NPS and other retirement accounts.',
   nameField: 'account_name',
   valueField: 'current_balance',
+  reviewSection: 'retirement',
   notApplicable: { profileField: 'not_applicable_retirement', label: "I don't have any retirement savings" },
   fields: [
     { name: 'current_balance', label: 'Current Balance', type: 'number', step: '0.01', required: true },
@@ -150,6 +156,7 @@ export const insuranceGridConfig: GridConfig = {
   valueField: 'premium',
   isFlow: true,
   frequencyField: 'premium_frequency',
+  reviewSection: 'insurance',
   // Phase 0C: replaces the old "this doesn't apply to me" checkbox with an
   // explicit Yes/No/Not-sure question — "no insurance" is real, scoreable
   // risk information for this category (unlike Investments/Retirement,

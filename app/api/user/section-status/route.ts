@@ -9,7 +9,10 @@ import { setSectionConfirmation } from '@/lib/services/financialSectionStatusDat
 import { ALL_SECTIONS, type FinancialSection, type ExplicitSectionConfirmation } from '@/lib/engines/financialSectionStatus';
 
 const VALID_SECTIONS = new Set<string>(ALL_SECTIONS);
-const VALID_CONFIRMATIONS = new Set<string>(['reviewed_zero', 'not_applicable']);
+// Phase 0C.1: 'reviewed_with_data' added — the positive-data-section
+// "I've added everything relevant to me" confirmation, alongside the
+// original zero/not-applicable confirmations.
+const VALID_CONFIRMATIONS = new Set<string>(['reviewed_zero', 'not_applicable', 'reviewed_with_data']);
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
@@ -37,7 +40,7 @@ export async function PUT(req: Request) {
 
   if (!section || !VALID_SECTIONS.has(section)) return bad('Invalid or missing section', 422);
   if (status !== null && (!status || !VALID_CONFIRMATIONS.has(status))) {
-    return bad('status must be "reviewed_zero", "not_applicable", or null', 422);
+    return bad('status must be "reviewed_zero", "not_applicable", "reviewed_with_data", or null', 422);
   }
 
   const supabase = await createClient();

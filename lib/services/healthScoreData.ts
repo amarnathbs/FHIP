@@ -13,6 +13,7 @@ import {
   type CheckIns,
 } from '@/lib/engines/healthScore';
 import { computeHealthScoreEligibility, type HealthScoreEligibility } from '@/lib/engines/healthScoreEligibility';
+import type { FinancialSection, FinancialSectionStatus } from '@/lib/engines/financialSectionStatus';
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -32,6 +33,14 @@ export interface HealthScorePayload extends HealthScoreResult {
   // all read this same field rather than deriving their own state, so they
   // can never disagree about which of the three a household is in.
   eligibility: HealthScoreEligibility;
+  // Phase 0C follow-up: exposing the raw per-section map (not just the
+  // rolled-up eligibility numbers) so other presentation surfaces — e.g. the
+  // dashboard's Data Quality panel and the report's data-quality table — can
+  // tell "reviewed and confirmed zero/not applicable" apart from "genuinely
+  // never reviewed" instead of falling back to raw row-presence and calling
+  // a confirmed-zero section "Missing" right next to a score that already
+  // counted it as reviewed.
+  sectionStatus: Record<FinancialSection, FinancialSectionStatus>;
 }
 
 // Builds the full HealthScoreInput without persisting anything — used by the
@@ -161,5 +170,5 @@ export async function loadHealthScore(userId: string, client?: SupabaseServerCli
 
   const history = (historyRes.data ?? []) as HealthScoreHistoryPoint[];
 
-  return { ...result, previousScore, scoreChange, history, eligibility };
+  return { ...result, previousScore, scoreChange, history, eligibility, sectionStatus: input.sectionStatus };
 }

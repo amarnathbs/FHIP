@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeDashboard, type DashboardInput, type DashboardSummary } from '@/lib/engines/dashboard';
 import { computeResilience, type ResilienceConfig, type ResilienceInput, type CommitmentRow } from '@/lib/engines/resilience';
+import { computeResilienceEligibility } from '@/lib/engines/resilienceEligibility';
 import {
   ALL_SECTIONS,
   effectiveSectionStatus,
@@ -316,5 +317,87 @@ describe('Financial Resilience scoring — synthetic personas', () => {
     const after = componentByCode(withCommitments, 'emergency_fund').currentValue.accessibleResources as number;
     expect(after).toBeLessThan(before);
     expect(after).toBeCloseTo(10000, 0);
+  });
+});
+
+// Phase 0C.1 §42 — mandatory RS-01..RS-06 Resilience presentation-state
+// tests. No new Resilience methodology is exercised here — only whether
+// computeResilienceEligibility() correctly reads the same component
+// treatments computeResilience() already produces.
+describe('Phase 0C.1 — Resilience presentation states', () => {
+  it('RS-01: insufficient data (Persona I) -> Resilience Not Yet Available', () => {
+    const result = resilienceFor({});
+    const eligibility = computeResilienceEligibility(result.components);
+    expect(eligibility.state).toBe('not_yet_available');
+    expect(eligibility.canDisplayNumericScore).toBe(false);
+    expect(eligibility.scoredComponents).toBe(0);
+  });
+
+  it('RS-02: some but not all components available -> Preliminary Resilience', () => {
+    // Income + expenses + assets gives emergency_fund, liquidity, and
+    // income_resilience real scores; debt/insurance stay missing
+    // (unconfirmed), concentration_risk has an asset base to work with too.
+    const result = resilienceFor({
+      income: [{ amount: 4000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
+      expenses: [{ expense_name: 'Essentials', amount: 2000, frequency: 'monthly', is_essential: true }],
+      assets: [{ current_value: 20000, asset_class: 'cash' }],
+    });
+    const eligibility = computeResilienceEligibility(result.components);
+    expect(eligibility.state).toBe('preliminary');
+    expect(eligibility.canDisplayNumericScore).toBe(true);
+    expect(eligibility.missingComponentLabels.length).toBeGreaterThan(0);
+  });
+
+  it('RS-03: every component resolved (data or confirmed zero) -> Full Resilience', () => {
+    // Persona A already scores every component from real data; Full just
+    // needs zero components left as missing_data.
+    const result = resilienceFor(
+      {
+        income: [
+          { amount: 6000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary', employer_name: 'Acme Corp' },
+        ],
+        expenses: [{ expense_name: 'Essentials', amount: 3000, frequency: 'monthly', is_essential: true }],
+        assets: [{ current_value: 45000, asset_class: 'cash' }],
+        investments: [
+          { current_value: 25000, cost_base: 20000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 3000, institution: 'Vanguard' },
+        ],
+      },
+      { sectionStatus: { liabilities: 'reviewed_zero', insurance: 'reviewed_zero' } }
+    );
+    const eligibility = computeResilienceEligibility(result.components);
+    expect(eligibility.state).toBe('full');
+    expect(eligibility.missingComponentLabels).toHaveLength(0);
+    expect(eligibility.canDisplayNumericScore).toBe(true);
+  });
+
+  it('RS-04: missing liabilities do not score Debt Pressure (raw methodology unaffected)', () => {
+    const result = resilienceFor({
+      income: [{ amount: 4000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
+      expenses: [{ expense_name: 'Essentials', amount: 2000, frequency: 'monthly', is_essential: true }],
+      assets: [{ current_value: 60000, asset_class: 'cash' }],
+    });
+    expect(componentByCode(result, 'debt_pressure').treatment).toBe('missing_data');
+  });
+
+  it('RS-05: confirmed zero liabilities use the existing approved scoring (raw methodology unaffected)', () => {
+    const result = resilienceFor(
+      {
+        income: [{ amount: 4000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
+        expenses: [{ expense_name: 'Essentials', amount: 2000, frequency: 'monthly', is_essential: true }],
+        assets: [{ current_value: 60000, asset_class: 'cash' }],
+      },
+      { sectionStatus: { liabilities: 'reviewed_zero' } }
+    );
+    expect(componentByCode(result, 'debt_pressure').treatment).toBe('scored');
+    expect(componentByCode(result, 'debt_pressure').rawScore).toBe(100);
+  });
+
+  it('RS-06: missing Insurance does not score Protection (raw methodology unaffected)', () => {
+    const result = resilienceFor({
+      income: [{ amount: 4000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
+      expenses: [{ expense_name: 'Essentials', amount: 2000, frequency: 'monthly', is_essential: true }],
+      assets: [{ current_value: 60000, asset_class: 'cash' }],
+    });
+    expect(componentByCode(result, 'insurance_protection').treatment).toBe('missing_data');
   });
 });

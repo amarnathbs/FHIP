@@ -9,7 +9,7 @@ import { getLatestRecommendations } from '@/lib/services/recommendationsData';
 import { loadDataFreshness } from '@/lib/services/reportSnapshotResolver';
 import { buildDataQuality } from '@/lib/engines/reportSections';
 import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
-import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
+import { ResilienceStateCard } from '@/components/resilience/ResilienceStateCard';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
 import { VitalSignsStrip } from '@/components/dashboard/VitalSignsStrip';
 import { PriorityActionsPanel } from '@/components/dashboard/PriorityActionsPanel';
@@ -58,7 +58,7 @@ export default async function DashboardPage() {
   const { payload: goalsPayload } = await computeGoalsPagePayload(user.id);
   const recommendationMatches = await getLatestRecommendations(user.id, supabase);
   const dataFreshness = await loadDataFreshness(user.id, supabase);
-  const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness });
+  const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness, healthScore });
 
   return (
       <div className="space-y-10">
@@ -126,7 +126,14 @@ export default async function DashboardPage() {
           <BlockHeading>Risks &amp; Protection</BlockHeading>
           <div className="space-y-6">
             <div className="relative">
-              <ResilienceGauge score={resilience.overallScore} statusLabel={resilience.statusLabel} statusBand={resilience.statusBand} />
+              <ResilienceStateCard
+                score={resilience.overallScore}
+                statusLabel={resilience.statusLabel}
+                statusBand={resilience.statusBand}
+                confidence={resilience.confidence}
+                eligibility={resilience.eligibility}
+                compact
+              />
               <Link href="/resilience" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
                 View full resilience breakdown →
               </Link>

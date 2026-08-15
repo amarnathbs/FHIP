@@ -1,3 +1,5 @@
+import type { FinancialSection } from '@/lib/engines/financialSectionStatus';
+
 export type GridCategory = 'income' | 'expense' | 'asset' | 'liability' | 'investment' | 'retirement' | 'insurance';
 
 export type GridFieldType = 'text' | 'number' | 'select' | 'date' | 'checkbox';
@@ -52,4 +54,14 @@ export interface GridConfig {
     // than forcing a Yes/No); Liabilities does not — see Phase 0C §12 vs §14.
     includeUnsure?: boolean;
   };
+  // Phase 0C.1: which canonical FinancialSection this grid represents.
+  // Set on every one of the 7 score-relevant grids. Drives the "I've added
+  // everything relevant to me" completion control — one row existing is
+  // 'in_progress', not 'reviewed_with_data', until the user explicitly
+  // confirms the section is complete (see effectiveSectionStatus in
+  // financialSectionStatus.ts). Liabilities/Insurance carry both this and
+  // zeroConfirmation: zeroConfirmation answers "do you have any at all",
+  // reviewSection's completion control answers "have you finished entering
+  // what you do have" once the answer is Yes.
+  reviewSection: FinancialSection;
 }

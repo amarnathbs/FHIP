@@ -4,6 +4,7 @@ import type { ReportRow } from '@/lib/services/reportsData';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
 import type { HealthScoreEligibility } from '@/lib/engines/healthScoreEligibility';
+import { DATA_QUALITY_STATUS_LABELS, type DataQualityStatus } from '@/lib/engines/reportSections';
 import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
 import {
   ReportAllocationChart,
@@ -181,7 +182,10 @@ export function ReportPreview({
   const overallConfidencePct = healthScore?.confidenceLevel ? Number(healthScore.confidenceLevel) : null;
   const confidenceTier: 'high' | 'medium' | 'low' = overallConfidencePct === null ? 'medium' : overallConfidencePct >= 80 ? 'high' : overallConfidencePct >= 50 ? 'medium' : 'low';
   const dataQualityRows = (dataQuality?.sectionData.rows as { area: string; status: string }[] | undefined) ?? [];
-  const limitingArea = dataQualityRows.find((r) => r.status !== 'complete')?.area ?? null;
+  // Confirmed-zero/not-applicable sections have been reviewed by the user —
+  // only stale or genuinely-missing sections should be named as the reason
+  // confidence isn't higher (Phase 0C follow-up; matches DataQualityPanel).
+  const limitingArea = dataQualityRows.find((r) => r.status === 'stale' || r.status === 'missing')?.area ?? null;
 
   const reportTitle = isFirstReport ? 'Household Financial Health Report — Current Baseline' : 'Household Financial Health Report — Monthly Review';
 
@@ -1307,10 +1311,10 @@ export function ReportPreview({
                 </tr>
               </thead>
               <tbody>
-                {(dataQuality.sectionData.rows as { area: string; status: string; lastUpdated: string | null; reportTreatment: string }[]).map((row, i) => (
+                {(dataQuality.sectionData.rows as { area: string; status: DataQualityStatus; lastUpdated: string | null; reportTreatment: string }[]).map((row, i) => (
                   <tr key={i} className="border-t">
                     <td className="py-1">{row.area}</td>
-                    <td className="py-1 capitalize">{row.status}</td>
+                    <td className="py-1">{DATA_QUALITY_STATUS_LABELS[row.status]}</td>
                     <td className="py-1">{row.lastUpdated ? formatDateShort(row.lastUpdated, currency) : 'Not provided'}</td>
                     <td className="py-1">{row.reportTreatment}</td>
                   </tr>

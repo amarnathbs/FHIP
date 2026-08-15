@@ -63,6 +63,7 @@ export function HealthScoreStateCard({
   }
 
   const isPreliminary = eligibility.state === 'preliminary';
+  const nextMissingSection = eligibility.missingSections[0];
 
   return (
     <div>
@@ -82,6 +83,14 @@ export function HealthScoreStateCard({
             <p className="mt-2">
               Still to review: {eligibility.missingSections.map((s) => SECTION_LABELS[s]).join(', ')}.
             </p>
+          )}
+          {nextMissingSection && (
+            <Link
+              href={SECTION_ROUTES[nextMissingSection]}
+              className="mt-3 inline-block rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              Improve my score confidence
+            </Link>
           )}
         </div>
       ) : (

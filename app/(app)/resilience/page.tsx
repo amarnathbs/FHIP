@@ -4,7 +4,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { loadResilience } from '@/lib/services/resilienceData';
-import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
+import { ResilienceStateCard } from '@/components/resilience/ResilienceStateCard';
 import { ComponentGrid } from '@/components/resilience/ComponentGrid';
 import { EmergencyFundDetail } from '@/components/resilience/EmergencyFundDetail';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
@@ -53,7 +53,13 @@ export default async function ResiliencePage() {
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-1">
-            <ResilienceGauge score={payload.overallScore} statusLabel={payload.statusLabel} statusBand={payload.statusBand} />
+            <ResilienceStateCard
+              score={payload.overallScore}
+              statusLabel={payload.statusLabel}
+              statusBand={payload.statusBand}
+              confidence={payload.confidence}
+              eligibility={payload.eligibility}
+            />
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="rounded-card border bg-white p-4">

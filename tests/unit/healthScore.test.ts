@@ -119,10 +119,18 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
 
   // --- Test Group C: income + expenses ---------------------------------------
   it('Group C: income + expenses lets Savings Behaviour and Cash Flow calculate correctly, without assuming liabilities/investments/insurance', () => {
-    const { result } = scoreFor({
-      income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
-      expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
-    });
+    // Phase 0C.1: one row is only 'in_progress' — Savings Behaviour requires
+    // Expenses to be explicitly confirmed reviewed (isReviewed), not merely
+    // present, so this test (which is about a fully-reviewed income+expenses
+    // household) confirms both explicitly. The in_progress case itself is
+    // covered separately below (CS-06/CS-09-style tests).
+    const { result } = scoreFor(
+      {
+        income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+        expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+      },
+      { sectionStatus: { income: 'reviewed_with_data', expenses: 'reviewed_with_data' } }
+    );
     expect(componentByCode(result, 'cash_flow').treatment).toBe('scored');
     expect(componentByCode(result, 'savings').treatment).toBe('scored');
     // No silent assumption about liabilities, investments, retirement, or insurance.
@@ -245,6 +253,9 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
 
   // --- Test Group K: full score -------------------------------------------------
   it('Group K: all 7 sections reviewed (data or explicit confirmation) yields a Full state with high confidence', () => {
+    // Phase 0C.1: every positive-data section needs its explicit
+    // 'reviewed_with_data' completion confirmation, not just rows — this is
+    // the corrected definition of Full (see effectiveSectionStatus).
     const { eligibility } = scoreFor(
       {
         income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
@@ -253,7 +264,17 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
         investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
         retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
       },
-      { sectionStatus: { liabilities: 'reviewed_zero', insurance: 'reviewed_zero' } }
+      {
+        sectionStatus: {
+          income: 'reviewed_with_data',
+          expenses: 'reviewed_with_data',
+          assets: 'reviewed_with_data',
+          investments: 'reviewed_with_data',
+          retirement: 'reviewed_with_data',
+          liabilities: 'reviewed_zero',
+          insurance: 'reviewed_zero',
+        },
+      }
     );
     expect(eligibility.state).toBe('full');
     expect(eligibility.missingSections).toHaveLength(0);
@@ -264,14 +285,21 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
 
   // --- Confidence tier boundaries ------------------------------------------------
   it('confidenceTierFor bands match the canonical High >=80 / Medium >=50 / Low <50 thresholds', () => {
-    // 4 of 7 sections reviewed = 57% -> medium
+    // 4 of 7 sections reviewed (explicitly confirmed, not just present) = 57% -> medium
     const { eligibility: medium } = scoreFor(
       {
         income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
         expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
         assets: [{ current_value: 25000, asset_class: 'cash' }],
       },
-      { sectionStatus: { liabilities: 'reviewed_zero' } }
+      {
+        sectionStatus: {
+          income: 'reviewed_with_data',
+          expenses: 'reviewed_with_data',
+          assets: 'reviewed_with_data',
+          liabilities: 'reviewed_zero',
+        },
+      }
     );
     expect(medium.confidencePercent).toBe(57);
     expect(medium.confidenceTier).toBe('medium');
@@ -285,9 +313,162 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
         investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
         retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
       },
-      { sectionStatus: { liabilities: 'reviewed_zero' } }
+      {
+        sectionStatus: {
+          income: 'reviewed_with_data',
+          expenses: 'reviewed_with_data',
+          assets: 'reviewed_with_data',
+          investments: 'reviewed_with_data',
+          retirement: 'reviewed_with_data',
+          liabilities: 'reviewed_zero',
+        },
+      }
     );
     expect(high.confidencePercent).toBe(86);
     expect(high.confidenceTier).toBe('high');
+  });
+});
+
+// Phase 0C.1 §41 — mandatory CS-01..CS-10 completion-semantics tests. These
+// exercise effectiveSectionStatus() and computeHealthScoreEligibility()
+// directly: one data row must never, by itself, mean a section is fully
+// reviewed.
+describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)', () => {
+  it('CS-01: no rows, no confirmation -> not_started', () => {
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: null })).toBe('not_started');
+  });
+
+  it('CS-02: rows exist, no confirmation -> in_progress (not reviewed_with_data)', () => {
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: null })).toBe('in_progress');
+  });
+
+  it('CS-03: rows exist + explicit completion confirmation -> reviewed_with_data', () => {
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: 'reviewed_with_data' })).toBe('reviewed_with_data');
+  });
+
+  it('CS-03b: a reviewed_with_data confirmation with no backing rows is stale and reverts to not_started', () => {
+    // e.g. the user confirmed the section complete, then deleted every row.
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: 'reviewed_with_data' })).toBe('not_started');
+  });
+
+  it('CS-04: explicit zero, no rows -> reviewed_zero', () => {
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: 'reviewed_zero' })).toBe('reviewed_zero');
+  });
+
+  it('CS-04b: rows appearing after a zero confirmation supersede it -> in_progress, not a contradiction', () => {
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: 'reviewed_zero' })).toBe('in_progress');
+  });
+
+  it('CS-05: not_applicable wins regardless of row presence', () => {
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: 'not_applicable' })).toBe('not_applicable');
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: 'not_applicable' })).toBe('not_applicable');
+  });
+
+  it('CS-06: Full is impossible while any relevant section is in_progress', () => {
+    const { eligibility } = scoreFor(
+      {
+        income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+        expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+        assets: [{ current_value: 25000, asset_class: 'cash' }],
+        investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
+        retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
+      },
+      {
+        sectionStatus: {
+          income: 'reviewed_with_data',
+          expenses: 'reviewed_with_data',
+          assets: 'reviewed_with_data',
+          // investments/retirement deliberately left unconfirmed — rows exist
+          // (so this isn't Test Group J's "not reviewed at all" case) but the
+          // household never clicked "I've added everything relevant to me."
+          liabilities: 'reviewed_zero',
+          insurance: 'reviewed_zero',
+        },
+      }
+    );
+    expect(eligibility.missingSections).toEqual(expect.arrayContaining(['investments', 'retirement']));
+    expect(eligibility.state).not.toBe('full');
+    expect(eligibility.state).toBe('preliminary');
+  });
+
+  it('CS-07: Preliminary is reachable while the minimum sections are merely in_progress (not yet confirmed complete)', () => {
+    // income/expenses/assets have rows but no completion confirmation, and
+    // liabilities is confirmed zero — meets the "some progress" bar for
+    // Preliminary without meeting the stricter "resolved" bar Full needs.
+    const { eligibility } = scoreFor(
+      {
+        income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+        expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+        assets: [{ current_value: 25000, asset_class: 'cash' }],
+      },
+      { sectionStatus: { liabilities: 'reviewed_zero' } }
+    );
+    expect(eligibility.state).toBe('preliminary');
+    expect(eligibility.canDisplayNumericScore).toBe(true);
+  });
+
+  it('CS-08: Full requires every relevant section resolved — swap one confirmed section back to in_progress and Full is lost', () => {
+    const base: Partial<DashboardInput> = {
+      income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+      expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+      assets: [{ current_value: 25000, asset_class: 'cash' }],
+      investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
+      retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
+    };
+    const fullyConfirmed = {
+      income: 'reviewed_with_data' as const,
+      expenses: 'reviewed_with_data' as const,
+      assets: 'reviewed_with_data' as const,
+      investments: 'reviewed_with_data' as const,
+      retirement: 'reviewed_with_data' as const,
+      liabilities: 'reviewed_zero' as const,
+      insurance: 'reviewed_zero' as const,
+    };
+    const { eligibility: full } = scoreFor(base, { sectionStatus: fullyConfirmed });
+    expect(full.state).toBe('full');
+
+    // Now withdraw the Assets confirmation (as if the user re-opened the
+    // section and it reverted to in_progress) — Full must be lost.
+    const { eligibility: notFull } = scoreFor(base, {
+      sectionStatus: { ...fullyConfirmed, assets: 'in_progress' },
+    });
+    expect(notFull.state).not.toBe('full');
+    expect(notFull.missingSections).toContain('assets');
+  });
+
+  it('CS-09: Financial Data Confidence does not equate a single row with a completed section', () => {
+    // Every core section has at least one row, but none are explicitly
+    // confirmed reviewed — confidence must not read as if the picture were
+    // complete just because data exists everywhere.
+    const { eligibility } = scoreFor({
+      income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+      expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+      assets: [{ current_value: 25000, asset_class: 'cash' }],
+      liabilities: [{ balance: 20000, interest_rate: 15, monthly_repayment: 600, debt_type: 'personal_loan', interest_rate_type: 'variable' }],
+      investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
+      retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
+      insurance: [{ policy_name: 'Test policy', cover_type: 'life', cover_amount: 100000, premium: 50, premium_frequency: 'monthly', renewal_date: null }],
+    });
+    expect(eligibility.confidencePercent).toBe(0);
+    expect(eligibility.confidenceTier).toBe('low');
+    // Rows everywhere clears the "some progress" bar for Preliminary
+    // (hasProgressed), but confidence still correctly reads 0% — a
+    // Preliminary score with 0% confidence is an honest combination:
+    // "here's an early number, but none of it has actually been confirmed
+    // reviewed yet," which is exactly the distinction this test is for.
+    expect(eligibility.state).toBe('preliminary');
+  });
+
+  it('CS-10: explicit status remains reversible — confirming then clearing returns to the row-derived state', () => {
+    // Confirmed complete...
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: 'reviewed_with_data' })).toBe('reviewed_with_data');
+    // ...then the confirmation is cleared (PUT status: null) — falls back to
+    // whatever row presence alone derives, exactly like it had never been
+    // confirmed, not stuck in some permanent state.
+    expect(effectiveSectionStatus({ hasRows: true, explicitConfirmation: null })).toBe('in_progress');
+
+    // Same for a zero confirmation.
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: 'reviewed_zero' })).toBe('reviewed_zero');
+    expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: null })).toBe('not_started');
   });
 });
