@@ -81,12 +81,18 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+type ZeroAnswer = 'yes' | 'no' | 'unsure' | null;
+
 export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subNav?: React.ReactNode }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [notApplicable, setNotApplicable] = useState(false);
+  // Phase 0C: explicit Yes/No(/Not sure) confirmation for Liabilities and
+  // Insurance — null means "not yet answered", distinct from 'yes' (which
+  // isn't itself persisted; see handleZeroAnswer below).
+  const [zeroAnswer, setZeroAnswer] = useState<ZeroAnswer>(null);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
   rowsRef.current = rows;
@@ -94,7 +100,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [masterItems, savedRecords, profile] = await Promise.all([
+      const [masterItems, savedRecords, profile, sectionStatusRows] = await Promise.all([
         fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
         fetchJson<{
@@ -103,11 +109,23 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
           not_applicable_retirement?: boolean;
           not_applicable_insurance?: boolean;
         }>('/api/user/profile').catch(() => null),
+        config.zeroConfirmation
+          ? fetchJson<{ section: string; status: string }[]>('/api/user/section-status').catch(() => [])
+          : Promise.resolve([]),
       ]);
       if (cancelled) return;
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
       if (config.notApplicable) setNotApplicable(Boolean(profile?.[config.notApplicable.profileField]));
+      if (config.zeroConfirmation) {
+        const confirmed = sectionStatusRows.find((r) => r.section === config.zeroConfirmation!.section);
+        // A "No" confirmation on record always shows as answered. Otherwise,
+        // real rows already on file imply an unspoken "Yes" — the radio
+        // reflects that rather than sitting blank above data that's clearly
+        // already there.
+        if (confirmed?.status === 'reviewed_zero') setZeroAnswer('no');
+        else if (savedRecords.length > 0) setZeroAnswer('yes');
+      }
 
       const byMasterKey = new Map(savedRecords.filter((r) => r.master_item_key).map((r) => [r.master_item_key!, r]));
       const merged = masterItems
@@ -203,6 +221,25 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [config.notApplicable.profileField]: checked }),
     }).catch(() => setNotApplicable(!checked)); // best effort; revert the toggle if the save failed
+  }
+
+  // Phase 0C: only 'no' is ever actually persisted (as a 'reviewed_zero'
+  // section-status confirmation) — 'yes' and 'unsure' both clear any
+  // standing confirmation, since real rows (for 'yes') or simply not
+  // knowing yet (for 'unsure') aren't states that need to be remembered
+  // explicitly. Reversible: switching answers always re-fires this.
+  async function handleZeroAnswer(answer: 'yes' | 'no' | 'unsure') {
+    if (!config.zeroConfirmation) return;
+    const previous = zeroAnswer;
+    setZeroAnswer(answer);
+    await fetchJson('/api/user/section-status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        section: config.zeroConfirmation.section,
+        status: answer === 'no' ? 'reviewed_zero' : null,
+      }),
+    }).catch(() => setZeroAnswer(previous)); // best effort; revert if the save failed
   }
 
   function addCustomRow() {
@@ -307,6 +344,48 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
               </span>
             </span>
           </label>
+        )}
+
+        {config.zeroConfirmation && (
+          <fieldset className="rounded-card border border-line bg-white p-3 text-sm">
+            <legend className="px-1 font-medium text-ink">{config.zeroConfirmation.question}</legend>
+            <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`zero-confirmation-${config.category}`}
+                  checked={zeroAnswer === 'yes'}
+                  onChange={() => handleZeroAnswer('yes')}
+                />
+                Yes
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`zero-confirmation-${config.category}`}
+                  checked={zeroAnswer === 'no'}
+                  onChange={() => handleZeroAnswer('no')}
+                />
+                {config.zeroConfirmation.noLabel}
+              </label>
+              {config.zeroConfirmation.includeUnsure && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`zero-confirmation-${config.category}`}
+                    checked={zeroAnswer === 'unsure'}
+                    onChange={() => handleZeroAnswer('unsure')}
+                  />
+                  Not sure / review later
+                </label>
+              )}
+            </div>
+            {zeroAnswer === 'no' && (
+              <p className="mt-2 text-xs text-muted">
+                Recorded — this counts as a confirmed answer in your Financial Health Score, not missing data.
+              </p>
+            )}
+          </fieldset>
         )}
 
         <div className="flex flex-wrap items-center gap-3">

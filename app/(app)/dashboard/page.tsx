@@ -8,7 +8,7 @@ import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import { getLatestRecommendations } from '@/lib/services/recommendationsData';
 import { loadDataFreshness } from '@/lib/services/reportSnapshotResolver';
 import { buildDataQuality } from '@/lib/engines/reportSections';
-import { HealthScoreGauge } from '@/components/score/HealthScoreGauge';
+import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
 import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
 import { VitalSignsStrip } from '@/components/dashboard/VitalSignsStrip';
@@ -77,17 +77,17 @@ export default async function DashboardPage() {
         {/* Health hero + four vital signs */}
         <section>
           <div className="relative">
-            <HealthScoreGauge score={healthScore.overallScore} statusLabel={healthScore.statusLabel} statusBand={healthScore.statusBand} />
-            {healthScore.dataConfidence < 70 && (
-              <div className="mt-3 rounded-card border border-dashed bg-gray-50 p-4 text-center text-sm text-gray-600">
-                This score is provisional because important financial information is missing. Complete more of
-                your data (Income, Expenses, Assets, Liabilities, Investments, Retirement, Insurance) for a more
-                reliable result.
-              </div>
+            <HealthScoreStateCard
+              score={healthScore.overallScore}
+              statusLabel={healthScore.statusLabel}
+              statusBand={healthScore.statusBand}
+              eligibility={healthScore.eligibility}
+            />
+            {healthScore.eligibility.canDisplayNumericScore && (
+              <Link href="/score" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
+                View full breakdown →
+              </Link>
             )}
-            <Link href="/score" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
-              View full breakdown →
-            </Link>
           </div>
           <div className="mt-6">
             <VitalSignsStrip summary={summary} />
@@ -96,7 +96,7 @@ export default async function DashboardPage() {
 
         {/* Priority actions */}
         <section>
-          <PriorityActionsPanel matches={recommendationMatches} />
+          <PriorityActionsPanel matches={recommendationMatches} healthScoreState={healthScore.eligibility.state} />
         </section>
 
         {/* Trends */}

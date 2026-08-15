@@ -63,7 +63,13 @@ export default async function ResiliencePage() {
               </p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-muted">Confidence</p>
+              {/* Phase 0C (§18): explicitly labelled "Resilience calculation
+                  confidence" rather than a bare "Confidence" — this is
+                  Resilience's own specialised measure (recency, verification
+                  history, per-category weighting), a different formula from
+                  the canonical Financial Data Confidence shown on /score, so
+                  it must not read as the same thing under the same word. */}
+              <p className="text-xs text-muted">Resilience calculation confidence</p>
               <p className="text-lg font-semibold text-ink">{payload.confidence.toFixed(0)}%</p>
             </div>
             <div className="rounded-card border bg-white p-4">

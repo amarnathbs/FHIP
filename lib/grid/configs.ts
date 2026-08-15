@@ -61,6 +61,11 @@ export const liabilityGridConfig: GridConfig = {
   description: 'Mortgages, loans, credit cards and anything else you owe.',
   nameField: 'liability_name',
   valueField: 'balance',
+  zeroConfirmation: {
+    section: 'liabilities',
+    question: 'Do you currently have any debts or financial liabilities?',
+    noLabel: 'No, I have no debts or liabilities',
+  },
   fields: [
     { name: 'lender', label: 'Lender', type: 'text' },
     { name: 'balance', label: 'Outstanding Balance', type: 'number', step: '0.01', required: true },
@@ -145,7 +150,20 @@ export const insuranceGridConfig: GridConfig = {
   valueField: 'premium',
   isFlow: true,
   frequencyField: 'premium_frequency',
-  notApplicable: { profileField: 'not_applicable_insurance', label: "I don't have any insurance" },
+  // Phase 0C: replaces the old "this doesn't apply to me" checkbox with an
+  // explicit Yes/No/Not-sure question — "no insurance" is real, scoreable
+  // risk information for this category (unlike Investments/Retirement,
+  // where genuine inapplicability is plausible), so it shouldn't be
+  // excluded from the score the way notApplicable is. Any pre-Phase-0C user
+  // who already set the old not_applicable_insurance flag keeps that
+  // confirmation (migration 0031 backfills it), the engine still honours
+  // it — this UI change only affects how new confirmations are made.
+  zeroConfirmation: {
+    section: 'insurance',
+    question: 'Do you currently hold personal insurance cover?',
+    noLabel: "No, I don't currently hold personal insurance",
+    includeUnsure: true,
+  },
   fields: [
     { name: 'provider', label: 'Provider', type: 'text' },
     { name: 'cover_amount', label: 'Cover Amount', type: 'number', step: '0.01', required: true },

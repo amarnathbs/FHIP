@@ -325,6 +325,12 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
 
 function buildHealthScore(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
   const hs = source.healthScore;
+  // Phase 0C (§24): a report must never present a Preliminary or
+  // Not-Yet-Scored result with Full-score authority. Reuses the same
+  // eligibility object Dashboard/Score already compute — never re-derives
+  // it — so a report can't disagree with what the live pages show.
+  const notYetScored = status === 'included' && hs?.eligibility.state === 'not_yet_scored';
+  const isPreliminary = status === 'included' && hs?.eligibility.state === 'preliminary';
   return {
     sectionCode: 'health_score',
     sectionTitle: SECTION_TITLES.health_score,
@@ -345,9 +351,21 @@ function buildHealthScore(source: ReportSourceData, status: SectionStatus, reaso
             riskOverrideReason: hs.riskOverrideReason,
             components: hs.components,
             recommendations: hs.recommendations,
+            // Phase 0C: the full eligibility object (not just a couple of
+            // derived fields) so the report can render the exact same
+            // Not-Yet-Scored / Preliminary / Full presentation Dashboard and
+            // /score use, via the same <HealthScoreStateCard>.
+            eligibility: hs.eligibility,
           }
         : {},
-    narrativeText: status === 'included' && hs ? scoreMovementNarrative(hs.overallScore, hs.previousScore, hs.positiveContributors.slice(0, 2)) : null,
+    narrativeText:
+      status !== 'included' || !hs
+        ? null
+        : notYetScored
+          ? "A Financial Health Score has not yet been calculated because some core financial information has not been reviewed."
+          : isPreliminary
+            ? `Preliminary Financial Health Score: ${hs.roundedScore}/100. Based on ${hs.eligibility.confidencePercent}% of the currently required financial picture.`
+            : scoreMovementNarrative(hs.overallScore, hs.previousScore, hs.positiveContributors.slice(0, 2)),
     chartData:
       status === 'included' && hs
         ? {

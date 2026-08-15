@@ -2,7 +2,8 @@ import { formatMoneyWhole } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
-import { HealthScoreGauge } from '@/components/score/HealthScoreGauge';
+import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
+import type { HealthScoreEligibility } from '@/lib/engines/healthScoreEligibility';
 import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
 import {
   ReportAllocationChart,
@@ -231,20 +232,26 @@ export function ReportPreview({
         {isFirstReport && (
           <p className="report-section text-center text-xs font-semibold uppercase tracking-wide text-trust">Current baseline</p>
         )}
-        {healthScore?.sectionStatus === 'included' && (
-          <div className="report-section grid gap-6 sm:grid-cols-2">
-            <HealthScoreGauge
-              score={healthScore.sectionData.roundedScore as number}
-              statusLabel={healthScore.sectionData.statusLabel as string}
-              statusBand={healthScore.sectionData.statusBand as string}
-              compact
-            />
-            <div className="rounded-card border bg-white p-6">
-              <p className="text-sm text-gray-600">{content.scoreGaugeExplanation}</p>
-              {healthScore.confidenceLevel && <p className="mt-3 text-xs text-gray-400">Data confidence: {healthScore.confidenceLevel}%</p>}
-            </div>
-          </div>
-        )}
+        {healthScore?.sectionStatus === 'included' &&
+          (() => {
+            const scoreEligibility = healthScore.sectionData.eligibility as HealthScoreEligibility;
+            return (
+              <div className="report-section grid gap-6 sm:grid-cols-2">
+                <HealthScoreStateCard
+                  score={healthScore.sectionData.roundedScore as number}
+                  statusLabel={healthScore.sectionData.statusLabel as string}
+                  statusBand={healthScore.sectionData.statusBand as string}
+                  eligibility={scoreEligibility}
+                  compact
+                />
+                {scoreEligibility.state !== 'not_yet_scored' && (
+                  <div className="rounded-card border bg-white p-6">
+                    <p className="text-sm text-gray-600">{content.scoreGaugeExplanation}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         {twoSentenceAssessment && (
           <SectionCard title="Overall position" className="report-section">
