@@ -79,7 +79,10 @@ export async function loadSectionStatus(
 
 // Sets (or clears) an explicit confirmation for one section. Reversible by
 // design (Phase 0C §34) — passing null deletes the row, letting the status
-// fall back to whatever hasRows alone would derive.
+// fall back to whatever hasRows alone would derive. Throws on failure
+// (rather than swallowing the error) so the API route can return a real
+// error and the client's optimistic UI update gets reverted instead of
+// silently claiming success on a write that never happened.
 export async function setSectionConfirmation(
   userId: string,
   section: FinancialSection,
@@ -88,13 +91,15 @@ export async function setSectionConfirmation(
 ): Promise<void> {
   const supabase = client ?? (await createClient());
   if (confirmation === null) {
-    await supabase.from('user_financial_section_status').delete().eq('user_id', userId).eq('section', section);
+    const { error } = await supabase.from('user_financial_section_status').delete().eq('user_id', userId).eq('section', section);
+    if (error) throw new Error(error.message);
     return;
   }
-  await supabase
+  const { error } = await supabase
     .from('user_financial_section_status')
     .upsert(
       { user_id: userId, section, status: confirmation, updated_at: new Date().toISOString() },
       { onConflict: 'user_id,section' }
     );
+  if (error) throw new Error(error.message);
 }

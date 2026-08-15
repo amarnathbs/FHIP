@@ -41,6 +41,10 @@ export async function PUT(req: Request) {
   }
 
   const supabase = await createClient();
-  await setSectionConfirmation(user.id, section as FinancialSection, status ?? null, supabase);
-  return ok({ section, status: status ?? null });
+  try {
+    await setSectionConfirmation(user.id, section as FinancialSection, status ?? null, supabase);
+    return ok({ section, status: status ?? null });
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : 'Failed to save section status', 500);
+  }
 }
