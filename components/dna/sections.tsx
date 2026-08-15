@@ -248,7 +248,7 @@ export function QuestionnairePlaceholder() {
   return (
     <LockedFeatureCard
       title="Behavioural Questionnaire"
-      description="A short optional questionnaire about your saving, spending, investment, debt and planning attitudes will improve classification confidence and surface self-perception vs. observed-behaviour insights. Kept as a placeholder for a fast-follow so it isn't forgotten."
+      description="A short optional questionnaire about your saving, spending, investment, debt and planning attitudes will improve classification confidence and surface self-perception vs. observed-behaviour insights."
     />
   );
 }

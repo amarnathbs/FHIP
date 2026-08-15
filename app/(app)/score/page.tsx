@@ -104,7 +104,7 @@ export default async function ScorePage() {
             />
             <LockedFeatureCard
               title="AI Commentary"
-              description="A plain-English summary of your results, generated from the calculated score — never calculated by AI itself. Arrives with Module 10 (AI Coach)."
+              description="A plain-English summary of your results, generated from the calculated score — never calculated by AI itself. Arrives with a future AI Coach update."
             />
           </div>
         </div>

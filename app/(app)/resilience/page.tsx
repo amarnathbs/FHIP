@@ -110,11 +110,11 @@ export default async function ResiliencePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <LockedFeatureCard
               title="Household vs Individual View"
-              description="Toggle resilience calculations between the whole household and a single member. Arrives with Module 11 (Personalization)."
+              description="Toggle resilience calculations between the whole household and a single member. Arrives with a future settings update."
             />
             <LockedFeatureCard
               title="Resilience Questionnaire"
-              description="A short optional questionnaire about your financial safety-net attitudes and history, to sharpen confidence further. Kept as a placeholder for a fast-follow so it isn't forgotten."
+              description="A short optional questionnaire about your financial safety-net attitudes and history, to sharpen confidence further."
             />
           </div>
         </div>

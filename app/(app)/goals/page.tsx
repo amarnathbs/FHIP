@@ -73,7 +73,7 @@ export default async function GoalsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <LockedFeatureCard
               title="Goal Dependencies"
-              description="Sequence goals so one starts only once another is funded (e.g. build the emergency reserve before increasing travel funding). Kept as a placeholder for a fast-follow so it isn't forgotten."
+              description="Sequence goals so one starts only once another is funded (e.g. build the emergency reserve before increasing travel funding)."
             />
             <LockedFeatureCard
               title="Reminders & Notifications"

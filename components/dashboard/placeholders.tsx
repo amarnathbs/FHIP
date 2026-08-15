@@ -9,11 +9,11 @@ export function FutureModulesSection() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <LockedFeatureCard
         title="AI Financial Insights"
-        description="Automatically generated observations, warnings, and opportunities based on your data. Arrives with Module 10 (AI Coach)."
+        description="Automatically generated observations, warnings, and opportunities based on your data. Arrives with a future AI Coach update."
       />
       <LockedFeatureCard
         title="Action Centre"
-        description="Prioritised, ranked recommendations with estimated benefit and one-click actions. Arrives with Module 10 (AI Coach)."
+        description="Prioritised, ranked recommendations with estimated benefit and one-click actions. Arrives with a future AI Coach update."
       />
       <LockedFeatureCard
         title="Full Household Forecast"
@@ -21,7 +21,7 @@ export function FutureModulesSection() {
       />
       <LockedFeatureCard
         title="Personalisation"
-        description="Reorder widgets, pin favourites, hide sections, and switch between monthly/quarterly/annual or household/individual views. Arrives with Module 11 (Settings)."
+        description="Reorder widgets, pin favourites, hide sections, and switch between monthly/quarterly/annual or household/individual views. Arrives with a future settings update."
       />
     </div>
   );

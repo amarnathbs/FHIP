@@ -158,7 +158,7 @@ export function CashFlowSection({ summary }: { summary: DashboardSummary }) {
         )}
       </div>
       <p className="mt-4 text-xs text-gray-400">
-        Seasonality, income stability, and AI-generated cash flow insights arrive with Module 10 (AI Coach).
+        Seasonality, income stability, and AI-generated cash flow insights arrive with a future AI Coach update.
       </p>
     </SectionCard>
   );
