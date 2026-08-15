@@ -227,13 +227,24 @@ describe('Phase 0C — Financial Health Score eligibility and missing-data integ
 
   // --- Test Group J: preliminary score ----------------------------------------
   it('Group J: minimum core sections reviewed (income, expenses, assets, liabilities) yields a Preliminary state', () => {
+    // Phase 0C.2 §8-9: Preliminary now requires these four to be fully
+    // RESOLVED (isReviewed), not merely present — so income/expenses/assets
+    // need their explicit "I've added everything relevant to me"
+    // confirmation, alongside liabilities' explicit zero.
     const { eligibility } = scoreFor(
       {
         income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
         expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
         assets: [{ current_value: 25000, asset_class: 'cash' }],
       },
-      { sectionStatus: { liabilities: 'reviewed_zero' } }
+      {
+        sectionStatus: {
+          income: 'reviewed_with_data',
+          expenses: 'reviewed_with_data',
+          assets: 'reviewed_with_data',
+          liabilities: 'reviewed_zero',
+        },
+      }
     );
     expect(eligibility.state).toBe('preliminary');
     expect(eligibility.canDisplayNumericScore).toBe(true);
@@ -391,10 +402,12 @@ describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)'
     expect(eligibility.state).toBe('preliminary');
   });
 
-  it('CS-07: Preliminary is reachable while the minimum sections are merely in_progress (not yet confirmed complete)', () => {
-    // income/expenses/assets have rows but no completion confirmation, and
-    // liabilities is confirmed zero — meets the "some progress" bar for
-    // Preliminary without meeting the stricter "resolved" bar Full needs.
+  it('CS-07: Preliminary is NOT reachable while the minimum sections are merely in_progress (Phase 0C.2 correction)', () => {
+    // income/expenses/assets have rows but no completion confirmation.
+    // Phase 0C.1 treated "some progress" as enough for Preliminary; Phase
+    // 0C.2 tightens this — a numeric score must not appear when the four
+    // core sections aren't actually confirmed reviewed, even if liabilities
+    // itself is confirmed zero (see EL-01..EL-04 for the per-section cases).
     const { eligibility } = scoreFor(
       {
         income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
@@ -403,8 +416,8 @@ describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)'
       },
       { sectionStatus: { liabilities: 'reviewed_zero' } }
     );
-    expect(eligibility.state).toBe('preliminary');
-    expect(eligibility.canDisplayNumericScore).toBe(true);
+    expect(eligibility.state).toBe('not_yet_scored');
+    expect(eligibility.canDisplayNumericScore).toBe(false);
   });
 
   it('CS-08: Full requires every relevant section resolved — swap one confirmed section back to in_progress and Full is lost', () => {
@@ -439,7 +452,10 @@ describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)'
   it('CS-09: Financial Data Confidence does not equate a single row with a completed section', () => {
     // Every core section has at least one row, but none are explicitly
     // confirmed reviewed — confidence must not read as if the picture were
-    // complete just because data exists everywhere.
+    // complete just because data exists everywhere. Phase 0C.2: this now
+    // also means no numeric score at all, since the 4 minimum sections
+    // aren't resolved — see EL-08 (0% confidence must never pair with a
+    // displayed score).
     const { eligibility } = scoreFor({
       income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
       expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
@@ -451,12 +467,8 @@ describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)'
     });
     expect(eligibility.confidencePercent).toBe(0);
     expect(eligibility.confidenceTier).toBe('low');
-    // Rows everywhere clears the "some progress" bar for Preliminary
-    // (hasProgressed), but confidence still correctly reads 0% — a
-    // Preliminary score with 0% confidence is an honest combination:
-    // "here's an early number, but none of it has actually been confirmed
-    // reviewed yet," which is exactly the distinction this test is for.
-    expect(eligibility.state).toBe('preliminary');
+    expect(eligibility.state).toBe('not_yet_scored');
+    expect(eligibility.canDisplayNumericScore).toBe(false);
   });
 
   it('CS-10: explicit status remains reversible — confirming then clearing returns to the row-derived state', () => {
@@ -470,5 +482,111 @@ describe('Phase 0C.1 — completion semantics (row-exists vs. section-reviewed)'
     // Same for a zero confirmation.
     expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: 'reviewed_zero' })).toBe('reviewed_zero');
     expect(effectiveSectionStatus({ hasRows: false, explicitConfirmation: null })).toBe('not_started');
+  });
+});
+
+// Phase 0C.2 §13 — mandatory EL-01..EL-08 tests proving the tightened
+// Preliminary rule: the four core sections (Income, Expenses, Assets,
+// Liabilities) must be fully RESOLVED, not merely in_progress, before any
+// numeric score — including Preliminary — is shown.
+describe('Phase 0C.2 — tightened Preliminary eligibility (core sections must be resolved, not merely in_progress)', () => {
+  // Baseline: all 4 core sections resolved, Investments/Retirement/Insurance
+  // untouched — every EL-0x case starts here and knocks exactly one of the
+  // 4 core sections back to 'in_progress' (or, for EL-07, all of them).
+  const RESOLVED_ROWS: Partial<DashboardInput> = {
+    income: [{ amount: 95000, net_amount: 72000, frequency: 'annually', master_item_key: 'employment_salary' }],
+    expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: false }],
+    assets: [{ current_value: 25000, asset_class: 'cash' }],
+  };
+  const RESOLVED_STATUS = {
+    income: 'reviewed_with_data' as const,
+    expenses: 'reviewed_with_data' as const,
+    assets: 'reviewed_with_data' as const,
+    liabilities: 'reviewed_zero' as const,
+  };
+
+  it('EL-01: Income in_progress, Expenses/Assets/Liabilities resolved -> Not Yet Scored', () => {
+    const { eligibility } = scoreFor(RESOLVED_ROWS, { sectionStatus: { ...RESOLVED_STATUS, income: 'in_progress' } });
+    expect(eligibility.state).toBe('not_yet_scored');
+    expect(eligibility.canDisplayNumericScore).toBe(false);
+  });
+
+  it('EL-02: Expenses in_progress -> Not Yet Scored', () => {
+    const { eligibility } = scoreFor(RESOLVED_ROWS, { sectionStatus: { ...RESOLVED_STATUS, expenses: 'in_progress' } });
+    expect(eligibility.state).toBe('not_yet_scored');
+  });
+
+  it('EL-03: Assets in_progress -> Not Yet Scored', () => {
+    const { eligibility } = scoreFor(RESOLVED_ROWS, { sectionStatus: { ...RESOLVED_STATUS, assets: 'in_progress' } });
+    expect(eligibility.state).toBe('not_yet_scored');
+  });
+
+  it('EL-04: Liabilities in_progress -> Not Yet Scored', () => {
+    const { eligibility } = scoreFor(RESOLVED_ROWS, { sectionStatus: { ...RESOLVED_STATUS, liabilities: 'in_progress' } });
+    expect(eligibility.state).toBe('not_yet_scored');
+  });
+
+  it('EL-05: Income + Expenses + Assets + Liabilities all resolved, Investments/Retirement/Insurance unresolved -> Preliminary', () => {
+    const { eligibility } = scoreFor(RESOLVED_ROWS, { sectionStatus: RESOLVED_STATUS });
+    expect(eligibility.state).toBe('preliminary');
+    expect(eligibility.canDisplayNumericScore).toBe(true);
+    expect(eligibility.missingSections).toEqual(expect.arrayContaining(['investments', 'retirement', 'insurance']));
+  });
+
+  it('EL-06: all seven resolved -> Full', () => {
+    const { eligibility } = scoreFor(
+      {
+        ...RESOLVED_ROWS,
+        investments: [{ current_value: 10000, cost_base: 8000, investment_type: 'etfs', country_code: 'AU', annual_contribution: 0, institution: 'Vanguard' }],
+        retirement: [{ current_balance: 50000, employer_contribution: 500, personal_contribution: 0, contribution_frequency: 'monthly', country_code: 'AU' }],
+      },
+      {
+        sectionStatus: {
+          ...RESOLVED_STATUS,
+          investments: 'reviewed_with_data',
+          retirement: 'reviewed_with_data',
+          insurance: 'reviewed_zero',
+        },
+      }
+    );
+    expect(eligibility.state).toBe('full');
+    expect(eligibility.missingSections).toHaveLength(0);
+  });
+
+  it('EL-07: core sections contain rows but no explicit completion confirmations -> Not Yet Scored', () => {
+    // The exact scenario that motivated this tightening (Phase 0C.2 §8):
+    // rows in all 4 minimum sections, zero explicit confirmations. Under
+    // Phase 0C.1 this reached Preliminary at 0% confidence; it must not
+    // anymore.
+    const { eligibility } = scoreFor(RESOLVED_ROWS);
+    expect(eligibility.state).toBe('not_yet_scored');
+    expect(eligibility.canDisplayNumericScore).toBe(false);
+  });
+
+  it('EL-08: a user cannot receive a numeric score at 0% Financial Data Confidence', () => {
+    // General property, not just the EL-07 instance: for every one of the
+    // EL-01..EL-04/EL-07 cases above, confidencePercent is 0 and
+    // canDisplayNumericScore is false together — never a numeric score
+    // paired with 0% confidence.
+    const cases = [
+      { income: 'in_progress' as const },
+      { expenses: 'in_progress' as const },
+      { assets: 'in_progress' as const },
+      { liabilities: 'in_progress' as const },
+      {},
+    ];
+    for (const override of cases) {
+      const { eligibility } = scoreFor(RESOLVED_ROWS, {
+        sectionStatus: override === cases[4] ? {} : { ...RESOLVED_STATUS, ...override },
+      });
+      if (!eligibility.canDisplayNumericScore) {
+        expect(eligibility.confidencePercent).toBeLessThan(100);
+      }
+      // The specific property under test: 0% confidence never coincides
+      // with a displayable numeric score.
+      if (eligibility.confidencePercent === 0) {
+        expect(eligibility.canDisplayNumericScore).toBe(false);
+      }
+    }
   });
 });

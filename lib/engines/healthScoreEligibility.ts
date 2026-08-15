@@ -8,7 +8,6 @@
 // diverge from what each page actually has on hand.
 import {
   isReviewed,
-  hasProgressed,
   SECTION_LABELS,
   type FinancialSection,
   type FinancialSectionStatus,
@@ -50,19 +49,23 @@ export const CORE_SCORE_SECTIONS: FinancialSection[] = [
   'insurance',
 ];
 
-// The minimum that must have SOME progress before ANY numeric score is
-// shown. Income + Expenses alone would let a purely cash-flow-driven number
-// stand in for a "financial health" verdict, so — per the Phase 0C decision
-// to use the more conservative reading where the brief left this open —
-// both sides of the balance sheet (Assets AND Liabilities) are required
-// too, not just one.
+// The four core sections that must be fully RESOLVED (isReviewed — not
+// merely 'in_progress') before any numeric score is shown. Income +
+// Expenses alone would let a purely cash-flow-driven number stand in for a
+// "financial health" verdict, so both sides of the balance sheet (Assets
+// AND Liabilities) are required too, not just one.
 //
-// Phase 0C.1 §21: this is deliberately the *progressed* threshold
-// (hasProgressed — some data or confirmation exists), not the stricter
-// *reviewed* threshold Full uses. Preliminary is meant to be reachable
-// while a section is still 'in_progress'; requiring full review here would
-// make Preliminary almost as hard to reach as Full and defeat its purpose
-// as an early, honestly-labelled estimate.
+// Phase 0C.2 §8-9 correction: Phase 0C.1 used the looser *progressed*
+// threshold here (hasProgressed — rows exist, even unconfirmed), which let
+// a household with real data in all four sections but zero explicit
+// completion confirmations reach Preliminary at 0% Financial Data
+// Confidence — a numeric score with no confirmed basis. That's now
+// tightened: these four must be isReviewed (reviewed_with_data, or
+// reviewed_zero for Liabilities specifically — Income/Expenses/Assets have
+// no zero/not-applicable path in the UI, so isReviewed() only admits
+// reviewed_with_data for those three; no per-section special-casing is
+// needed here as a result). Investments/Retirement/Insurance remain
+// unrequired for Preliminary — see CORE_SCORE_SECTIONS vs this list.
 export const MINIMUM_FOR_PRELIMINARY: FinancialSection[] = ['income', 'expenses', 'assets', 'liabilities'];
 
 export function confidenceTierFor(confidencePercent: number): ConfidenceTier {
@@ -85,12 +88,12 @@ export function computeHealthScoreEligibility(
     CORE_SCORE_SECTIONS.length > 0 ? Math.round((reviewedSections.length / CORE_SCORE_SECTIONS.length) * 100) : 100;
   const confidenceTier = confidenceTierFor(confidencePercent);
 
-  // Preliminary only needs *progress* on the minimum sections (rows exist,
-  // even if not yet confirmed complete) — see MINIMUM_FOR_PRELIMINARY.
-  // Full needs every relevant section fully *resolved* (isReviewed):
-  // reviewed_with_data, reviewed_zero, or not_applicable. A section that's
-  // merely 'in_progress' blocks Full but not Preliminary (Phase 0C.1 §21).
-  const meetsMinimum = MINIMUM_FOR_PRELIMINARY.every((s) => hasProgressed(sectionStatus[s]));
+  // Phase 0C.2: Preliminary now requires the four minimum sections to be
+  // fully RESOLVED (isReviewed), not merely progressed — see
+  // MINIMUM_FOR_PRELIMINARY's comment. A section that's merely
+  // 'in_progress' blocks both Preliminary and Full now; only
+  // Investments/Retirement/Insurance may remain unresolved for Preliminary.
+  const meetsMinimum = MINIMUM_FOR_PRELIMINARY.every((s) => isReviewed(sectionStatus[s]));
   const isComplete = missingSections.length === 0;
 
   const state: HealthScoreState = isComplete ? 'full' : meetsMinimum ? 'preliminary' : 'not_yet_scored';
