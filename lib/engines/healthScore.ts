@@ -1,6 +1,7 @@
 import type { DashboardSummary } from './dashboard';
 import { clamp, scoreFromBrackets, bandFor, type ScoreBand } from './scoring';
 import type { ResilienceResult } from './resilience';
+import { isReviewed, type FinancialSection, type FinancialSectionStatus } from './financialSectionStatus';
 
 export const MODEL_VERSION = 'fhs-2.0.0';
 
@@ -60,17 +61,13 @@ export interface HealthScoreInput {
   // Module 6's config/data couldn't be loaded.
   resilienceResult: ResilienceResult | null;
   config: HealthScoreConfig;
-  // User-set "not applicable to me" opt-outs (migration 0029) — lets these
-  // three components be excluded from both scoring and the dataConfidence
-  // denominator instead of counting as missing data. Scoped to the three
-  // categories where genuine inapplicability is plausible; cash flow,
-  // savings, debt, and net worth are derived from income/expenses/assets/
-  // liabilities, which aren't optional for any household.
-  notApplicable: {
-    investments: boolean;
-    retirement: boolean;
-    insurance: boolean;
-  };
+  // Phase 0C: canonical per-section review status (real data / explicitly
+  // confirmed zero / explicitly not-applicable / not yet reviewed) for all
+  // 7 sections the score draws on. Replaces the old hasEngaged() heuristic
+  // and the narrower 3-flag notApplicable object — see
+  // lib/engines/financialSectionStatus.ts for the full state model and why
+  // "no rows" must never be silently read as "confirmed zero."
+  sectionStatus: Record<FinancialSection, FinancialSectionStatus>;
 }
 
 export interface Recommendation {
@@ -133,12 +130,6 @@ function notApplicableComponent(code: ComponentCode, label: string, weight: numb
   };
 }
 
-// Whether the user has genuinely engaged with data entry, used to decide
-// whether an empty register means "confirmed zero" or "not entered yet".
-function hasEngaged(d: DashboardSummary): boolean {
-  return d.hasIncome && d.hasExpenses && (d.hasAssets || d.hasLiabilities || d.hasInvestments);
-}
-
 // ---------------------------------------------------------------------------
 // 1. Cash Flow Health
 // ---------------------------------------------------------------------------
@@ -194,6 +185,14 @@ function scoreSavings(input: HealthScoreInput, bands: ScoreBand[]): ComponentRes
   const weight = input.config.componentWeights.savings;
   if (!d.hasIncome) {
     return missingComponent('savings', 'Savings Behaviour', weight, 'Add income to calculate this.');
+  }
+  // Phase 0C fix (UX-003): expenses must be reviewed — real rows, or an
+  // explicit "I have no expenses" confirmation — before a savings rate can
+  // be calculated. Previously this only checked hasIncome, so zero expense
+  // rows silently became "$0 expenses" inside monthlySurplus, producing a
+  // false 100% savings rate rather than an honest "not enough information."
+  if (!isReviewed(input.sectionStatus.expenses)) {
+    return missingComponent('savings', 'Savings Behaviour', weight, 'Add expenses to calculate this.');
   }
   const income = d.netMonthlyIncome || d.grossMonthlyIncome;
   const cashSavingsRate = income > 0 ? Math.max(d.monthlySurplus, 0) / income : 0;
@@ -311,10 +310,13 @@ function scoreEmergencyFund(input: HealthScoreInput, bands: ScoreBand[]): Compon
 function scoreDebt(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.debt;
-  const engaged = hasEngaged(d);
   if (!d.hasLiabilities) {
-    if (engaged) {
-      // Confirmed zero debt — genuinely excellent for this component.
+    // Phase 0C fix (UX-005): only an EXPLICIT "I have no liabilities"
+    // confirmation may score this as a confirmed zero — no longer inferred
+    // from the old hasEngaged() heuristic (income+expenses+something else
+    // on file), which could silently reach 100/100 without the user ever
+    // having been asked about their liabilities specifically.
+    if (input.sectionStatus.liabilities === 'reviewed_zero') {
       return {
         code: 'debt',
         label: 'Debt Health',
@@ -324,7 +326,7 @@ function scoreDebt(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult
         statusBand: bandFor(100, bands).band,
         dataCompleteness: 100,
         treatment: 'scored',
-        explanation: 'No liabilities recorded — no debt-servicing burden.',
+        explanation: 'No debts reported — confirmed by you.',
         currentValue: { totalDebt: 0, debtServiceRatio: 0 },
         benchmarkValue: {},
       };
@@ -407,7 +409,7 @@ function scoreNetWorth(input: HealthScoreInput, bands: ScoreBand[]): ComponentRe
 function scoreInvestment(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.investment;
-  if (input.notApplicable.investments) {
+  if (input.sectionStatus.investments === 'not_applicable') {
     return notApplicableComponent('investment', 'Investment Health', weight);
   }
   if (!d.hasInvestments) {
@@ -442,7 +444,7 @@ function scoreInvestment(input: HealthScoreInput, bands: ScoreBand[]): Component
 function scoreRetirement(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.retirement;
-  if (input.notApplicable.retirement) {
+  if (input.sectionStatus.retirement === 'not_applicable') {
     return notApplicableComponent('retirement', 'Retirement Readiness', weight);
   }
   if (!d.hasRetirement) {
@@ -505,12 +507,17 @@ function scoreRetirement(input: HealthScoreInput, bands: ScoreBand[]): Component
 function scoreInsurance(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.insurance;
-  if (input.notApplicable.insurance) {
+  if (input.sectionStatus.insurance === 'not_applicable') {
     return notApplicableComponent('insurance', 'Insurance & Protection', weight);
   }
-  const engaged = hasEngaged(d);
   if (!d.hasInsurance) {
-    if (engaged && input.dependantsCount === 0) {
+    // Phase 0C fix (UX-006): the fixed 60/100 default now only applies once
+    // the user has EXPLICITLY confirmed "I don't currently hold personal
+    // insurance" (sectionStatus === 'reviewed_zero'). Previously this fired
+    // off the same hasEngaged() heuristic as Debt Health, so a household
+    // that simply hadn't visited the Insurance page yet could still receive
+    // a scored — not missing — Protection result.
+    if (input.sectionStatus.insurance === 'reviewed_zero' && input.dependantsCount === 0) {
       return {
         code: 'insurance',
         label: 'Insurance & Protection',
@@ -520,7 +527,7 @@ function scoreInsurance(input: HealthScoreInput, bands: ScoreBand[]): ComponentR
         statusBand: bandFor(60, bands).band,
         dataCompleteness: 100,
         treatment: 'scored',
-        explanation: 'No insurance recorded. With no dependants this may be lower risk, but income protection is still worth reviewing.',
+        explanation: 'No insurance held — confirmed by you. With no dependants this may be lower risk, but income protection is still worth reviewing.',
         currentValue: { totalCover: 0 },
         benchmarkValue: {},
       };

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadSectionStatus } from '@/lib/services/financialSectionStatusData';
 import {
   computeResilience,
   MODEL_VERSION,
@@ -58,6 +59,7 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
   ]);
 
   const dashboard = await loadDashboard(userId, supabase);
+  const sectionStatus = await loadSectionStatus(userId, dashboard, supabase);
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
   const isCurrentSnapshotRecent = snapshotRes.data?.snapshot_month === monthStart();
@@ -70,6 +72,7 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
     isCurrentSnapshotRecent,
     hasPriorMonthHistory: Boolean(priorScoreRes.data),
     config: configRes.data?.config as ResilienceConfig,
+    sectionStatus,
   };
 }
 

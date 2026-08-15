@@ -1,6 +1,7 @@
 import type { DashboardSummary } from './dashboard';
 import { computeInsuranceAdequacy } from './dashboard';
 import { clamp, scoreFromBrackets, bandFor, type ScoreBand } from './scoring';
+import { type FinancialSection, type FinancialSectionStatus } from './financialSectionStatus';
 
 export const MODEL_VERSION = 'resilience-1.0.0';
 
@@ -62,6 +63,11 @@ export interface ResilienceInput {
   isCurrentSnapshotRecent: boolean; // most recent financial_snapshots row is this calendar month
   hasPriorMonthHistory: boolean; // at least one earlier resilience_scores row exists
   config: ResilienceConfig;
+  // Phase 0C: same canonical per-section status Health Score uses (see
+  // lib/engines/financialSectionStatus.ts) — applies the same missing-data
+  // integrity principle here: an unconfirmed absence of liabilities/
+  // insurance must not be silently scored as a confirmed zero.
+  sectionStatus: Record<FinancialSection, FinancialSectionStatus>;
 }
 
 export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -295,9 +301,11 @@ function scoreIncomeResilience(input: ResilienceInput, bands: ScoreBand[]): Resi
 function scoreInsuranceProtection(input: ResilienceInput, bands: ScoreBand[]): ResilienceComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.insurance_protection;
-  const engaged = d.hasIncome && d.hasExpenses;
   if (!d.hasInsurance) {
-    if (input.dependantsCount === 0 && engaged) {
+    // Phase 0C fix: same principle as healthScore.ts's Insurance component
+    // — only an explicit "reviewed_zero" confirmation may be scored here,
+    // never an inferred engagement heuristic.
+    if (input.dependantsCount === 0 && input.sectionStatus.insurance === 'reviewed_zero') {
       const raw = 55;
       return {
         code: 'insurance_protection',
@@ -308,7 +316,7 @@ function scoreInsuranceProtection(input: ResilienceInput, bands: ScoreBand[]): R
         statusBand: bandFor(raw, bands).band,
         dataCompleteness: 100,
         treatment: 'scored',
-        explanation: 'No insurance recorded. With no dependants this is lower risk, but income protection is still worth reviewing.',
+        explanation: 'No insurance held — confirmed by you. With no dependants this is lower risk, but income protection is still worth reviewing.',
         currentValue: { totalCover: 0 },
         benchmarkValue: {},
       };
@@ -358,9 +366,11 @@ function scoreInsuranceProtection(input: ResilienceInput, bands: ScoreBand[]): R
 function scoreDebtPressure(input: ResilienceInput, bands: ScoreBand[]): ResilienceComponentResult {
   const d = input.dashboard;
   const weight = input.config.componentWeights.debt_pressure;
-  const engaged = d.hasIncome && d.hasExpenses;
   if (!d.hasLiabilities) {
-    if (engaged) {
+    // Phase 0C fix: same principle as healthScore.ts's Debt Health — only
+    // an explicit "reviewed_zero" confirmation may be scored as a
+    // confirmed-zero debt position.
+    if (input.sectionStatus.liabilities === 'reviewed_zero') {
       const raw = 100;
       return {
         code: 'debt_pressure',
@@ -371,7 +381,7 @@ function scoreDebtPressure(input: ResilienceInput, bands: ScoreBand[]): Resilien
         statusBand: bandFor(raw, bands).band,
         dataCompleteness: 100,
         treatment: 'scored',
-        explanation: 'No liabilities recorded — no debt-servicing pressure.',
+        explanation: 'No debts reported — confirmed by you.',
         currentValue: { totalDebt: 0 },
         benchmarkValue: {},
       };
