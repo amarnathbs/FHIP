@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadDashboard, getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadHealthScore, type HealthScorePayload } from '@/lib/services/healthScoreData';
 import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienceData';
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
@@ -30,6 +30,7 @@ export interface PremiumInvestmentRow {
   cost_base: number | null;
   investment_type: string;
   country_code: string;
+  currency_code: string | null;
   annual_contribution: number | null;
   institution: string | null;
 }
@@ -90,6 +91,16 @@ export interface PremiumSourceData {
   expenseItems: PremiumExpenseRow[];
   forecastReportData: ForecastReportData | null;
   goalsOnTrackHistory: GoalsOnTrackHistoryPoint[];
+  // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding — Investment
+  // Analysis (reportSectionsPremium.ts's buildInvestmentAnalysis) used to sum
+  // each investment's current_value regardless of currency_code, badly
+  // overstating totals for cross-border households (e.g. an INR 900,000
+  // holding counted as AUD 900,000). Same fx_rate_aud_inr assumption
+  // dashboard.ts's canonical totalInvestments already uses, threaded through
+  // here so the Premium report's own investment totals can never again
+  // drift from the correctly-converted canonical figure shown elsewhere in
+  // the same report.
+  fxRateAudInr: number;
 }
 
 export interface ReportSourceData {
@@ -226,10 +237,11 @@ export async function resolveReportSourceData(
       expensesRes,
       forecastReportData,
       goalSnapshotsRes,
+      fxRateAudInr,
     ] = await Promise.all([
       supabase
         .from('investments')
-        .select('id, investment_name, current_value, cost_base, investment_type, country_code, annual_contribution, institution')
+        .select('id, investment_name, current_value, cost_base, investment_type, country_code, currency_code, annual_contribution, institution')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase
@@ -259,6 +271,7 @@ export async function resolveReportSourceData(
         .eq('user_id', userId)
         .order('snapshot_month', { ascending: true })
         .limit(400),
+      getFxRateAudInr(supabase),
     ]);
 
     const historyByMonth = new Map<string, { onTrackCount: number; activeCount: number }>();
@@ -282,6 +295,7 @@ export async function resolveReportSourceData(
       expenseItems: (expensesRes.data as PremiumExpenseRow[]) ?? [],
       forecastReportData,
       goalsOnTrackHistory,
+      fxRateAudInr,
     };
   }
 

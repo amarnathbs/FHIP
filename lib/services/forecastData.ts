@@ -16,6 +16,7 @@ import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
 import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
+import { convertToReportingCurrency } from '@/lib/engines/fx';
 import { computeAllocatedMonthlyContribution, type AllocatedContributionInvestment, type AllocatedContributionRetirementAccount } from '@/lib/services/goalFundingAllocation';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -478,7 +479,24 @@ async function buildCalculatorInput(
     ]);
     if (accountsResult.error) throw new Error(accountsResult.error.message);
     const accounts = accountsResult.data ?? [];
-    const currentBalance = accounts.reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+    // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding: this used
+    // to sum each account's current_balance/contributions raw, regardless of
+    // currency_code, then labelled the sum with whichever account happened
+    // to be first in the array — a cross-border household with e.g. 216,600
+    // AUD + 1,100,000 INR + 30,000 AUD retirement accounts got "1,346,600"
+    // stamped AUD, overstating the true ~265,566 AUD position by over 1M.
+    // Convert every account to the forecast's reporting currency (same
+    // helper + same fx_rate_aud_inr assumption dashboard.ts's canonical
+    // totalRetirement already uses) before summing, so this starting
+    // balance can never again drift from the correctly-converted canonical
+    // figure shown elsewhere in the same report.
+    const retirementReportingCurrency: 'AUD' | 'INR' = profile.base_currency;
+    const retirementFxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
+    const toRetirementReportingCurrency = (amount: number, rowCurrencyCode: string | null | undefined) => {
+      const rowCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : retirementReportingCurrency;
+      return convertToReportingCurrency(amount, rowCurrency, retirementReportingCurrency, retirementFxRateAudInr);
+    };
+    const currentBalance = accounts.reduce((sum, a) => sum + toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code), 0);
     const CONTRIBUTION_FREQUENCY_TO_MONTHLY: Record<string, number> = {
       weekly: 52 / 12,
       fortnightly: 26 / 12,
@@ -488,9 +506,10 @@ async function buildCalculatorInput(
     };
     const monthlyContribution = accounts.reduce((sum, a) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
-      return sum + ((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0)) * factor;
+      const convertedContribution = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
+      return sum + convertedContribution * factor;
     }, 0);
-    const currency = accounts[0]?.currency_code ?? profile.base_currency;
+    const currency = retirementReportingCurrency;
 
     // Forecasting P1 fix FHIP-FC-RET-001 — timing hierarchy:
     // (1) forecast_profiles.retirement_date -> months = explicit date diff (most precise;

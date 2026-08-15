@@ -9,6 +9,7 @@ import type { PremiumSectionCode } from './reportEligibility';
 import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
+import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -200,13 +201,30 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
   const rows = premium.investments;
   if (rows.length === 0) return empty('investment_analysis', 18, 'No investment holdings are currently recorded.');
 
-  const totalCurrentValue = rows.reduce((s, r) => s + r.current_value, 0);
-  const totalCostBase = rows.reduce((s, r) => s + (r.cost_base ?? 0), 0);
+  // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding — totals used
+  // to sum each row's current_value/cost_base raw, regardless of
+  // currency_code, so a cross-border household's foreign-currency holdings
+  // (e.g. an INR 900,000 managed fund) were counted at face value into an
+  // AUD total, overstating it by tens of times. Converted to the report's
+  // currency via the same helper + fx_rate_aud_inr assumption dashboard.ts's
+  // canonical totalInvestments already uses, so this can never again drift
+  // from the correctly-converted figure shown elsewhere in the same report.
+  // byCountry deliberately stays in each country's own currency — matching
+  // dashboard.ts's per-country breakdowns, which show local totals "as
+  // recorded" by design; every row within one country bucket already shares
+  // one currency, so there's nothing to convert there.
+  const toReportingCurrency = (amount: number, rowCurrencyCode: string | null | undefined) => {
+    const rowCurrency: SupportedCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : source.currency;
+    return convertToReportingCurrency(amount, rowCurrency, source.currency, premium.fxRateAudInr);
+  };
+  const totalCurrentValue = rows.reduce((s, r) => s + toReportingCurrency(r.current_value, r.currency_code), 0);
+  const totalCostBase = rows.reduce((s, r) => s + toReportingCurrency(r.cost_base ?? 0, r.currency_code), 0);
   const byType = new Map<string, { type: string; label: string; value: number; count: number }>();
   const byCountry = new Map<string, { country: string; value: number; count: number }>();
   for (const r of rows) {
+    const convertedValue = toReportingCurrency(r.current_value, r.currency_code);
     const t = byType.get(r.investment_type) ?? { type: r.investment_type, label: source.content.categoryLabel(r.investment_type), value: 0, count: 0 };
-    t.value += r.current_value;
+    t.value += convertedValue;
     t.count += 1;
     byType.set(r.investment_type, t);
     const c = byCountry.get(r.country_code) ?? { country: r.country_code, value: 0, count: 0 };
