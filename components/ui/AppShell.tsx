@@ -88,8 +88,14 @@ const NAV_GROUPS: NavGroup[] = [
 // spec (§8 — videos/glossary/faqs/categories/etc.) are deliberately not
 // listed here at all, rather than shown disabled, per spec §8's "omit until
 // implementation" option.
+// R1.3 adds "New Content" (spec §10) — role-gated server-side by
+// /admin/resources/content/new itself (canCreateResource()), not by this
+// list; a Resources-role user without create rights simply sees a friendly
+// "you don't have permission" message on that page rather than the link
+// being hidden, matching this list's own stated convention above.
 const RESOURCES_ITEMS: { label: string; href: string }[] = [
   { label: 'Dashboard', href: '/admin/resources' },
+  { label: 'New Content', href: '/admin/resources/content/new' },
   { label: 'All Content', href: '/admin/resources/content' },
   { label: 'Drafts', href: '/admin/resources/content/drafts' },
   { label: 'Review Queue', href: '/admin/resources/content/review' },

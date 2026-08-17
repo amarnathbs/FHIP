@@ -73,7 +73,9 @@ export function ResourcesDashboardClient() {
           <h1 className="text-2xl font-semibold text-ink">Resources</h1>
           <p className="mt-1 text-sm text-muted">Manage FHIP financial education, videos, explainers and publishing workflows.</p>
         </div>
-        {/* "New Content" intentionally omitted — content creation is R1.3 scope (spec §19). */}
+        <Link href="/admin/resources/content/new" className="rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+          + New Content
+        </Link>
       </div>
 
       {loading && <ResourceLoadingSkeleton rows={4} />}
