@@ -305,7 +305,15 @@ export function ResourceEditor({
         onCancel={() => setConflict(false)}
       />
 
-      <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-app/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      {/* Bleed-to-edge sticky bar: the negative margin here must cancel
+          exactly the horizontal padding AppShell's <main> applies (px-4
+          below lg, px-8 at lg+ — see components/ui/AppShell.tsx), not an
+          sm: breakpoint. The two must move together; an sm:-mx-6/sm:px-6
+          pairing (fixed in the R1.3 closure pass, see
+          docs/resources/R1.3-closure-pass-final-acceptance-report.md) went
+          out of sync with <main>'s own lg: breakpoint and cost 8px of
+          horizontal overflow for every viewport in [640, 1023]. */}
+      <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-app/95 px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8">
         <nav aria-label="Breadcrumb" className="text-xs text-muted">
           <Link href="/admin/resources" className="hover:text-trust hover:underline">
             Resources

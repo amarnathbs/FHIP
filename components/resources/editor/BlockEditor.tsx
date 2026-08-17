@@ -262,11 +262,17 @@ export function BlockEditor({ blocks, onChange }: { blocks: AnyBlock[]; onChange
           const typeLabel = isKnownBlockType(b.type) ? BLOCK_TYPE_LABELS[b.type] : b.type;
           return (
             <li key={b.id} className="rounded-card border border-line bg-white p-4" aria-label={`${typeLabel} block ${i + 1}`}>
-              <div className="mb-3 flex items-center justify-between border-b border-line pb-2">
+              {/* flex-wrap on both rows (closure-pass fix, see
+                  docs/resources/R1.3-closure-pass-final-acceptance-report.md):
+                  the four full-text block-action buttons never fit one row
+                  at 390px without it, forcing page-level horizontal
+                  overflow. Wrapping keeps the full descriptive label text
+                  (accessible names, spec §32) instead of truncating it. */}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted">
                   {typeLabel} block {i + 1}
                 </span>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   <IconButton label={`Move ${typeLabel} block ${i + 1} up`} onClick={() => move(i, -1)} disabled={i === 0} />
                   <IconButton label={`Move ${typeLabel} block ${i + 1} down`} onClick={() => move(i, 1)} disabled={i === blocks.length - 1} />
                   <IconButton label={`Duplicate ${typeLabel} block ${i + 1}`} onClick={() => duplicate(i)} />

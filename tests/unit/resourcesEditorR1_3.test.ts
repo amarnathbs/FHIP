@@ -17,9 +17,17 @@
 // hasn't been. Every other assertion in this file depends only on schema
 // already live since R1.1/R1.2 and runs unconditionally.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
+
+// R1.3 closure pass: every individual test here does 1-3 real DEV Supabase
+// round trips; under the network latency observed during closure-pass
+// testing the 5000ms vitest default intermittently timed out mid-request
+// (never a failed assertion — the same tests pass reliably with headroom).
+// Widening the default here, once, is more robust than hand-tuning each
+// `it()` call. See docs/resources/R1.3-closure-pass-final-acceptance-report.md.
+vi.setConfig({ testTimeout: 20000 });
 import { createResourceDraft, updateResourceDraft, createResourceVersion } from '@/lib/resources/editor/mutations';
 import { getResourceEditorPost, isSlugAvailable, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { starterTemplateFor } from '@/lib/resources/editor/blocks';
@@ -161,7 +169,13 @@ async function cleanupFixtures(): Promise<void> {
 
 afterAll(async () => {
   await cleanupFixtures();
-});
+}, 60000); // R1.3 closure pass: default 10s hook timeout proved too tight for
+// this fixture set's teardown (7 auth-user deletes + several dependent-table
+// deletes, each a real DEV Supabase round trip) under the network latency
+// observed during closure-pass testing — a reproducible test-infrastructure
+// flakiness, not an application defect (every assertion in this file passed
+// consistently; only the afterAll's own timeout was too aggressive). See
+// docs/resources/R1.3-closure-pass-final-acceptance-report.md.
 
 function basePatch(overrides: Partial<EditorSavePatch> = {}): EditorSavePatch {
   return {
