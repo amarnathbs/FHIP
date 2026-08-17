@@ -80,6 +80,25 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// R1.2 Admin Resources shell nav — spec §41. Shown to any user holding at
+// least one Resources role or Super Admin (hasResourcesAccess, from
+// /api/admin/me); RLS remains the actual access boundary underneath this,
+// this list is UX-only (spec §90/§43: "Do not hide content solely for
+// security... Navigation hiding is only UX"). Future routes named in the
+// spec (§8 — videos/glossary/faqs/categories/etc.) are deliberately not
+// listed here at all, rather than shown disabled, per spec §8's "omit until
+// implementation" option.
+const RESOURCES_ITEMS: { label: string; href: string }[] = [
+  { label: 'Dashboard', href: '/admin/resources' },
+  { label: 'All Content', href: '/admin/resources/content' },
+  { label: 'Drafts', href: '/admin/resources/content/drafts' },
+  { label: 'Review Queue', href: '/admin/resources/content/review' },
+  { label: 'Scheduled', href: '/admin/resources/content/scheduled' },
+  { label: 'Published', href: '/admin/resources/content/published' },
+  { label: 'Review Due', href: '/admin/resources/content/review-due' },
+  { label: 'Archived', href: '/admin/resources/content/archived' },
+];
+
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -98,6 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasResourcesAccess, setHasResourcesAccess] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting group only if the initial page load lands
@@ -131,7 +151,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/admin/me')
       .then((r) => r.json())
       .then((j) => {
-        if (!cancelled) setIsAdmin(Boolean(j.data?.isAdmin));
+        if (!cancelled) {
+          setIsAdmin(Boolean(j.data?.isAdmin));
+          setHasResourcesAccess(Boolean(j.data?.hasResourcesAccess));
+        }
       })
       .catch(() => {});
     return () => {
@@ -303,6 +326,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   Recs Admin
                 </Link>
               </li>
+            </ul>
+          </div>
+        )}
+
+        {hasResourcesAccess && (
+          <div>
+            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Resources</p>
+            <ul className="space-y-0.5">
+              {RESOURCES_ITEMS.map((entry) => {
+                // Exact-match only (not the shared isActive's startsWith
+                // semantics) — Resources routes nest (/admin/resources/content
+                // vs /admin/resources/content/drafts), so a prefix match would
+                // highlight "All Content" while viewing "Drafts" too.
+                const itemActive = pathname === entry.href;
+                return (
+                  <li key={entry.href}>
+                    <Link
+                      href={entry.href}
+                      aria-current={itemActive ? 'page' : undefined}
+                      className={`block rounded px-3 py-2 text-sm ${
+                        itemActive ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {entry.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
