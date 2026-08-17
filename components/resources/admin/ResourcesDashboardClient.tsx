@@ -165,6 +165,13 @@ export function ResourcesDashboardClient() {
                 { href: '/admin/resources/content/review', label: 'Review Queue' },
                 { href: '/admin/resources/content/published', label: 'Published' },
                 { href: '/admin/resources/content/review-due', label: 'Review Due' },
+                // R1.4 (spec §65): quick links to the four specialist
+                // modules, kept in the same uncluttered row rather than a
+                // redesigned dashboard.
+                { href: '/admin/resources/videos', label: 'Videos' },
+                { href: '/admin/resources/glossary', label: 'Glossary' },
+                { href: '/admin/resources/faqs', label: 'FAQs' },
+                { href: '/admin/resources/money-updates', label: 'Money Updates' },
               ].map((link) => (
                 <Link key={link.href} href={link.href} className="rounded-full border border-line px-3 py-1.5 text-sm text-ink hover:bg-gray-50">
                   {link.label}

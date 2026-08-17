@@ -1,0 +1,98 @@
+import { createClient } from '@/lib/supabase/server';
+import { bad, ok } from '@/lib/api';
+import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
+import { getGlossaryEditorPost, getGlossaryTermOptions, findExactDuplicateGlossaryTerm } from '@/lib/resources/glossary/queries';
+import { getEditorReferenceData, getResourcePostVersions, isSlugAvailable } from '@/lib/resources/editor/queries';
+import { updateGlossaryDraft } from '@/lib/resources/glossary/mutations';
+import { validateGlossaryForDraftSave } from '@/lib/resources/glossary/validation';
+import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return bad('unauthenticated', 401);
+
+  const { id } = await params;
+  try {
+    const post = await getGlossaryEditorPost(supabase, id);
+    if (!post) return bad('Glossary definition not found.', 404);
+    const [reference, versions, termOptions] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), getGlossaryTermOptions(supabase, id)]);
+    return ok({ post, reference, versions, termOptions });
+  } catch (err) {
+    console.error('Resources glossary editor load error:', err);
+    return bad("We couldn't load this glossary definition. Try again.", 500);
+  }
+}
+
+// PATCH — spec §26-31/§99-101. Runs the spec §29 duplicate-term check
+// (case-insensitive, excluding this record itself) before saving: a hard
+// reject on an exact case-insensitive match to a *different* term (never
+// silently merges), a soft warning is left to the client-side check-as-you
+// type flow via GET .../similar.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return bad('unauthenticated', 401);
+
+  const current = await getCurrentResourceRoles();
+  if (!isResourceStaff(current)) return bad("You don't have permission to edit Resources content.", 403);
+
+  const { id } = await params;
+  try {
+    const body = await request.json();
+    const patch = body?.patch as EditorSavePatch | undefined;
+    const aliases: string[] = Array.isArray(body?.aliases) ? body.aliases.filter((a: unknown) => typeof a === 'string') : [];
+    const relatedTermIds: string[] = Array.isArray(body?.relatedTermIds) ? body.relatedTermIds : [];
+    const categoryIds: string[] = Array.isArray(body?.categoryIds) ? body.categoryIds : [];
+    const tagIds: string[] = Array.isArray(body?.tagIds) ? body.tagIds : [];
+    const expectedUpdatedAt = typeof body?.expectedUpdatedAt === 'string' ? body.expectedUpdatedAt : '';
+    const createVersion = Boolean(body?.createVersion);
+    const changeSummary = typeof body?.changeSummary === 'string' ? body.changeSummary : null;
+    const versionSnapshot = body?.versionSnapshot as PostVersionSnapshot | undefined;
+
+    if (!patch || !expectedUpdatedAt) return bad('Malformed save request.', 400);
+
+    const draftCheck = validateGlossaryForDraftSave({ title: patch.title ?? '' });
+    if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
+
+    if (patch.slug) {
+      const available = await isSlugAvailable(supabase, patch.slug, id);
+      if (!available) return Response.json({ error: 'That slug is already in use by another Resource.', fields: { slug: 'This slug is already taken.' } }, { status: 422 });
+    }
+
+    // Exact (case-insensitive) duplicate term reject (spec §29: "Prevent
+    // duplicate term ... Do not silently merge definitions"). A near-match
+    // (e.g. different capitalisation of a different word) is surfaced as a
+    // warning by the client's own /similar check, not blocked here.
+    if (patch.title?.trim()) {
+      const exactMatch = await findExactDuplicateGlossaryTerm(supabase, patch.title.trim(), id);
+      if (exactMatch) {
+        return Response.json({ error: 'A glossary term with this name already exists.', fields: { title: 'A glossary term with this exact name already exists.' } }, { status: 422 });
+      }
+    }
+
+    const outcome = await updateGlossaryDraft(supabase, id, {
+      patch,
+      aliases,
+      relatedTermIds,
+      categoryIds,
+      tagIds,
+      expectedUpdatedAt,
+      userId: user.id,
+      createVersion,
+      changeSummary,
+      versionSnapshot,
+    });
+
+    if (outcome.status === 'not_found') return bad('Glossary definition not found.', 404);
+    if (outcome.status === 'conflict') return Response.json({ error: 'This glossary definition was updated by someone else. Reload before saving your changes.' }, { status: 409 });
+    return ok(outcome.post);
+  } catch (err) {
+    console.error('Resources glossary save error:', err);
+    return bad('Could not save your changes.', 500);
+  }
+}

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff } from '@/lib/resources/permissions';
@@ -7,6 +7,18 @@ import { getResourceEditorPost } from '@/lib/resources/editor/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
+
+// R1.4 specialist previews (spec §21/§31/§43) have their own dedicated,
+// content-type-appropriate preview pages — a Video/Glossary/Money Update
+// post is redirected there rather than rendered through this generic
+// content_blocks-only preview (which would show an empty body for Video,
+// whose fields live on resource_videos, not content_blocks).
+const SPECIALIST_PREVIEW_ROUTES: Record<string, (id: string) => string> = {
+  video: (id) => `/admin/resources/videos/${id}/preview`,
+  glossary: (id) => `/admin/resources/glossary/${id}/preview`,
+  money_update: (id) => `/admin/resources/money-updates/${id}/preview`,
+  money_update_template: (id) => `/admin/resources/money-updates/${id}/preview`,
+};
 
 // /admin/resources/content/[id]/preview — spec §62-64. Authenticated,
 // role-protected Admin aid only — NOT the R1.5 public page. Reuses
@@ -22,6 +34,9 @@ export default async function ResourcePreviewPage({ params }: { params: Promise<
 
   const post = await getResourceEditorPost(supabase, id);
   if (!post) notFound();
+
+  const specialistRoute = SPECIALIST_PREVIEW_ROUTES[post.content_type];
+  if (specialistRoute) redirect(specialistRoute(id));
 
   return (
     <div className="space-y-6">

@@ -8,6 +8,12 @@
 // supabase/migrations/0033_resources_foundation.sql field-for-field. See
 // docs/resources/R1.1-database-foundation.md ("N. TypeScript Integration")
 // for the full explanation and what running the generator later would add.
+//
+// R1.4 (migration 0038) added three nullable resource_posts columns for
+// Money Update / Glossary — event_date, affected_audience, aliases — kept
+// on the shared ResourcePost interface below rather than a specialist-only
+// type, since they are real columns on the one shared table every content
+// type rows through.
 
 // 'analyst' added during the R1.1 closure pass to reconcile against the
 // approved R0-B spec. Deliberately not granted any content-workflow
@@ -91,6 +97,9 @@ export interface ResourcePost {
   created_at: string;
   updated_by: string | null;
   updated_at: string;
+  event_date: string | null; // R1.4 (migration 0038) — Money Update's real-world event date
+  affected_audience: string | null; // R1.4 (migration 0038) — Money Update
+  aliases: string[] | null; // R1.4 (migration 0038) — Glossary aliases/search synonyms
 }
 
 export interface ResourceWorkflowHistoryRow {

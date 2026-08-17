@@ -100,3 +100,21 @@ export function canReviewResource(current: CurrentResourceRoles): boolean {
 export function canComplianceApproveResource(current: CurrentResourceRoles): boolean {
   return canManageResources(current) || hasResourceRole(current, 'compliance_reviewer');
 }
+
+// R1.4 — Video/Glossary/Money Update creation and FAQ management (spec
+// §70/§71): a deliberately stricter set than isResourceStaff(), mirroring
+// the exact CREATE_ROLES restriction R1.3's content-creation route already
+// established (app/api/admin/resources/content/route.ts) — Publisher and
+// Compliance Reviewer are excluded from content *creation* and from FAQ
+// management specifically (spec §71: "Do not make Publisher a general FAQ
+// editor merely because Publisher can publish posts"), even though both
+// hold review-stage capabilities elsewhere in the workflow.
+const SPECIALIST_CREATE_ROLES: ResourceRole[] = ['resource_admin', 'author', 'editor'];
+
+export function canCreateSpecialistContent(current: CurrentResourceRoles): boolean {
+  return current.isSuperAdmin || current.roles.some((r) => SPECIALIST_CREATE_ROLES.includes(r));
+}
+
+export function canManageFaqs(current: CurrentResourceRoles): boolean {
+  return canCreateSpecialistContent(current);
+}

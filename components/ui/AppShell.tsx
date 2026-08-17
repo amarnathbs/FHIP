@@ -97,6 +97,21 @@ const RESOURCES_ITEMS: { label: string; href: string }[] = [
   { label: 'Dashboard', href: '/admin/resources' },
   { label: 'New Content', href: '/admin/resources/content/new' },
   { label: 'All Content', href: '/admin/resources/content' },
+];
+
+// R1.4 (spec §64): specialist content-type shortcuts so admins can reach
+// Video/Glossary/FAQ/Money Update management without going through All
+// Content for every workflow (spec §110). A separate group from
+// RESOURCES_ITEMS/WORKFLOW_ITEMS below, matching the spec's own suggested
+// CONTENT / WORKFLOW grouping.
+const CONTENT_TYPE_ITEMS: { label: string; href: string }[] = [
+  { label: 'Videos', href: '/admin/resources/videos' },
+  { label: 'Glossary', href: '/admin/resources/glossary' },
+  { label: 'FAQs', href: '/admin/resources/faqs' },
+  { label: 'Money Updates', href: '/admin/resources/money-updates' },
+];
+
+const WORKFLOW_ITEMS: { label: string; href: string }[] = [
   { label: 'Drafts', href: '/admin/resources/content/drafts' },
   { label: 'Review Queue', href: '/admin/resources/content/review' },
   { label: 'Scheduled', href: '/admin/resources/content/scheduled' },
@@ -345,6 +360,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // semantics) — Resources routes nest (/admin/resources/content
                 // vs /admin/resources/content/drafts), so a prefix match would
                 // highlight "All Content" while viewing "Drafts" too.
+                const itemActive = pathname === entry.href;
+                return (
+                  <li key={entry.href}>
+                    <Link
+                      href={entry.href}
+                      aria-current={itemActive ? 'page' : undefined}
+                      className={`block rounded px-3 py-2 text-sm ${
+                        itemActive ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {entry.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Content</p>
+            <ul className="space-y-0.5">
+              {CONTENT_TYPE_ITEMS.map((entry) => {
+                const itemActive = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+                return (
+                  <li key={entry.href}>
+                    <Link
+                      href={entry.href}
+                      aria-current={itemActive ? 'page' : undefined}
+                      className={`block rounded px-3 py-2 text-sm ${
+                        itemActive ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {entry.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Workflow</p>
+            <ul className="space-y-0.5">
+              {WORKFLOW_ITEMS.map((entry) => {
                 const itemActive = pathname === entry.href;
                 return (
                   <li key={entry.href}>

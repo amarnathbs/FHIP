@@ -27,9 +27,19 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
   if (!isResourceStaff(current)) redirect(`/admin/resources/content/${id}`);
 
   // R1.3 editors are scoped to exactly Article/Guide/FHIP Explainer (spec
-  // §2/§76: content type is locked after creation and the other five
-  // content types are explicitly out of scope, spec §4).
-  if (!isEditableContentType(post.content_type)) redirect(`/admin/resources/content/${id}`);
+  // §2/§76: content type is locked after creation). R1.4 (spec §68 —
+  // "Specialist Edit Routing... Do not load these through the Article
+  // editor") routes the four specialist content types to their own
+  // dedicated editors instead of the R1.2 read-only detail page.
+  if (!isEditableContentType(post.content_type)) {
+    const SPECIALIST_EDIT_ROUTES: Record<string, string> = {
+      video: `/admin/resources/videos/${id}/edit`,
+      glossary: `/admin/resources/glossary/${id}/edit`,
+      money_update: `/admin/resources/money-updates/${id}/edit`,
+      money_update_template: `/admin/resources/money-updates/${id}/edit`,
+    };
+    redirect(SPECIALIST_EDIT_ROUTES[post.content_type] ?? `/admin/resources/content/${id}`);
+  }
 
   const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
 
