@@ -59,20 +59,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const draftCheck = validateGlossaryForDraftSave({ title: patch.title ?? '' });
     if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
 
-    if (patch.slug) {
-      const available = await isSlugAvailable(supabase, patch.slug, id);
-      if (!available) return Response.json({ error: 'That slug is already in use by another Resource.', fields: { slug: 'This slug is already taken.' } }, { status: 422 });
-    }
-
     // Exact (case-insensitive) duplicate term reject (spec §29: "Prevent
     // duplicate term ... Do not silently merge definitions"). A near-match
     // (e.g. different capitalisation of a different word) is surfaced as a
     // warning by the client's own /similar check, not blocked here.
+    //
+    // R1.4 closure-pass fix (P2, found live-testing the Responsive Matrix
+    // Completion Pass): this check must run BEFORE the slug-availability
+    // check below, not after. The editor auto-derives an untouched slug
+    // deterministically from the title (see GlossaryEditor.tsx's
+    // `slugify(title)`), so an exact-duplicate title always produces an
+    // exact-duplicate auto-slug too — meaning the slug check below always
+    // fired first and masked the intended, friendlier "A glossary term with
+    // this name already exists" message behind a generic, confusing "That
+    // slug is already in use" one in the single most common real-world
+    // trigger of this rule (typing the same term title verbatim). The save
+    // was still correctly blocked either way — this fixes the message, not
+    // a security/data-integrity gap.
     if (patch.title?.trim()) {
       const exactMatch = await findExactDuplicateGlossaryTerm(supabase, patch.title.trim(), id);
       if (exactMatch) {
         return Response.json({ error: 'A glossary term with this name already exists.', fields: { title: 'A glossary term with this exact name already exists.' } }, { status: 422 });
       }
+    }
+
+    if (patch.slug) {
+      const available = await isSlugAvailable(supabase, patch.slug, id);
+      if (!available) return Response.json({ error: 'That slug is already in use by another Resource.', fields: { slug: 'This slug is already taken.' } }, { status: 422 });
     }
 
     const outcome = await updateGlossaryDraft(supabase, id, {

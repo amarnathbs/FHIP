@@ -10,11 +10,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { TextField, TextAreaField, SelectField, CheckboxField } from '@/components/resources/editor/FormField';
+import { BlockEditor } from '@/components/resources/editor/BlockEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES } from '@/lib/resources/admin/labels';
 import { QUESTION_MAX_LENGTH, SHORT_ANSWER_MAX_LENGTH } from '@/lib/resources/faq/validation';
 import type { FaqRow, FaqLinkedPost } from '@/lib/resources/faq/types';
 import type { RelatedRef } from '@/lib/resources/admin/queries';
+import type { AnyBlock } from '@/lib/resources/editor/blocks';
 
 const COMPLIANCE_OPTIONS = [
   { value: 'green', label: 'GREEN — General Education' },
@@ -32,6 +34,16 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
   const [categoryId, setCategoryId] = useState(faq?.category_id ?? '');
   const [isActive, setIsActive] = useState(faq?.is_active ?? true);
   const [compliance, setCompliance] = useState(faq?.compliance_classification ?? 'green');
+  // R1.4 closure-pass fix (P1, found live-testing the Responsive Matrix
+  // Completion Pass): the "Expanded Answer" (answer_blocks) field spec
+  // §34-39 describes and the original completion report's §M claims was
+  // delivered ("optional structured Expanded Answer") had no editor UI at
+  // all — save() always sent the frozen `faq?.answer_blocks ?? []` with no
+  // way to view or change it, so the field was entirely dead from the
+  // admin's perspective (always empty for a new FAQ, permanently frozen at
+  // whatever it started as for an existing one). Reuses R1.3's BlockEditor
+  // exactly as GlossaryEditor.tsx already does for content_blocks.
+  const [answerBlocks, setAnswerBlocks] = useState<AnyBlock[]>((faq?.answer_blocks as AnyBlock[]) ?? []);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +63,7 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
     setFieldErrors({});
     setSaved(false);
     try {
-      const body = { question, short_answer: shortAnswer, answer_blocks: faq?.answer_blocks ?? [], jurisdiction, is_active: isActive, category_id: categoryId || null, compliance_classification: compliance };
+      const body = { question, short_answer: shortAnswer, answer_blocks: answerBlocks, jurisdiction, is_active: isActive, category_id: categoryId || null, compliance_classification: compliance };
       if (isNew) {
         const res = await fetch('/api/admin/resources/faqs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const json = await res.json();
@@ -215,6 +227,12 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
         </div>
 
         <CheckboxField label="Active" checked={isActive} onChange={setIsActive} hint="Inactive FAQs are hidden from public surfaces but remain editable." />
+      </div>
+
+      <div className="rounded-card border border-line bg-white p-4">
+        <h2 className="mb-1 text-sm font-semibold text-ink">Expanded Answer</h2>
+        <p className="mb-3 text-xs text-muted">Optional structured detail beyond the Short Answer — plain English, avoid unexplained jargon.</p>
+        <BlockEditor blocks={answerBlocks} onChange={setAnswerBlocks} />
       </div>
 
       {!isNew && faq && (
