@@ -36,6 +36,7 @@ import {
   getPublicSourcesForPost,
   getPublicResourceSitemapEntries,
   getPublicCategories,
+  getCentralDisclaimer,
 } from '@/lib/resources/public/queries';
 import { isPubliclyVisible, isExpired, applyPublicPostVisibility, PUBLIC_STATUSES } from '@/lib/resources/public/visibility';
 import { isSafeSourceUrl } from '@/lib/resources/sources/validation';
@@ -516,6 +517,72 @@ describe('R1.5 live-DEV listing/filtering/sitemap', () => {
     const glossary = await getPublicGlossaryTerms(anon);
     expect(Array.isArray(videos.items)).toBe(true);
     expect(Array.isArray(glossary)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1.5 Closure Pass — Part A: migration 0039_resources_public_settings_read
+// (spec §12: "Add a focused automated assertion covering: allowed anonymous
+// setting; non-allowlisted setting hidden. The test must fail closed if 0039
+// is absent. Do not silently skip it and call R1.5 PASS.") Before 0039 is
+// live, resource_settings has only the staff-only "staff read settings"
+// policy (migration 0033) — an anonymous client gets zero rows for
+// everything, including the three keys that are supposed to become public.
+// That means the "allowed key is visible" assertions below FAIL CLOSED
+// (deliberately) until 0039 is applied to DEV; they are not skipped, and
+// they do not silently pass. The "non-allowlisted key stays hidden"
+// assertion passes in both states (RLS denies by default either way), which
+// is itself the correct permanent regression guard once 0039 is live.
+// ---------------------------------------------------------------------------
+describe('R1.5 closure — migration 0039 public settings read (spec §9/§10/§12)', () => {
+  const privateSettingKey = `r1_5_closure_private_test_setting_${RUN_ID}`;
+  const createdSettingKeys: string[] = [];
+
+  beforeAll(async () => {
+    // A temporary DEV-only non-allowlisted key, inserted via the privileged
+    // service-role admin client (legitimate CMS-admin fixture setup, never
+    // used to serve public content) — spec §10.
+    const { error } = await admin.from('resource_settings').insert({ key: privateSettingKey, value: 'R1.5 CLOSURE TEST — must never be anon-readable' });
+    if (error) throw new Error(`failed to create private test setting: ${error.message}`);
+    createdSettingKeys.push(privateSettingKey);
+  });
+
+  afterAll(async () => {
+    if (createdSettingKeys.length > 0) await admin.from('resource_settings').delete().in('key', createdSettingKeys);
+  });
+
+  it('anonymous can read default_disclaimer (fails closed — 0 rows — until migration 0039 is live)', async () => {
+    const { data, error } = await anon.from('resource_settings').select('value').eq('key', 'default_disclaimer').maybeSingle();
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+  });
+
+  it('anonymous can read youtube_channel_handle if the row exists (fails closed until 0039 is live)', async () => {
+    const { data: rowExists } = await admin.from('resource_settings').select('key').eq('key', 'youtube_channel_handle').maybeSingle();
+    if (!rowExists) return; // spec §9: "visible if row exists" — nothing to assert if it was never seeded
+    const { data, error } = await anon.from('resource_settings').select('value').eq('key', 'youtube_channel_handle').maybeSingle();
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+  });
+
+  it('anonymous can read youtube_channel_url if the row exists (fails closed until 0039 is live)', async () => {
+    const { data: rowExists } = await admin.from('resource_settings').select('key').eq('key', 'youtube_channel_url').maybeSingle();
+    if (!rowExists) return; // spec §9: "visible if row exists"
+    const { data, error } = await anon.from('resource_settings').select('value').eq('key', 'youtube_channel_url').maybeSingle();
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+  });
+
+  it('anonymous CANNOT read a non-allowlisted resource_settings key, before or after 0039 (spec §10)', async () => {
+    const { data, error } = await anon.from('resource_settings').select('value').eq('key', privateSettingKey).maybeSingle();
+    expect(error).toBeNull();
+    expect(data).toBeNull();
+  });
+
+  it('getCentralDisclaimer() resolves to a non-empty string regardless of migration state (DB value once live, defensive fallback until then)', async () => {
+    const text = await getCentralDisclaimer(anon);
+    expect(typeof text).toBe('string');
+    expect(text.length).toBeGreaterThan(0);
   });
 });
 
