@@ -76,6 +76,21 @@ export async function resolveContextResource(supabase: SupabaseClient, contextKe
   return null;
 }
 
+/**
+ * Batch form of resolveContextResource() for a Server Component page that
+ * needs several context keys at once (e.g. the Dashboard's vital-sign
+ * cards) and cannot mount an async Server Component per-card inside its
+ * existing 'use client' tree — see WhatDoesThisMeanLink.tsx's header for why
+ * this split exists. Runs the same per-key resolution in parallel; still
+ * exactly one round trip per key (small, bounded — the whole registry is a
+ * few dozen entries at most), no join query fancier than that is worth the
+ * complexity for this data size.
+ */
+export async function resolveContextResources(supabase: SupabaseClient, contextKeys: string[]): Promise<Record<string, ResolvedContextResource | null>> {
+  const entries = await Promise.all(contextKeys.map(async (key) => [key, await resolveContextResource(supabase, key)] as const));
+  return Object.fromEntries(entries);
+}
+
 // --- Admin management (spec §57/§78) ----------------------------------------
 
 export interface ContextMappingRow {

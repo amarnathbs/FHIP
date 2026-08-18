@@ -13,6 +13,7 @@ import { CommitmentsManager, type Commitment } from '@/components/resilience/Com
 import { StressTestPanel } from '@/components/resilience/StressTestPanel';
 import { Methodology } from '@/components/resilience/Methodology';
 import { formatDateShort } from '@/lib/engines/date';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export default async function ResiliencePage() {
   const supabase = await createClient();
@@ -49,6 +50,7 @@ export default async function ResiliencePage() {
             How well your household could absorb a financial shock — job loss, an unexpected bill, or a market
             downturn — today.
           </p>
+          <WhatDoesThisMean contextKey="resilience.emergency_fund" compact={false} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

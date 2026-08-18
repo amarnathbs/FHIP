@@ -10,6 +10,7 @@ import { WhatIfSimulator } from '@/components/score/WhatIfSimulator';
 import { CheckInsPanel } from '@/components/score/CheckInsPanel';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { formatDateShort } from '@/lib/engines/date';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export default async function ScorePage() {
   const supabase = await createClient();
@@ -40,6 +41,7 @@ export default async function ScorePage() {
           <p className="mt-1 text-muted">
             One clear measure of your overall financial position, explained component by component.
           </p>
+          <WhatDoesThisMean contextKey="scores.financial_health_score" compact={false} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

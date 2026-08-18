@@ -11,7 +11,8 @@ import { buildDataQuality } from '@/lib/engines/reportSections';
 import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
 import { ResilienceStateCard } from '@/components/resilience/ResilienceStateCard';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
-import { VitalSignsStrip } from '@/components/dashboard/VitalSignsStrip';
+import { VitalSignsStrip, type DashboardContextLinks } from '@/components/dashboard/VitalSignsStrip';
+import { resolveContextResources } from '@/lib/resources/context/queries';
 import { PriorityActionsPanel } from '@/components/dashboard/PriorityActionsPanel';
 import { DataQualityPanel } from '@/components/dashboard/DataQualityPanel';
 import { FutureModulesSection } from '@/components/dashboard/placeholders';
@@ -59,6 +60,9 @@ export default async function DashboardPage() {
   const recommendationMatches = await getLatestRecommendations(user.id, supabase);
   const dataFreshness = await loadDataFreshness(user.id, supabase);
   const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness, healthScore });
+  // R1.6 (spec §66/§140): resolved once here (Server Component), threaded
+  // down as a plain prop — see VitalSignsStrip.tsx's header for why.
+  const dashboardContextLinks = (await resolveContextResources(supabase, ['dashboard.net_worth', 'dashboard.emergency_fund', 'dashboard.debt_service_ratio'])) as DashboardContextLinks;
 
   return (
       <div className="space-y-10">
@@ -90,7 +94,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <div className="mt-6">
-            <VitalSignsStrip summary={summary} />
+            <VitalSignsStrip summary={summary} contextLinks={dashboardContextLinks} />
           </div>
         </section>
 
