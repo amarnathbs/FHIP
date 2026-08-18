@@ -1,0 +1,150 @@
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { getPublicResourceBySlug } from '@/lib/resources/public/queries';
+import { isExpired } from '@/lib/resources/public/visibility';
+import { buildResourceMetadata, buildBreadcrumbJsonLd, buildArticleJsonLd, buildVideoJsonLd, buildFaqJsonLd, buildResourceCanonicalUrl, getPublicSiteBaseUrl } from '@/lib/resources/public/metadata';
+import { Breadcrumbs } from '@/components/resources/public/Breadcrumbs';
+import { ResourceDetailHeader } from '@/components/resources/public/ResourceDetailHeader';
+import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
+import { GuideTOC, deriveTocFromBlocks } from '@/components/resources/public/GuideTOC';
+import { VideoDetailBody } from '@/components/resources/public/VideoDetailBody';
+import { GlossaryDetailBody } from '@/components/resources/public/GlossaryDetailBody';
+import { MoneyUpdateDetailBody } from '@/components/resources/public/MoneyUpdateDetailBody';
+import { FreshnessWarning } from '@/components/resources/public/FreshnessWarning';
+import { SourceList } from '@/components/resources/public/SourceList';
+import { FaqAccordion } from '@/components/resources/public/FaqAccordion';
+import { CentralDisclaimer } from '@/components/resources/public/CentralDisclaimer';
+import type { ResourceContentType, ResourceJurisdiction } from '@/lib/resources/types';
+import type { AnyBlock } from '@/lib/resources/editor/blocks';
+
+type Params = { slug: string };
+
+// Spec §63-66: title/description/canonical/robots derived per-post, with
+// documented seo_title->title and seo_description->excerpt fallbacks
+// (buildResourceMetadata). Spec §71/§86: a hidden/unpublished/nonexistent
+// slug produces the exact same outcome here — generateMetadata simply
+// returns {} (Next falls back to the parent segment's own metadata), no
+// distinguishing signal leaks through a page <title>/description either.
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = await createClient();
+  const post = await getPublicResourceBySlug(supabase, slug);
+  if (!post) return {};
+  return buildResourceMetadata(post);
+}
+
+// Spec §14/§29-32/§35/§42/§46: the single canonical public detail URL,
+// dispatching rendering by content_type. Spec §71/§86: getPublicResourceBySlug
+// returns null identically for "never existed" and "exists but not
+// currently public" — notFound() below can't distinguish them, which is
+// the point.
+export default async function ResourceDetailPage({ params }: { params: Promise<Params> }) {
+  const { slug } = await params;
+  const supabase = await createClient();
+  const post = await getPublicResourceBySlug(supabase, slug);
+  if (!post) notFound();
+
+  const canonicalUrl = buildResourceCanonicalUrl(slug);
+  const breadcrumbItems = [
+    { label: 'Home', href: '/' },
+    { label: 'Resources', href: '/resources' },
+    ...(post.primary_category ? [{ label: post.primary_category.name, href: `/resources/topic/${post.primary_category.slug}` }] : []),
+    { label: post.title },
+  ];
+
+  const siteBaseUrl = getPublicSiteBaseUrl();
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: 'Home', url: `${siteBaseUrl}/` },
+    { name: 'Resources', url: `${siteBaseUrl}/resources` },
+    { name: post.title, url: canonicalUrl },
+  ]);
+  const articleJsonLd = post.content_type !== 'video' ? buildArticleJsonLd({ title: post.title, excerpt: post.excerpt, slug: post.slug, published_at: post.published_at, updated_at: post.updated_at, authorName: post.author?.display_name ?? null }) : null;
+  const videoJsonLd =
+    post.content_type === 'video' && post.video
+      ? buildVideoJsonLd({
+          title: post.title,
+          excerpt: post.excerpt,
+          slug: post.slug,
+          published_at: post.published_at,
+          thumbnailUrl: post.video.thumbnail_url,
+          durationSeconds: post.video.duration_seconds,
+          embedUrl: `https://www.youtube.com/embed/${post.video.youtube_video_id}`,
+        })
+      : null;
+  const faqJsonLd = buildFaqJsonLd(post.faqs.filter((f) => f.short_answer).map((f) => ({ question: f.question, shortAnswer: f.short_answer as string })));
+
+  const showGenericFreshnessWarning = post.content_type !== 'money_update' && post.freshness_type === 'time_sensitive' && isExpired(post.expires_at);
+  const toc = post.content_type === 'guide' ? deriveTocFromBlocks(post.content_blocks as AnyBlock[]) : [];
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      {/* Structured data (spec §67/§68) — built only from real stored fields, omitted entirely when required fields are missing. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      {articleJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />}
+      {videoJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }} />}
+      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
+
+      <Breadcrumbs items={breadcrumbItems} />
+
+      <div className={`mt-4 grid grid-cols-1 gap-8 ${toc.length > 0 ? 'lg:grid-cols-[1fr_260px]' : ''}`}>
+        <article
+          className={`min-w-0 space-y-6 rounded-card border bg-white p-6 sm:p-8 ${post.content_type === 'fhip_explainer' ? 'border-ai/30 border-t-4' : 'border-line'}`}
+        >
+          <ResourceDetailHeader
+            contentType={post.content_type as ResourceContentType}
+            title={post.title}
+            excerpt={post.excerpt}
+            jurisdiction={post.jurisdiction as ResourceJurisdiction}
+            difficulty={post.difficulty}
+            publishedAt={post.published_at}
+            updatedAt={post.updated_at}
+            authorName={post.author?.display_name ?? null}
+          />
+
+          {/* Mobile/tablet "On this page" disclosure (spec §31) — GuideTOC's
+              own <details lg:hidden> renders only below the desktop
+              breakpoint; the matching desktop <nav hidden lg:block> is
+              rendered separately in the <aside> below so each half only
+              ever exists visibly at one breakpoint. */}
+          {toc.length > 0 && <GuideTOC entries={toc} />}
+
+          {showGenericFreshnessWarning && <FreshnessWarning expiresAt={post.expires_at} lastReviewedAt={post.last_reviewed_at} />}
+
+          {post.content_type === 'video' && post.video ? (
+            <VideoDetailBody video={post.video} title={`@GKTC video: ${post.title}`} />
+          ) : post.content_type === 'glossary' ? (
+            <GlossaryDetailBody aliases={post.aliases} contentBlocks={post.content_blocks} relatedTerms={post.relatedGlossaryTerms} />
+          ) : post.content_type === 'money_update' ? (
+            <MoneyUpdateDetailBody eventDate={post.event_date} affectedAudience={post.affected_audience} contentBlocks={post.content_blocks} expiresAt={post.expires_at} lastReviewedAt={post.last_reviewed_at} />
+          ) : (
+            <BlockRenderer blocks={post.content_blocks as AnyBlock[]} />
+          )}
+
+          {post.author?.bio && (
+            <div className="border-t border-line pt-4 text-sm text-muted">
+              <p className="font-semibold text-ink">{post.author.display_name}</p>
+              {post.author.role_title && <p>{post.author.role_title}</p>}
+              <p className="mt-1">{post.author.bio}</p>
+            </div>
+          )}
+
+          <SourceList sources={post.sources} />
+          <FaqAccordion faqs={post.faqs} />
+
+          <div className="border-t border-line pt-4">
+            <CentralDisclaimer supabase={supabase} prominent={post.content_type === 'money_update'} />
+          </div>
+        </article>
+
+        {toc.length > 0 && (
+          <aside className="hidden lg:block">
+            <div className="sticky top-6 rounded-card border border-line bg-white p-4">
+              <GuideTOC entries={toc} />
+            </div>
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}

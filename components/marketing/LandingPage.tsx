@@ -266,6 +266,7 @@ export default function PreviewLandingPage() {
             <a href="#features">Features</a>
             <a href="#health">Financial Health</a>
             <a href="#forecasting">Forecasting</a>
+            <Link href="/resources">Resources</Link>
             <a href="#pricing">Pricing</a>
             <a href="#security">Security</a>
           </nav>
@@ -689,7 +690,7 @@ export default function PreviewLandingPage() {
             <ul>
               <li><a href="#">About</a></li>
               <li><a href="#security">Security</a></li>
-              <li><a href="#">Resources</a></li>
+              <li><Link href="/resources">Resources</Link></li>
               <li><Link href="/contact">Contact</Link></li>
             </ul>
           </div>

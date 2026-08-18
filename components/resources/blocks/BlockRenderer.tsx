@@ -83,8 +83,15 @@ function RenderBlock({ block }: { block: AnyBlock }) {
       if (!d.text?.trim()) return null;
       const Tag = (`h${d.level}` as unknown) as 'h2' | 'h3' | 'h4';
       const sizeClass = d.level === 2 ? 'text-xl' : d.level === 3 ? 'text-lg' : 'text-base';
+      // id=block.id — a stable anchor every heading already carries via its
+      // own block id (lib/resources/editor/blocks.ts). Purely additive: it
+      // changes nothing about how the block renders, only makes it a valid
+      // link target. R1.5's public Guide TOC (spec §30/§31) is the reason
+      // this exists — "derive it from existing content blocks... stable
+      // block anchors" — rather than inventing a second, parallel heading-id
+      // scheme outside the block model.
       return (
-        <Tag className={`${sizeClass} font-semibold text-ink`}>
+        <Tag id={block.id} className={`${sizeClass} scroll-mt-24 font-semibold text-ink`}>
           <InlineMarkup text={d.text} />
         </Tag>
       );
