@@ -5,6 +5,7 @@ import { getResourcesLandingData } from '@/lib/resources/public/queries';
 import { getPublicSiteBaseUrl } from '@/lib/resources/public/metadata';
 import { ResourcePublicCard } from '@/components/resources/public/ResourcePublicCard';
 import { PublicEmptyState } from '@/components/resources/public/PublicStates';
+import { SearchBox } from '@/components/resources/public/SearchBox';
 
 // Spec §17/§18: brand + hero copy taken verbatim from the approved
 // positioning; canonical + OG per spec §63-66.
@@ -36,6 +37,10 @@ export default async function ResourcesLandingPage() {
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted">
             We don&rsquo;t just give you financial numbers. We help you understand what those numbers mean.
           </p>
+
+          <div className="mx-auto mt-8 flex justify-center">
+            <SearchBox variant="full" placeholder="Search financial topics, terms and guides" />
+          </div>
 
           <ol className="mt-8 flex flex-wrap items-center justify-center gap-2 text-sm font-medium text-ink" aria-label="Learning journey">
             {LEARNING_JOURNEY.map((step, i) => (

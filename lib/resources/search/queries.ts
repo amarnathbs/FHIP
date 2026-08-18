@@ -24,6 +24,7 @@ export interface SearchFilters {
   q: string;
   contentType: SearchContentTypeFilter;
   jurisdiction: SearchJurisdictionFilter;
+  categoryId?: string | null; // spec §13's "Topic" filter — a resource_categories.id, or null/omitted for "All"
   page: number;
   pageSize?: number;
 }
@@ -47,6 +48,7 @@ export async function searchPublicResources(supabase: SupabaseClient, filters: S
     p_query: q,
     p_content_type: filters.contentType === 'all' ? null : filters.contentType,
     p_jurisdiction: filters.jurisdiction === 'all' ? null : filters.jurisdiction,
+    p_category_id: filters.categoryId ?? null,
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
   });

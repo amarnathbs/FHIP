@@ -32,6 +32,14 @@ export function PublicResourcesNav() {
           <Link href="/resources" aria-current={onResources ? 'page' : undefined} className={onResources ? 'font-semibold text-trust' : 'text-muted hover:text-ink'}>
             Resources
           </Link>
+          {/* spec §12: a search entry point on the public header, deliberately
+              small — it must not dominate the main FHIP navigation. */}
+          <Link href="/resources/search" aria-label="Search Resources" className="text-muted hover:text-ink" title="Search Resources">
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+              <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M14 14L18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </Link>
           <Link href="/login" className="hidden text-muted hover:text-ink sm:inline">
             Log in
           </Link>

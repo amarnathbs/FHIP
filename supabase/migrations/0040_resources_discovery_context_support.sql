@@ -86,6 +86,7 @@ create or replace function public.search_resource_posts(
   p_query text,
   p_content_type text default null,
   p_jurisdiction text default null,
+  p_category_id uuid default null,
   p_limit int default 12,
   p_offset int default 0
 )
@@ -171,6 +172,10 @@ as $$
         or (p_jurisdiction <> 'global' and p.jurisdiction in (p_jurisdiction, 'global'))
       )
       and (
+        p_category_id is null
+        or exists (select 1 from public.resource_post_categories rpc2 where rpc2.post_id = p.id and rpc2.category_id = p_category_id)
+      )
+      and (
         (select raw from q) = ''
         or p.search_vector @@ (select tsq from q)
         or p.title ilike '%' || (select raw from q) || '%'
@@ -188,8 +193,8 @@ as $$
   offset greatest(p_offset, 0);
 $$;
 
-revoke all on function public.search_resource_posts(text, text, text, int, int) from public;
-grant execute on function public.search_resource_posts(text, text, text, int, int) to anon, authenticated;
+revoke all on function public.search_resource_posts(text, text, text, uuid, int, int) from public;
+grant execute on function public.search_resource_posts(text, text, text, uuid, int, int) to anon, authenticated;
 
 comment on function public.search_resource_posts is
   'R1.6 public Resources search (spec Part A). SECURITY INVOKER — runs under the caller''s own RLS, never service-role. Deterministic tiered ranking, no AI. Never returns money_update_template, draft, or any other non-public row — WHERE clause mirrors lib/resources/public/visibility.ts exactly, and the caller''s own RLS is a second, independent backstop underneath it.';
