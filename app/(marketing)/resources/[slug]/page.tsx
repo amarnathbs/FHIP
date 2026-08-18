@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getPublicResourceBySlug } from '@/lib/resources/public/queries';
@@ -15,6 +16,10 @@ import { FreshnessWarning } from '@/components/resources/public/FreshnessWarning
 import { SourceList } from '@/components/resources/public/SourceList';
 import { FaqAccordion } from '@/components/resources/public/FaqAccordion';
 import { CentralDisclaimer } from '@/components/resources/public/CentralDisclaimer';
+import { RelatedResources } from '@/components/resources/public/RelatedResources';
+import { ResourceCTAs } from '@/components/resources/public/ResourceCTAs';
+import { getRelatedResourcesForPost } from '@/lib/resources/discovery/related';
+import { getUseInFhipActionsForPost } from '@/lib/resources/context/queries';
 import type { ResourceContentType, ResourceJurisdiction } from '@/lib/resources/types';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
 
@@ -59,6 +64,22 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
   const supabase = await createClient();
   const post = await getPublicResourceBySlug(supabase, slug);
   if (!post) notFound();
+
+  // R1.6 (spec §50/§63): session-state (not financial-data) adaptation for
+  // the generic fallback CTA, and the "Use this in FHIP" bidirectional
+  // action list — both reuse the same request-scoped client, still under
+  // normal RLS, never service-role.
+  const [
+    {
+      data: { user },
+    },
+    relatedResources,
+    useInFhipActions,
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    getRelatedResourcesForPost(supabase, { id: post.id, primary_category_id: post.primary_category?.id ?? null, jurisdiction: post.jurisdiction, content_type: post.content_type }),
+    getUseInFhipActionsForPost(supabase, post.id),
+  ]);
 
   const canonicalUrl = buildResourceCanonicalUrl(slug);
   const breadcrumbItems = [
@@ -145,6 +166,27 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
 
           <SourceList sources={post.sources} />
           <FaqAccordion faqs={post.faqs} />
+
+          {/* R1.6 order per spec §71: content -> FAQs -> Sources -> Related
+              Resources -> CTA -> Disclaimer. */}
+          <RelatedResources items={relatedResources} />
+
+          <div className="border-t border-line pt-6">
+            <ResourceCTAs primaryCta={post.primaryCta} secondaryCta={post.secondaryCta} isAuthenticated={!!user} />
+          </div>
+
+          {useInFhipActions.length > 0 && (
+            <div className="border-t border-line pt-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Use this in FHIP</h2>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {useInFhipActions.map((action) => (
+                  <Link key={action.route} href={action.route} className="rounded-compact border border-line px-4 py-2 text-sm font-semibold text-trust hover:border-trust">
+                    {action.label.replace('Use this in FHIP: ', '')}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-line pt-4">
             <CentralDisclaimer supabase={supabase} prominent={post.content_type === 'money_update'} />

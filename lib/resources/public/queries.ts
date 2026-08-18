@@ -443,6 +443,14 @@ const DETAIL_COLUMNS = [
   'aliases',
   'primary_category:resource_categories!primary_category_id(id,name,slug)',
   'author:resource_authors!author_id(id,display_name,role_title,bio,is_active)',
+  // R1.6 (spec §47/§48): CTAs are FK columns on resource_posts itself, so
+  // this embed is a plain to-one join exactly like primary_category/author
+  // above — no array-unwrap needed. RLS's "public read active ctas" policy
+  // (migration 0033, unchanged) is what makes an inactive CTA resolve to
+  // null here automatically (spec §48: "it should disappear without editing
+  // every linked Resource").
+  'primary_cta:resource_ctas!primary_cta_id(id,label,description,destination_type,destination_url,is_active)',
+  'secondary_cta:resource_ctas!secondary_cta_id(id,label,description,destination_type,destination_url,is_active)',
 ].join(', ');
 
 export interface PublicResourceDetail {
@@ -486,6 +494,17 @@ export interface PublicResourceDetail {
   relatedGlossaryTerms: { id: string; slug: string | null; title: string }[];
   faqs: PublicFaq[];
   sources: PublicSource[];
+  primaryCta: PublicCta | null;
+  secondaryCta: PublicCta | null;
+}
+
+// R1.6 — spec §41-52.
+export interface PublicCta {
+  id: string;
+  label: string;
+  description: string | null;
+  destination_type: string;
+  destination_url: string;
 }
 
 /**
@@ -562,6 +581,12 @@ export async function getPublicResourceBySlug(supabase: SupabaseClient, slug: st
     relatedGlossaryTerms: ((relatedResult.data ?? []) as unknown as { related: { id: string; slug: string | null; title: string } }[]).map((r) => r.related).filter(Boolean),
     faqs,
     sources,
+    // Deliberately re-check is_active in TS too, not just trusting the RLS
+    // policy that already filters it — cheap, and consistent with how every
+    // other visibility-sensitive relation in this function (author.is_active,
+    // relatedGlossaryTerms) is double-checked rather than assumed.
+    primaryCta: p.primary_cta && (p.primary_cta as { is_active: boolean }).is_active ? (p.primary_cta as unknown as PublicCta) : null,
+    secondaryCta: p.secondary_cta && (p.secondary_cta as { is_active: boolean }).is_active ? (p.secondary_cta as unknown as PublicCta) : null,
   };
 }
 
