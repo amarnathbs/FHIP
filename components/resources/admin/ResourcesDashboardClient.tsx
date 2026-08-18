@@ -172,6 +172,10 @@ export function ResourcesDashboardClient() {
                 { href: '/admin/resources/glossary', label: 'Glossary' },
                 { href: '/admin/resources/faqs', label: 'FAQs' },
                 { href: '/admin/resources/money-updates', label: 'Money Updates' },
+                // R1.6 (spec §75): discovery/context management quick links.
+                { href: '/admin/resources/related', label: 'Related Content' },
+                { href: '/admin/resources/ctas', label: 'CTAs' },
+                { href: '/admin/resources/context', label: 'Context Mapping' },
               ].map((link) => (
                 <Link key={link.href} href={link.href} className="rounded-full border border-line px-3 py-1.5 text-sm text-ink hover:bg-gray-50">
                   {link.label}

@@ -120,6 +120,18 @@ const WORKFLOW_ITEMS: { label: string; href: string }[] = [
   { label: 'Archived', href: '/admin/resources/content/archived' },
 ];
 
+// R1.6 (spec §75): "Add operational links: Search & Discovery, Related
+// Content, CTAs, Context Mapping — only where real management surfaces
+// exist. Do not add dead links." Search itself has no admin management
+// surface (it's fully deterministic/automatic, nothing to curate beyond the
+// content already managed above), so no "Search & Discovery" link is added
+// — only the three that have real screens behind them.
+const DISCOVERY_ITEMS: { label: string; href: string }[] = [
+  { label: 'Related Content', href: '/admin/resources/related' },
+  { label: 'CTAs', href: '/admin/resources/ctas' },
+  { label: 'Context Mapping', href: '/admin/resources/context' },
+];
+
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -400,6 +412,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="mt-3 px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Workflow</p>
             <ul className="space-y-0.5">
               {WORKFLOW_ITEMS.map((entry) => {
+                const itemActive = pathname === entry.href;
+                return (
+                  <li key={entry.href}>
+                    <Link
+                      href={entry.href}
+                      aria-current={itemActive ? 'page' : undefined}
+                      className={`block rounded px-3 py-2 text-sm ${
+                        itemActive ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {entry.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Discovery</p>
+            <ul className="space-y-0.5">
+              {DISCOVERY_ITEMS.map((entry) => {
                 const itemActive = pathname === entry.href;
                 return (
                   <li key={entry.href}>
