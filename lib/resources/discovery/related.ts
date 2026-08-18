@@ -137,7 +137,7 @@ export async function getRelatedResourcesForPost(supabase: SupabaseClient, sourc
   const candidateMap = new Map<string, CandidatePost>();
 
   if (source.primary_category_id) {
-    let q = supabase
+    const q = supabase
       .from('resource_posts')
       .select(`${CANDIDATE_COLUMNS}, resource_post_categories!inner(category_id)`)
       .eq('resource_post_categories.category_id', source.primary_category_id)

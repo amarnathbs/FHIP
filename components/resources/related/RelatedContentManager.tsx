@@ -19,11 +19,14 @@ function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSear
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
+    // Every branch schedules its state update inside the timeout (even the
+    // empty-query "clear" case) rather than calling setState synchronously
+    // in the effect body.
     debounceRef.current = setTimeout(async () => {
+      if (!q.trim()) {
+        setResults([]);
+        return;
+      }
       setLoading(true);
       try {
         const qp = new URLSearchParams({ q });
@@ -96,7 +99,10 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (source) void loadRelations(source.id);
+    const timer = setTimeout(() => {
+      if (source) void loadRelations(source.id);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [source, loadRelations]);
 
   async function addRelation(target: RelatableSearchResult) {

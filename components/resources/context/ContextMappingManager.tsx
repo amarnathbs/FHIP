@@ -27,11 +27,14 @@ function PostPicker({ onPick, excludeId }: { onPick: (post: RelatableSearchResul
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
+    // Every branch schedules its state update inside the timeout (even the
+    // empty-query "clear" case) rather than calling setState synchronously
+    // in the effect body — avoids cascading-render re-entrancy.
     debounceRef.current = setTimeout(async () => {
+      if (!q.trim()) {
+        setResults([]);
+        return;
+      }
       const qp = new URLSearchParams({ q });
       if (excludeId) qp.set('exclude', excludeId);
       const res = await fetch(`/api/admin/resources/related/search-posts?${qp.toString()}`);
@@ -99,7 +102,15 @@ export function ContextMappingManager({ canManage }: { canManage: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (contextKey) void load(contextKey);
+    // Deferred a tick (matches the debounced-load convention used elsewhere
+    // in this admin shell) rather than invoking `load` synchronously in the
+    // effect body, which begins executing its own setState calls before the
+    // first `await` — the react-hooks/set-state-in-effect rule flags that
+    // re-entrancy risk even though `load` itself is declared async.
+    const timer = setTimeout(() => {
+      if (contextKey) void load(contextKey);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [contextKey, load]);
 
   async function addMapping(post: RelatableSearchResult) {
