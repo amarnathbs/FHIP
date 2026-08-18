@@ -25,10 +25,8 @@ export function deriveTocFromBlocks(blocks: AnyBlock[]): TocEntry[] {
     .filter((e) => e.text?.trim());
 }
 
-export function GuideTOC({ entries }: { entries: TocEntry[] }) {
-  if (entries.length === 0) return null;
-
-  const list = (
+function TocList({ entries }: { entries: TocEntry[] }) {
+  return (
     <ul className="space-y-1.5 text-sm">
       {entries.map((e) => (
         <li key={e.id} style={{ paddingLeft: e.level === 3 ? '0.75rem' : e.level === 4 ? '1.5rem' : 0 }}>
@@ -39,20 +37,43 @@ export function GuideTOC({ entries }: { entries: TocEntry[] }) {
       ))}
     </ul>
   );
+}
 
+// Split into two single-purpose components rather than one component that
+// renders both variants internally (`hidden lg:block` / `lg:hidden`) — a
+// prior version did that and was called twice (once inline in the article
+// body for mobile, once again in the desktop <aside>), which meant the
+// "desktop nav" half of the FIRST call had nothing hiding it at lg+ widths
+// and rendered a visible duplicate TOC inline above the article body.
+// Confirmed live via DOM inspection during the R1.5 responsive pass at
+// 1024px before this fix (2 <nav aria-label="On this page"> elements both
+// visible). Each of these two components is now rendered exactly once, in
+// exactly the layout slot it belongs to — see app/(marketing)/resources/[slug]/page.tsx.
+
+// Desktop/tablet: persistent sidebar block (spec §79: "optional content/
+// sidebar arrangement for TOC/metadata at desktop"). Render this only
+// inside the <aside> column.
+export function GuideTocDesktop({ entries }: { entries: TocEntry[] }) {
+  if (entries.length === 0) return null;
   return (
-    <>
-      {/* Desktop/tablet: persistent sidebar block (spec §79: "optional content/sidebar arrangement for TOC/metadata at desktop"). */}
-      <nav aria-label="On this page" className="hidden lg:block">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">On this page</p>
-        {list}
-      </nav>
+    <nav aria-label="On this page">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">On this page</p>
+      <TocList entries={entries} />
+    </nav>
+  );
+}
 
-      {/* Mobile/tablet: collapsible disclosure (spec §31). */}
-      <details className="rounded-card border border-line bg-white p-3 lg:hidden">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-ink marker:content-none">On this page</summary>
-        <div className="mt-2">{list}</div>
-      </details>
-    </>
+// Mobile/tablet: collapsible disclosure (spec §31). Render this only inline
+// in the article body, hidden at lg+ via its own class (the desktop
+// sidebar takes over at that width instead).
+export function GuideTocMobile({ entries }: { entries: TocEntry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <details className="rounded-card border border-line bg-white p-3 lg:hidden">
+      <summary className="cursor-pointer list-none text-sm font-semibold text-ink marker:content-none">On this page</summary>
+      <div className="mt-2">
+        <TocList entries={entries} />
+      </div>
+    </details>
   );
 }

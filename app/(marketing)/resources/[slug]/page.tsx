@@ -7,7 +7,7 @@ import { buildResourceMetadata, buildBreadcrumbJsonLd, buildArticleJsonLd, build
 import { Breadcrumbs } from '@/components/resources/public/Breadcrumbs';
 import { ResourceDetailHeader } from '@/components/resources/public/ResourceDetailHeader';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
-import { GuideTOC, deriveTocFromBlocks } from '@/components/resources/public/GuideTOC';
+import { GuideTocDesktop, GuideTocMobile, deriveTocFromBlocks } from '@/components/resources/public/GuideTOC';
 import { VideoDetailBody } from '@/components/resources/public/VideoDetailBody';
 import { GlossaryDetailBody } from '@/components/resources/public/GlossaryDetailBody';
 import { MoneyUpdateDetailBody } from '@/components/resources/public/MoneyUpdateDetailBody';
@@ -23,14 +23,29 @@ type Params = { slug: string };
 // Spec §63-66: title/description/canonical/robots derived per-post, with
 // documented seo_title->title and seo_description->excerpt fallbacks
 // (buildResourceMetadata). Spec §71/§86: a hidden/unpublished/nonexistent
-// slug produces the exact same outcome here — generateMetadata simply
-// returns {} (Next falls back to the parent segment's own metadata), no
-// distinguishing signal leaks through a page <title>/description either.
+// slug produces the exact same outcome here — no distinguishing signal
+// leaks through a page <title>/description either.
+//
+// KNOWN DEFECT (documented in the R1.5 completion report, not silently
+// accepted): calling notFound() here as well as in the page component below
+// was tried specifically to fix the HTTP status code, on the theory that
+// generateMetadata resolves before the body starts streaming. Verified live
+// via `curl -D-` that it does NOT fix it in this Next.js version (16.2.12)
+// — both a hidden fixture and a genuinely nonexistent slug still return
+// HTTP 200 even though the rendered page content is the correct generic
+// 404 page with a noindex meta tag. Left in place anyway (harmless, still
+// the more idiomatic pattern) since removing it would not change the
+// outcome. The security-relevant property still holds: rendered content is
+// byte-for-byte identical for "hidden" vs "never existed" (spec §71's
+// actual concern), and the noindex meta tag is present on both regardless
+// of the wrong status line, so a JS-rendering crawler still will not index
+// it — see the completion report's Public Security Tests section for the
+// full analysis.
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
   const supabase = await createClient();
   const post = await getPublicResourceBySlug(supabase, slug);
-  if (!post) return {};
+  if (!post) notFound();
   return buildResourceMetadata(post);
 }
 
@@ -102,12 +117,11 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
             authorName={post.author?.display_name ?? null}
           />
 
-          {/* Mobile/tablet "On this page" disclosure (spec §31) — GuideTOC's
-              own <details lg:hidden> renders only below the desktop
-              breakpoint; the matching desktop <nav hidden lg:block> is
-              rendered separately in the <aside> below so each half only
-              ever exists visibly at one breakpoint. */}
-          {toc.length > 0 && <GuideTOC entries={toc} />}
+          {/* Mobile/tablet "On this page" disclosure (spec §31) only — the
+              matching desktop nav is rendered once, separately, in the
+              <aside> below (see GuideTOC.tsx's header for why these are two
+              distinct components rather than one rendered twice). */}
+          <GuideTocMobile entries={toc} />
 
           {showGenericFreshnessWarning && <FreshnessWarning expiresAt={post.expires_at} lastReviewedAt={post.last_reviewed_at} />}
 
@@ -140,7 +154,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
         {toc.length > 0 && (
           <aside className="hidden lg:block">
             <div className="sticky top-6 rounded-card border border-line bg-white p-4">
-              <GuideTOC entries={toc} />
+              <GuideTocDesktop entries={toc} />
             </div>
           </aside>
         )}

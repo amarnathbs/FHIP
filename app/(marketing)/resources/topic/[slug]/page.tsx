@@ -15,11 +15,18 @@ type Search = { jurisdiction?: string; type?: string; page?: string };
 const VALID_JURISDICTIONS = ['all', 'global', 'australia', 'india', 'australia_india_cross_border'];
 const VALID_TYPES = ['all', 'article', 'guide', 'fhip_explainer', 'video', 'glossary', 'money_update'];
 
+// KNOWN DEFECT — see the matching comment in
+// app/(marketing)/resources/[slug]/page.tsx's generateMetadata: calling
+// notFound() here too was tried and verified NOT to fix this Next.js
+// version's HTTP-status-stays-200 behaviour for a programmatic notFound()
+// (confirmed live via curl -D- for both a real and a fake topic slug).
+// Rendered content and noindex are still correct regardless — documented in
+// the R1.5 completion report, not silently accepted.
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
   const supabase = await createClient();
   const category = await getPublicCategoryBySlug(supabase, slug);
-  if (!category) return {};
+  if (!category) notFound();
   const canonical = `${getPublicSiteBaseUrl()}/resources/topic/${slug}`;
   return {
     title: `${category.name} | FHIP Resources`,
