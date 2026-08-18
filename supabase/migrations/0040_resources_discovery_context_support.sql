@@ -54,15 +54,37 @@
 -- depends on this), excerpt gets weight B. Category/tag and transcript
 -- matching are handled outside this column (see the RPC below) since they
 -- live in other tables.
+--
+-- Postgres will not accept to_tsvector('english', ...) written directly
+-- inside a GENERATED ALWAYS AS (...) STORED expression (42P17: "generation
+-- expression is not immutable" — caught live applying this migration to
+-- DEV). The 2-arg to_tsvector(regconfig, text) function is itself marked
+-- IMMUTABLE, but resolving the text literal 'english' to a regconfig OID is
+-- a catalog lookup, and the generated-column validator does not accept that
+-- as provably immutable — a long-standing, well-documented Postgres
+-- limitation, unrelated to anything specific to this schema. Fixed by
+-- wrapping the computation in our own SQL function explicitly declared
+-- IMMUTABLE: Postgres then only checks this function's declared volatility
+-- as a single node, not the nodes inside its body.
+create or replace function resource_posts_search_vector(title text, aliases text[], excerpt text)
+returns tsvector
+language sql
+immutable
+as $$
+  select
+    setweight(to_tsvector('pg_catalog.english', coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('pg_catalog.english', coalesce(array_to_string(aliases, ' '), '')), 'A') ||
+    setweight(to_tsvector('pg_catalog.english', coalesce(excerpt, '')), 'B');
+$$;
+
+comment on function resource_posts_search_vector is
+  'R1.6 — IMMUTABLE wrapper around to_tsvector() so resource_posts.search_vector can be a GENERATED ALWAYS AS (...) STORED column (see this function''s own inline comment above for why to_tsvector(''english'', ...) cannot be written directly inside that expression).';
+
 alter table resource_posts add column search_vector tsvector
-  generated always as (
-    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(array_to_string(aliases, ' '), '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(excerpt, '')), 'B')
-  ) stored;
+  generated always as (resource_posts_search_vector(title, aliases, excerpt)) stored;
 
 comment on column resource_posts.search_vector is
-  'R1.6 — generated tsvector for public search (title+aliases weight A, excerpt weight B). Always in sync with the source row (STORED GENERATED ALWAYS AS, not a trigger) — spec §82: no manual "rebuild search" step, ever, including after R1.7''s bulk import.';
+  'R1.6 — generated tsvector for public search (title+aliases weight A, excerpt weight B), computed via the IMMUTABLE resource_posts_search_vector() wrapper. Always in sync with the source row (STORED GENERATED ALWAYS AS, not a trigger) — spec §82: no manual "rebuild search" step, ever, including after R1.7''s bulk import.';
 
 create index idx_resource_posts_search_vector on resource_posts using gin(search_vector);
 
