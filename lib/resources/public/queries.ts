@@ -49,7 +49,10 @@ export interface PublicResourceCard {
   video: PublicCardVideo | null;
 }
 
-const CARD_COLUMNS = [
+// Exported for lib/resources/search/queries.ts (spec §73: search result
+// cards reuse the exact same card shape/query columns as every other public
+// listing — no separate, visually-incompatible search-card fetch).
+export const CARD_COLUMNS = [
   'id',
   'slug',
   'title',
@@ -72,7 +75,7 @@ const CARD_COLUMNS = [
 // post, migration 0033 §11), so every card query normalises it to a single
 // object-or-null immediately after the fetch rather than repeating that
 // unwrap at every render call site.
-interface RawCardRow {
+export interface RawCardRow {
   id: string;
   slug: string | null;
   title: string;
@@ -89,7 +92,7 @@ interface RawCardRow {
   video: PublicCardVideo[] | PublicCardVideo | null;
 }
 
-function normalizeCard(row: RawCardRow): PublicResourceCard {
+export function normalizeCard(row: RawCardRow): PublicResourceCard {
   return {
     ...row,
     content_type: row.content_type as PublicContentType,

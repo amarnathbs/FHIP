@@ -118,3 +118,17 @@ export function canCreateSpecialistContent(current: CurrentResourceRoles): boole
 export function canManageFaqs(current: CurrentResourceRoles): boolean {
   return canCreateSpecialistContent(current);
 }
+
+// R1.6 — Related Content / CTA Library / Context Mapping admin (spec §79/
+// §80: "Likely management roles: Super Admin, Resource Admin, Editor...
+// Compliance Reviewer/Publisher should not automatically become mapping
+// administrators unless existing RBAC says so." No existing RBAC document
+// grants Publisher/Compliance Reviewer either capability, so this is
+// deliberately narrower than isResourceStaff() — Analyst is excluded (must
+// remain read-only per spec §79/§80, and is already excluded from
+// isResourceStaff() itself).
+const DISCOVERY_MANAGE_ROLES: ResourceRole[] = ['resource_admin', 'editor'];
+
+export function canManageDiscovery(current: CurrentResourceRoles): boolean {
+  return current.isSuperAdmin || current.roles.some((r) => DISCOVERY_MANAGE_ROLES.includes(r));
+}
