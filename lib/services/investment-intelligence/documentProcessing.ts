@@ -33,7 +33,7 @@ import { emitAuditEvent } from './audit';
 import { downloadSourceDocumentObject } from './storage';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
-import type { ParsedDocumentOutput, ParsedInstrumentRecord, ParsedTransactionRecord } from './parsers/types';
+import type { ParsedInstrumentRecord } from './parsers/types';
 import { resolveOrCreateAccount } from './accountResolution';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
@@ -42,9 +42,9 @@ import { evaluateCertification } from './certification';
 import { loadActiveReconciliationConfig } from './reconciliationConfig';
 import { scaledToDecimalString, ZERO } from './decimal';
 import { isoDateDaysBetween } from './dateNormalisation';
-import { normaliseSchemeName, detectPlanType, detectOptionType } from './parsers/textUtils';
+import { normaliseSchemeName } from './parsers/textUtils';
 import { randomUUID } from 'crypto';
-import type { IiPlanType, IiOptionType, IiPortfolioTruthStatus } from './types';
+import type { IiPlanType, IiOptionType } from './types';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -638,6 +638,44 @@ async function handleExtractionFailure(
   });
 
   return { ok: false, status, parseRunId, error: errorMessage, reconciliationCaseId: caseId };
+}
+
+// R2 API surface — "certify/re-certify portfolio" (spec section 51).
+// Re-runs the certification evaluation for one position on demand (e.g.
+// after a user resolves a reconciliation case) WITHOUT requiring a fresh
+// document upload — gathers the current owner/instrument-resolution state
+// fresh from the database rather than reusing a stale in-memory flag from
+// whatever the last processing run happened to compute.
+export async function recertifyPosition(userId: string, accountId: string, instrumentId: string): Promise<{ ok: boolean; error: string | null }> {
+  const admin = createAdminClient();
+
+  const { data: account, error: accountErr } = await admin.from('ii_accounts').select('id, owner_member_id, source_document_id').eq('id', accountId).eq('user_id', userId).maybeSingle();
+  if (accountErr || !account) return { ok: false, error: accountErr?.message ?? 'Account not found or not owned by this user.' };
+
+  const { data: latestSnapshot } = await admin
+    .from('ii_holding_snapshots')
+    .select('source_document_id')
+    .eq('account_id', accountId)
+    .eq('instrument_id', instrumentId)
+    .order('as_of_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sourceDocumentId = (latestSnapshot?.source_document_id as string | null) ?? (account.source_document_id as string | null) ?? accountId;
+
+  const config = await loadActiveReconciliationConfig();
+  const ownerUnresolved = !account.owner_member_id;
+
+  const { data: instrumentCases } = await admin
+    .from('ii_reconciliation_cases')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'open')
+    .eq('discrepancy_type', 'ambiguous_instrument')
+    .eq('source_document_id', sourceDocumentId);
+  const anyInstrumentUnresolved = (instrumentCases ?? []).length > 0;
+
+  await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, anyInstrumentUnresolved);
+  return { ok: true, error: null };
 }
 
 async function evaluatePositionAndCertify(

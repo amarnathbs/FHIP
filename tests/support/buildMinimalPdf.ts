@@ -16,7 +16,6 @@ function escapePdfText(s: string): string {
 }
 
 export function buildMinimalTextPdf(pages: string[][]): Buffer {
-  const objects: string[] = [];
   const pageObjNums: number[] = [];
   const contentObjNums: number[] = [];
 
@@ -32,58 +31,29 @@ export function buildMinimalTextPdf(pages: string[][]): Buffer {
   const kids = pageObjNums.map((n) => `${n} 0 R`).join(' ');
   const pagesObj = `2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>\nendobj\n`;
 
-  objects.push(catalogObj, pagesObj);
-
-  for (let i = 0; i < pages.length; i++) {
-    const lines = pages[i];
-    let y = 760;
-    const streamParts: string[] = ['BT', '/F1 9 Tf', `50 ${y} Td`];
-    for (let li = 0; li < lines.length; li++) {
-      if (li === 0) {
-        streamParts.push(`(${escapePdfText(lines[li])}) Tj`);
-      } else {
-        streamParts.push('0 -12 Td', `(${escapePdfText(lines[li])}) Tj`);
-      }
-    }
-    streamParts.push('ET');
-    const streamContent = streamParts.join('\n');
-    const contentObj = `${contentObjNums[i]} 0 obj\n<< /Length ${Buffer.byteLength(streamContent, 'utf8')} >>\nstream\n${streamContent}\nendstream\nendobj\n`;
-    const pageObj = `${pageObjNums[i]} 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 ${fontObjNum} 0 R >> >> /MediaBox [0 0 612 792] /Contents ${contentObjNums[i]} 0 R >>\nendobj\n`;
-    objects.push(pageObj, contentObj);
-  }
-
-  const fontObj = `${fontObjNum} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
-  objects.push(fontObj);
-
-  let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
-  const offsets: number[] = [0]; // object 0 is free
-  let cursor = Buffer.byteLength(pdf, 'binary');
-
-  // objects[] currently holds catalog+pages, then (page,content) pairs, then font — but object numbers are 1,2,3.. in that same order? No: pageObjNums start at 3, so ordering in objects[] must match ascending object numbers for offsets[] indexing below. Recompute properly by object number.
   const byNumber = new Map<number, string>();
   byNumber.set(1, catalogObj);
   byNumber.set(2, pagesObj);
   for (let i = 0; i < pages.length; i++) {
     const lines = pages[i];
-    let streamParts: string[];
-    {
-      const parts: string[] = ['BT', '/F1 9 Tf', '50 760 Td'];
-      for (let li = 0; li < lines.length; li++) {
-        if (li === 0) parts.push(`(${escapePdfText(lines[li])}) Tj`);
-        else parts.push('0 -12 Td', `(${escapePdfText(lines[li])}) Tj`);
-      }
-      parts.push('ET');
-      streamParts = parts;
+    const parts: string[] = ['BT', '/F1 9 Tf', '50 760 Td'];
+    for (let li = 0; li < lines.length; li++) {
+      if (li === 0) parts.push(`(${escapePdfText(lines[li])}) Tj`);
+      else parts.push('0 -12 Td', `(${escapePdfText(lines[li])}) Tj`);
     }
-    const streamContent = streamParts.join('\n');
+    parts.push('ET');
+    const streamContent = parts.join('\n');
     const contentObj = `${contentObjNums[i]} 0 obj\n<< /Length ${Buffer.byteLength(streamContent, 'utf8')} >>\nstream\n${streamContent}\nendstream\nendobj\n`;
     const pageObj = `${pageObjNums[i]} 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 ${fontObjNum} 0 R >> >> /MediaBox [0 0 612 792] /Contents ${contentObjNums[i]} 0 R >>\nendobj\n`;
     byNumber.set(pageObjNums[i], pageObj);
     byNumber.set(contentObjNums[i], contentObj);
   }
+  const fontObj = `${fontObjNum} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
   byNumber.set(fontObjNum, fontObj);
 
   const totalObjects = fontObjNum; // highest object number
+  let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+  let cursor = Buffer.byteLength(pdf, 'binary');
   const offsetByNumber = new Map<number, number>();
   for (let n = 1; n <= totalObjects; n++) {
     const objStr = byNumber.get(n);
@@ -97,16 +67,11 @@ export function buildMinimalTextPdf(pages: string[][]): Buffer {
   let xref = `xref\n0 ${totalObjects + 1}\n0000000000 65535 f \n`;
   for (let n = 1; n <= totalObjects; n++) {
     const off = offsetByNumber.get(n);
-    if (off === undefined) {
-      xref += `0000000000 00000 f \n`;
-    } else {
-      xref += `${off.toString().padStart(10, '0')} 00000 n \n`;
-    }
+    xref += off === undefined ? `0000000000 00000 f \n` : `${off.toString().padStart(10, '0')} 00000 n \n`;
   }
   pdf += xref;
   pdf += `trailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
-  void offsets;
   return Buffer.from(pdf, 'binary');
 }
 
