@@ -35,3 +35,4 @@ next-env.d.ts
 /.claude/
 .env.local.example
 supabase/.temp/
+ii-r1-live-dev-test-results.local.json
