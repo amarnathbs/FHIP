@@ -29,7 +29,7 @@
     "qualityStatus": "warning"
   },
   "reconciliation": {
-    "discrepancyType": "closing_balance_mismatch",
+    "discrepancyType": "value_mismatch",
     "discrepancyDetails": {
       "priorCertifiedValue": 11200,
       "newStatementValue": 45000,

@@ -25,6 +25,9 @@ export type IiAccountStatus = 'active' | 'closed' | 'archived';
 export type IiSourceDocumentStatus = 'uploaded' | 'parsing' | 'parsed' | 'parse_failed' | 'superseded' | 'archived';
 export type IiDocumentType = 'cas_statement' | 'demat_statement' | 'contract_note' | 'manual_entry_record' | 'other';
 
+// R2 extends the R1 12-value taxonomy (migration 0033) with the additional
+// canonical values spec section 19 requires — see migration 0040's comment
+// for the exact reasoning. All 12 R1 values are kept unchanged.
 export type IiTransactionType =
   | 'purchase'
   | 'sip'
@@ -37,8 +40,75 @@ export type IiTransactionType =
   | 'merger'
   | 'fee'
   | 'tax'
-  | 'adjustment';
+  | 'adjustment'
+  | 'stp_in'
+  | 'stp_out'
+  | 'swp'
+  | 'transfer_in'
+  | 'transfer_out'
+  | 'reversal'
+  | 'segregation'
+  | 'unclassified';
 export type IiTransactionStatus = 'parsed' | 'reconciled' | 'corrected' | 'reversed';
+
+// --- R2 additions (spec sections 8-34) ---
+
+export type IiParserCode = 'cams_detailed_v1' | 'kfintech_detailed_v1';
+
+export type IiParseRunStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export type IiSourceDocumentStatusR2 = IiSourceDocumentStatus | 'password_required' | 'reconciliation_required' | 'unsupported';
+
+export type IiPlanType = 'direct' | 'regular' | 'not_applicable';
+export type IiOptionType = 'growth' | 'idcw' | 'dividend_payout' | 'dividend_reinvestment' | 'not_applicable';
+
+export type IiPortfolioTruthStatus =
+  | 'pending'
+  | 'parsed'
+  | 'reconciliation_required'
+  | 'certified_with_warnings'
+  | 'certified'
+  | 'failed'
+  | 'superseded'
+  | 'archived';
+
+export type IiHistoryCompleteness = 'complete_from_inception' | 'complete_from_known_opening_balance' | 'partial_history' | 'holdings_only';
+
+export type IiDiscrepancyType =
+  | 'owner_unmatched'
+  | 'account_unmatched'
+  | 'instrument_unmatched'
+  | 'ambiguous_instrument'
+  | 'transaction_unclassified'
+  | 'unit_mismatch'
+  | 'value_mismatch'
+  | 'duplicate_suspected'
+  | 'missing_opening_history'
+  | 'unsupported_document'
+  | 'document_corrupt'
+  | 'document_password_required'
+  | 'parse_incomplete'
+  | 'statement_period_gap'
+  | 'other';
+
+export type IiReconciliationSeverity = 'info' | 'low' | 'medium' | 'high' | 'blocking';
+
+export type IiAuditEventTypeR2 =
+  | IiAuditEventType
+  | 'document_uploaded'
+  | 'source_detected'
+  | 'parse_started'
+  | 'parse_failed'
+  | 'parser_version_used'
+  | 'account_resolved'
+  | 'instrument_resolved'
+  | 'reconciliation_case_created'
+  | 'reconciliation_case_resolved'
+  | 'portfolio_certified'
+  | 'portfolio_certified_with_warnings'
+  | 'portfolio_failed'
+  | 'document_superseded'
+  | 'document_processing_failed';
 
 export type IiQualityStatus = 'certified' | 'warning' | 'incomplete';
 

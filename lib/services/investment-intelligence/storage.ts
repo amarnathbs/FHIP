@@ -82,3 +82,18 @@ export async function deleteSourceDocumentObject(objectKey: string): Promise<{ e
   const { error } = await admin.storage.from(II_STORAGE_BUCKET).remove([objectKey]);
   return { error: error?.message ?? null };
 }
+
+// R2 — server-side byte download for real processing (the parser needs the
+// actual bytes in-process; a signed URL is for browser/download use only).
+// Service-role-only, called exclusively from the processing pipeline
+// AFTER the calling route has already verified the requesting user owns
+// the ii_source_documents row this objectKey belongs to
+// (documentProcessing.ts never accepts a bare objectKey from a request
+// body — always re-derives it from the owned row).
+export async function downloadSourceDocumentObject(objectKey: string): Promise<{ bytes: Uint8Array | null; error: string | null }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(II_STORAGE_BUCKET).download(objectKey);
+  if (error || !data) return { bytes: null, error: error?.message ?? 'Download failed' };
+  const arrayBuffer = await data.arrayBuffer();
+  return { bytes: new Uint8Array(arrayBuffer), error: null };
+}
