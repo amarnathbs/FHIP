@@ -65,6 +65,12 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'DNA', href: '/dna' },
       { type: 'link', label: 'Resilience', href: '/resilience' },
       { type: 'link', label: 'Twin / Benchmark', href: '/financial-twin' },
+      // Investment Intelligence (India) R2: statement upload / Portfolio
+      // Truth review only — this area does NOT feed Investments/Assets/
+      // Dashboard yet (no FHIP publishing in R2, spec section 32). Kept
+      // as its own nav entry, not merged into "Investment & Retirement"
+      // above, so that separation is visible to the user too.
+      { type: 'link', label: 'Investment Intelligence (India)', href: '/investment-intelligence' },
     ],
   },
   {
