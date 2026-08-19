@@ -30,6 +30,35 @@ interface ReconciliationCase {
   opened_at: string;
 }
 
+// R3 — Publish to FHIP (spec sections 41-42). Mirrors the shape returned by
+// GET /api/investment-intelligence/positions/[id]/preview.
+interface PublicationPreview {
+  positionId: string;
+  eligibility: { status: 'ELIGIBLE' | 'NOT_ELIGIBLE' | 'REVIEW_REQUIRED'; blockingReasons: { code: string; message: string }[]; warningReasons: { code: string; message: string }[] };
+  owner: { memberId: string | null; resolvedOwner: string | null; memberName: string | null };
+  investmentCategory: string | null;
+  institution: string | null;
+  sourceCountry: string | null;
+  sourceCurrency: string | null;
+  valuationAsOfDate: string | null;
+  certifiedValue: number | null;
+  costBaseStatus: string;
+  costBaseValue: number | null;
+  annualContributionStatus: string;
+  targetRegister: string;
+  duplicateCandidates: { investmentId: string; matchScore: number; matchedOn: string[]; existingValue: number; existingCurrency: string; existingInstitution: string | null; existingOwner: string }[];
+  financialImpact: { currentIncludedValue: number; newPublishedValue: number; manualValueBeingSuperseded: number; netChange: number; currency: string } | null;
+  registerAction: string;
+  dataQualityStatus: string;
+  baseCurrency: { currencyCode: string | null; amount: number | null; rateUsed: number | null; available: boolean; reason?: string };
+  alreadyPublished: { publicationId: string; publishedRowId: string | null; status: string } | null;
+}
+
+function formatMoney(value: number | null, currency: string | null): string {
+  if (value == null) return '—';
+  return `${currency ?? ''} ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`.trim();
+}
+
 interface DocumentSummary {
   document: {
     id: string;
@@ -105,6 +134,13 @@ export function InvestmentIntelligenceClient() {
   const [sourceKey, setSourceKey] = useState<'cams' | 'kfintech'>('cams');
   const [countryCode] = useState<'IN'>('IN');
   const [uploading, setUploading] = useState(false);
+
+  // R3 — Publish to FHIP flow state.
+  const [publishPreview, setPublishPreview] = useState<PublicationPreview | null>(null);
+  const [publishPositionId, setPublishPositionId] = useState<string | null>(null);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishChoice, setPublishChoice] = useState<'new' | string>('new'); // 'new' or a candidate investmentId
+  const [publishResultMessage, setPublishResultMessage] = useState<string | null>(null);
 
   async function loadDocuments() {
     try {
@@ -242,6 +278,54 @@ export function InvestmentIntelligenceClient() {
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
+    }
+  }
+
+  async function openPublishPreview(positionId: string) {
+    setError(null);
+    setPublishResultMessage(null);
+    setPublishChoice('new');
+    setPublishPositionId(positionId);
+    setPublishPreview(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/positions/${positionId}/preview`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not build publication preview');
+      setPublishPreview(json.data as PublicationPreview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setPublishPositionId(null);
+    }
+  }
+
+  function closePublishPreview() {
+    setPublishPositionId(null);
+    setPublishPreview(null);
+    setPublishResultMessage(null);
+  }
+
+  async function confirmPublish() {
+    if (!publishPositionId) return;
+    setPublishBusy(true);
+    setError(null);
+    try {
+      const body: { linkToExistingInvestmentId?: string; acknowledgedNoDuplicate?: boolean } =
+        publishChoice === 'new' ? { acknowledgedNoDuplicate: true } : { linkToExistingInvestmentId: publishChoice };
+      const res = await fetch(`/api/investment-intelligence/positions/${publishPositionId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Publish failed');
+      setPublishResultMessage(
+        `Published. Net change to net worth: ${json.data?.financialImpact ? formatMoney(json.data.financialImpact.netChange, json.data.financialImpact.currency) : '—'}.`
+      );
+      if (selectedId) await loadSummary(selectedId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setPublishBusy(false);
     }
   }
 
@@ -403,22 +487,154 @@ export function InvestmentIntelligenceClient() {
                   <p className="mt-1 text-sm text-gray-500">No positions evaluated yet for this statement.</p>
                 ) : (
                   <ul className="mt-1 space-y-1">
-                    {summary.portfolioTruthStatuses.map((s) => (
-                      <li key={`${s.account_id}:${s.instrument_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
-                        <span className="text-xs text-gray-600">
-                          Position {s.account_id.slice(0, 8)}…/{s.instrument_id.slice(0, 8)}…
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <StatusBadge status={s.status} />
-                          <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                            Re-evaluate
-                          </button>
-                        </span>
-                      </li>
-                    ))}
+                    {summary.portfolioTruthStatuses.map((s) => {
+                      const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
+                      const canPublish = holding && (s.status === 'certified' || s.status === 'certified_with_warnings');
+                      return (
+                        <li key={`${s.account_id}:${s.instrument_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
+                          <span className="text-xs text-gray-600">
+                            Position {s.account_id.slice(0, 8)}…/{s.instrument_id.slice(0, 8)}…
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <StatusBadge status={s.status} />
+                            <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                              Re-evaluate
+                            </button>
+                            {canPublish && (
+                              <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                                Publish to FHIP
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* R3 — Publish to FHIP: Preview -> Duplicate/Conflict Review ->
+          Net-worth Impact Preview -> Confirm -> Success (spec sections
+          41-42). Minimal inline panel, not a full redesign of the module. */}
+      {publishPositionId && (
+        <section className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">Publish to FHIP</h2>
+            <button onClick={closePublishPreview} className="text-xs text-gray-500 hover:underline">
+              Close
+            </button>
+          </div>
+          {!publishPreview ? (
+            <p className="mt-2 text-sm text-gray-500">Loading preview…</p>
+          ) : publishResultMessage ? (
+            <p className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{publishResultMessage}</p>
+          ) : (
+            <div className="mt-3 space-y-3 text-sm">
+              {publishPreview.eligibility.status === 'NOT_ELIGIBLE' ? (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+                  <p className="font-medium">Not eligible to publish</p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {publishPreview.eligibility.blockingReasons.map((r) => (
+                      <li key={r.code}>{r.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs text-gray-500">Owner</dt>
+                      <dd className="font-medium text-gray-900">{publishPreview.owner.memberName ?? publishPreview.owner.resolvedOwner ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Category</dt>
+                      <dd className="font-medium text-gray-900">{publishPreview.investmentCategory ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Institution</dt>
+                      <dd className="font-medium text-gray-900">{publishPreview.institution ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Certified value ({publishPreview.sourceCurrency})</dt>
+                      <dd className="font-medium text-gray-900">{formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">As of</dt>
+                      <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Target register</dt>
+                      <dd className="font-medium text-gray-900">{publishPreview.targetRegister}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Cost base</dt>
+                      <dd className="font-medium text-gray-900">
+                        {publishPreview.costBaseValue != null ? formatMoney(publishPreview.costBaseValue, publishPreview.sourceCurrency) : `Unknown (${publishPreview.costBaseStatus})`}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Household currency</dt>
+                      <dd className="font-medium text-gray-900">
+                        {publishPreview.baseCurrency.available ? formatMoney(publishPreview.baseCurrency.amount, publishPreview.baseCurrency.currencyCode) : `Unavailable — ${publishPreview.baseCurrency.reason}`}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {publishPreview.alreadyPublished && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                      This position already has an active publication. Use Refresh instead of a first-time publish.
+                    </div>
+                  )}
+
+                  {publishPreview.duplicateCandidates.length > 0 && !publishPreview.alreadyPublished && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="font-medium text-amber-900">Possible duplicate of an existing manual investment</p>
+                      <div className="mt-2 space-y-1">
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name="publishChoice" checked={publishChoice === 'new'} onChange={() => setPublishChoice('new')} />
+                          <span>This is a new, separate investment — publish as new.</span>
+                        </label>
+                        {publishPreview.duplicateCandidates.map((c) => (
+                          <label key={c.investmentId} className="flex items-center gap-2">
+                            <input type="radio" name="publishChoice" checked={publishChoice === c.investmentId} onChange={() => setPublishChoice(c.investmentId)} />
+                            <span>
+                              This is the same investment as my existing &ldquo;{c.existingInstitution ?? 'manual'}&rdquo; row ({formatMoney(c.existingValue, c.existingCurrency)}) — link and supersede it.
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {publishPreview.financialImpact && (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Net-worth impact</p>
+                      <p className="mt-1 text-gray-800">
+                        {publishChoice !== 'new'
+                          ? `Existing manual value ${formatMoney(publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0, publishPreview.sourceCurrency)} superseded by certified value ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} — net change ${formatMoney((publishPreview.certifiedValue ?? 0) - (publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0), publishPreview.sourceCurrency)}.`
+                          : `New position adds ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} to net worth.`}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <button onClick={closePublishPreview} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmPublish}
+                      disabled={publishBusy || !!publishPreview.alreadyPublished}
+                      className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {publishBusy ? 'Publishing…' : 'Confirm & Publish'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </section>

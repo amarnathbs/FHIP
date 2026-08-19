@@ -145,3 +145,79 @@ export type IiAuditEventType =
   | 'professional_access'
   | 'archive'
   | 'deletion';
+
+// --- R3 additions (FHIP Publishing Integration & No-Double-Counting) ---
+
+// investments.owner / assets.owner / retirement_accounts.owner is a ROLE
+// ENUM (migration 0004), NOT a household_members.id FK. This corrects the
+// R0_FHIP_PUBLISHING_CONTRACT.md OWNER section's imprecise phrasing
+// ("resolved to a household_members.id, published into investments.owner")
+// against the actual schema — see R3_FHIP_MAPPING_SPEC.md.
+export const FHIP_OWNER_VALUES = ['self', 'spouse', 'joint', 'child', 'family_trust', 'company', 'smsf', 'other'] as const;
+export type FhipOwner = (typeof FHIP_OWNER_VALUES)[number];
+
+// household_members.relationship (migration 0009) — the source vocabulary
+// Investment Intelligence must map FROM.
+export type HouseholdMemberRelationship = 'self' | 'spouse' | 'partner' | 'child' | 'parent' | 'other_dependant' | 'other';
+
+export type IiPublicationStatusR3 = 'published' | 'unpublished' | 'superseded' | 'failed';
+
+export type IiCostBaseStatus = 'certified' | 'partial' | 'unknown' | 'not_available';
+export type IiAnnualContributionSource = 'confirmed_user_plan' | 'none';
+export type IiRiskBand = 'conservative' | 'balanced' | 'growth' | 'high_growth' | 'unknown';
+export type IiLinkageType = 'new_position' | 'linked_manual_row';
+export type IiInvestmentSourceType = 'manual' | 'investment_intelligence_published';
+
+// Publication eligibility gate outcome (spec section 10). NOT_ELIGIBLE and
+// REVIEW_REQUIRED are computed/ephemeral (never persisted as an
+// ii_fhip_publications row) — nothing is written to the database until the
+// user confirms a publish that has cleared this gate.
+export type IiEligibilityStatus = 'ELIGIBLE' | 'NOT_ELIGIBLE' | 'REVIEW_REQUIRED';
+
+export interface IiEligibilityReason {
+  code: string;
+  message: string;
+}
+
+export interface IiEligibilityResult {
+  status: IiEligibilityStatus;
+  blockingReasons: IiEligibilityReason[];
+  warningReasons: IiEligibilityReason[];
+}
+
+// One candidate existing manual FHIP row that might be the same economic
+// investment as the certified position being published (spec section 27).
+export interface IiDuplicateCandidate {
+  investmentId: string;
+  matchScore: number; // 0-1, transparency only — never used to auto-merge
+  matchedOn: string[]; // e.g. ['owner', 'category', 'institution', 'country', 'currency', 'approximate_value']
+  existingValue: number;
+  existingCurrency: string;
+  existingInstitution: string | null;
+  existingOwner: string;
+}
+
+export type IiRegisterAction = 'ADD_NEW' | 'REPLACE_LINK_EXISTING' | 'LEAVE_UNCHANGED' | 'REQUIRES_REVIEW';
+
+export interface IiFinancialImpact {
+  currentIncludedValue: number; // value currently counted toward net worth for this slot (0 if none)
+  newPublishedValue: number; // the certified value about to be included
+  manualValueBeingSuperseded: number; // 0 unless linking to an existing manual row
+  netChange: number; // newPublishedValue - manualValueBeingSuperseded (never the full newPublishedValue on a confirmed duplicate)
+  currency: string;
+}
+
+export type IiAuditEventTypeR3 =
+  | IiAuditEventTypeR2
+  | 'publication_previewed'
+  | 'publication_created'
+  | 'publication_confirmed'
+  | 'manual_duplicate_linked'
+  | 'manual_record_superseded'
+  | 'publication_refreshed'
+  | 'publication_superseded'
+  | 'publication_unpublished'
+  | 'publication_republished'
+  | 'publication_failed'
+  | 'conflict_detected'
+  | 'conflict_resolved';
