@@ -42,7 +42,7 @@ import type {
   SourceDetectionResult,
   ValidationOutcome,
 } from './types';
-import { splitLines, normaliseSchemeName, detectPlanType, detectOptionType, extractLabelledField, maskPan } from './textUtils';
+import { splitLines, normaliseSchemeName, detectPlanType, detectOptionType, extractLabelledField, maskPan, redactPanFromLine } from './textUtils';
 import { parseExactDecimal } from '../decimal';
 import { parseStatementDate } from '../dateNormalisation';
 import { classifyTransactionType } from '../transactionTypeMapping';
@@ -138,7 +138,9 @@ export const kfintechParser: InvestmentDocumentParser = {
         let holdingMode: string | null = null;
         let j = i + 1;
         while (j < lines.length && !extractLabelledField(lines[j], 'Folio No') && !extractLabelledField(lines[j], 'AMC Name')) {
-          blockLines.push(lines[j]);
+          // PAN redacted before retention (see textUtils.ts's
+          // redactPanFromLine doc comment — spec sections 16/34).
+          blockLines.push(redactPanFromLine(lines[j]));
           const p = extractLabelledField(lines[j], 'PAN');
           if (p !== null) pan = p;
           const n = extractLabelledField(lines[j], 'Investor Name');

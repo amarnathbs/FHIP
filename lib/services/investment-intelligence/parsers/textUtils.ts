@@ -53,3 +53,19 @@ export function maskPan(raw: string | null): string | null {
   if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(s)) return s; // not PAN-shaped — return as-is rather than guess
   return `${s.slice(0, 5)}****${s.slice(9)}`;
 }
+
+/**
+ * Redact a PAN value out of a verbatim source line before it is retained
+ * anywhere (spec sections 16, 34: "Full PAN must not appear in logs" —
+ * applied here proactively to ParsedAccountRecord.raw, which is currently
+ * unused downstream but must never become a full-PAN leak vector if a
+ * future call site starts persisting/logging it). Only touches a line
+ * that is exactly a "PAN[:] value" label line; every other line passes
+ * through unchanged.
+ */
+export function redactPanFromLine(line: string): string {
+  const value = extractLabelledField(line, 'PAN');
+  if (value === null) return line;
+  const masked = maskPan(value) ?? 'REDACTED';
+  return line.replace(value, masked);
+}
