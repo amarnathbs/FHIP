@@ -1,0 +1,19 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040001100
+PAN: ABCDE0011F
+Name: SANJAY GUPTA
+Holding Mode: SI
+
+AMC Name: Mirae Asset Mutual Fund
+Scheme Name: Mirae Asset Large Cap Fund - Growth (Direct Plan)
+ISIN: INF769K01AX1
+AMFI Code: 118825
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+08-Jan-2025   Purchase                              12,50,000.00  8734.567  143.1290  8734.567 [Ref: LG0001]
+08-Apr-2025   Purchase                              8,75,000.50  5678.912  154.1110  14413.479 [Ref: LG0002]
+
+Closing Unit Balance as on 30-Jun-2025 : 14413.479 Units   Valuation : Rs. 23,13,363.38   NAV as on 30-Jun-2025 : Rs. 160.5000

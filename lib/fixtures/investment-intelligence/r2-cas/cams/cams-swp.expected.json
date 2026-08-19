@@ -1,0 +1,67 @@
+{
+  "fixtureId": "cams-swp",
+  "title": "Systematic Withdrawal Plan, three monthly instalments",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040001000",
+      "holderName": "ROHAN JOSHI",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 3,
+  "transactions": [
+    {
+      "folioNumber": "1201040001000",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "swp",
+      "amount": "2000.00",
+      "units": "15.200",
+      "nav": "131.5000",
+      "sourceReference": "SWP0001"
+    },
+    {
+      "folioNumber": "1201040001000",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-03-01",
+      "canonicalType": "swp",
+      "amount": "2000.00",
+      "units": "15.300",
+      "nav": "130.5000",
+      "sourceReference": "SWP0002"
+    },
+    {
+      "folioNumber": "1201040001000",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-04-01",
+      "canonicalType": "swp",
+      "amount": "2000.00",
+      "units": "15.400",
+      "nav": "129.5000",
+      "sourceReference": "SWP0003"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040001000",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "254.100",
+      "value": "67107.81",
+      "nav": "264.1000"
+    }
+  ],
+  "notes": null
+}

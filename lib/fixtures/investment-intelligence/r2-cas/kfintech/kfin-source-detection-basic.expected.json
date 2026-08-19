@@ -1,0 +1,43 @@
+{
+  "fixtureId": "kfin-source-detection-basic",
+  "title": "Source detection, single folio, single AMC, single scheme, regular plan, growth, lumpsum purchase",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654321/00",
+      "holderName": "ANIL KUMAR",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "7654321/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-03",
+      "canonicalType": "purchase",
+      "amount": "20000.00",
+      "units": "143.680",
+      "nav": "139.2200",
+      "sourceReference": "KTXN0001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654321/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "143.680",
+      "value": "22164.66",
+      "nav": "154.3000"
+    }
+  ],
+  "notes": null
+}

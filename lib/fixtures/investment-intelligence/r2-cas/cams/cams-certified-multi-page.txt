@@ -1,0 +1,29 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040001300
+PAN: ABCDE0013F
+Name: ISHITA BOSE
+Holding Mode: SI
+
+AMC Name: Axis Mutual Fund
+Scheme Name: Axis Small Cap Fund - Growth (Direct Plan)
+ISIN: INF846K01EW2
+AMFI Code: 135944
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+05-Jan-2025   SIP Purchase                          3000.00  25.000  120.0000  25.000 [Ref: MP0001]
+20-Jan-2025   Purchase                              3000.00  24.793  121.0000  49.793 [Ref: MP0002]
+05-Feb-2025   SIP Purchase                          3000.00  24.590  122.0000  74.383 [Ref: MP0003]
+20-Feb-2025   Purchase                              3000.00  24.390  123.0000  98.773 [Ref: MP0004]
+05-Mar-2025   SIP Purchase                          3000.00  24.194  124.0000  122.967 [Ref: MP0005]
+20-Mar-2025   Purchase                              3000.00  24.000  125.0000  146.967 [Ref: MP0006]
+05-Apr-2025   SIP Purchase                          3000.00  23.810  126.0000  170.777 [Ref: MP0007]
+20-Apr-2025   Purchase                              3000.00  23.622  127.0000  194.399 [Ref: MP0008]
+05-May-2025   SIP Purchase                          3000.00  23.438  128.0000  217.837 [Ref: MP0009]
+20-May-2025   Purchase                              3000.00  23.256  129.0000  241.093 [Ref: MP0010]
+05-Jun-2025   SIP Purchase                          3000.00  23.077  130.0000  264.170 [Ref: MP0011]
+20-Jun-2025   Purchase                              3000.00  22.901  131.0000  287.071 [Ref: MP0012]
+
+Closing Unit Balance as on 30-Jun-2025 : 287.071 Units   Valuation : Rs. 37606.30   NAV as on 30-Jun-2025 : Rs. 131.0000

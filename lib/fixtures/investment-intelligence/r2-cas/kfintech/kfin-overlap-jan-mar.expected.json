@@ -1,0 +1,67 @@
+{
+  "fixtureId": "kfin-overlap-jan-mar",
+  "title": "Statement 1 of an incremental-import pair: Jan-Mar",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-03-31",
+  "accounts": [
+    {
+      "folioNumber": "7654335/00",
+      "holderName": "HARSH VARDHAN",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 3,
+  "transactions": [
+    {
+      "folioNumber": "7654335/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-01-11",
+      "canonicalType": "purchase",
+      "amount": "12000.00",
+      "units": "44.280",
+      "nav": "271.0000",
+      "sourceReference": "KOVL0001"
+    },
+    {
+      "folioNumber": "7654335/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-11",
+      "canonicalType": "sip",
+      "amount": "4000.00",
+      "units": "14.700",
+      "nav": "272.1000",
+      "sourceReference": "KOVL0002"
+    },
+    {
+      "folioNumber": "7654335/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-03-11",
+      "canonicalType": "sip",
+      "amount": "4000.00",
+      "units": "14.500",
+      "nav": "275.8600",
+      "sourceReference": "KOVL0003"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654335/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-03-31",
+      "units": "73.480",
+      "value": "20270.19",
+      "nav": "275.8600"
+    }
+  ],
+  "notes": null
+}

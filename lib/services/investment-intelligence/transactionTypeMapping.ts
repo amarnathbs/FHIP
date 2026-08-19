@@ -31,6 +31,13 @@ const RULES: Rule[] = [
   { code: 'stp_in', test: /\bstp\b.*\b(in|purchase)\b|systematic transfer.*\bin\b/i, type: 'stp_in' },
   { code: 'stp_out', test: /\bstp\b.*\bout\b|systematic transfer.*\bout\b/i, type: 'stp_out' },
   { code: 'swp', test: /\bswp\b|systematic withdrawal/i, type: 'swp' },
+  // 'reversal' is checked BEFORE the generic purchase/redemption rules
+  // deliberately: a real RTA narrative like "Purchase - Reversed" or
+  // "Redemption Reversal" contains a purchase/redemption keyword too, and
+  // the reversal fact is the more important classification signal
+  // (spec section 39/40's CAMS/KFIN adversarial rule-precedence test case
+  // exercises exactly this ordering).
+  { code: 'reversal', test: /\breversal\b|\breversed\b|\brejected\b.*\bunits?\b/i, type: 'reversal' },
   { code: 'switch_in', test: /switch.*\bin\b/i, type: 'switch_in' },
   { code: 'switch_out', test: /switch.*\bout\b/i, type: 'switch_out' },
   { code: 'dividend_reinvestment', test: /(idcw|dividend).*(reinvest)/i, type: 'reinvestment' },
@@ -42,7 +49,6 @@ const RULES: Rule[] = [
   { code: 'transfer_in', test: /transfer.*\bin\b/i, type: 'transfer_in' },
   { code: 'transfer_out', test: /transfer.*\bout\b/i, type: 'transfer_out' },
   { code: 'transfer_generic', test: /\btransfer\b/i, type: 'transfer' },
-  { code: 'reversal', test: /\breversal\b|\breversed\b|\brejected\b.*\bunits?\b/i, type: 'reversal' },
   { code: 'merger', test: /\bmerger\b|\bmerged\b|\bscheme consolidation\b/i, type: 'merger' },
   { code: 'segregation', test: /\bsegregat/i, type: 'segregation' },
   { code: 'fee', test: /\btransaction charge\b|\bstamp duty\b|\bfee\b/i, type: 'fee' },

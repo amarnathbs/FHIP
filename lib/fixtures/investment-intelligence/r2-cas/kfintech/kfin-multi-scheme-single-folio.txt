@@ -1,0 +1,29 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654322/00
+PAN : ABCDE0102F
+Investor Name : SUNITA RAO
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+12/01/2025   Purchase - Lumpsum          18000.00  66.420  271.0000  66.420 [Ref: KTXN0101]
+
+Closing Balance : 66.420 units as on 30/06/2025   Market Value : Rs 20500.50   NAV : Rs 308.6000
+
+AMC Name : HDFC Mutual Fund
+Scheme : HDFC Flexi Cap Fund - Growth (Regular Plan)
+ISIN : INF179K01YX6
+AMFI Code : 118835
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+18/01/2025   Purchase - Lumpsum          22000.00  183.600  119.8300  183.600 [Ref: KTXN0102]
+
+Closing Balance : 183.600 units as on 30/06/2025   Market Value : Rs 24100.70   NAV : Rs 131.3000

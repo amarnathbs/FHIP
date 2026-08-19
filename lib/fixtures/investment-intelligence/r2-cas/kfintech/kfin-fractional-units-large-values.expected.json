@@ -1,0 +1,55 @@
+{
+  "fixtureId": "kfin-fractional-units-large-values",
+  "title": "Large Indian-comma-formatted amounts with fractional (3-decimal) units",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654332/00",
+      "holderName": "VARUN MALHOTRA",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654332/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-01-14",
+      "canonicalType": "purchase",
+      "amount": "2000000.00",
+      "units": "6482.315",
+      "nav": "308.5120",
+      "sourceReference": "KLG0001"
+    },
+    {
+      "folioNumber": "7654332/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-04-14",
+      "canonicalType": "purchase",
+      "amount": "1560000.75",
+      "units": "4890.221",
+      "nav": "318.9900",
+      "sourceReference": "KLG0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654332/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "11372.536",
+      "value": "3757485.89",
+      "nav": "330.4000"
+    }
+  ],
+  "notes": null
+}

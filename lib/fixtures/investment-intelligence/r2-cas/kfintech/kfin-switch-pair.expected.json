@@ -1,0 +1,63 @@
+{
+  "fixtureId": "kfin-switch-pair",
+  "title": "Switch-out of one scheme paired with switch-in to another, same folio/date",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654327/00",
+      "holderName": "AMIT SINGH",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654327/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-04-11",
+      "canonicalType": "switch_out",
+      "amount": "9000.00",
+      "units": "68.350",
+      "nav": "131.6800",
+      "sourceReference": "KSW0001OUT"
+    },
+    {
+      "folioNumber": "7654327/00",
+      "scheme": "Nippon India Small Cap Fund - Growth (Regular Plan)",
+      "isin": "INF204K01UP8",
+      "amfiSchemeCode": "118779",
+      "transactionDateIso": "2025-04-11",
+      "canonicalType": "switch_in",
+      "amount": "9000.00",
+      "units": "77.860",
+      "nav": "115.6000",
+      "sourceReference": "KSW0001IN"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "7654327/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "11.650",
+      "value": "1534.30",
+      "nav": "131.7000"
+    },
+    {
+      "folioNumber": "7654327/00",
+      "scheme": "Nippon India Small Cap Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "77.860",
+      "value": "8751.46",
+      "nav": "112.4000"
+    }
+  ],
+  "notes": null
+}

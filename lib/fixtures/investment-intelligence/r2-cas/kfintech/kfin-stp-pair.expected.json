@@ -1,0 +1,63 @@
+{
+  "fixtureId": "kfin-stp-pair",
+  "title": "Systematic Transfer Plan out of one scheme into another",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654330/00",
+      "holderName": "DIVYA NAIDU",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654330/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-03-01",
+      "canonicalType": "stp_out",
+      "amount": "4000.00",
+      "units": "29.110",
+      "nav": "137.4000",
+      "sourceReference": "KSTP0001OUT"
+    },
+    {
+      "folioNumber": "7654330/00",
+      "scheme": "Mirae Asset Large Cap Fund - Growth (Regular Plan)",
+      "isin": "INF769K01AY9",
+      "amfiSchemeCode": "118826",
+      "transactionDateIso": "2025-03-01",
+      "canonicalType": "stp_in",
+      "amount": "4000.00",
+      "units": "25.600",
+      "nav": "156.2500",
+      "sourceReference": "KSTP0001IN"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "7654330/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "170.890",
+      "value": "52736.65",
+      "nav": "308.6000"
+    },
+    {
+      "folioNumber": "7654330/00",
+      "scheme": "Mirae Asset Large Cap Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "25.600",
+      "value": "3898.88",
+      "nav": "152.3000"
+    }
+  ],
+  "notes": null
+}
