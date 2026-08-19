@@ -1,0 +1,31 @@
+{
+  "fixtureKey": "07-household-b-independent",
+  "sourceKey": "manual",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "manual_entry_record",
+  "originalFilename": "manual-household-b-independent.json",
+  "account": {
+    "accountType": "mf_folio",
+    "institutionName": "Axis Mutual Fund",
+    "folioNumber": "TESTFIX-FOLIO-HOUSEHOLDB-001"
+  },
+  "instrument": {
+    "instrumentName": "Axis Bluechip Fund - Growth (Direct Plan)",
+    "instrumentClass": "mutual_fund",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": [
+      { "scheme": "amfi_scheme_code", "value": "TESTFIX-AMFI-AXISBC-HOUSEHOLDB-001", "countryCode": "IN" }
+    ]
+  },
+  "transactions": [
+    { "transactionType": "purchase", "transactionDate": "2025-02-05", "units": 300, "pricePerUnit": 40, "grossAmount": 12000, "sourceReference": "TESTFIX-TXN-HOUSEHOLDB-000201-1" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-03-31",
+    "units": 300,
+    "value": 12800,
+    "qualityStatus": "certified"
+  }
+}
