@@ -688,11 +688,54 @@ export async function republishPosition(userId: string, publicationId: string): 
   const { data: activeConflict } = await supabase.from('ii_fhip_publications').select('id').eq('user_id', userId).eq('account_id', pub.account_id).eq('instrument_id', pub.instrument_id).eq('status', 'published').maybeSingle();
   if (activeConflict) return { error: 'Another publication for this position is already active — republish refused to avoid a duplicate active row.', publicationId: null };
 
-  await supabase
+  // Re-derive the FULL certified field set (matching publishPosition()'s
+  // fieldPayload), not just the 3 economically-significant fields the
+  // original implementation wrote. Live-DEV reproduction (R3 closure pass)
+  // confirmed the gap directly: after unpublish -> republish, current_value
+  // correctly read 520000 but investment_name stayed "Original Manual
+  // Investment" and ii_canonical_account_id stayed null, even though
+  // source_type read 'investment_intelligence_published' — a provenance/
+  // display-consistency bug, not a financial-integrity one (value/cost_base/
+  // owner were already correct). account_id/instrument_id live on the
+  // publication row itself; the rest (name/institution/instrument class/
+  // quality status) isn't persisted on ii_fhip_publications, so it's
+  // re-fetched fresh here rather than trusted from whatever the investments
+  // row happened to hold pre-unpublish.
+  const [{ data: accountRaw }, { data: instrumentRaw }, { data: snapshotRaw }] = await Promise.all([
+    supabase.from('ii_accounts').select('id, institution_name').eq('id', pub.account_id).eq('user_id', userId).maybeSingle(),
+    supabase.from('ii_instruments').select('id, instrument_class, instrument_name, amc_name').eq('id', pub.instrument_id).maybeSingle(),
+    supabase.from('ii_holding_snapshots').select('quality_status').eq('id', pub.canonical_position_id).eq('user_id', userId).maybeSingle(),
+  ]);
+  if (!accountRaw || !instrumentRaw) return { error: 'Republish failed: the account or instrument backing this publication is missing or inaccessible.', publicationId: null };
+  const account = accountRaw as { id: string; institution_name: string };
+  const instrument = instrumentRaw as { id: string; instrument_class: IiInstrumentClass; instrument_name: string; amc_name: string | null };
+  const qualityStatus = ((snapshotRaw as { quality_status: string } | null)?.quality_status) ?? 'unknown';
+
+  const { error: investUpdateErr } = await supabase
     .from('investments')
-    .update({ source_type: 'investment_intelligence_published', current_value: pub.published_value, cost_base: pub.published_cost_base, owner: pub.published_owner, ii_publication_id: publicationId, is_active: true })
+    .update({
+      source_type: 'investment_intelligence_published',
+      investment_name: instrument.instrument_name,
+      investment_type: mapInstrumentClassToInvestmentType(instrument.instrument_class),
+      current_value: pub.published_value,
+      currency_code: pub.source_currency,
+      country_code: pub.source_country,
+      institution: instrument.amc_name ?? account.institution_name,
+      cost_base: pub.published_cost_base,
+      annual_contribution: pub.published_annual_contribution,
+      risk_profile: pub.risk_band,
+      owner: pub.published_owner,
+      master_item_key: pub.target_master_item_key,
+      ii_canonical_account_id: account.id,
+      ii_canonical_instrument_id: instrument.id,
+      ii_source_quality_status: qualityStatus,
+      ii_publication_id: publicationId,
+      ii_last_refreshed_at: new Date().toISOString(),
+      is_active: true,
+    })
     .eq('id', pub.published_row_id)
     .eq('user_id', userId);
+  if (investUpdateErr) return { error: `Republish failed: could not restore the certified field set: ${investUpdateErr.message}`, publicationId: null };
 
   const { error: updErr } = await supabase.from('ii_fhip_publications').update({ status: 'published', last_republished_at: new Date().toISOString() }).eq('id', publicationId).eq('user_id', userId);
   if (updErr) return { error: updErr.message, publicationId: null };
