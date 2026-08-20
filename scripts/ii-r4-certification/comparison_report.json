@@ -1,0 +1,969 @@
+[
+  {
+    "id": "TC001",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 1",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.8392960662525879,
+      "cagr": 0.07001002307221116,
+      "years": 9.005479452054795
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.8392960662525879,
+      "years": 9.005479452054795,
+      "cagr": 0.07001002307221116
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC002",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 2",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.6393333333333333,
+      "years": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.6393333333333333,
+      "years": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC003",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 3",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.7413642384105961,
+      "cagr": 0.20288269533154324,
+      "years": 3.0027397260273974
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.7413642384105961,
+      "years": 3.0027397260273974,
+      "cagr": 0.20288269533154324
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC004",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 4",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.9513082437275984,
+      "years": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.9513082437275984,
+      "years": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC005",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 5",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 1.4918098159509205,
+      "cagr": 0.10670125723401958,
+      "years": 9.005479452054795
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 1.4918098159509205,
+      "years": 9.005479452054795,
+      "cagr": 0.10670125723401958
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC006",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 6",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.010523364485981235,
+      "cagr": 0.0026187264113588515,
+      "years": 4.002739726027397
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.010523364485981235,
+      "years": 4.002739726027397,
+      "cagr": 0.0026187264113588515
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC007",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 7",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.3315075376884422,
+      "cagr": 0.03230386268226715,
+      "years": 9.005479452054795
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.3315075376884422,
+      "years": 9.005479452054795,
+      "cagr": 0.03230386268226715
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC008",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 8",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.1360150375939848,
+      "cagr": 0.025819026379857446,
+      "years": 5.002739726027397
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.1360150375939848,
+      "years": 5.002739726027397,
+      "cagr": 0.025819026379857446
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC009",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 9",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.7402125000000002,
+      "cagr": 0.08229305196856651,
+      "years": 7.005479452054795
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.7402125000000002,
+      "years": 7.005479452054795,
+      "cagr": 0.08229305196856651
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC010",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 10",
+    "production": {
+      "status": "ok",
+      "pointToPointReturn": 0.9171698113207547,
+      "cagr": 0.24203612208019454,
+      "years": 3.0027397260273974
+    },
+    "oracle": {
+      "status": "ok",
+      "pointToPointReturn": 0.9171698113207547,
+      "years": 3.0027397260273974,
+      "cagr": 0.24203612208019454
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC11",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 11",
+    "production": {
+      "status": "ok",
+      "rate": 0.18592486442292877
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.1859248638153076,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 6.07621175596762e-10,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC12",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 12",
+    "production": {
+      "status": "ok",
+      "rate": 0.2977955266263445
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.29779555320739737,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 2.6581052858798415e-8,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC13",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 13",
+    "production": {
+      "status": "ok",
+      "rate": 0.14486710565774355
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.14486710906028752,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 3.4025439688001313e-9,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC14",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 14",
+    "production": {
+      "status": "ok",
+      "rate": -0.17130631645598499
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": -0.1713063162565231,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 1.9946189144803839e-10,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC15",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 15",
+    "production": {
+      "status": "ok",
+      "rate": 0.04412616422070335
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.04412617087364197,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 6.6529386236191534e-9,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC16",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 16",
+    "production": {
+      "status": "ok",
+      "rate": 0.9005018029639535
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.9005018043518067,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 1.3878531657240956e-9,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC17",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 17",
+    "production": {
+      "status": "ok",
+      "rate": -0.08996613745967368
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": -0.08996613442897798,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 3.0306956944059493e-9,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC18",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 18",
+    "production": {
+      "status": "ok",
+      "rate": -0.16806447803094954
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": -0.1680644780397415,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 8.791967154309077e-12,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC19",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 19",
+    "production": {
+      "status": "ok",
+      "rate": 0.26878530659841976
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.2687853074073792,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 8.089594549787194e-10,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC20",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 20",
+    "production": {
+      "status": "ok",
+      "rate": 0.24896428611578877
+    },
+    "oracle": {
+      "status": "ok",
+      "rate": 0.24896428585052488,
+      "method": "oracle-pure-bisection-v1"
+    },
+    "maxVariance": 2.652638941835761e-10,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC21",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 21",
+    "production": {
+      "status": "ok",
+      "twrr": 0.3516142207611732,
+      "subPeriodCount": 3
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.3516142207611732,
+      "subPeriodCount": 3
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC22",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 22",
+    "production": {
+      "status": "ok",
+      "twrr": 0.2257667749264527,
+      "subPeriodCount": 4
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.2257667749264527,
+      "subPeriodCount": 4
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC23",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 23",
+    "production": {
+      "status": "ok",
+      "twrr": 0.06641929004103786,
+      "subPeriodCount": 2
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.06641929004103786,
+      "subPeriodCount": 2
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC24",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 24",
+    "production": {
+      "status": "ok",
+      "twrr": 0.5182487341658106,
+      "subPeriodCount": 2
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.5182487341658106,
+      "subPeriodCount": 2
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC25",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 25",
+    "production": {
+      "status": "ok",
+      "twrr": -0.07639901385436687,
+      "subPeriodCount": 3
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": -0.07639901385436687,
+      "subPeriodCount": 3
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC26",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 26",
+    "production": {
+      "status": "ok",
+      "twrr": 0.8282520105250941,
+      "subPeriodCount": 4
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.8282520105250941,
+      "subPeriodCount": 4
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC27",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 27",
+    "production": {
+      "status": "ok",
+      "twrr": -0.09241574317181023,
+      "subPeriodCount": 3
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": -0.09241574317181023,
+      "subPeriodCount": 3
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC28",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 28",
+    "production": {
+      "status": "ok",
+      "twrr": -0.1395237992593953,
+      "subPeriodCount": 2
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": -0.1395237992593953,
+      "subPeriodCount": 2
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC29",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 29",
+    "production": {
+      "status": "ok",
+      "twrr": 0.33877480206263666,
+      "subPeriodCount": 2
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.33877480206263666,
+      "subPeriodCount": 2
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC30",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 30",
+    "production": {
+      "status": "ok",
+      "twrr": 0.12382645615776733,
+      "subPeriodCount": 4
+    },
+    "oracle": {
+      "status": "ok",
+      "twrr": 0.12382645615776733,
+      "subPeriodCount": 4
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC31",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 31",
+    "production": {
+      "status": "ok",
+      "blendedReturn": -0.054954772884899694,
+      "coveragePct": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "blendedReturn": -0.054954772884899694,
+      "coveragePct": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC32",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 32",
+    "production": {
+      "status": "ok",
+      "blendedReturn": 0.014185167236434593,
+      "coveragePct": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "blendedReturn": 0.014185167236434593,
+      "coveragePct": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC33",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 33",
+    "production": {
+      "status": "ok",
+      "blendedReturn": 0.012867093052450818,
+      "coveragePct": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "blendedReturn": 0.012867093052450818,
+      "coveragePct": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC34",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 34",
+    "production": {
+      "status": "ok",
+      "blendedReturn": 0.04387281813576793,
+      "coveragePct": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "blendedReturn": 0.04387281813576793,
+      "coveragePct": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC35",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 35",
+    "production": {
+      "status": "ok",
+      "blendedReturn": -0.08686526459394384,
+      "coveragePct": 1
+    },
+    "oracle": {
+      "status": "ok",
+      "blendedReturn": -0.08686526459394384,
+      "coveragePct": 1
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC36",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 36",
+    "production": {
+      "status": "ok",
+      "activeReturn": 0.205177
+    },
+    "oracle": {
+      "status": "ok",
+      "activeReturn": 0.205177
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC37",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 37",
+    "production": {
+      "status": "ok",
+      "activeReturn": 0.106599
+    },
+    "oracle": {
+      "status": "ok",
+      "activeReturn": 0.106599
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC38",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 38",
+    "production": {
+      "status": "ok",
+      "activeReturn": 0.16988
+    },
+    "oracle": {
+      "status": "ok",
+      "activeReturn": 0.16988
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC39",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 39",
+    "production": {
+      "status": "ok",
+      "activeReturn": -0.011319000000000001
+    },
+    "oracle": {
+      "status": "ok",
+      "activeReturn": -0.011319000000000001
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC40",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 40",
+    "production": {
+      "status": "ok",
+      "activeReturn": 0.04581
+    },
+    "oracle": {
+      "status": "ok",
+      "activeReturn": 0.04581
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC41",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 41 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "production": {
+      "status": "ok",
+      "annualisedVolatility": 0.12649815390142075,
+      "beta": 0.31133123419895786,
+      "trackingError": 0.1474838763351139,
+      "sharpe": 1.906057030595867,
+      "maxDrawdown": -0.048264586048717306
+    },
+    "oracle": {
+      "annualisedVolatility": 0.12649815390142077,
+      "beta": 0.3113312341989579,
+      "trackingError": 0.1474838763351139,
+      "sharpe": 1.9060570305958666,
+      "maxDrawdown": -0.048264586048717306,
+      "status": "ok"
+    },
+    "maxVariance": 4.440892098500626e-16,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC42",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 42 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "production": {
+      "status": "ok",
+      "annualisedVolatility": 0.156859656163106,
+      "beta": -0.4803305966111412,
+      "trackingError": 0.24273692375410838,
+      "sharpe": 0.6071832241321528,
+      "maxDrawdown": -0.1224203846742632
+    },
+    "oracle": {
+      "annualisedVolatility": 0.156859656163106,
+      "beta": -0.4803305966111412,
+      "trackingError": 0.24273692375410838,
+      "sharpe": 0.6071832241321528,
+      "maxDrawdown": -0.1224203846742632,
+      "status": "ok"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC43",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 43 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "production": {
+      "status": "ok",
+      "annualisedVolatility": 0.13802057690625805,
+      "beta": -0.046103692450697474,
+      "trackingError": 0.17132247552782986,
+      "sharpe": 0.5720325428125692,
+      "maxDrawdown": -0.1093657185205138
+    },
+    "oracle": {
+      "annualisedVolatility": 0.13802057690625802,
+      "beta": -0.04610369245069749,
+      "trackingError": 0.17132247552782986,
+      "sharpe": 0.5720325428125693,
+      "maxDrawdown": -0.1093657185205138,
+      "status": "ok"
+    },
+    "maxVariance": 1.1102230246251565e-16,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC44",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 44 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "production": {
+      "status": "ok",
+      "annualisedVolatility": 0.16054426779792771,
+      "beta": 0.37199114762430424,
+      "trackingError": 0.1713788665277633,
+      "sharpe": 1.23560958298359,
+      "maxDrawdown": -0.06698507124197495
+    },
+    "oracle": {
+      "annualisedVolatility": 0.1605442677979277,
+      "beta": 0.3719911476243042,
+      "trackingError": 0.1713788665277633,
+      "sharpe": 1.2356095829835902,
+      "maxDrawdown": -0.06698507124197495,
+      "status": "ok"
+    },
+    "maxVariance": 2.220446049250313e-16,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC45",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 45 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "production": {
+      "status": "ok",
+      "annualisedVolatility": 0.15319124212271928,
+      "beta": 0.14799185912774984,
+      "trackingError": 0.1891712837082261,
+      "sharpe": -0.48684416565927163,
+      "maxDrawdown": -0.29826260805730376
+    },
+    "oracle": {
+      "annualisedVolatility": 0.15319124212271928,
+      "beta": 0.14799185912774973,
+      "trackingError": 0.1891712837082261,
+      "sharpe": -0.48684416565927163,
+      "maxDrawdown": -0.29826260805730376,
+      "status": "ok"
+    },
+    "maxVariance": 1.1102230246251565e-16,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": ""
+  },
+  {
+    "id": "TC046",
+    "family": "xirr",
+    "description": "All-outflow cash flows (no positive flow) — must be unavailable",
+    "production": {
+      "status": "unavailable",
+      "reason": "ALL_SAME_SIGN"
+    },
+    "oracle": {
+      "status": "unavailable",
+      "reason": "ALL_SAME_SIGN"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": "both unavailable (production reason=ALL_SAME_SIGN, oracle reason=ALL_SAME_SIGN)"
+  },
+  {
+    "id": "TC047",
+    "family": "twrr",
+    "description": "Missing boundary valuation at an external-flow date — must be unavailable",
+    "production": {
+      "status": "unavailable",
+      "reason": "MISSING_BOUNDARY_VALUATION"
+    },
+    "oracle": {
+      "status": "unavailable",
+      "reason": "MISSING_BOUNDARY_VALUATION",
+      "detail": "2021-06-15"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": "both unavailable (production reason=MISSING_BOUNDARY_VALUATION, oracle reason=MISSING_BOUNDARY_VALUATION)"
+  },
+  {
+    "id": "TC048",
+    "family": "cagr",
+    "description": "Zero beginning value — must be unavailable",
+    "production": {
+      "status": "unavailable",
+      "reason": "ZERO_OR_NEGATIVE_BEGINNING_VALUE"
+    },
+    "oracle": {
+      "status": "unavailable",
+      "reason": "ZERO_OR_NEGATIVE_BEGINNING_VALUE"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": "both unavailable (production reason=ZERO_OR_NEGATIVE_BEGINNING_VALUE, oracle reason=ZERO_OR_NEGATIVE_BEGINNING_VALUE)"
+  },
+  {
+    "id": "TC049",
+    "family": "riskBundle",
+    "description": "Too few observations for beta/volatility (n=3) — must be unavailable",
+    "production": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    },
+    "oracle": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": "both unavailable (production reason=INSUFFICIENT_HISTORY, oracle reason=INSUFFICIENT_HISTORY)"
+  },
+  {
+    "id": "TC050",
+    "family": "xirr",
+    "description": "Single cash flow only — insufficient history, must be unavailable",
+    "production": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    },
+    "oracle": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    },
+    "maxVariance": 0,
+    "tolerance": 0.000001,
+    "result": "PASS",
+    "note": "both unavailable (production reason=INSUFFICIENT_HISTORY, oracle reason=INSUFFICIENT_HISTORY)"
+  }
+]
