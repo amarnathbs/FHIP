@@ -31,8 +31,9 @@ as passes.
 
 ## UNIT
 
-`npx vitest run --no-file-parallelism`: **663/663 tests pass**, 49 test
-files, 0 regressions.
+`npx vitest run --no-file-parallelism`: **669/669 tests pass**, 49 files,
+plus 5 opt-in live-DEV tests that skip unless `II_R4_LIVE=1` (50 files
+total). 0 regressions.
 
 Progression across the two passes:
 
@@ -40,7 +41,7 @@ Progression across the two passes:
 | --- | --- | --- |
 | R3 baseline (`c2e447b`) | 493 | 39 |
 | R4 calculation core (`27bd370`) | 631 | 48 |
-| R4 continuation (this pass) | **663** | **49** |
+| R4 continuation (this pass) | **669** | **50** |
 
 The continuation pass added exactly one file (`iiR4ServiceLayer.test.ts`,
 32 cases) and changed no existing test. The 631-test figure was
@@ -132,7 +133,7 @@ Harness: `scripts/ii_r4_live_dev_security_tests.mjs`, run against DEV
 `vqycarelcoijzwlpkpcz`. Seeds throwaway instruments, benchmarks,
 transactions, snapshots and NAV series under two ephemeral
 `@fhip-test.local` users, then deletes everything in teardown.
-**PASS 26 · FAIL 4 · BLOCKED 7 (37 checks).**
+**PASS 37 · FAIL 0 · BLOCKED 0 (37 checks)** after the corrected migration 0043 was applied on 2026-08-20. The pre-migration run of the same unmodified harness returned PASS 26 / FAIL 4 / BLOCKED 7.
 
 ### Seeded scenarios (spec section 91)
 
@@ -171,14 +172,37 @@ the defining property — that it zeroes the NPV of the DB-sourced cash-flow
 series — to a relative residual at or below 1.7e-16, i.e. floating-point
 exact.
 
-### Genuinely blocked
+### Previously blocked, now resolved
 
-Anything depending on `ii_risk_free_rates` (live Sharpe / Sortino / alpha
-against real reference data) and anything depending on the R4 shape of
-`ii_analytics_results` (persistence round-trip, analytics-integrity
-security tests) could not be evaluated, because migration 0043 sections
-4-5 are not applied to DEV. These are recorded BLOCKED. No live figure was
-fabricated for any of them.
+Before migration 0043 sections 4-5 were applied, everything depending on
+`ii_risk_free_rates` and on the R4 shape of `ii_analytics_results` was
+recorded BLOCKED rather than fabricated. All of it now evaluates for real
+and passes.
+
+### Live end-to-end integration (opt-in)
+
+`tests/unit/iiR4LiveIntegration.test.ts`, run with `II_R4_LIVE=1`, exercises
+the real production path end to end against a seeded 36-month portfolio:
+`loadAnalyticsDataset -> runAnalytics -> toPersistableRows ->
+persistAnalyticsRows`. **5/5 pass.** It covers what the REST harness
+structurally cannot: the upsert's `onConflict` list against the table's
+real unique index (LIVE-INT-003 persists, then re-runs and asserts the row
+count is unchanged), and that Sharpe/Sortino/alpha genuinely compute
+against seeded reference data (LIVE-INT-002).
+
+### BROWSER
+
+The Performance page was rendered against a seeded four-fund,
+two-currency portfolio. **This found two real defects that tsc, 663 unit
+tests, a clean production build and the entire live/security harness had
+all passed over** — a fabricated all-zero benchmark driving tracking
+error, information ratio and rolling beat-%, and an as-of date that
+flat-extrapolated stale data. See `R4_IMPLEMENTATION_REPORT.md` defects 5
+and 6, and `R4_API_AND_UX_ARCHITECTURE.md` §10.
+
+The lesson worth carrying forward: unit tests covered "no benchmark at
+all" but not "a benchmark that exists but falls below the coverage
+threshold". Render a mixed fixture after any change to suppression logic.
 
 Full detail, including the live security gap this surfaced and the
 migration fix written in response, is in `R4_SECURITY_VERIFICATION.md` §3.

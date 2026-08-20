@@ -36,3 +36,6 @@ next-env.d.ts
 .env.local.example
 supabase/.temp/
 ii-r1-live-dev-test-results.local.json
+
+# R4 UX verification fixture scratch state (contains DEV test-user ids)
+scripts/.ii_r4_ux_fixture.json

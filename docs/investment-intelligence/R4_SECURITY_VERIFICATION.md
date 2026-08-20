@@ -12,9 +12,14 @@ and signed in for real access tokens. Code inspection was never accepted as
 evidence. Anything that could not be genuinely evaluated is recorded
 BLOCKED, never PASS.
 
-**Result: PASS 26 · FAIL 4 · BLOCKED 7 (37 checks).** All four failures and
-all seven blocks share a single root cause — migration 0043 sections 4-5
-are not applied to DEV — described in §3.
+**Result: PASS 37 · FAIL 0 · BLOCKED 0 (37 checks).**
+
+This is the state after the Product Owner applied the corrected migration
+0043 on 2026-08-20. The earlier run of the same harness, before the
+migration, returned PASS 26 · FAIL 4 · BLOCKED 7; that history is retained
+in §3 because it documents a real exploitable defect and the fix for it.
+Nothing in the harness was changed between the two runs — the previously
+failing and blocked checks now evaluate for real and pass.
 
 ## 1. Test users
 
@@ -34,9 +39,9 @@ teardown along with every seeded row. No production data is touched.
 | --- | --- | --- | --- |
 | SEC-R4-003 | Unauthenticated (anon) read of analytics returns nothing | **PASS** | HTTP 200, 0 rows |
 | SEC-R4-011 | User B cannot read user A's transactions or holding snapshots | **PASS** | tx=0, snap=0 |
-| SEC-R4-001 | User B cannot read user A's analytics results | BLOCKED | see §3 |
-| SEC-R4-002 | User A can read their own analytics results (positive control) | BLOCKED | see §3 |
-| SEC-R4-012 | User B cannot insert analytics attributed to user A | BLOCKED | see §3 |
+| SEC-R4-001 | User B cannot read user A's analytics results | **PASS** | 0 rows |
+| SEC-R4-002 | User A can read their own analytics results (positive control) | **PASS** | 1 row |
+| SEC-R4-012 | User B cannot insert analytics attributed to user A | **PASS** | HTTP 403 `42501` |
 
 ### 2.2 Reference-data write protection
 
@@ -51,7 +56,7 @@ A with the anon apikey and A's real bearer token.
 | SEC-R4-008 | `ii_benchmark_series` | **PASS** | HTTP 403 `42501` RLS violation |
 | SEC-R4-009 | `ii_instrument_benchmarks` (insert) | **PASS** | HTTP 403 `42501` RLS violation |
 | SEC-R4-009b | `ii_instrument_benchmarks` (alter existing mapping) | **PASS** | PATCH returned 204 but affected zero rows; re-read confirms `benchmark_id` unchanged |
-| SEC-R4-010 | `ii_risk_free_rates` | BLOCKED | table does not exist in DEV |
+| SEC-R4-010 | `ii_risk_free_rates` | **PASS** | HTTP 403 `42501` RLS violation |
 
 SEC-R4-009b is worth noting: PostgREST returns 204 for a PATCH that RLS
 filtered down to zero rows, so the status code alone would have been
@@ -61,12 +66,27 @@ would have been a false pass.
 
 ### 2.3 Analytics-result integrity
 
-| ID | Test | Result |
-| --- | --- | --- |
-| SEC-R4-ANALYTICS-WRITE | Ordinary user cannot forge an analytics row against the **live** schema | **FAIL** |
-| SEC-R4-000/004/005 | Positive control, forged insert, forged update/delete (R4 shape) | BLOCKED |
+| ID | Test | Result | Evidence |
+| --- | --- | --- | --- |
+| SEC-R4-ANALYTICS-WRITE | Ordinary user cannot forge an analytics row against the **live** schema | **PASS** | HTTP 403 `42501` (was HTTP 201 before the migration) |
+| SEC-R4-000 | Service role CAN persist (positive control) | **PASS** | row created |
+| SEC-R4-004 | Ordinary user cannot INSERT a forged result | **PASS** | HTTP 403 `42501` |
+| SEC-R4-005 | Ordinary user cannot UPDATE or DELETE | **PASS** | PATCH/DELETE both 204 affecting zero rows; re-read confirms row intact |
 
-## 3. Root cause: migration 0043 sections 4-5 are not applied
+SEC-R4-005 again shows why status codes alone are insufficient: both the
+PATCH and the DELETE returned 204, because RLS filtered the row set to
+empty rather than raising. The assertion is the re-read (`rowIntact=true`).
+
+## 3. RESOLVED — the defect this pass found, and its fix
+
+> **Status: fixed and verified.** The corrected migration was applied by the
+> Product Owner on 2026-08-20 and independently confirmed live from this
+> session: `MIGRATION 0043 FULLY APPLIED: YES`, and the exploit below now
+> returns **HTTP 403** where it previously returned **HTTP 201**. The
+> section is retained in full because the defect was real, exploitable, and
+> would otherwise be invisible in the project record.
+
+### 3.0 Original finding (pre-fix): migration 0043 sections 4-5 were not applied
 
 Verified live on 2026-08-20 by direct query:
 
@@ -159,23 +179,67 @@ capability: PostgREST does not execute DDL, and no `exec_sql`-style RPC
 exists on the project (probed five candidate names, all `PGRST202`). The
 Product Owner must re-run the corrected migration.
 
-## 4. Re-verification procedure after the migration is applied
+## 4. Post-fix verification (executed 2026-08-20)
 
 ```
-node scripts/ii_r4_schema_probe.mjs           # expect: MIGRATION 0043 FULLY APPLIED: YES
-node scripts/ii_r4_live_dev_security_tests.mjs # expect: FAIL=0, BLOCKED=0
+node scripts/ii_r4_schema_probe.mjs            -> MIGRATION 0043 FULLY APPLIED: YES
+node scripts/ii_r4_live_dev_security_tests.mjs -> PASS=37 FAIL=0 BLOCKED=0
 ```
 
-The security harness needs no edits — the blocked tests are already
-written and will evaluate for real as soon as the schema exists. Expected
-transitions:
+The harness was **not modified** between the pre-fix and post-fix runs.
+Every previously failing or blocked check now evaluates for real:
 
-| ID | Now | After |
+| ID | Before | After |
 | --- | --- | --- |
-| SCHEMA-GATE / SCHEMA-RF / SCHEMA-ANALYTICS | FAIL | PASS |
-| SEC-R4-ANALYTICS-WRITE | FAIL | PASS (403 RLS) |
-| SEC-R4-000/001/002/004/005/012 | BLOCKED | PASS |
-| SEC-R4-010 | BLOCKED | PASS |
+| SCHEMA-GATE / SCHEMA-RF / SCHEMA-ANALYTICS | FAIL | **PASS** |
+| SEC-R4-ANALYTICS-WRITE | FAIL (HTTP 201) | **PASS** (HTTP 403 `42501`) |
+| SEC-R4-000/001/002/004/005/012 | BLOCKED | **PASS** |
+| SEC-R4-010 | BLOCKED | **PASS** (HTTP 403 `42501`) |
+
+### 4.1 Legacy table confirmed inert
+
+The renamed `ii_analytics_results_r1_legacy` retains its rows (there were
+none) and no longer carries a write policy — an authenticated write to the
+legacy name is rejected 403, so the rename is not a back-door. Verified
+independently by the coordinating session.
+
+### 4.2 Live end-to-end verification of the real code path
+
+`tests/unit/iiR4LiveIntegration.test.ts` (opt-in, `II_R4_LIVE=1`) exercises
+`loadAnalyticsDataset -> runAnalytics -> toPersistableRows ->
+persistAnalyticsRows` against a genuinely seeded 36-month portfolio, read
+through an RLS-respecting client bound to a real user's access token.
+**5/5 pass.** It closes two gaps the REST-level harness structurally could
+not:
+
+* **LIVE-INT-003** — the REST harness seeds analytics rows via raw REST with
+  the service role, which never calls `persistAnalyticsRows()` and therefore
+  never validates the upsert's `onConflict` column list against the table's
+  actual unique index. This test persists through the real function and then
+  re-runs it with identical inputs, asserting the row count does not change.
+  Had the `onConflict` specification been wrong, this is where it would surface.
+* **LIVE-INT-002** — confirms Sharpe, Sortino, alpha, beta and tracking error
+  now genuinely **compute** against seeded reference data rather than
+  correctly-but-untestably suppressing, and that the resolved risk-free
+  version (`dev-seed-v1`) is carried into the persisted rows for traceability.
+
+**LIVE-INT-005** re-confirms at the ORM layer what SEC-R4-004 confirms at
+the REST layer: the owning user can read their persisted rows, and an
+insert attempt through the same client fails with a row-level-security
+error.
+
+### 4.3 Risk-free reference data seeded
+
+`scripts/ii_r4_seed_risk_free_rates.mjs` seeded 16 rows (IN and AU, 2019-2026
+annual periods) under `version = 'dev-seed-v1'`.
+
+**These are DEV seed values, not a certified feed**, and are labelled as
+such in both the `source` and `version` columns. They are approximate
+annual averages (RBI 91-day T-Bill for IN, RBA cash rate for AU), adequate
+for verifying the calculation path and not for advice. Because the version
+string is carried into every persisted `ii_analytics_results` row, figures
+computed against this seed remain identifiable and will be detectable as
+stale when a certified series replaces it under a new version.
 
 ## 5. Application-layer security properties (static, and true today)
 

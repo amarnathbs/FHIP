@@ -217,10 +217,37 @@ export async function loadAnalyticsDataset(
 
   if (schemes.length === 0) return { dataset: null, warnings, empty: true };
 
+  // The effective as-of date is the latest date for which certified data
+  // actually exists, not "today". Running the period out to today would
+  // flat-extrapolate the last known valuation across every intervening
+  // month (valueOnOrBefore keeps returning the final point), inventing
+  // zero-return periods that dilute the benchmark blend and misdescribe the
+  // period in the UI. An explicitly requested asOfDate is still honoured,
+  // but is likewise capped to the data.
+  let latestDataDate: Date | null = null;
+  for (const s of schemes) {
+    for (const p of s.valuationSeries) {
+      if (!latestDataDate || p.date > latestDataDate) latestDataDate = p.date;
+    }
+  }
+  const effectiveAsOf =
+    latestDataDate === null
+      ? asOfDate
+      : opts.asOfDate
+        ? new Date(Math.min(opts.asOfDate.getTime(), latestDataDate.getTime()))
+        : latestDataDate;
+
+  if (latestDataDate && asOfDate.getTime() - latestDataDate.getTime() > 45 * 86_400_000) {
+    warnings.push({
+      scope: 'data_currency',
+      detail: `The most recent certified valuation is dated ${latestDataDate.toISOString().slice(0, 10)}. Figures are calculated up to that date, not to today.`,
+    });
+  }
+
   return {
     dataset: {
       userId,
-      asOfDate,
+      asOfDate: effectiveAsOf,
       periodStart: opts.periodStart ?? earliest ?? asOfDate,
       schemes,
       mappings,

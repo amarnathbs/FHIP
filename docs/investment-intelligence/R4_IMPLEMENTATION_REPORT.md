@@ -221,3 +221,59 @@ engines. **No certified engine file was modified.**
    suppressed — verified by `SVC-RISK-001`, which asserts volatility,
    downside deviation and max drawdown all still compute with an empty
    risk-free series.
+
+### Defects found by rendering the page in a real browser
+
+The UX was built, typechecked, unit-tested and production-built before it
+was ever rendered. Rendering it against a seeded multi-currency portfolio
+immediately exposed two defects that none of those gates caught. Both are
+recorded because they show a class of bug the test strategy was blind to.
+
+5. **Fabricated benchmark (spec-critical).** `blendedBenchmarkReturn()`
+   returns its raw `periodReturns` array *alongside* an `'unavailable'`
+   status — the numbers are retained for diagnostics. The orchestrator
+   consumed them unconditionally. At 0% benchmark coverage every period
+   return is 0, so the engine silently built an all-zero "benchmark" and
+   computed real-looking figures against it. The page rendered:
+
+   > Blended benchmark return — *Only 0.0% of this portfolio's value has a
+   > mapped benchmark…*
+   >
+   > Tracking error **3.69%** · Information ratio **0.92** ·
+   > Beat benchmark **100% of 24 windows**
+
+   Tracking error came out *exactly* equal to portfolio volatility (3.69%),
+   which is the arithmetic signature of differencing against a zero series.
+   This is precisely the failure the status vocabulary exists to prevent,
+   and it sat one line below the text explaining that no benchmark was
+   available.
+
+   Fixed by propagating suppression: the benchmark level series is built
+   only when `blend.blended.status === 'ok'`. Beta, alpha, tracking error,
+   information ratio, capture ratios, the rolling beat-%, and the chart's
+   benchmark line now all suppress together.
+
+   Covered by `SVC-ORCH-007` (6 cases). **Negative control performed**: the
+   fix was reverted, 4 of the 6 cases correctly failed, then restored and
+   confirmed green. The positive control is `LIVE-INT-002`, which asserts
+   beta and tracking error DO compute at full coverage — so the fix
+   suppresses correctly without over-suppressing.
+
+   Why the unit tests missed it: `SVC-ORCH-005` tested the *no mappings at
+   all* case, where `periodReturns` is empty and the bug cannot express
+   itself. The failing case needs a mapping that exists but falls below the
+   coverage threshold — the gap between "no benchmark" and "not enough
+   benchmark".
+
+6. **As-of date ran to today, flat-extrapolating stale data.** `asOfDate`
+   defaulted to `new Date()`. With data ending 2023-12-31, the period ran
+   to 2026-08-20 and `valueOnOrBefore` kept returning the final valuation
+   for every intervening month, inventing ~32 zero-return periods that
+   diluted the benchmark blend and misdescribed the period in the UI
+   ("2021-01-31 to 2026-08-20"). Sharpe was materially distorted (0.38 vs
+   a corrected 0.19).
+
+   Fixed: the effective as-of date is now the latest date for which
+   certified data exists; an explicitly requested date is honoured but
+   capped to the data. A `data_currency` warning discloses the real cutoff
+   when it is more than 45 days behind today.

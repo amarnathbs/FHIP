@@ -506,6 +506,76 @@ describe('SVC-ORCH-005: no metric is ever emitted as a misleading zero', () => {
   });
 });
 
+describe('SVC-ORCH-007: suppressed blended benchmark suppresses EVERY benchmark-relative metric', () => {
+  // Regression test for a real defect found by rendering the page in a
+  // browser, which the earlier "no mappings at all" test did not reach.
+  //
+  // blendedBenchmarkReturn() returns raw periodReturns alongside an
+  // 'unavailable' status. Consuming them regardless of status fabricated a
+  // benchmark: at 0% coverage every period return is 0, so tracking error
+  // came out exactly equal to portfolio volatility, and the UI reported
+  // "beat the benchmark in 100% of windows" directly beneath "0.0% of this
+  // portfolio has a mapped benchmark".
+  function belowCoverageDataset(): AnalyticsDataset {
+    const mapped = scheme({ instrumentId: 'mapped', currencyCode: 'INR' });
+    const unmapped = scheme({ instrumentId: 'unmapped', currencyCode: 'INR' });
+    // Make the UNMAPPED holding dominate so coverage falls under 80%.
+    mapped.valuationSeries = mapped.valuationSeries.map((p) => ({ ...p, value: 10 }));
+    unmapped.valuationSeries = unmapped.valuationSeries.map((p) => ({ ...p, value: 90 }));
+    const ds = dataset([mapped, unmapped]);
+    // Only the 'mapped' instrument has a benchmark mapping.
+    ds.mappings = [mapping('mapped', 'nifty')];
+    return ds;
+  }
+
+  it('suppresses the blend below the coverage threshold', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    expect(p.blendedBenchmarkReturn.status).not.toBe('CALCULATED');
+    expect(p.blendedBenchmarkReturn.detail).toMatch(/coverage|mapped benchmark/i);
+  });
+
+  it('does NOT report tracking error, information ratio, beta, alpha or capture', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    for (const [name, outcome] of [
+      ['trackingError', p.risk.trackingError],
+      ['informationRatio', p.risk.informationRatio],
+      ['beta', p.risk.beta],
+      ['alpha', p.risk.alpha],
+      ['captureRatios', p.risk.captureRatios],
+    ] as const) {
+      expect(outcome.status, `${name} must not be CALCULATED without a benchmark conclusion`).not.toBe('CALCULATED');
+      expect(outcome.value, `${name} must not carry a value`).toBeUndefined();
+    }
+  });
+
+  it('does NOT report a rolling benchmark-beat percentage', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    for (const h of p.rolling.horizons) {
+      expect(h.beat.status, `rolling ${h.windowYears}Y beat% must be suppressed`).not.toBe('CALCULATED');
+      expect(h.beat.value).toBeUndefined();
+    }
+  });
+
+  it('draws no benchmark line in the comparison chart', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    expect(p.performanceVsBenchmarkSeries.every((pt) => pt.benchmark === null)).toBe(true);
+  });
+
+  it('still reports the benchmark-independent risk metrics', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    expect(p.risk.volatility.status).toBe('CALCULATED');
+    expect(p.risk.maxDrawdown.status).toBe('CALCULATED');
+    expect(p.portfolioTwrr.status).toBe('CALCULATED');
+  });
+
+  it('tracking error is not silently equal to volatility (the fabrication signature)', () => {
+    const p = runAnalytics(belowCoverageDataset()).portfolios[0];
+    // With the bug, TE == volatility exactly, because the "benchmark" was an
+    // all-zero series. With the fix, TE is not calculated at all.
+    expect(p.risk.trackingError.status).not.toBe('CALCULATED');
+  });
+});
+
 describe('SVC-ORCH-006: missingReferenceData constructor never carries a value', () => {
   it('is structurally incapable of showing a number', () => {
     const o = missingReferenceData('BENCHMARK_MAPPING_MISSING', 'none');

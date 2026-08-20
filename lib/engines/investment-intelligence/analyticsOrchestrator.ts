@@ -315,7 +315,24 @@ function analysePortfolioCurrency(
   // ---- Risk metrics ---------------------------------------------------
   const monthEnd = toMonthEndSeries(valuations);
   const fundReturns = periodicReturnsFromLevels(monthEnd);
-  const benchmarkLevels = buildBlendedBenchmarkLevels(blend.rebalanceDates, blend.blended.periodReturns);
+
+  // The benchmark level series may ONLY be built from a blend that actually
+  // reached a conclusion. blendedBenchmarkReturn() still returns its raw
+  // `periodReturns` alongside an 'unavailable' status (they are useful for
+  // diagnostics), and an earlier revision of this function consumed them
+  // unconditionally. That produced a fabricated benchmark: with zero
+  // coverage every period return is 0, so tracking error came out exactly
+  // equal to portfolio volatility, information ratio and rolling
+  // benchmark-beat% were computed against an all-zero series, and the UI
+  // showed "beat the benchmark in 100% of windows" directly beneath
+  // "0.0% of this portfolio has a mapped benchmark".
+  //
+  // Suppression must therefore propagate: no blend conclusion => no
+  // benchmark-relative metric of any kind.
+  const benchmarkLevels =
+    blend.blended.status === 'ok'
+      ? buildBlendedBenchmarkLevels(blend.rebalanceDates, blend.blended.periodReturns)
+      : [];
   const benchmarkReturns = benchmarkLevels.length > 1 ? periodicReturnsFromLevels(toMonthEndSeries(benchmarkLevels)) : [];
   const aligned = alignSeries(fundReturns, benchmarkReturns);
 

@@ -376,7 +376,7 @@ any certified engine file:
 All three baseline figures were independently reproduced before any code
 was written, and matched the prior pass's claims exactly.
 
-## 46.3 The blocking finding
+## 46.3 The blocking finding — FOUND, FIXED, AND VERIFIED CLOSED
 
 Migration 0043 could never have applied cleanly: **migration 0035 already
 creates a table named `ii_analytics_results`**, so section 5's bare
@@ -391,51 +391,95 @@ value, **HTTP 201**.
 
 Migration 0043 has been corrected in this pass — made fully idempotent, and
 section 5 now renames the legacy table aside (preserving rows), strips its
-permissive policy, and creates the R4 table under the canonical name. The
-fix **cannot be applied by this session**: PostgREST does not execute DDL
-and no `exec_sql`-style RPC exists (five candidate names probed, all
-`PGRST202`).
+permissive policy, and creates the R4 table under the canonical name.
 
-## 46.4 Final classification
+**The Product Owner applied the corrected migration on 2026-08-20, and it
+is verified closed:**
 
-**CONDITIONAL PASS.**
+* `node scripts/ii_r4_schema_probe.mjs` → `MIGRATION 0043 FULLY APPLIED: YES`
+  (13/13 columns, 2/2 new tables).
+* The exact same forgery exploit that returned **HTTP 201** now returns
+  **HTTP 403 `42501`**.
+* `ii_analytics_results_r1_legacy` exists with 0 rows (no data lost) and
+  carries no write policy — the rename is not a back-door.
+* Full harness, unmodified between runs: **PASS 37 · FAIL 0 · BLOCKED 0.**
 
-UNCONDITIONAL FULL PASS is withheld for one specific, bounded reason:
-spec section 113 requires "security intact" and "live DEV verification
-passes", and one live security check currently **fails** —
-`SEC-R4-ANALYTICS-WRITE`. Seven further checks are BLOCKED behind the same
-unapplied migration sections. Reporting this as a pass would be
-fabrication.
 
-Why this remains CONDITIONAL rather than FAIL, stated honestly:
+## 46.4 Post-migration verification and browser testing
 
-* The defect is **pre-existing R1 state** (migration 0035), not introduced
-  by R4. R4's migration is the thing that fixes it.
-* Its blast radius today is nil: **no code path anywhere reads
-  `ii_analytics_results` back**. The GET route recomputes from source on
-  every request, so a forged row cannot alter any number shown to anyone.
-* Cross-user forgery is still blocked by the policy's `with check` clause;
-  a user can only write rows keyed to their own `auth.uid()`.
-* None of the section 111 Critical-FAIL conditions occurred: no calculation
-  discrepancy, no benchmark error, no cross-user data leakage, no currency
-  error, no incomplete-history misstatement, no net-worth mutation, no R3
-  regression, no independent-reconciliation failure. The independent live
-  reconciliation passed 7/7 against a required 5.
+After the Product Owner applied the corrected migration, this session:
 
-The remaining work is a single database operation, not a code change.
+1. **Re-verified the schema live** — `MIGRATION 0043 FULLY APPLIED: YES`.
+2. **Seeded `ii_risk_free_rates`** with 16 IN/AU rows under
+   `version = 'dev-seed-v1'`, explicitly labelled as DEV seed values rather
+   than a certified feed.
+3. **Re-ran the unmodified security harness** — PASS 37 · FAIL 0 · BLOCKED 0.
+4. **Added a live end-to-end integration test** (`iiR4LiveIntegration.test.ts`,
+   opt-in via `II_R4_LIVE=1`) exercising the real
+   `loadAnalyticsDataset -> runAnalytics -> toPersistableRows ->
+   persistAnalyticsRows` path. 5/5 pass. This validates the upsert's
+   `onConflict` specification against the table's actual unique index —
+   something the REST-level harness structurally could not do, because it
+   seeds rows via raw REST and never calls the production persistence
+   function.
+5. **Rendered the Performance page in a real browser** against a seeded
+   four-fund, two-currency portfolio.
 
-## 46.5 Exact prerequisites for R5
+Step 5 found **two real defects that steps 1-4, a clean typecheck, 663
+passing unit tests and a clean production build had all passed over** —
+including a fabricated all-zero benchmark that produced a
+confident-looking "beat the benchmark in 100% of windows" one line beneath
+"0.0% of this portfolio has a mapped benchmark". Both are documented as
+defects 5 and 6 in `R4_IMPLEMENTATION_REPORT.md`, both are fixed, and the
+fix for the benchmark defect has a **verified negative control** (reverted,
+4 of 6 regression cases correctly failed, restored, green) plus a positive
+control confirming it does not over-suppress.
 
-1. **Product Owner re-runs the corrected `0043` migration end to end**
-   against DEV. It is now idempotent; do not hand-pick statements.
-2. `node scripts/ii_r4_schema_probe.mjs` → expect
-   `MIGRATION 0043 FULLY APPLIED: YES`.
-3. `node scripts/ii_r4_live_dev_security_tests.mjs` → expect
-   `FAIL=0, BLOCKED=0`. The harness needs no edits; the blocked tests are
-   already written and will evaluate for real once the schema exists.
-4. Seed `ii_risk_free_rates` with IN and AU reference rows so Sharpe,
-   Sortino and alpha compute live instead of correctly suppressing.
-5. Re-evaluate R4 for UNCONDITIONAL FULL PASS. **R5 scope (SIP simulation,
-   fund X-ray, tax, cost leakage, recommendations) must not begin before
-   that re-evaluation** — spec section 115 hard stop, which this pass
-   observed: zero R5 scope was introduced.
+## 46.5 Final classification
+
+**UNCONDITIONAL FULL PASS.**
+
+Against spec section 113's conditions:
+
+| Condition | Status |
+| --- | --- |
+| All calculations independently certified | 50/50 oracle cases + 7 live reconciliations from DB ground truth |
+| Live-DEV verification passes | PASS 37 · FAIL 0 · BLOCKED 0 |
+| Security intact | All reference-data and analytics-integrity tests pass; forgery blocked 403 |
+| No cross-user leakage | Verified with two real authenticated users |
+| Read-only to financial registers | One DB mutation in all of R4: the derived analytics upsert |
+| No R3 regression | R3 pack 136/136 |
+| No R5 scope | Zero |
+| Build / typecheck / lint | Build exit 0; tsc clean; lint 6E/6W unchanged from baseline |
+| Test suite | 669/669 (+5 opt-in live), zero regressions |
+
+**Carried-forward operational prerequisites** — none of these are R4
+defects, but they gate real-world usefulness and should be tracked:
+
+1. **Risk-free data is a DEV seed, not a certified feed.** The architecture
+   requirement (versioned, never hard-coded, suppress when absent) is met
+   and verified. Replacing `dev-seed-v1` with a real ingested RBI/RBA
+   series under a new version string remains an operational task. Because
+   the version is carried into every persisted row, figures computed
+   against the seed stay identifiable and become detectably stale.
+2. **No NAV/benchmark ingestion pipeline exists.** R4 reads whatever is in
+   the reference tables; it does not populate them. Until a feed exists,
+   real users' portfolios will correctly but unhelpfully return
+   `MISSING_REFERENCE_DATA` for most benchmark-relative metrics. This was
+   always out of R4 scope (see §9) and the suppression behaviour is
+   correct — but the feature is not user-ready without the data.
+3. **Six stale `ii-r1-*@fhip-test.local` users remain in DEV** from the R1
+   pass. Not created by, and not deleted by, this session.
+
+## 46.6 Prerequisites for R5
+
+R4 is complete. Before R5 (SIP simulation, fund X-ray, tax, cost leakage,
+recommendations) begins:
+
+1. Fast-forward `feature/investment-intelligence-r4-performance-benchmark`
+   onto this work.
+2. Address carried-forward items 1 and 2 above if R5 depends on live
+   benchmark or risk-free data.
+3. Re-run `II_R4_LIVE=1 npx vitest run tests/unit/iiR4LiveIntegration.test.ts`
+   and `node scripts/ii_r4_live_dev_security_tests.mjs` as the R4 regression
+   gate before merging R5 work.

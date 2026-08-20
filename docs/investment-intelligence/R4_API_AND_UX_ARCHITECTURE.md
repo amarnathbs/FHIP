@@ -191,6 +191,22 @@ matching-value outcome to `STALE` when the fingerprint has moved.
 | Drawdown chart | `DrawdownChart`. |
 | "How this was calculated" | `CalculationDetails` — period, frequency, contributing benchmarks and their TRI/PRI type, coverage %, risk-free rate and source, every engine version, and the input fingerprint. |
 
+### 8.0 Suppression must propagate
+
+`blendedBenchmarkReturn()` returns its raw `periodReturns` alongside an
+`'unavailable'` status. **Never consume them unless the status is `ok`.**
+At low or zero coverage those returns are zeros, and building a benchmark
+level series from them fabricates an all-zero benchmark against which
+tracking error, information ratio and rolling beat-% all compute
+real-looking numbers. This shipped briefly and was caught only by
+rendering the page (see `R4_IMPLEMENTATION_REPORT.md` defect 5).
+
+The rule: **no blend conclusion means no benchmark-relative metric of any
+kind** — beta, alpha, tracking error, information ratio, capture ratios,
+rolling beat-%, and the chart's benchmark line all suppress together.
+Enforced at a single site in `analysePortfolioCurrency`, regression-tested
+by `SVC-ORCH-007` with a verified negative control.
+
 ### 8.1 The single rendering gate
 
 `MetricValue` is the only component that turns a metric into pixels. It
@@ -246,3 +262,37 @@ No FHIP financial register (`investments`, `assets`,
 `retirement_accounts`, `income`, `expenses`, `liabilities`) and no R3
 publication table appears anywhere. R3's own regression pack (136 tests
 across 7 files) re-passes unchanged.
+
+## 10. Browser verification
+
+The page was rendered in a real browser against a seeded four-fund,
+two-currency portfolio (`scripts/ii_r4_ux_fixture.mjs`), authenticated by
+injecting a Supabase `@supabase/ssr` auth cookie rather than typing
+credentials into the login form.
+
+The fixture is deliberately mixed so that real numbers and genuine
+suppression states appear side by side: one fully-mapped fund, one
+unmapped fund, one partial-history fund, and one AUD fund. Confirmed
+rendering correctly:
+
+* Two separate per-currency blocks (INR, AUD) with the cross-currency
+  explanation above them — no combined figure anywhere.
+* TWRR and XIRR both shown and visibly different (23.62% vs 28.14% for
+  INR), with the educational note explaining why they differ.
+* Blended benchmark and active return suppressed with the coverage
+  percentage stated in the message.
+* Every benchmark-relative risk metric suppressed with a reason, and the
+  chart drawing only the portfolio line with an explicit note that the gap
+  is not drawn as zero.
+* Rolling table showing a calculated 1Y row alongside suppressed 3Y/5Y
+  rows, each carrying its own explanation.
+* The `data_currency` warning disclosing that figures stop at 2023-12-31.
+
+**Two real defects were found this way that typecheck, 663 unit tests and a
+clean production build had all passed over** — see
+`R4_IMPLEMENTATION_REPORT.md` defects 5 and 6. Render this page against a
+mixed fixture after any change to the orchestrator's suppression logic;
+the unit tests alone did not catch either bug.
+
+Note on the fixture: it creates a real DEV user and seeded portfolio and
+must be torn down with `node scripts/ii_r4_ux_fixture.mjs destroy`.
