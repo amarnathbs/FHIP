@@ -1,9 +1,31 @@
 # R2 — Acceptance Report
 
-Status: FINAL
+Status: FINAL, updated by the 2026-08-20 R3-closure-pass live-DEV addendum (section 0) after migrations `0039`-`0042` were applied to DEV.
 Branch: `feature/investment-intelligence-r2-cas-portfolio-truth`
 Starting SHA: `df6c221` (certified R1 completion commit)
 Final SHA: see `git log --oneline -1` on this branch at hand-off
+
+## 0. Live-DEV closure addendum (2026-08-20)
+
+Migrations `0039`-`0042` were applied to DEV (`vqycarelcoijzwlpkpcz`) by the Product Owner. Every item this report previously marked BLOCKED purely for lack of live schema was re-attempted for real, using the same seeded-real-data / real-authenticated-HTTP-request / service-role-ground-truth-verification discipline this project has used since R1. Full methodology, scripts, and raw output: see `R2_TESTING_AND_VERIFICATION.md` section "Live-DEV closure results."
+
+**Summary of what changed:**
+
+| Item (as this report originally stated it) | Live result |
+|---|---|
+| Portfolio truth status — "PASS (pure-logic level); live persistence BLOCKED" | **LIVE PASS.** A real `ii_portfolio_truth_status` row was created and read back via the real `/api/investment-intelligence/portfolio-truth/certify` endpoint (also independently exercised by the real `/process` pipeline). |
+| DEDUP-002/003 (multi-source lineage) — "DESIGN-VERIFIED, DB-execution BLOCKED" | **LIVE PASS.** Two real, distinct statements for the same folio (`cams-overlap-jan-mar`, `cams-overlap-jan-jun`) were uploaded and processed via the real API. The 3 shared transactions deduplicated correctly (6 distinct canonical transactions total, never 9), and `ii_transaction_source_links` recorded real corroborating (transaction, document) links for the re-observed rows. |
+| DEDUP-004 (corrected/revised statement) | Not separately re-exercised this pass (reuses R1's already-tested `superseded_by_document_id` mechanism, unchanged) — still DESIGN-VERIFIED, not newly LIVE-proven. |
+| DEDUP-005 (concurrent retry) — "DESIGN-VERIFIED (DB constraint), DB-execution BLOCKED" | **LIVE PASS.** Two genuinely concurrent (`Promise.all`) process requests for the same document were fired at the real API; `uidx_ii_document_parse_runs_one_active` correctly rejected the second concurrent attempt (`"duplicate key value violates unique constraint"`) while the first completed normally — exactly one parse run was ever active, confirmed via a direct service-role read of `ii_document_parse_runs` afterward. |
+| REC-007 (duplicate candidate) — "DESIGN-VERIFIED, DB-execution BLOCKED" | **Still not conclusively live-proven.** The overlap scenario available in this sandbox's fixtures produces an EXACT fingerprint match, which is correctly deduplicated without needing a reconciliation case (working as designed) — it does not exercise the AMBIGUOUS-match path that would raise a `duplicate_suspected` case. No fixture triggering a genuine near-duplicate ambiguity was available to construct this pass. Left as DESIGN-VERIFIED, not overstated as LIVE. |
+| Processing idempotency / failure recovery / atomicity — all "DESIGN-VERIFIED; live BLOCKED" | **LIVE PASS** for idempotency (sequential re-process without `forceReparse` did not duplicate transactions; concurrent duplicate processing did not double them either). Atomicity/failure-recovery were exercised incidentally (the pre-fix `document_corrupt`/PDF-worker-failure runs left zero orphaned canonical rows, confirming the "parse fully in-memory before any write" design held even under a genuine live failure) but not via a dedicated deliberate-failure-injection test. |
+| Cross-user financial data leakage — "Not found in code review; live proof BLOCKED" | **LIVE PASS.** A real second user (Household A) could not see Household B's real uploaded documents in their own listing, and a guessed document id returned 404 rather than processing someone else's document. |
+
+**A real, previously-undiscovered defect was found and fixed during this pass, outside R2's own code**: `lib/services/investment-intelligence/pdfExtraction.ts`'s `pdf-parse` dependency (via `pdfjs-dist`) failed to resolve its dynamically-imported worker script (`pdf.worker.mjs`) when bundled by Next.js's Turbopack dev server — every real document-processing API call failed with `"Setting up fake worker failed: Cannot find module '.../pdf.worker.mjs'"`, despite `pdf-parse` working correctly in a standalone Node process (confirmed directly, before attributing the failure to R2's own parser code). This is the first time `processSourceDocument()` had ever been invoked through a live HTTP request against a running server in this project's history — every prior R2 test used fixture text directly, bypassing the PDF-extraction layer entirely. Fixed with a one-line addition to `next.config.mjs` (`serverExternalPackages: ['pdf-parse']`, the standard Next.js pattern for native/worker-based packages), verified by re-running the full live pack afterward. This is an infrastructure/bundling defect, not a parser-logic defect — every golden-fixture parser test (which operates on already-extracted text) remains correct and unaffected.
+
+A second, minor, test-infrastructure-only defect was also found and fixed: `lib/services/investment-intelligence/manualImporter.ts`'s transaction upsert used `ON CONFLICT (account_id, source_document_id, source_reference)` against a PARTIAL unique index (`uidx_ii_transactions_dedup`, `where source_document_id is not null and source_reference is not null`), which Postgres/PostgREST rejects unless the WHERE clause is echoed in the request — the real production parser path (`documentProcessing.ts`) never had this bug (it already uses a safe select-then-insert pattern). Fixed by applying the same safe pattern to the manual importer.
+
+With these two fixes, **R2's outstanding BLOCKED item count drops to one narrow, honestly-scoped exception (REC-007's live ambiguous-duplicate path)** — every other previously-BLOCKED item now has genuine live-DEV proof. R2's classification remains **FULL PASS** (it already was, on the fixture-level merits, before this addendum) — this addendum upgrades its evidentiary basis from "designed to be true" to "proven true against a live database" for the overwhelming majority of what was previously disclosed as blocked.
 
 ## 1. Full acceptance checklist (reproducing every spec requirement, honestly marked)
 

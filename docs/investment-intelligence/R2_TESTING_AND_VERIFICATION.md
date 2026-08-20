@@ -127,3 +127,20 @@ See `R2_SECURITY_VERIFICATION.md` in full — code-level design review (migratio
 - Genuine binary-level encrypted-PDF decryption — **not attempted**; the classification logic around it is tested, the upstream decryption itself is not re-proven (see section 3).
 
 None of these are silently omitted from the acceptance report — see `R2_ACCEPTANCE_REPORT.md`'s checklist for the exact PASS/CONDITIONAL/BLOCKED marking of every item.
+
+## 6. Live-DEV closure results (2026-08-20, after migrations 0039-0042 applied)
+
+Methodology matches this project's established discipline exactly: real throwaway auth users created via the Admin API, real password-grant sign-in (not a fabricated token), real HTTP requests against the actual running Next.js dev server (`npm run dev`, port 3000) carrying a genuine `@supabase/ssr`-shaped session cookie built from the real sign-in response, and independent service-role reads for ground truth before/after every consequential step. Scripts: `scripts/r2_closure_live_tests.mjs`, `scripts/r3_pdf_gen.mjs` (a from-scratch minimal PDF generator, since this sandbox has extracted `.txt` golden fixtures but no binary `.pdf` ones — verified to round-trip through the real `pdf-parse` + `camsParser` pipeline correctly against `cams-overlap-jan-mar.expected.json` before being trusted for live use).
+
+| Test | Status | Evidence |
+|---|---|---|
+| Real multipart upload via `/api/investment-intelligence/source-documents` | LIVE PASS | 200, real `ii_source_documents` row created |
+| Real processing via `/api/investment-intelligence/source-documents/[id]/process` | LIVE PASS (after the `pdf-parse` worker-bundling fix — see `R2_ACCEPTANCE_REPORT.md` section 0) | `{"ok":true,"status":"parsed","summary":{"transactionsFound":3,"holdingsFound":1,...}}` |
+| `ii_portfolio_truth_status` persisted live | LIVE PASS | Real row read back via service-role, `status:"certified_with_warnings"` |
+| DEDUP-005 concurrent retry (`uidx_ii_document_parse_runs_one_active`) | LIVE PASS | Two genuinely concurrent (`Promise.all`) process requests — one succeeded, one failed with the exact constraint-violation error, zero still-active runs afterward |
+| Processing idempotency, sequential re-process | LIVE PASS | 3 transactions before and after a re-process without `forceReparse` |
+| DEDUP-002/003 overlap + multi-source lineage | LIVE PASS | 6 distinct canonical transactions (not 9) across two overlapping statements for the same folio; real `ii_transaction_source_links` rows recorded for the 3 re-observed transactions |
+| Cross-user leakage (source-documents listing + guessed-id processing) | LIVE PASS | User A's listing never contains User B's real documents; a guessed document id returns 404 |
+| REC-007 (duplicate candidate via ambiguous match) | Still not live-proven | The available overlap fixture produces exact fingerprint matches (correctly silent-deduped, no case needed) rather than an ambiguous near-duplicate — no fixture in this sandbox exercises the `duplicate_suspected` path live |
+
+Raw output preserved in `r2-closure-live-results.local.json` during the session (gitignored, not committed — matches this project's `*.local.json` convention for live-test scratch output).

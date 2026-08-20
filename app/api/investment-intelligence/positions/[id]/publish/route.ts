@@ -36,7 +36,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   if (result.error) {
-    const status = result.errorCode === 'REVIEW_REQUIRED' ? 409 : result.errorCode === 'NOT_ELIGIBLE' || result.errorCode === 'TARGET_NOT_ACTIVATED' ? 422 : 500;
+    // Live-testing-discovered fix (R3 closure pass, SEC-R3-003/007): a
+    // position that does not exist OR does not belong to the caller (RLS
+    // makes the two indistinguishable, by design) must read as 404, never
+    // the previous unconditional 500 fallback — the security OUTCOME was
+    // always correct (no cross-user access occurred), but the status code
+    // was misleading API hygiene, caught by the live adversarial pack.
+    const status =
+      result.errorCode === 'REVIEW_REQUIRED' ? 409 : result.errorCode === 'NOT_ELIGIBLE' || result.errorCode === 'TARGET_NOT_ACTIVATED' ? 422 : result.errorCode === 'NOT_FOUND' || result.errorCode === 'LINK_TARGET_NOT_FOUND' ? 404 : 500;
     return bad(result.error, status);
   }
   return ok(result);

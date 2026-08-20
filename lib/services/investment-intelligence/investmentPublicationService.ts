@@ -112,6 +112,22 @@ interface ManualInvestmentQueryRow {
   source_type: string;
 }
 
+// Live-testing-discovered defect (R3 closure pass): pre_publication_manual_
+// snapshot carries a `captured_at` metadata key that is NOT itself a column
+// on `investments`. Spreading the raw snapshot object directly into an
+// `.update()` payload (as the compensation-revert and unpublish-restore
+// paths originally did) sends an unknown column to PostgREST, which REJECTS
+// the entire update — and neither call site checked the returned error, so
+// the failure was silent: the row was left stamped as still
+// 'investment_intelligence_published' with the certified (not restored)
+// value, exactly the "half-reverted" state the compensating-workflow design
+// was supposed to prevent. This helper is the fix: it extracts ONLY the
+// real investments columns the snapshot carries, dropping captured_at.
+function restorableFieldsFromSnapshot(snap: Record<string, unknown>) {
+  const { current_value, cost_base, institution, owner, investment_type, master_item_key, annual_contribution, risk_profile } = snap;
+  return { current_value, cost_base, institution, owner, investment_type, master_item_key, annual_contribution, risk_profile };
+}
+
 function toExistingManualInvestmentRow(row: ManualInvestmentQueryRow): ExistingManualInvestmentRow {
   return {
     id: row.id,
@@ -385,7 +401,7 @@ export interface PublishResult {
 export async function publishPosition(userId: string, positionId: string, options: PublishOptions = {}): Promise<PublishResult> {
   const supabase = await createClient();
   const ctx = await loadPositionContext(supabase, userId, positionId);
-  if ('error' in ctx) return { publicationId: null, publishedRowId: null, action: null, financialImpact: null, error: ctx.error };
+  if ('error' in ctx) return { publicationId: null, publishedRowId: null, action: null, financialImpact: null, error: ctx.error, errorCode: 'NOT_FOUND' };
   const { snapshot, account, instrument, truth, member, openLots } = ctx;
 
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
@@ -578,12 +594,32 @@ export async function publishPosition(userId: string, positionId: string, option
       const { data: reverted } = await supabase.from('investments').select('pre_publication_manual_snapshot').eq('id', publishedRowId).eq('user_id', userId).maybeSingle();
       const snap = reverted?.pre_publication_manual_snapshot as Record<string, unknown> | null;
       if (snap) {
-        await supabase.from('investments').update({ ...snap, source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null }).eq('id', publishedRowId).eq('user_id', userId);
+        const { error: revertErr } = await supabase
+          .from('investments')
+          .update({ ...restorableFieldsFromSnapshot(snap), source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null })
+          .eq('id', publishedRowId)
+          .eq('user_id', userId);
+        if (revertErr) {
+          // The compensation write itself failed — this is now a genuinely
+          // inconsistent row (stamped published, no backing publication) and
+          // must be surfaced loudly, not swallowed, per spec section 46.
+          await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'investments', subjectId: publishedRowId, actorType: 'system', metadata: { positionId, reason: `compensation write failed: ${revertErr.message}`, compensated: false } });
+        }
       }
     }
     await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'investments', subjectId: publishedRowId, actorType: 'system', metadata: { positionId, reason: pubErr?.message ?? 'unknown', compensated: true } });
     return { publicationId: null, publishedRowId: null, action: null, financialImpact: null, error: `Publication failed and was safely rolled back: ${pubErr?.message ?? 'unknown error'}`, errorCode: 'WRITE_FAILED' };
   }
+
+  // Back-link the target row to its now-created publication. A genuine
+  // live-testing-discovered gap (R3 closure pass): the initial fieldPayload
+  // is built before the publication row exists, so ii_publication_id must
+  // be set in a follow-up write, exactly as republishPosition() already
+  // does for the republish case. Never touches current_value/ownership/
+  // any economically-significant field — purely the provenance pointer the
+  // UI's "Review in Investment Intelligence" link and future consistency
+  // checks rely on.
+  await supabase.from('investments').update({ ii_publication_id: pub.id }).eq('id', publishedRowId).eq('user_id', userId);
 
   await emitAuditEvent({
     userId,
@@ -616,13 +652,19 @@ export async function unpublishPosition(userId: string, publicationId: string): 
   if (row?.source_type === 'investment_intelligence_published' && row.pre_publication_manual_snapshot) {
     // Was a linked manual row — restore it exactly as it was before linking.
     const snap = row.pre_publication_manual_snapshot as Record<string, unknown>;
-    await supabase.from('investments').update({ ...snap, source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null, is_active: true }).eq('id', pub.published_row_id).eq('user_id', userId);
+    const { error: restoreErr } = await supabase
+      .from('investments')
+      .update({ ...restorableFieldsFromSnapshot(snap), source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null, is_active: true })
+      .eq('id', pub.published_row_id)
+      .eq('user_id', userId);
+    if (restoreErr) return { error: `Unpublish restore failed: ${restoreErr.message}` };
   } else {
     // Was a brand-new II-created row — archiving is the correct exclusion
     // mechanism (matches R0_NET_WORTH_DEDUP_CONTRACT.md scenario 10; the
     // existing registry.archive() semantics: is_active=false already
     // excludes from computeDashboard() automatically, no engine changes).
-    await supabase.from('investments').update({ is_active: false }).eq('id', pub.published_row_id).eq('user_id', userId);
+    const { error: archiveErr } = await supabase.from('investments').update({ is_active: false, ii_publication_id: null }).eq('id', pub.published_row_id).eq('user_id', userId);
+    if (archiveErr) return { error: `Unpublish archive failed: ${archiveErr.message}` };
   }
 
   const { error: updErr } = await supabase.from('ii_fhip_publications').update({ status: 'unpublished' }).eq('id', publicationId).eq('user_id', userId);
@@ -702,14 +744,32 @@ export async function refreshPosition(userId: string, newPositionId: string): Pr
     return { error: decision.reason, publicationId: active.id as string, decision: decision.action };
   }
 
-  // Activate the new snapshot: update the SAME published_row_id in place
-  // (never a second investments row), mark the OLD publication superseded,
-  // insert a NEW publication row for the new snapshot as the active one.
-  await supabase
-    .from('investments')
-    .update({ current_value: snapshot.value, ii_last_refreshed_at: new Date().toISOString(), ii_source_quality_status: snapshot.quality_status })
-    .eq('id', active.published_row_id)
+  // Activate the new snapshot. Corrected ordering (live-testing-discovered
+  // defect, R3 closure pass — the original ordering inserted the new
+  // 'published' row BEFORE marking the old one 'superseded', which
+  // unconditionally violated uidx_ii_fhip_publications_one_active_position
+  // — a refresh could never succeed in production). The safe order:
+  //   1. Mark the OLD publication 'superseded' FIRST (frees the unique
+  //      partial-index slot for this economic position).
+  //   2. Insert the NEW publication row with status='published'. If this
+  //      fails, COMPENSATE by reverting the old row back to 'published'
+  //      (undoing step 1) — never leave the position with zero active
+  //      publications.
+  //   3. Only once the new publication row exists does the target
+  //      investments row get updated to the new value + back-linked to the
+  //      new publication id — so investments.current_value is NEVER
+  //      observable as ahead of the publication record that is supposed to
+  //      back it (the exact half-written state this ordering bug produced
+  //      live: current_value=561000 while the only 'published' row still
+  //      said published_value=520000).
+  const { error: supersedeErr } = await supabase
+    .from('ii_fhip_publications')
+    .update({ status: 'superseded', supersession_reason: decision.reason })
+    .eq('id', active.id as string)
     .eq('user_id', userId);
+  if (supersedeErr) {
+    return { error: `Refresh failed at step 1 (supersede old publication): ${supersedeErr.message}`, publicationId: null, decision: null };
+  }
 
   const idempotencyKey = computeIdempotencyKey({ accountId: account.id, instrumentId: instrument.id, canonicalPositionId: newPositionId, publicationTarget: active.publication_target });
   const { data: newPub, error: newPubErr } = await supabase
@@ -744,11 +804,27 @@ export async function refreshPosition(userId: string, newPositionId: string): Pr
     .single();
 
   if (newPubErr || !newPub) {
-    await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'ii_fhip_publications', subjectId: active.id as string, actorType: 'system', metadata: { reason: newPubErr?.message ?? 'unknown' } });
+    // COMPENSATE: revert the old publication back to 'published' — the
+    // position must never be left with zero active publications.
+    await supabase.from('ii_fhip_publications').update({ status: 'published', supersession_reason: null }).eq('id', active.id as string).eq('user_id', userId);
+    await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'ii_fhip_publications', subjectId: active.id as string, actorType: 'system', metadata: { reason: newPubErr?.message ?? 'unknown', compensated: true } });
     return { error: newPubErr?.message ?? 'Refresh failed', publicationId: null, decision: null };
   }
 
-  await supabase.from('ii_fhip_publications').update({ status: 'superseded', superseded_by_publication_id: newPub.id, supersession_reason: decision.reason }).eq('id', active.id as string).eq('user_id', userId);
+  // Link the old row's forward pointer now that the new row's id is known.
+  await supabase.from('ii_fhip_publications').update({ superseded_by_publication_id: newPub.id }).eq('id', active.id as string).eq('user_id', userId);
+
+  // Only now does the target row change — after a real, backing, active
+  // publication exists, never before.
+  const { error: investUpdateErr } = await supabase
+    .from('investments')
+    .update({ current_value: snapshot.value, ii_last_refreshed_at: new Date().toISOString(), ii_source_quality_status: snapshot.quality_status, ii_publication_id: newPub.id })
+    .eq('id', active.published_row_id)
+    .eq('user_id', userId);
+  if (investUpdateErr) {
+    await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'investments', subjectId: active.published_row_id as string, actorType: 'system', metadata: { reason: `investments row update failed after publication row was already created: ${investUpdateErr.message}`, publicationId: newPub.id } });
+    return { error: `Refresh partially completed — the publication record was created (id=${newPub.id}) but the investments row could not be updated: ${investUpdateErr.message}. Manual reconciliation required.`, publicationId: newPub.id as string, decision: decision.action };
+  }
 
   await emitAuditEvent({ userId, eventType: 'publication_refreshed', subjectType: 'ii_fhip_publications', subjectId: newPub.id as string, actorType: 'user', metadata: { previousPublicationId: active.id, decision: decision.action } });
   await emitAuditEvent({ userId, eventType: 'publication_superseded', subjectType: 'ii_fhip_publications', subjectId: active.id as string, actorType: 'system', metadata: { supersededBy: newPub.id } });

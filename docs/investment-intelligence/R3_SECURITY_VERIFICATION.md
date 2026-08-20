@@ -1,6 +1,6 @@
 # R3 — Security Verification
 
-Status: FINAL (R3) for STATIC/design verification; SEC-R3-001..010 LIVE adversarial tests are **BLOCKED** pending migration `0042` application to DEV — stated plainly per this project's own testing discipline (never claim LIVE for something only reasoned about from SQL).
+Status: FINAL (R3). SEC-R3-001..010 LIVE adversarial tests were completed 2026-08-20 after migration `0042` was applied to DEV — see section 6. STATIC/design verification (sections 1-5) is reproduced below unchanged as the design-level record.
 
 ## 1. RLS design (STATIC — verified by reading the migration text directly)
 
@@ -34,6 +34,31 @@ Every new API route (`app/api/investment-intelligence/positions/[id]/{eligibilit
 - `evaluateEligibility()`/`detectDuplicateCandidates()`/`calculateFinancialImpact()` never accept or trust a caller-supplied user/household identifier — every function takes only the specific data needed for its decision (owner id, instrument class, values), never a security-relevant identity to check against. There is no code path in `publicationLogic.ts` where an authorization decision could be spoofed, because `publicationLogic.ts` makes no authorization decisions at all — that responsibility lives entirely in `investmentPublicationService.ts`'s explicit `.eq('user_id', userId)` scoping, which is inspectable and was inspected (section 2).
 - No new table exposes an unrestricted CRUD surface — every route is bounded to one specific operation (section 5, `R3_PUBLISHING_ARCHITECTURE.md`).
 
-## 5. Classification
+## 5. Classification (static/design)
 
-STATIC/design-level review: **PASS** — the RLS and application-layer pattern is correct, consistent with this project's own established discipline, and introduces no new attack surface (no new policies needed, no new unscoped queries found). **LIVE adversarial SEC-R3-001..010: BLOCKED pending migration application** — this must be independently re-run with real seeded victim rows before R3 can be called a full, unconditional security PASS; the orchestrating session or a human operator must complete this step in DEV.
+STATIC/design-level review: **PASS** — the RLS and application-layer pattern is correct, consistent with this project's own established discipline, and introduces no new attack surface (no new policies needed, no new unscoped queries found).
+
+## 6. Live-DEV closure results (2026-08-20)
+
+Methodology: two real throwaway auth users (Household A, Household B) created via the Auth Admin API; Household B's real portfolio data (an `ii_accounts`/`ii_instruments`/`ii_transactions`/`ii_holding_snapshots` chain plus a real manual `investments` row) legitimately created and then certified/published via B's own authenticated session hitting the real API routes; every attack fired by User A via genuine `@supabase/ssr`-shaped session cookies built from a real password-grant sign-in (never a fabricated token) against the real running Next.js dev server; ground truth independently re-verified via service-role reads both before AND after every attack — never accepting a denial response alone as proof without first confirming a real victim row existed to be blocked. Script: `scripts/r3_sec_tests.mjs`.
+
+| ID | Test | Result |
+|---|---|---|
+| SEED-VERIFY | Real victim data exists for User B before any attack (1 active investments row, 1+ publications) | **PASS** |
+| SEC-R3-001 | User A cannot preview User B's canonical position | **PASS** (404) |
+| SEC-R3-002 | User A cannot check eligibility on User B's position | **PASS** (404) |
+| SEC-R3-003 | User A cannot publish User B's position | **PASS** (404, after fixing a status-code-only bug — see `R3_ACCEPTANCE_REPORT.md` defect #6; the security outcome was already correct, denial occurred, before the fix) |
+| SEC-R3-004 | User A cannot refresh User B's position | **PASS** (422) |
+| SEC-R3-005 | User A cannot unpublish User B's publication | **PASS** (404) |
+| SEC-R3-006 | User A cannot republish User B's publication | **PASS** (409) |
+| SEC-R3-007 | User A cannot link User B's canonical position to any row, including a row A legitimately owns | **PASS** (404 — rejected before the link target is even considered, since the position itself is never resolvable as A's) |
+| SEC-R3-008 | User A cannot PATCH User B's investments row (spoofed cross-household target write) | **PASS** (400, RLS-filtered `select` finds nothing to update) |
+| SEC-R3-009 | Direct PostgREST insert into `ii_fhip_publications` with `user_id` spoofed to B, authenticated as A | **PASS** (403, `42501` — RLS `with check` clause rejected it) |
+| SEC-R3-010 | User A cannot read User B's `ii_audit_events` | **PASS** (200, 0 rows — RLS-scoped select) |
+| GROUND-TRUTH-AFTER | User B's real investments/publications data is byte-for-byte unchanged after every attack above | **PASS** |
+
+**12/12 PASS.** Full raw output preserved in `r3-closure-sec-results.local.json` during the session (gitignored scratch file, not committed).
+
+## 7. Final classification (updated)
+
+**LIVE PASS — unconditional.** Both the static/design review and the live adversarial pack are clean. No cross-user access, no spoofed-ownership write, no unauthorized read of another household's data or audit trail was found anywhere in this pass.

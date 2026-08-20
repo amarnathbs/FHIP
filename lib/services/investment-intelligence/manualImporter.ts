@@ -189,13 +189,42 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       gross_amount: tx.grossAmount,
       source_reference: tx.sourceReference ?? null,
     };
-    const { data: created, error: txErr } = tx.sourceReference
-      ? await admin
-          .from('ii_transactions')
-          .upsert(txPayload, { onConflict: 'account_id,source_document_id,source_reference', ignoreDuplicates: true })
-          .select('id')
-          .maybeSingle()
-      : await admin.from('ii_transactions').insert(txPayload).select('id').single();
+    // R3 closure-pass fix: uidx_ii_transactions_dedup (migration 0033) is a
+    // PARTIAL unique index (`where source_document_id is not null and
+    // source_reference is not null`). Postgres/PostgREST will only use a
+    // partial index as an ON CONFLICT arbiter when the request's ON
+    // CONFLICT target itself carries a matching WHERE clause — a bare
+    // column-list upsert (what Supabase-js's `.upsert(payload, {onConflict})`
+    // sends) does NOT match it and fails with 42P10 ("no unique or
+    // exclusion constraint matching the ON CONFLICT specification"). This
+    // was a real, live-verified defect (first ever live execution of this
+    // code path — see R2_ACCEPTANCE_REPORT.md's closure-pass addendum) in
+    // this test-only helper (never in the production parser path, which
+    // already uses the safe select-then-insert pattern below —
+    // documentProcessing.ts lines ~418-442). Fixed the same way here:
+    // select-then-insert instead of upsert-against-a-partial-index.
+    let created: { id: string } | null = null;
+    let txErr: { message: string } | null = null;
+    if (tx.sourceReference) {
+      const { data: existing } = await admin
+        .from('ii_transactions')
+        .select('id')
+        .eq('account_id', accountResult.accountId)
+        .eq('source_document_id', doc.id)
+        .eq('source_reference', tx.sourceReference)
+        .maybeSingle();
+      if (existing) {
+        created = existing as { id: string };
+      } else {
+        const { data: inserted, error } = await admin.from('ii_transactions').insert(txPayload).select('id').single();
+        created = inserted as { id: string } | null;
+        txErr = error;
+      }
+    } else {
+      const { data: inserted, error } = await admin.from('ii_transactions').insert(txPayload).select('id').single();
+      created = inserted as { id: string } | null;
+      txErr = error;
+    }
     if (txErr) {
       await admin.from('ii_source_documents').update({ status: 'parse_failed', parse_error: txErr.message }).eq('id', doc.id);
       return {
