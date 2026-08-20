@@ -177,9 +177,32 @@ create policy "read ii_risk_free_rates" on ii_risk_free_rates for select using (
 -- Move the legacy placeholder aside (preserving any rows rather than
 -- dropping them), revoke its permissive write policy, and then create the
 -- R4 table under the canonical name.
-alter table if exists ii_analytics_results rename to ii_analytics_results_r1_legacy;
-alter index if exists idx_ii_analytics_results_user rename to idx_ii_analytics_results_r1_legacy_user;
-alter index if exists idx_ii_analytics_results_subject rename to idx_ii_analytics_results_r1_legacy_subject;
+--
+-- The rename is guarded on the table's SHAPE, not merely on its existence.
+-- An unguarded `alter table if exists ... rename` would be actively harmful
+-- on a second run: by then ii_analytics_results is the NEW R4 table, and a
+-- bare rename would move it aside and then create a third empty one. The
+-- guard below fires only when the table present under the canonical name is
+-- genuinely the legacy placeholder (has subject_type, lacks
+-- input_snapshot_version), which is true exactly once.
+do $$
+begin
+  if to_regclass('public.ii_analytics_results') is not null
+     and to_regclass('public.ii_analytics_results_r1_legacy') is null
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'ii_analytics_results' and column_name = 'subject_type'
+     )
+     and not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'ii_analytics_results' and column_name = 'input_snapshot_version'
+     )
+  then
+    execute 'alter table ii_analytics_results rename to ii_analytics_results_r1_legacy';
+    execute 'alter index if exists idx_ii_analytics_results_user rename to idx_ii_analytics_results_r1_legacy_user';
+    execute 'alter index if exists idx_ii_analytics_results_subject rename to idx_ii_analytics_results_r1_legacy_subject';
+  end if;
+end $$;
 do $$
 begin
   if to_regclass('public.ii_analytics_results_r1_legacy') is not null then
@@ -188,9 +211,12 @@ begin
     execute 'drop policy if exists "own ii_analytics_results" on ii_analytics_results_r1_legacy';
     execute 'drop policy if exists "read own ii_analytics_results_r1_legacy" on ii_analytics_results_r1_legacy';
     execute 'create policy "read own ii_analytics_results_r1_legacy" on ii_analytics_results_r1_legacy for select using (auth.uid() = user_id)';
+    -- Guarded alongside the policy: on a database where the 0035 placeholder
+    -- never existed, there is no legacy table to comment on and a bare
+    -- `comment on table` would abort the migration.
+    execute 'comment on table ii_analytics_results_r1_legacy is ''Superseded R1 storage-shape placeholder, renamed by migration 0043. Read-only to its owner; no write policy. Retained rather than dropped so no data is lost. Not used by any R4 code path.''';
   end if;
 end $$;
-comment on table ii_analytics_results_r1_legacy is 'Superseded R1 storage-shape placeholder, renamed by migration 0043. Read-only to its owner; no write policy. Retained rather than dropped so no data is lost. Not used by any R4 code path.';
 
 create table if not exists ii_analytics_results (
   id uuid primary key default gen_random_uuid(),
