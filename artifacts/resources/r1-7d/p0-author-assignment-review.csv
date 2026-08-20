@@ -1,0 +1,85 @@
+Content_ID,Title,Content_Type,Current_Author,Author_Required_For_Publication,Proposed_Author,Human_Decision,Status
+FH-001,What Does Financial Health Actually Mean?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FH-002,7 Financial Numbers Every Household Should Know,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FH-006,The Four Foundations of Household Financial Health,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+MM-001,Household Cash Flow Explained,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+MM-004,How to Calculate and Improve Your Savings Rate,guide,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+ER-001,What Is an Emergency Fund?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+MM-002,Gross Income vs Take-Home Income,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+ER-002,How Many Months of Expenses Should You Keep?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+NW-003,Why Net Worth Can Matter More Than Salary,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IP-002,Life Insurance Explained in Plain English,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-001,How FHIP Calculates Net Worth,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-008,Cash Flow Deficit,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+ER-003,Emergency Savings vs Investments,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+NW-001,What Is Net Worth?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+DB-001,Good Debt vs Bad Debt,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+ER-004,What Happens Financially If Your Income Stops?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+DB-002,Understanding Your Debt-to-Income Ratio,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-009,Fixed Expense,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-012,Discretionary Expense,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-014,Emergency Fund,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+DB-003,Understanding Your Debt Service Ratio,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GL-003,How Inflation Changes the Future Cost of Your Goals,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GL-002,"Short-, Medium- and Long-Term Financial Goals",article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-001,Asset,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IN-002,Investment Risk Explained in Plain English,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IN-004,Diversification Explained,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+MM-003,"Fixed, Variable, Essential and Discretionary Expenses",article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+DB-004,How Interest Rates Affect Your Loan Repayments,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RAU-003,Understanding Retirement Readiness in Australia,guide,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RIN-001,EPF Explained for Beginners,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+CB-002,AUD and INR Currency Risk Explained,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RIN-002,PPF Explained for Beginners,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-025,How to Read Your FHIP Free Report,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RIN-003,NPS Explained for Beginners,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-026,How to Read Your FHIP Premium Report,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IP-001,Why Insurance Is Part of Financial Health,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+DN-001,Why Financial Decisions Aren't Just About Mathematics,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FC-002,Forecast vs Prediction: What's the Difference?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FC-003,How Future Net Worth Can Be Estimated,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+SB-001,What Is a Financial Health Score?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+SB-002,Why One Score Cannot Describe Your Entire Financial Position,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-006,How FHIP Calculates Debt Service Ratio,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-001,What Is Financial Health? | GKTC x FHIP,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-004,How FHIP Measures Emergency Fund Coverage,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-004,Savings Rate: The Number That Shows What You Keep,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-005,How FHIP Calculates Debt-to-Income Ratio,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-012,How FHIP Measures Retirement Readiness,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-007,Financial Resilience: Can Your Finances Absorb a Shock?,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-002,Liability,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-005,Net Income,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-011,Essential Expense,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-005,How Much Emergency Fund Do You Really Need?,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-008,Compounding Explained Visually,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-003,Net Worth,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-006,Cash Flow,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-015,Liquidity,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-002,7 Numbers Every Household Should Know,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-006,Debt-to-Income Ratio Explained,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-004,Gross Income,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-007,Cash Flow Surplus,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-010,Variable Expense,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GLO-013,Savings Rate,glossary,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+VID-003,Net Worth Explained in 5 Minutes,video,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FH-003,Financial Health vs Wealth: What's the Difference?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FH-004,Why a High Income Doesn't Automatically Mean Financial Security,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FH-005,How Often Should You Review Your Financial Position?,guide,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+NW-004,What Does Negative Net Worth Mean?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+GL-001,How to Turn Financial Dreams into Measurable Goals,guide,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IN-001,Saving vs Investing: When Does Each Make Sense?,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+NW-002,Assets vs Liabilities: The Building Blocks of Net Worth,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IN-003,Risk and Return: Why They Usually Move Together,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+IN-005,Asset Allocation Explained,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RAU-002,How Superannuation Contributions Build Retirement Savings,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+RAU-001,Superannuation Explained for Beginners,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+SB-003,"Understanding Savings, Debt and Liquidity Ratios Together",article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+FC-001,Why Financial Forecasting Matters,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+CB-001,Understanding Your Financial Life Across Australia and India,article,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-002,How FHIP Calculates Cash Flow Surplus,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-007,How FHIP Measures Financial Resilience,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-010,How FHIP Measures Goal Readiness,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-003,How FHIP Calculates Savings Rate,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-009,How to Read the FHIP Financial Health Score,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-008,How FHIP Calculates the Financial Health Score,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
+EX-011,How FHIP Tracks Goal Funding Progress,fhip_explainer,null,YES (per existing CMS publication policy),,NOT_REVIEWED,NEEDS_AUTHOR_ASSIGNMENT
