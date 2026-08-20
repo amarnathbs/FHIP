@@ -15,7 +15,13 @@
     "test:e2e": "playwright test",
     "resources:import-r0a": "tsx --env-file=.env.local scripts/resources/import-r0a-content-master.ts",
     "resources:rollback-r0a": "tsx --env-file=.env.local scripts/resources/rollback-r0a.ts",
-    "resources:verify-r0a": "tsx --env-file=.env.local scripts/resources/verify-r0a.ts"
+    "resources:verify-r0a": "tsx --env-file=.env.local scripts/resources/verify-r0a.ts",
+    "resources:p0:dry-run": "tsx --env-file=.env.local scripts/resources/p0-content/load-p0-content.ts",
+    "resources:p0:apply": "tsx --env-file=.env.local scripts/resources/p0-content/load-p0-content.ts -- --apply",
+    "resources:p0:verify": "tsx --env-file=.env.local scripts/resources/p0-content/verify-p0-content.ts",
+    "resources:p0:reconcile": "tsx --env-file=.env.local scripts/resources/p0-content/query-cms-reconciliation.ts",
+    "resources:p0:related-dry-run": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts",
+    "resources:p0:related-apply": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts -- --apply"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
