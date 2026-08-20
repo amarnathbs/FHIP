@@ -1,6 +1,6 @@
 # R3 — Testing and Verification
 
-Status: FINAL (R3), UPDATED 2026-08-20 after migration `0042` was applied to DEV and the live closure pass completed (see `R3_ACCEPTANCE_REPORT.md` section 0). Every claim below is labeled STATIC / FIXTURE-UNIT / LOCAL-DB / LIVE-DEV / MANUAL-ADVERSARIAL explicitly, per this project's own discipline. Nothing is claimed LIVE unless it was actually run against a live environment.
+Status: FINAL (R3), UPDATED 2026-08-20 after migration `0042` was applied to DEV and the live closure pass completed (see `R3_ACCEPTANCE_REPORT.md` section 0), UPDATED AGAIN 2026-08-20 (same day, later pass) by the provenance-preservation closure pass — see `R3_CLOSURE_REPORT.md` for the full defect/fix writeup and section 9 below for this pass's own testing summary. Every claim below is labeled STATIC / FIXTURE-UNIT / LOCAL-DB / LIVE-DEV / MANUAL-ADVERSARIAL explicitly, per this project's own discipline. Nothing is claimed LIVE unless it was actually run against a live environment.
 
 ## 1. Summary
 
@@ -19,6 +19,8 @@ npx tsc --noEmit          -> clean, 0 errors
 npx eslint .               -> 6 errors, 6 warnings (identical to documented pre-existing baseline)
 npm run build               -> succeeds, 161 routes incl. all new R3 routes
 ```
+
+**Re-run after the 2026-08-20 provenance closure pass**: `npx tsc --noEmit` clean; `npx eslint .` unchanged at 6 errors/6 warnings (all pre-existing, in files this pass did not touch); `npm run build` succeeds, 145 routes (route count differs from the figure above because it reflects this worktree's actual current route set, not a regression — no route was added or removed by this pass).
 
 ## 3. FIXTURE/UNIT test packs — run for real, exact results
 
@@ -45,6 +47,13 @@ npx vitest run
 ```
 
 364 of these are the exact pre-existing R1/R2 suite (confirmed identical count to R2's documented baseline after fixing a pre-existing, unrelated environment gap — see section 6). 106 are new R3 tests. **Zero pre-existing tests were modified.**
+
+**Re-run after the 2026-08-20 provenance closure pass**, `npx vitest run --no-file-parallelism`:
+```
+ Test Files  38 passed (38)
+      Tests  489 passed (489)
+```
+470 pre-existing (unchanged, zero modified) + 19 new in `tests/unit/iiR3ProvenanceClosure.test.ts` (PROV-R3C-001..010, FIN-R3C-001..006, plus 3 pure-function tests for `buildPreLinkManualSnapshot`/`restorableFieldsFromManualSnapshot`). See section 9.
 
 ## 5. What was BLOCKED, and is now closed (2026-08-20)
 
@@ -89,3 +98,15 @@ Before R3 work began, `npx vitest run` reported 357/358 (one suite failed to loa
 ## 8. Live-DEV closure pass — full detail
 
 See `R3_ACCEPTANCE_REPORT.md` section 0 for the complete methodology, the four prerequisites and their results, and the six real defects found and fixed. Scripts used (temporary, deleted after this pass per the cleanup discipline every closure pass in this project follows): `scripts/r3_closure_setup.ts`, `scripts/r3_lib_auth.mjs`, `scripts/r3_closure_live_tests.mjs`, `scripts/r3_closure_live_tests_part2.mjs`, `scripts/r3_sec_tests.mjs`, `scripts/r2_closure_live_tests.mjs`, `scripts/r3_pdf_gen.mjs`, `scripts/r3_cleanup.mjs`.
+
+## 9. Provenance-preservation closure pass (2026-08-20, later same day) — full detail
+
+Full writeup: `R3_CLOSURE_REPORT.md`. Summary:
+
+- **Automated (`tests/unit/iiR3ProvenanceClosure.test.ts`, 19 tests, all PASS)**: drives the real `publishPosition()`/`refreshPosition()`/`unpublishPosition()` functions end to end through a minimal in-memory fake Postgrest client (not a reimplementation of the logic — the real service code runs, only its Supabase I/O is faked), covering PROV-R3C-001 (basic name preservation), 002 (refresh doesn't destroy the snapshot), 003 (multiple refreshes), 004 (idempotent publish leaves the snapshot untouched), 005 (unpublish/re-publish lifecycle), 006 (a manual edit between cycles becomes the new legitimate pre-link state, not the original-original), 008 (failed-publication compensation restores the complete field set), 009 (schema-verified null/blank/Unicode name handling), 010 (currency_code/country_code preserved with the same rigor as investment_name), plus FIN-R3C-001..006 (financial-integrity regression) and 4 pure-function tests for the new `buildPreLinkManualSnapshot()`/`restorableFieldsFromManualSnapshot()` helpers, including an explicit proof that a pre-fix (old-format) snapshot restores its known fields correctly while leaving the new fields `undefined` (which `JSON.stringify` drops, so PostgREST never receives a bad value for them).
+- **LIVE-DEV mandatory reproduction**: a fresh throwaway household (not reused from any prior pass), seeded via the Auth Admin API + service-role inserts — manual investment `investment_name="Original Manual Investment"`/`current_value=500000`/`currency_code=AUD`/`country_code=AU`, certified II position `instrument_name="Imported Mutual Fund Name"`/`current_value=520000`/`currency_code=INR`. Real HTTP requests against a directly-started `next start` process (Bash-started, bypassing the MCP preview-tool wrapper per the established R1.7/R3 workaround), authenticated via a real password sign-in through the actual `/login` page in a real browser tab (same-origin `createBrowserClient` cookie session, not a fabricated token) — `eligibility` → `preview` → `publish` (with `linkToExistingInvestmentId`) → `unpublish`, each a genuine `fetch()` call from within that authenticated tab. Service-role ground-truth query after publish: exactly one active `investments` row, `current_value=520000`, `investment_name="Imported Mutual Fund Name"`, exactly one `ii_fhip_publications` row `status='published'`. Ground-truth query after unpublish: `current_value=500000`, `investment_name="Original Manual Investment"`, `currency_code=AUD`, `country_code=AU`, `source_type='manual'`, all four `ii_*` tracking columns null. **A genuine bonus live proof of PROV-R3C-008**: an attempted same-position re-publish (using `publishPosition()` instead of the correct `republishPosition()`) hit the real `ii_fhip_publications_canonical_position_id_key` unique constraint and triggered the real compensation path — ground truth confirmed the row was correctly reverted to the complete original manual state (name, value, currency, country), not left half-published or corrupted.
+- **LIVE-DEV security re-check (SEC-R3C-001..004)**: two fresh throwaway households (A, B). SEC-R3C-001 (preview) and 002 (publish/link, including an attempt to link A's certified position to B's OWN manual row) both returned 404 via the real API. SEC-R3C-003 (unpublish) returned 404 via the real API, and ground truth confirmed A's publication was still genuinely `status='published'` at 520000 afterward (not silently unpublished). SEC-R3C-004 (direct PostgREST read/PATCH of `investments.pre_publication_manual_snapshot` using B's own real access token) returned an empty result set for both the read and the write — per this project's own established methodology, a zero-row response alone is not accepted as proof, so ground truth was independently re-queried via service-role afterward and confirmed A's row's `investment_name` was still `"Original Manual Investment"`, not the attacker's injected `"PWNED"` value.
+- **Backward compatibility**: a live DEV query for any `investments` row with a non-null `pre_publication_manual_snapshot` returned zero rows, and `ii_fhip_publications` returned zero rows — every fixture from the prior R3 closure pass had already been fully cleaned up, so there was no pre-fix-format snapshot on DEV to migrate or special-case. The backward-compatible behaviour (a pre-fix snapshot restores its known fields and leaves the newer fields untouched rather than fabricating them) is proven by the automated pure-function test instead.
+- **Cleanup**: every fixture this pass created (2 auth users + cascaded rows, 2 `ii_instruments` rows) was deleted and independently re-verified via a fresh service-role query returning zero rows across every affected table (`investments`, `household_members`, `user_profiles`, `ii_accounts`, `ii_holding_snapshots`, `ii_portfolio_truth_status`, `ii_fhip_publications`, `ii_audit_events`, `ii_instruments`) plus confirmation the two auth users no longer exist.
+- **Regression**: `npx tsc --noEmit` clean; `npx eslint .` unchanged (6E/6W, same pre-existing files); `npx vitest run --no-file-parallelism` 489/489 (470 pre-existing + 19 new); `npm run build` clean, 145 routes.
+- **Adjacent issue found, out of scope, not fixed here**: `republishPosition()` does not re-write `investment_name`/`institution`/`country_code`/`currency_code`/`master_item_key`/`ii_canonical_*` when reactivating a publication — only `current_value`/`cost_base`/`owner`. Live-confirmed during the SEC-R3C-003 setup (republishing A's position left `investment_name` stuck at the manual-restored value even though `source_type` read `investment_intelligence_published`). Not a financial-integrity or security issue (current_value is correct); flagged as a follow-up task, not fixed in this narrowly-scoped pass.

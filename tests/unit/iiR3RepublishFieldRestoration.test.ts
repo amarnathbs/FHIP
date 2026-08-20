@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { createClient } from '@/lib/supabase/server';
-import { republishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
+import { republishPosition, unpublishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // Regression coverage for the republish provenance-restoration defect
 // (spec section 37, R3 closure pass, live-DEV reproduced 2026-08-20):
@@ -26,7 +26,17 @@ vi.mock('@/lib/services/investment-intelligence/audit', () => ({
   emitAuditEvent: vi.fn().mockResolvedValue({ error: null }),
 }));
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
+
+interface FakeQueryBuilder extends PromiseLike<{ data: Row | null; error: null }> {
+  select(): FakeQueryBuilder;
+  eq(col: string, val: unknown): FakeQueryBuilder;
+  neq(col: string, val: unknown): FakeQueryBuilder;
+  in(col: string, vals: unknown[]): FakeQueryBuilder;
+  update(payload: Row): FakeQueryBuilder;
+  maybeSingle(): Promise<{ data: Row | null; error: null }>;
+  single(): Promise<{ data: Row | null; error: null }>;
+}
 
 function makeFakeSupabase(tables: Record<string, Row[]>) {
   function from(table: string) {
@@ -34,7 +44,7 @@ function makeFakeSupabase(tables: Record<string, Row[]>) {
     let rows = [...source];
     let pendingUpdate: Row | null = null;
 
-    const builder: any = {
+    const builder: FakeQueryBuilder = {
       select() {
         return builder;
       },
@@ -63,7 +73,7 @@ function makeFakeSupabase(tables: Record<string, Row[]>) {
       // Update chains in the real code are awaited directly without a
       // terminal .maybeSingle()/.single() call — making the builder itself
       // thenable covers `await supabase.from(x).update(y).eq(...).eq(...)`.
-      then(onFulfilled: (v: { data: Row | null; error: null }) => unknown, onRejected?: (e: unknown) => unknown) {
+      then(onFulfilled, onRejected) {
         return applyAndResolve(null).then(onFulfilled, onRejected);
       },
     };
@@ -148,7 +158,7 @@ describe('republishPosition() restores the full certified field set', () => {
   });
 
   it('re-derives investment_name/institution/country/currency/master_item_key/risk/annual_contribution/canonical ids/quality status, not just value/cost_base/owner', async () => {
-    (createClient as any).mockResolvedValue(makeFakeSupabase(tables));
+    (createClient as Mock).mockResolvedValue(makeFakeSupabase(tables));
 
     const result = await republishPosition(userId, publicationId);
 
@@ -181,10 +191,95 @@ describe('republishPosition() restores the full certified field set', () => {
 
   it('prefers the certified instrument amc_name over account institution_name when both are present', async () => {
     tables.ii_instruments[0].amc_name = 'HDFC AMC Certified Name';
-    (createClient as any).mockResolvedValue(makeFakeSupabase(tables));
+    (createClient as Mock).mockResolvedValue(makeFakeSupabase(tables));
 
     await republishPosition(userId, publicationId);
 
     expect(tables.investments[0].institution).toBe('HDFC AMC Certified Name');
+  });
+
+  // PROV-R3C-011 (second closure pass, live-DEV reproduced 2026-08-20):
+  // republishPosition() overwrote the row's genuinely-manual state (restored
+  // there by a PRIOR unpublish) without capturing a fresh
+  // pre_publication_manual_snapshot first. A subsequent unpublish then found
+  // pre_publication_manual_snapshot=null and took the wrong branch
+  // (archive, per the brand-new-position case) instead of restoring —
+  // silently removing the position from net worth while leaving it
+  // permanently stamped with the certified name/value/currency. Live-DEV
+  // proof: link -> unpublish (correct restore to manual) -> republish
+  // (silently dropped the manual state, no new snapshot) -> unpublish again
+  // -> is_active=false, investment_name/current_value/currency_code frozen
+  // at the certified values, never restored.
+  it('republishing a row that is CURRENTLY manual (restored by an earlier unpublish) re-captures a fresh snapshot, so a later unpublish can still restore it', async () => {
+    // Start from exactly the state a correct prior unpublish leaves behind:
+    // the row is genuinely manual right now, snapshot already consumed/null.
+    tables.investments[0] = {
+      ...tables.investments[0],
+      source_type: 'manual',
+      investment_name: 'Original Manual Investment',
+      institution: 'Original Manual Institution',
+      country_code: 'AU',
+      currency_code: 'AUD',
+      current_value: 500000,
+      cost_base: null,
+      owner: 'self',
+      master_item_key: 'managed_funds',
+      annual_contribution: null,
+      risk_profile: null,
+      pre_publication_manual_snapshot: null,
+      ii_linked_at: null,
+      is_active: true,
+    };
+    (createClient as Mock).mockResolvedValue(makeFakeSupabase(tables));
+
+    const republishResult = await republishPosition(userId, publicationId);
+    expect(republishResult.error).toBeNull();
+
+    // Republish must have captured a fresh snapshot of the manual state it
+    // just overwrote — not left pre_publication_manual_snapshot null.
+    const afterRepublish = tables.investments[0];
+    expect(afterRepublish.source_type).toBe('investment_intelligence_published');
+    expect(afterRepublish.current_value).toBe(520000);
+    expect(afterRepublish.pre_publication_manual_snapshot).not.toBeNull();
+    expect((afterRepublish.pre_publication_manual_snapshot as Row).investment_name).toBe('Original Manual Investment');
+    expect((afterRepublish.pre_publication_manual_snapshot as Row).current_value).toBe(500000);
+    expect((afterRepublish.pre_publication_manual_snapshot as Row).currency_code).toBe('AUD');
+    expect((afterRepublish.pre_publication_manual_snapshot as Row).country_code).toBe('AU');
+
+    // The publication needs to read as 'published' for unpublishPosition()'s
+    // own lookup filter (.eq('status', 'published')) to find it.
+    tables.ii_fhip_publications[0].status = 'published';
+
+    const unpublishResult = await unpublishPosition(userId, publicationId);
+    expect(unpublishResult.error).toBeNull();
+
+    // The critical assertion: full manual restoration, not an incorrect
+    // archive of a row still stamped with certified values.
+    const afterUnpublish = tables.investments[0];
+    expect(afterUnpublish.source_type).toBe('manual');
+    expect(afterUnpublish.investment_name).toBe('Original Manual Investment');
+    expect(afterUnpublish.current_value).toBe(500000);
+    expect(afterUnpublish.currency_code).toBe('AUD');
+    expect(afterUnpublish.country_code).toBe('AU');
+    expect(afterUnpublish.institution).toBe('Original Manual Institution');
+    expect(afterUnpublish.is_active).toBe(true);
+    expect(afterUnpublish.pre_publication_manual_snapshot).toBeNull();
+    expect(afterUnpublish.ii_publication_id).toBeNull();
+  });
+
+  it('republishing a row that was never manual (a brand-new II position, unpublish only archived it) captures no snapshot — nothing to protect', async () => {
+    tables.investments[0] = {
+      ...tables.investments[0],
+      source_type: 'investment_intelligence_published', // unpublish archived, never restored — no manual state ever existed
+      investment_name: 'Imported Mutual Fund Name',
+      pre_publication_manual_snapshot: null,
+      is_active: false,
+    };
+    (createClient as Mock).mockResolvedValue(makeFakeSupabase(tables));
+
+    const result = await republishPosition(userId, publicationId);
+    expect(result.error).toBeNull();
+    expect(tables.investments[0].pre_publication_manual_snapshot).toBeNull();
+    expect(tables.investments[0].is_active).toBe(true);
   });
 });

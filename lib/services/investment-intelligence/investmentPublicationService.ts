@@ -29,6 +29,7 @@ import { emitAuditEvent } from './audit';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import {
+  buildPreLinkManualSnapshot,
   calculateFinancialImpact,
   classifyRegisterAction,
   computeBaseCurrencyPreview,
@@ -45,7 +46,9 @@ import {
   resolveCostBaseStatus,
   resolveCostBaseValue,
   resolveRiskBand,
+  restorableFieldsFromManualSnapshot,
   type ExistingManualInvestmentRow,
+  type ManualInvestmentSnapshotSource,
 } from './publicationLogic';
 import type {
   FhipOwner,
@@ -112,21 +115,37 @@ interface ManualInvestmentQueryRow {
   source_type: string;
 }
 
-// Live-testing-discovered defect (R3 closure pass): pre_publication_manual_
-// snapshot carries a `captured_at` metadata key that is NOT itself a column
-// on `investments`. Spreading the raw snapshot object directly into an
-// `.update()` payload (as the compensation-revert and unpublish-restore
-// paths originally did) sends an unknown column to PostgREST, which REJECTS
-// the entire update — and neither call site checked the returned error, so
-// the failure was silent: the row was left stamped as still
-// 'investment_intelligence_published' with the certified (not restored)
-// value, exactly the "half-reverted" state the compensating-workflow design
-// was supposed to prevent. This helper is the fix: it extracts ONLY the
-// real investments columns the snapshot carries, dropping captured_at.
-function restorableFieldsFromSnapshot(snap: Record<string, unknown>) {
-  const { current_value, cost_base, institution, owner, investment_type, master_item_key, annual_contribution, risk_profile } = snap;
-  return { current_value, cost_base, institution, owner, investment_type, master_item_key, annual_contribution, risk_profile };
-}
+// restorableFieldsFromManualSnapshot() (imported from ./publicationLogic,
+// where every pure/DB-free decision function lives) replaced this file's
+// former local restorableFieldsFromSnapshot() during the R3 provenance-
+// preservation closure pass (docs/investment-intelligence/R3_CLOSURE_REPORT.md).
+// The original local helper already fixed a real live-testing-discovered
+// defect — spreading the raw snapshot (which carries a `captured_at`
+// metadata key that is NOT an `investments` column) straight into an
+// `.update()` payload sent PostgREST an unknown column and silently failed
+// the whole update. The closure pass found the ALLOW-LIST itself was
+// incomplete: `investment_name`, `currency_code`, and `country_code` are all
+// overwritten by publishPosition()'s fieldPayload (see below) but were never
+// in the list, so unpublishPosition() could never restore them — see
+// buildPreLinkManualSnapshot()'s doc comment for the full field-matrix
+// writeup and the backward-compatibility behaviour for pre-fix snapshots.
+//
+// Every unpublish/compensation restore also explicitly nulls the four
+// `ii_*` tracking columns below (ii_canonical_account_id,
+// ii_canonical_instrument_id, ii_source_quality_status,
+// ii_last_refreshed_at) alongside the pre-existing ii_linked_at/
+// ii_publication_id nulling — these are never part of the manual snapshot
+// (a manual row's ORIGINAL value for all four is deterministically null,
+// there is nothing to "capture") but fieldPayload sets all four during
+// link, so a restored row must have them cleared too or a row back at
+// source_type='manual' is left pointing at a certified II position it is no
+// longer connected to.
+const II_TRACKING_FIELDS_TO_CLEAR_ON_RESTORE = {
+  ii_canonical_account_id: null,
+  ii_canonical_instrument_id: null,
+  ii_source_quality_status: null,
+  ii_last_refreshed_at: null,
+} as const;
 
 function toExistingManualInvestmentRow(row: ManualInvestmentQueryRow): ExistingManualInvestmentRow {
   return {
@@ -512,17 +531,17 @@ export async function publishPosition(userId: string, positionId: string, option
     if (manualRow.source_type !== 'manual') return { publicationId: null, publishedRowId: null, action: null, financialImpact: null, error: 'The selected row is not a manual investment and cannot be linked.', errorCode: 'LINK_TARGET_NOT_MANUAL' };
 
     manualValueBeingSuperseded = Number(manualRow.current_value);
-    const preLinkSnapshot = {
-      current_value: manualRow.current_value,
-      cost_base: manualRow.cost_base,
-      institution: manualRow.institution,
-      owner: manualRow.owner,
-      investment_type: manualRow.investment_type,
-      master_item_key: manualRow.master_item_key,
-      annual_contribution: manualRow.annual_contribution,
-      risk_profile: manualRow.risk_profile,
-      captured_at: new Date().toISOString(),
-    };
+    // Fresh capture on EVERY call that reaches this branch (spec's
+    // "idempotent link" and "re-publish lifecycle" rules) — the manualRow
+    // query above always re-reads the row's CURRENT state, and the guard at
+    // line ~512 (`source_type !== 'manual'`) means this branch is
+    // structurally unreachable for an already-linked row, so an idempotent
+    // retry is caught earlier by the existingSamePublish short-circuit
+    // before ever reaching here, and a genuine second link cycle (after a
+    // real unpublish put the row back to source_type='manual', possibly
+    // with a user-edited name in between) correctly captures THAT edited
+    // state as the new pre-link snapshot rather than reusing a stale one.
+    const preLinkSnapshot = buildPreLinkManualSnapshot(manualRow as unknown as ManualInvestmentSnapshotSource, new Date().toISOString());
     const { data: updated, error: updateErr } = await supabase
       .from('investments')
       .update({ ...fieldPayload, pre_publication_manual_snapshot: preLinkSnapshot, ii_linked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -596,7 +615,7 @@ export async function publishPosition(userId: string, positionId: string, option
       if (snap) {
         const { error: revertErr } = await supabase
           .from('investments')
-          .update({ ...restorableFieldsFromSnapshot(snap), source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null })
+          .update({ ...restorableFieldsFromManualSnapshot(snap), ...II_TRACKING_FIELDS_TO_CLEAR_ON_RESTORE, source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null })
           .eq('id', publishedRowId)
           .eq('user_id', userId);
         if (revertErr) {
@@ -654,7 +673,7 @@ export async function unpublishPosition(userId: string, publicationId: string): 
     const snap = row.pre_publication_manual_snapshot as Record<string, unknown>;
     const { error: restoreErr } = await supabase
       .from('investments')
-      .update({ ...restorableFieldsFromSnapshot(snap), source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null, is_active: true })
+      .update({ ...restorableFieldsFromManualSnapshot(snap), ...II_TRACKING_FIELDS_TO_CLEAR_ON_RESTORE, source_type: 'manual', pre_publication_manual_snapshot: null, ii_linked_at: null, ii_publication_id: null, is_active: true })
       .eq('id', pub.published_row_id)
       .eq('user_id', userId);
     if (restoreErr) return { error: `Unpublish restore failed: ${restoreErr.message}` };
@@ -711,6 +730,39 @@ export async function republishPosition(userId: string, publicationId: string): 
   const instrument = instrumentRaw as { id: string; instrument_class: IiInstrumentClass; instrument_name: string; amc_name: string | null };
   const qualityStatus = ((snapshotRaw as { quality_status: string } | null)?.quality_status) ?? 'unknown';
 
+  // Live-testing-discovered defect (found independently, second closure
+  // pass): the row's pre_publication_manual_snapshot is already null at this
+  // point for a previously-linked row — the preceding unpublish() consumed
+  // it to restore the row to manual state, then cleared it (correctly, so a
+  // stale snapshot is never reused — see unpublishPosition()'s own
+  // discipline). But that means the row sitting here RIGHT NOW, if its
+  // source_type still reads 'manual', genuinely IS the user's live manual
+  // data (it was just correctly restored) — and republish is about to
+  // overwrite it with certified values again. Without re-capturing a FRESH
+  // snapshot of exactly this state first, a SUBSEQUENT unpublish would find
+  // pre_publication_manual_snapshot=null and incorrectly take the
+  // brand-new-position ARCHIVE branch instead of the RESTORE branch —
+  // silently removing the investment from net worth entirely while leaving
+  // it permanently stamped with the certified name/value/currency. Live-DEV
+  // reproduced exactly this: link -> unpublish (correct restore) -> republish
+  // (silently dropped the manual snapshot) -> unpublish again ->
+  // is_active=false, investment_name/current_value/currency_code left at the
+  // certified values, never restored. If the row's source_type is already
+  // 'investment_intelligence_published' here (the "brand-new position,
+  // never linked to manual data" case — unpublish only archived it, never
+  // restored anything), there is no manual state to protect and no snapshot
+  // is captured, matching the existing archive-then-reactivate semantics.
+  const { data: preRepublishRow } = await supabase
+    .from('investments')
+    .select('source_type, investment_name, investment_type, current_value, currency_code, country_code, institution, cost_base, owner, master_item_key, annual_contribution, risk_profile')
+    .eq('id', pub.published_row_id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const freshManualSnapshot =
+    preRepublishRow && preRepublishRow.source_type === 'manual'
+      ? buildPreLinkManualSnapshot(preRepublishRow as unknown as ManualInvestmentSnapshotSource, new Date().toISOString())
+      : null;
+
   const { error: investUpdateErr } = await supabase
     .from('investments')
     .update({
@@ -732,6 +784,7 @@ export async function republishPosition(userId: string, publicationId: string): 
       ii_publication_id: publicationId,
       ii_last_refreshed_at: new Date().toISOString(),
       is_active: true,
+      ...(freshManualSnapshot ? { pre_publication_manual_snapshot: freshManualSnapshot, ii_linked_at: new Date().toISOString() } : {}),
     })
     .eq('id', pub.published_row_id)
     .eq('user_id', userId);

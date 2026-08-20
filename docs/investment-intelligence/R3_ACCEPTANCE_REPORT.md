@@ -1,6 +1,6 @@
 # R3 — Acceptance Report
 
-Status: FINAL (R3), UPGRADED 2026-08-20 by the live-DEV closure pass after migrations `0039`-`0042` were applied to DEV (`vqycarelcoijzwlpkpcz`, independently confirmed by the orchestrating session via direct REST probes returning 200 on every new R2/R3 table/column).
+Status: FINAL (R3). History: UPGRADED 2026-08-20 by this document's own live-DEV closure pass (section 0 below) to a self-reported UNCONDITIONAL FULL PASS; that self-report was independently OVERRIDDEN the same day by the orchestrating session's own from-scratch live-DEV testing, which found a real provenance defect (original manual `investment_name` silently lost on unpublish) and downgraded the classification to CONDITIONAL PASS; a second, provenance-preservation closure pass (later the same day) fixed that defect plus two more of the same class it found via its own inspection (`currency_code`, `country_code`) — see `R3_CLOSURE_REPORT.md` for the complete defect/fix/verification writeup and final classification. **`R3_CLOSURE_REPORT.md` is the authoritative current status; this document's section 0 below is retained as the historical record of the FIRST closure pass and is not re-litigated.**
 
 ## 0. Live-DEV closure pass summary
 
@@ -68,7 +68,9 @@ No other outstanding issues remain. Every item this report previously listed as 
 
 Every throwaway fixture created for this closure pass (2 auth users, 1 household member, 1 manual investments row, 1 II account/instrument-linked position chain, uploaded source documents, publications) was deleted via the Auth Admin API's cascading delete (`on delete cascade` from `auth.users` reaches every dependent row per `R0_CANONICAL_DATA_CONTRACT.md`'s convention) and independently re-verified via a fresh service-role query returning zero rows across every affected table before this report was finalized. See the Final Response for the exact verification output.
 
-## Final Classification
+## Final Classification (superseded — see `R3_CLOSURE_REPORT.md`)
+
+**This section's original verdict below (self-reported UNCONDITIONAL FULL PASS) was independently overridden by the orchestrating session after its own live-DEV testing found a real provenance defect — see the status line at the top of this document and `R3_CLOSURE_REPORT.md` for the current, authoritative classification.**
 
 **R3 — UNCONDITIONAL FULL PASS.**
 

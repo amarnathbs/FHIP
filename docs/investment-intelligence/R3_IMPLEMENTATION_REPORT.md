@@ -1,13 +1,15 @@
 # R3 — Implementation Report
 
-Status: FINAL (R3)
+Status: FINAL (R3), CLOSED 2026-08-20 by the provenance-preservation closure pass (see `R3_CLOSURE_REPORT.md` and section "Provenance-preservation closure pass" below).
 
 ## Branch / commits
 
 - Base: `b950a48` (R2 final commit, `feature/investment-intelligence-r2-cas-portfolio-truth`, independently FULL PASS as of 2026-08-20).
 - Branch: `feature/investment-intelligence-r3-fhip-publishing`, created via `git checkout b950a48 -b feature/investment-intelligence-r3-fhip-publishing`.
 - R3 commit: `e90325b` — "feat(investment-intelligence-r3): FHIP publishing integration + no-double-count core".
-- 19 files changed, 2,825 insertions, 46 deletions (against `b950a48`). Zero pre-existing files deleted; zero pre-existing test files modified.
+- Closure-pass commit: `9c48da5` — "fix(investment-intelligence-r2-r3): live-DEV closure pass, real defects found+fixed" (the pass that upgraded R3 to UNCONDITIONAL FULL PASS, later independently overridden to CONDITIONAL PASS after a real defect was found via the orchestrating session's own hands-on live-DEV testing).
+- Provenance-preservation closure-pass work (this document's latest update): built on top of `9c48da5`, in an isolated worktree (git could not check out the shared branch name a second time — see `R3_CLOSURE_REPORT.md` section 0 for the exact mechanics); the diff is a clean, linear continuation of `9c48da5` and is intended to land on `feature/investment-intelligence-r3-fhip-publishing`.
+- 19 files changed, 2,825 insertions, 46 deletions (against `b950a48`, for the original `e90325b` commit). Zero pre-existing files deleted; zero pre-existing test files modified. The provenance-preservation closure pass additionally touches 2 files (`investmentPublicationService.ts`, `publicationLogic.ts`) and adds 1 new test file (`tests/unit/iiR3ProvenanceClosure.test.ts`) — see `R3_CLOSURE_REPORT.md` for the exact diff.
 
 ## What was built
 
@@ -23,6 +25,10 @@ Status: FINAL (R3)
 ## A real bug found and fixed during implementation
 
 The first version of `detectDuplicateCandidates()` did not require institution to match as a structural signal, only owner+category — a unit test built directly from the spec's own section-32 worked example (Institution A/500,000 vs Institution B/520,000, same owner, same category) failed, because value-proximity + owner + category alone cleared the match threshold, incorrectly flagging two genuinely different investments as a duplicate. The fix — requiring institution match whenever both sides know it, falling back to approximate-value only when institution is unknown — is now the implemented, tested behaviour. This is documented in detail in `R3_DUPLICATE_RESOLUTION_SPEC.md` section 2 and demonstrates the testing discipline the brief asked for: a real defect caught by a real test, not merely a designed-to-pass assertion.
+
+## Provenance-preservation closure pass (2026-08-20)
+
+The orchestrating session's own from-scratch live-DEV testing (real seeded households, real authenticated HTTP calls) found that `investmentPublicationService.ts`'s pre-link snapshot (`pre_publication_manual_snapshot`) never captured `investment_name`, so a manual investment's original name was silently, permanently lost the moment it was linked to a certified Investment Intelligence position and could never be recovered on unpublish — a real provenance defect that downgraded R3's self-reported "UNCONDITIONAL FULL PASS" to CONDITIONAL PASS. This closure pass fixed it, and additionally found (via its own field-matrix inspection, not assuming `investment_name` was the only affected field) that `currency_code` and `country_code` had the exact same defect — meaning a restored `current_value` could even end up silently mis-tagged with the wrong currency. All three are now captured and restored correctly, verified both by 19 new automated tests and by a live-DEV reproduction against real seeded data. Full writeup, including the complete field matrix, root cause, exact diff, and final classification: `R3_CLOSURE_REPORT.md`.
 
 ## What was deliberately NOT built (scope firewall, spec section 84)
 

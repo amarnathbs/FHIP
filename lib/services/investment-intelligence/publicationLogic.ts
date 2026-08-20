@@ -410,4 +410,88 @@ export function computeIdempotencyKey(input: { accountId: string; instrumentId: 
   return `${input.accountId}:${input.instrumentId}:${input.canonicalPositionId}:${input.publicationTarget}`;
 }
 
+// ---------------------------------------------------------------------------
+// Pre-link manual snapshot (R3 closure pass — provenance-preservation fix,
+// docs/investment-intelligence/R3_CLOSURE_REPORT.md). The orchestrating
+// session's live-DEV testing found `investment_name` was overwritten by
+// publishPosition()'s REPLACE_LINK_EXISTING path but never captured in
+// `pre_publication_manual_snapshot`, so unpublishPosition() could never
+// restore it — the original manual name was silently, permanently lost.
+// Inspecting the FULL fieldPayload publishPosition() writes (not just
+// investment_name) found two more of the same class of bug: currency_code
+// and country_code are also overwritten and were also never captured/
+// restored — meaning a restored current_value could end up mis-tagged with
+// the WRONG currency after unpublish (500,000 originally denominated AUD
+// silently re-tagged INR), a latent value-integrity bug riding on the same
+// root cause. These two pure functions are now the SINGLE place that
+// decides what "the manual row's reversible state" means, used by both the
+// capture site (publishPosition) and every restore site (unpublishPosition,
+// and the publish-failure compensation path) — so the two can never drift
+// out of sync again the way the ad-hoc inline object literals did.
+//
+// Deliberately built as an allow-list keyed by field name, not a spread of
+// the whole row: this is what makes it BACKWARD COMPATIBLE for free. A
+// snapshot captured before this fix shipped simply has no `investment_name`/
+// `currency_code`/`country_code` key at all; reading a missing key here
+// yields `undefined`, and `JSON.stringify` (which every supabase-js
+// `.update()` call goes through before hitting PostgREST) drops object
+// properties whose value is `undefined` — so an old snapshot's restore
+// payload omits those three columns entirely rather than sending a bad
+// value, and PostgREST leaves whatever is currently in those columns
+// untouched. No historical value is ever fabricated for pre-fix rows.
+// ---------------------------------------------------------------------------
+export interface ManualInvestmentSnapshotSource {
+  investment_name: string;
+  investment_type: string;
+  current_value: number;
+  currency_code: string;
+  country_code: string | null;
+  institution: string | null;
+  cost_base: number | null;
+  owner: string;
+  master_item_key: string | null;
+  annual_contribution: number | null;
+  risk_profile: string | null;
+}
+
+// Ordered, single source of truth for exactly which `investments` columns
+// are reversible manual state. Add a field here (and to
+// ManualInvestmentSnapshotSource above) the moment a future change makes
+// publishPosition()'s fieldPayload overwrite one more manual column.
+const MANUAL_SNAPSHOT_FIELDS = [
+  'investment_name',
+  'current_value',
+  'currency_code',
+  'country_code',
+  'cost_base',
+  'institution',
+  'owner',
+  'investment_type',
+  'master_item_key',
+  'annual_contribution',
+  'risk_profile',
+] as const;
+
+export function buildPreLinkManualSnapshot(row: ManualInvestmentSnapshotSource, capturedAt: string): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = { captured_at: capturedAt };
+  for (const field of MANUAL_SNAPSHOT_FIELDS) {
+    snapshot[field] = row[field];
+  }
+  return snapshot;
+}
+
+// Extracts ONLY real `investments` columns from a stored snapshot — drops
+// `captured_at` (not a column; spreading it raw into `.update()` was R3's
+// original closure-pass defect, see the `restorableFieldsFromSnapshot`
+// history this function replaces) and, for a pre-fix snapshot missing the
+// newer keys, naturally omits them (see the backward-compatibility note
+// above) rather than restoring `undefined`/fabricated values.
+export function restorableFieldsFromManualSnapshot(snap: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of MANUAL_SNAPSHOT_FIELDS) {
+    out[field] = snap[field];
+  }
+  return out;
+}
+
 export type { IiDuplicateCandidate, IiEligibilityResult, IiFinancialImpact };

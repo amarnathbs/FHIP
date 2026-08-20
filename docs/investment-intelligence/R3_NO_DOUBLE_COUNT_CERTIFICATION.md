@@ -1,6 +1,8 @@
 # R3 — No-Double-Count Certification
 
-Status: FINAL (R3). This document exists specifically to answer the 13 questions spec section 78 requires, plainly and directly, each backed by a real file/function/test — not asserted confidence.
+Status: FINAL (R3), RE-CONFIRMED 2026-08-20 by the provenance-preservation closure pass (`R3_CLOSURE_REPORT.md`). This document exists specifically to answer the 13 questions spec section 78 requires, plainly and directly, each backed by a real file/function/test — not asserted confidence.
+
+**Closure-pass note**: the closure pass fixed a real defect (original manual `investment_name`/`currency_code`/`country_code` silently lost on unpublish — never a double-counting, financial-total, or currency-conversion defect; a provenance/reversibility defect). FIN-R3C-001 through 006 explicitly re-proved every guarantee this document certifies still holds after the fix, live against real DEV: exactly one active row at 520,000 for the critical duplicate scenario, idempotent retry produces no duplicate, refresh to 561,000 still produces exactly one active row, an older snapshot after a newer one is still rejected, and unpublish still restores the original manual value. No double-counting mechanism described below was touched by this closure pass.
 
 ## 1. What is the economic source of truth for a published investment?
 
