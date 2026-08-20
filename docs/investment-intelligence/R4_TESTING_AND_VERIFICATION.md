@@ -19,10 +19,10 @@ routes built) — see `R4_SECURITY_VERIFICATION.md` and
   by first getting a real 1-warning regression during development —
   an unused loop variable in a test fixture — and fixing it before this
   final count).
-- `npx next build`: see `R4_ACCEPTANCE_REPORT.md` for the captured result
-  (build was still running at the time this document was drafted; the
-  Static Verification section of the acceptance report has the final
-  status).
+- `npx next build` (Turbopack): succeeds, exit code 0, once real Supabase
+  credentials are present in the worktree (the build's static-prerender
+  step needs them for two pre-existing pages, `/admin/benchmarks` and
+  `/signup`, unrelated to any R4 code). See `R4_ACCEPTANCE_REPORT.md` §39.
 
 ## UNIT
 

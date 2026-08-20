@@ -208,10 +208,13 @@ un-re-tested, not re-confirmed, by this session.
 ## 39. Static Verification
 
 `tsc --noEmit`: clean. `eslint .`: 6E/6W, identical to baseline, zero new
-issues. `vitest run --no-file-parallelism`: 631/631. `next build`: see
-build log captured during this session (result recorded in this
-document's companion terminal output; if not yet complete when this
-report was finalised, that is stated explicitly rather than assumed).
+issues. `vitest run --no-file-parallelism`: 631/631. `next build`
+(Turbopack): **succeeds, exit code 0**, TypeScript pass clean, all pages
+compiled/prerendered with no errors (verified only after copying real
+Supabase credentials into this worktree — the build fails at the static-
+prerender step for `/admin/benchmarks` and `/signup` without them, purely
+an environment-configuration issue unrelated to any R4 code; both
+pre-existing pages, neither touched by R4).
 
 ## 40. Architecture Exceptions
 
