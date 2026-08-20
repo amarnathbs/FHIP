@@ -154,7 +154,13 @@ describe('R1.7C P0 content -- structured block conversion', () => {
   });
 
   it('no payload leaks internal editorial-instruction text into a block', () => {
-    const leakPhrases = ['should route', 'cta library', 'batch contents', 'editorial review checklist'];
+    // 'should open the' and 'should embed the' were added after a live
+    // Admin-preview spot check during the R1.7C closure pass found two CTA
+    // leaks (RAU-002, RIN-001) and a systemic issue across all 8 Video
+    // records (the converter only recognised one of the two real CTA
+    // section headings used across the 14 source batches) that this
+    // original 4-phrase list did not catch -- see p0-change-log.csv.
+    const leakPhrases = ['should route', 'cta library', 'batch contents', 'editorial review checklist', 'should open the', 'should embed the', 'without turning the video'];
     for (const p of payload.payloads) {
       const blocks = p.update_fields.content_blocks ?? [];
       const serialized = JSON.stringify(blocks).toLowerCase();

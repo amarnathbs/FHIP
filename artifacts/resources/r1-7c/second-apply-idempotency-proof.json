@@ -1,0 +1,16 @@
+{
+  "total_post_count_unchanged": true,
+  "total_post_count_before": 306,
+  "total_post_count_after": 306,
+  "related_content_count_unchanged": true,
+  "related_content_count_before": 79,
+  "related_content_count_after": 79,
+  "r17c_audit_rows_before": 168,
+  "r17c_audit_rows_after": 168,
+  "new_audit_rows_from_second_apply": 0,
+  "content_hash_changes": 0,
+  "updated_at_churn": 0,
+  "updated_by_changes": 0,
+  "diffs": [],
+  "verdict": "PASS -- true no-op idempotency proven"
+}
