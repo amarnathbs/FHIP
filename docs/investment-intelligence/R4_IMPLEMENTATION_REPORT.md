@@ -147,3 +147,77 @@ discipline R3 itself demonstrated against R2.
   permitted sandbox fallback).
 - No live DEV testing, no security testing (no reachable Supabase
   instance, no API routes to attack).
+
+---
+
+## Continuation Pass (2026-08-20) — Service, API and UX Layers
+
+The original report above covers the calculation core at `27bd370`. This
+section records the continuation pass, which added everything above the
+engines. **No certified engine file was modified.**
+
+### Files added
+
+| File | Purpose |
+| --- | --- |
+| `lib/engines/investment-intelligence/calculationStatus.ts` | 7-status vocabulary + deterministic mapping from each engine's reason union. |
+| `lib/engines/investment-intelligence/benchmarkService.ts` | Builds monthly-rebalanced period structure; coverage and TRI/PRI discipline. |
+| `lib/engines/investment-intelligence/riskMetricsService.ts` | Runs the risk suite; resolves risk-free rate from versioned reference data. |
+| `lib/engines/investment-intelligence/rollingReturnService.ts` | 1Y/3Y/5Y horizons + benchmark-beat pairing. |
+| `lib/engines/investment-intelligence/analyticsOrchestrator.ts` | Pure top-level entry point; currency separation; persistence mapping; staleness. |
+| `lib/services/investment-intelligence/analyticsRepository.ts` | The only I/O boundary. Read-only except the derived-analytics upsert. |
+| `app/api/investment-intelligence/analytics/route.ts` | GET derived results. |
+| `app/api/investment-intelligence/analytics/recalculate/route.ts` | POST recompute + persist. |
+| `app/(app)/investment-intelligence/performance/page.tsx` | Performance page. |
+| `components/investment-intelligence/PerformanceClient.tsx` | Full Performance UX. |
+| `tests/unit/iiR4ServiceLayer.test.ts` | 32 service-layer tests. |
+| `scripts/ii_r4_schema_probe.mjs` | Read-only migration-0043 application probe. |
+| `scripts/ii_r4_live_dev_security_tests.mjs` | LIVE-R4 + SEC-R4 harness. |
+| `scripts/ii_r4_analytics_rls_probe.mjs` | Focused analytics-write exploitation probe. |
+| `docs/investment-intelligence/R4_API_AND_UX_ARCHITECTURE.md` | This layer's architecture. |
+
+### Files modified
+
+* `supabase/migrations/0043_…sql` — made idempotent; section 5 corrected to
+  handle the pre-existing `ii_analytics_results` table (see below).
+* `R4_SECURITY_VERIFICATION.md` — rewritten with real live results.
+* `R4_TESTING_AND_VERIFICATION.md`, `R4_ACCEPTANCE_REPORT.md` — updated.
+
+### Defects found and fixed during this pass
+
+1. **Migration 0043 could never apply (blocking).** Migration 0035 already
+   creates `ii_analytics_results`; section 5's bare `create table` fails
+   with *relation already exists*, so the hardened RLS policy was never
+   installed. Its 0035 predecessor policy is `for all using (auth.uid() =
+   user_id)`, granting writes to ordinary users. Confirmed by direct
+   exploitation against DEV (HTTP 201 on a forged insert), not inferred.
+   Fixed by renaming the legacy table aside, stripping its permissive
+   policy, and creating the R4 table under the canonical name — plus
+   making the whole migration idempotent so it can be safely re-run over
+   the already-applied sections 1-3.
+
+2. **Case-insensitive filesystem collision (self-inflicted, caught).** A
+   service file initially named `BenchmarkEngine.ts` silently overwrote
+   the certified `benchmarkEngine.ts` primitives on Windows. Caught via
+   `git status` showing the primitives file modified; restored from git
+   before anything consumed it. Service filenames are now lexically
+   distinct from the primitives they wrap, with header comments explaining
+   why. Recorded because the hazard will recur for anyone adding a
+   `PascalCase` service beside a `camelCase` primitive.
+
+3. **Wrong argument order against four risk primitives.** The first draft
+   of `riskMetricsService.ts` called `downsideDeviation`, `sharpeRatio`,
+   `sortinoRatio`, `regressionAlpha` and `calmarRatio` with transposed
+   arguments (e.g. `sharpeRatio(returns, rf, ppy)` where the signature is
+   `(returns, ppy, rf)`), and passed a bare number to `calmarRatio` where
+   it expects a full `DrawdownResult` plus `historyDays`. Caught by
+   reading the actual signatures rather than trusting the draft, and
+   corrected before any test was written against the wrong behaviour.
+
+4. **Conceptual error in downside-deviation suppression.** The first draft
+   suppressed downside deviation when risk-free data was absent. That is
+   wrong: the certified primitive's MAR defaults to 0 per period and needs
+   no risk-free input. Corrected so only Sharpe, Sortino and alpha are
+   suppressed — verified by `SVC-RISK-001`, which asserts volatility,
+   downside deviation and max drawdown all still compute with an empty
+   risk-free series.

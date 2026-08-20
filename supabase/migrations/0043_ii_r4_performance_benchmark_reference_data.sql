@@ -1,9 +1,18 @@
 -- Investment Intelligence R4 — Performance & Benchmark Engine.
 -- Forward-only migration. Does NOT modify any already-applied migration
--- (0001-0042 remain untouched). NOT YET APPLIED TO DEV — this session has
--- no DDL execution capability in this sandbox (same constraint as every
--- prior IL release); application status is BLOCKED pending the user
--- running this file against the real Supabase project.
+-- (0001-0042 remain untouched).
+--
+-- APPLICATION STATUS (verified live against DEV vqycarelcoijzwlpkpcz on
+-- 2026-08-20): sections 1-3 ARE applied (all 13 columns confirmed present
+-- by direct query). Sections 4-5 are NOT: ii_risk_free_rates does not
+-- exist, and ii_analytics_results is still the migration-0035 placeholder
+-- shape (see the detailed note above section 5).
+--
+-- This file is now IDEMPOTENT and safe to re-run end to end: every DDL
+-- statement is guarded (`if not exists`, `drop policy if exists`, or a
+-- pg_constraint existence check), so re-running it will skip the
+-- already-applied sections 1-3 and complete sections 4-5. Re-run the WHOLE
+-- file rather than hand-picking statements.
 --
 -- Scope (spec sections 69-70):
 --   1. Extend ii_prices_nav with provenance/versioning columns.
@@ -29,33 +38,38 @@
 -- ---------------------------------------------------------------------------
 -- 1. ii_prices_nav — provenance/versioning columns.
 -- ---------------------------------------------------------------------------
-alter table ii_prices_nav add column source_timestamp timestamptz;
-alter table ii_prices_nav add column data_version text;
-alter table ii_prices_nav add column quality_status text not null default 'ok' check (quality_status in ('ok', 'suspicious_jump', 'stale', 'superseded'));
+alter table ii_prices_nav add column if not exists source_timestamp timestamptz;
+alter table ii_prices_nav add column if not exists data_version text;
+alter table ii_prices_nav add column if not exists quality_status text not null default 'ok' check (quality_status in ('ok', 'suspicious_jump', 'stale', 'superseded'));
 comment on column ii_prices_nav.source_timestamp is 'When the source (e.g. AMFI feed, admin import) asserted this NAV value, distinct from created_at (when this row was inserted).';
 comment on column ii_prices_nav.data_version is 'Free-text version/batch identifier for the ingestion run that produced this row (spec section 55-57 traceability).';
 
 -- ---------------------------------------------------------------------------
 -- 2. ii_benchmarks / ii_benchmark_series — return-type, currency, versioning.
 -- ---------------------------------------------------------------------------
-alter table ii_benchmarks add column return_type text check (return_type in ('TRI', 'PRI', 'DEBT_INDEX', 'COMMODITY_GOLD', 'OTHER'));
+alter table ii_benchmarks add column if not exists return_type text check (return_type in ('TRI', 'PRI', 'DEBT_INDEX', 'COMMODITY_GOLD', 'OTHER'));
 comment on column ii_benchmarks.return_type is 'Total Return Index vs Price Return Index vs other — spec section 30: a stated TRI benchmark must never be silently satisfied with a PRI series.';
 
-alter table ii_benchmark_series add column currency_code char(3) references currencies(currency_code);
-alter table ii_benchmark_series add column source_id uuid references ii_sources(id);
-alter table ii_benchmark_series add column data_version text;
-alter table ii_benchmark_series add column quality_status text not null default 'ok' check (quality_status in ('ok', 'duplicate_flagged', 'suspicious_jump', 'stale', 'superseded'));
+alter table ii_benchmark_series add column if not exists currency_code char(3) references currencies(currency_code);
+alter table ii_benchmark_series add column if not exists source_id uuid references ii_sources(id);
+alter table ii_benchmark_series add column if not exists data_version text;
+alter table ii_benchmark_series add column if not exists quality_status text not null default 'ok' check (quality_status in ('ok', 'duplicate_flagged', 'suspicious_jump', 'stale', 'superseded'));
 
 -- ---------------------------------------------------------------------------
 -- 3. ii_instrument_benchmarks — effective-dated mapping + versioning
 --    (spec sections 30-31: schemes whose benchmark changed over time).
 -- ---------------------------------------------------------------------------
-alter table ii_instrument_benchmarks add column effective_from date not null default '1900-01-01';
-alter table ii_instrument_benchmarks add column effective_to date;
-alter table ii_instrument_benchmarks add column source_id uuid references ii_sources(id);
-alter table ii_instrument_benchmarks add column mapping_version text not null default 'v1';
-alter table ii_instrument_benchmarks add column quality_status text not null default 'ok' check (quality_status in ('ok', 'ambiguous', 'superseded'));
-alter table ii_instrument_benchmarks add constraint ii_instrument_benchmarks_effective_range_check check (effective_to is null or effective_to >= effective_from);
+alter table ii_instrument_benchmarks add column if not exists effective_from date not null default '1900-01-01';
+alter table ii_instrument_benchmarks add column if not exists effective_to date;
+alter table ii_instrument_benchmarks add column if not exists source_id uuid references ii_sources(id);
+alter table ii_instrument_benchmarks add column if not exists mapping_version text not null default 'v1';
+alter table ii_instrument_benchmarks add column if not exists quality_status text not null default 'ok' check (quality_status in ('ok', 'ambiguous', 'superseded'));
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'ii_instrument_benchmarks_effective_range_check') then
+    alter table ii_instrument_benchmarks add constraint ii_instrument_benchmarks_effective_range_check check (effective_to is null or effective_to >= effective_from);
+  end if;
+end $$;
 
 -- The original unique(instrument_id, benchmark_id, relationship_type) from
 -- migration 0031 would incorrectly forbid a scheme re-adopting the SAME
@@ -89,9 +103,14 @@ begin
   end if;
 end $$;
 
-alter table ii_instrument_benchmarks add constraint ii_instrument_benchmarks_unique_mapping_period unique (instrument_id, benchmark_id, relationship_type, effective_from);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'ii_instrument_benchmarks_unique_mapping_period') then
+    alter table ii_instrument_benchmarks add constraint ii_instrument_benchmarks_unique_mapping_period unique (instrument_id, benchmark_id, relationship_type, effective_from);
+  end if;
+end $$;
 
-create index idx_ii_instrument_benchmarks_effective on ii_instrument_benchmarks(instrument_id, relationship_type, effective_from);
+create index if not exists idx_ii_instrument_benchmarks_effective on ii_instrument_benchmarks(instrument_id, relationship_type, effective_from);
 
 -- ---------------------------------------------------------------------------
 -- 4. ii_risk_free_rates — versioned risk-free reference data (spec 37).
@@ -100,7 +119,7 @@ create index idx_ii_instrument_benchmarks_effective on ii_instrument_benchmarks(
 --    the authenticated role, so ordinary users cannot alter it; the
 --    service role bypasses RLS entirely for admin ingestion).
 -- ---------------------------------------------------------------------------
-create table ii_risk_free_rates (
+create table if not exists ii_risk_free_rates (
   id uuid primary key default gen_random_uuid(),
   country_code char(2) not null references countries(country_code),
   period_start date not null,
@@ -113,8 +132,9 @@ create table ii_risk_free_rates (
   constraint ii_risk_free_rates_period_check check (period_end >= period_start),
   unique (country_code, period_start, period_end, version)
 );
-create index idx_ii_risk_free_rates_country_period on ii_risk_free_rates(country_code, period_start, period_end);
+create index if not exists idx_ii_risk_free_rates_country_period on ii_risk_free_rates(country_code, period_start, period_end);
 alter table ii_risk_free_rates enable row level security;
+drop policy if exists "read ii_risk_free_rates" on ii_risk_free_rates;
 create policy "read ii_risk_free_rates" on ii_risk_free_rates for select using (true);
 -- Deliberately no insert/update/delete policy for the authenticated role —
 -- this table is written only by trusted server/admin processes using the
@@ -134,7 +154,45 @@ create policy "read ii_risk_free_rates" on ii_risk_free_rates for select using (
 --    else — this is the DB-level backing for the mandatory
 --    "fake-analytics-insertion rejection" security test (spec section 95).
 -- ---------------------------------------------------------------------------
-create table ii_analytics_results (
+-- IMPORTANT — pre-existing table collision (found during R4 live-DEV
+-- verification, 2026-08-20).
+--
+-- Migration 0035 (R1, "Migration E") ALREADY created a table named
+-- ii_analytics_results as a storage-shape placeholder, with a completely
+-- different column set (subject_type/subject_id/metric_value/
+-- calculation_version/input_snapshot) and — critically — this RLS policy:
+--
+--     create policy "own ii_analytics_results" on ii_analytics_results
+--       for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+--
+-- `for all` grants INSERT/UPDATE/DELETE to the authenticated role, so an
+-- ordinary user could write their own analytics rows. This was CONFIRMED
+-- LIVE against DEV: an ordinary authenticated user successfully inserted a
+-- row with calculation_version = 'FORGED-BY-CLIENT' and an arbitrary
+-- metric_value, returning HTTP 201. That directly violates the R4
+-- requirement that derived analytics be server-written only.
+--
+-- A bare `create table ii_analytics_results` therefore fails with
+-- "relation already exists" and never reaches the hardened policy below.
+-- Move the legacy placeholder aside (preserving any rows rather than
+-- dropping them), revoke its permissive write policy, and then create the
+-- R4 table under the canonical name.
+alter table if exists ii_analytics_results rename to ii_analytics_results_r1_legacy;
+alter index if exists idx_ii_analytics_results_user rename to idx_ii_analytics_results_r1_legacy_user;
+alter index if exists idx_ii_analytics_results_subject rename to idx_ii_analytics_results_r1_legacy_subject;
+do $$
+begin
+  if to_regclass('public.ii_analytics_results_r1_legacy') is not null then
+    -- The permissive `for all` policy follows the table through the rename;
+    -- drop it so the legacy name is not a write back-door into analytics storage.
+    execute 'drop policy if exists "own ii_analytics_results" on ii_analytics_results_r1_legacy';
+    execute 'drop policy if exists "read own ii_analytics_results_r1_legacy" on ii_analytics_results_r1_legacy';
+    execute 'create policy "read own ii_analytics_results_r1_legacy" on ii_analytics_results_r1_legacy for select using (auth.uid() = user_id)';
+  end if;
+end $$;
+comment on table ii_analytics_results_r1_legacy is 'Superseded R1 storage-shape placeholder, renamed by migration 0043. Read-only to its owner; no write policy. Retained rather than dropped so no data is lost. Not used by any R4 code path.';
+
+create table if not exists ii_analytics_results (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
   scope_type text not null check (scope_type in ('scheme', 'portfolio')),
@@ -154,9 +212,13 @@ create table ii_analytics_results (
   created_at timestamptz not null default now(),
   unique (user_id, scope_type, scope_id, metric_key, input_snapshot_version, engine_version)
 );
-create index idx_ii_analytics_results_user_scope on ii_analytics_results(user_id, scope_type, scope_id, metric_key);
-create index idx_ii_analytics_results_created on ii_analytics_results(created_at);
+create index if not exists idx_ii_analytics_results_user_scope on ii_analytics_results(user_id, scope_type, scope_id, metric_key);
+create index if not exists idx_ii_analytics_results_created on ii_analytics_results(created_at);
 alter table ii_analytics_results enable row level security;
+-- Defensive: ensure no permissive policy of any earlier vintage survives on
+-- this name before the SELECT-only policy is (re)created.
+drop policy if exists "own ii_analytics_results" on ii_analytics_results;
+drop policy if exists "read own ii_analytics_results" on ii_analytics_results;
 create policy "read own ii_analytics_results" on ii_analytics_results for select using (auth.uid() = user_id);
 -- No insert/update/delete policy for the authenticated role — see header
 -- comment. Persistence happens exclusively via a service-role server

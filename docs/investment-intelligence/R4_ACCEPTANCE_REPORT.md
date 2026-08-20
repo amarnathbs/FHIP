@@ -136,11 +136,17 @@ recalculate" flow is not yet exercised against a real database.
 
 ## 18. Performance UX
 
-**Not built this session.** See Known Limitations.
+~~**Not built this session.**~~ **SUPERSEDED — built in the continuation
+pass.** Portfolio dashboard, scheme table with progressive disclosure,
+performance-vs-benchmark chart, drawdown chart and a "how this was
+calculated" panel. See §46 and `R4_API_AND_UX_ARCHITECTURE.md` §8.
 
 ## 19. API/Service Changes
 
-**None.** No API route was added or modified this session.
+~~**None.**~~ **SUPERSEDED — built in the continuation pass.**
+`GET /api/investment-intelligence/analytics` and
+`POST /api/investment-intelligence/analytics/recalculate`, over a bounded
+service layer. See §46 and `R4_API_AND_UX_ARCHITECTURE.md` §§1, 6.
 
 ## 20. Files Changed
 
@@ -176,25 +182,34 @@ committed in its broken state. See `R4_TESTING_AND_VERIFICATION.md`.
 
 ## 34. Live DEV Tests
 
-**NOT PERFORMED.** No reachable Supabase instance in this worktree.
+~~**NOT PERFORMED.**~~ **SUPERSEDED — performed in the continuation pass.**
+LIVE-R4-001..010 all seeded and exercised against DEV; 26 PASS / 4 FAIL /
+7 BLOCKED overall. See §46 and `R4_TESTING_AND_VERIFICATION.md` §LIVE-DEV.
 
 ## 35. Independent Live Reconciliation
 
-**NOT PERFORMED** (depends on §34).
+~~**NOT PERFORMED.**~~ **SUPERSEDED — 7 cases performed against a required
+minimum of 5**, each recomputed from DB-sourced ground truth by an
+independent bisection-XIRR / chain-linked-TWRR implementation that imports
+no production code. Relative NPV residuals ≤ 1.7e-16. See §46.
 
 ## 36. Security Tests
 
-**NOT PERFORMED.** See `R4_SECURITY_VERIFICATION.md` for the full honest
-accounting — no API routes exist to attack, and no live database
-connection was available in this session to seed victim data or attempt
-writes against the new reference-data/analytics-results RLS policies.
+~~**NOT PERFORMED.**~~ **SUPERSEDED — performed in the continuation pass**
+against DEV with two real authenticated test users. 26 PASS / 4 FAIL /
+7 BLOCKED. The failures surfaced a genuine, exploitable pre-existing
+security gap in `ii_analytics_results` (forged insert returned HTTP 201).
+See `R4_SECURITY_VERIFICATION.md` — fully rewritten — and §46.
 
 ## 37. Reference-Data Security Tests
 
-**NOT PERFORMED**, same reason as §36. RLS policy design (SELECT-only for
-authenticated, no write policy) follows R1's own already-verified
-pattern, but this specific application of it to R4's new tables has not
-itself been exercised live.
+~~**NOT PERFORMED.**~~ **SUPERSEDED — all four applicable reference tables
+verified live and PASSING**: ordinary-user writes to `ii_prices_nav`,
+`ii_benchmarks`, `ii_benchmark_series` and `ii_instrument_benchmarks` are
+all rejected by RLS (HTTP 403, SQLSTATE `42501`), and an attempt to alter
+an existing benchmark mapping affected zero rows (verified by re-read, not
+by status code alone). `ii_risk_free_rates` remains BLOCKED — the table
+does not exist in DEV yet. See `R4_SECURITY_VERIFICATION.md` §2.2.
 
 ## 38. R1/R2/R3 Regression Results
 
@@ -277,6 +292,13 @@ outstanding SCOPE gaps are enumerated in §41 and directly drive §44.
 
 ## 44. Final Classification
 
+> **SUPERSEDED BY THE CONTINUATION PASS (2026-08-20).** The verdict in
+> this section describes the calculation-core-only delivery at `27bd370`.
+> The continuation pass built the API/service/UX layers and ran live-DEV
+> and security testing. The current, governing verdict is in §46 at the
+> end of this document. The text immediately below is retained as the
+> historical record of the first pass.
+
 **CONDITIONAL PASS — calculation core only.**
 
 Rationale: the spec's own rules (section 112) say CONDITIONAL PASS is
@@ -317,3 +339,103 @@ what actually shipped, is genuinely sound.
 6. Only after 1-5 above should R4 be re-evaluated for UNCONDITIONAL FULL
    PASS; R5 work should not begin until that re-evaluation happens, per
    the stop condition in the original R4 instructions.
+
+---
+
+# 46. Continuation Pass — Governing Verdict (2026-08-20)
+
+This section supersedes §44 and §45 above.
+
+## 46.1 What the continuation pass added
+
+Building on the certified calculation core at `27bd370`, without touching
+any certified engine file:
+
+* **Service/API architecture** — `calculationStatus.ts` (7-status
+  vocabulary), `benchmarkService.ts`, `riskMetricsService.ts`,
+  `rollingReturnService.ts`, `analyticsOrchestrator.ts`,
+  `analyticsRepository.ts`, and two API routes (`GET /analytics`,
+  `POST /analytics/recalculate`).
+* **Performance UX** — portfolio dashboard, scheme table with progressive
+  disclosure, performance-vs-benchmark chart, drawdown chart, and a
+  "how this was calculated" panel.
+* **History-completeness gating and currency separation wired end to end.**
+* **32 new service-layer tests**; suite 631 → 663, zero regressions.
+* **Live-DEV and security testing actually executed** for the first time.
+* **A real, exploitable security defect found and a migration fix written.**
+
+## 46.2 Baseline and regression
+
+| Check | Baseline (start of pass) | After |
+| --- | --- | --- |
+| `npx tsc --noEmit` | clean | clean |
+| `npx vitest run` | 631/631, 48 files | **663/663, 49 files** |
+| `npx eslint .` | 6 errors / 6 warnings | 6 errors / 6 warnings |
+| R3 financial-integrity pack | 136/136 | **136/136** |
+
+All three baseline figures were independently reproduced before any code
+was written, and matched the prior pass's claims exactly.
+
+## 46.3 The blocking finding
+
+Migration 0043 could never have applied cleanly: **migration 0035 already
+creates a table named `ii_analytics_results`**, so section 5's bare
+`create table` fails with *relation already exists* and never installs the
+hardened RLS policy.
+
+The 0035 placeholder's policy is `for all using (auth.uid() = user_id)`,
+which grants writes to the authenticated role. Confirmed by direct
+exploitation against DEV, not inferred: an ordinary user inserted a row
+with `calculation_version = 'FORGED-BY-CLIENT'` and an arbitrary metric
+value, **HTTP 201**.
+
+Migration 0043 has been corrected in this pass — made fully idempotent, and
+section 5 now renames the legacy table aside (preserving rows), strips its
+permissive policy, and creates the R4 table under the canonical name. The
+fix **cannot be applied by this session**: PostgREST does not execute DDL
+and no `exec_sql`-style RPC exists (five candidate names probed, all
+`PGRST202`).
+
+## 46.4 Final classification
+
+**CONDITIONAL PASS.**
+
+UNCONDITIONAL FULL PASS is withheld for one specific, bounded reason:
+spec section 113 requires "security intact" and "live DEV verification
+passes", and one live security check currently **fails** —
+`SEC-R4-ANALYTICS-WRITE`. Seven further checks are BLOCKED behind the same
+unapplied migration sections. Reporting this as a pass would be
+fabrication.
+
+Why this remains CONDITIONAL rather than FAIL, stated honestly:
+
+* The defect is **pre-existing R1 state** (migration 0035), not introduced
+  by R4. R4's migration is the thing that fixes it.
+* Its blast radius today is nil: **no code path anywhere reads
+  `ii_analytics_results` back**. The GET route recomputes from source on
+  every request, so a forged row cannot alter any number shown to anyone.
+* Cross-user forgery is still blocked by the policy's `with check` clause;
+  a user can only write rows keyed to their own `auth.uid()`.
+* None of the section 111 Critical-FAIL conditions occurred: no calculation
+  discrepancy, no benchmark error, no cross-user data leakage, no currency
+  error, no incomplete-history misstatement, no net-worth mutation, no R3
+  regression, no independent-reconciliation failure. The independent live
+  reconciliation passed 7/7 against a required 5.
+
+The remaining work is a single database operation, not a code change.
+
+## 46.5 Exact prerequisites for R5
+
+1. **Product Owner re-runs the corrected `0043` migration end to end**
+   against DEV. It is now idempotent; do not hand-pick statements.
+2. `node scripts/ii_r4_schema_probe.mjs` → expect
+   `MIGRATION 0043 FULLY APPLIED: YES`.
+3. `node scripts/ii_r4_live_dev_security_tests.mjs` → expect
+   `FAIL=0, BLOCKED=0`. The harness needs no edits; the blocked tests are
+   already written and will evaluate for real once the schema exists.
+4. Seed `ii_risk_free_rates` with IN and AU reference rows so Sharpe,
+   Sortino and alpha compute live instead of correctly suppressing.
+5. Re-evaluate R4 for UNCONDITIONAL FULL PASS. **R5 scope (SIP simulation,
+   fund X-ray, tax, cost leakage, recommendations) must not begin before
+   that re-evaluation** — spec section 115 hard stop, which this pass
+   observed: zero R5 scope was introduced.
