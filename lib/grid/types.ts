@@ -15,6 +15,14 @@ export interface GridFieldDef {
   step?: string;
   required?: boolean;
   defaultValue?: string | number | boolean;
+  // Chunk 3a item 1 (Spec 1 §9): when true, this field's visibility/
+  // required-ness is driven per-row by the selected catalogue item's
+  // master_financial_items metadata (supports_<name>/requires_<name>
+  // columns — migrations 0033/0034) rather than being uniformly shown for
+  // every row in this category. See lib/grid/fieldVisibility.ts. Only
+  // meaningful for field names with a matching supports_*/requires_*
+  // column pair (currently purchase_date, purchase_price).
+  metadataDriven?: boolean;
 }
 
 export interface GridConfig {

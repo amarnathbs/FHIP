@@ -5,12 +5,37 @@ import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS, expectedCurrencyForCountry } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
 import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
+import { resolveFieldVisibility, isMetadataFieldMissing } from '@/lib/grid/fieldVisibility';
 import type { GridConfig } from '@/lib/grid/types';
 
 interface MasterItem {
   item_key: string;
   item_label: string;
   sort_order: number;
+  // Chunk 3a item 1 (Spec 1 §9) — category metadata (migrations 0033/0034),
+  // read by resolveFieldVisibility() to conditionally show/hide/require
+  // fields like purchase_date/purchase_price per catalogue item rather than
+  // uniformly for the whole category. Optional/undefined degrades safely to
+  // today's always-shown, never-required behaviour.
+  requires_purchase_date?: boolean;
+  supports_purchase_date?: boolean;
+  requires_purchase_price?: boolean;
+  supports_purchase_price?: boolean;
+}
+
+const ITEM_META_FIELDS = [
+  'requires_purchase_date',
+  'supports_purchase_date',
+  'requires_purchase_price',
+  'supports_purchase_price',
+] as const;
+
+function metaFromMaster(item: MasterItem): Partial<Row> {
+  const meta: Partial<Row> = {};
+  for (const key of ITEM_META_FIELDS) {
+    if (item[key] !== undefined) meta[key] = item[key];
+  }
+  return meta;
 }
 
 interface SavedRecord {
@@ -60,10 +85,11 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
     currency_override: item.item_key === 'foreign_currency',
     expanded: false,
     ...fieldDefaults(config),
+    ...metaFromMaster(item),
   };
 }
 
-function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolean, label: string): Row {
+function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolean, label: string, item?: MasterItem): Row {
   return {
     ...record,
     key: record.master_item_key ?? `custom-${record.id}`,
@@ -76,6 +102,11 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
     currency_code: record.currency_code,
     currency_override: Boolean(record.currency_override),
     expanded: false,
+    // A saved row's own field values (e.g. an already-saved purchase_date)
+    // take precedence over the spread above via ...record already having
+    // set them; this only backfills the item's supports_*/requires_* flags,
+    // which a saved record never carries itself.
+    ...(item ? metaFromMaster(item) : {}),
   };
 }
 
@@ -84,6 +115,14 @@ function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): b
   if (!row.currency_code) return false;
   if (row.is_custom && duplicates.has(row.item_label.trim().toLowerCase())) return false;
   if (currencyMismatchBlocked(row)) return false;
+  // Chunk 3a item 1: a metadata-driven field the selected catalogue item
+  // marks as required (requires_purchase_date/requires_purchase_price) must
+  // be filled in before the row can save. Every populated item ships with
+  // both flags false today (see migration 0034's notes), so this is a no-op
+  // in practice until the Product Owner opts a specific item in.
+  for (const f of config.fields) {
+    if (f.metadataDriven && isMetadataFieldMissing(row, f)) return false;
+  }
   const value = row[config.valueField];
   return value !== '' && value !== undefined && value !== null;
 }
@@ -136,7 +175,9 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((item) => {
           const saved = byMasterKey.get(item.item_key);
-          return saved ? rowFromRecord(saved, config, false, item.item_label) : rowFromMaster(item, currency, config);
+          return saved
+            ? rowFromRecord(saved, config, false, item.item_label, item)
+            : rowFromMaster(item, currency, config);
         });
       const customRows = savedRecords
         .filter((r) => !r.master_item_key)
@@ -293,6 +334,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   const missingRequiredCount = included.filter((r) => {
     if (!r.owner || !r.currency_code) return true;
     if (config.frequencyField && !r[config.frequencyField]) return true;
+    if (config.fields.some((f) => f.metadataDriven && isMetadataFieldMissing(r, f))) return true;
     return false;
   }).length;
 
@@ -433,43 +475,56 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       ))}
                     </select>
                   </td>
-                  {config.fields.map((f) => (
-                    <td key={f.name} className="px-3 py-2">
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          disabled={!row.included}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
-                        />
-                      )}
-                    </td>
-                  ))}
+                  {config.fields.map((f) => {
+                    // Chunk 3a item 1 (Spec 1 §9): purchase_date/
+                    // purchase_price (and any future metadataDriven field)
+                    // are shown/required/read-only per-row based on the
+                    // selected catalogue item — see lib/grid/fieldVisibility.ts.
+                    // Every non-metadataDriven field keeps its unconditional
+                    // always-shown behaviour exactly as before.
+                    const vis = resolveFieldVisibility(row, f);
+                    return (
+                      <td key={f.name} className="px-3 py-2">
+                        {!vis.show ? (
+                          <span className="text-muted">—</span>
+                        ) : f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={!row.included || vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || vis.readOnly}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className={`w-28 rounded border px-2 py-1 disabled:bg-gray-50 ${
+                              vis.required && !String(row[f.name] ?? '') ? 'border-caution' : ''
+                            }`}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
@@ -569,41 +624,53 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       ))}
                     </select>
                   </div>
-                  {config.fields.map((f) => (
-                    <div key={f.name}>
-                      <label className="block text-xs text-muted">{f.label}</label>
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-full rounded border px-2 py-1"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-full rounded border px-2 py-1"
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {config.fields.map((f) => {
+                    // See the desktop table's identical comment above —
+                    // Chunk 3a item 1 (Spec 1 §9).
+                    const vis = resolveFieldVisibility(row, f);
+                    if (!vis.show) return null;
+                    return (
+                      <div key={f.name}>
+                        <label className="block text-xs text-muted">
+                          {f.label}
+                          {vis.required && <span className="text-risk"> *</span>}
+                        </label>
+                        {f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-full rounded border px-2 py-1"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={vis.readOnly}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                   <div>
                     <label className="block text-xs text-muted">Currency</label>
                     <select
