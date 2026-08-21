@@ -1,119 +1,92 @@
-# FHIP Migration Registry
+# Migration registry
 
-**Purpose.** One place that records which migration number belongs to which
-module, on which branch, and how far it has been applied. This exists because
-three feature streams (Investment Intelligence, Resources CMS, Financial Data
-Hub) develop in parallel off a `main` that ends at `0030`, and two of them have
-already collided.
+The single source of truth for allocated migration versions. **Record an
+allocation here before writing the migration file.**
 
-**Created by:** FDH-1, 2026-08-21. There was no pre-existing migration-governance
-document on `main` (`main` has no `docs/` directory at all — see
-`docs/financial-data-hub/FDH0_REPOSITORY_MAP.md` §9), so this does not duplicate
-an existing system.
+Allocate with:
 
-## The rules (Product Owner Decision 1)
+```sh
+node scripts/check-migration-versions.mjs   # reports the next free version
+```
 
-1. **No arbitrary reserved ranges.** No stream may reserve `0050-0099` "for
-   later". Numbers are allocated one at a time, by a live process.
-2. **Every allocation runs the live process:** identify the highest migration
-   already committed on the latest merged `main`, and allocate the next
-   sequential number — *checking, at the same moment, what other unmerged
-   branches and the shared DEV database already occupy* (see §3).
-3. **Merged and applied migrations are immutable.** They are never renumbered.
-4. **Where two unmerged branches collide, the branch that merges second
-   renumbers — and only its own unmerged, unapplied migration.**
+The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
+and fails the build if two active migrations ever share a version again.
 
-## 1. Merged on `main` (immutable)
+- **Next free version: `0050`**
+- Active migrations: 49 (`0001`-`0049`), one file per version
+- Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
-`main` @ `fe7a094`. Migrations `0001`–`0030`, all **MERGED** and
-**APPLIED-PROD**. They are listed in `supabase/migrations/` and are not
-restated here; nothing in this registry may renumber any of them.
+## Allocated versions
 
-| Migration | Module | Purpose | Branch | Status |
-| --- | --- | --- | --- | --- |
-| `0001`–`0030` | FHIP core (modules 1–10, recommendations, reports, contact) | The shipped platform schema | `main` | MERGED / APPLIED-PROD |
+| Version | File | Module | Status |
+|---|---|---|---|
+| 0001-0030 | (see `supabase/migrations/`) | Core platform | Applied to DEV, merged to `main` |
+| 0031 | `0031_ii_reference_foundation.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0032 | `0032_ii_source_documents_accounts.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0033 | `0033_ii_transactions_holdings.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0034 | `0034_ii_publishing_goal_allocations.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0035 | `0035_ii_analytics_insights_reconciliation.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0036 | `0036_ii_audit_events.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0037 | `0037_ii_storage_policy.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0038 | `0038_ii_india_adapter_seed.sql` | Investment Intelligence R1 | Applied to DEV |
+| 0039 | `0039_ii_r2_audit_and_document_lifecycle.sql` | Investment Intelligence R2 | Applied to DEV |
+| 0040 | `0040_ii_r2_transaction_lineage_and_dedup.sql` | Investment Intelligence R2 | Applied to DEV |
+| 0041 | `0041_ii_r2_scheme_resolution_and_portfolio_truth.sql` | Investment Intelligence R2 | Applied to DEV |
+| 0042 | `0042_ii_r3_fhip_publishing_bridge.sql` | Investment Intelligence R3 | Applied to DEV |
+| 0043 | `0043_ii_r4_performance_benchmark_reference_data.sql` | Investment Intelligence R4 | Applied to DEV |
+| 0044 | `0044_ii_r5_sip_xray_holdings.sql` | Investment Intelligence R5 | Applied to DEV |
+| 0045 | `0045_fdh_reference_foundation.sql` | Financial Data Hub FDH-1 | Applied to DEV |
+| 0046 | `0046_fdh_accounts_documents_jobs.sql` | Financial Data Hub FDH-1 | Applied to DEV |
+| 0047 | `0047_fdh_transactions_and_classification.sql` | Financial Data Hub FDH-1 | Applied to DEV |
+| 0048 | `0048_fdh_review_quality_provenance.sql` | Financial Data Hub FDH-1 | Applied to DEV |
+| 0049 | `0049_reconcile_phase0c_resources_lineage.sql` | Cross-stream reconciliation | Applied to DEV |
 
-## 2. Unmerged streams
+**0049 detail** — Purpose: canonical forward re-emission of the archived
+Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed
+below), so a fresh database can be rebuilt deterministically from a single
+`0001`-`0049` chain without any duplicate version. **Applied to DEV
+(`vqycarelcoijzwlpkpcz`) 2026-08-21, independently verified live**
+post-application (idempotent no-op against existing data: `user_financial_section_status`
+row count unchanged, new `resource_posts`/`resource_faqs` columns present and
+functional, `search_resource_posts` RPC callable by `anon`, public settings
+policy and staff-only workflow-history policy both behave correctly). See
+`docs/database-reconciliation/MIGRATION_LINEAGE_COMPLETION_REPORT.md` for the
+full pre- and post-application evidence package. Production
+(`twwpnltizhtjxhamyoxt`) has never received any migration from this
+reconciliation and was never touched.
 
-| Migration | Module | Purpose | Branch | Status |
-| --- | --- | --- | --- | --- |
-| `0031` | Investment Intelligence R1 | `ii_` reference foundation | `feature/investment-intelligence-r1-data-foundation` | BRANCH / APPLIED-DEV |
-| `0032` | Investment Intelligence R1 | `ii_` source documents + accounts | same | BRANCH / APPLIED-DEV |
-| `0033` | Investment Intelligence R1 | `ii_` transactions + holdings | same | BRANCH / APPLIED-DEV |
-| `0034` | Investment Intelligence R1 | `ii_` publishing + goal allocations | same | BRANCH / APPLIED-DEV |
-| `0035` | Investment Intelligence R1 | `ii_` analytics, insights, reconciliation | same | BRANCH / APPLIED-DEV |
-| `0036` | Investment Intelligence R1 | `ii_` audit events | same | BRANCH / APPLIED-DEV |
-| `0037` | Investment Intelligence R1 | `ii_` storage policy | same | BRANCH / APPLIED-DEV |
-| `0038` | Investment Intelligence R1 | India adapter seed | same | BRANCH / APPLIED-DEV |
-| `0039` | Investment Intelligence R2 | audit + document lifecycle | `feature/investment-intelligence-r2-cas-portfolio-truth` | BRANCH |
-| `0040` | Investment Intelligence R2 | transaction lineage + dedup | same | BRANCH |
-| `0041` | Investment Intelligence R2 | scheme resolution + portfolio truth | same | BRANCH |
-| `0042` | Investment Intelligence R3 | FHIP publishing bridge | `feature/investment-intelligence-r3-fhip-publishing` | BRANCH |
-| `0043` | Investment Intelligence R4 | performance/benchmark reference data | `feature/investment-intelligence-r4-performance-benchmark` | BRANCH |
-| `0044` | Investment Intelligence R5 | SIP X-ray holdings | `feature/investment-intelligence-r5-sip-xray` | BRANCH |
-| `0031` **(collision)** | Design System / sections | `financial_section_status` | `feature/resources-r1-7d-…` lineage | BRANCH — **collides with II `0031`** |
-| `0032` **(collision)** | Design System / sections | section status "reviewed with data" | same | BRANCH — **collides with II `0032`** |
-| `0033`–`0038` **(collision)** | Resources CMS R1.1–R1.4 | resources foundation, seed, roles, editors, specialist content | same | BRANCH — **collide with II `0033`–`0038`** |
-| `0039` **(collision)** | Resources CMS R1.5 | public settings read | `feature/resources-r1-5-public-frontend` | BRANCH — **collides with II `0039`** |
-| `0040` **(collision)** | Resources CMS R1.6 | discovery/context support | `feature/resources-r1-6-discovery-context` | BRANCH — **collides with II `0040`** |
-| `0045` | **Financial Data Hub FDH-1** | FDH reference / master-data foundation | `feature/financial-data-hub-fdh-1-foundation` | BRANCH |
-| `0046` | **Financial Data Hub FDH-1** | FDH accounts, statement uploads, ingestion jobs | same | BRANCH |
-| `0047` | **Financial Data Hub FDH-1** | FDH transactions, allocations, links, duplicates, classification | same | BRANCH |
-| `0048` | **Financial Data Hub FDH-1** | FDH review, reconciliation, data quality, provenance, evidence | same | BRANCH |
+## Historical collision — RECONCILED (2026-08-21)
 
-**Status vocabulary:** PLANNED / BRANCH / MERGED / APPLIED-DEV / APPLIED-PROD.
+Versions 0031-0040 were each claimed by two files. Investment Intelligence is
+the canonical active owner; the Phase 0C and Resources counterparts are archived
+and their effects re-emitted by `0049`. See
+`docs/architecture/ADR_MIGRATION_LINEAGE_RECONCILIATION.md`.
 
-## 3. FDH-1's allocation: how `0045` was chosen, and why not `0031`
+| Legacy version | Investment Intelligence file (canonical, active) | Displaced file (archived) | Displaced module | Both applied to DEV? | Re-emitted by |
+|---|---|---|---|---|---|
+| 0031 | `0031_ii_reference_foundation.sql` | `0031_financial_section_status.sql` | Phase 0C | Yes | 0049 |
+| 0032 | `0032_ii_source_documents_accounts.sql` | `0032_section_status_reviewed_with_data.sql` | Phase 0C | Yes | 0049 |
+| 0033 | `0033_ii_transactions_holdings.sql` | `0033_resources_foundation.sql` | Resources | Yes | 0049 |
+| 0034 | `0034_ii_publishing_goal_allocations.sql` | `0034_resources_seed.sql` | Resources | Yes | 0049 |
+| 0035 | `0035_ii_analytics_insights_reconciliation.sql` | `0035_resources_analyst_role_delta.sql` | Resources | Yes | 0049 |
+| 0036 | `0036_ii_audit_events.sql` | `0036_resources_anon_function_grants_fix.sql` | Resources | Yes | 0049 |
+| 0037 | `0037_ii_storage_policy.sql` | `0037_resources_editor_support.sql` | Resources | Yes | 0049 |
+| 0038 | `0038_ii_india_adapter_seed.sql` | `0038_resources_specialist_content_support.sql` | Resources | Yes | 0049 |
+| 0039 | `0039_ii_r2_audit_and_document_lifecycle.sql` | `0039_resources_public_settings_read.sql` | Resources | Yes | 0049 |
+| 0040 | `0040_ii_r2_transaction_lineage_and_dedup.sql` | `0040_resources_discovery_context_support.sql` | Resources | Yes | 0049 |
 
-The live process was run on 2026-08-21 and produced evidence, not an assumption.
+## Module ownership boundaries
 
-**Step 1 — highest migration on latest merged `main`.**
-`main` @ `fe7a094` ends at `0030_contact_submissions.sql`. The literal next
-sequential number is therefore `0031`.
+Investment Intelligence is the canonical owner of investment accounts,
+securities, holdings, investment transactions, valuations, portfolio
+calculations, performance data (XIRR/TWRR/CAGR), benchmarks, risk and
+investment analytics. These are never moved into Resources or FDH and are never
+renamed to resolve numbering.
 
-**Step 2 — check what `0031` actually is.** Running `git ls-tree` over the
-unmerged branch tips shows `0031` is claimed **twice**, independently:
+## FDH-1 migrations in detail
 
-* `0031_ii_reference_foundation.sql` (Investment Intelligence R1)
-* `0031_financial_section_status.sql` (the design-system / Resources lineage)
-
-The same double-claim runs all the way from `0031` to `0040`. This collision
-predates FDH and was already recorded by FDH-0 as RED item R1
-(`docs/financial-data-hub/FDH0_IMPLEMENTATION_READINESS_REPORT.md` §2).
-
-**Step 3 — check the shared DEV database.** This is the step that settles it.
-A read-only probe of the DEV project (`vqycarelcoijzwlpkpcz`) on 2026-08-21
-found that `ii_sources`, `ii_instruments`, `ii_accounts`, `ii_transactions`,
-`ii_holding_snapshots` and `ii_analytics_results` are all **PRESENT**, as are
-`resource_categories`, `resource_posts` and `resource_settings` — while
-`financial_section_status` is **ABSENT**. In other words:
-
-> Investment Intelligence's `0031`–`0037` **and** Resources' `0033`+ are already
-> applied to the shared DEV database, and the Resources stream's own `0031`/`0032`
-> lost that collision and were never applied there.
-
-Numbers `0031`–`0044` are therefore not merely claimed on paper — they are
-occupied in the environment FDH-1 must be applied to. A migration file named
-`0031_fdh_reference_foundation.sql` would collide on merge with two branches at
-once and could not be applied to DEV at all.
-
-**Step 4 — apply rule 4.** FDH is the stream that will merge last of the three.
-Rule 4 says the branch merging second renumbers *its own* unmerged, unapplied
-migration. FDH-1 therefore renumbers **only its own four files**, to the next
-numbers free across every stream and in DEV: **`0045`–`0048`**. No other
-stream's migration is renumbered, and nothing merged or applied is touched.
-
-**This is not a reserved range.** `0045`–`0048` are four specific, contiguous
-numbers allocated for four specific migrations that exist today. FDH-2 will
-re-run this same process from scratch and take whatever is then free — it has
-no claim on `0049` or anything beyond.
-
-**Open item for the Product Owner.** The `0031`–`0040` double-claim between
-Investment Intelligence and Resources is still unresolved and is not FDH's to
-fix. Whichever of those two merges second must renumber. FDH-1 records the
-collision here; it does not renumber another stream's files.
-
-## 4. FDH-1 migrations in detail
+(Carried forward from FDH-1's original registry entry — not duplicated
+elsewhere.)
 
 | File | Tables created | Existing tables altered |
 | --- | --- | --- |
@@ -125,3 +98,16 @@ collision here; it does not renumber another stream's files.
 All four are additive. They contain no `alter table` against any pre-existing
 table, no `drop`, and no `update`/`delete` of any existing row. They reference
 `auth.users`, `countries`, `currencies` and `households` by foreign key only.
+
+## FDH-2 — Australia & India Category, MCC, Institution & Merchant Intelligence Foundation
+
+Base branch: `feature/financial-data-hub-fdh-2-master-data`, created 2026-08-21
+by merging `feature/financial-data-hub-fdh-1-foundation` (`7a7e53a`, full FDH-1
+application code + migrations `0045`-`0048`) with `fix/migration-lineage-ii-resources`
+(`76b40f4`, the certified migration-lineage reconciliation, migrations
+`0031`-`0044` + `0049` + the collision guard). These were sibling branches off
+the same point in `main` (`fe7a094`) — neither contained the other — so this
+merge was required before any FDH-2 migration could be safely allocated.
+`0045`-`0048` were confirmed byte-identical between both branches before
+merging (verified via SHA-256, not assumed). FDH-2's own migration
+allocation is recorded separately once assigned.
