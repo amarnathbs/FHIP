@@ -118,9 +118,15 @@ categories.
 
 `CLEAN_REBUILD_CERTIFICATION.md`. Summary: 49/49 migrations apply to an empty
 PostgreSQL 18 database with zero manual intervention; 155 tables, all
-RLS-enabled; module counts (33 II / 20 Resources / 1 Phase 0C / 24 FDH) match
-live DEV exactly; order-equivalence, idempotency and negative controls all PASS;
-25/25 tenant-isolation checks PASS.
+RLS-enabled. Of those 155, 78 belong to the four streams reconciled/added in
+this and adjacent work (33 II / 20 Resources / 1 Phase 0C / 24 FDH) — **these
+four counts sum to 78, not 155**; the remaining 77 tables are pre-existing
+base-FHIP tables from migrations `0001`-`0030`, unrelated to this
+reconciliation. (An earlier version of this document juxtaposed the 155 total
+with the four module counts in a way that could be misread as claiming they
+summed to 155; corrected here.) Module counts match live DEV exactly;
+order-equivalence, idempotency and negative controls all PASS; 25/25
+tenant-isolation checks PASS.
 
 ## 10. Execution
 

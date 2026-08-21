@@ -39,7 +39,21 @@ and fails the build if two active migrations ever share a version again.
 | 0046 | `0046_fdh_accounts_documents_jobs.sql` | Financial Data Hub FDH-1 | Applied to DEV |
 | 0047 | `0047_fdh_transactions_and_classification.sql` | Financial Data Hub FDH-1 | Applied to DEV |
 | 0048 | `0048_fdh_review_quality_provenance.sql` | Financial Data Hub FDH-1 | Applied to DEV |
-| 0049 | `0049_reconcile_phase0c_resources_lineage.sql` | Reconciliation (Phase 0C + Resources) | **Pending DEV application — verified no-op** |
+| 0049 | `0049_reconcile_phase0c_resources_lineage.sql` | Cross-stream reconciliation | **SQL READY — NOT YET APPLIED TO DEV** |
+
+**0049 detail** — Purpose: canonical forward re-emission of the archived
+Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed
+below), so a fresh database can be rebuilt deterministically from a single
+`0001`-`0049` chain without any duplicate version. Production: **NOT
+APPLIED** (production project `twwpnltizhtjxhamyoxt` has never received any
+migration from this reconciliation; DEV project `vqycarelcoijzwlpkpcz` has not
+received `0049` either as of this entry — it has been fully verified offline
+via PGlite replay/order-equivalence/idempotency/RLS certification, and its
+complete verbatim contents have been delivered to the Product Owner in chat
+for manual application through the Supabase Dashboard SQL editor, but that
+application has not yet happened). See
+`docs/database-reconciliation/MIGRATION_LINEAGE_COMPLETION_REPORT.md` for the
+full pre-application evidence package and the outstanding blocking condition.
 
 ## Historical collision — RECONCILED (2026-08-21)
 

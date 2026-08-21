@@ -89,7 +89,16 @@ Per module:
 | Resources (`resource*`) | 20 | 20 | PASS |
 | Phase 0C (`user_financial_section_status`) | 1 | 1 | PASS |
 | Financial Data Hub (`fdh_*`) | 24 | 24 | PASS |
+| **Subtotal — four reconciled/added streams** | **78** | **78** | **PASS** |
+| Pre-existing base-FHIP tables (`0001`-`0030`, unrelated to this reconciliation) | 77 | 77 | PASS |
 | **Total exposed relations** | **155** | **155** | **PASS** |
+
+**Correction (this pass):** an earlier version of this table placed a "Total
+exposed relations = 155" row directly beneath the four module rows without a
+subtotal, which reads as though 33+20+1+24 summed to 155. It does not — those
+four counts sum to 78. The other 77 tables in the 155 total are pre-existing
+base-FHIP tables from migrations `0001`-`0030` and are untouched by this
+reconciliation. The explicit subtotal row above prevents that misreading.
 
 ## Order-equivalence proof
 

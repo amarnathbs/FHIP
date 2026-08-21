@@ -152,8 +152,16 @@ regenerated read-only at any point.
 | Resources tables | 20 | 20 | 20 | YES |
 | Phase 0C tables | 1 | 1 | 1 | YES |
 | FDH tables | 24 | 24 | 24 | YES |
+| Subtotal — four reconciled/added streams | 78 | 78 | 78 | YES |
+| Pre-existing base-FHIP tables (`0001`-`0030`) | 77 | 77 | 77 | YES |
 | Total exposed relations | 155 | 155 | 155 | YES |
 | In-scope columns | 676 | 676 | 676 | YES |
+
+**Correction (this pass):** the "Total exposed relations = 155" row previously
+sat directly beneath the four module rows with no subtotal, which reads as
+33+20+1+24=155 — that arithmetic is wrong (it sums to 78). The remaining 77 of
+the 155 total are pre-existing base-FHIP tables from `0001`-`0030`, unrelated
+to this reconciliation. The subtotal row above prevents that misreading.
 
 All four perspectives required by this reconciliation — repository migration
 lineage, expected Investment Intelligence schema, expected Resources schema, and
