@@ -55,6 +55,7 @@ export interface RetirementRow {
   employer_contribution: number | null;
   personal_contribution: number | null;
   contribution_frequency: Frequency | null;
+  master_item_key?: string | null;
   country_code?: string | null;
   currency_code?: string | null;
 }
@@ -281,6 +282,36 @@ const DEBT_REPAYMENT_MASTER_ITEMS = new Set(['mortgage', 'car_loan_repayments'])
 export function isDebtRepaymentExpense(row: ExpenseRow): boolean {
   if (row.master_item_key) return DEBT_REPAYMENT_MASTER_ITEMS.has(row.master_item_key);
   return row.expense_category === 'debt_repayment';
+}
+
+// Chunk 3a (docs/app-review-2026-08/CHUNK3A_CANONICAL_SCHEMA.md §4) found
+// and disclosed this live defect, and Chunk 3b's AR-0-cited discovery
+// re-confirmed it live against real DEV data (45 affected rows across 39
+// users as of 2026-08-21): these 6 catalogue items are contribution
+// *flows* (Spec 2 §34-36's "account vs contribution" distinction), not
+// standalone account balances, but the pre-existing flat
+// retirement_accounts grid let a user tick e.g. "Employer Contributions"
+// and type a number straight into current_balance — summed by
+// totalRetirement below as if it were a real super balance, phantom-
+// double-counting against the user's actual account. Chunk 3b deprecates
+// these 6 catalogue items (supabase/migrations/0038) and backfills the
+// real existing rows into the new retirement_contributions table
+// (migration 0039) where evidence allows, but this exclusion set is the
+// actual fix and is independent of both migrations being applied — it
+// works whether master_item_key is 'employer_contributions' etc. on an
+// is_active or since-deprecated catalogue row, so a legacy row a user
+// saved before either migration lands is corrected immediately, not just
+// once the catalogue deprecation and grid orphaned-key fallback exist.
+const CONTRIBUTION_TYPE_MASTER_ITEMS = new Set([
+  'employer_contributions',
+  'salary_sacrifice',
+  'personal_concessional',
+  'non_concessional',
+  'government_co_contribution',
+  'spouse_contribution',
+]);
+export function isRetirementContributionRow(masterItemKey?: string | null): boolean {
+  return Boolean(masterItemKey) && CONTRIBUTION_TYPE_MASTER_ITEMS.has(masterItemKey as string);
 }
 
 function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): number {
@@ -537,7 +568,11 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
 
   const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
-  const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
+  // Excludes Class-F contribution-type rows (isRetirementContributionRow,
+  // above) — see that helper's comment for the phantom-balance defect this
+  // fixes (Chunk 3a discovery, Chunk 3b live-confirmed and corrected).
+  const retirementBalanceRows = input.retirement.filter((r) => !isRetirementContributionRow(r.master_item_key));
+  const totalRetirement = retirementBalanceRows.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
   const totalLiabilities = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
 
@@ -572,7 +607,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   }
   const assetsByCountry = byCountry(input.assets, 'current_value', 'country_code');
   const liabilitiesByCountry = byCountry(input.liabilities, 'balance', 'country_code');
-  const retirementByCountry = byCountry(input.retirement, 'current_balance', 'country_code');
+  // Uses the same Class-F-excluded row set as totalRetirement above, for
+  // internal consistency — otherwise a per-country breakdown could sum to
+  // more than the (corrected) headline totalRetirement figure.
+  const retirementByCountry = byCountry(retirementBalanceRows, 'current_balance', 'country_code');
 
   const liquidAssets = allocationMap.get('cash') ?? 0;
   const emergencyFundMonths = essentialMonthlyExpenses > 0 ? liquidAssets / essentialMonthlyExpenses : null;

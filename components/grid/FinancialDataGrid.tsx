@@ -6,6 +6,7 @@ import { OWNER_OPTIONS, expectedCurrencyForCountry } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
 import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
 import { resolveFieldVisibility, isMetadataFieldMissing } from '@/lib/grid/fieldVisibility';
+import { activeItemKeys, findOrphanedRecords, resolveOrphanedLabel } from '@/lib/grid/rowMerge';
 import type { GridConfig } from '@/lib/grid/types';
 
 interface MasterItem {
@@ -59,6 +60,14 @@ interface Row extends GridRow {
   currency_override?: boolean;
   country_code?: string;
   expanded: boolean;
+  // Chunk 3b prerequisite fix: true for a saved row whose master_item_key
+  // points at a catalogue item that is no longer active (e.g. deprecated by
+  // this sub-chunk's taxonomy-consolidation migration, or 0031's
+  // collectables/collectibles fix). Distinct from is_custom — the item name
+  // is still catalogue-sourced (not user-editable), it just no longer has a
+  // matching row in the active tickable list. Never silently dropped from
+  // the grid; see load() below.
+  is_archived?: boolean;
 }
 
 let customRowCounter = 0;
@@ -89,13 +98,21 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
   };
 }
 
-function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolean, label: string, item?: MasterItem): Row {
+function rowFromRecord(
+  record: SavedRecord,
+  config: GridConfig,
+  isCustom: boolean,
+  label: string,
+  item?: MasterItem,
+  isArchived?: boolean
+): Row {
   return {
     ...record,
     key: record.master_item_key ?? `custom-${record.id}`,
     id: record.id,
     master_item_key: record.master_item_key,
     is_custom: isCustom,
+    is_archived: Boolean(isArchived),
     item_label: label,
     included: true,
     owner: record.owner,
@@ -154,8 +171,15 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [masterItems, savedRecords, profile] = await Promise.all([
-        fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}`),
+      // Chunk 3b prerequisite fix: fetch the FULL catalogue (active +
+      // deprecated) in one call. The active subset drives the tickable
+      // master-item list exactly as before; the full set is kept around so
+      // a saved row whose master_item_key points at a now-deprecated item
+      // can still resolve a real item_label instead of silently vanishing
+      // (see AR-0's migration 0031 disclosure and this sub-chunk's own
+      // taxonomy-consolidation deprecations).
+      const [allMasterItems, savedRecords, profile] = await Promise.all([
+        fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}&includeInactive=true`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
         fetchJson<{
           preferred_currency: 'AUD' | 'INR' | null;
@@ -169,8 +193,17 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
       setDefaultCurrency(currency);
       if (config.notApplicable) setNotApplicable(Boolean(profile?.[config.notApplicable.profileField]));
 
+      // includeInactive=true returns both; only is_active !== false items
+      // populate the tickable list (matches the plain, non-includeInactive
+      // endpoint's own .eq('is_active', true) filter — is_active is
+      // undefined only if a caller queries an older selection, in which
+      // case it degrades to "treat as active", same as every other
+      // optional metadata field on this interface).
+      const activeKeySet = activeItemKeys(allMasterItems);
+      const activeMasterItems = allMasterItems.filter((item) => activeKeySet.has(item.item_key));
       const byMasterKey = new Map(savedRecords.filter((r) => r.master_item_key).map((r) => [r.master_item_key!, r]));
-      const merged = masterItems
+      const fullCatalogByKey = new Map(allMasterItems.map((item) => [item.item_key, item]));
+      const merged = activeMasterItems
         .slice()
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((item) => {
@@ -182,8 +215,24 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
       const customRows = savedRecords
         .filter((r) => !r.master_item_key)
         .map((r) => rowFromRecord(r, config, true, String(r[config.nameField] ?? '')));
+      // Orphaned rows (Chunk 3b prerequisite fix): a saved record has a
+      // master_item_key, but it isn't in the active catalogue (deprecated
+      // since the row was saved) — it is not a custom row (has a real
+      // master_item_key) and was skipped by the merged.map() above (only
+      // active items are iterated), so without this it would disappear
+      // from the grid entirely even though the DB row and its value are
+      // completely untouched. See lib/grid/rowMerge.ts (unit-tested
+      // separately) for the pure lookup logic. Rendered as a normal
+      // (non-custom-editable-name), clearly-marked "Archived item" row —
+      // still includable/editable/deletable via the exact same code paths
+      // as any other saved row.
+      const archivedRows = findOrphanedRecords(savedRecords, activeMasterItems).map((r) => {
+        const catalogItem = fullCatalogByKey.get(r.master_item_key!);
+        const label = resolveOrphanedLabel(r, fullCatalogByKey, config.nameField);
+        return rowFromRecord(r, config, false, label, catalogItem, true);
+      });
 
-      setRows([...merged, ...customRows]);
+      setRows([...merged, ...archivedRows, ...customRows]);
     }
     load();
     return () => {
@@ -454,6 +503,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     ) : (
                       row.item_label
                     )}
+                    {row.is_archived && (
+                      <span
+                        className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-muted"
+                        title="This item is no longer offered as a new catalogue entry, but your saved value is untouched and still fully editable."
+                      >
+                        Archived item
+                      </span>
+                    )}
                     {errorsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
                     )}
@@ -591,6 +648,11 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     />
                   ) : (
                     row.item_label
+                  )}
+                  {row.is_archived && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-muted">
+                      Archived item
+                    </span>
                   )}
                 </label>
                 {row.included && (
