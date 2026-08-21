@@ -50,6 +50,41 @@ function toDate(s: string): Date {
 }
 
 /**
+ * PostgREST caps an unbounded select at 1000 rows and reports the truncation
+ * ONLY in the Content-Range header — the response body is a perfectly
+ * well-formed array with no error. Confirmed live against DEV (R5 branch):
+ * seeding 1500 ii_prices_nav rows and issuing a plain select returned exactly
+ * 1000 rows with `Content-Range: 0-999/1500`.
+ *
+ * That silent truncation is dangerous here rather than merely incomplete: a
+ * few years of daily NAV/transaction/snapshot/benchmark history for even one
+ * instrument exceeds 1000 rows, so a plain select would silently drop the
+ * most recent history — wrong as-of dates, wrong coverage, wrong XIRR/TWRR/
+ * benchmark figures, all with no error surfaced anywhere.
+ *
+ * Every large time-series read in this module therefore goes through this
+ * helper, which pages explicitly until a short page is returned. Same
+ * pattern as r5Repository.ts's fetchAllRows.
+ */
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> }
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    // Defensive ceiling so a pathological dataset cannot spin forever.
+    if (out.length > 500_000) break;
+  }
+  return out;
+}
+
+/**
  * Load everything the AnalyticsOrchestrator needs for ONE user.
  *
  * `userId` MUST come from the authenticated session (never a request
@@ -71,19 +106,42 @@ export async function loadAnalyticsDataset(
     .eq('user_id', userId);
   if (truthErr) throw new Error(`Failed to load portfolio truth status: ${truthErr.message}`);
 
-  const { data: txRows, error: txErr } = await supabase
-    .from('ii_transactions')
-    .select('instrument_id, transaction_type, transaction_date, gross_amount, currency_code, status')
-    .eq('user_id', userId)
-    .order('transaction_date', { ascending: true });
-  if (txErr) throw new Error(`Failed to load transactions: ${txErr.message}`);
+  interface TxRow {
+    instrument_id: string;
+    transaction_type: string;
+    transaction_date: string;
+    gross_amount: number;
+    currency_code: string;
+    status: string;
+  }
+  const txRows = await fetchAllRows<TxRow>(() =>
+    supabase
+      .from('ii_transactions')
+      .select('instrument_id, transaction_type, transaction_date, gross_amount, currency_code, status')
+      .eq('user_id', userId)
+      // Secondary order on id: transaction_date alone is not unique across a
+      // user's instruments, and an unstable tie-break across page boundaries
+      // can silently drop or duplicate rows.
+      .order('transaction_date', { ascending: true })
+      .order('id', { ascending: true })
+  );
 
-  const { data: snapRows, error: snapErr } = await supabase
-    .from('ii_holding_snapshots')
-    .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
-    .eq('user_id', userId)
-    .order('as_of_date', { ascending: true });
-  if (snapErr) throw new Error(`Failed to load holding snapshots: ${snapErr.message}`);
+  interface SnapRow {
+    instrument_id: string;
+    as_of_date: string;
+    units: number;
+    value: number;
+    currency_code: string;
+    quality_status: string;
+  }
+  const snapRows = await fetchAllRows<SnapRow>(() =>
+    supabase
+      .from('ii_holding_snapshots')
+      .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
+      .eq('user_id', userId)
+      .order('as_of_date', { ascending: true })
+      .order('id', { ascending: true })
+  );
 
   const instrumentIds = [
     ...new Set([
@@ -106,17 +164,29 @@ export async function loadAnalyticsDataset(
   const instrumentById = new Map((instruments ?? []).map((i) => [i.id as string, i]));
 
   // ---- NAV history -----------------------------------------------------
-  const { data: navRows, error: navErr } = await supabase
-    .from('ii_prices_nav')
-    .select('instrument_id, price_date, price, data_version, quality_status')
-    .in('instrument_id', instrumentIds)
-    .order('price_date', { ascending: true });
-  if (navErr) throw new Error(`Failed to load NAV history: ${navErr.message}`);
+  interface NavRow {
+    instrument_id: string;
+    price_date: string;
+    price: number;
+    data_version: string | null;
+    quality_status: string | null;
+  }
+  const navRows = await fetchAllRows<NavRow>(() =>
+    supabase
+      .from('ii_prices_nav')
+      .select('instrument_id, price_date, price, data_version, quality_status')
+      .in('instrument_id', instrumentIds)
+      // Secondary order on id: price_date alone is not unique once several
+      // instruments are queried together, so a tie needs a deterministic
+      // sort to page reliably.
+      .order('price_date', { ascending: true })
+      .order('id', { ascending: true })
+  );
 
   const navByInstrument = new Map<string, SeriesPoint[]>();
   let navDataVersion: string | null = null;
   let sawSuspectNav = false;
-  for (const r of navRows ?? []) {
+  for (const r of navRows) {
     if (r.quality_status && r.quality_status !== 'ok') {
       sawSuspectNav = true;
       continue; // never feed a flagged NAV point into a certified calculation
@@ -137,13 +207,24 @@ export async function loadAnalyticsDataset(
   const benchmarkSeriesById: Record<string, SeriesPoint[]> = {};
   let benchmarkDataVersion: string | null = null;
   if (benchmarkIds.length) {
-    const { data: seriesRows, error: seriesErr } = await supabase
-      .from('ii_benchmark_series')
-      .select('benchmark_id, series_date, value, data_version, quality_status')
-      .in('benchmark_id', benchmarkIds)
-      .order('series_date', { ascending: true });
-    if (seriesErr) throw new Error(`Failed to load benchmark series: ${seriesErr.message}`);
-    for (const r of seriesRows ?? []) {
+    interface BenchmarkSeriesRow {
+      benchmark_id: string;
+      series_date: string;
+      value: number;
+      data_version: string | null;
+      quality_status: string | null;
+    }
+    const seriesRows = await fetchAllRows<BenchmarkSeriesRow>(() =>
+      supabase
+        .from('ii_benchmark_series')
+        .select('benchmark_id, series_date, value, data_version, quality_status')
+        .in('benchmark_id', benchmarkIds)
+        // Secondary order on id: series_date alone is not unique once several
+        // benchmarks are queried together.
+        .order('series_date', { ascending: true })
+        .order('id', { ascending: true })
+    );
+    for (const r of seriesRows) {
       if (r.quality_status && r.quality_status !== 'ok') continue;
       const id = r.benchmark_id as string;
       benchmarkSeriesById[id] = benchmarkSeriesById[id] ?? [];
