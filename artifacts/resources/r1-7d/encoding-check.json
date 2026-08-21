@@ -1,0 +1,98 @@
+{
+  "records": 84,
+  "total_reader_facing_chars": 569934,
+  "list_blocks": 191,
+  "example_and_callout_blocks": 246,
+  "symbol_coverage": {
+    "percent": {
+      "records": 31,
+      "examples": [
+        "CB-002",
+        "DB-002",
+        "DB-003",
+        "DB-004"
+      ]
+    },
+    "division/formula slash": {
+      "records": 14,
+      "examples": [
+        "DB-002",
+        "DB-003",
+        "EX-003",
+        "EX-004"
+      ]
+    },
+    "em dash": {
+      "records": 12,
+      "examples": [
+        "ER-001",
+        "ER-002",
+        "FH-001",
+        "FH-002"
+      ]
+    },
+    "curly apostrophe": {
+      "records": 32,
+      "examples": [
+        "ER-001",
+        "ER-002",
+        "EX-008",
+        "EX-009"
+      ]
+    },
+    "curly quotes": {
+      "records": 29,
+      "examples": [
+        "ER-001",
+        "ER-002",
+        "EX-008",
+        "EX-009"
+      ]
+    },
+    "ratio multiple (3.5x)": {
+      "records": 2,
+      "examples": [
+        "EX-005",
+        "VID-006"
+      ]
+    },
+    "arrow": {
+      "records": 9,
+      "examples": [
+        "EX-008",
+        "EX-010",
+        "EX-012",
+        "NW-002"
+      ]
+    },
+    "dollar": {
+      "records": 7,
+      "examples": [
+        "FH-002",
+        "FH-004",
+        "FH-005",
+        "FH-006"
+      ]
+    },
+    "multiplication sign": {
+      "records": 3,
+      "examples": [
+        "GL-003",
+        "MM-004",
+        "RAU-001"
+      ]
+    },
+    "rupee (INR)": {
+      "records": 3,
+      "examples": [
+        "RIN-001",
+        "RIN-002",
+        "RIN-003"
+      ]
+    }
+  },
+  "symbols_absent_entirely": [
+    "en dash"
+  ],
+  "corruption_findings": []
+}

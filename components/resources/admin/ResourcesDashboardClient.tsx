@@ -15,6 +15,7 @@ const SUMMARY_CARDS: { key: keyof DashboardSummary['counts']; label: string }[] 
   { key: 'published', label: 'Published' },
   { key: 'drafts', label: 'Draft' },
   { key: 'inReview', label: 'In Review' },
+  { key: 'approved', label: 'Approved' },
   { key: 'scheduled', label: 'Scheduled' },
   { key: 'reviewDue', label: 'Review Due' },
   { key: 'archived', label: 'Archived' },

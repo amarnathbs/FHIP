@@ -34,3 +34,4 @@ next-env.d.ts
 # local Claude Code tool state (developer-machine-specific, not app config)
 /.claude/
 .env.local.example
+.r17d-reviewer-credentials.local.json

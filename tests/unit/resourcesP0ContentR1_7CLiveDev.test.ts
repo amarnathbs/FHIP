@@ -64,11 +64,19 @@ describe('R1.7C live DEV -- post-load state', () => {
     }
   });
 
-  it('all 84 remain draft/private/non-indexable/unpublished', async () => {
+  // R1.7D-FINAL recorded the authorised human editorial and compliance
+  // decisions, so the 84 are no longer all `draft`: 76 are now `approved`
+  // and the 8 video scripts deliberately remain `draft` until a real @GKTC
+  // video exists. The status expectation is updated to that authorised set.
+  //
+  // The security half of this assertion is NOT relaxed — it is the whole
+  // point of the R1.7D-FINAL gate that approval must never imply publication,
+  // so private / unpublished / non-indexable are still asserted for all 84.
+  it('all 84 remain private/non-indexable/unpublished, in an authorised non-published status', async () => {
     const { data, error } = await admin.from('resource_posts').select('content_id,status,visibility,published_at,is_indexable').in('content_id', EXPECTED_84);
     expect(error).toBeNull();
     for (const row of data ?? []) {
-      expect(row.status, `${row.content_id} status`).toBe('draft');
+      expect(['draft', 'approved'], `${row.content_id} status`).toContain(row.status);
       expect(row.visibility, `${row.content_id} visibility`).toBe('private');
       expect(row.published_at, `${row.content_id} published_at`).toBeNull();
       expect(row.is_indexable, `${row.content_id} is_indexable`).not.toBe(true);

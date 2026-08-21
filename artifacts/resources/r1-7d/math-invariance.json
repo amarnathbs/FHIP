@@ -1,0 +1,16 @@
+{
+  "records_compared": 84,
+  "total_numeric_strings_pre": 184,
+  "records_with_numeric_drift": 1,
+  "drift": [
+    {
+      "content_id": "IN-001",
+      "pre_count": 2,
+      "post_count": 1,
+      "removed": [
+        "FHIP can separate cash/savings from investments in the household balance sheet and connect each balance to relevant goals without double counting. The Investments module can show asset type, liquidity and concentration, while Goals and Forecasting show time horizon and funding progress. R1.7B content should educate users about the trade-off without turning FHIP into a product-selection adviser."
+      ],
+      "added": []
+    }
+  ]
+}

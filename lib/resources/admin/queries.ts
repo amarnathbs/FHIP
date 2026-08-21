@@ -215,6 +215,7 @@ export interface DashboardSummary {
     published: number;
     drafts: number;
     inReview: number;
+    approved: number;
     scheduled: number;
     reviewDue: number;
     archived: number;
@@ -255,11 +256,18 @@ export async function getResourceDashboardSummary(supabase: SupabaseClient): Pro
   const nowIso = new Date().toISOString();
   const sevenDaysIso = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [published, drafts, inReview, scheduled, reviewDue, archived, editorialReviewCount, complianceReviewCount, reviewDueItems, scheduledSoonItems, recent] =
+  const [published, drafts, inReview, approved, scheduled, reviewDue, archived, editorialReviewCount, complianceReviewCount, reviewDueItems, scheduledSoonItems, recent] =
     await Promise.all([
       countByStatus(supabase, ['published']),
       countByStatus(supabase, ['idea', 'draft']),
       countByStatus(supabase, ['editorial_review', 'compliance_review']),
+      // 'approved' is a real, reachable workflow state (content that has
+      // completed editorial and, for AMBER, compliance review but has not
+      // been published). It previously had no tile at all, so approved
+      // content was absent from every Content Overview count while still
+      // being listed and filterable under All Content. Added in R1.7D-FINAL,
+      // the first pass in which P0 content actually reached this state.
+      countByStatus(supabase, ['approved']),
       countByStatus(supabase, ['scheduled']),
       countByStatus(supabase, ['review_due']),
       countByStatus(supabase, ['archived']),
@@ -286,7 +294,7 @@ export async function getResourceDashboardSummary(supabase: SupabaseClient): Pro
   void nowIso; // reserved for a future "review date passed" informational badge — see §59, deliberately not automating any status change here.
 
   return {
-    counts: { published, drafts, inReview, scheduled, reviewDue, archived },
+    counts: { published, drafts, inReview, approved, scheduled, reviewDue, archived },
     needsAttention: {
       editorialReview: { count: editorialReviewCount, items: editorialReviewItems },
       complianceReview: { count: complianceReviewCount, items: complianceReviewItems },
