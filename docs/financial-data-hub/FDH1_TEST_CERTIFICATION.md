@@ -180,3 +180,220 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder \
   npx next build                                    # exit 0
 node scripts/fdh1_live_dev_verification.mjs         # 0/24 tables present today
 ```
+
+---
+
+# 7. Live DEV Certification — 2026-08-21
+
+**This section supersedes §5.1, §5.2 and §5.3 above**, which recorded that live
+verification had not been possible. It has now been performed. The statements in
+§5 remain as an accurate record of the state at the time they were written and
+have not been edited.
+
+## 7.1 Environment
+
+| Field | Value |
+| --- | --- |
+| Supabase project ref | `vqycarelcoijzwlpkpcz` |
+| Host | `vqycarelcoijzwlpkpcz.supabase.co` |
+| Classification | **DEV** |
+| Credentials source | `D:\FHIP\.env.local` (`NEXT_PUBLIC_SUPABASE_URL`) |
+| Production database | **NOT TOUCHED** — no production credential was loaded, resolved or used at any point |
+| Branch / commit | `feature/financial-data-hub-fdh-1-foundation` @ `315749d` |
+
+## 7.2 Migration application
+
+Migrations `0045`–`0048` were **already applied** to DEV by the Product Owner
+through the Supabase SQL editor — this project's only DDL mechanism. Closure
+therefore **verified** rather than re-applied, which is the correct action:
+re-running the DDL would have failed on existing objects.
+
+The applied state was confirmed by schema effect, not by any "migration
+succeeded" message:
+
+* **24 / 24 FDH tables resolve live** (HTTP 200, service role).
+* `fdh_source_types` holds its **9 migration-seeded rows** — proving the
+  migration *body* executed, not merely that tables exist.
+* Every other FDH table is empty, exactly as FDH-1 intends (master data is
+  FDH-2 scope).
+
+**Capability limits, established by test rather than assumption.** This agent
+confirmed it has no DDL path of its own: `exec_sql`, `execute_sql`, `run_sql`
+and `admin_exec` all return `PGRST202`; `information_schema`, `pg_catalog` and
+the `supabase_migrations` ledger all return `PGRST106` ("Only the following
+schemas are exposed: public, graphql_public"). Live schema facts below were
+therefore established from the **PostgREST OpenAPI definition** plus **real
+database behaviour**, never from a catalog query.
+
+## 7.3 Live schema verification (expected vs actual)
+
+Expected values are derived by parsing migrations `0045`–`0048`; actual values
+are read from live DEV. Reproduce with
+`node scripts/fdh1_closure_fk_reconcile.mjs`.
+
+| Property | Expected (from migrations) | Live DEV | Result |
+| --- | --- | --- | --- |
+| FDH tables | 24 | 24 | match (0 missing, 0 extra) |
+| Primary keys | 1 per table | 1 per table | match |
+| Foreign keys, total | 85 | 85 (reconciled, §7.4) | match |
+| FKs without explicit `ON DELETE` | 0 | 0 | match |
+| Tables with RLS enabled | 24 / 24 | 24 / 24 (behaviourally confirmed) | match |
+| Per-table FK counts | 24 tables | all 24 match exactly | match |
+
+## 7.4 Foreign key count — the 85 vs 68 reconciliation
+
+A naive live count returns **68**, not the 85 previously reported. This is fully
+explained and is **not** drift:
+
+| Source | Count |
+| --- | --- |
+| FKs defined in migrations `0045`–`0048` | **85** |
+| — targeting `public.*` (PostgREST annotates these) | 68 |
+| — targeting `auth.users` (cross-schema; `auth` is not an exposed schema, so PostgREST cannot annotate them) | 17 |
+| FKs observed live via OpenAPI | **68** |
+| 68 + 17 | **85 — reconciles exactly** |
+
+The 17 are the 15 `user_id` columns plus
+`fdh_classification_history.changed_by_user` and `fdh_review_items.resolved_by`.
+Set comparison shows **defined-but-not-live: NONE** and **live-but-not-defined:
+NONE**. Delete actions break down as 32 `cascade`, 30 `set null`, 23 `restrict`.
+
+All three delete actions were additionally confirmed **behaviourally** on live
+DEV: cascade (deleting an account removed its transactions), restrict (an
+in-use institution could not be deleted, HTTP 409) and set null (deleting a
+merchant nulled `fdh_transactions.merchant_id`).
+
+## 7.5 The 27-check RLS suite — and why the first run was not yet evidence
+
+`scripts/fdh1_live_dev_verification.mjs --rls` reports **27/27 passed**. Run
+against DEV as found, **16 of those 27 checks were vacuous**:
+
+* the 15 "anon cannot read `<table>`" checks assert *0 rows returned* — but
+  every one of those tables held **0 rows**, so the assertion passes identically
+  with RLS switched off;
+* the append-only check `PATCH`ed
+  `fdh_classification_history?id=eq.00000000-…-000000000000`, a row that does
+  not exist, so "0 rows changed" was guaranteed regardless of policy.
+
+Only 11 checks (the 6 account-isolation checks, which had a real row, and the 5
+master-data `403`s, which are true policy denials) were genuine on that run.
+
+`scripts/fdh1_closure_certification.mjs` was written to close this. It runs the
+**same 27 checks**, unchanged in meaning and count, but only after seeding a
+real synthetic object graph owned by user A across **all 15 user-owned tables**,
+and it carries a **negative control**: the service role must *see* every row
+that anon and user B cannot. If the control fails the run aborts rather than
+reporting a meaningless pass.
+
+**Result: 27/27 with the negative control passing and every table non-empty.**
+The full enumerated table is in the closure report. Wider run: **105 / 106
+checks pass**, the single non-pass being finding **FDH1-F1** (§7.6), which is
+recorded deliberately rather than suppressed.
+
+Additional live coverage beyond the mandated 27: per-table cross-user isolation
+across all 15 tables (read and delete), household-id spoofing, user-rule
+isolation, global-rule governance (an ordinary user cannot approve a global
+rule — status stayed `proposed`), master-data delete protection, and a
+confirmation that isolation is not *over*-blocking (user B can still create its
+own rule).
+
+## 7.6 Finding FDH1-F1 — cross-tenant foreign key reference
+
+**Severity: LOW. Not a confidentiality breach. Not fixed here (out of scope).**
+
+Postgres does not apply RLS to foreign-key validation. A user B can therefore
+`INSERT` a row **that B itself owns** (`user_id = B`) whose
+`financial_account_id` points at an account owned by A. The insert returns 201.
+
+This is **not** ownership spoofing — check 06 confirms B cannot write a row
+carrying A's `user_id` (HTTP 403). It is a referential-hygiene gap. Its
+confidentiality impact was tested directly and is nil:
+
+| Probe | Result |
+| --- | --- |
+| B reads A's account via PostgREST embed on the reference | `"fdh_financial_accounts": null` — RLS holds on the join |
+| B reads A's account directly | 0 rows |
+| A's own view of transactions on A's account | 7 rows, **all owned by A** — B's row is invisible to A |
+| B enumerates account ids through any FDH read path | 0 rows — the UUID must leak out-of-band to be usable at all |
+
+So no data crosses the tenant boundary in either direction, and exploitation
+requires an unguessable UUID that FDH exposes nowhere. The forward risk is that
+a *future* service-role aggregate could sum a foreign tenant's row into an
+account total; no such calculation exists in FDH-1. Standard remedies are a
+composite FK on `(id, user_id)` or a validation trigger. **Recorded for Product
+Owner decision; deliberately not fixed during closure.**
+
+## 7.7 Financial data integrity (live)
+
+All 34 integrity checks pass. Selected evidence:
+
+| Property | Live result |
+| --- | --- |
+| Raw account identifier | `062000123456789` **rejected**; `XXXX-4321` accepted; boundary exact — 6 digits accepted, 7 rejected |
+| Country | `ZZ` rejected; AU and IN both representable |
+| Currency | INR original vs AUD reporting stored separately; FX metadata nullable; reporting amount without reporting currency rejected |
+| Monetary precision | `1234.5600`, `987654.2100`, `999999999999.9900`, `0.0001` all return **byte-exact on the wire**; `8191.1230` shows no float drift; `numeric(20,4)` rounds a 5-dp input to `1.0001` |
+| Negative amount | rejected (magnitude-only design) |
+| Confidence | 0, 0.5, 1 accepted; −0.01 and 1.01 rejected |
+| Direction vs meaning | `credit+transfer`, `debit+investment`, `credit+refund`, `debit+debt_principal` **all accepted** — no CREDIT⇒INCOME / DEBIT⇒EXPENSE coupling |
+| Allocations | 650 = 450 + 150 + 50 persists exactly; duplicate sequence rejected (409); draft under-allocation permitted by design |
+| Reconciliation | `reconciled` with variance 25 beyond tolerance 0 **rejected**; `failed` and `not_available` representable |
+| Purge | claiming `purged` while holding a storage reference **rejected**; PENDING→PURGED→FAILED all transition; `description_raw` / `merchant_raw` null out cleanly |
+| Provenance | `parser_id` **and** `parser_version_id` both retained |
+| Review persistence | `missing_counterpart_account` stays `open`, independent of any job |
+| Transaction link | `internal_transfer` persists with a NULL counterpart |
+| Classification history | `unknown → expense` via `user_manual` recorded with both sides |
+
+> A note on method: three monetary checks reported FAIL on the first run. The
+> cause was the harness comparing `JSON.parse`d values, which normalise
+> `1234.5600` to `1234.56`. The database was correct throughout. The harness now
+> compares the **raw wire text**, which is also the stronger assertion — it
+> proves the column is `numeric`, not `float8`. A test bug was fixed; no
+> acceptance criterion was weakened.
+
+## 7.8 Boundaries and blast radius
+
+| Check | Result |
+| --- | --- |
+| DDL in `0045`–`0048` touching a non-FDH object | **NONE** — every statement targets an `fdh_` object |
+| `ii_*` / Input Data references in the migrations | comment text only; zero DDL, zero FK |
+| FDH table defining an instrument/holding/units/NAV/folio/valuation column | **NONE** — no competing canonical investment entity |
+| Service-role client in `lib/financial-data-hub/**` | **NONE** — repositories import `@/lib/supabase/server` (RLS-scoped) only |
+| Client component importing `lib/supabase/admin` | **NONE**; the key is non-`NEXT_PUBLIC_` and cannot reach the browser bundle |
+| Existing FHIP / II / Resources row counts | unchanged (e.g. `households` 242 before and after; `expense_items` 2104; `forecast_results` 209875; `ii_instruments` 8; `resource_posts` 306) |
+
+## 7.9 Synthetic data cleanup
+
+All synthetic certification data was removed and the removal **verified by
+re-query**, not assumed.
+
+One real cleanup defect was found and fixed mid-closure: PostgREST's `like`
+wildcard is `*`, not SQL's `%`, so the first cleanup pass silently matched
+nothing and left 1 institution and 2 categories behind. Corrected, re-run, and
+confirmed.
+
+**Final state: 0 synthetic rows across all 24 FDH tables.** `fdh_source_types`
+correctly retains its 9 migration-seeded rows — legitimate data, deliberately
+preserved. Both throwaway auth users were deleted. `households` re-counted at
+242, unchanged.
+
+## 7.10 Regression rerun (post-live-testing)
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | **exit 0** |
+| `npx vitest run` | **17 files, 244 passed, 0 failed, 0 skipped** |
+| `npx eslint .` | 6 errors, 6 warnings — **all pre-existing**; all 6 error files confirmed untouched by this branch (`git diff --name-only main...HEAD` returns nothing for each) |
+| Existing FHIP calculation data | unchanged; no expected output was regenerated |
+
+## 7.11 Scripts added for this closure
+
+| Script | Purpose |
+| --- | --- |
+| `fdh1_closure_capability_probe.mjs` | establishes DDL / catalog access limits by test |
+| `fdh1_closure_schema_inventory.mjs` | live FDH inventory from the OpenAPI definition |
+| `fdh1_closure_fk_reconcile.mjs` | migration-defined vs live schema/FK/RLS diff |
+| `fdh1_closure_preflight.mjs` | row counts and dependency reference data |
+| `fdh1_closure_certification.mjs` | the 27 checks against real data + integrity suite + cleanup |
+| `fdh1_closure_followup.mjs` | failure triage and residue cleanup |
+| `fdh1_closure_preservation.mjs` | existing FHIP / II / Resources preservation check |

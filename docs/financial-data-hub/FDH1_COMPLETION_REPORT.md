@@ -1,5 +1,11 @@
 # FDH-1 — Completion Report
 
+> **STATUS SUPERSEDED 2026-08-21 → FULL PASS.** The single condition below was
+> closed by live DEV certification. See **§15 Full-Pass Closure Certification**
+> at the end of this document. Everything from here to §14 is the original
+> report and is preserved **unedited** as the historical record — including the
+> status line immediately below, which was accurate when written.
+
 **Status: CONDITIONAL-PASS**
 **Branch:** `feature/financial-data-hub-fdh-1-foundation`
 **Starting `main` commit:** `fe7a09413cccc44b6ba4cb790c53abab3dfa0187`
@@ -491,3 +497,79 @@ Neither is a code blocker, and both are Product Owner calls.
 **STOP.** FDH-1 is complete. FDH-2 has not been started: no merchant research,
 no category library, no upload, no parser, no Expense Tracker. Awaiting Product
 Owner review.
+
+---
+
+# 15. Full-Pass Closure Certification — 2026-08-21
+
+*Added after live DEV certification. Sections 1–14 above are unmodified.*
+
+## 15.1 Verdict
+
+**FULL PASS.**
+
+The single outstanding condition — migrations unapplied, live RLS suite not
+executed — is closed. Migrations `0045`–`0048` are applied to DEV
+(`vqycarelcoijzwlpkpcz`), verified by schema effect, and the live 27-check
+RLS/isolation suite passes **27/27 against real, non-empty data with a passing
+negative control**.
+
+Evidence: `FDH1_TEST_CERTIFICATION.md` §7. Cross-stream issue:
+`FDH1_CROSS_STREAM_BLOCKERS.md`.
+
+## 15.2 What closure actually verified
+
+Nothing in the original report was taken on trust. Every load-bearing claim was
+independently reproduced: the migration files were read in full, the FK
+inventory was re-derived from source and diffed against live DEV, the tests were
+re-run, and the RLS claims were re-established through real cross-user database
+operations rather than policy text.
+
+| Closure item | Result |
+| --- | --- |
+| Target environment conclusively DEV | yes — `vqycarelcoijzwlpkpcz` |
+| Production touched | **NO** |
+| `0045`–`0048` applied and verified by schema effect | yes — 24/24 tables, 9 seeded `fdh_source_types` rows |
+| FK count reconciled (85) | yes — 68 public + 17 `auth.users`; 0 without explicit `ON DELETE` |
+| Live 27-check RLS suite | **27/27**, negative control passing |
+| Cross-user read / update / delete / ownership-spoof protection | all pass |
+| Master-data write protection, global-rule governance | all pass |
+| Service-role exposure in client FDH code | none |
+| Raw account identifier protection (live) | enforced, boundary exact at 6/7 digits |
+| Monetary precision AUD + INR | exact on the wire, no float artefact |
+| Investment Intelligence canonical objects modified | **NONE** |
+| Existing FHIP schema / data / calculations changed | **NONE** |
+| Synthetic certification data cleaned up | yes — 0 rows remaining, re-verified |
+| `tsc` / tests / ESLint / build | exit 0 / 244 passed / 6-6 pre-existing / exit 0 |
+
+## 15.3 Corrections to the original report
+
+Two claims in §1–§14 do not survive re-verification exactly as written. Neither
+changes the verdict; both are recorded rather than quietly amended.
+
+1. **The 27-check suite was not yet evidence when first written.** 16 of its 27
+   checks were vacuous against an empty database (see
+   `FDH1_TEST_CERTIFICATION.md` §7.5). The checks themselves were sound in
+   intent; they simply could not fail. Closure added
+   `scripts/fdh1_closure_certification.mjs`, which runs the same 27 checks after
+   seeding real data and guards them with a negative control.
+
+2. **"To convert to PASS: … apply `supabase/seed_fdh_test_fixtures.sql`"** was
+   not required and was not done. The closure harness creates and removes its
+   own fixtures, which leaves DEV cleaner than seeding a persistent fixture file
+   would have.
+
+## 15.4 Standing finding
+
+**FDH1-F1 — cross-tenant foreign key reference (LOW).** Postgres does not apply
+RLS to FK validation, so a user may insert a row *they own* referencing another
+tenant's account UUID. Tested directly: no data crosses the boundary in either
+direction, and the UUID is not obtainable through any FDH read path. Not fixed —
+out of closure scope. Details and remedies in `FDH1_TEST_CERTIFICATION.md` §7.6.
+
+## 15.5 FDH-2 status
+
+**HOLD.** FDH-2 remains not started. The AMBER item "apply the migrations and
+run the live RLS suite" is now **closed**. The remaining gate is unchanged and
+is a hard one: the **Investment Intelligence + Resources migration lineage
+reconciliation** must complete first (`FDH1_CROSS_STREAM_BLOCKERS.md` §4).

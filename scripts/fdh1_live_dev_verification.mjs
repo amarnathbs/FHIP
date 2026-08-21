@@ -8,8 +8,14 @@
 //   DOES NOT: apply any migration, create any table, or modify any existing
 //         row. This environment has no psql, no Docker and no SQL-execution
 //         RPC, so DDL cannot be applied programmatically from here; migrations
-//         0031-0034 must be applied through the Supabase SQL editor by someone
-//         with console access.
+//         0045-0048 must be applied through the Supabase SQL editor by someone
+//         with console access. (They were, on 2026-08-21.)
+//
+// NOTE (closure, 2026-08-21): run against an EMPTY database, 16 of the 27 checks
+// below are VACUOUS — the 15 "anon reads 0 rows" checks and the append-only
+// probe pass identically with RLS disabled, because there is no data to hide.
+// scripts/fdh1_closure_certification.mjs runs these same 27 checks after seeding
+// a real object graph, guarded by a negative control. Prefer it as evidence.
 //
 // Usage:
 //   node scripts/fdh1_live_dev_verification.mjs            # schema probe only
@@ -295,7 +301,7 @@ const present = await probeSchema();
 if (process.argv.includes('--rls')) {
   if (present === 0) {
     console.log('\nSkipping RLS suite: no FDH table exists in this project yet.');
-    console.log('Apply supabase/migrations/0031-0034 first, then re-run with --rls.');
+    console.log('Apply supabase/migrations/0045-0048 first, then re-run with --rls.');
     process.exitCode = 2;
   } else {
     await rlsSuite();
