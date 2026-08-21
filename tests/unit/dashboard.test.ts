@@ -151,3 +151,111 @@ describe('computeDashboard master_item_key-based classification (grid never sets
     expect(d.creditUtilization).toBeCloseTo(0.2, 6);
   });
 });
+
+// AR-0 §3.3 (Spec 1 App Review, most financially material Chunk 1 fix):
+// nonDebtExpenses used to filter on expense_category !== 'debt_repayment',
+// but expense_category is never collected by the grid (lib/grid/configs.ts's
+// expenseGridConfig.fields has no expense_category field), so it always
+// Zod-defaulted to 'other' and the filter was dead code. A household that
+// logged the exact same loan repayment as both a "Mortgage" expense row and
+// a liability's monthly_repayment had it subtracted from monthlySurplus
+// twice. Fixed by deriving the exclusion from master_item_key instead,
+// mirroring this file's existing MASTER_ASSET_ITEM_TO_BUCKET-style pattern.
+describe('computeDashboard debt-repayment expense/liability double-counting (AR-0 §3.3)', () => {
+  it('Spec 1 Test Case 1: a Mortgage expense row and its matching Home Loan liability repayment are deducted once, not twice', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 8000, net_amount: 8000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Mortgage', amount: 3000, frequency: 'monthly', is_essential: true, master_item_key: 'mortgage' },
+          { expense_name: 'Groceries', amount: 2000, frequency: 'monthly', is_essential: true, master_item_key: 'groceries' },
+        ],
+        liabilities: [
+          { balance: 500000, interest_rate: 6, monthly_repayment: 3000, debt_type: 'other', master_item_key: 'home_loan' },
+        ],
+      },
+      'AUD'
+    );
+    // income 8000 - groceries 2000 - debtMonthlyRepayments 3000 = 3000
+    // (mortgage expense row excluded from totalMonthlyExpenses, not 6000)
+    expect(d.monthlySurplus).toBe(3000);
+    expect(d.totalMonthlyExpenses).toBe(2000);
+    expect(d.debtMonthlyRepayments).toBe(3000);
+  });
+
+  it('Spec 1 Test Case 3: two genuinely distinct liabilities are both counted, not deduplicated against each other', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        liabilities: [
+          { balance: 500000, interest_rate: 6, monthly_repayment: 3000, debt_type: 'other', master_item_key: 'home_loan' },
+          { balance: 20000, interest_rate: 8, monthly_repayment: 700, debt_type: 'other', master_item_key: 'car_loan' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.debtMonthlyRepayments).toBe(3700);
+    expect(d.monthlySurplus).toBe(10000 - 3700);
+  });
+
+  it('excludes a Car Loan Repayments expense row from totalMonthlyExpenses via master_item_key', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        expenses: [
+          { expense_name: 'Car Loan Repayments', amount: 700, frequency: 'monthly', is_essential: true, master_item_key: 'car_loan_repayments' },
+        ],
+        liabilities: [{ balance: 20000, interest_rate: 8, monthly_repayment: 700, debt_type: 'other', master_item_key: 'car_loan' }],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(0);
+    expect(d.debtMonthlyRepayments).toBe(700);
+  });
+
+  it('does NOT exclude a Rent expense row — rent has no liability-side counterpart to double-count against', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        expenses: [{ expense_name: 'Rent', amount: 2200, frequency: 'monthly', is_essential: true, master_item_key: 'rent' }],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(2200);
+    expect(d.essentialMonthlyExpenses).toBe(2200);
+  });
+
+  it('no regression: a household with no expense-side debt-repayment items is byte-for-byte unchanged', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 6000, net_amount: 6000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Groceries', amount: 1200, frequency: 'monthly', is_essential: true, master_item_key: 'groceries' },
+          { expense_name: 'Streaming Services', amount: 50, frequency: 'monthly', is_essential: false, master_item_key: 'streaming_services' },
+        ],
+        liabilities: [{ balance: 10000, interest_rate: 12, monthly_repayment: 300, debt_type: 'other', master_item_key: 'personal_loan' }],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(1250);
+    expect(d.debtMonthlyRepayments).toBe(300);
+    expect(d.monthlySurplus).toBe(6000 - 1250 - 300);
+  });
+
+  it('still honours expense_category=debt_repayment as a fallback when master_item_key is absent (custom rows)', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 5000, net_amount: 5000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Custom loan repayment', amount: 400, frequency: 'monthly', is_essential: true, expense_category: 'debt_repayment' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(0);
+  });
+});

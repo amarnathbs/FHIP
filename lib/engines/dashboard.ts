@@ -260,6 +260,29 @@ export function isCreditCardDebt(debtType: string, masterItemKey?: string | null
   return masterItemKey === 'credit_card' || masterItemKey === 'store_card' || debtType === 'credit_card';
 }
 
+// expense_category (lib/validation/expense.ts) has the same never-collected-
+// by-the-grid problem as asset_class/investment_type/debt_type above:
+// lib/grid/configs.ts's expenseGridConfig.fields never lists it, so every
+// expense row saved through the live app leaves it at its Zod default
+// 'other' — a filter keyed on expense_category alone is dead code for every
+// real user. master_item_key is the reliable signal instead, matching this
+// file's own established fix pattern (MASTER_ASSET_ITEM_TO_BUCKET,
+// MASTER_INVESTMENT_ITEM_TO_BUCKET, GOOD_DEBT_MASTER_ITEMS above).
+//
+// Only expense-catalogue items that mirror a Liability row's own
+// monthly_repayment cash outflow belong in this set (supabase/seed_master_
+// items.sql, 'expense' category): 'mortgage' and 'car_loan_repayments'.
+// 'rent' is deliberately excluded even though it sits right next to
+// 'mortgage' in the catalogue — renting has no liability-side counterpart
+// (there is no "rent" liability to double-count against), so excluding it
+// here would just make coreSurvivalMonthlyExpenses/essentialMonthlyExpenses
+// wrong for every renting household, not fix a real double-count.
+const DEBT_REPAYMENT_MASTER_ITEMS = new Set(['mortgage', 'car_loan_repayments']);
+export function isDebtRepaymentExpense(row: ExpenseRow): boolean {
+  if (row.master_item_key) return DEBT_REPAYMENT_MASTER_ITEMS.has(row.master_item_key);
+  return row.expense_category === 'debt_repayment';
+}
+
 function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): number {
   return rows.reduce((sum, r) => sum + toMonthly(Number(r[amountField]), r[freqField] as Frequency), 0);
 }
@@ -447,12 +470,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
 
-  // 'debt_repayment'-category expense rows and the liabilities table's
-  // monthly_repayment represent the same cash outflow when a user tracks a
-  // loan repayment as an expense line — excluded here so debtMonthlyRepayments
-  // (below) is the only source of debt cash-flow, matching this field's own
-  // long-standing "excludes debt repayments, tracked separately" comment.
-  const nonDebtExpenses = input.expenses.filter((r) => r.expense_category !== 'debt_repayment');
+  // Debt-repayment expense rows (isDebtRepaymentExpense, above — keyed on
+  // master_item_key, not the never-collected expense_category) and the
+  // liabilities table's monthly_repayment represent the same cash outflow
+  // when a user tracks a loan repayment as an expense line — excluded here
+  // so debtMonthlyRepayments (below) is the only source of debt cash-flow,
+  // matching this field's own long-standing "excludes debt repayments,
+  // tracked separately" comment.
+  const nonDebtExpenses = input.expenses.filter((r) => !isDebtRepaymentExpense(r));
   const essentialMonthlyExpenses = sumMonthly(
     nonDebtExpenses.filter((r) => r.is_essential),
     'amount',
