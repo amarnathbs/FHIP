@@ -16,8 +16,10 @@ import { z } from 'zod';
 import {
   FDH_CHANGED_BY_TYPES,
   FDH_CLASSIFICATION_CHANGE_SOURCES,
+  FDH_DOCUMENT_TYPES,
   FDH_ECONOMIC_TRANSACTION_TYPES,
   FDH_GLOBAL_RULE_TYPES,
+  FDH_RULE_CANDIDATE_TYPES,
   FDH_USER_RULE_TYPES,
 } from '../constants/enums';
 import {
@@ -56,28 +58,99 @@ export const fdhRuleMatchDefinitionSchema = z.discriminatedUnion('match_kind', [
     match_kind: z.literal('account_scoped_default'),
     financial_account_id: fdhUuid,
   }),
+  /**
+   * FDH-2 ADDITION. Required/excluded TERM matching, not a single needle —
+   * this is what lets a salary pattern require "SALARY" or "PAYROLL" while
+   * excluding a bare "PAY" from over-matching, and what lets a bank-fee
+   * pattern require "FEE" while excluding "FEE WAIVED"/"FEE REFUND". Terms
+   * are bounded, non-regex substrings — never an unbounded pattern. Optional
+   * `source_context` scopes the pattern to a document type (e.g. only a
+   * `bank_statement`, never a `payslip`); omitted means any context.
+   */
+  z.object({
+    match_kind: z.literal('narrative_pattern'),
+    required_terms_normalised: z.array(z.string().min(2).max(200)).min(1).max(10),
+    excluded_terms_normalised: z.array(z.string().min(2).max(200)).max(10).optional(),
+    source_context: z.enum(FDH_DOCUMENT_TYPES).optional(),
+    country_code: fdhCountryCode.optional(),
+  }),
+  /**
+   * FDH-2 ADDITION. Recognises a payment-RAIL narrative (UPI/, BPAY, EFTPOS,
+   * NEFT, ...). `rail_key` names a row in `fdh_payment_rail_master` — this is
+   * NEVER paired with a `classify` action; see
+   * `fdhRuleActionDefinitionSchema`'s `annotate_payment_rail` member and the
+   * specification's explicit rule that a payment rail is a mechanism, never
+   * an economic category.
+   */
+  z.object({
+    match_kind: z.literal('payment_rail_narrative'),
+    rail_key: fdhMachineKey,
+    narrative_terms_normalised: z.array(z.string().min(1).max(200)).min(1).max(10),
+  }),
 ]);
 
+// Plain object (no .refine()) so it remains a valid z.discriminatedUnion
+// member — the "must change at least one field" rule is enforced below via
+// .superRefine() on the union as a whole instead.
+const fdhClassifyActionSchema = z.object({
+  action_kind: z.literal('classify'),
+  economic_transaction_type: z.enum(FDH_ECONOMIC_TRANSACTION_TYPES).optional(),
+  category_id: fdhUuid.optional(),
+  subcategory_id: fdhUuid.optional(),
+  merchant_id: fdhUuid.optional(),
+  set_transfer_flag: z.boolean().optional(),
+  set_subscription_flag: z.boolean().optional(),
+});
+
+/**
+ * FDH-2 ADDITION. `flag_candidate` is STRUCTURALLY NON-AUTHORITATIVE — it
+ * carries no `economic_transaction_type`, `category_id` or `subcategory_id`
+ * at all. It names a `candidate_type` a future engine (FDH-6) must
+ * independently confirm: a transfer needs its counterpart matched by
+ * amount/date/account, a credit-card payment needs settlement matching, an
+ * investment-transfer needs funding matching. This is exactly how the
+ * specification's TRANSFER_CANDIDATE / LIABILITY_SETTLEMENT_CANDIDATE /
+ * INVESTMENT_FUNDING_CANDIDATE suggestions are represented: a rule may
+ * SUGGEST, never COMMIT, one of these.
+ */
+const fdhFlagCandidateActionSchema = z.object({
+  action_kind: z.literal('flag_candidate'),
+  candidate_type: z.enum(FDH_RULE_CANDIDATE_TYPES),
+  note: z.string().max(200).optional(),
+});
+
+/**
+ * FDH-2 ADDITION. Records which payment MECHANISM was observed. Never
+ * carries an economic_transaction_type, category or subcategory — a payment
+ * rail is metadata about HOW money moved, never WHAT it was for.
+ */
+const fdhAnnotatePaymentRailActionSchema = z.object({
+  action_kind: z.literal('annotate_payment_rail'),
+  rail_key: fdhMachineKey,
+});
+
 export const fdhRuleActionDefinitionSchema = z
-  .object({
-    action_kind: z.literal('classify'),
-    economic_transaction_type: z.enum(FDH_ECONOMIC_TRANSACTION_TYPES).optional(),
-    category_id: fdhUuid.optional(),
-    subcategory_id: fdhUuid.optional(),
-    merchant_id: fdhUuid.optional(),
-    set_transfer_flag: z.boolean().optional(),
-    set_subscription_flag: z.boolean().optional(),
-  })
-  .refine(
-    (a) =>
-      a.economic_transaction_type !== undefined
+  .discriminatedUnion('action_kind', [
+    fdhClassifyActionSchema,
+    fdhFlagCandidateActionSchema,
+    fdhAnnotatePaymentRailActionSchema,
+  ])
+  .superRefine((a, ctx) => {
+    if (a.action_kind !== 'classify') return;
+    const changesSomething = a.economic_transaction_type !== undefined
       || a.category_id !== undefined
       || a.subcategory_id !== undefined
       || a.merchant_id !== undefined
       || a.set_transfer_flag !== undefined
-      || a.set_subscription_flag !== undefined,
-    { message: 'a classify action must change at least one field' },
-  );
+      || a.set_subscription_flag !== undefined;
+    if (!changesSomething) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['economic_transaction_type'],
+        message: 'a classify action must change at least one field',
+      });
+    }
+  });
 
 /**
  * The `match_kind` values a rule of a given `rule_type` may carry. Keeping the
@@ -92,6 +165,9 @@ const MATCH_KIND_FOR_RULE_TYPE: Record<string, string> = {
   institution_narrative: 'institution_narrative',
   source_provided_category: 'source_provided_category',
   account_scoped_default: 'account_scoped_default',
+  // FDH-2 additions.
+  narrative_pattern: 'narrative_pattern',
+  payment_rail_narrative: 'payment_rail_narrative',
 };
 
 function refineRuleTypeMatchesDefinition(

@@ -26,7 +26,7 @@ import {
   FDH_DOCUMENT_TYPES,
   FDH_ECONOMIC_TRANSACTION_TYPES,
   FDH_ERROR_CODES,
-  FDH_INSTITUTION_TYPES,
+  FDH1_INSTITUTION_TYPES,
   FDH_JOB_TYPES,
   FDH_PROCESSING_STATUSES,
   FDH_PURGE_STATUSES,
@@ -35,8 +35,8 @@ import {
   FDH_TRANSACTION_LINK_TYPES,
 } from '@/lib/financial-data-hub/constants/enums';
 import {
-  FDH_MASTER_DATA_TABLES,
-  FDH_TABLES,
+  FDH1_MASTER_DATA_TABLES,
+  FDH1_TABLES,
   FDH_USER_OWNED_TABLES,
 } from '@/lib/financial-data-hub/constants/tables';
 
@@ -118,9 +118,9 @@ describe('FDH-1 migration files exist and are additive only', () => {
     expect(/\bdelete\s+from\b/i.test(SQL)).toBe(false);
   });
 
-  it('creates exactly the declared FDH table set and nothing else', () => {
+  it('creates exactly the declared FDH-1 table set and nothing else', () => {
     const created = createdTables(SQL).sort();
-    expect(created).toEqual([...FDH_TABLES].sort());
+    expect(created).toEqual([...FDH1_TABLES].sort());
   });
 
   it('touches none of the seven protected FHIP Input Data tables', () => {
@@ -141,8 +141,8 @@ describe('FDH-1 migration files exist and are additive only', () => {
 });
 
 describe('FDH-1 row level security', () => {
-  it('enables RLS on every FDH table without exception', () => {
-    for (const table of FDH_TABLES) {
+  it('enables RLS on every FDH-1 table without exception', () => {
+    for (const table of FDH1_TABLES) {
       expect(
         SQL.includes(`alter table ${table} enable row level security`),
         `RLS not enabled on ${table}`,
@@ -186,7 +186,7 @@ describe('FDH-1 row level security', () => {
   });
 
   it('gives master-data tables read-only RLS and no write policy at all', () => {
-    for (const table of FDH_MASTER_DATA_TABLES) {
+    for (const table of FDH1_MASTER_DATA_TABLES) {
       expect(SQL).toContain(`create policy "read ${table}" on ${table}`);
       const policies = [...SQL.matchAll(new RegExp(`create policy "[^"]*" on ${table}[^;]*;`, 'g'))]
         .map((m) => m[0]);
@@ -264,7 +264,7 @@ describe('FDH-1 monetary and precision guarantees', () => {
 
 describe('FDH-1 SQL check constraints match the TypeScript vocabularies', () => {
   const cases: [string, string, readonly string[]][] = [
-    ['fdh_financial_institutions', 'institution_type', FDH_INSTITUTION_TYPES],
+    ['fdh_financial_institutions', 'institution_type', FDH1_INSTITUTION_TYPES],
     ['fdh_source_types', 'source_type_key', FDH_SOURCE_TYPES],
     ['fdh_financial_accounts', 'account_type', FDH_ACCOUNT_TYPES],
     ['fdh_statement_uploads', 'processing_status', FDH_PROCESSING_STATUSES],

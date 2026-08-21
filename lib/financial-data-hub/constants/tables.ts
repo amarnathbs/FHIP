@@ -8,8 +8,16 @@
  * this set is touched by any FDH migration.
  */
 
-/** Shared reference/master data. No `user_id`. Read-only through RLS. */
-export const FDH_MASTER_DATA_TABLES = [
+/**
+ * Shared reference/master data created by FDH-1 (migration 0045). No
+ * `user_id`. Read-only through RLS. FROZEN — `tests/unit/fdh1SchemaContract
+ * .test.ts` scopes its "creates exactly this set" / "RLS enabled" / "read-only
+ * policy" assertions to migrations 0045-0048 only, so this list must stay
+ * exactly what FDH-1 shipped. FDH-2's own additions live in
+ * `FDH2_MASTER_DATA_TABLES_ADDED` below and are checked by
+ * `tests/unit/fdh2SchemaContract.test.ts` against migrations 0050-0056.
+ */
+export const FDH1_MASTER_DATA_TABLES = [
   'fdh_source_types',
   'fdh_financial_institutions',
   'fdh_categories',
@@ -20,7 +28,37 @@ export const FDH_MASTER_DATA_TABLES = [
   'fdh_parser_registry',
   'fdh_parser_versions',
 ] as const;
+
+/** New master-data tables FDH-2 creates (migrations 0050-0052). All
+ * `for select using (true)`, no write policy. */
+export const FDH2_MASTER_DATA_TABLES_ADDED = [
+  'fdh_source_registry',
+  'fdh_economic_transaction_types',
+  'fdh_mcc_master',
+  'fdh_mcc_category_map',
+  'fdh_institution_capabilities',
+  'fdh_institution_aliases',
+  'fdh_payment_rail_master',
+] as const;
+
+/** The complete current master-data table set (FDH-1 + FDH-2). Used by the
+ * repository layer's allow-list; NOT used by fdh1SchemaContract.test.ts,
+ * which is intentionally frozen to FDH1_MASTER_DATA_TABLES — see above. */
+export const FDH_MASTER_DATA_TABLES = [
+  ...FDH1_MASTER_DATA_TABLES,
+  ...FDH2_MASTER_DATA_TABLES_ADDED,
+] as const;
 export type FdhMasterDataTable = (typeof FDH_MASTER_DATA_TABLES)[number];
+
+/**
+ * FDH-2 addition. MORE restricted than FDH_MASTER_DATA_TABLES: these tables
+ * have RLS enabled but carry NO policy of any kind for anon/authenticated —
+ * only the service role (which bypasses RLS) can read or write them. Pending
+ * governance-workflow data is not settled public reference data — see
+ * migration 0052_fdh2_merchant_and_governance_foundation.sql.
+ */
+export const FDH_ADMIN_ONLY_TABLES = ['fdh_global_learning_candidates'] as const;
+export type FdhAdminOnlyTable = (typeof FDH_ADMIN_ONLY_TABLES)[number];
 
 /** Household financial data. Every one carries `user_id` and owner-only RLS. */
 export const FDH_USER_OWNED_TABLES = [
@@ -42,7 +80,17 @@ export const FDH_USER_OWNED_TABLES = [
 ] as const;
 export type FdhUserOwnedTable = (typeof FDH_USER_OWNED_TABLES)[number];
 
-export const FDH_TABLES = [...FDH_MASTER_DATA_TABLES, ...FDH_USER_OWNED_TABLES] as const;
+/** FROZEN — the complete table set FDH-1 shipped (migrations 0045-0048).
+ * Used only by fdh1SchemaContract.test.ts's "creates exactly this set" and
+ * "RLS enabled on every table" checks, which are correctly scoped to those
+ * four files only. */
+export const FDH1_TABLES = [...FDH1_MASTER_DATA_TABLES, ...FDH_USER_OWNED_TABLES] as const;
+
+export const FDH_TABLES = [
+  ...FDH_MASTER_DATA_TABLES,
+  ...FDH_USER_OWNED_TABLES,
+  ...FDH_ADMIN_ONLY_TABLES,
+] as const;
 export type FdhTable = (typeof FDH_TABLES)[number];
 
 /**

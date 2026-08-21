@@ -20,7 +20,13 @@ export const FDH_COUNTRY_CODES = ['AU', 'IN'] as const;
 export type FdhCountryCode = (typeof FDH_COUNTRY_CODES)[number];
 
 // --- Institutions and sources ----------------------------------------------
-export const FDH_INSTITUTION_TYPES = [
+/**
+ * FROZEN — the institution-type vocabulary exactly as FDH-1 shipped it
+ * (migration 0045). `tests/unit/fdh1SchemaContract.test.ts` checks this
+ * against the check constraint in 0045's own SQL text, so it must never
+ * change. FDH-2's widened set is `FDH_INSTITUTION_TYPES` below.
+ */
+export const FDH1_INSTITUTION_TYPES = [
   'bank',
   'credit_card_issuer',
   'lender',
@@ -33,7 +39,48 @@ export const FDH_INSTITUTION_TYPES = [
   'payroll_source',
   'other',
 ] as const;
+
+/**
+ * FDH-2 WIDENING (2026-08-21): adds `government_payment_source` and
+ * `payment_processor`, both named explicitly in the FDH-2 specification
+ * institution-type list (section 24-28) and absent from the FDH-1 set. This is
+ * a forward, additive widening of the existing `check (... in (...))` — no
+ * value is removed and no existing row's meaning changes. See migration
+ * `0051_fdh2_institution_and_payment_rail_foundation.sql`, whose widened
+ * check constraint `tests/unit/fdh2SchemaContract.test.ts` verifies this
+ * list against.
+ */
+export const FDH_INSTITUTION_TYPES = [
+  'bank',
+  'credit_card_issuer',
+  'lender',
+  'broker',
+  'investment_platform',
+  'depository',
+  'mutual_fund_platform',
+  'super_fund',
+  'retirement_provider',
+  'payroll_source',
+  'government_payment_source',
+  'payment_processor',
+  'other',
+] as const;
 export type FdhInstitutionType = (typeof FDH_INSTITUTION_TYPES)[number];
+
+/**
+ * Parser/data-connection coverage status for an institution. FDH-2 sets every
+ * seeded institution to `master_only` — it must never imply a parser exists
+ * before one is independently certified (FDH-3+).
+ */
+export const FDH_INSTITUTION_COVERAGE_STATUSES = [
+  'master_only',
+  'parser_planned',
+  'parser_in_development',
+  'parser_certified',
+  'connected_data_future',
+  'deprecated',
+] as const;
+export type FdhInstitutionCoverageStatus = (typeof FDH_INSTITUTION_COVERAGE_STATUSES)[number];
 
 /** How the data arrived — deliberately separate from WHO it came from. */
 export const FDH_SOURCE_TYPES = [
@@ -374,13 +421,33 @@ export const FDH_GOVERNANCE_STATUSES = [
 ] as const;
 export type FdhGovernanceStatus = (typeof FDH_GOVERNANCE_STATUSES)[number];
 
+/**
+ * FDH-2 WIDENING (2026-08-21): adds `user_dependent`, named explicitly in the
+ * FDH-2 specification (section 12-20: "do not force ambiguous categories...
+ * into a single bucket; use MIXED/USER_DEPENDENT where context matters").
+ * Additive only — no existing value removed.
+ */
 export const FDH_ESSENTIAL_DISCRETIONARY = [
   'essential',
   'discretionary',
   'mixed',
+  'user_dependent',
   'not_applicable',
 ] as const;
 export type FdhEssentialDiscretionary = (typeof FDH_ESSENTIAL_DISCRETIONARY)[number];
+
+/**
+ * Fixed/variable spending-shape metadata. Purely descriptive — never
+ * classification logic. New in FDH-2.
+ */
+export const FDH_FIXED_VARIABLE = [
+  'fixed',
+  'variable',
+  'semi_variable',
+  'user_dependent',
+  'not_applicable',
+] as const;
+export type FdhFixedVariable = (typeof FDH_FIXED_VARIABLE)[number];
 
 export const FDH_MERCHANT_ALIAS_TYPES = [
   'statement_narrative',
@@ -406,6 +473,14 @@ export type FdhMerchantAliasSource = (typeof FDH_MERCHANT_ALIAS_SOURCES)[number]
  * admin-supplied unbounded regular expression evaluated over every user's
  * transaction narratives is a denial-of-service vector, and it is not needed
  * for any FDH-2 use case identified so far.
+ *
+ * FDH-2 WIDENING (2026-08-21): adds `narrative_pattern` (required/excluded
+ * term matching — income/salary/government/transfer/fee/interest/
+ * cash-withdrawal/refund/credit-card-payment/investment-transfer pattern
+ * seeds) and `payment_rail_narrative` (payment-mechanism recognition, kept
+ * structurally separate from economic classification). Both are bounded,
+ * non-regex substring matches — see validation/classification.ts. Additive
+ * only; see migration 0052_fdh2_merchant_and_governance_foundation.sql.
  */
 export const FDH_GLOBAL_RULE_TYPES = [
   'merchant_exact',
@@ -414,6 +489,8 @@ export const FDH_GLOBAL_RULE_TYPES = [
   'description_contains',
   'institution_narrative',
   'source_provided_category',
+  'narrative_pattern',
+  'payment_rail_narrative',
 ] as const;
 export type FdhGlobalRuleType = (typeof FDH_GLOBAL_RULE_TYPES)[number];
 
@@ -478,3 +555,155 @@ export const FDH_EVIDENCE_TYPES = [
   'other',
 ] as const;
 export type FdhEvidenceType = (typeof FDH_EVIDENCE_TYPES)[number];
+
+// =============================================================================
+// FDH-2 — category/MCC/institution/merchant/rule/governance vocabularies.
+// =============================================================================
+
+/** Where a provenance-recorded fact came from. Shared by every FDH-2 table
+ * carrying `source_key`, via `fdh_source_registry.source_category`. */
+export const FDH_SOURCE_CATEGORIES = [
+  'official_mcc_reference',
+  'institution_official_website',
+  'public_company_information',
+  'government_official_source',
+  'fhip_design_decision',
+  'industry_public_documentation',
+  'other',
+] as const;
+export type FdhSourceCategory = (typeof FDH_SOURCE_CATEGORIES)[number];
+
+/** Broad, non-overlapping MCC grouping used only for display/browse, never for
+ * classification by itself. */
+export const FDH_MCC_BROAD_GROUPS = [
+  'retail_merchandise',
+  'grocery_supermarket',
+  'food_beverage',
+  'fuel_automotive',
+  'utilities_telecom',
+  'transport_travel',
+  'health_medical',
+  'education',
+  'financial_services',
+  'government_services',
+  'insurance',
+  'entertainment_recreation',
+  'professional_services',
+  'wholesale_business',
+  'other',
+] as const;
+export type FdhMccBroadGroup = (typeof FDH_MCC_BROAD_GROUPS)[number];
+
+export const FDH_MCC_MAPPING_CONFIDENCE = ['high', 'medium', 'low', 'context_required'] as const;
+export type FdhMccMappingConfidence = (typeof FDH_MCC_MAPPING_CONFIDENCE)[number];
+
+export const FDH_MCC_MAPPING_TYPES = ['direct', 'broad_group_only', 'ambiguous_unmapped'] as const;
+export type FdhMccMappingType = (typeof FDH_MCC_MAPPING_TYPES)[number];
+
+/** Alias-library provenance for BOTH institution and merchant aliases. */
+export const FDH_ALIAS_SOURCES = ['admin_curated', 'imported_dataset', 'external_reference'] as const;
+export type FdhAliasSource = (typeof FDH_ALIAS_SOURCES)[number];
+
+/** Structured merchant/MCC confidence states. Never a fabricated precise
+ * percentage — see FDH-2 specification section 83-93. */
+export const FDH_MCC_CONFIDENCE_STATES = ['verified', 'high', 'medium', 'low'] as const;
+export type FdhMccConfidenceState = (typeof FDH_MCC_CONFIDENCE_STATES)[number];
+
+/** Merchant-level recurrence LIKELIHOOD only — never "this transaction IS
+ * recurring". Detection is a future engine (FDH-6). */
+export const FDH_RECURRING_TYPES = [
+  'subscription',
+  'utility',
+  'insurance',
+  'membership',
+  'loan_or_financial',
+  'telecom',
+  'rent_or_housing',
+  'government',
+  'other_recurring',
+  'not_normally_recurring',
+  'unknown',
+] as const;
+export type FdhRecurringType = (typeof FDH_RECURRING_TYPES)[number];
+
+/** A payment MECHANISM — deliberately never an economic category. */
+export const FDH_PAYMENT_RAIL_CATEGORIES = [
+  'card',
+  'direct_debit',
+  'direct_credit',
+  'bill_payment',
+  'p2p_transfer',
+  'atm',
+  'wire',
+  'cash',
+  'other',
+] as const;
+export type FdhPaymentRailCategory = (typeof FDH_PAYMENT_RAIL_CATEGORIES)[number];
+
+/** An institution may hold several capabilities without duplicating the
+ * institution row. Deliberately the same closed vocabulary as
+ * `FDH_INSTITUTION_TYPES`, so a capability can never name something the
+ * primary `institution_type` column itself could not hold. */
+export const FDH_INSTITUTION_CAPABILITY_TYPES = FDH_INSTITUTION_TYPES;
+export type FdhInstitutionCapabilityType = FdhInstitutionType;
+
+/**
+ * The global-learning governance workflow's candidate kinds. A candidate is
+ * always AGGREGATE evidence about a proposed merchant/alias/rule change —
+ * never a bag of one user's raw transaction text.
+ */
+export const FDH_GLOBAL_LEARNING_CANDIDATE_TYPES = [
+  'merchant_alias',
+  'merchant_new',
+  'classification_rule',
+] as const;
+export type FdhGlobalLearningCandidateType = (typeof FDH_GLOBAL_LEARNING_CANDIDATE_TYPES)[number];
+
+export const FDH_GLOBAL_LEARNING_STATUSES = [
+  'open',
+  'admin_review',
+  'approved',
+  'rejected',
+  'merged',
+] as const;
+export type FdhGlobalLearningStatus = (typeof FDH_GLOBAL_LEARNING_STATUSES)[number];
+
+/** A conservative, explainable heuristic gate — never complex AI-based PII
+ * detection (FDH-2 specification section 55-64/83-93). */
+export const FDH_PII_SCREENING_STATUSES = ['not_screened', 'passed', 'flagged', 'rejected'] as const;
+export type FdhPiiScreeningStatus = (typeof FDH_PII_SCREENING_STATUSES)[number];
+
+/**
+ * The two NEW discriminated-union members FDH-2 adds to
+ * `fdhRuleMatchDefinitionSchema` (validation/classification.ts).
+ * `narrative_pattern` covers required/excluded term matching for
+ * income/salary/government/transfer/fee/interest/cash-withdrawal/refund/
+ * credit-card-payment/investment-transfer pattern seeds — the FDH-1
+ * `description_contains` member only supported one needle and cannot express
+ * "PAY" excluded-unless-"PAYROLL" style rules. `payment_rail_narrative`
+ * recognises a payment MECHANISM narrative (UPI/, BPAY, EFTPOS, NEFT, ...)
+ * strictly separately from any economic classification.
+ */
+export const FDH_RULE_MATCH_KINDS_FDH2 = ['narrative_pattern', 'payment_rail_narrative'] as const;
+export type FdhRuleMatchKindFdh2 = (typeof FDH_RULE_MATCH_KINDS_FDH2)[number];
+
+/**
+ * The two NEW discriminated-union members FDH-2 adds to
+ * `fdhRuleActionDefinitionSchema`. Both are structurally NON-authoritative:
+ * `flag_candidate` never sets `economic_transaction_type`, `category_id` or
+ * `subcategory_id` directly — it names a `candidate_type` a future engine
+ * (FDH-6) must independently confirm (amount/date/account matching for
+ * transfers, settlement matching for credit-card payments, funding matching
+ * for investment transfers). `annotate_payment_rail` records which payment
+ * mechanism was observed without asserting any economic meaning.
+ */
+export const FDH_RULE_CANDIDATE_TYPES = [
+  'transfer_candidate',
+  'liability_settlement_candidate',
+  'investment_funding_candidate',
+  'possible_duplicate_review',
+] as const;
+export type FdhRuleCandidateType = (typeof FDH_RULE_CANDIDATE_TYPES)[number];
+
+export const FDH_RULE_ACTION_KINDS_FDH2 = ['flag_candidate', 'annotate_payment_rail'] as const;
+export type FdhRuleActionKindFdh2 = (typeof FDH_RULE_ACTION_KINDS_FDH2)[number];
