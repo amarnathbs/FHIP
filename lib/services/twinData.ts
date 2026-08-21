@@ -16,6 +16,7 @@ export interface TwinRetirementRow {
   employer_contribution: number | null;
   personal_contribution: number | null;
   contribution_frequency: string | null;
+  master_item_key?: string | null;
   country_code: string | null;
   target_retirement_age: number | null;
   account_type: string;
@@ -95,7 +96,12 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
       supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true),
-      supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
+      // master_item_key is selected here for parity with loadDashboardForTwin's query below and
+      // for defensive consistency, though rawRetirement itself is currently only ever read for
+      // target_retirement_age (metricDerivation.ts) — never re-summed by current_balance — so this
+      // particular query was not a live instance of the phantom-balance defect. See the exclusion
+      // in loadDashboardForTwin below for the one that was.
+      supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, master_item_key, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
       supabase.from('insurance_policies').select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days').eq('user_id', userId).eq('is_active', true),
       supabase.from('investments').select('current_value, investment_type, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase.from('liabilities').select('balance, debt_type, master_item_key, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
@@ -197,7 +203,14 @@ async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClie
     supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('investments').select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    // master_item_key is required here — computeDashboard's totalRetirement (lib/engines/dashboard.ts,
+    // isRetirementContributionRow) excludes Class-F contribution-type rows from the phantom-balance
+    // sum ONLY when master_item_key is present on each row. Without it (the live defect this comment
+    // fixes), every row silently looks like a real balance to computeDashboard regardless of type,
+    // even though the exact same query in dashboardData.ts's loadDashboard (the canonical Dashboard
+    // page) already selects it correctly — the Financial Twin's own copy of the dashboard summary had
+    // fallen out of sync and was double-counting contribution rows dashboard.ts had already fixed.
+    supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days').eq('user_id', userId).eq('is_active', true),
     supabase.from('user_goals').select('goal_name, target_amount, current_amount, currency_code, target_date, priority, status').eq('user_id', userId).eq('status', 'active'),
     supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
