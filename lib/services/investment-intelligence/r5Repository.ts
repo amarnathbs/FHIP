@@ -35,6 +35,40 @@ export interface LoadWarning {
   detail: string;
 }
 
+/**
+ * PostgREST caps an unbounded select at 1000 rows and reports the truncation
+ * ONLY in the Content-Range header — the response body is a perfectly
+ * well-formed array with no error. Confirmed live against DEV: seeding 1500
+ * ii_prices_nav rows and issuing a plain select returned exactly 1000 rows
+ * with `Content-Range: 0-999/1500`.
+ *
+ * That silent truncation is dangerous here rather than merely incomplete: a
+ * few years of daily NAV for even one fund exceeds 1000 rows, so a plain
+ * select would drop the most recent history, make the as-of cap wrong, and
+ * leave later instruments with NO NAV at all — surfacing as a spurious
+ * "NAV unavailable" on a scheme whose NAV is in fact fully present.
+ *
+ * Every large time-series read in this module therefore goes through this
+ * helper, which pages explicitly until a short page is returned.
+ */
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> }
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    // Defensive ceiling so a pathological dataset cannot spin forever.
+    if (out.length > 500_000) break;
+  }
+  return out;
+}
+
 export interface R5LoadResult<T> {
   dataset: T | null;
   warnings: LoadWarning[];
@@ -59,16 +93,30 @@ export async function loadSipDataset(
 ): Promise<R5LoadResult<SipDataset>> {
   const warnings: LoadWarning[] = [];
 
-  const { data: txnRows, error: txnErr } = await supabase
-    .from('ii_transactions')
-    .select('id, account_id, instrument_id, transaction_type, transaction_date, gross_amount, units, currency_code, source_reference, status')
-    .eq('user_id', userId)
-    .order('transaction_date', { ascending: true });
-  if (txnErr) throw new Error(`Could not load transactions: ${txnErr.message}`);
+  interface TxnRow {
+    id: string;
+    account_id: string;
+    instrument_id: string;
+    transaction_type: string;
+    transaction_date: string;
+    gross_amount: number;
+    units: number | null;
+    currency_code: string;
+    source_reference: string | null;
+    status: string;
+  }
+  const txnRows = await fetchAllRows<TxnRow>(() =>
+    supabase
+      .from('ii_transactions')
+      .select('id, account_id, instrument_id, transaction_type, transaction_date, gross_amount, units, currency_code, source_reference, status')
+      .eq('user_id', userId)
+      .order('transaction_date', { ascending: true })
+      .order('id', { ascending: true })
+  );
 
   // R2 remains transaction truth: reversed/corrected rows are excluded from
   // the analytical view, but nothing is rewritten.
-  const usable = (txnRows ?? []).filter((r) => r.status !== 'reversed');
+  const usable = txnRows.filter((r) => r.status !== 'reversed');
   if (usable.length === 0) {
     return { dataset: null, warnings, empty: true };
   }
@@ -93,16 +141,24 @@ export async function loadSipDataset(
   const latestTxnDate = transactions[transactions.length - 1].transactionDate;
   const requestedAsOf = options.asOfDate ?? todayIso();
 
-  const { data: navRows, error: navErr } = await supabase
-    .from('ii_prices_nav')
-    .select('instrument_id, price_date, price, quality_status')
-    .in('instrument_id', instrumentIds)
-    .order('price_date', { ascending: true });
-  if (navErr) throw new Error(`Could not load NAV history: ${navErr.message}`);
+  interface NavRow {
+    instrument_id: string;
+    price_date: string;
+    price: number;
+    quality_status: string;
+  }
+  const navRows = await fetchAllRows<NavRow>(() =>
+    supabase
+      .from('ii_prices_nav')
+      .select('instrument_id, price_date, price, quality_status')
+      .in('instrument_id', instrumentIds)
+      .order('instrument_id', { ascending: true })
+      .order('price_date', { ascending: true })
+  );
 
   const navByInstrument = new Map<string, Observation[]>();
   let latestNavDate: string | null = null;
-  for (const r of navRows ?? []) {
+  for (const r of navRows) {
     if (r.quality_status === 'superseded') continue;
     const list = navByInstrument.get(r.instrument_id) ?? [];
     list.push({ date: r.price_date, value: Number(r.price) });
@@ -210,14 +266,23 @@ async function loadBenchmarkSeries(
   const { data: benchmarks } = await supabase.from('ii_benchmarks').select('id, benchmark_key, return_type').in('id', benchmarkIds);
   const bmMeta = new Map((benchmarks ?? []).map((b) => [b.id as string, b]));
 
-  const { data: seriesRows } = await supabase
-    .from('ii_benchmark_series')
-    .select('benchmark_id, series_date, value, quality_status')
-    .in('benchmark_id', benchmarkIds)
-    .order('series_date', { ascending: true });
+  interface BmSeriesRow {
+    benchmark_id: string;
+    series_date: string;
+    value: number;
+    quality_status: string;
+  }
+  const seriesRows = await fetchAllRows<BmSeriesRow>(() =>
+    supabase
+      .from('ii_benchmark_series')
+      .select('benchmark_id, series_date, value, quality_status')
+      .in('benchmark_id', benchmarkIds)
+      .order('benchmark_id', { ascending: true })
+      .order('series_date', { ascending: true })
+  );
 
   const seriesByBenchmark = new Map<string, Observation[]>();
-  for (const r of seriesRows ?? []) {
+  for (const r of seriesRows) {
     if (r.quality_status === 'superseded' || r.quality_status === 'duplicate_flagged') continue;
     const list = seriesByBenchmark.get(r.benchmark_id) ?? [];
     list.push({ date: r.series_date, value: Number(r.value) });
@@ -250,14 +315,24 @@ export async function loadXrayDataset(
 
   // Current positions come from the certified R2/R3 holding snapshots. R5
   // READS them and never writes them.
-  const { data: holdingRows, error: holdingErr } = await supabase
-    .from('ii_holding_snapshots')
-    .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
-    .eq('user_id', userId)
-    .order('as_of_date', { ascending: false });
-  if (holdingErr) throw new Error(`Could not load holdings: ${holdingErr.message}`);
+  interface HoldingRow {
+    instrument_id: string;
+    as_of_date: string;
+    units: number;
+    value: number;
+    currency_code: string;
+    quality_status: string;
+  }
+  const holdingRows = await fetchAllRows<HoldingRow>(() =>
+    supabase
+      .from('ii_holding_snapshots')
+      .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
+      .eq('user_id', userId)
+      .order('as_of_date', { ascending: false })
+      .order('instrument_id', { ascending: true })
+  );
 
-  if (!holdingRows || holdingRows.length === 0) {
+  if (holdingRows.length === 0) {
     return { dataset: null, warnings, empty: true };
   }
 
@@ -370,15 +445,38 @@ async function loadFundHoldingsSnapshots(
 
   const usableSnaps = snapRows.filter((s) => s.quality_status !== 'superseded');
   const snapIds = usableSnaps.map((s) => s.id);
-  const { data: lineRows } = await supabase
-    .from('ii_fund_holdings_lines')
-    .select(
-      'snapshot_id, underlying_instrument_id, holding_name, isin, issuer_id, issuer_name, asset_kind, weight_pct, sector_code, industry_code, market_cap_class, credit_rating_band, agency_ratings, maturity_date, modified_duration'
-    )
-    .in('snapshot_id', snapIds);
+  interface LineRow {
+    snapshot_id: string;
+    underlying_instrument_id: string | null;
+    holding_name: string;
+    isin: string | null;
+    issuer_id: string | null;
+    issuer_name: string | null;
+    asset_kind: 'security' | 'cash' | 'derivative' | 'other';
+    weight_pct: number;
+    sector_code: string | null;
+    industry_code: string | null;
+    market_cap_class: string | null;
+    credit_rating_band: string | null;
+    agency_ratings: unknown;
+    maturity_date: string | null;
+    modified_duration: number | null;
+  }
+  // A 50-fund portfolio at 250 holdings each is 12,500 lines — well past the
+  // 1000-row cap, so this read must page too.
+  const lineRows = await fetchAllRows<LineRow>(() =>
+    supabase
+      .from('ii_fund_holdings_lines')
+      .select(
+        'snapshot_id, underlying_instrument_id, holding_name, isin, issuer_id, issuer_name, asset_kind, weight_pct, sector_code, industry_code, market_cap_class, credit_rating_band, agency_ratings, maturity_date, modified_duration'
+      )
+      .in('snapshot_id', snapIds)
+      .order('snapshot_id', { ascending: true })
+      .order('weight_pct', { ascending: false })
+  );
 
   const linesBySnapshot = new Map<string, SnapshotHolding[]>();
-  for (const r of lineRows ?? []) {
+  for (const r of lineRows) {
     const list = linesBySnapshot.get(r.snapshot_id) ?? [];
     list.push({
       canonicalId: r.underlying_instrument_id,

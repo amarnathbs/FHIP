@@ -1,0 +1,162 @@
+{
+  "ranAt": "2026-08-21T02:40:15.493Z",
+  "appBaseUrl": "http://localhost:3199",
+  "results": [
+    {
+      "id": "LIVE-R5-SERVER",
+      "description": "Dev server reachable",
+      "status": "PASS",
+      "detail": "http://localhost:3199"
+    },
+    {
+      "id": "SEC-R5-API-001",
+      "description": "Unauthenticated GET /api/investment-intelligence/sip is refused",
+      "status": "PASS",
+      "detail": "HTTP 401 {\"error\":\"unauthenticated\"}"
+    },
+    {
+      "id": "SEC-R5-API-002",
+      "description": "Unauthenticated GET /api/investment-intelligence/xray is refused",
+      "status": "PASS",
+      "detail": "HTTP 401 {\"error\":\"unauthenticated\"}"
+    },
+    {
+      "id": "LIVE-R5-AUTH",
+      "description": "Session cookie authenticates against the app",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "id": "LIVE-R5-001",
+      "description": "Standard monthly SIP produces a series with an actual SIP XIRR",
+      "status": "PASS",
+      "detail": "cadence=MONTHLY confidence=CONFIRMED_SOURCE contributions=36; API rate=0.11992726381797947 independent=0.11992726381802721 variance=4.774e-14; API terminal=227448.64157295172 independent=227448.64 variance=0.000000"
+    },
+    {
+      "id": "LIVE-R5-001b",
+      "description": "Source-confirmed SIP is labelled CONFIRMED_SOURCE and MONTHLY",
+      "status": "PASS",
+      "detail": "confidence=CONFIRMED_SOURCE cadence=MONTHLY"
+    },
+    {
+      "id": "LIVE-R5-004",
+      "description": "Benchmark SIP uses IDENTICAL cash flows and matches an independent reconstruction",
+      "status": "PASS",
+      "detail": "API benchmark rate=0.08994552554984915 independent=0.08994553305367103 variance=7.504e-9; benchmark=E2E_BM_1787279938481_0 returnType=TRI"
+    },
+    {
+      "id": "LIVE-R5-004b",
+      "description": "Every benchmark contribution matches the real contribution date and amount",
+      "status": "PASS",
+      "detail": "36 applied vs 36 actual contributions"
+    },
+    {
+      "id": "LIVE-R5-004c",
+      "description": "SIP benchmark excess return equals actual minus benchmark, and is not called alpha",
+      "status": "PASS",
+      "detail": "label=\"SIP benchmark excess return\" API=0.029981738268130317 independent=0.029981730764356174 variance=7.504e-9"
+    },
+    {
+      "id": "LIVE-R5-ASOF",
+      "description": "Response reports the correct as-of date and the NAV date actually used",
+      "status": "PASS",
+      "detail": "asOfDate=2024-06-28 navDateUsed=2024-06-28 navAtAsOf=149.772442"
+    },
+    {
+      "id": "LIVE-R5-002",
+      "description": "SIP with a missed contribution reports the gap, and skipped-period count is 1",
+      "status": "PASS",
+      "detail": "gaps=[{\"fromDate\":\"2022-11-07\",\"toDate\":\"2023-01-07\",\"days\":61,\"missedPeriods\":1}] skippedPeriods=1 consistencyPct=0.9583333333333334 activity=LIKELY_STOPPED"
+    },
+    {
+      "id": "LIVE-R5-002b",
+      "description": "Activity wording is observational and contains no advice",
+      "status": "PASS",
+      "detail": "statement=\"No contribution has been recorded for this series since 2024-01-07, a gap of about 5 expected intervals as at 2024-06-28. Based on the imported records alone, no recent activity is present for this series.\""
+    },
+    {
+      "id": "LIVE-R5-003",
+      "description": "SIP + lump sum: ending value attributed to the series ONLY, not the whole fund",
+      "status": "PASS",
+      "detail": "API terminal=84428.08642017409; series-only expected=84428.09 (variance 0.000000); whole-fund would be 393688.53"
+    },
+    {
+      "id": "LIVE-R5-003b",
+      "description": "Mixed position is disclosed to the caller",
+      "status": "PASS",
+      "detail": "positionIsMixed=true"
+    },
+    {
+      "id": "LIVE-R5-NOBENCH",
+      "description": "Unmapped scheme yields NO benchmark rate and NO excess return (not zero)",
+      "status": "PASS",
+      "detail": "benchmarkSip.status=unavailable rate=null reason=MISSING_BENCHMARK; excess.status=unavailable"
+    },
+    {
+      "id": "LIVE-R5-NOBENCH-b",
+      "description": "Actual SIP return remains available despite the missing benchmark",
+      "status": "PASS",
+      "detail": "actualXirr.status=ok rate=0.06994214022397002"
+    },
+    {
+      "id": "LIVE-R5-010",
+      "description": "User B's SIP request returns none of user A's series",
+      "status": "PASS",
+      "detail": "B saw 0 series; empty=true; leaked A's instruments: false"
+    },
+    {
+      "id": "LIVE-R5-010b",
+      "description": "User B's X-Ray request returns none of user A's positions",
+      "status": "PASS",
+      "detail": "HTTP 200 empty=true total=undefined"
+    },
+    {
+      "id": "SEC-R5-API-003",
+      "description": "Malformed asOf parameter is rejected",
+      "status": "PASS",
+      "detail": "HTTP 400 {\"error\":\"Invalid date parameter: expected YYYY-MM-DD.\"}"
+    },
+    {
+      "id": "SEC-R5-API-004",
+      "description": "A far-future asOf is capped to real data, not silently accepted",
+      "status": "PASS",
+      "detail": "requested 2099-12-31, response asOfDate=2024-06-28"
+    },
+    {
+      "id": "LIVE-R5-XRAY-ZERO",
+      "description": "X-Ray with zero holdings coverage returns UNAVAILABLE with no fabricated zero analytics",
+      "status": "PASS",
+      "detail": "available=false coverage=0 topHoldings=omitted sectorExposure=omitted reason=\"No fund holdings disclosure is available for any scheme in this portfolio at the selected date. Look-through exposure ca\""
+    },
+    {
+      "id": "LIVE-R5-XRAY-DATES",
+      "description": "X-Ray reports positions as-of and holdings as-of separately",
+      "status": "PASS",
+      "detail": "portfolioAsOfDate=2024-06-28 holdingsAsOfDate=null"
+    },
+    {
+      "id": "LIVE-R5-SIM",
+      "description": "Simulation returns labelled flat + step-up variants",
+      "status": "PASS",
+      "detail": "HTTP 200 variants=Flat contribution:ok, 5% annual step-up:ok, 10% annual step-up:ok classification=SIMULATION"
+    },
+    {
+      "id": "LIVE-R5-SIM-b",
+      "description": "Flat simulation total contributed equals contributions x amount",
+      "status": "PASS",
+      "detail": "API total=210000 independent=210000 (count=42)"
+    },
+    {
+      "id": "SEC-R5-API-005",
+      "description": "A fully-provisioned user B cannot run a simulation against user A's series",
+      "status": "PASS",
+      "detail": "B has own series: true; attacking A's seriesKey -> HTTP 404 {\"error\":\"No recurring-contribution series with that identifier exists for this account.\"}"
+    },
+    {
+      "id": "SEC-R5-API-005b",
+      "description": "User B CAN simulate their own series (refusal above is ownership, not breakage)",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    }
+  ]
+}
