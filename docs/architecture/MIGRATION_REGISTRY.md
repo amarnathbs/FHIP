@@ -12,8 +12,8 @@ node scripts/check-migration-versions.mjs   # reports the next free version
 The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
 and fails the build if two active migrations ever share a version again.
 
-- **Next free version: `0050`**
-- Active migrations: 49 (`0001`-`0049`), one file per version
+- **Next free version: `0057`**
+- Active migrations: 56 (`0001`-`0056`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -40,6 +40,13 @@ and fails the build if two active migrations ever share a version again.
 | 0047 | `0047_fdh_transactions_and_classification.sql` | Financial Data Hub FDH-1 | Applied to DEV |
 | 0048 | `0048_fdh_review_quality_provenance.sql` | Financial Data Hub FDH-1 | Applied to DEV |
 | 0049 | `0049_reconcile_phase0c_resources_lineage.sql` | Cross-stream reconciliation | Applied to DEV |
+| 0050 | `0050_fdh2_taxonomy_mcc_foundation.sql` | Financial Data Hub FDH-2 | NOT yet applied to DEV — delivered to Product Owner for manual application |
+| 0051 | `0051_fdh2_institution_and_payment_rail_foundation.sql` | Financial Data Hub FDH-2 | NOT yet applied to DEV |
+| 0052 | `0052_fdh2_merchant_and_governance_foundation.sql` | Financial Data Hub FDH-2 | NOT yet applied to DEV |
+| 0053 | `0053_fdh2_taxonomy_and_mcc_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
+| 0054 | `0054_fdh2_institution_and_payment_rail_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
+| 0055 | `0055_fdh2_merchant_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
+| 0056 | `0056_fdh2_classification_rule_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 
 **0049 detail** — Purpose: canonical forward re-emission of the archived
 Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed
@@ -109,5 +116,43 @@ application code + migrations `0045`-`0048`) with `fix/migration-lineage-ii-reso
 the same point in `main` (`fe7a094`) — neither contained the other — so this
 merge was required before any FDH-2 migration could be safely allocated.
 `0045`-`0048` were confirmed byte-identical between both branches before
-merging (verified via SHA-256, not assumed). FDH-2's own migration
-allocation is recorded separately once assigned.
+merging (verified via SHA-256, not assumed).
+
+**Allocation.** The migration guard was re-run live on this integration
+branch before any FDH-2 file was written: `OK: 49 active migrations, one
+file per version, next version is 0050.` Seven versions were allocated,
+`0050`-`0056` — three schema migrations (additive `alter table` on FDH-1
+tables plus eight brand-new FDH-2 tables) and four generated seed
+migrations (idempotent `insert ... on conflict (...) do nothing`, produced
+deterministically by `scripts/fdh2_generate_master_data_migration.mjs` from
+the version-controlled source data in `data/financial-data-hub/*.mjs`). The
+guard was re-run after allocation: `OK: 56 active migrations, one file per
+version, next version is 0057.`
+
+| File | Tables created | Existing tables altered (additive only) |
+| --- | --- | --- |
+| `0050_fdh2_taxonomy_mcc_foundation.sql` | `fdh_source_registry`, `fdh_economic_transaction_types`, `fdh_mcc_master`, `fdh_mcc_category_map` | `fdh_categories` (+9 columns, 3 constraints, widened `essential_discretionary`), `fdh_subcategories` (+8 columns, 2 constraints, widened `essential_discretionary`) |
+| `0051_fdh2_institution_and_payment_rail_foundation.sql` | `fdh_institution_capabilities`, `fdh_institution_aliases`, `fdh_payment_rail_master` | `fdh_financial_institutions` (+5 columns, widened `institution_type` to add `government_payment_source`/`payment_processor`) |
+| `0052_fdh2_merchant_and_governance_foundation.sql` | `fdh_global_learning_candidates` | `fdh_merchants` (+10 columns, 1 constraint), `fdh_classification_rules` + `fdh_user_classification_rules` (widened `rule_type` to add `narrative_pattern`/`payment_rail_narrative`) |
+| `0053_fdh2_taxonomy_and_mcc_seed.sql` | — (seed only) | 11 source-registry rows, 13 economic-type rows, 25 categories, 121 subcategories, 87 MCCs, 87 MCC-category mappings |
+| `0054_fdh2_institution_and_payment_rail_seed.sql` | — (seed only) | 47 institutions (22 AU + 25 IN), 3 institution capabilities, 98 institution aliases, 20 payment rails |
+| `0055_fdh2_merchant_seed.sql` | — (seed only) | 123 merchants (69 AU + 54 IN), 198 merchant aliases |
+| `0056_fdh2_classification_rule_seed.sql` | — (seed only) | 60 classification-rule pattern seeds |
+
+All seven files are additive: every `alter table` either adds a nullable/
+defaulted column or performs the sanctioned `drop constraint if exists
+<name>` + `add constraint <same name>` additive-widening idiom (verified by
+`tests/unit/fdh2SchemaContract.test.ts`, which fails if any dropped
+constraint is not re-added under the identical name). No `drop table`, no
+`drop column`, no `update`, no `delete from` appears anywhere in the three
+schema migrations. Every seed-migration INSERT uses
+`on conflict (<stable key>) do nothing` — proven idempotent by
+`scripts/fdh2_certify_master_data.mjs` (the four seed migrations were
+re-applied a second time against an already-seeded database with zero row
+count change).
+
+**Status as of this dispatch: NOT yet applied to DEV or production.**
+Delivered to the orchestrating session as complete migration SQL, per this
+project's established controlled manual-application process (Product Owner
+applies via the Supabase Dashboard SQL editor) — this agent has no DDL
+execution capability against any live environment.
