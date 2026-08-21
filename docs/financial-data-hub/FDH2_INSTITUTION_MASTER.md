@@ -3,7 +3,7 @@
 ## 1. Coverage
 
 22 AU institutions + 25 India institutions = 47 total (`fdh_financial_
-institutions`), plus 98 aliases (`fdh_institution_aliases`) and 3
+institutions`), plus 99 aliases (`fdh_institution_aliases`) and 3
 multi-capability rows (`fdh_institution_capabilities`).
 
 **AU (22)**: CBA, Westpac, NAB, ANZ, Macquarie Bank (+broker/
@@ -50,29 +50,57 @@ master_only coverage" check, which scans every seed migration's literal
 coverage-status values. No FDH-2 institution implies parser support exists;
 none does (FDH-3+).
 
-## 4. Known lower-confidence entries (disclosed, not hidden)
+## 4. Known lower-confidence entries — RESOLVED 2026-08-22 (closure-research pass)
 
-Two institutions carry an explicit `notes` disclosure because this
-session's research had no live web access (see `FDH2_RESEARCH_EVIDENCE.md`):
+Two institutions originally carried an explicit `notes` disclosure because
+FDH-2's initial implementation had no live web access. A dedicated
+closure-research pass (migration `0057`, see `FDH2_RESEARCH_EVIDENCE.md`'s
+closure-research section) genuinely live-verified both:
 
-- **ME Bank (AU)** — acquired by Bank of Queensland Group in 2021; the
-  precise current operational status of the ME retail brand (continued
-  independent operation vs. full migration into BOQ's platforms) could not
-  be independently re-verified. Seeded as a historically significant
-  institution with the ownership change stated and the operational detail
-  flagged uncertain.
-- **Suncorp Bank (AU)** — ANZ's acquisition was publicly announced in 2022
-  and reported completed in 2024; the precise current legal/operational
-  structure could not be re-verified. Same treatment.
+- **ME Bank (AU)** — APRA revoked Members Equity Bank Limited's ADI licence
+  after its banking business transferred to Bank of Queensland Limited
+  following BOQ's 2021 acquisition; ME Bank's own official site now states
+  it is "a division of Bank of Queensland Limited". `legal_name` corrected
+  from the pre-acquisition "Members Equity Bank Pty Limited" to the current
+  licence holder, "Bank of Queensland Limited". The ME retail brand remains
+  actively operated.
+- **Suncorp Bank (AU)** — ANZ completed its acquisition on 31 July 2024.
+  Suncorp-Metway Limited legally renamed to **Norfina Limited** (same ABN
+  66 010 831 722) as part of the transition, continuing to trade as
+  "Suncorp Bank" (AFCA confirms complaints are filed against Norfina
+  Limited). It remains a separate ADI within the ANZ Group pending an
+  eventual single-licence merger. `legal_name` corrected accordingly.
 
-Both remain seeded (removing a real, well-known institution would be a
-worse outcome than disclosing uncertainty about one fact), and both are
-flagged for a future research pass with live web access before any
-downstream phase treats their `parent_group`/status as settled fact.
+Both facts are now sourced to a live, dated verification rather than
+trained-knowledge recall — see `fdh_source_registry` key
+`fdh2_closure_live_research_20260822`.
+
+### Additional corrections/updates from the same pass
+
+- **SelfWealth (AU)** — acquired by Syfe (Singapore fintech, via Svava Pte
+  Ltd) in 2025 after a competing takeover contest against Bell Financial
+  Group and AxiCorp; delisted from the ASX. `parent_group` added.
+- **Bank Australia (AU)** — completed its merger with Qudos Bank on 1 July
+  2025; both retail brands now operate under the single Bank Australia Ltd
+  legal entity. A `QUDOS BANK` alias was added so that narrative resolves
+  to this institution. A further prospective merger with P&N Group is under
+  member consideration (vote expected 2027) and is deliberately **not**
+  reflected as complete.
+- **Yes Bank (IN)** — the originally-seeded SBI-led-consortium ownership
+  fact was accurate as of 2020 but had gone stale: Sumitomo Mitsui Banking
+  Corporation (SMBC) has since become Yes Bank's largest shareholder
+  (~24.2%, 2025) via a secondary purchase from SBI and other lenders. Not a
+  majority/controlling stake, so `parent_group` is deliberately left null.
+- **Groww (IN)** — the holding company converted from a private to a public
+  limited company ahead of its November 2025 IPO. `legal_name` corrected
+  from "...Private Limited" to "...Limited".
+- **Protean eGov Technologies / NPS CRA (IN)** — the NPS CRA informational
+  site migrated from `npscra.nsdl.co.in` to `npscra.proteantech.in`.
+  `website_domain` corrected.
 
 ## 5. Alias library
 
-98 aliases across 47 institutions (avg. ~2.1 per institution), covering the
+99 aliases across 47 institutions (avg. ~2.1 per institution — 98 from the original seed plus 1 added by the 2026-08-22 closure-research pass, QUDOS BANK -> Bank Australia), covering the
 common short forms and legal-name variants actually seen in the wild (CBA /
 COMMBANK / COMMONWEALTH BANK / COMMONWEALTH BANK OF AUSTRALIA all resolving
 to one institution; SBI / STATE BANK OF INDIA; etc.). Zero speculative

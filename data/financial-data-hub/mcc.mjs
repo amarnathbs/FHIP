@@ -90,7 +90,7 @@ export const mccList = [
   mcc('6051', 'Quasi Cash — Non-Financial Institutions', 'Quasi-cash / money order / stored value', 'financial_services'),
   mcc('6211', 'Securities Brokers and Dealers', 'Broker / investment platform', 'financial_services'),
   mcc('6300', 'Insurance Sales, Underwriting, Premiums', 'Insurance premium', 'insurance', 'Genuinely ambiguous across insurance TYPE — left unresolved at subcategory (see mccCategoryMap.mjs).'),
-  mcc('6540', 'POS Funding — Non-Financial Institutions', 'Prepaid / POS funding transaction', 'financial_services'),
+  mcc('6540', 'Non-Financial Institutions — Stored Value Card Purchase/Load', 'Prepaid / POS funding transaction', 'financial_services', 'CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search, cross-checked across multiple tier-2 payment-processor MCC references): official_or_public_description corrected from the paraphrase "POS Funding — Non-Financial Institutions" to the standard network text "Non-Financial Institutions — Stored Value Card Purchase/Load". The FHIP normalized_description was already an accurate restatement and is unchanged.'),
 
   // Government services
   mcc('9311', 'Tax Payments', 'Government tax payment', 'government_services'),

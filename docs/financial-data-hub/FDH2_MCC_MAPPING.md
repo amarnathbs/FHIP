@@ -22,15 +22,24 @@ breakdown:
 
 | mapping_type | Count | Meaning |
 | --- | --- | --- |
-| `direct` | 68 | A specific category (and often subcategory) is confidently assigned |
-| `broad_group_only` | 12 | Only a top-level category is assigned; subcategory is deliberately left ambiguous |
+| `direct` | 67 | A specific category (and often subcategory) is confidently assigned |
+| `broad_group_only` | 13 | Only a top-level category is assigned; subcategory is deliberately left ambiguous |
 | `ambiguous_unmapped` | 7 | No category at all — resolving this MCC requires merchant identity or narrative context |
+
+Counts as of the 2026-08-22 closure-research pass (migration `0057`): MCC
+`5531` ("Auto and Home Supply Stores") was downgraded from `direct`/`medium`
+(with a `vehicle_maintenance_registration` subcategory) to
+`broad_group_only`/`low` with no subcategory, after live verification of the
+official description confirmed these stores commonly also sell home
+appliances/electronics — a genuinely mixed automotive/shopping purpose the
+original `direct` mapping over-specified. This moved one row from `direct`
+to `broad_group_only` relative to FDH-2's original counts (68/12/7).
 
 | mapping_confidence | Count |
 | --- | --- |
 | `high` | 43 |
-| `medium` | 25 |
-| `low` | 8 |
+| `medium` | 24 |
+| `low` | 9 |
 | `context_required` | 11 |
 
 ## 3. Deliberately unresolved MCCs (the "never guess" cases)

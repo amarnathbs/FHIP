@@ -12,8 +12,8 @@ node scripts/check-migration-versions.mjs   # reports the next free version
 The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
 and fails the build if two active migrations ever share a version again.
 
-- **Next free version: `0057`**
-- Active migrations: 56 (`0001`-`0056`), one file per version
+- **Next free version: `0058`**
+- Active migrations: 57 (`0001`-`0057`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -47,6 +47,7 @@ and fails the build if two active migrations ever share a version again.
 | 0054 | `0054_fdh2_institution_and_payment_rail_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0055 | `0055_fdh2_merchant_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0056 | `0056_fdh2_classification_rule_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
+| 0057 | `0057_fdh2_closure_research_corrections.sql` | Financial Data Hub FDH-2 (closure-research corrections, hand-written, additive/corrective only) | NOT yet applied to DEV — delivered to Product Owner for manual application alongside 0050-0056 |
 
 **0049 detail** — Purpose: canonical forward re-emission of the archived
 Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed

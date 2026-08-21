@@ -30,8 +30,9 @@ function m(canonical_name, display_name, opts) {
     is_payment_processor: opts.is_payment_processor ?? false,
     website_domain: opts.website_domain ?? null,
     parent_company_name: opts.parent_company_name ?? null,
+    active: opts.active ?? true,
     source_key: opts.source_key ?? S,
-    source_checked_at: '2026-08-21',
+    source_checked_at: opts.source_checked_at ?? '2026-08-21',
     aliases: opts.aliases ?? [],
     notes: opts.notes ?? null,
   };
@@ -83,7 +84,7 @@ export const merchantsAu = [
   m('uber', 'Uber', { merchant_type: 'transport', category_key: 'transport', subcategory_key: 'rideshare_taxi', mcc: '4121', mcc_confidence: 'high', essential_discretionary: 'discretionary', website_domain: 'uber.com', aliases: ['UBER', 'UBER *TRIP', 'UBER TRIP'] }),
   m('uber_eats', 'Uber Eats', { merchant_type: 'other', category_key: 'food', subcategory_key: 'takeaway_food_delivery', mcc: '5814', mcc_confidence: 'medium', essential_discretionary: 'discretionary', website_domain: 'ubereats.com', parent_company_name: 'Uber', aliases: ['UBER EATS', 'UBER *EATS'] }),
   m('didi_au', 'DiDi', { merchant_type: 'transport', category_key: 'transport', subcategory_key: 'rideshare_taxi', mcc: '4121', mcc_confidence: 'high', essential_discretionary: 'discretionary', website_domain: 'didiglobal.com', aliases: ['DIDI'] }),
-  m('menulog', 'Menulog', { merchant_type: 'other', category_key: 'food', subcategory_key: 'takeaway_food_delivery', mcc: '5814', mcc_confidence: 'medium', essential_discretionary: 'discretionary', website_domain: 'menulog.com.au', aliases: ['MENULOG'] }),
+  m('menulog', 'Menulog', { merchant_type: 'other', category_key: 'food', subcategory_key: 'takeaway_food_delivery', mcc: '5814', mcc_confidence: 'medium', essential_discretionary: 'discretionary', active: false, source_checked_at: '2026-08-22', website_domain: 'menulog.com.au', aliases: ['MENULOG'], notes: 'CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search): Menulog ceased Australian operations on 26 November 2025 after Just Eat Takeaway.com (its parent since 2020) was itself acquired by Prosus and exited the Australian market amid falling share and consecutive-year losses. Kept seeded for narrative-matching on older statements, marked active: false.' }),
   m('doordash_au', 'DoorDash', { merchant_type: 'other', category_key: 'food', subcategory_key: 'takeaway_food_delivery', mcc: '5814', mcc_confidence: 'medium', essential_discretionary: 'discretionary', website_domain: 'doordash.com', aliases: ['DOORDASH'] }),
 
   // --- Transport (tolls) ---
@@ -104,7 +105,7 @@ export const merchantsAu = [
   // --- Online / e-commerce ---
   m('amazon_au', 'Amazon Australia', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'online_marketplace_general', mcc: '5964', mcc_confidence: 'low', essential_discretionary: 'discretionary', website_domain: 'amazon.com.au', aliases: ['AMAZON', 'AMAZON.COM.AU', 'AMAZON AU'], notes: 'General marketplace — actual purchase category varies by item; default category is broad-group only.' }),
   m('ebay_au', 'eBay Australia', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'online_marketplace_general', mcc: '5964', mcc_confidence: 'low', essential_discretionary: 'discretionary', website_domain: 'ebay.com.au', aliases: ['EBAY'] }),
-  m('catch_au', 'Catch.com.au', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'online_marketplace_general', mcc: '5964', mcc_confidence: 'low', essential_discretionary: 'discretionary', website_domain: 'catch.com.au', parent_company_name: 'Wesfarmers', aliases: ['CATCH', 'CATCH.COM.AU'] }),
+  m('catch_au', 'Catch.com.au', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'online_marketplace_general', mcc: '5964', mcc_confidence: 'low', essential_discretionary: 'discretionary', active: false, source_checked_at: '2026-08-22', website_domain: 'catch.com.au', parent_company_name: 'Wesfarmers', aliases: ['CATCH', 'CATCH.COM.AU'], notes: 'CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search): Wesfarmers permanently closed Catch.com.au, with its last trading day 30 April 2025, after sustained losses ($96m in FY23/24). Kept seeded (real, historically significant merchant for narrative-matching on older statements) but marked active: false rather than left silently as an operating merchant.' }),
   m('temple_and_webster', 'Temple & Webster', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'home_furniture_homeware', mcc: '5712', mcc_confidence: 'high', essential_discretionary: 'discretionary', website_domain: 'templeandwebster.com.au', aliases: ['TEMPLE & WEBSTER', 'TEMPLE AND WEBSTER'] }),
   m('booktopia', 'Booktopia', { merchant_type: 'retail', category_key: 'shopping', subcategory_key: 'other_shopping', mcc: '5942', mcc_confidence: 'high', essential_discretionary: 'discretionary', website_domain: 'booktopia.com.au', aliases: ['BOOKTOPIA'] }),
 
