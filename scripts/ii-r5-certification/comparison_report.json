@@ -1,0 +1,6637 @@
+{
+  "generatedAt": "2026-08-21T01:59:31.856Z",
+  "tolerances": {
+    "xirr": 0.000001,
+    "weight": 1e-8,
+    "overlap": 1e-8,
+    "exposure": 1e-8,
+    "hhi": 1e-8,
+    "simulationValue": 0.01
+  },
+  "caseCount": 89,
+  "comparisonCount": 698,
+  "passCount": 698,
+  "failCount": 0,
+  "rows": [
+    {
+      "case": "SIP-001",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-001",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-001",
+      "metric": "contributionCount",
+      "production": 36,
+      "independent": 36,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-001",
+      "metric": "actualSipXirr",
+      "production": 0.1265950642484409,
+      "independent": 0.1265950662150862,
+      "variance": 1.966645318818294e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-001",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-001",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "cadence",
+      "production": "QUARTERLY",
+      "independent": "QUARTERLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "contributionCount",
+      "production": 12,
+      "independent": 12,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "actualSipXirr",
+      "production": 0.12579220215307937,
+      "independent": 0.12579220659128626,
+      "variance": 4.438206885337692e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-002",
+      "metric": "activityStatus",
+      "production": "POSSIBLE_PAUSE",
+      "independent": "POSSIBLE_PAUSE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "cadence",
+      "production": "IRREGULAR",
+      "independent": "IRREGULAR",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "confidence",
+      "production": "AMBIGUOUS",
+      "independent": "AMBIGUOUS",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "contributionCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "actualSipXirr",
+      "production": 0.13193963850782336,
+      "independent": 0.13193963865604025,
+      "variance": 1.4821688321120519e-10,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "consistencyPct",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-003",
+      "metric": "activityStatus",
+      "production": "UNKNOWN",
+      "independent": "UNKNOWN",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "contributionCount",
+      "production": 29,
+      "independent": 29,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "actualSipXirr",
+      "production": 0.12601920144730375,
+      "independent": 0.12601920493383661,
+      "variance": 3.486532867968961e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "consistencyPct",
+      "production": 0.9666666666666667,
+      "independent": 0.9666666666666667,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-004",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "contributionCount",
+      "production": 26,
+      "independent": 26,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "actualSipXirr",
+      "production": 0.1259893346882277,
+      "independent": 0.12598933825764108,
+      "variance": 3.5694133759811564e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "consistencyPct",
+      "production": 0.8666666666666667,
+      "independent": 0.8666666666666667,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-005",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "contributionCount",
+      "production": 36,
+      "independent": 36,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "actualSipXirr",
+      "production": 0.1267849350083339,
+      "independent": 0.12678493661311224,
+      "variance": 1.604778337993551e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-006",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "actualSipXirr",
+      "production": 0.12615694291369228,
+      "independent": 0.12615694588312182,
+      "variance": 2.9694295355930933e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-007",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "contributionCount",
+      "production": 24,
+      "independent": 24,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "actualSipXirr",
+      "production": 0.12605653647421802,
+      "independent": 0.12605653959704793,
+      "variance": 3.1228299113283953e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-008",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "contributionCount",
+      "production": 24,
+      "independent": 24,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "actualSipXirr",
+      "production": 0.13159610214014575,
+      "independent": 0.1315961022107513,
+      "variance": 7.060554918503215e-11,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-009",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "actualSipXirr",
+      "production": 0.13292149071276474,
+      "independent": 0.13292149165616135,
+      "variance": 9.4339661083076e-10,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-010",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "actualSipXirr",
+      "production": 0.1469590760512087,
+      "independent": 0.14695907715853535,
+      "variance": 1.1073266470429388e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-011",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "actualSipXirr",
+      "production": -0.16586895381003014,
+      "independent": -0.16586894329026103,
+      "variance": 1.0519769111372312e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-012",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "actualSipXirr",
+      "production": 0.32218536981902035,
+      "independent": 0.32218540090048914,
+      "variance": 3.10814687876082e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-013",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "confidence",
+      "production": "AMBIGUOUS",
+      "independent": "AMBIGUOUS",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "contributionCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "actualSipXirr",
+      "production": 0.4836871556215856,
+      "independent": 0.48368715590884687,
+      "variance": 2.87261270326411e-10,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-014",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "contributionCount",
+      "production": 24,
+      "independent": 24,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "actualSipXirr",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-015",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-016",
+      "metric": "seriesCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-016",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-016",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-016",
+      "metric": "contributionCount",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "cadence",
+      "production": "IRREGULAR",
+      "independent": "IRREGULAR",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "confidence",
+      "production": "AMBIGUOUS",
+      "independent": "AMBIGUOUS",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "contributionCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "actualSipXirr",
+      "production": 0.11427937515624192,
+      "independent": 0.11427937822503734,
+      "variance": 3.06879541223104e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "consistencyPct",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-017",
+      "metric": "activityStatus",
+      "production": "UNKNOWN",
+      "independent": "UNKNOWN",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "cadence",
+      "production": "WEEKLY",
+      "independent": "WEEKLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "contributionCount",
+      "production": 40,
+      "independent": 40,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "actualSipXirr",
+      "production": 0.12296879401991906,
+      "independent": 0.12296881869639037,
+      "variance": 2.4676471310769443e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-018",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "contributionCount",
+      "production": 40,
+      "independent": 40,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "actualSipXirr",
+      "production": 0.11797296517689997,
+      "independent": 0.11797296517674111,
+      "variance": 1.5885903703605209e-13,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-019",
+      "metric": "activityStatus",
+      "production": "LIKELY_STOPPED",
+      "independent": "LIKELY_STOPPED",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "cadence",
+      "production": "MONTHLY",
+      "independent": "MONTHLY",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "confidence",
+      "production": "CONFIRMED_SOURCE",
+      "independent": "CONFIRMED_SOURCE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "contributionCount",
+      "production": 29,
+      "independent": 29,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "actualSipXirr",
+      "production": 0.12919826481979899,
+      "independent": 0.12919826482218927,
+      "variance": 2.3902824164423464e-12,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "consistencyPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-020",
+      "metric": "activityStatus",
+      "production": "LATE",
+      "independent": "LATE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-001",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-001",
+      "metric": "benchmarkSipXirr",
+      "production": 0.12272263457176408,
+      "independent": 0.12272267651365837,
+      "variance": 4.19418942909644e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-001",
+      "metric": "syntheticUnits",
+      "production": 9.182012027235087,
+      "independent": 9.182012027235087,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-001",
+      "metric": "terminalValue",
+      "production": 228647.59849408738,
+      "independent": 228647.59849408738,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-002",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-002",
+      "metric": "benchmarkSipXirr",
+      "production": 0.12390499466178377,
+      "independent": 0.12390501423302339,
+      "variance": 1.9571239615046032e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-002",
+      "metric": "syntheticUnits",
+      "production": 7.891228275168406,
+      "independent": 7.891228275168406,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-002",
+      "metric": "terminalValue",
+      "production": 196504.90425563234,
+      "independent": 196504.90425563234,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-003",
+      "metric": "benchmarkSipStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-003",
+      "metric": "benchmarkSipXirr",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-003",
+      "metric": "syntheticUnits",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-003",
+      "metric": "terminalValue",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-004",
+      "metric": "benchmarkSipStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-004",
+      "metric": "benchmarkSipXirr",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-004",
+      "metric": "syntheticUnits",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-004",
+      "metric": "terminalValue",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-005",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-005",
+      "metric": "benchmarkSipXirr",
+      "production": 0.24755409590226346,
+      "independent": 0.24755409625853647,
+      "variance": 3.562730110928669e-10,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-005",
+      "metric": "syntheticUnits",
+      "production": 7.4656683507850214,
+      "independent": 7.4656683507850214,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-005",
+      "metric": "terminalValue",
+      "production": 251175.61661240223,
+      "independent": 251175.61661240223,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-006",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-006",
+      "metric": "benchmarkSipXirr",
+      "production": -0.10218369433916193,
+      "independent": -0.10218369433918273,
+      "variance": 2.080280392391387e-14,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-006",
+      "metric": "syntheticUnits",
+      "production": 9.121269364641526,
+      "independent": 9.121269364641526,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-006",
+      "metric": "terminalValue",
+      "production": 117755.76522545567,
+      "independent": 117755.76522545567,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-007",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-007",
+      "metric": "benchmarkSipXirr",
+      "production": 0.0064763807049522904,
+      "independent": 0.006476383803237697,
+      "variance": 3.098285406878676e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-007",
+      "metric": "syntheticUnits",
+      "production": 15.16758758259185,
+      "independent": 15.16758758259185,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-007",
+      "metric": "terminalValue",
+      "production": 152219.20791972752,
+      "independent": 152219.20791972752,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-008",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-008",
+      "metric": "benchmarkSipXirr",
+      "production": -0.11540688801958363,
+      "independent": -0.11540687600412639,
+      "variance": 1.2015457240277527e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-008",
+      "metric": "syntheticUnits",
+      "production": 7.730642378941347,
+      "independent": 7.730642378941347,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-008",
+      "metric": "terminalValue",
+      "production": 99802.74374369955,
+      "independent": 99802.74374369955,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-009",
+      "metric": "benchmarkSipStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-009",
+      "metric": "benchmarkSipXirr",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-009",
+      "metric": "syntheticUnits",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-009",
+      "metric": "terminalValue",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-010",
+      "metric": "benchmarkSipStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-010",
+      "metric": "benchmarkSipXirr",
+      "production": 0.12216669162796903,
+      "independent": 0.12216674911411246,
+      "variance": 5.748614342881986e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-010",
+      "metric": "syntheticUnits",
+      "production": 7.765991913311328,
+      "independent": 7.765991913311328,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "SIP-BENCH-010",
+      "metric": "terminalValue",
+      "production": 193386.30744941795,
+      "independent": 193386.30744941795,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "totalContributed",
+      "production": 210000,
+      "independent": 210000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "unitsAccumulated",
+      "production": 1636.7992430191307,
+      "independent": 1636.7992430191307,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "terminalValue",
+      "production": 261238.62936892343,
+      "independent": 261238.62936892343,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-001",
+      "metric": "simulationXirr",
+      "production": 0.1264380901159845,
+      "independent": 0.12643809252040233,
+      "variance": 2.404417831503025e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "totalContributed",
+      "production": 223884,
+      "independent": 223884,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "unitsAccumulated",
+      "production": 1735.1411357733223,
+      "independent": 1735.1411357733223,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "terminalValue",
+      "production": 276934.32411109796,
+      "independent": 276934.32411109796,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-002",
+      "metric": "simulationXirr",
+      "production": 0.1265140640252006,
+      "independent": 0.12651406626537215,
+      "variance": 2.240171548262282e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "totalContributed",
+      "production": 238530,
+      "independent": 238530,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "unitsAccumulated",
+      "production": 1838.5900019122912,
+      "independent": 1838.5900019122912,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "terminalValue",
+      "production": 293445.1088729881,
+      "independent": 293445.1088729881,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-003",
+      "metric": "simulationXirr",
+      "production": 0.1265850597496411,
+      "independent": 0.12658506184438012,
+      "variance": 2.0947390211301098e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "totalContributed",
+      "production": 153078,
+      "independent": 153078,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "unitsAccumulated",
+      "production": 1183.765204288683,
+      "independent": 1183.765204288683,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "terminalValue",
+      "production": 188932.88274778653,
+      "independent": 188932.88274778653,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-004",
+      "metric": "simulationXirr",
+      "production": 0.12654292648315482,
+      "independent": 0.126542928663257,
+      "variance": 2.1801021821143962e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "totalContributed",
+      "production": 223884,
+      "independent": 223884,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "unitsAccumulated",
+      "production": 1736.1303099147237,
+      "independent": 1736.1303099147237,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "terminalValue",
+      "production": 277092.19960988563,
+      "independent": 277092.19960988563,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-005",
+      "metric": "simulationXirr",
+      "production": 0.12626546490292254,
+      "independent": 0.1262654678753461,
+      "variance": 2.972423557290327e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "contributionCount",
+      "production": 42,
+      "independent": 42,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "totalContributed",
+      "production": 223884,
+      "independent": 223884,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "unitsAccumulated",
+      "production": 1867.0537285784744,
+      "independent": 1867.0537285784744,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "terminalValue",
+      "production": 166341.63628552828,
+      "independent": 166341.63628552828,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-006",
+      "metric": "simulationXirr",
+      "production": -0.16646617493642402,
+      "independent": -0.1664661685467581,
+      "variance": 6.389665907491349e-9,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "contributionCount",
+      "production": 54,
+      "independent": 54,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "totalContributed",
+      "production": 322386,
+      "independent": 322386,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "unitsAccumulated",
+      "production": 2590.4552760583633,
+      "independent": 2590.4552760583633,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "terminalValue",
+      "production": 413445.31936044735,
+      "independent": 413445.31936044735,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-007",
+      "metric": "simulationXirr",
+      "production": 0.11934978050222045,
+      "independent": 0.11934978050208883,
+      "variance": 1.316169395693123e-13,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "simulationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "contributionCount",
+      "production": 37,
+      "independent": 37,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "totalContributed",
+      "production": 185000,
+      "independent": 185000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "unitsAccumulated",
+      "production": 1636.1433328737485,
+      "independent": 1636.1433328737485,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "terminalValue",
+      "production": 216987.30035843264,
+      "independent": 216987.30035843264,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "STEP-008",
+      "metric": "simulationXirr",
+      "production": 0.10368753638900839,
+      "independent": 0.10368755542818692,
+      "variance": 1.9039178525415146e-8,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "exposures.order",
+      "production": [
+        "S1"
+      ],
+      "independent": [
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-001",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures.count",
+      "production": 10,
+      "independent": 10,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures.order",
+      "production": [
+        "S1",
+        "S10",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8",
+        "S9"
+      ],
+      "independent": [
+        "S1",
+        "S10",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8",
+        "S9"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S10].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S10].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S3].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S3].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S4].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S4].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S5].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S5].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S6].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S6].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S7].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S7].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S8].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S8].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S9].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "exposures[S9].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "effectiveCoverage",
+      "production": 0.9999999999999999,
+      "independent": 0.9999999999999999,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-002",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures.count",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures.order",
+      "production": [
+        "S1",
+        "S3",
+        "S2",
+        "S4"
+      ],
+      "independent": [
+        "S1",
+        "S3",
+        "S2",
+        "S4"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.36,
+      "independent": 0.36,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S3].effectiveWeight",
+      "production": 0.27999999999999997,
+      "independent": 0.27999999999999997,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S3].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.24,
+      "independent": 0.24,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S4].effectiveWeight",
+      "production": 0.12,
+      "independent": 0.12,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "exposures[S4].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-003",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures.count",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures.order",
+      "production": [
+        "S2",
+        "S3",
+        "S1",
+        "S5"
+      ],
+      "independent": [
+        "S2",
+        "S3",
+        "S1",
+        "S5"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.35,
+      "independent": 0.35,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S2].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S3].effectiveWeight",
+      "production": 0.275,
+      "independent": 0.275,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S3].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.25,
+      "independent": 0.25,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S5].effectiveWeight",
+      "production": 0.125,
+      "independent": 0.125,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "exposures[S5].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-004",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures.count",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures.order",
+      "production": [
+        "S2",
+        "S1"
+      ],
+      "independent": [
+        "S2",
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures[S2].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.39999999999999997,
+      "independent": 0.39999999999999997,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "exposures[S1].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-005",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures.count",
+      "production": 12,
+      "independent": 12,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures.order",
+      "production": [
+        "S10",
+        "S7",
+        "S8",
+        "S9",
+        "S11",
+        "S12",
+        "S6",
+        "S1",
+        "S5",
+        "S2",
+        "S4",
+        "S3"
+      ],
+      "independent": [
+        "S10",
+        "S7",
+        "S8",
+        "S9",
+        "S11",
+        "S12",
+        "S6",
+        "S1",
+        "S5",
+        "S2",
+        "S4",
+        "S3"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S10].effectiveWeight",
+      "production": 0.125,
+      "independent": 0.125,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S10].schemeCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S7].effectiveWeight",
+      "production": 0.125,
+      "independent": 0.125,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S7].schemeCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S8].effectiveWeight",
+      "production": 0.125,
+      "independent": 0.125,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S8].schemeCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S9].effectiveWeight",
+      "production": 0.125,
+      "independent": 0.125,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S9].schemeCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S11].effectiveWeight",
+      "production": 0.11666666666666667,
+      "independent": 0.11666666666666667,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S11].schemeCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S12].effectiveWeight",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S12].schemeCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S6].effectiveWeight",
+      "production": 0.08333333333333334,
+      "independent": 0.08333333333333334,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S6].schemeCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.075,
+      "independent": 0.075,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S1].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S5].effectiveWeight",
+      "production": 0.05,
+      "independent": 0.05,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S5].schemeCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.041666666666666664,
+      "independent": 0.041666666666666664,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S4].effectiveWeight",
+      "production": 0.025,
+      "independent": 0.025,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S4].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S3].effectiveWeight",
+      "production": 0.008333333333333333,
+      "independent": 0.008333333333333333,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "exposures[S3].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-006",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures.count",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures.order",
+      "production": [
+        "S3",
+        "S2",
+        "S-REL"
+      ],
+      "independent": [
+        "S3",
+        "S2",
+        "S-REL"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S3].effectiveWeight",
+      "production": 0.48,
+      "independent": 0.48,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S3].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.27999999999999997,
+      "independent": 0.27999999999999997,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S-REL].effectiveWeight",
+      "production": 0.24,
+      "independent": 0.24,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "exposures[S-REL].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-007",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures.count",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures.order",
+      "production": [
+        "OA",
+        "OB",
+        "X"
+      ],
+      "independent": [
+        "OA",
+        "OB",
+        "X"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[OA].effectiveWeight",
+      "production": 0.54,
+      "independent": 0.54,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[OA].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[OB].effectiveWeight",
+      "production": 0.32000000000000006,
+      "independent": 0.32000000000000006,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[OB].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[X].effectiveWeight",
+      "production": 0.14,
+      "independent": 0.14,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exposures[X].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-008",
+      "metric": "exactExposureX",
+      "production": 0.14,
+      "independent": 0.14,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "exposures.order",
+      "production": [
+        "S1"
+      ],
+      "independent": [
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "unresolvedWeight",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-009",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "exposures.order",
+      "production": [
+        "S1"
+      ],
+      "independent": [
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.85,
+      "independent": 0.85,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "cashWeight",
+      "production": 0.15,
+      "independent": 0.15,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-010",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures.count",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures.order",
+      "production": [
+        "S1",
+        "S2"
+      ],
+      "independent": [
+        "S1",
+        "S2"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.37,
+      "independent": 0.37,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "effectiveCoverage",
+      "production": 0.87,
+      "independent": 0.87,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-011",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "exposures.order",
+      "production": [
+        "S1"
+      ],
+      "independent": [
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "effectiveCoverage",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "noSnapshotWeight",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-012",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "exposures.order",
+      "production": [
+        "S1"
+      ],
+      "independent": [
+        "S1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-013",
+      "metric": "freshness",
+      "production": "VERY_STALE",
+      "independent": "VERY_STALE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures.count",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures.order",
+      "production": [
+        "S1",
+        "S2"
+      ],
+      "independent": [
+        "S1",
+        "S2"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures[S1].effectiveWeight",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures[S1].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-014",
+      "metric": "freshness",
+      "production": "VERY_STALE",
+      "independent": "VERY_STALE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "exposures.count",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "exposures.order",
+      "production": [
+        "S2"
+      ],
+      "independent": [
+        "S2"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "exposures[S2].effectiveWeight",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "exposures[S2].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "effectiveCoverage",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "cashWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "unresolvedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "noSnapshotWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "XRAY-015",
+      "metric": "freshness",
+      "production": "CURRENT",
+      "independent": "CURRENT",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-001",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-001",
+      "metric": "weightedOverlap",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-001",
+      "metric": "commonSecurityCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-001",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-002",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-002",
+      "metric": "weightedOverlap",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-002",
+      "metric": "commonSecurityCount",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-002",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-003",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-003",
+      "metric": "weightedOverlap",
+      "production": 0.05,
+      "independent": 0.05,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-003",
+      "metric": "commonSecurityCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-003",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-004",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-004",
+      "metric": "weightedOverlap",
+      "production": 0.6000000000000001,
+      "independent": 0.6000000000000001,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-004",
+      "metric": "commonSecurityCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-004",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-005",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-005",
+      "metric": "weightedOverlap",
+      "production": 0.42000000000000004,
+      "independent": 0.42000000000000004,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-005",
+      "metric": "commonSecurityCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-005",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-006",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-006",
+      "metric": "weightedOverlap",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-006",
+      "metric": "commonSecurityCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-006",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-007",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-007",
+      "metric": "weightedOverlap",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-007",
+      "metric": "commonSecurityCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-007",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-008",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-008",
+      "metric": "weightedOverlap",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-008",
+      "metric": "commonSecurityCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-008",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-008",
+      "metric": "hasQualityWarning",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-009",
+      "metric": "overlapStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-009",
+      "metric": "weightedOverlap",
+      "production": 0.9,
+      "independent": 0.9,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-009",
+      "metric": "commonSecurityCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-009",
+      "metric": "symmetry",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-009",
+      "metric": "hasQualityWarning",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixSize",
+      "production": 10,
+      "independent": 10,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixSymmetric",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixBounded",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues.count",
+      "production": 45,
+      "independent": 45,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[0]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[1]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[2]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[3]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[4]",
+      "production": 0.08,
+      "independent": 0.08,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[5]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[6]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[7]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[8]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[9]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[10]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[11]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[12]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[13]",
+      "production": 0.08,
+      "independent": 0.08,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[14]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[15]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[16]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[17]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[18]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[19]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[20]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[21]",
+      "production": 0.08,
+      "independent": 0.08,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[22]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[23]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[24]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[25]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[26]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[27]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[28]",
+      "production": 0.08,
+      "independent": 0.08,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[29]",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[30]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[31]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[32]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[33]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[34]",
+      "production": 0.08,
+      "independent": 0.08,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[35]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[36]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[37]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[38]",
+      "production": 0.18,
+      "independent": 0.18,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[39]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[40]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[41]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[42]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[43]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "OVERLAP-010",
+      "metric": "matrixValues[44]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-001",
+      "metric": "top1",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-001",
+      "metric": "top5",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-001",
+      "metric": "top10",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-001",
+      "metric": "hhi",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-002",
+      "metric": "top1",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-002",
+      "metric": "top5",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-002",
+      "metric": "top10",
+      "production": 0.9999999999999999,
+      "independent": 1,
+      "variance": 1.1102230246251565e-16,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-002",
+      "metric": "hhi",
+      "production": 0.10000000000000003,
+      "independent": 0.10000000000000002,
+      "variance": 1.3877787807814457e-17,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-003",
+      "metric": "top1",
+      "production": 0.15,
+      "independent": 0.15,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-003",
+      "metric": "top5",
+      "production": 0.5399999999999999,
+      "independent": 0.54,
+      "variance": 1.1102230246251565e-16,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-003",
+      "metric": "top10",
+      "production": 0.693333333333333,
+      "independent": 0.6933333333333334,
+      "variance": 3.3306690738754696e-16,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-003",
+      "metric": "hhi",
+      "production": 0.0755066666666666,
+      "independent": 0.07550666666666667,
+      "variance": 6.938893903907228e-17,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-004",
+      "metric": "top1",
+      "production": 0.375,
+      "independent": 0.375,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-004",
+      "metric": "top5",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-004",
+      "metric": "top10",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-004",
+      "metric": "hhi",
+      "production": 0.2790625,
+      "independent": 0.2790625,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorBuckets.keys",
+      "production": [
+        "FIN",
+        "ENERGY",
+        "TECH"
+      ],
+      "independent": [
+        "FIN",
+        "ENERGY",
+        "TECH"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorBuckets[FIN]",
+      "production": 0.44,
+      "independent": 0.44,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorBuckets[ENERGY]",
+      "production": 0.36,
+      "independent": 0.36,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorBuckets[TECH]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorClassifiedWeight",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-005",
+      "metric": "sectorUnclassifiedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapBuckets.keys",
+      "production": [
+        "LARGE",
+        "MID",
+        "SMALL"
+      ],
+      "independent": [
+        "LARGE",
+        "MID",
+        "SMALL"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapBuckets[LARGE]",
+      "production": 0.6499999999999999,
+      "independent": 0.6499999999999999,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapBuckets[MID]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapBuckets[SMALL]",
+      "production": 0.15,
+      "independent": 0.15,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapClassifiedWeight",
+      "production": 0.9999999999999999,
+      "independent": 1,
+      "variance": 1.1102230246251565e-16,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-006",
+      "metric": "marketCapUnclassifiedWeight",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-007",
+      "metric": "sectorBuckets.keys",
+      "production": [
+        "FIN",
+        "TECH"
+      ],
+      "independent": [
+        "FIN",
+        "TECH"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-007",
+      "metric": "sectorBuckets[FIN]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-007",
+      "metric": "sectorBuckets[TECH]",
+      "production": 0.25,
+      "independent": 0.25,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-007",
+      "metric": "sectorClassifiedWeight",
+      "production": 0.65,
+      "independent": 0.65,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-007",
+      "metric": "sectorUnclassifiedWeight",
+      "production": 0.35,
+      "independent": 0.35,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcBuckets.keys",
+      "production": [
+        "AMC-A",
+        "AMC-B"
+      ],
+      "independent": [
+        "AMC-A",
+        "AMC-B"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcBuckets[AMC-A].weight",
+      "production": 0.6363636363636364,
+      "independent": 0.6363636363636364,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcBuckets[AMC-A].schemeCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcBuckets[AMC-B].weight",
+      "production": 0.2727272727272727,
+      "independent": 0.2727272727272727,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcBuckets[AMC-B].schemeCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CONC-008",
+      "metric": "amcUnattributedWeight",
+      "production": 0.09090909090909091,
+      "independent": 0.09090909090909091,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "AAA",
+        "AA",
+        "A"
+      ],
+      "independent": [
+        "AAA",
+        "AA",
+        "A"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "creditBuckets[AA]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "creditBuckets[A]",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10",
+        "GT_10Y"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10",
+        "GT_10Y"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityBuckets[Y5_10]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "maturityBuckets[GT_10Y]",
+      "production": 0.1,
+      "independent": 0.1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "weightedDuration",
+      "production": 3.94,
+      "independent": 3.94,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "ISS-A",
+        "ISS-C",
+        "ISS-B"
+      ],
+      "independent": [
+        "ISS-A",
+        "ISS-C",
+        "ISS-B"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "issuerBuckets[ISS-A]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "issuerBuckets[ISS-C]",
+      "production": 0.30000000000000004,
+      "independent": 0.30000000000000004,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "issuerBuckets[ISS-B]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "SOVEREIGN",
+        "AAA",
+        "AA"
+      ],
+      "independent": [
+        "SOVEREIGN",
+        "AAA",
+        "AA"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "creditBuckets[SOVEREIGN]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "creditBuckets[AA]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "maturityBuckets[Y5_10]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "weightedDuration",
+      "production": 3.7100000000000004,
+      "independent": 3.7100000000000004,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "GOI",
+        "ISS-A",
+        "ISS-B"
+      ],
+      "independent": [
+        "GOI",
+        "ISS-A",
+        "ISS-B"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "issuerBuckets[GOI]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "issuerBuckets[ISS-A]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "issuerBuckets[ISS-B]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "SOVEREIGN",
+        "AAA",
+        "AA",
+        "A",
+        "BELOW_A"
+      ],
+      "independent": [
+        "SOVEREIGN",
+        "AAA",
+        "AA",
+        "A",
+        "BELOW_A"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets[SOVEREIGN]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets[AA]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets[A]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "creditBuckets[BELOW_A]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5",
+        "Y5_10"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "maturityBuckets[Y5_10]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "weightedDuration",
+      "production": 3.98,
+      "independent": 3.98,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "I5"
+      ],
+      "independent": [
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "I5"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets[I3]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets[I4]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "issuerBuckets[I5]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "AAA",
+        "UNRATED"
+      ],
+      "independent": [
+        "AAA",
+        "UNRATED"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "creditBuckets[UNRATED]",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "weightedDuration",
+      "production": 2.88,
+      "independent": 2.88,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I2",
+        "I1"
+      ],
+      "independent": [
+        "I2",
+        "I1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.6,
+      "independent": 0.6,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.4,
+      "independent": 0.4,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "AAA",
+        "AA",
+        "A"
+      ],
+      "independent": [
+        "AAA",
+        "AA",
+        "A"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.35,
+      "independent": 0.35,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "creditBuckets[AA]",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "creditBuckets[A]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "LT_1Y",
+        "Y1_3",
+        "Y3_5",
+        "Y5_10",
+        "GT_10Y"
+      ],
+      "independent": [
+        "LT_1Y",
+        "Y1_3",
+        "Y3_5",
+        "Y5_10",
+        "GT_10Y"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets[LT_1Y]",
+      "production": 0.15,
+      "independent": 0.15,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets[Y5_10]",
+      "production": 0.25,
+      "independent": 0.25,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "maturityBuckets[GT_10Y]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "weightedDuration",
+      "production": 4.6850000000000005,
+      "independent": 4.6850000000000005,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I4",
+        "I2",
+        "I3",
+        "I5",
+        "I1"
+      ],
+      "independent": [
+        "I4",
+        "I2",
+        "I3",
+        "I5",
+        "I1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets[I4]",
+      "production": 0.25,
+      "independent": 0.25,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets[I3]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets[I5]",
+      "production": 0.2,
+      "independent": 0.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.15,
+      "independent": 0.15,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "AAA",
+        "AA"
+      ],
+      "independent": [
+        "AAA",
+        "AA"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "creditBuckets[AA]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y5_10"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y5_10"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "maturityBuckets[Y5_10]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "durationStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "weightedDuration",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I1",
+        "I2"
+      ],
+      "independent": [
+        "I1",
+        "I2"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "creditStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "creditBuckets.keys",
+      "production": [],
+      "independent": [],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "durationStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "weightedDuration",
+      "production": 3.2,
+      "independent": 3.2,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I1",
+        "I2"
+      ],
+      "independent": [
+        "I1",
+        "I2"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "AAA",
+        "AA"
+      ],
+      "independent": [
+        "AAA",
+        "AA"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "creditBuckets[AAA]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "creditBuckets[AA]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "maturityStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "maturityBuckets.keys",
+      "production": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "independent": [
+        "Y1_3",
+        "Y3_5"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "maturityBuckets[Y1_3]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "maturityBuckets[Y3_5]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "durationStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "weightedDuration",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "issuerBuckets.keys",
+      "production": [
+        "I2",
+        "I1"
+      ],
+      "independent": [
+        "I2",
+        "I1"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "issuerBuckets[I2]",
+      "production": 0.7,
+      "independent": 0.7,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "issuerBuckets[I1]",
+      "production": 0.3,
+      "independent": 0.3,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-001",
+      "metric": "lookThroughStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-001",
+      "metric": "noFabricatedZeroSectors",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-001",
+      "metric": "effectiveCoverage",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-002",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-002",
+      "metric": "effectiveCoverage",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-002",
+      "metric": "noSnapshotWeight",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-003",
+      "metric": "lookThroughStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-003",
+      "metric": "effectiveCoverage",
+      "production": 0.95,
+      "independent": 0.95,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-003",
+      "metric": "noSnapshotWeight",
+      "production": 0.05,
+      "independent": 0.05,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-004",
+      "metric": "freshness",
+      "production": "VERY_STALE",
+      "independent": "VERY_STALE",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-004",
+      "metric": "hasStaleStatus",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-005",
+      "metric": "mixedDateWarning",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-005",
+      "metric": "mixedDateSpreadDays",
+      "production": 184,
+      "independent": 184,
+      "variance": 0,
+      "tolerance": 0,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-005",
+      "metric": "oldestHoldingsDate",
+      "production": "2023-11-30",
+      "independent": "2023-11-30",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-005",
+      "metric": "newestHoldingsDate",
+      "production": "2024-06-01",
+      "independent": "2024-06-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-006",
+      "metric": "unresolvedWeight",
+      "production": 0.45,
+      "independent": 0.45,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-006",
+      "metric": "hasUnresolvedStatus",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-006",
+      "metric": "weightIdentity",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-007",
+      "metric": "benchmarkSipStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-007",
+      "metric": "benchmarkSipReason",
+      "production": "MISSING_BENCHMARK",
+      "independent": "MISSING_BENCHMARK",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-007",
+      "metric": "noFabricatedBenchmarkRate",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-008",
+      "metric": "confidence",
+      "production": "NOT_SIP",
+      "independent": "NOT_SIP",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-008",
+      "metric": "notConfirmed",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-009",
+      "metric": "confidence",
+      "production": "AMBIGUOUS",
+      "independent": "AMBIGUOUS",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-009",
+      "metric": "notConfirmed",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-010",
+      "metric": "creditStatus",
+      "production": "ok",
+      "independent": "ok",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-010",
+      "metric": "creditBuckets.keys",
+      "production": [
+        "UNRATED"
+      ],
+      "independent": [
+        "UNRATED"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-010",
+      "metric": "creditBuckets[UNRATED]",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 1e-8,
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-010",
+      "metric": "durationStatus",
+      "production": "unavailable",
+      "independent": "unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DQ-R5-010",
+      "metric": "noFabricatedDuration",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    }
+  ]
+}

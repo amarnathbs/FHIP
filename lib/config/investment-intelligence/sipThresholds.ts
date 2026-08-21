@@ -63,8 +63,18 @@ export const AMOUNT_SIMILARITY_TOLERANCE = 0.05; // ±5% of median
 export const PAUSE_THRESHOLDS = {
   /** Up to this many periods overdue is still just "expected/on-time". */
   EXPECTED_MAX_MISSED: 0.5,
-  /** Beyond EXPECTED, up to here is LATE (grace for debit-date drift). */
-  LATE_MAX_MISSED: 1.0,
+  /**
+   * Beyond EXPECTED, up to here is LATE (grace for debit-date drift).
+   *
+   * Deliberately 1.5, not 1.0. Month lengths vary 28-31 days against a
+   * 30.4375-day nominal period, so a perfectly healthy monthly SIP viewed on
+   * the very day its next instalment falls due already reads as 1.02 periods
+   * overdue. A 1.0 cut-off therefore labelled a SIP that has missed NOTHING
+   * as POSSIBLE_PAUSE — alarming and wrong. POSSIBLE_PAUSE should mean
+   * "roughly a whole instalment has now been missed", which is ~2 periods,
+   * so LATE must extend past 1.5.
+   */
+  LATE_MAX_MISSED: 1.5,
   /** Beyond LATE, up to here is POSSIBLE_PAUSE. */
   POSSIBLE_PAUSE_MAX_MISSED: 3.0,
   /** Strictly beyond POSSIBLE_PAUSE is LIKELY_STOPPED. Always > 1 period. */
