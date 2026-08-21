@@ -7,15 +7,11 @@
 
 ## Final classification
 
-# CONDITIONAL PASS
+# UNCONDITIONAL FULL PASS
 
-Every calculation, security, no-fabrication and no-double-count requirement is
-met and independently verified. The condition is a **bounded infrastructure
-gap**, not a defect: migration 0044 could not be applied to DEV by this session,
-so the Portfolio X-Ray half's live-DEV and browser evidence is incomplete.
-
-This mirrors R4's own first pass, which was CONDITIONAL until a follow-up
-closed exactly this class of gap.
+Upgraded from CONDITIONAL PASS after migration 0044 was applied to DEV by the
+Product Owner. **Every previously-blocked check has been executed and passes.
+Nothing remains BLOCKED, and no state remains unverified.**
 
 ---
 
@@ -25,46 +21,48 @@ closed exactly this class of gap.
 | --- | --- |
 | Baseline reproduced | 669/669 tests, tsc clean, R4 50-case cert, R4 forgery fix — all re-run by this session, not inherited |
 | Calculation correctness | **89/89 cases, 698/698 comparisons, 0 failures** against an oracle that imports no production code and uses a different XIRR algorithm; max variance 5.749e-08 vs a 1e-6 tolerance |
-| Certification can genuinely fail | **Both** negative controls executed green → red → green, with the broken code never committed |
+| Certification can genuinely fail | **Three** negative controls executed green → red → green, with the broken code never committed |
 | Manual reconciliation | **12/12** hand-worked cases pass; largest variance 3.098e-09 |
 | Mathematical identities | Exact 14% look-through; 3.2%+2.0%=5.2%; overlap symmetry and 0..1 bounds; HHI convention; weight identity summing to exactly 1 |
 | No fabrication | 14 distinct "unavailable is never zero" proofs across SIP, X-Ray and debt |
-| SIP live-DEV | **26/26 PASS** end-to-end through the real API against real DEV data, with independently computed expected values |
-| Security — R4 regression | **10/10 PASS**; R4's analytics-forgery hole confirmed still closed, with service-role ground truth |
-| Security — API layer | **8/8 PASS** live: unauthenticated blocked, cross-user blocked, spoofed parameters rejected, far-future as-of capped |
-| Browser truthfulness | 0%-coverage negative control passes with **0 charts, 0 SVGs, 0 tables, 0 "0.00%"**; benchmark-unavailable renders "Not available"; 0 advisory phrases; 0 mentions of "alpha" |
-| No net-worth impact | No write to any financial register anywhere in R5 |
+| SIP live-DEV | **26/26 PASS** end-to-end through the real API, independently computed expected values |
+| X-Ray live-DEV | **32/32 PASS** end-to-end through the real API, independently computed expected values |
+| Security — full pack | **24/24 PASS, 0 BLOCKED** |
+| Security — R4 regression | **10/10 PASS**; R4's analytics-forgery hole confirmed still closed, via service-role ground truth |
+| Browser truthfulness | **All 12 states rendered and read**; 0%-coverage control re-run against a real empty table with 0 charts / 0 SVGs / 0 tables / 0 "0.00%"; 0 advisory phrases; 0 mentions of "alpha" |
+| No net-worth impact | Proven live: `investments=0 assets=0` after a full multi-fund look-through |
+| Determinism | Identical input fingerprint across repeat live runs; `cases.json` byte-stable |
 | Static | tsc clean; lint **identical to baseline** (zero new errors/warnings); 800/800 tests; build exit 0 |
 
-## 2. The condition
+## 2. The condition — now closed
 
-**Migration 0044 is not applied to DEV, and this session has no DDL capability.**
+Migration 0044 was applied by the Product Owner and verified live by this
+session (`scripts/ii_r5_schema_probe.mjs` → "MIGRATION 0044 FULLY APPLIED: YES",
+all six tables with every expected column present).
 
-Independently established (`scripts/ii_r5_schema_probe.mjs`): seven
-`exec_sql`-style RPC candidates all HTTP 404; no `DATABASE_URL`; all six R5
-tables report `PGRST205`.
+| Previously | Now |
+| --- | --- |
+| SEC-R5-001 … 011 **BLOCKED** | **11/11 PASS** — all five new reference/analytics tables reject ordinary-user writes with HTTP 403 `42501`; cross-user read/delete/tamper all blocked |
+| LIVE-R5-005 … 009 **BLOCKED** | **PASS** — overlap, multi-fund look-through, partial coverage, stale holdings and debt all exercised against real seeded DEV data |
+| Six browser states **not seen** | **All rendered and read**, every figure independently re-derived |
 
-Consequently:
+Full pack: `node scripts/ii_r5_live_dev_security_tests.mjs` → **24 PASS /
+0 FAIL / 0 BLOCKED**.
 
-* **SEC-R5-001 … 011 BLOCKED** — the six new R5 tables' RLS is written to the
-  pattern R4 proved effective, but is **asserted, not proven**.
-* **LIVE-R5-005 … 009 BLOCKED** — overlap, multi-fund X-Ray, partial coverage,
-  stale holdings and debt scenarios not exercised against live data.
-* **Six browser states not seen rendered** — normal X-Ray with holdings,
-  partial coverage, stale warning, populated overlap heatmap,
-  missing-classification, debt widgets.
+### Two things worth recording from the closure pass
 
-Nothing was reported PASS that could not be genuinely evaluated. The harnesses
-are written and will evaluate all 22 blocked checks for real the moment 0044 is
-applied.
+**1. HTTP 204 does not mean "succeeded".** The cross-user DELETE (SEC-R5-005)
+and the owner's UPDATE (SEC-R5-006) both returned **204**. They are recorded
+PASS only because service-role ground truth confirmed the row survived
+unchanged — RLS filtered the statement to zero rows rather than rejecting it.
+A pack that trusted status codes would have mis-reported both.
 
-### To close the condition
-
-1. Apply `supabase/migrations/0044_ii_r5_sip_xray_holdings.sql` to DEV
-   (idempotent; safe to re-run end to end).
-2. `node scripts/ii_r5_schema_probe.mjs` → expect "MIGRATION 0044 FULLY APPLIED: YES".
-3. `node scripts/ii_r5_live_dev_security_tests.mjs` → expect 24 PASS / 0 BLOCKED.
-4. Seed fund-holdings snapshots and re-run browser QA for the six states above.
+**2. The placeholder verdicts were removed.** The security pack previously
+emitted `LIVE-R5-001 … 010` as BLOCKED with "Scenario harness not executed in
+this run" even when it could have run them. It now **reads each scenario
+harness's own results file and reports what that harness actually recorded**,
+reporting BLOCKED only when a harness genuinely has not been run. A placeholder
+that can silently become a PASS is a certification hazard.
 
 ## 3. Defects found and fixed during R5
 
@@ -95,24 +93,36 @@ four unbounded reads that caused 3.1 (`ii_transactions`,
 NAV.
 
 **Deliberately not fixed here.** It is certified R4 code; changing it would
-alter certified behaviour without re-certification. Raised as a separate
-follow-up.
+alter certified behaviour without re-certification.
+
+**Status:** independently confirmed by the coordinating session (zero `.range()`
+calls across 8 large-table reads in that file) and now being fixed under a
+separate task. R5 has not touched `analyticsRepository.ts` and will not, to
+avoid conflicting with that work.
 
 ## 5. Known limitations, stated plainly
 
-1. Migration 0044 not applied; 22 security/live checks BLOCKED (section 2).
-2. Six X-Ray browser states not visually verified (section 2).
-3. **Fund-manager concentration deliberately DEFERRED** — no reliable versioned
+None of these blocks the classification; all are bounded, disclosed, and
+visible to the user where relevant.
+
+1. **Fund-manager concentration deliberately DEFERRED** — no reliable versioned
    metadata source exists. Disclosed in the UI rather than estimated.
-4. **Multi-agency credit-rating consolidation suppressed** — no approved
+2. **Multi-agency credit-rating consolidation suppressed** — no approved
    methodology is configured, so agency-specific data is retained and the
    consolidated view withheld.
-5. **Industry exposure** is implemented but produces results only where genuine
+3. **Industry exposure** is implemented but produces results only where genuine
    industry classification exists; it is never derived from sector data.
-6. Formal performance matrix (1/10/25/50/100 funds × 50/100/250 holdings) **not**
-   executed. No N+1 or quadratic-in-holdings pattern found by inspection.
-7. The `ii_fund_holdings` R1 table remains in place, unused by R5, which reads
+4. Formal performance matrix (1/10/25/50/100 funds × 50/100/250 holdings) **not**
+   executed. No N+1 or quadratic-in-holdings pattern found by inspection; the
+   live 5-fund / 21-security portfolio and the 10-fund overlap matrix both
+   responded without perceptible delay.
+5. The `ii_fund_holdings` R1 table remains in place, unused by R5, which reads
    the new versioned tables instead.
+6. **R5 ships the holdings architecture and data contract, but no production
+   holdings feed.** All look-through evidence to date uses controlled seeded
+   data. A real disclosure source is an R6 prerequisite.
+7. Security testing covers the RLS and API surface. No session-fixation, CSRF,
+   or JWT-forgery testing was performed.
 
 ## 6. Critical-FAIL conditions — none present
 
@@ -159,11 +169,13 @@ optimisation to R6.
 
 ## 8. Prerequisites for R6
 
-1. Apply migration 0044 and close the 22 BLOCKED checks.
-2. Complete the six outstanding X-Ray browser states.
-3. Resolve the R4 unbounded-read finding (section 4).
-4. Product Owner decision on the migration-numbering fork (disclosed, untouched).
-5. Product Owner decision on an approved multi-agency credit-rating
+1. **A real fund-holdings data source.** R5 ships the provider architecture,
+   the versioned schema and the data contract, but no production feed. Every
+   look-through result to date is over controlled seeded data.
+2. Resolve the R4 unbounded-read finding (section 4). Being handled separately;
+   `analyticsRepository.ts` was deliberately not touched by R5.
+3. Product Owner decision on the migration-numbering fork (disclosed, untouched).
+4. Product Owner decision on an approved multi-agency credit-rating
    consolidation methodology, if consolidated credit quality is wanted.
-6. A real fund-holdings data source, since R5 ships the architecture and
-   contract but no production holdings feed.
+5. Optionally, a reliable versioned fund-manager metadata source, which would
+   let the deferred fund-manager concentration analysis be built.

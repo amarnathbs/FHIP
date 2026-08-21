@@ -98,48 +98,83 @@ returned correct figures with an explicit warning:
 > 'public.ii_r5_analytics_results' in the schema cache); the figures shown were
 > recomputed from certified inputs."
 
-## 5. Checks currently BLOCKED
+## 5. The six new R5 tables — now proven
 
-`node scripts/ii_r5_live_dev_security_tests.mjs` → **2 PASS / 0 FAIL / 22 BLOCKED**
+Migration 0044 was applied to DEV by the Product Owner and verified live
+(`node scripts/ii_r5_schema_probe.mjs` → "MIGRATION 0044 FULLY APPLIED: YES",
+all six tables present with every expected column).
 
-| ID | Check | Status |
-| --- | --- | --- |
-| SEC-R5-012 | Unauthenticated anon-key requests return no user-owned rows | **PASS** |
-| SEC-R5-013 | Ordinary user cannot insert into `ii_fund_holdings` | **PASS** |
-| SEC-R5-001 … 011 | Security of the six **new** R5 tables | **BLOCKED** |
-| LIVE-R5-001 … 010 (X-Ray half) | Scenarios needing fund-holdings snapshots | **BLOCKED** |
+`node scripts/ii_r5_live_dev_security_tests.mjs` → **24 PASS / 0 FAIL / 0 BLOCKED**
 
-### Why, and what was done about it
+| ID | Check | Result | Evidence |
+| --- | --- | --- | --- |
+| SCHEMA-GATE-R5 | Migration 0044 applied | PASS | all six tables present |
+| SEC-R5-001 | Ordinary user cannot forge an R5 analytics result for themselves | PASS | HTTP 403 `42501` |
+| SEC-R5-002 | User B cannot forge a result attributed to user A | PASS | HTTP 403 `42501` |
+| SEC-R5-003 | User B cannot READ user A's R5 analytics row | PASS | 0 rows visible to B |
+| SEC-R5-004 | User A CAN read their own row | PASS | 1 row visible to A |
+| SEC-R5-005 | User B cannot DELETE user A's row | PASS | row still present after the attempt |
+| SEC-R5-006 | Owner cannot UPDATE (tamper with) their own row | PASS | `engine_version` unchanged |
+| SEC-R5-007 | Ordinary user cannot declare a fake SIP series into existence | PASS | HTTP 403 `42501` on `ii_sip_series` |
+| SEC-R5-008 | Ordinary user cannot insert a fund-holdings snapshot | PASS | HTTP 403 `42501` |
+| SEC-R5-009 | Ordinary user cannot insert a security classification | PASS | HTTP 403 `42501` |
+| SEC-R5-010 | Ordinary user cannot insert a controlled security alias | PASS | HTTP 403 `42501` |
+| SEC-R5-011 | Ordinary user cannot insert a fund-holdings line | PASS | HTTP 403 `42501` |
+| SEC-R5-012 | Unauthenticated anon-key requests return no user-owned rows | PASS | 0 rows across all 8 tables |
+| SEC-R5-013 | Ordinary user cannot insert into `ii_fund_holdings` | PASS | HTTP 403 + ground truth |
+| LIVE-R5-001 … 010 | End-to-end scenarios | PASS | delegated to the two scenario harnesses |
 
-Migration **0044 is not applied to DEV**, and this session has **no DDL
-capability**. That was established independently, not assumed
-(`scripts/ii_r5_schema_probe.mjs`):
+### An important detail in SEC-R5-005 and SEC-R5-006
 
-* Seven `exec_sql`-style RPC candidates probed — all HTTP 404.
-* No `DATABASE_URL` / `POSTGRES_URL` in the environment.
-* All six R5 tables report `PGRST205` "Could not find the table … in the
-  schema cache".
+Both the cross-user DELETE and the owner's UPDATE returned **HTTP 204**, which
+looks like success. They are recorded PASS only because **service-role ground
+truth** confirmed the row survived and `engine_version` was unchanged: RLS
+filtered the statement to zero rows rather than rejecting the request.
 
-This mirrors R4's own first pass, where the Product Owner had to apply the
-migration before the equivalent checks could run.
+This is exactly why every mutation check in this pack verifies against the
+database rather than trusting a status code. A pack that inferred security from
+the HTTP response alone would have recorded these two as FAIL — or, worse, a
+naive implementation reading `204` as "deleted" would have reported a
+vulnerability that does not exist.
 
-**The SIP half was not left blocked.** The SIP analytics path reads only
-tables that already exist, so it was exercised fully end-to-end against real
-DEV data — see section 2 and `R5_TESTING_AND_VERIFICATION.md`.
+### Scenario-harness delegation
 
-Migration 0044's policies are written to the same pattern that R4 proved
-effective (`select`-only for the owner, no authenticated-role write policy, so
-the service role is the only writer). **That pattern is verified for the
-existing tables and asserted-but-not-yet-proven for the new ones.** The harness
-is written and will evaluate all 22 checks for real the moment 0044 is applied.
+`LIVE-R5-001 … 010` are not executed inside this DB-level pack, because they
+need a running application server. They live in two dedicated harnesses, and
+this pack now **reads each harness's own results file and reports what that
+harness actually recorded** — reporting BLOCKED if a harness has not been run,
+never PASS.
 
-## 6. What this section does NOT claim
+* `scripts/ii_r5_live_sip_e2e.mjs` — **26/26 PASS**
+* `scripts/ii_r5_live_xray_e2e.mjs` — **32/32 PASS**
 
-* It does **not** claim the six new R5 tables' RLS has been tested. It has not.
-* It does **not** claim LIVE-R5-005 … 009 (overlap, multi-fund X-Ray, partial
-  coverage, stale holdings, debt) have been exercised against live data. They
-  have not.
-* It **does** claim, with live evidence, that R4's forgery fix holds, that all
-  pre-existing reference data is write-protected, that the R5 API refuses
-  unauthenticated and cross-user access, and that no request parameter can
-  widen visibility.
+## 6. Live X-Ray adversarial results
+
+From `scripts/ii_r5_live_xray_e2e.mjs`, against real seeded DEV holdings:
+
+| ID | Check | Result | Evidence |
+| --- | --- | --- | --- |
+| LIVE-R5-010 | User B's X-Ray returns none of A's positions | PASS | `empty=true` |
+| LIVE-R5-010b | A **fully-provisioned** B sees only their own holdings | PASS | B's look-through contains only `BONLY1`/`BONLY2`; zero of A's securities |
+| LIVE-R5-010c | A fully-provisioned B cannot request overlap for A's fund ids | PASS | HTTP 404 "One or both of the requested funds are not held in this portfolio" |
+| LIVE-R5-010d | B's own overlap request still works | PASS | HTTP 200 — proving 010c is ownership, not breakage |
+| LIVE-R5-PERSIST | Result persisted with correct versioning/coverage/as-of | PASS | `engine=xray-engine-r5-v1 coverage=1 asOf=2024-06-30 snapshotIds=2` |
+| LIVE-R5-NETWORTH | Look-through created NO investments/assets rows | PASS | `investments=0 assets=0` |
+
+`LIVE-R5-010b` deliberately provisions user B with their own fund first.
+Without that, the earlier `empty=true` result could have been an incidental
+empty-dataset short circuit rather than a genuine isolation guarantee. `010d`
+then proves the endpoint works for B's own data, so the 404 in `010c` is
+specifically about ownership.
+
+## 7. What this section does NOT claim
+
+* It does **not** claim penetration testing beyond the RLS/API surface listed
+  above — no session-fixation, CSRF, or JWT-forgery testing was performed.
+* It **does** claim, with live evidence against a real database and a real
+  running application: R4's forgery fix holds; all reference data (old and new)
+  is write-protected against ordinary users; derived analytics cannot be
+  forged, tampered with, deleted, or read across tenants; the R5 API refuses
+  unauthenticated and cross-user access even for fully-provisioned attackers;
+  no request parameter can widen visibility; and R5 writes nothing to any
+  financial register.

@@ -182,6 +182,35 @@ oracle is doing real work.
 
 **Restore → green.** 91/91 pass; `git diff` clean.
 
+### Negative Control B2 — X-Ray core formula (added after migration 0044)
+
+Re-run for extra confidence once the X-Ray path had been validated live.
+
+**Green.** 131/131 tests pass.
+
+**Break.** In `lookThrough.ts`, drop the portfolio weighting from the core
+formula — use the raw within-fund weight instead of
+`portfolioWeight × holdingWeightInFund`.
+
+**Red — confirmed.** **16 tests failed.**
+
+```
+XRAY-008 / exposures[OA].effectiveWeight:
+  production=0.9   independent=0.54  variance=0.36   tolerance=1e-8  FAIL
+XRAY-005 / exposures[S2].effectiveWeight:
+  production=1.2   independent=0.6   variance=0.6    tolerance=1e-8  FAIL
+XRAY-003 / exposures.order:
+  expected ['S3','S1','S2','S4'] to equal ['S1','S3','S2','S4']      FAIL
+```
+
+Three distinct failure modes surfaced from one defect: wrong magnitudes, an
+**impossible weight of 1.2** (above the 1.0 ceiling), and a corrupted ordering
+of the exposure vector. The ordering failure is worth noting — it means the
+pack detects the defect even where a magnitude happens to coincide.
+
+**Restore → green.** 131/131 pass; `git diff --numstat` shows zero changed
+lines.
+
 ## 8. Reproduction
 
 ```

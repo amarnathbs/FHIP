@@ -217,7 +217,39 @@ async function main() {
 
   // -------------------------------------------------------------------------
   // LIVE-R5-001..010 — end-to-end scenarios.
+  //
+  // These are NOT executed here. They live in two dedicated harnesses that
+  // need a running application server, which this DB-level pack deliberately
+  // does not require:
+  //
+  //   LIVE-R5-001..004, 010 (SIP half)   -> scripts/ii_r5_live_sip_e2e.mjs
+  //   LIVE-R5-005..009, 010 (X-Ray half) -> scripts/ii_r5_live_xray_e2e.mjs
+  //
+  // Rather than emit a placeholder verdict, this pack reads each harness's
+  // own results file and reports what that harness ACTUALLY recorded. If a
+  // harness has not been run, the scenario is reported BLOCKED with that
+  // exact reason — never PASS.
   // -------------------------------------------------------------------------
+  const harnessFiles = [
+    ['scripts/ii_r5_live_sip_e2e.mjs', path.join(__dirname, 'ii-r5-certification', 'live_sip_e2e_results.json')],
+    ['scripts/ii_r5_live_xray_e2e.mjs', path.join(__dirname, 'ii-r5-certification', 'live_xray_e2e_results.json')],
+  ];
+  const harnessResults = new Map();
+  const harnessRanAt = [];
+  for (const [name, file] of harnessFiles) {
+    if (!fs.existsSync(file)) {
+      harnessRanAt.push(`${name}: NOT RUN`);
+      continue;
+    }
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    harnessRanAt.push(`${name}: ran ${parsed.ranAt}`);
+    for (const r of parsed.results) {
+      // A scenario covered by two harnesses passes only if both agree.
+      const prev = harnessResults.get(r.id);
+      if (!prev || prev.status === 'PASS') harnessResults.set(r.id, r);
+    }
+  }
+
   const liveScenarios = [
     ['LIVE-R5-001', 'Standard monthly SIP produces a series with an actual SIP XIRR'],
     ['LIVE-R5-002', 'SIP with a missed contribution reports the gap, not "stopped"'],
@@ -228,17 +260,16 @@ async function main() {
     ['LIVE-R5-007', 'Partial holdings coverage is reported at its true fraction'],
     ['LIVE-R5-008', 'Stale holdings raise a stale warning and are not shown as current'],
     ['LIVE-R5-009', 'Debt fund X-Ray shows only supportable measures'],
-    ['LIVE-R5-010', 'Cross-user attack target: user B cannot retrieve A\'s SIP or X-Ray'],
+    ['LIVE-R5-010', "Cross-user attack target: user B cannot retrieve A's SIP or X-Ray"],
   ];
+  console.log(`\n  Delegated scenario harnesses: ${harnessRanAt.join(' | ')}`);
   for (const [id, description] of liveScenarios) {
-    record(
-      id,
-      description,
-      'BLOCKED',
-      migration0044Applied
-        ? 'Scenario harness not executed in this run.'
-        : 'Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability.'
-    );
+    const r = harnessResults.get(id);
+    if (!r) {
+      record(id, description, 'BLOCKED', 'Neither scenario harness has recorded a result for this id. Run scripts/ii_r5_live_sip_e2e.mjs and scripts/ii_r5_live_xray_e2e.mjs against a running server.');
+    } else {
+      record(id, description, r.status, `via scenario harness — ${r.detail ?? ''}`);
+    }
   }
 }
 

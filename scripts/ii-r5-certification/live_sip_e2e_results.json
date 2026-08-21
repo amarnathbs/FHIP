@@ -1,12 +1,12 @@
 {
-  "ranAt": "2026-08-21T02:40:15.493Z",
-  "appBaseUrl": "http://localhost:3199",
+  "ranAt": "2026-08-21T04:09:05.548Z",
+  "appBaseUrl": "http://localhost:3210",
   "results": [
     {
       "id": "LIVE-R5-SERVER",
       "description": "Dev server reachable",
       "status": "PASS",
-      "detail": "http://localhost:3199"
+      "detail": "http://localhost:3210"
     },
     {
       "id": "SEC-R5-API-001",
@@ -42,7 +42,7 @@
       "id": "LIVE-R5-004",
       "description": "Benchmark SIP uses IDENTICAL cash flows and matches an independent reconstruction",
       "status": "PASS",
-      "detail": "API benchmark rate=0.08994552554984915 independent=0.08994553305367103 variance=7.504e-9; benchmark=E2E_BM_1787279938481_0 returnType=TRI"
+      "detail": "API benchmark rate=0.08994552554984915 independent=0.08994553305367103 variance=7.504e-9; benchmark=E2E_BM_1787285270953_0 returnType=TRI"
     },
     {
       "id": "LIVE-R5-004b",

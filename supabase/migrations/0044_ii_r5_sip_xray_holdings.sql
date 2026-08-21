@@ -32,11 +32,18 @@
 -- ===========================================================================
 -- APPLICATION STATUS
 -- ===========================================================================
--- NOT YET APPLIED to DEV (vqycarelcoijzwlpkpcz) as at authoring time. See
--- R5_IMPLEMENTATION_REPORT.md for the live application record. This file is
--- written to be IDEMPOTENT and safe to re-run end to end: every DDL statement
+-- APPLIED to DEV (vqycarelcoijzwlpkpcz) — verified live by
+-- `node scripts/ii_r5_schema_probe.mjs`, which reports
+-- "MIGRATION 0044 FULLY APPLIED: YES" with all six tables present and every
+-- expected column confirmed by direct query. Post-application security was
+-- then proven live: scripts/ii_r5_live_dev_security_tests.mjs -> 24 PASS /
+-- 0 FAIL / 0 BLOCKED. See docs/investment-intelligence/R5_ACCEPTANCE_REPORT.md
+-- and R5_SECURITY_VERIFICATION.md for the full record.
+--
+-- This file is IDEMPOTENT and safe to re-run end to end: every DDL statement
 -- is guarded (`if not exists` / `drop policy if exists`), so a partial
--- application can be completed by re-running the WHOLE file.
+-- application can be completed by re-running the WHOLE file. Only this
+-- comment block has changed since application; no DDL was altered.
 --
 -- ===========================================================================
 -- SCOPE

@@ -1,83 +1,83 @@
 {
-  "ranAt": "2026-08-21T02:21:09.749Z",
+  "ranAt": "2026-08-21T04:09:35.757Z",
   "results": [
     {
       "id": "SCHEMA-GATE-R5",
       "description": "Migration 0044 applied to DEV",
-      "status": "BLOCKED",
-      "detail": "Missing: ii_fund_holdings_snapshots, ii_fund_holdings_lines, ii_security_classifications, ii_security_aliases, ii_sip_series, ii_r5_analytics_results. This session has no DDL capability (probed; see scripts/ii_r5_schema_probe.mjs), so every check that depends on these tables is reported BLOCKED rather than PASS."
+      "status": "PASS",
+      "detail": "All six R5 tables present."
     },
     {
       "id": "SEC-R5-001",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot forge an R5 analytics result for themselves",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_r5_analytics_results\\\"\"}"
     },
     {
       "id": "SEC-R5-002",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "User B cannot forge an R5 analytics result attributed to user A",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_r5_analytics_results\\\"\"}"
     },
     {
       "id": "SEC-R5-003",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "User B cannot READ user A's R5 analytics row",
+      "status": "PASS",
+      "detail": "rows visible to B: 0"
     },
     {
       "id": "SEC-R5-004",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "User A CAN read their own R5 analytics row",
+      "status": "PASS",
+      "detail": "rows visible to A: 1"
     },
     {
       "id": "SEC-R5-005",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "User B cannot DELETE user A's R5 analytics row",
+      "status": "PASS",
+      "detail": "delete HTTP 204; row still present: true"
     },
     {
       "id": "SEC-R5-006",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Owner cannot UPDATE (tamper with) their own R5 analytics row",
+      "status": "PASS",
+      "detail": "patch HTTP 204; engine_version now xray-engine-r5-v1"
     },
     {
       "id": "SEC-R5-007",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot declare a fake SIP series into existence",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_sip_series\\\"\"}"
     },
     {
       "id": "SEC-R5-008",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot insert a fund-holdings snapshot",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_fund_holdings_snapshots\\\"\"}"
     },
     {
       "id": "SEC-R5-009",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot insert a security classification",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_security_classifications\\\"\"}"
     },
     {
       "id": "SEC-R5-010",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot insert a controlled security alias",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_security_aliases\\\"\"}"
     },
     {
       "id": "SEC-R5-011",
-      "description": "R5-table security check",
-      "status": "BLOCKED",
-      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+      "description": "Ordinary user cannot insert a fund-holdings line",
+      "status": "PASS",
+      "detail": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_fund_holdings_lines\\\"\"}"
     },
     {
       "id": "SEC-R5-012",
       "description": "Unauthenticated (anon-key-only) requests return no user-owned rows",
       "status": "PASS",
-      "detail": "ii_transactions: HTTP 200 rows=0 | ii_holding_snapshots: HTTP 200 rows=0"
+      "detail": "ii_transactions: HTTP 200 rows=0 | ii_holding_snapshots: HTTP 200 rows=0 | ii_fund_holdings_snapshots: HTTP 200 rows=0 | ii_fund_holdings_lines: HTTP 200 rows=0 | ii_security_classifications: HTTP 200 rows=0 | ii_security_aliases: HTTP 200 rows=0 | ii_sip_series: HTTP 200 rows=0 | ii_r5_analytics_results: HTTP 200 rows=0"
     },
     {
       "id": "SEC-R5-013",
@@ -88,62 +88,62 @@
     {
       "id": "LIVE-R5-001",
       "description": "Standard monthly SIP produces a series with an actual SIP XIRR",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — cadence=MONTHLY confidence=CONFIRMED_SOURCE contributions=36; API rate=0.11992726381797947 independent=0.11992726381802721 variance=4.774e-14; API terminal=227448.64157295172 independent=227448.64 variance=0.000000"
     },
     {
       "id": "LIVE-R5-002",
       "description": "SIP with a missed contribution reports the gap, not \"stopped\"",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — gaps=[{\"fromDate\":\"2022-11-07\",\"toDate\":\"2023-01-07\",\"days\":61,\"missedPeriods\":1}] skippedPeriods=1 consistencyPct=0.9583333333333334 activity=LIKELY_STOPPED"
     },
     {
       "id": "LIVE-R5-003",
       "description": "SIP plus an independent lump sum attributes only the series units",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — API terminal=84428.08642017409; series-only expected=84428.09 (variance 0.000000); whole-fund would be 393688.53"
     },
     {
       "id": "LIVE-R5-004",
       "description": "Actual-vs-benchmark SIP comparison over identical cash flows",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — API benchmark rate=0.08994552554984915 independent=0.08994553305367103 variance=7.504e-9; benchmark=E2E_BM_1787285270953_0 returnType=TRI"
     },
     {
       "id": "LIVE-R5-005",
       "description": "Two overlapping mutual funds produce a symmetric overlap figure",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — API overlap=0.35 independent=min(.10,.20)+min(.30,.25)=0.35; commonSecurityCount=2 expected=2"
     },
     {
       "id": "LIVE-R5-006",
       "description": "Multi-fund portfolio X-Ray produces weighted effective exposures",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — X=0.14 SHARED=0.28 OA=0.33 OB=0.22 all exact (tol 1e-8); coverage=1"
     },
     {
       "id": "LIVE-R5-007",
       "description": "Partial holdings coverage is reported at its true fraction",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — effectiveCoverage=0.5599999999999999 (independent 0.70×0.80=0.56); schemeCoverage=0.7; noSnapshotWeight=0.3; undisclosedRemainder=0.13999999999999996"
     },
     {
       "id": "LIVE-R5-008",
       "description": "Stale holdings raise a stale warning and are not shown as current",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — freshness=VERY_STALE statuses=[\"COMPLETE\",\"STALE_HOLDINGS\",\"CLASSIFICATION_INCOMPLETE\"] holdingsAsOfDate=2023-01-31"
     },
     {
       "id": "LIVE-R5-009",
       "description": "Debt fund X-Ray shows only supportable measures",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — applicable=true buckets={\"SOVEREIGN\":0.4,\"AAA\":0.3,\"AA\":0.2,\"UNRATED\":0.1}"
     },
     {
       "id": "LIVE-R5-010",
       "description": "Cross-user attack target: user B cannot retrieve A's SIP or X-Ray",
-      "status": "BLOCKED",
-      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+      "status": "PASS",
+      "detail": "via scenario harness — empty=true totalPortfolioValue=undefined"
     }
   ]
 }

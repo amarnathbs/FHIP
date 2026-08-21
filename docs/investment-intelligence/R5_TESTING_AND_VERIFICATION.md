@@ -67,17 +67,77 @@ Both negative controls executed green → red → green.
 
 ## 5. Live-DEV verification (LIVE-DEV + ADVERSARIAL)
 
-### 5.1 What could and could not be tested
+### 5.1 Coverage
 
-Migration 0044 is **not applied** to DEV and this session has **no DDL
-capability** — independently established, not assumed
-(`scripts/ii_r5_schema_probe.mjs`: seven `exec_sql`-style RPCs all 404, no
-connection string, all six R5 tables `PGRST205`).
+Migration 0044 was initially **not applied**, which blocked the X-Ray half. It
+has since been applied to DEV by the Product Owner and verified live
+(`scripts/ii_r5_schema_probe.mjs` → "MIGRATION 0044 FULLY APPLIED: YES").
 
-The **SIP path reads only tables that already exist**, and persistence to the
-new tables is deliberately non-fatal. The SIP half was therefore exercised
-**fully end-to-end against real DEV data through the real HTTP API**. The X-Ray
-half's look-through scenarios could not be.
+**Both halves are now exercised fully end-to-end against real DEV data through
+the real HTTP API:**
+
+| Harness | Result |
+| --- | --- |
+| `scripts/ii_r5_live_sip_e2e.mjs` | **26 PASS / 0 FAIL / 0 BLOCKED** |
+| `scripts/ii_r5_live_xray_e2e.mjs` | **32 PASS / 0 FAIL / 0 BLOCKED** |
+| `scripts/ii_r5_live_dev_security_tests.mjs` | **24 PASS / 0 FAIL / 0 BLOCKED** |
+| `scripts/ii_r5_analytics_forgery_regression.mjs` | **10 PASS / 0 FAIL / 0 BLOCKED** |
+
+Nothing remains BLOCKED.
+
+### 5.1b Live X-Ray results (LIVE-R5-005 … 009)
+
+Every expected value below was computed by the harness itself from the seeded
+inputs, importing no production module.
+
+| ID | Check | Evidence |
+| --- | --- | --- |
+| LIVE-R5-006 | Weighted effective exposure | X=0.14, SHARED=0.28, OA=0.33, OB=0.22 — **all exact at 1e-8** |
+| LIVE-R5-006b | Security held via two funds | `schemeCount=2`, 2 contributing funds |
+| LIVE-R5-006c | Cash preserved | 0.03, not redistributed |
+| LIVE-R5-006d | **No double count** | all buckets sum to **exactly 1** |
+| LIVE-R5-006e | Values sum back | Σ effectiveValue = ₹970,000 on a ₹1,000,000 portfolio with 3% cash |
+| LIVE-R5-006f | Sector aggregation | ENERGY .33, TECH .28, PHARMA .22, FIN .14 |
+| LIVE-R5-006g | Market cap | LARGE .42, MID .33, SMALL .22 |
+| LIVE-R5-006h | Concentration + HHI | top1 .33, top5 .97, HHI 0.2553 = independent 0.2553 |
+| LIVE-R5-005 | Overlap | 0.35 = min(.10,.20)+min(.30,.25); 2 common securities |
+| LIVE-R5-005b | Matrix identities | symmetric ✓ bounded ✓ diagonal 1 ✓ |
+| LIVE-R5-007 | Partial coverage | 0.56 = independent 0.70×0.80; noSnapshot 0.30 |
+| LIVE-R5-007b | Undisclosed remainder | 0.14 = 0.70×0.20, retained not rescaled |
+| LIVE-R5-007c | Quality status | `PARTIAL_COVERAGE` raised, `COMPLETE` not claimed |
+| LIVE-R5-008 | Stale holdings | `VERY_STALE` + `STALE_HOLDINGS` |
+| LIVE-R5-008b | **No look-ahead** | future 2024-09-30 snapshot **not used**; only `OLD` |
+| LIVE-R5-009 | Debt credit bands | SOVEREIGN .40, AAA .30, AA .20, UNRATED .10 |
+| LIVE-R5-009b | Missing rating | lands in UNRATED, never a credit band |
+| LIVE-R5-009c | Weighted duration | 3.47 = independent 3.47 |
+| LIVE-R5-009d | Maturity buckets | Y1_3 .40, Y3_5 .20, Y5_10 .40 |
+| LIVE-R5-CLASS | Unclassified holdings | sector/market-cap **unavailable with 0 buckets**, not zeros |
+| LIVE-R5-CLASS-b | Look-through unaffected | top holding 0.60 |
+| LIVE-R5-UNRES | Unresolved retained | 0.65 = .5×.6 + .5×.7 |
+| LIVE-R5-UNRES-b | **Identical names not matched** | overlap 0.30 from the resolved security ONLY; the identically-named "MYSTERY HOLDING" in both funds contributed nothing |
+| LIVE-R5-PERSIST | Versioned persistence | engine, coverage 1, asOf, portfolioAsOf, holdingsAsOf, 2 snapshot ids, classification, input hash |
+| LIVE-R5-DETERMINISM | Determinism | identical input fingerprint across two runs |
+| LIVE-R5-NETWORTH | **No net-worth impact** | `investments=0 assets=0` after full look-through |
+
+`LIVE-R5-UNRES-b` is the strongest single result here: two funds each held an
+unresolved line printed with the *identical* name "MYSTERY HOLDING", and the
+engine correctly refused to treat them as the same security — the overlap came
+out at 0.30 from the one genuinely-resolved holding, not 0.30 + 0.60.
+
+### 5.1c Test-data hygiene
+
+All seeded DEV data was purged and the purge verified:
+`ii_fund_holdings_snapshots`, `ii_fund_holdings_lines`, `ii_r5_analytics_results`,
+`ii_sip_series`, `ii_security_classifications`, `ii_security_aliases`,
+`ii_transactions`, `ii_holding_snapshots`, `ii_prices_nav`, `ii_benchmarks`,
+`ii_benchmark_series`, `ii_accounts` all report **0 rows**; `ii_instruments`
+retains 8 pre-existing rows and **0 test rows**.
+
+The per-fixture teardowns initially left 10 instruments behind — their `like`
+filters did not match names containing spaces, and FK ordering blocked deleting
+a security while a fund-holdings line still referenced it as an underlying.
+`scripts/ii_r5_purge_test_data.mjs` was written to sweep in strict dependency
+order and verify the result.
 
 ### 5.2 Live SIP end-to-end — 26/26 PASS
 
@@ -148,19 +208,26 @@ See `R5_SECURITY_VERIFICATION.md`.
 
 ## 6. Browser QA (BROWSER)
 
-See `R5_BROWSER_QA.md`. Conducted in a real browser as a real logged-in user.
+See `R5_BROWSER_QA.md`. Conducted in a real browser as a real logged-in user,
+across two passes (the second after migration 0044 was applied).
 
-Passed: SIP overview with data; **benchmark-unavailable rendering "Not
-available" rather than 0.00%**; gap/pause states; SIP detail with charts,
-consistency, assumptions and timing; labelled simulation with three variants;
-**the mandatory 0%-coverage X-Ray negative control** (0 charts, 0 SVGs,
-0 tables, 0 occurrences of "0.00%"); overlap-unavailable with no heatmap;
-correct separate as-of dates; and a full-page language sweep finding 0 advisory
-phrases and 0 mentions of "alpha".
+**All twelve states verified rendered.** SIP: overview with data;
+benchmark-unavailable rendering "Not available" rather than 0.00%; gap/pause;
+detail with charts, consistency, assumptions and timing; labelled simulation
+with three variants. X-Ray: normal portfolio (top-10 table, sector chart,
+market cap, concentration — every figure re-derived by hand and matching);
+partial coverage with the honest remainder panel summing to exactly 1; stale
+holdings and a 245-day mixed-date spread suppressing the portfolio conclusion;
+a populated, symmetric overlap heatmap where the undisclosed fund renders
+**"—" not "0%"**; debt widgets including a hand-verified 4.05-year duration;
+missing classification rendering unavailable with **0 charts** while
+look-through still works; and the 0%-coverage negative control **re-run against
+a real, empty table** rather than a missing one.
 
-**Not covered:** normal X-Ray with real holdings, partial coverage, stale
-holdings, a populated overlap heatmap, missing-classification rendering, and
-debt widgets — all require migration 0044.
+Language sweeps on every page found **0 advisory phrases** and **0 mentions of
+"alpha"**.
+
+**Nothing remains unverified.**
 
 ## 7. Integration / no-regression
 

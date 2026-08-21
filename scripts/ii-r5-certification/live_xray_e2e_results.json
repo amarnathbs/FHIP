@@ -1,0 +1,198 @@
+{
+  "ranAt": "2026-08-21T04:07:38.014Z",
+  "appBaseUrl": "http://localhost:3210",
+  "results": [
+    {
+      "id": "LIVE-R5X-SERVER",
+      "description": "Dev server reachable",
+      "status": "PASS",
+      "detail": "http://localhost:3210"
+    },
+    {
+      "id": "LIVE-R5X-GATE",
+      "description": "Migration 0044 applied",
+      "status": "PASS",
+      "detail": "ii_fund_holdings_snapshots reachable"
+    },
+    {
+      "id": "LIVE-R5-006",
+      "description": "Multi-fund portfolio X-Ray produces weighted effective exposures",
+      "status": "PASS",
+      "detail": "X=0.14 SHARED=0.28 OA=0.33 OB=0.22 all exact (tol 1e-8); coverage=1"
+    },
+    {
+      "id": "LIVE-R5-006b",
+      "description": "A security held via two funds reports schemeCount 2",
+      "status": "PASS",
+      "detail": "X schemeCount=2, contributingFunds=2"
+    },
+    {
+      "id": "LIVE-R5-006c",
+      "description": "Cash weight preserved, never redistributed across equities",
+      "status": "PASS",
+      "detail": "cashWeight=0.03 expected=0.03"
+    },
+    {
+      "id": "LIVE-R5-006d",
+      "description": "NO DOUBLE COUNT: all weight buckets sum to exactly 1",
+      "status": "PASS",
+      "detail": "sum=1"
+    },
+    {
+      "id": "LIVE-R5-006e",
+      "description": "Effective values sum back to the portfolio value (attribution, not extra wealth)",
+      "status": "PASS",
+      "detail": "Σ effectiveValue=970000 expected=970000 (portfolio ₹1,000,000, 3% cash)"
+    },
+    {
+      "id": "LIVE-R5-006f",
+      "description": "Sector exposure aggregates correctly across funds",
+      "status": "PASS",
+      "detail": "{\"ENERGY\":0.33,\"TECH\":0.28,\"PHARMA\":0.22000000000000003,\"FIN\":0.14}"
+    },
+    {
+      "id": "LIVE-R5-006g",
+      "description": "Market-cap exposure aggregates from security-level classification",
+      "status": "PASS",
+      "detail": "{\"LARGE\":0.42000000000000004,\"MID\":0.33,\"SMALL\":0.22000000000000003}"
+    },
+    {
+      "id": "LIVE-R5-006h",
+      "description": "Concentration and HHI match an independent calculation",
+      "status": "PASS",
+      "detail": "top1=0.33 top5=0.9700000000000001 hhi=0.2553 independentHhi=0.2553"
+    },
+    {
+      "id": "LIVE-R5-005",
+      "description": "Two overlapping funds produce the independently-calculated overlap",
+      "status": "PASS",
+      "detail": "API overlap=0.35 independent=min(.10,.20)+min(.30,.25)=0.35; commonSecurityCount=2 expected=2"
+    },
+    {
+      "id": "LIVE-R5-005b",
+      "description": "Live overlap matrix is symmetric, bounded 0..1, diagonal 1",
+      "status": "PASS",
+      "detail": "symmetric=true bounded=true diagonal1=true matrix=[[1,0.35],[0.35,1]]"
+    },
+    {
+      "id": "LIVE-R5-007",
+      "description": "Partial holdings coverage is reported at its true fraction, never rounded up",
+      "status": "PASS",
+      "detail": "effectiveCoverage=0.5599999999999999 (independent 0.70×0.80=0.56); schemeCoverage=0.7; noSnapshotWeight=0.3; undisclosedRemainder=0.13999999999999996"
+    },
+    {
+      "id": "LIVE-R5-007b",
+      "description": "Undisclosed remainder retained rather than rescaled to 100%",
+      "status": "PASS",
+      "detail": "undisclosedRemainderWeight=0.13999999999999996 expected=0.70×0.20=0.14"
+    },
+    {
+      "id": "LIVE-R5-007c",
+      "description": "PARTIAL_COVERAGE quality status raised, COMPLETE not claimed",
+      "status": "PASS",
+      "detail": "[\"PARTIAL_COVERAGE\",\"MISSING_HOLDINGS\",\"CLASSIFICATION_INCOMPLETE\"]"
+    },
+    {
+      "id": "LIVE-R5-008",
+      "description": "Stale holdings raise a stale warning and are never shown as current",
+      "status": "PASS",
+      "detail": "freshness=VERY_STALE statuses=[\"COMPLETE\",\"STALE_HOLDINGS\",\"CLASSIFICATION_INCOMPLETE\"] holdingsAsOfDate=2023-01-31"
+    },
+    {
+      "id": "LIVE-R5-008b",
+      "description": "A FUTURE snapshot is never used to describe an earlier analytics date",
+      "status": "PASS",
+      "detail": "holdings used: [\"OLD\"]; future snapshot (2024-09-30) used = false"
+    },
+    {
+      "id": "LIVE-R5-009",
+      "description": "Debt X-Ray credit bands match an independent calculation",
+      "status": "PASS",
+      "detail": "applicable=true buckets={\"SOVEREIGN\":0.4,\"AAA\":0.3,\"AA\":0.2,\"UNRATED\":0.1}"
+    },
+    {
+      "id": "LIVE-R5-009b",
+      "description": "A missing rating lands in UNRATED, never a credit band",
+      "status": "PASS",
+      "detail": "UNRATED=0.1 expected=0.10 (the one bond with no rating)"
+    },
+    {
+      "id": "LIVE-R5-009c",
+      "description": "Weighted modified duration matches an independent calculation",
+      "status": "PASS",
+      "detail": "API=3.4700000000000006 independent=3.47"
+    },
+    {
+      "id": "LIVE-R5-009d",
+      "description": "Maturity buckets place each bond in the correct band",
+      "status": "PASS",
+      "detail": "{\"Y1_3\":0.4,\"Y3_5\":0.2,\"Y5_10\":0.4} (expected Y1_3=.30+.10=.40, Y3_5=.20, Y5_10=.40)"
+    },
+    {
+      "id": "LIVE-R5-CLASS",
+      "description": "Holdings present but unclassified -> sector/market-cap UNAVAILABLE, not zero buckets",
+      "status": "PASS",
+      "detail": "available=true sector.status=unavailable sectorBuckets=0 mcap.status=unavailable statuses=[\"COMPLETE\",\"CLASSIFICATION_INCOMPLETE\"]"
+    },
+    {
+      "id": "LIVE-R5-CLASS-b",
+      "description": "Look-through itself still works despite missing classification",
+      "status": "PASS",
+      "detail": "top holding weight=0.6 expected=0.60"
+    },
+    {
+      "id": "LIVE-R5-UNRES",
+      "description": "Unresolved weight retained and reported, never dropped",
+      "status": "PASS",
+      "detail": "unresolvedWeight=0.6499999999999999 expected=.5*.6+.5*.7=0.65"
+    },
+    {
+      "id": "LIVE-R5-UNRES-b",
+      "description": "Identically-NAMED unresolved holdings are NOT treated as matched in overlap",
+      "status": "PASS",
+      "detail": "overlap=0.3 expected=min(.40,.30)=0.30 from X ONLY; commonSecurityCount=1 expected=1 (MYSTERY HOLDING excluded despite identical names)"
+    },
+    {
+      "id": "LIVE-R5-010",
+      "description": "User B's X-Ray returns none of user A's positions",
+      "status": "PASS",
+      "detail": "empty=true totalPortfolioValue=undefined"
+    },
+    {
+      "id": "LIVE-R5-010b",
+      "description": "A fully-provisioned user B sees ONLY their own holdings, never user A's",
+      "status": "PASS",
+      "detail": "B's look-through contains: [\"BONLY2\",\"BONLY1\"]; sees own=true; leaked A's securities=false"
+    },
+    {
+      "id": "LIVE-R5-010c",
+      "description": "A fully-provisioned user B cannot request overlap for user A's fund ids",
+      "status": "PASS",
+      "detail": "HTTP 404 {\"error\":\"One or both of the requested funds are not held in this portfolio.\"} (B holds cf26b8ba-07cc-497e-b8dc-c98b370041de, requested A's 072ee5fd-293d-4207-97c5-1efc69429ab9/45e90239-d5af-46eb-9787-34f100cc25bc)"
+    },
+    {
+      "id": "LIVE-R5-010d",
+      "description": "User B's own overlap request still works (the refusal above is ownership, not breakage)",
+      "status": "PASS",
+      "detail": "HTTP 200 available=false"
+    },
+    {
+      "id": "LIVE-R5-PERSIST",
+      "description": "X-Ray result persisted with correct versioning, coverage and as-of metadata",
+      "status": "PASS",
+      "detail": "engine=xray-engine-r5-v1 coverage=1 asOf=2024-06-30 portfolioAsOf=2024-06-30 holdingsAsOf=2024-06-01 snapshotIds=2 classification=r5x-classification-v1 inputHash=f9f5293cdf099cc0…"
+    },
+    {
+      "id": "LIVE-R5-DETERMINISM",
+      "description": "Re-running the same analysis reproduces an identical input fingerprint",
+      "status": "PASS",
+      "detail": "run1=f9f5293cdf099cc03bf084f0… run2=f9f5293cdf099cc03bf084f0…"
+    },
+    {
+      "id": "LIVE-R5-NETWORTH",
+      "description": "X-Ray look-through created NO investments/assets rows",
+      "status": "PASS",
+      "detail": "investments=0 assets=0 (both must be 0 — look-through is attribution, not wealth)"
+    }
+  ]
+}
