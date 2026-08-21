@@ -45,6 +45,7 @@ import { isoDateDaysBetween } from './dateNormalisation';
 import { normaliseSchemeName } from './parsers/textUtils';
 import { randomUUID } from 'crypto';
 import type { IiPlanType, IiOptionType } from './types';
+import { fetchAllRows } from './pagination';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -310,9 +311,48 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   for (const t of parsed.transactions) uniqueSchemes.set(schemeKey(t.scheme), t.scheme);
   for (const h of parsed.holdings) uniqueSchemes.set(schemeKey(h.scheme), h.scheme);
 
-  const { data: existingIdentifierRows } = await admin.from('ii_instrument_identifiers').select('instrument_id, identifier_scheme, identifier_value, country_code').eq('is_active', true);
-  const { data: existingInstrumentRows } = await admin.from('ii_instruments').select('id, instrument_name, amc_name, plan_type, option_type, country_of_domicile').eq('is_active', true);
-  const { data: aliasRowsRaw } = await admin.from('ii_scheme_alias_map').select('*').eq('is_active', true);
+  // R6-P0 pagination closure — HIGHEST-SEVERITY site found in the module-wide
+  // audit. These three reads load the ENTIRE active canonical universe with no
+  // user filter, and they are the reference set against which an incoming
+  // statement's schemes are resolved. The Indian mutual-fund universe alone is
+  // well over 1000 active schemes (and each instrument carries several
+  // identifier rows), so an unbounded select here was silently truncated to
+  // the first 1000 rows with no error.
+  //
+  // The consequence is worse than "incomplete": resolution that cannot see an
+  // existing instrument does not fail loudly, it MINTS A NEW canonical
+  // instrument. That produces duplicate instruments, splits a holder's history
+  // across them, and defeats the R2 dedup guarantees — the exact data-integrity
+  // property R2 was built to protect.
+  const existingIdentifierRows = await fetchAllRows<{
+    instrument_id: string;
+    identifier_scheme: string;
+    identifier_value: string;
+    country_code: string;
+  }>(() =>
+    admin
+      .from('ii_instrument_identifiers')
+      .select('instrument_id, identifier_scheme, identifier_value, country_code')
+      .eq('is_active', true)
+      .order('id', { ascending: true })
+  );
+  const existingInstrumentRows = await fetchAllRows<{
+    id: string;
+    instrument_name: string;
+    amc_name: string | null;
+    plan_type: string | null;
+    option_type: string | null;
+    country_of_domicile: string;
+  }>(() =>
+    admin
+      .from('ii_instruments')
+      .select('id, instrument_name, amc_name, plan_type, option_type, country_of_domicile')
+      .eq('is_active', true)
+      .order('id', { ascending: true })
+  );
+  const aliasRowsRaw = await fetchAllRows<Record<string, unknown>>(() =>
+    admin.from('ii_scheme_alias_map').select('*').eq('is_active', true).order('id', { ascending: true })
+  );
 
   const existingForResolution: ExistingInstrumentForResolution[] = (existingInstrumentRows ?? []).map((r) => {
     const isin = (existingIdentifierRows ?? []).find((i) => i.instrument_id === r.id && i.identifier_scheme === 'isin')?.identifier_value ?? null;
@@ -698,13 +738,22 @@ async function evaluatePositionAndCertify(
     .maybeSingle();
   if (!latestSnapshot) return; // no certified closing balance for this position yet — nothing to certify
 
-  const { data: allTxns } = await admin
-    .from('ii_transactions')
-    .select('transaction_type, units, transaction_date')
-    .eq('account_id', accountId)
-    .eq('instrument_id', instrumentId)
-    .lte('transaction_date', latestSnapshot.as_of_date as string)
-    .order('transaction_date', { ascending: true });
+  // R6-P0: unbounded before. This is the unit-reconciliation input that
+  // decides whether a position can be CERTIFIED, so a silently truncated
+  // transaction history produces a wrong derived unit balance and therefore a
+  // wrong certification verdict. A long-running daily/weekly SIP in one scheme
+  // passes 1000 transactions. `transaction_date` repeats, so `id` supplies the
+  // unique tie-breaker.
+  const allTxns = await fetchAllRows<{ transaction_type: string; units: number; transaction_date: string }>(() =>
+    admin
+      .from('ii_transactions')
+      .select('transaction_type, units, transaction_date')
+      .eq('account_id', accountId)
+      .eq('instrument_id', instrumentId)
+      .lte('transaction_date', latestSnapshot.as_of_date as string)
+      .order('transaction_date', { ascending: true })
+      .order('id', { ascending: true })
+  );
 
   const { data: earlierSnapshot } = await admin
     .from('ii_holding_snapshots')

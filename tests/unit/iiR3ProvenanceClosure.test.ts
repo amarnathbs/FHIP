@@ -55,10 +55,27 @@ function makeFakeSupabase(db: FakeDb, opts: { forcedErrors?: ForcedError[] } = {
   function from(table: string) {
     if (!db[table]) db[table] = [];
     const filters: Array<(r: Row) => boolean> = [];
+    const orderClauses: Array<{ col: string; ascending: boolean }> = [];
     let pending: { type: 'insert' | 'update'; payload: Row } | null = null;
 
     function matchRows(): Row[] {
       return db[table].filter((r) => filters.every((f) => f(r)));
+    }
+
+    /** Apply .order() clauses, first clause = primary key (stable sort). */
+    function sortRows(rows: Row[]): Row[] {
+      const result = [...rows];
+      for (let i = orderClauses.length - 1; i >= 0; i--) {
+        const { col, ascending } = orderClauses[i];
+        result.sort((a, b) => {
+          const av = a[col] as string | number;
+          const bv = b[col] as string | number;
+          if (av < bv) return ascending ? -1 : 1;
+          if (av > bv) return ascending ? 1 : -1;
+          return 0;
+        });
+      }
+      return result;
     }
 
     function execute(): { data: unknown; error: { message: string } | null } {
@@ -106,6 +123,20 @@ function makeFakeSupabase(db: FakeDb, opts: { forcedErrors?: ForcedError[] } = {
       update(payload: Row) {
         pending = { type: 'update', payload };
         return api;
+      },
+      // R6-P0: the real PostgREST client supports .order()/.range(), and the
+      // production code now pages its ii_tax_lots read (a long-running SIP can
+      // open >1000 lots in one scheme). The mock has to model that surface or
+      // it stops representing the client it stands in for.
+      order(col: string, o?: { ascending?: boolean }) {
+        orderClauses.push({ col, ascending: o?.ascending !== false });
+        return api;
+      },
+      range(from: number, to: number) {
+        const { data, error } = execute();
+        if (error) return Promise.resolve({ data: null, error });
+        const arr = sortRows((data as Row[] | null) ?? []);
+        return Promise.resolve({ data: arr.slice(from, to + 1), error: null });
       },
       maybeSingle() {
         const { data, error } = execute();

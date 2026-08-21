@@ -28,6 +28,7 @@ import type { SipDataset } from '@/lib/engines/investment-intelligence/sip/sipOr
 import type { XrayDataset } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
+import { fetchAllRows } from './pagination';
 import type { Observation } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
 
 export interface LoadWarning {
@@ -51,23 +52,8 @@ export interface LoadWarning {
  * Every large time-series read in this module therefore goes through this
  * helper, which pages explicitly until a short page is returned.
  */
-const PAGE_SIZE = 1000;
-
-async function fetchAllRows<T>(
-  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> }
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    const page = data ?? [];
-    out.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    // Defensive ceiling so a pathological dataset cannot spin forever.
-    if (out.length > 500_000) break;
-  }
-  return out;
-}
+// R6-P0: the helper now lives in ./pagination and is shared with
+// analyticsRepository, so the module has exactly ONE paging implementation.
 
 export interface R5LoadResult<T> {
   dataset: T | null;
@@ -330,6 +316,15 @@ export async function loadXrayDataset(
       .eq('user_id', userId)
       .order('as_of_date', { ascending: false })
       .order('instrument_id', { ascending: true })
+      // R6-P0: ii_holding_snapshots is unique on (account_id, instrument_id,
+      // as_of_date) — see uidx_ii_holding_snapshots_position_date in
+      // migration 0033 — so (as_of_date, instrument_id) is NOT unique for a
+      // user holding the SAME instrument in more than one account. `id`
+      // makes the page ordering total. Note this read is consumed as
+      // "first row per instrument wins" (latest-snapshot semantics), so a
+      // page-boundary reordering could otherwise pick a different account's
+      // snapshot as the instrument's latest.
+      .order('id', { ascending: true })
   );
 
   if (holdingRows.length === 0) {
@@ -424,17 +419,37 @@ async function loadFundHoldingsSnapshots(
   const debtLines: DebtExposureLine[] = [];
   let classificationVersion: string | null = null;
 
-  const { data: snapRows, error: snapErr } = await supabase
-    .from('ii_fund_holdings_snapshots')
-    .select('id, fund_instrument_id, holdings_as_of_date, source_data_version, classification_version, quality_status')
-    .in('fund_instrument_id', fundIds)
-    .lte('holdings_as_of_date', asOfDate)
-    .order('holdings_as_of_date', { ascending: false });
-
-  if (snapErr) {
+  // R6-P0: this read was unbounded. Every preserved historical disclosure for
+  // every fund in the portfolio is in scope (`.lte(asOfDate)` bounds the
+  // future, not the past), so a 50-fund portfolio with years of monthly
+  // disclosures passes 1000 rows. Truncation here is doubly damaging: the
+  // resulting `snapIds` are the filter for the holdings-LINES read below, so
+  // a silently short snapshot list silently removes whole funds from
+  // look-through exposure. Ordering needs `id` because
+  // (fund_instrument_id, holdings_as_of_date) has only a non-unique index.
+  interface SnapHeaderRow {
+    id: string;
+    fund_instrument_id: string;
+    holdings_as_of_date: string;
+    source_data_version: string | null;
+    classification_version: string | null;
+    quality_status: string | null;
+  }
+  let snapRows: SnapHeaderRow[];
+  try {
+    snapRows = await fetchAllRows<SnapHeaderRow>(() =>
+      supabase
+        .from('ii_fund_holdings_snapshots')
+        .select('id, fund_instrument_id, holdings_as_of_date, source_data_version, classification_version, quality_status')
+        .in('fund_instrument_id', fundIds)
+        .lte('holdings_as_of_date', asOfDate)
+        .order('holdings_as_of_date', { ascending: false })
+        .order('id', { ascending: true })
+    );
+  } catch (e) {
     warnings.push({
       scope: 'fund_holdings',
-      detail: `Fund holdings data is not available (${snapErr.message}). Look-through exposure is reported as unavailable rather than estimated.`,
+      detail: `Fund holdings data is not available (${e instanceof Error ? e.message : String(e)}). Look-through exposure is reported as unavailable rather than estimated.`,
     });
     return { snapshotsByFund, classificationVersion, debtLines };
   }
@@ -473,6 +488,14 @@ async function loadFundHoldingsSnapshots(
       .in('snapshot_id', snapIds)
       .order('snapshot_id', { ascending: true })
       .order('weight_pct', { ascending: false })
+      // R6-P0: `weight_pct` is NOT unique — ii_fund_holdings_lines has no
+      // unique constraint at all (migration 0044 creates only two non-unique
+      // indexes), and many holdings legitimately share a weight (several
+      // lines at 0.50%, a long tail rounded to 0.01%). With ~12,500 lines
+      // this read spans ~13 pages, so a tie straddling a page boundary could
+      // silently drop or duplicate a holding line and skew look-through
+      // exposure. `id` is the primary key and makes the ordering total.
+      .order('id', { ascending: true })
   );
 
   const linesBySnapshot = new Map<string, SnapshotHolding[]>();

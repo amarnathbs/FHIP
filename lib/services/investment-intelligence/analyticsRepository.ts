@@ -25,6 +25,7 @@ import type { BenchmarkMapping } from '@/lib/engines/investment-intelligence/ben
 import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmarkService';
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
+import { fetchAllRows } from './pagination';
 
 /** Transaction types that represent money leaving the investor (cost). */
 const OUTFLOW_TYPES = new Set(['purchase', 'sip', 'switch_in', 'reinvestment', 'fee', 'tax']);
@@ -66,23 +67,8 @@ function toDate(s: string): Date {
  * helper, which pages explicitly until a short page is returned. Same
  * pattern as r5Repository.ts's fetchAllRows.
  */
-const PAGE_SIZE = 1000;
-
-async function fetchAllRows<T>(
-  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> }
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    const page = data ?? [];
-    out.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    // Defensive ceiling so a pathological dataset cannot spin forever.
-    if (out.length > 500_000) break;
-  }
-  return out;
-}
+// R6-P0: the helper now lives in ./pagination and is shared with r5Repository,
+// so the module has exactly ONE paging implementation to reason about.
 
 /**
  * Load everything the AnalyticsOrchestrator needs for ONE user.
@@ -100,11 +86,25 @@ export async function loadAnalyticsDataset(
   const asOfDate = opts.asOfDate ?? new Date();
 
   // ---- Positions and their certified history completeness -------------
-  const { data: truthRows, error: truthErr } = await supabase
-    .from('ii_portfolio_truth_status')
-    .select('instrument_id, account_id, history_completeness, status')
-    .eq('user_id', userId);
-  if (truthErr) throw new Error(`Failed to load portfolio truth status: ${truthErr.message}`);
+  // R6-P0: one row per (account, instrument) position. Unbounded before, and
+  // spec section 4 lists it as an R4 query path to audit. An aggregated or
+  // long-lived household can exceed 1000 positions, and truncation here
+  // silently shrinks `instrumentIds` — i.e. schemes vanish from the analysis
+  // entirely. Unique on (account_id, instrument_id) per migration 0041, but
+  // ordering by `id` keeps the page ordering total regardless.
+  interface TruthRow {
+    instrument_id: string;
+    account_id: string;
+    history_completeness: string | null;
+    status: string;
+  }
+  const truthRows = await fetchAllRows<TruthRow>(() =>
+    supabase
+      .from('ii_portfolio_truth_status')
+      .select('instrument_id, account_id, history_completeness, status')
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+  );
 
   interface TxRow {
     instrument_id: string;
@@ -416,17 +416,38 @@ async function loadBenchmarkMappings(
 async function loadRiskFreeRates(
   supabase: SupabaseClient
 ): Promise<{ riskFreeSeries: RiskFreeRatePoint[]; riskFreeWarnings: LoadWarning[] }> {
-  const { data, error } = await supabase
-    .from('ii_risk_free_rates')
-    .select('country_code, period_start, period_end, annualised_rate, source, method, version');
-
-  if (error) {
+  // R6-P0: unbounded reference read, and spec section 4 names reference data
+  // and calculation inputs explicitly. This table is per-country periodic
+  // rates with no user filter, so it grows monotonically with every country
+  // and every period ever loaded; a decade of daily rates for a handful of
+  // countries passes 1000. Truncation would silently withhold Sharpe/Sortino/
+  // alpha for later periods, or worse, match the wrong period.
+  interface RateRow {
+    country_code: string;
+    period_start: string;
+    period_end: string;
+    annualised_rate: number;
+    source: string;
+    method: string;
+    version: string;
+  }
+  let data: RateRow[];
+  try {
+    data = await fetchAllRows<RateRow>(() =>
+      supabase
+        .from('ii_risk_free_rates')
+        .select('country_code, period_start, period_end, annualised_rate, source, method, version')
+        .order('country_code', { ascending: true })
+        .order('period_start', { ascending: true })
+        .order('id', { ascending: true })
+    );
+  } catch (e) {
     return {
       riskFreeSeries: [],
       riskFreeWarnings: [
         {
           scope: 'risk_free',
-          detail: `Risk-free reference data is unavailable (${error.message}). Sharpe, Sortino and alpha are withheld rather than calculated against an assumed rate.`,
+          detail: `Risk-free reference data is unavailable (${e instanceof Error ? e.message : String(e)}). Sharpe, Sortino and alpha are withheld rather than calculated against an assumed rate.`,
         },
       ],
     };

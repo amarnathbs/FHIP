@@ -38,7 +38,7 @@ type MockRow = Record<string, unknown>;
 const POSTGREST_CAP = 1000;
 
 function applyOrder(rows: MockRow[], clauses: Array<{ col: string; ascending: boolean }>): MockRow[] {
-  let result = [...rows];
+  const result = [...rows];
   // Apply clauses in reverse so the FIRST .order() call is the primary sort
   // key, relying on Array.sort's stability — the same trick the real fix
   // depends on for deterministic multi-key ordering.

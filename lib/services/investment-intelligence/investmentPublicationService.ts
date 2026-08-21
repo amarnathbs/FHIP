@@ -28,6 +28,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
+import { fetchAllRows } from './pagination';
 import {
   buildPreLinkManualSnapshot,
   calculateFinancialImpact,
@@ -230,13 +231,22 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
     member = (data as unknown as HouseholdMemberRow | null) ?? null;
   }
 
-  const { data: openLotsRaw } = await supabase
-    .from('ii_tax_lots')
-    .select('units_remaining, cost_per_unit, status')
-    .eq('user_id', userId)
-    .eq('account_id', snapshot.account_id)
-    .eq('instrument_id', snapshot.instrument_id)
-    .neq('status', 'closed');
+  // R6-P0: unbounded before. Open tax lots for ONE position drive the
+  // published COST BASIS, and a daily/weekly SIP held for a few years opens
+  // well over 1000 lots in a single scheme. Silent truncation understates cost
+  // basis with no error surfaced — a wrong number on the user's net worth.
+  // (Also flagged forward to R6-P1: the tax engine's lot-matching reads must
+  // page for the same reason, at far higher row counts.)
+  const openLotsRaw = await fetchAllRows<{ units_remaining: number; cost_per_unit: number; status: string }>(() =>
+    supabase
+      .from('ii_tax_lots')
+      .select('units_remaining, cost_per_unit, status')
+      .eq('user_id', userId)
+      .eq('account_id', snapshot.account_id)
+      .eq('instrument_id', snapshot.instrument_id)
+      .neq('status', 'closed')
+      .order('id', { ascending: true })
+  );
 
   const { data: blockingCase } = await supabase
     .from('ii_reconciliation_cases')

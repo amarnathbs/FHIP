@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { IiIdentifierScheme, IiInstrumentClass } from './types';
+import { fetchAllRows } from './pagination';
 
 // ADR-002: a source-provider identifier never becomes the sole primary
 // identifier. This module is the alias-resolution step ADR-002's
@@ -69,12 +70,32 @@ export async function resolveOrCreateInstrument(
 
   if (input.candidates.length > 0) {
     const schemes = [...new Set(input.candidates.map((c) => c.scheme))];
-    const { data: rows, error } = await admin
-      .from('ii_instrument_identifiers')
-      .select('instrument_id, identifier_scheme, identifier_value, country_code')
-      .in('identifier_scheme', schemes)
-      .eq('is_active', true);
-    if (error) return { instrumentId: null, created: false, error: error.message };
+    // R6-P0 pagination closure: this is a GLOBAL read of the identifier
+    // universe for the requested schemes — there is no user or instrument
+    // filter — so with a full mutual-fund universe it comfortably exceeds
+    // PostgREST's silent 1000-row cap. Same severity as the resolver read in
+    // documentProcessing.ts: an identifier that exists but is not RETURNED
+    // makes resolution fall through and MINT A DUPLICATE canonical
+    // instrument, splitting a holder's history and defeating R2's dedup
+    // guarantees. `id` gives the paged read a unique tie-breaker.
+    let rows: Array<{
+      instrument_id: string;
+      identifier_scheme: string;
+      identifier_value: string;
+      country_code: string;
+    }>;
+    try {
+      rows = await fetchAllRows(() =>
+        admin
+          .from('ii_instrument_identifiers')
+          .select('instrument_id, identifier_scheme, identifier_value, country_code')
+          .in('identifier_scheme', schemes)
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+      );
+    } catch (e) {
+      return { instrumentId: null, created: false, error: e instanceof Error ? e.message : String(e) };
+    }
 
     const existing: ExistingIdentifierRow[] = (rows ?? []).map((r) => ({
       instrumentId: r.instrument_id as string,
