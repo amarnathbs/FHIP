@@ -30,7 +30,6 @@ import { calculateSipConsistency, classifySipActivity } from '@/lib/engines/inve
 import { simulateHistoricalSip } from '@/lib/engines/investment-intelligence/sip/sipSimulation';
 import {
   calculatePortfolioLookThrough,
-  selectSnapshotAsOf,
   type FundHoldingsSnapshot,
   type PortfolioFundPosition,
 } from '@/lib/engines/investment-intelligence/xray/lookThrough';
@@ -53,8 +52,8 @@ export const TOLERANCES = {
 } as const;
 
 const CERT_DIR = path.resolve(__dirname, '../../scripts/ii-r5-certification');
-const cases = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'cases.json'), 'utf8')).cases as Array<Record<string, any>>;
-const oracle = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'oracle_results.json'), 'utf8')).results as Array<Record<string, any>>;
+const cases = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'cases.json'), 'utf8')).cases as CertCase[];
+const oracle = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'oracle_results.json'), 'utf8')).results as OracleResult[];
 const oracleById = new Map(oracle.map((r) => [r.id, r]));
 
 interface ComparisonRow {
@@ -91,8 +90,62 @@ function compareExact(caseId: string, metric: string, prod: unknown, exp: unknow
 // Production-side computation, mirroring the oracle's structure but using the
 // real engines.
 // ---------------------------------------------------------------------------
-function toSnapshot(s: Record<string, any>): FundHoldingsSnapshot {
-  return s as FundHoldingsSnapshot;
+// Concrete shapes of the JSON produced by generate_cases.mjs. Declaring them
+// explicitly keeps this harness fully typed without resorting to `any`.
+interface RawSnapshot {
+  snapshotId: string;
+  fundInstrumentId: string;
+  holdingsAsOfDate: string;
+  sourceKey: string;
+  sourceDataVersion: string | null;
+  classificationVersion: string | null;
+  holdings: Array<{
+    canonicalId: string | null;
+    displayName: string;
+    weightPct: number;
+    assetKind?: string;
+    sectorCode?: string | null;
+    industryCode?: string | null;
+    marketCapClass?: string | null;
+  }>;
+}
+interface CaseInput {
+  transactions?: SipCandidateTransaction[];
+  positionTransactions?: SipCandidateTransaction[];
+  asOfDate?: string;
+  navAtAsOf?: number | null;
+  attributableInflows?: Array<{ date: string; amount: number }>;
+  contributions?: Array<{ date: string; amount: number }>;
+  benchmarkSeries?: Array<{ date: string; value: number }>;
+  series?: Array<{ date: string; value: number }>;
+  startDate?: string;
+  endDate?: string;
+  startingContribution?: number;
+  annualStepUpPct?: number;
+  contributionIntervalMonths?: number;
+  positions?: PortfolioFundPosition[];
+  snapshots?: RawSnapshot[];
+  portfolioAsOfDate?: string;
+  lines?: DebtExposureLine[];
+  consolidationMethodology?: string | null;
+  kind?: string;
+}
+interface CertCase {
+  id: string;
+  family: string;
+  description: string;
+  input: CaseInput;
+  certify: string[];
+}
+interface OracleResult {
+  id: string;
+  family: string;
+  certify: string[];
+  expected: Record<string, unknown>;
+}
+
+function toSnapshot(s: RawSnapshot): FundHoldingsSnapshot {
+  return s as unknown as FundHoldingsSnapshot;
 }
 
 function primarySeries(all: SipSeries[]): SipSeries | null {
@@ -100,10 +153,10 @@ function primarySeries(all: SipSeries[]): SipSeries | null {
   return [...all].sort((a, b) => (b.contributions.length - a.contributions.length) || a.seriesKey.localeCompare(b.seriesKey))[0];
 }
 
-function runSip(input: Record<string, any>) {
-  const txns = input.transactions as SipCandidateTransaction[];
+function runSip(input: CaseInput) {
+  const txns = input.transactions ?? [];
   const all = detectSipSeries(txns);
-  const out: Record<string, any> = { seriesCount: all.length };
+  const out: Record<string, unknown> = { seriesCount: all.length };
   const primary = primarySeries(all);
   if (!primary) {
     return { ...out, cadence: null, confidence: null, contributionCount: 0, actualSipXirrStatus: 'unavailable', actualSipXirr: null, consistencyPct: null, activityStatus: null };
@@ -116,11 +169,12 @@ function runSip(input: Record<string, any>) {
   out.allConfidences = all.map((s) => s.confidence).sort();
   out.allContributionCounts = all.map((s) => s.contributions.length).sort((a, b) => a - b);
 
-  const positionTxns = (input.positionTransactions && input.positionTransactions.length > 0 ? input.positionTransactions : primary.contributions) as SipCandidateTransaction[];
-  const attr = attributeSipUnits(primary, positionTxns, input.asOfDate);
+  const positionTxns: SipCandidateTransaction[] =
+    input.positionTransactions && input.positionTransactions.length > 0 ? input.positionTransactions : primary.contributions;
+  const attr = attributeSipUnits(primary, positionTxns, input.asOfDate!);
   const actual = calculateActualSipXirr(primary, attr, {
-    asOfDate: input.asOfDate,
-    navAtAsOf: input.navAtAsOf,
+    asOfDate: input.asOfDate!,
+    navAtAsOf: input.navAtAsOf ?? null,
     attributableInflows: input.attributableInflows ?? [],
   });
   out.actualSipXirrStatus = actual.status;
@@ -134,12 +188,12 @@ function runSip(input: Record<string, any>) {
   out.expectedPeriods = cons.expectedPeriods ?? null;
   out.skippedPeriods = cons.skippedPeriods ?? null;
 
-  out.activityStatus = classifySipActivity(primary, input.asOfDate).status;
+  out.activityStatus = classifySipActivity(primary, input.asOfDate!).status;
   out.notConfirmed = primary.confidence !== 'CONFIRMED_SOURCE';
   return out;
 }
 
-function runBenchmarkSip(input: Record<string, any>) {
+function runBenchmarkSip(input: CaseInput) {
   // Build a minimal series carrier from the raw contribution list.
   const contributions = (input.contributions as Array<{ date: string; amount: number }>).map((c, i) => ({
     id: `C${i}`,
@@ -167,7 +221,7 @@ function runBenchmarkSip(input: Record<string, any>) {
     detectionMethodVersion: 'sip-detection-r5-v1' as never,
     thresholdConfigVersion: 'sip-thresholds-r5-v1' as never,
   };
-  const r = calculateBenchmarkSip(series, { benchmarkSeries: input.benchmarkSeries, asOfDate: input.asOfDate });
+  const r = calculateBenchmarkSip(series, { benchmarkSeries: input.benchmarkSeries ?? null, asOfDate: input.asOfDate! });
   return {
     benchmarkSipStatus: r.status,
     benchmarkSipReason: r.status === 'ok' ? null : r.reason,
@@ -178,13 +232,13 @@ function runBenchmarkSip(input: Record<string, any>) {
   };
 }
 
-function runSimulation(input: Record<string, any>) {
+function runSimulation(input: CaseInput) {
   const r = simulateHistoricalSip({
-    series: input.series,
-    startDate: input.startDate,
-    endDate: input.endDate,
-    startingContribution: input.startingContribution,
-    annualStepUpPct: input.annualStepUpPct,
+    series: input.series ?? [],
+    startDate: input.startDate!,
+    endDate: input.endDate!,
+    startingContribution: input.startingContribution!,
+    annualStepUpPct: input.annualStepUpPct!,
     contributionIntervalMonths: input.contributionIntervalMonths,
   });
   if (r.status !== 'ok') return { simulationStatus: 'unavailable', reason: r.reason };
@@ -198,19 +252,19 @@ function runSimulation(input: Record<string, any>) {
   };
 }
 
-function buildSnapshotMap(snapshots: Array<Record<string, any>>): Map<string, FundHoldingsSnapshot[]> {
+function buildSnapshotMap(snapshots: RawSnapshot[]): Map<string, FundHoldingsSnapshot[]> {
   const m = new Map<string, FundHoldingsSnapshot[]>();
   for (const s of snapshots) {
-    const k = s.fundInstrumentId as string;
+    const k = s.fundInstrumentId;
     if (!m.has(k)) m.set(k, []);
     m.get(k)!.push(toSnapshot(s));
   }
   return m;
 }
 
-function runLookThrough(input: Record<string, any>) {
-  const positions = input.positions as PortfolioFundPosition[];
-  const r = calculatePortfolioLookThrough(positions, buildSnapshotMap(input.snapshots ?? []), input.asOfDate, input.portfolioAsOfDate ?? input.asOfDate);
+function runLookThrough(input: CaseInput) {
+  const positions = input.positions ?? [];
+  const r = calculatePortfolioLookThrough(positions, buildSnapshotMap(input.snapshots ?? []), input.asOfDate!, input.portfolioAsOfDate ?? input.asOfDate!);
   if (r.status !== 'ok') {
     return {
       lookThroughStatus: 'unavailable',
@@ -250,11 +304,11 @@ function runLookThrough(input: Record<string, any>) {
   };
 }
 
-function runOverlap(input: Record<string, any>) {
-  const snaps = (input.snapshots as Array<Record<string, any>>).map(toSnapshot);
+function runOverlap(input: CaseInput) {
+  const snaps = (input.snapshots ?? []).map(toSnapshot);
   if (snaps.length === 2) {
-    const fwd = calculateFundOverlap(snaps[0], snaps[1], input.asOfDate);
-    const rev = calculateFundOverlap(snaps[1], snaps[0], input.asOfDate);
+    const fwd = calculateFundOverlap(snaps[0], snaps[1], input.asOfDate!);
+    const rev = calculateFundOverlap(snaps[1], snaps[0], input.asOfDate!);
     return {
       overlapStatus: fwd.status,
       weightedOverlap: fwd.weightedOverlap ?? null,
@@ -263,7 +317,7 @@ function runOverlap(input: Record<string, any>) {
       symmetry: fwd.weightedOverlap !== undefined && rev.weightedOverlap !== undefined && Math.abs(fwd.weightedOverlap - rev.weightedOverlap) < 1e-12,
     };
   }
-  const m = calculateOverlapMatrix(snaps.map((s) => ({ fundInstrumentId: s.fundInstrumentId, fundName: s.fundInstrumentId, snapshot: s })), input.asOfDate);
+  const m = calculateOverlapMatrix(snaps.map((s) => ({ fundInstrumentId: s.fundInstrumentId, fundName: s.fundInstrumentId, snapshot: s })), input.asOfDate!);
   const n = m.matrix.length;
   const values: Array<number | null> = [];
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) values.push(m.matrix[i][j] === null ? null : Number((m.matrix[i][j] as number).toFixed(12)));
@@ -279,9 +333,9 @@ function runOverlap(input: Record<string, any>) {
   return { matrixSize: n, matrixSymmetric: symmetric, matrixBounded: bounded, matrixValues: values };
 }
 
-function runConcentration(input: Record<string, any>) {
-  const positions = input.positions as PortfolioFundPosition[];
-  const lt = calculatePortfolioLookThrough(positions, buildSnapshotMap(input.snapshots ?? []), input.asOfDate, input.portfolioAsOfDate ?? input.asOfDate);
+function runConcentration(input: CaseInput) {
+  const positions = input.positions ?? [];
+  const lt = calculatePortfolioLookThrough(positions, buildSnapshotMap(input.snapshots ?? []), input.asOfDate!, input.portfolioAsOfDate ?? input.asOfDate!);
   const conc = calculateSecurityConcentration(lt);
   const sector = calculateSectorExposure(lt, 'cert-classification-v1');
   const mcap = calculateMarketCapExposure(lt, 'cert-classification-v1');
@@ -299,7 +353,7 @@ function runConcentration(input: Record<string, any>) {
   };
 }
 
-function runAmc(input: Record<string, any>) {
+function runAmc(input: CaseInput) {
   const r = calculateAmcConcentration(input.positions as PortfolioFundPosition[]);
   return {
     amcBuckets: r.buckets.map((b) => ({ amcId: b.amcId, weight: b.weight, schemeCount: b.schemeCount })),
@@ -307,10 +361,10 @@ function runAmc(input: Record<string, any>) {
   };
 }
 
-function runDebt(input: Record<string, any>) {
-  const lines = input.lines as DebtExposureLine[];
+function runDebt(input: CaseInput) {
+  const lines = input.lines ?? [];
   const credit = calculateCreditQuality(lines, input.consolidationMethodology ?? null);
-  const maturity = calculateMaturityBuckets(lines, input.asOfDate);
+  const maturity = calculateMaturityBuckets(lines, input.asOfDate!);
   const duration = calculateWeightedDuration(lines);
   const issuer = calculateIssuerConcentration(lines);
   return {
@@ -327,7 +381,7 @@ function runDebt(input: Record<string, any>) {
   };
 }
 
-function runCase(c: Record<string, any>): Record<string, any> {
+function runCase(c: CertCase): Record<string, unknown> {
   switch (c.family) {
     case 'sip': return runSip(c.input);
     case 'benchmark_sip': return runBenchmarkSip(c.input);
@@ -387,7 +441,7 @@ describe('R5 independent certification pack', () => {
   for (const c of cases) {
     it(`${c.id} — ${c.description}`, () => {
       const production = runCase(c);
-      const expected = oracleById.get(c.id)!.expected as Record<string, any>;
+      const expected = oracleById.get(c.id)!.expected as Record<string, unknown>;
 
       for (const metric of c.certify as string[]) {
         // Some certify keys are derived views onto the same result object;

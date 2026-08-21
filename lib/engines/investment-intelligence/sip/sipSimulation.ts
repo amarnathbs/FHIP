@@ -21,7 +21,7 @@
 //     a TRI/total-return series includes them, a price series does not)
 //   * the methodology version
 
-import { xirr, type CashFlow, XIRR_METHOD_VERSION } from '../xirr';
+import { xirr, type CashFlow } from '../xirr';
 import { resolveObservationOnOrAfter, resolveObservationAsOf, sortSeries, SIP_DATE_ALIGNMENT_VERSION, type Observation } from './dateAlignment';
 import { SIMULATION_CONTRIBUTION_ROUNDING, SIP_THRESHOLD_CONFIG_VERSION } from '@/lib/config/investment-intelligence/sipThresholds';
 

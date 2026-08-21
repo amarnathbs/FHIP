@@ -29,8 +29,9 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Deterministic PRNG (mulberry32) — fixed seed so cases.json is
-// byte-for-byte reproducible on every run.
+// Deterministic PRNG (mulberry32). Every price/index series below is built
+// from a FIXED per-series seed, so cases.json is byte-for-byte reproducible
+// on every run — regenerating it produces no diff.
 function mulberry32(seed) {
   return function () {
     seed |= 0;
@@ -39,11 +40,6 @@ function mulberry32(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-const rand = mulberry32(20260821);
-
-function iso(y, m, d) {
-  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
 }
 function addDays(isoDate, days) {
   const dt = new Date(isoDate + 'T00:00:00.000Z');
@@ -144,7 +140,6 @@ function navAsOf(series, date) {
 // SIP-001..020 — detection + actual SIP XIRR
 // ===========================================================================
 const navA = buildSeries('2019-12-01', '2024-06-30', 100, 0.12, 11);
-const navFlat = buildSeries('2019-12-01', '2024-06-30', 50, 0.0, 12);
 const navDown = buildSeries('2019-12-01', '2024-06-30', 200, -0.15, 13);
 const navUp = buildSeries('2019-12-01', '2024-06-30', 80, 0.30, 14);
 

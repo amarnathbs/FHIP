@@ -1,0 +1,149 @@
+{
+  "ranAt": "2026-08-21T02:21:09.749Z",
+  "results": [
+    {
+      "id": "SCHEMA-GATE-R5",
+      "description": "Migration 0044 applied to DEV",
+      "status": "BLOCKED",
+      "detail": "Missing: ii_fund_holdings_snapshots, ii_fund_holdings_lines, ii_security_classifications, ii_security_aliases, ii_sip_series, ii_r5_analytics_results. This session has no DDL capability (probed; see scripts/ii_r5_schema_probe.mjs), so every check that depends on these tables is reported BLOCKED rather than PASS."
+    },
+    {
+      "id": "SEC-R5-001",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-002",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-003",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-004",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-005",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-006",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-007",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-008",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-009",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-010",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-011",
+      "description": "R5-table security check",
+      "status": "BLOCKED",
+      "detail": "Migration 0044 is not applied to DEV, so the R5 tables do not exist and this check cannot be genuinely evaluated."
+    },
+    {
+      "id": "SEC-R5-012",
+      "description": "Unauthenticated (anon-key-only) requests return no user-owned rows",
+      "status": "PASS",
+      "detail": "ii_transactions: HTTP 200 rows=0 | ii_holding_snapshots: HTTP 200 rows=0"
+    },
+    {
+      "id": "SEC-R5-013",
+      "description": "Ordinary user cannot insert into the pre-existing ii_fund_holdings reference table",
+      "status": "PASS",
+      "detail": "HTTP 403; service-role ground truth rows: 0"
+    },
+    {
+      "id": "LIVE-R5-001",
+      "description": "Standard monthly SIP produces a series with an actual SIP XIRR",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-002",
+      "description": "SIP with a missed contribution reports the gap, not \"stopped\"",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-003",
+      "description": "SIP plus an independent lump sum attributes only the series units",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-004",
+      "description": "Actual-vs-benchmark SIP comparison over identical cash flows",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-005",
+      "description": "Two overlapping mutual funds produce a symmetric overlap figure",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-006",
+      "description": "Multi-fund portfolio X-Ray produces weighted effective exposures",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-007",
+      "description": "Partial holdings coverage is reported at its true fraction",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-008",
+      "description": "Stale holdings raise a stale warning and are not shown as current",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-009",
+      "description": "Debt fund X-Ray shows only supportable measures",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    },
+    {
+      "id": "LIVE-R5-010",
+      "description": "Cross-user attack target: user B cannot retrieve A's SIP or X-Ray",
+      "status": "BLOCKED",
+      "detail": "Requires migration 0044 (fund-holdings snapshots / SIP series / R5 analytics tables). Not applied to DEV, and this session has no DDL capability."
+    }
+  ]
+}
