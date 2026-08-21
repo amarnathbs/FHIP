@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
-import { OWNER_OPTIONS } from '@/lib/constants';
+import { OWNER_OPTIONS, expectedCurrencyForCountry } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
+import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
 import type { GridConfig } from '@/lib/grid/types';
 
 interface MasterItem {
@@ -16,6 +17,7 @@ interface SavedRecord {
   id: string;
   master_item_key: string | null;
   currency_code: string;
+  currency_override?: boolean;
   owner: string;
   [key: string]: unknown;
 }
@@ -25,6 +27,12 @@ interface Row extends GridRow {
   id: string | null;
   included: boolean;
   currency_code: string;
+  // Explicit, user-set carve-out for a genuinely foreign-currency holding —
+  // see currencyMismatch()/currencyMismatchBlocked() below. Never silently
+  // defaulted true except for the 'foreign_currency' catalogue item, which
+  // is inherently cross-currency by design.
+  currency_override?: boolean;
+  country_code?: string;
   expanded: boolean;
 }
 
@@ -46,6 +54,10 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
     included: false,
     owner: 'self',
     currency_code: defaultCurrency,
+    // 'foreign_currency' is inherently a deliberate cross-currency holding
+    // (Assets catalogue) — default its override on so it isn't silently
+    // hard-blocked before the user ever touches country/currency.
+    currency_override: item.item_key === 'foreign_currency',
     expanded: false,
     ...fieldDefaults(config),
   };
@@ -62,6 +74,7 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
     included: true,
     owner: record.owner,
     currency_code: record.currency_code,
+    currency_override: Boolean(record.currency_override),
     expanded: false,
   };
 }
@@ -70,6 +83,7 @@ function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): b
   if (config.frequencyField && !row[config.frequencyField]) return false;
   if (!row.currency_code) return false;
   if (row.is_custom && duplicates.has(row.item_label.trim().toLowerCase())) return false;
+  if (currencyMismatchBlocked(row)) return false;
   const value = row[config.valueField];
   return value !== '' && value !== undefined && value !== null;
 }
@@ -162,6 +176,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     if (!row || !isRowSaveable(row, config, findDuplicateCustomNames(rowsRef.current ?? []))) return;
 
     const body: Record<string, unknown> = { owner: row.owner, currency_code: row.currency_code };
+    // Only ever included when true. currency_override is a real DB column
+    // only once migration 0032 is applied — omitting the key entirely for
+    // the (overwhelmingly common) non-override case means an ordinary save
+    // never touches that column at all, so it keeps working unchanged
+    // whether or not the migration has landed yet. Only the narrow,
+    // deliberate override path is affected until then (see
+    // lib/validation/asset.ts's matching comment on the schema side).
+    if (row.currency_override) body.currency_override = true;
     body[config.nameField] = row.item_label;
     if (row.master_item_key) body.master_item_key = row.master_item_key;
     for (const f of config.fields) body[f.name] = row[f.name] === '' ? undefined : row[f.name];
@@ -198,7 +220,18 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   }
 
   function handleFieldChange(key: string, field: string, value: unknown) {
-    updateRow(key, { [field]: value } as Partial<Row>);
+    const patch: Partial<Row> = { [field]: value } as Partial<Row>;
+    if (field === 'country_code') {
+      // Country is the source of truth for currency, not the other way
+      // around — auto-set currency to the new country's expected currency
+      // every time country changes, and require the user to re-confirm any
+      // override explicitly rather than silently carrying a stale one
+      // across countries (that silent-carry-over is the original bug).
+      const expected = expectedCurrencyForCountry(value as string);
+      patch.currency_override = false;
+      if (expected) patch.currency_code = expected;
+    }
+    updateRow(key, patch);
     scheduleSave(key);
   }
 
@@ -280,6 +313,15 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     if (warnings.length) warningsByRow.set(r.key, warnings);
   }
   const totalWarnings = Array.from(warningsByRow.values()).reduce((s, w) => s + w.length, 0);
+
+  // Country/currency mismatch is a hard block (see isRowSaveable), with an
+  // explicit override carve-out. The set below drives the checkbox+warning
+  // UI and stays populated even once overridden, so the checkbox (and the
+  // ability to un-check it) remains visible.
+  const currencyMismatchRows = new Set<string>();
+  for (const r of included) {
+    if (currencyMismatch(r)) currencyMismatchRows.add(r.key);
+  }
 
   if (!rows) {
     return (
@@ -433,11 +475,31 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       value={row.currency_code}
                       disabled={!row.included}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className="w-20 rounded border px-2 py-1 disabled:bg-gray-50"
+                      className={`w-20 rounded border px-2 py-1 disabled:bg-gray-50 ${
+                        currencyMismatchBlocked(row) ? 'border-risk' : ''
+                      }`}
                     >
                       <option value="AUD">AUD</option>
                       <option value="INR">INR</option>
                     </select>
+                    {currencyMismatchRows.has(row.key) && (
+                      <div className="mt-1 w-44">
+                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
+                          {currencyMismatchBlocked(row)
+                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
+                            : 'Confirmed as an intentionally different currency.'}
+                        </p>
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row.currency_override)}
+                            disabled={!row.included}
+                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
+                          />
+                          This holding is genuinely in a different currency
+                        </label>
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {row.is_custom && (
@@ -547,11 +609,30 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     <select
                       value={row.currency_code}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className="w-full rounded border px-2 py-1"
+                      className={`w-full rounded border px-2 py-1 ${
+                        currencyMismatchBlocked(row) ? 'border-risk' : ''
+                      }`}
                     >
                       <option value="AUD">AUD</option>
                       <option value="INR">INR</option>
                     </select>
+                    {currencyMismatchRows.has(row.key) && (
+                      <div className="mt-1">
+                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
+                          {currencyMismatchBlocked(row)
+                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
+                            : 'Confirmed as an intentionally different currency.'}
+                        </p>
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row.currency_override)}
+                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
+                          />
+                          This holding is genuinely in a different currency
+                        </label>
+                      </div>
+                    )}
                   </div>
                   {row.is_custom && (
                     <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">

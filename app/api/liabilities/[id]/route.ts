@@ -1,6 +1,6 @@
 import { requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
-import { liabilitySchema } from '@/lib/validation/liability';
+import { liabilityPatchSchema } from '@/lib/validation/liability';
 
 const registry = makeRegistry('liabilities');
 
@@ -8,7 +8,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const parsed = liabilitySchema.partial().safeParse(await req.json());
+  const parsed = liabilityPatchSchema.safeParse(await req.json());
   if (!parsed.success) return bad(parsed.error.message, 422);
   const { data, error } = await registry.update(user.id, id, parsed.data);
   return error ? bad(error.message) : ok(data);
