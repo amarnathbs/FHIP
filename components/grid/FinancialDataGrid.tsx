@@ -89,7 +89,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   const [notApplicable, setNotApplicable] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
-  rowsRef.current = rows;
+  // Kept in sync via an effect rather than assigned during render — a plain
+  // ref write in the render body trips react-hooks/refs ("Cannot access
+  // refs during render"). rowsRef is only ever read from saveRow(), which
+  // fires from an async setTimeout callback (scheduleSave), never from
+  // another component's render, so this has no effect on behavior.
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
 
   useEffect(() => {
     let cancelled = false;
