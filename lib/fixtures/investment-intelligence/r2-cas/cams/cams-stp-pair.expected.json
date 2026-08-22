@@ -1,0 +1,63 @@
+{
+  "fixtureId": "cams-stp-pair",
+  "title": "Systematic Transfer Plan out of one scheme into another",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040000900",
+      "holderName": "MEERA PILLAI",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "1201040000900",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "stp_out",
+      "amount": "3000.00",
+      "units": "22.420",
+      "nav": "133.8300",
+      "sourceReference": "STP0001OUT"
+    },
+    {
+      "folioNumber": "1201040000900",
+      "scheme": "Nippon India Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF204K01UN3",
+      "amfiSchemeCode": "118778",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "stp_in",
+      "amount": "3000.00",
+      "units": "27.200",
+      "nav": "110.2900",
+      "sourceReference": "STP0001IN"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "1201040000900",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "127.580",
+      "value": "17210.54",
+      "nav": "134.9000"
+    },
+    {
+      "folioNumber": "1201040000900",
+      "scheme": "Nippon India Small Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "27.200",
+      "value": "3144.32",
+      "nav": "115.6000"
+    }
+  ],
+  "notes": null
+}

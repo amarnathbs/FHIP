@@ -1,0 +1,5929 @@
+{
+  "generatedAt": "2026-08-22T13:27:30.176Z",
+  "tolerances": {
+    "currency": 0.01,
+    "costPerUnit": 0.000001
+  },
+  "caseCount": 142,
+  "comparisonCount": 644,
+  "passCount": 644,
+  "failCount": 0,
+  "rows": [
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-07",
+      "independent": "2019-04-07",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[0].unitsConsumed",
+      "production": 316.52,
+      "independent": 316.52,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[0].costBasis",
+      "production": 24074.5112,
+      "independent": 24074.51,
+      "variance": 0.0012000000024272595,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[1].acquisitionDate",
+      "production": "2019-08-02",
+      "independent": "2019-08-02",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[1].unitsConsumed",
+      "production": 20.79000000000002,
+      "independent": 20.79,
+      "variance": 2.1316282072803006e-14,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.lot[1].costBasis",
+      "production": 1728.8964000000017,
+      "independent": 1728.9,
+      "variance": 0.003599999998414205,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.totalCostBasis",
+      "production": 25803.407600000002,
+      "independent": 25803.41,
+      "variance": 0.0023999999975785613,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-001",
+      "metric": "FIFO-001-disp-0.totalUnitsConsumed",
+      "production": 337.31,
+      "independent": 337.31,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[0].acquisitionDate",
+      "production": "2019-06-17",
+      "independent": "2019-06-17",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[0].unitsConsumed",
+      "production": 258.64,
+      "independent": 258.64,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[0].costBasis",
+      "production": 23748.3248,
+      "independent": 23748.32,
+      "variance": 0.004799999998795101,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[1].acquisitionDate",
+      "production": "2019-10-16",
+      "independent": "2019-10-16",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[1].unitsConsumed",
+      "production": 202.8,
+      "independent": 202.8,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.lot[1].costBasis",
+      "production": 16252.392000000002,
+      "independent": 16252.39,
+      "variance": 0.002000000002226443,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.totalCostBasis",
+      "production": 40000.7168,
+      "independent": 40000.71,
+      "variance": 0.006800000002840534,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-002",
+      "metric": "FIFO-002-disp-0.totalUnitsConsumed",
+      "production": 461.44,
+      "independent": 461.44,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[0].acquisitionDate",
+      "production": "2019-06-21",
+      "independent": "2019-06-21",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[0].unitsConsumed",
+      "production": 85.65,
+      "independent": 85.65,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[0].costBasis",
+      "production": 8369.718,
+      "independent": 8369.72,
+      "variance": 0.0019999999985884642,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[1].acquisitionDate",
+      "production": "2019-09-11",
+      "independent": "2019-09-11",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[1].unitsConsumed",
+      "production": 26.289999999999992,
+      "independent": 26.29,
+      "variance": 7.105427357601002e-15,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.lot[1].costBasis",
+      "production": 1103.3912999999995,
+      "independent": 1103.39,
+      "variance": 0.0012999999994462996,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.totalCostBasis",
+      "production": 9473.1093,
+      "independent": 9473.11,
+      "variance": 0.0007000000005064066,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-003",
+      "metric": "FIFO-003-disp-0.totalUnitsConsumed",
+      "production": 111.94,
+      "independent": 111.94,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.lot[0].acquisitionDate",
+      "production": "2019-06-05",
+      "independent": "2019-06-05",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.lot[0].unitsConsumed",
+      "production": 126.05,
+      "independent": 126.05,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.lot[0].costBasis",
+      "production": 4153.3475,
+      "independent": 4153.35,
+      "variance": 0.002500000000509317,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.totalCostBasis",
+      "production": 4153.3475,
+      "independent": 4153.35,
+      "variance": 0.002500000000509317,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-004",
+      "metric": "FIFO-004-disp-0.totalUnitsConsumed",
+      "production": 126.05,
+      "independent": 126.05,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-14",
+      "independent": "2019-04-14",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[0].unitsConsumed",
+      "production": 328.84,
+      "independent": 328.84,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[0].costBasis",
+      "production": 10572.205999999998,
+      "independent": 10572.21,
+      "variance": 0.004000000000814907,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[1].acquisitionDate",
+      "production": "2019-05-25",
+      "independent": "2019-05-25",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[1].unitsConsumed",
+      "production": 366.07,
+      "independent": 366.07,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.lot[1].costBasis",
+      "production": 11516.5622,
+      "independent": 11516.56,
+      "variance": 0.002200000000811997,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.totalCostBasis",
+      "production": 22088.7682,
+      "independent": 22088.77,
+      "variance": 0.0018000000018218998,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-005",
+      "metric": "FIFO-005-disp-0.totalUnitsConsumed",
+      "production": 694.91,
+      "independent": 694.91,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-26",
+      "independent": "2019-04-26",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[0].unitsConsumed",
+      "production": 459.61,
+      "independent": 459.61,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[0].costBasis",
+      "production": 9146.239,
+      "independent": 9146.24,
+      "variance": 0.0010000000002037268,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[1].acquisitionDate",
+      "production": "2019-06-24",
+      "independent": "2019-06-24",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[1].unitsConsumed",
+      "production": 9.879999999999995,
+      "independent": 9.88,
+      "variance": 5.329070518200751e-15,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.lot[1].costBasis",
+      "production": 637.8527999999998,
+      "independent": 637.85,
+      "variance": 0.00279999999975189,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.totalCostBasis",
+      "production": 9784.0918,
+      "independent": 9784.09,
+      "variance": 0.0018000000000029104,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-006",
+      "metric": "FIFO-006-disp-0.totalUnitsConsumed",
+      "production": 469.49,
+      "independent": 469.49,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-11",
+      "independent": "2019-04-11",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.lot[0].unitsConsumed",
+      "production": 267.73,
+      "independent": 267.73,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.lot[0].costBasis",
+      "production": 7333.1247,
+      "independent": 7333.12,
+      "variance": 0.004700000000411819,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.totalCostBasis",
+      "production": 7333.1247,
+      "independent": 7333.12,
+      "variance": 0.004700000000411819,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-007",
+      "metric": "FIFO-007-disp-0.totalUnitsConsumed",
+      "production": 267.73,
+      "independent": 267.73,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-06",
+      "independent": "2019-04-06",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.lot[0].unitsConsumed",
+      "production": 101.28,
+      "independent": 101.28,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.lot[0].costBasis",
+      "production": 9813.0192,
+      "independent": 9813.02,
+      "variance": 0.0007999999997991836,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.totalCostBasis",
+      "production": 9813.0192,
+      "independent": 9813.02,
+      "variance": 0.0007999999997991836,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-008",
+      "metric": "FIFO-008-disp-0.totalUnitsConsumed",
+      "production": 101.28,
+      "independent": 101.28,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.lot[0].acquisitionDate",
+      "production": "2019-02-21",
+      "independent": "2019-02-21",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.lot[0].unitsConsumed",
+      "production": 86.63,
+      "independent": 86.63,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.lot[0].costBasis",
+      "production": 971.1223,
+      "independent": 971.12,
+      "variance": 0.002299999999991087,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.totalCostBasis",
+      "production": 971.1223,
+      "independent": 971.12,
+      "variance": 0.002299999999991087,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-009",
+      "metric": "FIFO-009-disp-0.totalUnitsConsumed",
+      "production": 86.63,
+      "independent": 86.63,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[0].acquisitionDate",
+      "production": "2019-05-12",
+      "independent": "2019-05-12",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[0].unitsConsumed",
+      "production": 336.46,
+      "independent": 336.46,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[0].costBasis",
+      "production": 12025.0804,
+      "independent": 12025.08,
+      "variance": 0.0004000000008090865,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[1].acquisitionDate",
+      "production": "2019-11-15",
+      "independent": "2019-11-15",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[1].unitsConsumed",
+      "production": 73.39000000000004,
+      "independent": 73.39,
+      "variance": 4.263256414560601e-14,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.lot[1].costBasis",
+      "production": 3477.218200000002,
+      "independent": 3477.22,
+      "variance": 0.0017999999977291736,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.totalCostBasis",
+      "production": 15502.298600000002,
+      "independent": 15502.3,
+      "variance": 0.0013999999973748345,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-010",
+      "metric": "FIFO-010-disp-0.totalUnitsConsumed",
+      "production": 409.85,
+      "independent": 409.85,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[0].acquisitionDate",
+      "production": "2019-03-31",
+      "independent": "2019-03-31",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[0].unitsConsumed",
+      "production": 344.33,
+      "independent": 344.33,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[0].costBasis",
+      "production": 16651.7988,
+      "independent": 16651.8,
+      "variance": 0.0011999999987892807,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[1].acquisitionDate",
+      "production": "2019-09-01",
+      "independent": "2019-09-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[1].unitsConsumed",
+      "production": 168.82,
+      "independent": 168.82,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.lot[1].costBasis",
+      "production": 6082.5846,
+      "independent": 6082.58,
+      "variance": 0.004600000000209548,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.totalCostBasis",
+      "production": 22734.3834,
+      "independent": 22734.38,
+      "variance": 0.003399999997782288,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-011",
+      "metric": "FIFO-011-disp-0.totalUnitsConsumed",
+      "production": 513.15,
+      "independent": 513.15,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[0].acquisitionDate",
+      "production": "2019-04-30",
+      "independent": "2019-04-30",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[0].unitsConsumed",
+      "production": 232.64,
+      "independent": 232.64,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[0].costBasis",
+      "production": 18925.264,
+      "independent": 18925.26,
+      "variance": 0.004000000000814907,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[1].acquisitionDate",
+      "production": "2019-06-29",
+      "independent": "2019-06-29",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[1].unitsConsumed",
+      "production": 261.25,
+      "independent": 261.25,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.lot[1].costBasis",
+      "production": 10123.4375,
+      "independent": 10123.44,
+      "variance": 0.002500000000509317,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.totalCostBasis",
+      "production": 29048.7015,
+      "independent": 29048.7,
+      "variance": 0.0014999999984866008,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-012",
+      "metric": "FIFO-012-disp-0.totalUnitsConsumed",
+      "production": 493.89,
+      "independent": 493.89,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.lot[0].acquisitionDate",
+      "production": "2019-05-16",
+      "independent": "2019-05-16",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.lot[0].unitsConsumed",
+      "production": 119.46,
+      "independent": 119.46,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.lot[0].costBasis",
+      "production": 3674.5896,
+      "independent": 3674.59,
+      "variance": 0.00040000000035433914,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.totalCostBasis",
+      "production": 3674.5896,
+      "independent": 3674.59,
+      "variance": 0.00040000000035433914,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-013",
+      "metric": "FIFO-013-disp-0.totalUnitsConsumed",
+      "production": 119.46,
+      "independent": 119.46,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.lot[0].acquisitionDate",
+      "production": "2019-07-09",
+      "independent": "2019-07-09",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.lot[0].unitsConsumed",
+      "production": 398.56,
+      "independent": 398.56,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.lot[0].costBasis",
+      "production": 26651.7072,
+      "independent": 26651.71,
+      "variance": 0.002799999998387648,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.totalCostBasis",
+      "production": 26651.7072,
+      "independent": 26651.71,
+      "variance": 0.002799999998387648,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-014",
+      "metric": "FIFO-014-disp-0.totalUnitsConsumed",
+      "production": 398.56,
+      "independent": 398.56,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.lot[0].acquisitionDate",
+      "production": "2019-02-06",
+      "independent": "2019-02-06",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.lot[0].unitsConsumed",
+      "production": 152.85,
+      "independent": 152.85,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.lot[0].costBasis",
+      "production": 4756.692,
+      "independent": 4756.69,
+      "variance": 0.0020000000004074536,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.totalCostBasis",
+      "production": 4756.692,
+      "independent": 4756.69,
+      "variance": 0.0020000000004074536,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-015",
+      "metric": "FIFO-015-disp-0.totalUnitsConsumed",
+      "production": 152.85,
+      "independent": 152.85,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.lotCount",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.lot[0].acquisitionDate",
+      "production": "2019-07-12",
+      "independent": "2019-07-12",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.lot[0].unitsConsumed",
+      "production": 322.5,
+      "independent": 322.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.lot[0].costBasis",
+      "production": 3312.075,
+      "independent": 3312.07,
+      "variance": 0.004999999999654392,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.totalCostBasis",
+      "production": 3312.075,
+      "independent": 3312.07,
+      "variance": 0.004999999999654392,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-016",
+      "metric": "FIFO-016-disp-0.totalUnitsConsumed",
+      "production": 322.5,
+      "independent": 322.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lotCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[0].acquisitionDate",
+      "production": "2019-05-04",
+      "independent": "2019-05-04",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[0].unitsConsumed",
+      "production": 386.42,
+      "independent": 386.42,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[0].costBasis",
+      "production": 26523.8688,
+      "independent": 26523.87,
+      "variance": 0.0011999999987892807,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[1].acquisitionDate",
+      "production": "2019-09-08",
+      "independent": "2019-09-08",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[1].unitsConsumed",
+      "production": 336.26,
+      "independent": 336.26,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[1].costBasis",
+      "production": 7549.036999999999,
+      "independent": 7549.04,
+      "variance": 0.0030000000006111804,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[2].acquisitionDate",
+      "production": "2020-02-16",
+      "independent": "2020-02-16",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[2].unitsConsumed",
+      "production": 27.119999999999948,
+      "independent": 27.12,
+      "variance": 5.3290705182007514e-14,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.lot[2].costBasis",
+      "production": 2428.5959999999955,
+      "independent": 2428.6,
+      "variance": 0.004000000004452886,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.totalCostBasis",
+      "production": 36501.5018,
+      "independent": 36501.51,
+      "variance": 0.008200000003853347,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-017",
+      "metric": "FIFO-017-disp-0.totalUnitsConsumed",
+      "production": 749.8,
+      "independent": 749.8,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[0].acquisitionDate",
+      "production": "2019-07-03",
+      "independent": "2019-07-03",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[0].unitsConsumed",
+      "production": 81.92,
+      "independent": 81.92,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[0].costBasis",
+      "production": 1276.3136,
+      "independent": 1276.31,
+      "variance": 0.0036000000000058208,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[1].acquisitionDate",
+      "production": "2019-08-29",
+      "independent": "2019-08-29",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[1].unitsConsumed",
+      "production": 266.13,
+      "independent": 266.13,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.lot[1].costBasis",
+      "production": 14426.9073,
+      "independent": 14426.91,
+      "variance": 0.002699999999094871,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.totalCostBasis",
+      "production": 15703.2209,
+      "independent": 15703.22,
+      "variance": 0.0009000000009109499,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-018",
+      "metric": "FIFO-018-disp-0.totalUnitsConsumed",
+      "production": 348.05,
+      "independent": 348.05,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[0].acquisitionDate",
+      "production": "2019-06-11",
+      "independent": "2019-06-11",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[0].unitsConsumed",
+      "production": 390.28,
+      "independent": 390.28,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[0].costBasis",
+      "production": 8328.5752,
+      "independent": 8328.58,
+      "variance": 0.004800000000614091,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[1].acquisitionDate",
+      "production": "2019-07-26",
+      "independent": "2019-07-26",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[1].unitsConsumed",
+      "production": 119.12,
+      "independent": 119.12,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.lot[1].costBasis",
+      "production": 11278.281600000002,
+      "independent": 11278.28,
+      "variance": 0.0016000000014173565,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.totalCostBasis",
+      "production": 19606.8568,
+      "independent": 19606.86,
+      "variance": 0.0031999999991967343,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-019",
+      "metric": "FIFO-019-disp-0.totalUnitsConsumed",
+      "production": 509.4,
+      "independent": 509.4,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lotCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[0].acquisitionDate",
+      "production": "2019-03-17",
+      "independent": "2019-03-17",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[0].unitsConsumed",
+      "production": 372.76,
+      "independent": 372.76,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[0].costBasis",
+      "production": 35281.734000000004,
+      "independent": 35281.73,
+      "variance": 0.004000000000814907,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[1].acquisitionDate",
+      "production": "2019-09-24",
+      "independent": "2019-09-24",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[1].unitsConsumed",
+      "production": 233.76,
+      "independent": 233.76,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.lot[1].costBasis",
+      "production": 4927.6608,
+      "independent": 4927.66,
+      "variance": 0.0007999999997991836,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.totalCostBasis",
+      "production": 40209.3948,
+      "independent": 40209.39,
+      "variance": 0.00480000000243308,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FIFO-020",
+      "metric": "FIFO-020-disp-0.totalUnitsConsumed",
+      "production": 606.52,
+      "independent": 606.52,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-001",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-001",
+      "metric": "costBasisPerUnit",
+      "production": 53.15,
+      "independent": 53.15,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-002",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-002",
+      "metric": "costBasisPerUnit",
+      "production": 46.13,
+      "independent": 46.13,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-003",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-003",
+      "metric": "costBasisPerUnit",
+      "production": 35.84,
+      "independent": 35.84,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-004",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-004",
+      "metric": "costBasisPerUnit",
+      "production": 47.82,
+      "independent": 47.82,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-005",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-005",
+      "metric": "costBasisPerUnit",
+      "production": 43.6,
+      "independent": 43.6,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-006",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-006",
+      "metric": "costBasisPerUnit",
+      "production": 35.2,
+      "independent": 35.2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-007",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-007",
+      "metric": "costBasisPerUnit",
+      "production": 47.98,
+      "independent": 47.98,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-008",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-008",
+      "metric": "costBasisPerUnit",
+      "production": 41.3,
+      "independent": 41.3,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-009",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-009",
+      "metric": "costBasisPerUnit",
+      "production": 17.23,
+      "independent": 17.23,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-010",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-010",
+      "metric": "costBasisPerUnit",
+      "production": 49.95,
+      "independent": 49.95,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-011",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-011",
+      "metric": "costBasisPerUnit",
+      "production": 36.8,
+      "independent": 36.8,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-012",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-012",
+      "metric": "costBasisPerUnit",
+      "production": 48.73,
+      "independent": 48.73,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-013",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-013",
+      "metric": "costBasisPerUnit",
+      "production": 47.44,
+      "independent": 47.44,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-014",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-014",
+      "metric": "costBasisPerUnit",
+      "production": 52.23,
+      "independent": 52.23,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-015",
+      "metric": "basisSource",
+      "production": "fmv_unavailable",
+      "independent": "fmv_unavailable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRAND-015",
+      "metric": "costBasisPerUnit",
+      "production": 55.2,
+      "independent": 55.2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-001",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-001",
+      "metric": "holdingDays",
+      "production": 364,
+      "independent": 364,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-001",
+      "metric": "anniversaryDate",
+      "production": "2022-04-01",
+      "independent": "2022-04-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-001",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-002",
+      "metric": "isLongTerm",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-002",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-002",
+      "metric": "anniversaryDate",
+      "production": "2022-06-15",
+      "independent": "2022-06-15",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-002",
+      "metric": "expectLongTerm-matches-generator",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-003",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-003",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-003",
+      "metric": "anniversaryDate",
+      "production": "2021-02-28",
+      "independent": "2021-02-28",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-003",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-004",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-004",
+      "metric": "holdingDays",
+      "production": 364,
+      "independent": 364,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-004",
+      "metric": "anniversaryDate",
+      "production": "2023-01-31",
+      "independent": "2023-01-31",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-004",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-005",
+      "metric": "isLongTerm",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-005",
+      "metric": "holdingDays",
+      "production": 367,
+      "independent": 367,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-005",
+      "metric": "anniversaryDate",
+      "production": "2020-12-01",
+      "independent": "2020-12-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-005",
+      "metric": "expectLongTerm-matches-generator",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-006",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-006",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-006",
+      "metric": "anniversaryDate",
+      "production": "2022-04-01",
+      "independent": "2022-04-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-006",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-007",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-007",
+      "metric": "holdingDays",
+      "production": 364,
+      "independent": 364,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-007",
+      "metric": "anniversaryDate",
+      "production": "2022-06-15",
+      "independent": "2022-06-15",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-007",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-008",
+      "metric": "isLongTerm",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-008",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-008",
+      "metric": "anniversaryDate",
+      "production": "2021-02-28",
+      "independent": "2021-02-28",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-008",
+      "metric": "expectLongTerm-matches-generator",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-009",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-009",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-009",
+      "metric": "anniversaryDate",
+      "production": "2023-01-31",
+      "independent": "2023-01-31",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-009",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-010",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-010",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-010",
+      "metric": "anniversaryDate",
+      "production": "2020-12-01",
+      "independent": "2020-12-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-010",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-011",
+      "metric": "isLongTerm",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-011",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-011",
+      "metric": "anniversaryDate",
+      "production": "2022-04-01",
+      "independent": "2022-04-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-011",
+      "metric": "expectLongTerm-matches-generator",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-012",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-012",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-012",
+      "metric": "anniversaryDate",
+      "production": "2022-06-15",
+      "independent": "2022-06-15",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-012",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-013",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-013",
+      "metric": "holdingDays",
+      "production": 364,
+      "independent": 364,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-013",
+      "metric": "anniversaryDate",
+      "production": "2021-02-28",
+      "independent": "2021-02-28",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-013",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-014",
+      "metric": "isLongTerm",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-014",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-014",
+      "metric": "anniversaryDate",
+      "production": "2023-01-31",
+      "independent": "2023-01-31",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-014",
+      "metric": "expectLongTerm-matches-generator",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-015",
+      "metric": "isLongTerm",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-015",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-015",
+      "metric": "anniversaryDate",
+      "production": "2020-12-01",
+      "independent": "2020-12-01",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "BOUND-015",
+      "metric": "expectLongTerm-matches-generator",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "costBasisUsed",
+      "production": 9408.2157,
+      "independent": 9408.22,
+      "variance": 0.004299999998693238,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-001",
+      "metric": "taxableGain",
+      "production": 353.27969999999914,
+      "independent": 353.28,
+      "variance": 0.00030000000083418854,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "holdingDays",
+      "production": 2191,
+      "independent": 2191,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "costBasisUsed",
+      "production": 4025.88,
+      "independent": 4025.88,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-002",
+      "metric": "taxableGain",
+      "production": -1258.4040000000005,
+      "independent": -1258.4,
+      "variance": 0.00400000000036016,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "holdingDays",
+      "production": 1523,
+      "independent": 1523,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "costBasisUsed",
+      "production": 9324.612000000001,
+      "independent": 9324.61,
+      "variance": 0.0020000000004074536,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-003",
+      "metric": "taxableGain",
+      "production": 5009.499,
+      "independent": 5009.5,
+      "variance": 0.0010000000002037268,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "holdingDays",
+      "production": 912,
+      "independent": 912,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "costBasisUsed",
+      "production": 14483.0157,
+      "independent": 14483.02,
+      "variance": 0.004300000000512227,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-004",
+      "metric": "taxableGain",
+      "production": 2924.419900000001,
+      "independent": 2924.42,
+      "variance": 0.00009999999929277692,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "holdingDays",
+      "production": 2374,
+      "independent": 2374,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "costBasisUsed",
+      "production": 2699.166,
+      "independent": 2699.17,
+      "variance": 0.0039999999999054126,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-005",
+      "metric": "taxableGain",
+      "production": 2549.642,
+      "independent": 2549.64,
+      "variance": 0.0019999999999527063,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "holdingDays",
+      "production": 1827,
+      "independent": 1827,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "costBasisUsed",
+      "production": 9812.2752,
+      "independent": 9812.28,
+      "variance": 0.004800000000614091,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-006",
+      "metric": "taxableGain",
+      "production": 4592.203200000002,
+      "independent": 4592.2,
+      "variance": 0.0032000000019252184,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "holdingDays",
+      "production": 1522,
+      "independent": 1522,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "costBasisUsed",
+      "production": 4888.364799999999,
+      "independent": 4888.36,
+      "variance": 0.004799999999704596,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-007",
+      "metric": "taxableGain",
+      "production": -589.3087999999989,
+      "independent": -589.3,
+      "variance": 0.008799999998927888,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "holdingDays",
+      "production": 911,
+      "independent": 911,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "costBasisUsed",
+      "production": 2168.4624,
+      "independent": 2168.46,
+      "variance": 0.002399999999852298,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-008",
+      "metric": "taxableGain",
+      "production": 39.71759999999995,
+      "independent": 39.72,
+      "variance": 0.00240000000005125,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-009",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-009",
+      "metric": "holdingDays",
+      "production": 1553,
+      "independent": 1553,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-009",
+      "metric": "costBasisUsed",
+      "production": 3591.3570000000004,
+      "independent": 3591.36,
+      "variance": 0.0029999999997016857,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-009",
+      "metric": "taxableGain",
+      "production": 1952.2589999999996,
+      "independent": 1952.26,
+      "variance": 0.0010000000004311005,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-010",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-010",
+      "metric": "holdingDays",
+      "production": 1645,
+      "independent": 1645,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-010",
+      "metric": "costBasisUsed",
+      "production": 4489.4223,
+      "independent": 4489.42,
+      "variance": 0.002300000000104774,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBT-010",
+      "metric": "taxableGain",
+      "production": 1020.6107999999995,
+      "independent": 1020.61,
+      "variance": 0.0007999999994581231,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "holdingDays",
+      "production": 1978,
+      "independent": 1978,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "costBasisUsed",
+      "production": 12000,
+      "independent": 12000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "taxableGain",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "holdingDays",
+      "production": 730,
+      "independent": 730,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "costBasisUsed",
+      "production": 12000,
+      "independent": 12000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "taxableGain",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "holdingDays",
+      "production": 943,
+      "independent": 943,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "costBasisUsed",
+      "production": 5000,
+      "independent": 5000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "taxableGain",
+      "production": 1400,
+      "independent": 1400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "holdingDays",
+      "production": 745,
+      "independent": 745,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "taxableGain",
+      "production": 1200,
+      "independent": 1200,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "holdingDays",
+      "production": 793,
+      "independent": 793,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "costBasisUsed",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "taxableGain",
+      "production": 400,
+      "independent": 400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "holdingDays",
+      "production": 792,
+      "independent": 792,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "costBasisUsed",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "taxableGain",
+      "production": 400,
+      "independent": 400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "holdingDays",
+      "production": 1095,
+      "independent": 1095,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "taxableGain",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "holdingDays",
+      "production": 1096,
+      "independent": 1096,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "taxableGain",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "holdingDays",
+      "production": 731,
+      "independent": 731,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "costBasisUsed",
+      "production": 7500,
+      "independent": 7500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "taxableGain",
+      "production": 1750,
+      "independent": 1750,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "holdingDays",
+      "production": 732,
+      "independent": 732,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "costBasisUsed",
+      "production": 7500,
+      "independent": 7500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "taxableGain",
+      "production": 1750,
+      "independent": 1750,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25"
+      ],
+      "independent": [
+        "FY2024-25"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 298275.02,
+      "independent": 298275.02,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "FY2024-25.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "FY2024-25.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 173275.02000000002,
+      "independent": 173275.02,
+      "variance": 2.9103830456733704e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-001",
+      "metric": "FY2024-25.contributingDisposalCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 106822.77999999998,
+      "independent": 106822.78,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "FY2025-26.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "FY2025-26.exemptionApplied",
+      "production": 106822.77999999998,
+      "independent": 106822.78,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-002",
+      "metric": "FY2025-26.contributingDisposalCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24"
+      ],
+      "independent": [
+        "FY2023-24"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 121991.88000000002,
+      "independent": 121991.88,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "FY2023-24.exemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "FY2023-24.exemptionApplied",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 21991.88000000002,
+      "independent": 21991.88,
+      "variance": 1.8189894035458565e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-003",
+      "metric": "FY2023-24.contributingDisposalCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25"
+      ],
+      "independent": [
+        "FY2024-25"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 348954.8,
+      "independent": 348954.8,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "FY2024-25.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "FY2024-25.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 223954.8,
+      "independent": 223954.8,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-004",
+      "metric": "FY2024-25.contributingDisposalCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 415068.27,
+      "independent": 415068.27,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "FY2025-26.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "FY2025-26.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 290068.27,
+      "independent": 290068.27,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-005",
+      "metric": "FY2025-26.contributingDisposalCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24"
+      ],
+      "independent": [
+        "FY2023-24"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 169544.2,
+      "independent": 169544.2,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "FY2023-24.exemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "FY2023-24.exemptionApplied",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 69544.20000000001,
+      "independent": 69544.2,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-006",
+      "metric": "FY2023-24.contributingDisposalCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25"
+      ],
+      "independent": [
+        "FY2024-25"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 14527.489999999998,
+      "independent": 14527.49,
+      "variance": 1.8189894035458565e-12,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "FY2024-25.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "FY2024-25.exemptionApplied",
+      "production": 14527.489999999998,
+      "independent": 14527.49,
+      "variance": 1.8189894035458565e-12,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-007",
+      "metric": "FY2024-25.contributingDisposalCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 349242.24,
+      "independent": 349242.24,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "FY2025-26.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "FY2025-26.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 224242.24,
+      "independent": 224242.24,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-008",
+      "metric": "FY2025-26.contributingDisposalCount",
+      "production": 3,
+      "independent": 3,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24"
+      ],
+      "independent": [
+        "FY2023-24"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 242699.42,
+      "independent": 242699.42,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "FY2023-24.exemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "FY2023-24.exemptionApplied",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 142699.42,
+      "independent": 142699.42,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-009",
+      "metric": "FY2023-24.contributingDisposalCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25"
+      ],
+      "independent": [
+        "FY2024-25"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 232192.21,
+      "independent": 232192.21,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "FY2024-25.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "FY2024-25.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 107192.20999999999,
+      "independent": 107192.21,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-010",
+      "metric": "FY2024-25.contributingDisposalCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 90039.84,
+      "independent": 90039.84,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "FY2025-26.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "FY2025-26.exemptionApplied",
+      "production": 90039.84,
+      "independent": 90039.84,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-011",
+      "metric": "FY2025-26.contributingDisposalCount",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24"
+      ],
+      "independent": [
+        "FY2023-24"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 165043.38,
+      "independent": 165043.38,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "FY2023-24.exemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "FY2023-24.exemptionApplied",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 65043.380000000005,
+      "independent": 65043.38,
+      "variance": 7.275957614183426e-12,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-012",
+      "metric": "FY2023-24.contributingDisposalCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25"
+      ],
+      "independent": [
+        "FY2024-25"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 287168.59,
+      "independent": 287168.59,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "FY2024-25.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "FY2024-25.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 162168.59000000003,
+      "independent": 162168.59,
+      "variance": 2.9103830456733704e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-013",
+      "metric": "FY2024-25.contributingDisposalCount",
+      "production": 4,
+      "independent": 4,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 266167.07,
+      "independent": 266167.07,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "FY2025-26.exemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "FY2025-26.exemptionApplied",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 141167.07,
+      "independent": 141167.07,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-014",
+      "metric": "FY2025-26.contributingDisposalCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24"
+      ],
+      "independent": [
+        "FY2023-24"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 422314.62,
+      "independent": 422314.62,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "FY2023-24.exemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "FY2023-24.exemptionApplied",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 322314.62,
+      "independent": 322314.62,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "FYAGG-015",
+      "metric": "FY2023-24.contributingDisposalCount",
+      "production": 5,
+      "independent": 5,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-001",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "independent": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-001",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 90505.20999999999,
+      "independent": 90505.21,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-001",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-001",
+      "metric": "FY2026-27.totalLtcgBeforeExemption",
+      "production": 84814.34,
+      "independent": 84814.34,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-001",
+      "metric": "FY2026-27.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-002",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "independent": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-002",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 100730.08,
+      "independent": 100730.08,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-002",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-002",
+      "metric": "FY2027-28.totalLtcgBeforeExemption",
+      "production": 80892.83,
+      "independent": 80892.83,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-002",
+      "metric": "FY2027-28.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-003",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-003",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 70902.18,
+      "independent": 70902.18,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-003",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-003",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 87237.39,
+      "independent": 87237.39,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-003",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-004",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "independent": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-004",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 74489.52,
+      "independent": 74489.52,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-004",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-004",
+      "metric": "FY2026-27.totalLtcgBeforeExemption",
+      "production": 84734.51999999999,
+      "independent": 84734.52,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-004",
+      "metric": "FY2026-27.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-005",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "independent": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-005",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 99795.01999999999,
+      "independent": 99795.02,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-005",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-005",
+      "metric": "FY2027-28.totalLtcgBeforeExemption",
+      "production": 67862.12,
+      "independent": 67862.12,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-005",
+      "metric": "FY2027-28.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-006",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-006",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 85471.79000000001,
+      "independent": 85471.79,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-006",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-006",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 89028.32,
+      "independent": 89028.32,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-006",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-007",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "independent": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-007",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 94069.6,
+      "independent": 94069.6,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-007",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-007",
+      "metric": "FY2026-27.totalLtcgBeforeExemption",
+      "production": 85399.92,
+      "independent": 85399.92,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-007",
+      "metric": "FY2026-27.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-008",
+      "metric": "fyKeys",
+      "production": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "independent": [
+        "FY2025-26",
+        "FY2027-28"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-008",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 125130.91,
+      "independent": 125130.91,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-008",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 130.9100000000035,
+      "independent": 130.91,
+      "variance": 3.495870259939693e-12,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-008",
+      "metric": "FY2027-28.totalLtcgBeforeExemption",
+      "production": 82581.09999999999,
+      "independent": 82581.1,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-008",
+      "metric": "FY2027-28.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-009",
+      "metric": "fyKeys",
+      "production": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "independent": [
+        "FY2023-24",
+        "FY2025-26"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-009",
+      "metric": "FY2023-24.totalLtcgBeforeExemption",
+      "production": 83262.41,
+      "independent": 83262.41,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-009",
+      "metric": "FY2023-24.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-009",
+      "metric": "FY2025-26.totalLtcgBeforeExemption",
+      "production": 130126.25,
+      "independent": 130126.25,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-009",
+      "metric": "FY2025-26.taxableLtcgAfterExemption",
+      "production": 5126.25,
+      "independent": 5126.25,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-010",
+      "metric": "fyKeys",
+      "production": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "independent": [
+        "FY2024-25",
+        "FY2026-27"
+      ],
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-010",
+      "metric": "FY2024-25.totalLtcgBeforeExemption",
+      "production": 94851.70999999999,
+      "independent": 94851.71,
+      "variance": 1.4551915228366852e-11,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-010",
+      "metric": "FY2024-25.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-010",
+      "metric": "FY2026-27.totalLtcgBeforeExemption",
+      "production": 100405.59,
+      "independent": 100405.59,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "CROSSFY-010",
+      "metric": "FY2026-27.taxableLtcgAfterExemption",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-001",
+      "metric": "holdingDays",
+      "production": 30,
+      "independent": 30,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-001",
+      "metric": "applicableLoadPct",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-001",
+      "metric": "exitLoadAmount",
+      "production": 298.6614,
+      "independent": 298.66,
+      "variance": 0.0013999999999896318,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-002",
+      "metric": "holdingDays",
+      "production": 89,
+      "independent": 89,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-002",
+      "metric": "applicableLoadPct",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-002",
+      "metric": "exitLoadAmount",
+      "production": 451.7246,
+      "independent": 451.72,
+      "variance": 0.004599999999982174,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-003",
+      "metric": "holdingDays",
+      "production": 90,
+      "independent": 90,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-003",
+      "metric": "applicableLoadPct",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-003",
+      "metric": "exitLoadAmount",
+      "production": 369.5982,
+      "independent": 369.6,
+      "variance": 0.0018000000000029104,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-004",
+      "metric": "holdingDays",
+      "production": 91,
+      "independent": 91,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-004",
+      "metric": "applicableLoadPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-004",
+      "metric": "exitLoadAmount",
+      "production": 293.42810000000003,
+      "independent": 293.43,
+      "variance": 0.0018999999999778083,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-005",
+      "metric": "holdingDays",
+      "production": 364,
+      "independent": 364,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-005",
+      "metric": "applicableLoadPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-005",
+      "metric": "exitLoadAmount",
+      "production": 130.6826,
+      "independent": 130.68,
+      "variance": 0.002600000000001046,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-006",
+      "metric": "holdingDays",
+      "production": 365,
+      "independent": 365,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-006",
+      "metric": "applicableLoadPct",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-006",
+      "metric": "exitLoadAmount",
+      "production": 382.034,
+      "independent": 382.03,
+      "variance": 0.004000000000019099,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-007",
+      "metric": "holdingDays",
+      "production": 366,
+      "independent": 366,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-007",
+      "metric": "applicableLoadPct",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-007",
+      "metric": "exitLoadAmount",
+      "production": 125.23025,
+      "independent": 125.23,
+      "variance": 0.0002499999999940883,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-008",
+      "metric": "holdingDays",
+      "production": 1094,
+      "independent": 1094,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-008",
+      "metric": "applicableLoadPct",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-008",
+      "metric": "exitLoadAmount",
+      "production": 189.68665000000001,
+      "independent": 189.69,
+      "variance": 0.0033499999999833108,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-009",
+      "metric": "holdingDays",
+      "production": 1095,
+      "independent": 1095,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-009",
+      "metric": "applicableLoadPct",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-009",
+      "metric": "exitLoadAmount",
+      "production": 155.0131,
+      "independent": 155.01,
+      "variance": 0.003100000000017644,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-010",
+      "metric": "holdingDays",
+      "production": 1096,
+      "independent": 1096,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-010",
+      "metric": "applicableLoadPct",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-010",
+      "metric": "exitLoadAmount",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-011",
+      "metric": "holdingDays",
+      "production": 2000,
+      "independent": 2000,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-011",
+      "metric": "applicableLoadPct",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-011",
+      "metric": "exitLoadAmount",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-012",
+      "metric": "holdingDays",
+      "production": 1,
+      "independent": 1,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-012",
+      "metric": "applicableLoadPct",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-012",
+      "metric": "exitLoadAmount",
+      "production": 378.9224,
+      "independent": 378.92,
+      "variance": 0.002399999999965985,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-013",
+      "metric": "holdingDays",
+      "production": 45,
+      "independent": 45,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-013",
+      "metric": "applicableLoadPct",
+      "production": 2,
+      "independent": 2,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-013",
+      "metric": "exitLoadAmount",
+      "production": 260.7024,
+      "independent": 260.7,
+      "variance": 0.0024000000000228283,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-014",
+      "metric": "holdingDays",
+      "production": 500,
+      "independent": 500,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-014",
+      "metric": "applicableLoadPct",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-014",
+      "metric": "exitLoadAmount",
+      "production": 189.33445,
+      "independent": 189.33,
+      "variance": 0.004449999999991405,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-015",
+      "metric": "holdingDays",
+      "production": 800,
+      "independent": 800,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-015",
+      "metric": "applicableLoadPct",
+      "production": 0.5,
+      "independent": 0.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "EXIT-015",
+      "metric": "exitLoadAmount",
+      "production": 56.44625,
+      "independent": 56.45,
+      "variance": 0.003750000000003695,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-001",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-001",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-002",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-002",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-003",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-003",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-004",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-004",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-005",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-005",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-006",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-006",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-007",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-007",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-008",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-008",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-009",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-009",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-010",
+      "metric": "gainType",
+      "production": "unresolved",
+      "independent": "unresolved",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "AMBIG-010",
+      "metric": "taxableGain",
+      "production": null,
+      "independent": null,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-001",
+      "metric": "ruleVersion",
+      "production": "1961_act_pre_20240723",
+      "independent": "1961_act_pre_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-001",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-001",
+      "metric": "stcgRatePct",
+      "production": 15,
+      "independent": 15,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-001",
+      "metric": "ltcgRatePct",
+      "production": 10,
+      "independent": 10,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-001",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-002",
+      "metric": "ruleVersion",
+      "production": "1961_act_pre_20240723",
+      "independent": "1961_act_pre_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-002",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-002",
+      "metric": "stcgRatePct",
+      "production": 15,
+      "independent": 15,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-002",
+      "metric": "ltcgRatePct",
+      "production": 10,
+      "independent": 10,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-002",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-003",
+      "metric": "ruleVersion",
+      "production": "1961_act_pre_20240723",
+      "independent": "1961_act_pre_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-003",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-003",
+      "metric": "stcgRatePct",
+      "production": 15,
+      "independent": 15,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-003",
+      "metric": "ltcgRatePct",
+      "production": 10,
+      "independent": 10,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-003",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 100000,
+      "independent": 100000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-004",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-004",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-004",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-004",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-004",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-005",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-005",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-005",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-005",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-005",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-006",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-006",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-006",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-006",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-006",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-007",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-007",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-007",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-007",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-007",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-008",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-008",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-008",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-008",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-008",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-009",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-009",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-009",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-009",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-009",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-010",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-010",
+      "metric": "placeholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-010",
+      "metric": "stcgRatePct",
+      "production": 20,
+      "independent": 20,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-010",
+      "metric": "ltcgRatePct",
+      "production": 12.5,
+      "independent": 12.5,
+      "variance": 0,
+      "tolerance": 0.000001,
+      "result": "PASS"
+    },
+    {
+      "case": "RATE-010",
+      "metric": "ltcgExemptionThresholdInr",
+      "production": 125000,
+      "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "costBasisUsed",
+      "production": 8500,
+      "independent": 8500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "taxableGain",
+      "production": 15250,
+      "independent": 15250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "costBasisUsed",
+      "production": 8500,
+      "independent": 8500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "taxableGain",
+      "production": 15250,
+      "independent": 15250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "costBasisUsed",
+      "production": 5292,
+      "independent": 5292,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "taxableGain",
+      "production": 432,
+      "independent": 432,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "costBasisUsed",
+      "production": 5292,
+      "independent": 5292,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "taxableGain",
+      "production": 432,
+      "independent": 432,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "costBasisUsed",
+      "production": 5250,
+      "independent": 5250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "taxableGain",
+      "production": 68250,
+      "independent": 68250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "costBasisUsed",
+      "production": 5250,
+      "independent": 5250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "taxableGain",
+      "production": 68250,
+      "independent": 68250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "costBasisUsed",
+      "production": 5500,
+      "independent": 5500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "costBasisUsed",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "taxableGain",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "costBasisUsed",
+      "production": 4000,
+      "independent": 4000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "taxableGain",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "costBasisUsed",
+      "production": 2500,
+      "independent": 2500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "taxableGain",
+      "production": 1500,
+      "independent": 1500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    }
+  ]
+}

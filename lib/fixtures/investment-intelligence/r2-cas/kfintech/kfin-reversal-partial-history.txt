@@ -1,0 +1,19 @@
+KFINTECH Consolidated Account Statement
+Period : 01/03/2025 to 30/06/2025
+
+Folio No : 7654333/00
+PAN : ABCDE0112F
+Investor Name : SHWETA AGARWAL
+Mode of Holding : Single
+
+AMC Name : HDFC Mutual Fund
+Scheme : HDFC Flexi Cap Fund - Growth (Regular Plan)
+ISIN : INF179K01YX6
+AMFI Code : 118835
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+18/03/2025   Purchase - Lumpsum          4000.00  29.400  136.0500  89.400 [Ref: KREV0001]
+20/03/2025   Purchase Reversed           4000.00  29.400  136.0500  60.000 [Ref: KREV0002]
+
+Closing Balance : 60.000 units as on 30/06/2025   Market Value : Rs 7902.00   NAV : Rs 131.7000

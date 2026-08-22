@@ -1,0 +1,19 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Mar-2025 To 30-Jun-2025
+
+Folio No: 1201040001200
+PAN: ABCDE0012F
+Name: NEHA VERMA
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+12-Mar-2025   Purchase                              5000.00  37.200  134.4000  157.200 [Ref: REV0001]
+14-Mar-2025   Purchase - Reversed                   5000.00  37.200  134.4000  120.000 [Ref: REV0002]
+
+Closing Unit Balance as on 30-Jun-2025 : 120.000 Units   Valuation : Rs. 16188.00   NAV as on 30-Jun-2025 : Rs. 134.9000

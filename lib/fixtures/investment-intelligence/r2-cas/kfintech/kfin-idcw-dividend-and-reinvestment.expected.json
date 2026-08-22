@@ -1,0 +1,55 @@
+{
+  "fixtureId": "kfin-idcw-dividend-and-reinvestment",
+  "title": "IDCW dividend payout (no unit impact) and dividend reinvestment (unit impact) — rule-precedence case",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654328/00",
+      "holderName": "POOJA MENON",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654328/00",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "isin": "INF174K01LT0",
+      "amfiSchemeCode": "112308",
+      "transactionDateIso": "2025-02-25",
+      "canonicalType": "dividend",
+      "amount": "600.00",
+      "units": "0.000",
+      "nav": "41.2000",
+      "sourceReference": "KDIV0001"
+    },
+    {
+      "folioNumber": "7654328/00",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "isin": "INF174K01LT0",
+      "amfiSchemeCode": "112308",
+      "transactionDateIso": "2025-05-25",
+      "canonicalType": "reinvestment",
+      "amount": "540.00",
+      "units": "12.100",
+      "nav": "44.6300",
+      "sourceReference": "KDIV0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654328/00",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "412.100",
+      "value": "18750.55",
+      "nav": "45.5000"
+    }
+  ],
+  "notes": null
+}

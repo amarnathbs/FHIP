@@ -1,0 +1,11 @@
+# R1 — Architecture Exception
+
+Status: **NONE.**
+
+No R0-approved architectural decision (any `R0_*.md` contract or `ADR-001`-`ADR-010`) was amended, contradicted, or silently altered during R1 implementation. Every ambiguity encountered during implementation was resolved **within** the frozen architecture, not by changing it:
+
+1. **NPS instrument classification** (`R0_NET_WORTH_DEDUP_CONTRACT.md` scenario 6 says NPS routes via "`ii_instruments.instrument_class` classifies NPS as a retirement-type instrument," but the R0-frozen `ii_instruments.instrument_class` enum in `R0_CANONICAL_DATA_CONTRACT.md` has no such value). Resolved without amending the frozen enum: NPS-type instruments are seeded with `instrument_class='other'`, and publish-target routing keys off `ii_accounts.account_type='retirement'` instead — a value that already exists in the frozen `ii_accounts` schema. `computePublicationTarget()` (`lib/services/investment-intelligence/publishing.ts`) implements and `tests/unit/iiPublishing.test.ts` verifies this routing. This is a smallest-possible interpretation choice, not a schema change, and is documented in `R1_IMPLEMENTATION_REPORT.md` section 8 and `R1_DATABASE_SCHEMA.md`.
+
+2. **Migration numbering** (`0031` vs. the orchestrating session's pre-confirmed `0041`). This is a housekeeping/numbering question, not an architectural one — no entity, column, RLS policy, or contract was affected either way. Resolved by following `R1_IMPLEMENTATION_SPEC.md` section 1's own explicit text (which names `0031_investment_intelligence_foundation.sql`) and this branch's actual git history, documented as a deviation with its collision risk named plainly in `R1_IMPLEMENTATION_REPORT.md` section 8 — not an architecture exception, since it changes no approved design decision.
+
+No table, column, RLS policy shape, storage design, or identifier strategy was implemented differently from what `R0_CANONICAL_DATA_CONTRACT.md`, `R0_CANONICAL_IDENTIFIER_STRATEGY.md`, `R0_SOURCE_PROVENANCE_CONTRACT.md`, `R0_SECURITY_RLS_ARCHITECTURE.md`, `R0_NET_WORTH_DEDUP_CONTRACT.md`, `R0_GOAL_INTEGRATION_CONTRACT.md`, `R0_FORECASTING_CONTRACT.md`, `R0_CROSS_BORDER_CONTRACT.md`, `R0_INSIGHT_CLASSIFICATION.md`, `R0_AUDIT_REQUIREMENTS.md`, or any of the 10 ADRs specify.

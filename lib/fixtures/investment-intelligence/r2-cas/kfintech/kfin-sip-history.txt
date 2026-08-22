@@ -1,0 +1,23 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654325/00
+PAN : ABCDE0104F
+Investor Name : MANOJ TIWARI
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+07/01/2025   SIP Instalment              4000.00  14.760  271.0000  14.760 [Ref: KSIP0001]
+07/02/2025   SIP Instalment              4000.00  14.903  268.4000  29.663 [Ref: KSIP0002]
+07/03/2025   SIP Instalment              4000.00  14.498  275.9000  44.161 [Ref: KSIP0003]
+07/04/2025   SIP Instalment              4000.00  14.281  280.1000  58.442 [Ref: KSIP0004]
+07/05/2025   SIP Instalment              4000.00  14.008  285.5500  72.450 [Ref: KSIP0005]
+07/06/2025   SIP Instalment              4000.00  13.787  290.1200  86.237 [Ref: KSIP0006]
+
+Closing Balance : 86.237 units as on 30/06/2025   Market Value : Rs 25019.08   NAV : Rs 290.1200

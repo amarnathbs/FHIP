@@ -1,0 +1,2560 @@
+{
+  "generatedAt": "2026-08-22",
+  "seed": "0x52365031",
+  "totalCases": 142,
+  "cases": [
+    {
+      "id": "FIFO-001",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-001-acq-0",
+          "instrumentKey": "SCH-FIFO-1",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-07",
+          "units": 316.52,
+          "costPerUnit": 76.06
+        },
+        {
+          "sourceEventId": "FIFO-001-acq-1",
+          "instrumentKey": "SCH-FIFO-1",
+          "kind": "purchase",
+          "acquisitionDate": "2019-08-02",
+          "units": 240.58,
+          "costPerUnit": 83.16
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-001-disp-0",
+          "instrumentKey": "SCH-FIFO-1",
+          "disposalDate": "2020-06-14",
+          "units": 337.31,
+          "saleValue": 31186.26
+        }
+      ]
+    },
+    {
+      "id": "FIFO-002",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-002-acq-0",
+          "instrumentKey": "SCH-FIFO-2",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-17",
+          "units": 258.64,
+          "costPerUnit": 91.82
+        },
+        {
+          "sourceEventId": "FIFO-002-acq-1",
+          "instrumentKey": "SCH-FIFO-2",
+          "kind": "purchase",
+          "acquisitionDate": "2019-10-16",
+          "units": 412.11,
+          "costPerUnit": 80.14
+        },
+        {
+          "sourceEventId": "FIFO-002-acq-2",
+          "instrumentKey": "SCH-FIFO-2",
+          "kind": "purchase",
+          "acquisitionDate": "2019-12-06",
+          "units": 181.51,
+          "costPerUnit": 38.82
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-002-disp-0",
+          "instrumentKey": "SCH-FIFO-2",
+          "disposalDate": "2021-01-08",
+          "units": 461.44,
+          "saleValue": 47524.06
+        }
+      ]
+    },
+    {
+      "id": "FIFO-003",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-003-acq-0",
+          "instrumentKey": "SCH-FIFO-3",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-21",
+          "units": 85.65,
+          "costPerUnit": 97.72
+        },
+        {
+          "sourceEventId": "FIFO-003-acq-1",
+          "instrumentKey": "SCH-FIFO-3",
+          "kind": "purchase",
+          "acquisitionDate": "2019-09-11",
+          "units": 415.69,
+          "costPerUnit": 41.97
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-003-disp-0",
+          "instrumentKey": "SCH-FIFO-3",
+          "disposalDate": "2019-11-15",
+          "units": 111.94,
+          "saleValue": 9586.71
+        }
+      ]
+    },
+    {
+      "id": "FIFO-004",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-004-acq-0",
+          "instrumentKey": "SCH-FIFO-4",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-05",
+          "units": 126.05,
+          "costPerUnit": 32.95
+        },
+        {
+          "sourceEventId": "FIFO-004-acq-1",
+          "instrumentKey": "SCH-FIFO-4",
+          "kind": "purchase",
+          "acquisitionDate": "2019-11-16",
+          "units": 312.63,
+          "costPerUnit": 35.25
+        },
+        {
+          "sourceEventId": "FIFO-004-acq-2",
+          "instrumentKey": "SCH-FIFO-4",
+          "kind": "purchase",
+          "acquisitionDate": "2020-03-31",
+          "units": 384.72,
+          "costPerUnit": 78.2
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-004-disp-0",
+          "instrumentKey": "SCH-FIFO-4",
+          "disposalDate": "2021-03-05",
+          "units": 126.05,
+          "saleValue": 15968.16
+        }
+      ]
+    },
+    {
+      "id": "FIFO-005",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-005-acq-0",
+          "instrumentKey": "SCH-FIFO-5",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-14",
+          "units": 328.84,
+          "costPerUnit": 32.15
+        },
+        {
+          "sourceEventId": "FIFO-005-acq-1",
+          "instrumentKey": "SCH-FIFO-5",
+          "kind": "purchase",
+          "acquisitionDate": "2019-05-25",
+          "units": 369.38,
+          "costPerUnit": 31.46
+        },
+        {
+          "sourceEventId": "FIFO-005-acq-2",
+          "instrumentKey": "SCH-FIFO-5",
+          "kind": "purchase",
+          "acquisitionDate": "2019-08-26",
+          "units": 219.12,
+          "costPerUnit": 56.39
+        },
+        {
+          "sourceEventId": "FIFO-005-acq-3",
+          "instrumentKey": "SCH-FIFO-5",
+          "kind": "purchase",
+          "acquisitionDate": "2020-02-02",
+          "units": 263.42,
+          "costPerUnit": 28.09
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-005-disp-0",
+          "instrumentKey": "SCH-FIFO-5",
+          "disposalDate": "2020-05-12",
+          "units": 694.91,
+          "saleValue": 19571.83
+        }
+      ]
+    },
+    {
+      "id": "FIFO-006",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-006-acq-0",
+          "instrumentKey": "SCH-FIFO-6",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-26",
+          "units": 459.61,
+          "costPerUnit": 19.9
+        },
+        {
+          "sourceEventId": "FIFO-006-acq-1",
+          "instrumentKey": "SCH-FIFO-6",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-24",
+          "units": 52.82,
+          "costPerUnit": 64.56
+        },
+        {
+          "sourceEventId": "FIFO-006-acq-2",
+          "instrumentKey": "SCH-FIFO-6",
+          "kind": "purchase",
+          "acquisitionDate": "2019-10-17",
+          "units": 352.15,
+          "costPerUnit": 83.53
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-006-disp-0",
+          "instrumentKey": "SCH-FIFO-6",
+          "disposalDate": "2020-06-30",
+          "units": 469.49,
+          "saleValue": 11246.82
+        }
+      ]
+    },
+    {
+      "id": "FIFO-007",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-007-acq-0",
+          "instrumentKey": "SCH-FIFO-7",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-11",
+          "units": 321.89,
+          "costPerUnit": 27.39
+        },
+        {
+          "sourceEventId": "FIFO-007-acq-1",
+          "instrumentKey": "SCH-FIFO-7",
+          "kind": "purchase",
+          "acquisitionDate": "2019-09-05",
+          "units": 345.17,
+          "costPerUnit": 52.04
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-007-disp-0",
+          "instrumentKey": "SCH-FIFO-7",
+          "disposalDate": "2020-04-19",
+          "units": 267.73,
+          "saleValue": 18327.64
+        }
+      ]
+    },
+    {
+      "id": "FIFO-008",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-008-acq-0",
+          "instrumentKey": "SCH-FIFO-8",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-06",
+          "units": 101.28,
+          "costPerUnit": 96.89
+        },
+        {
+          "sourceEventId": "FIFO-008-acq-1",
+          "instrumentKey": "SCH-FIFO-8",
+          "kind": "purchase",
+          "acquisitionDate": "2019-10-04",
+          "units": 470.15,
+          "costPerUnit": 24.44
+        },
+        {
+          "sourceEventId": "FIFO-008-acq-2",
+          "instrumentKey": "SCH-FIFO-8",
+          "kind": "purchase",
+          "acquisitionDate": "2020-01-31",
+          "units": 427.56,
+          "costPerUnit": 18.49
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-008-disp-0",
+          "instrumentKey": "SCH-FIFO-8",
+          "disposalDate": "2020-07-19",
+          "units": 101.28,
+          "saleValue": 10831.42
+        }
+      ]
+    },
+    {
+      "id": "FIFO-009",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-009-acq-0",
+          "instrumentKey": "SCH-FIFO-9",
+          "kind": "purchase",
+          "acquisitionDate": "2019-02-21",
+          "units": 107.43,
+          "costPerUnit": 11.21
+        },
+        {
+          "sourceEventId": "FIFO-009-acq-1",
+          "instrumentKey": "SCH-FIFO-9",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-10",
+          "units": 148.48,
+          "costPerUnit": 30.53
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-009-disp-0",
+          "instrumentKey": "SCH-FIFO-9",
+          "disposalDate": "2019-12-22",
+          "units": 86.63,
+          "saleValue": 8813.77
+        }
+      ]
+    },
+    {
+      "id": "FIFO-010",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-010-acq-0",
+          "instrumentKey": "SCH-FIFO-10",
+          "kind": "purchase",
+          "acquisitionDate": "2019-05-12",
+          "units": 336.46,
+          "costPerUnit": 35.74
+        },
+        {
+          "sourceEventId": "FIFO-010-acq-1",
+          "instrumentKey": "SCH-FIFO-10",
+          "kind": "purchase",
+          "acquisitionDate": "2019-11-15",
+          "units": 417.98,
+          "costPerUnit": 47.38
+        },
+        {
+          "sourceEventId": "FIFO-010-acq-2",
+          "instrumentKey": "SCH-FIFO-10",
+          "kind": "purchase",
+          "acquisitionDate": "2020-02-20",
+          "units": 249.03,
+          "costPerUnit": 74.07
+        },
+        {
+          "sourceEventId": "FIFO-010-acq-3",
+          "instrumentKey": "SCH-FIFO-10",
+          "kind": "purchase",
+          "acquisitionDate": "2020-06-24",
+          "units": 219.29,
+          "costPerUnit": 86.38
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-010-disp-0",
+          "instrumentKey": "SCH-FIFO-10",
+          "disposalDate": "2020-09-01",
+          "units": 409.85,
+          "saleValue": 30547.99
+        }
+      ]
+    },
+    {
+      "id": "FIFO-011",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-011-acq-0",
+          "instrumentKey": "SCH-FIFO-11",
+          "kind": "purchase",
+          "acquisitionDate": "2019-03-31",
+          "units": 344.33,
+          "costPerUnit": 48.36
+        },
+        {
+          "sourceEventId": "FIFO-011-acq-1",
+          "instrumentKey": "SCH-FIFO-11",
+          "kind": "purchase",
+          "acquisitionDate": "2019-09-01",
+          "units": 392.94,
+          "costPerUnit": 36.03
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-011-disp-0",
+          "instrumentKey": "SCH-FIFO-11",
+          "disposalDate": "2020-09-21",
+          "units": 513.15,
+          "saleValue": 24730.15
+        }
+      ]
+    },
+    {
+      "id": "FIFO-012",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-012-acq-0",
+          "instrumentKey": "SCH-FIFO-12",
+          "kind": "purchase",
+          "acquisitionDate": "2019-04-30",
+          "units": 232.64,
+          "costPerUnit": 81.35
+        },
+        {
+          "sourceEventId": "FIFO-012-acq-1",
+          "instrumentKey": "SCH-FIFO-12",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-29",
+          "units": 261.25,
+          "costPerUnit": 38.75
+        },
+        {
+          "sourceEventId": "FIFO-012-acq-2",
+          "instrumentKey": "SCH-FIFO-12",
+          "kind": "purchase",
+          "acquisitionDate": "2019-07-31",
+          "units": 362.54,
+          "costPerUnit": 88.78
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-012-disp-0",
+          "instrumentKey": "SCH-FIFO-12",
+          "disposalDate": "2019-10-14",
+          "units": 493.89,
+          "saleValue": 53560.6
+        }
+      ]
+    },
+    {
+      "id": "FIFO-013",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-013-acq-0",
+          "instrumentKey": "SCH-FIFO-13",
+          "kind": "purchase",
+          "acquisitionDate": "2019-05-16",
+          "units": 172.46,
+          "costPerUnit": 30.76
+        },
+        {
+          "sourceEventId": "FIFO-013-acq-1",
+          "instrumentKey": "SCH-FIFO-13",
+          "kind": "purchase",
+          "acquisitionDate": "2019-11-12",
+          "units": 209.01,
+          "costPerUnit": 47.9
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-013-disp-0",
+          "instrumentKey": "SCH-FIFO-13",
+          "disposalDate": "2020-07-18",
+          "units": 119.46,
+          "saleValue": 5285
+        }
+      ]
+    },
+    {
+      "id": "FIFO-014",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-014-acq-0",
+          "instrumentKey": "SCH-FIFO-14",
+          "kind": "purchase",
+          "acquisitionDate": "2019-07-09",
+          "units": 414.44,
+          "costPerUnit": 66.87
+        },
+        {
+          "sourceEventId": "FIFO-014-acq-1",
+          "instrumentKey": "SCH-FIFO-14",
+          "kind": "purchase",
+          "acquisitionDate": "2019-10-01",
+          "units": 198.09,
+          "costPerUnit": 63.59
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-014-disp-0",
+          "instrumentKey": "SCH-FIFO-14",
+          "disposalDate": "2020-07-06",
+          "units": 398.56,
+          "saleValue": 33246.05
+        }
+      ]
+    },
+    {
+      "id": "FIFO-015",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-015-acq-0",
+          "instrumentKey": "SCH-FIFO-15",
+          "kind": "purchase",
+          "acquisitionDate": "2019-02-06",
+          "units": 198.83,
+          "costPerUnit": 31.12
+        },
+        {
+          "sourceEventId": "FIFO-015-acq-1",
+          "instrumentKey": "SCH-FIFO-15",
+          "kind": "purchase",
+          "acquisitionDate": "2019-03-27",
+          "units": 386.69,
+          "costPerUnit": 28.6
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-015-disp-0",
+          "instrumentKey": "SCH-FIFO-15",
+          "disposalDate": "2019-05-26",
+          "units": 152.85,
+          "saleValue": 11846.2
+        }
+      ]
+    },
+    {
+      "id": "FIFO-016",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-016-acq-0",
+          "instrumentKey": "SCH-FIFO-16",
+          "kind": "purchase",
+          "acquisitionDate": "2019-07-12",
+          "units": 322.5,
+          "costPerUnit": 10.27
+        },
+        {
+          "sourceEventId": "FIFO-016-acq-1",
+          "instrumentKey": "SCH-FIFO-16",
+          "kind": "purchase",
+          "acquisitionDate": "2019-08-13",
+          "units": 115.49,
+          "costPerUnit": 94.04
+        },
+        {
+          "sourceEventId": "FIFO-016-acq-2",
+          "instrumentKey": "SCH-FIFO-16",
+          "kind": "purchase",
+          "acquisitionDate": "2020-01-06",
+          "units": 145.68,
+          "costPerUnit": 54.57
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-016-disp-0",
+          "instrumentKey": "SCH-FIFO-16",
+          "disposalDate": "2020-05-29",
+          "units": 322.5,
+          "saleValue": 22286.06
+        }
+      ]
+    },
+    {
+      "id": "FIFO-017",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-017-acq-0",
+          "instrumentKey": "SCH-FIFO-17",
+          "kind": "purchase",
+          "acquisitionDate": "2019-05-04",
+          "units": 386.42,
+          "costPerUnit": 68.64
+        },
+        {
+          "sourceEventId": "FIFO-017-acq-1",
+          "instrumentKey": "SCH-FIFO-17",
+          "kind": "purchase",
+          "acquisitionDate": "2019-09-08",
+          "units": 336.26,
+          "costPerUnit": 22.45
+        },
+        {
+          "sourceEventId": "FIFO-017-acq-2",
+          "instrumentKey": "SCH-FIFO-17",
+          "kind": "purchase",
+          "acquisitionDate": "2020-02-16",
+          "units": 89.41,
+          "costPerUnit": 89.55
+        },
+        {
+          "sourceEventId": "FIFO-017-acq-3",
+          "instrumentKey": "SCH-FIFO-17",
+          "kind": "purchase",
+          "acquisitionDate": "2020-07-02",
+          "units": 260.05,
+          "costPerUnit": 73.8
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-017-disp-0",
+          "instrumentKey": "SCH-FIFO-17",
+          "disposalDate": "2021-06-11",
+          "units": 749.8,
+          "saleValue": 39157.78
+        }
+      ]
+    },
+    {
+      "id": "FIFO-018",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-018-acq-0",
+          "instrumentKey": "SCH-FIFO-18",
+          "kind": "purchase",
+          "acquisitionDate": "2019-07-03",
+          "units": 81.92,
+          "costPerUnit": 15.58
+        },
+        {
+          "sourceEventId": "FIFO-018-acq-1",
+          "instrumentKey": "SCH-FIFO-18",
+          "kind": "purchase",
+          "acquisitionDate": "2019-08-29",
+          "units": 344.52,
+          "costPerUnit": 54.21
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-018-disp-0",
+          "instrumentKey": "SCH-FIFO-18",
+          "disposalDate": "2020-08-28",
+          "units": 348.05,
+          "saleValue": 34470.99
+        }
+      ]
+    },
+    {
+      "id": "FIFO-019",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-019-acq-0",
+          "instrumentKey": "SCH-FIFO-19",
+          "kind": "purchase",
+          "acquisitionDate": "2019-06-11",
+          "units": 390.28,
+          "costPerUnit": 21.34
+        },
+        {
+          "sourceEventId": "FIFO-019-acq-1",
+          "instrumentKey": "SCH-FIFO-19",
+          "kind": "purchase",
+          "acquisitionDate": "2019-07-26",
+          "units": 148.23,
+          "costPerUnit": 94.68
+        },
+        {
+          "sourceEventId": "FIFO-019-acq-2",
+          "instrumentKey": "SCH-FIFO-19",
+          "kind": "purchase",
+          "acquisitionDate": "2019-12-31",
+          "units": 188.82,
+          "costPerUnit": 21.8
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-019-disp-0",
+          "instrumentKey": "SCH-FIFO-19",
+          "disposalDate": "2020-09-21",
+          "units": 509.4,
+          "saleValue": 19077.98
+        }
+      ]
+    },
+    {
+      "id": "FIFO-020",
+      "family": "fifo",
+      "acquisitions": [
+        {
+          "sourceEventId": "FIFO-020-acq-0",
+          "instrumentKey": "SCH-FIFO-20",
+          "kind": "purchase",
+          "acquisitionDate": "2019-03-17",
+          "units": 372.76,
+          "costPerUnit": 94.65
+        },
+        {
+          "sourceEventId": "FIFO-020-acq-1",
+          "instrumentKey": "SCH-FIFO-20",
+          "kind": "purchase",
+          "acquisitionDate": "2019-09-24",
+          "units": 233.76,
+          "costPerUnit": 21.08
+        },
+        {
+          "sourceEventId": "FIFO-020-acq-2",
+          "instrumentKey": "SCH-FIFO-20",
+          "kind": "purchase",
+          "acquisitionDate": "2020-02-17",
+          "units": 391.75,
+          "costPerUnit": 84.98
+        }
+      ],
+      "disposals": [
+        {
+          "sourceEventId": "FIFO-020-disp-0",
+          "instrumentKey": "SCH-FIFO-20",
+          "disposalDate": "2020-06-19",
+          "units": 606.52,
+          "saleValue": 23163.81
+        }
+      ]
+    },
+    {
+      "id": "GRAND-001",
+      "family": "grandfathering",
+      "branch": "fmv_benefit",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 27.5,
+      "salePricePerUnit": 84.51,
+      "fmvPerUnit": 53.15,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-002",
+      "family": "grandfathering",
+      "branch": "fmv_benefit",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 21.87,
+      "salePricePerUnit": 82.74,
+      "fmvPerUnit": 46.13,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-003",
+      "family": "grandfathering",
+      "branch": "fmv_benefit",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 23.18,
+      "salePricePerUnit": 64.13,
+      "fmvPerUnit": 35.84,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-004",
+      "family": "grandfathering",
+      "branch": "fmv_benefit",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 34.22,
+      "salePricePerUnit": 66.75,
+      "fmvPerUnit": 47.82,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-005",
+      "family": "grandfathering",
+      "branch": "capped_at_sale",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 28.34,
+      "salePricePerUnit": 43.6,
+      "fmvPerUnit": 61.07,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-006",
+      "family": "grandfathering",
+      "branch": "capped_at_sale",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 24.52,
+      "salePricePerUnit": 35.2,
+      "fmvPerUnit": 66.17,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-007",
+      "family": "grandfathering",
+      "branch": "capped_at_sale",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 31.52,
+      "salePricePerUnit": 47.98,
+      "fmvPerUnit": 75.4,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-008",
+      "family": "grandfathering",
+      "branch": "capped_at_sale",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 25.97,
+      "salePricePerUnit": 41.3,
+      "fmvPerUnit": 74.22,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-009",
+      "family": "grandfathering",
+      "branch": "no_effect",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 17.23,
+      "salePricePerUnit": 41.5,
+      "fmvPerUnit": 10.12,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-010",
+      "family": "grandfathering",
+      "branch": "no_effect",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 49.95,
+      "salePricePerUnit": 67.07,
+      "fmvPerUnit": 26.68,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-011",
+      "family": "grandfathering",
+      "branch": "no_effect",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 36.8,
+      "salePricePerUnit": 49.38,
+      "fmvPerUnit": 16.38,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-012",
+      "family": "grandfathering",
+      "branch": "no_effect",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 48.73,
+      "salePricePerUnit": 56.47,
+      "fmvPerUnit": 28.1,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-013",
+      "family": "grandfathering",
+      "branch": "real_loss_preserved",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 47.44,
+      "salePricePerUnit": 25.51,
+      "fmvPerUnit": 24.03,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-014",
+      "family": "grandfathering",
+      "branch": "real_loss_preserved",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 52.23,
+      "salePricePerUnit": 32.28,
+      "fmvPerUnit": 32.24,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRAND-015",
+      "family": "grandfathering",
+      "branch": "fmv_unavailable",
+      "acquisitionDate": "2016-06-15",
+      "actualCostPerUnit": 55.2,
+      "salePricePerUnit": 93.36,
+      "fmvPerUnit": null,
+      "isEquityOriented": true
+    },
+    {
+      "id": "BOUND-001",
+      "family": "boundary",
+      "acquisitionDate": "2021-04-01",
+      "disposalDate": "2022-03-31",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-002",
+      "family": "boundary",
+      "acquisitionDate": "2021-06-15",
+      "disposalDate": "2022-06-16",
+      "thresholdMonths": 12,
+      "expectLongTerm": true
+    },
+    {
+      "id": "BOUND-003",
+      "family": "boundary",
+      "acquisitionDate": "2020-02-29",
+      "disposalDate": "2021-02-28",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-004",
+      "family": "boundary",
+      "acquisitionDate": "2022-01-31",
+      "disposalDate": "2023-01-30",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-005",
+      "family": "boundary",
+      "acquisitionDate": "2019-12-01",
+      "disposalDate": "2020-12-02",
+      "thresholdMonths": 12,
+      "expectLongTerm": true
+    },
+    {
+      "id": "BOUND-006",
+      "family": "boundary",
+      "acquisitionDate": "2021-04-01",
+      "disposalDate": "2022-04-01",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-007",
+      "family": "boundary",
+      "acquisitionDate": "2021-06-15",
+      "disposalDate": "2022-06-14",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-008",
+      "family": "boundary",
+      "acquisitionDate": "2020-02-29",
+      "disposalDate": "2021-03-01",
+      "thresholdMonths": 12,
+      "expectLongTerm": true
+    },
+    {
+      "id": "BOUND-009",
+      "family": "boundary",
+      "acquisitionDate": "2022-01-31",
+      "disposalDate": "2023-01-31",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-010",
+      "family": "boundary",
+      "acquisitionDate": "2019-12-01",
+      "disposalDate": "2020-11-30",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-011",
+      "family": "boundary",
+      "acquisitionDate": "2021-04-01",
+      "disposalDate": "2022-04-02",
+      "thresholdMonths": 12,
+      "expectLongTerm": true
+    },
+    {
+      "id": "BOUND-012",
+      "family": "boundary",
+      "acquisitionDate": "2021-06-15",
+      "disposalDate": "2022-06-15",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-013",
+      "family": "boundary",
+      "acquisitionDate": "2020-02-29",
+      "disposalDate": "2021-02-27",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "BOUND-014",
+      "family": "boundary",
+      "acquisitionDate": "2022-01-31",
+      "disposalDate": "2023-02-01",
+      "thresholdMonths": 12,
+      "expectLongTerm": true
+    },
+    {
+      "id": "BOUND-015",
+      "family": "boundary",
+      "acquisitionDate": "2019-12-01",
+      "disposalDate": "2020-12-01",
+      "thresholdMonths": 12,
+      "expectLongTerm": false
+    },
+    {
+      "id": "DEBT-001",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-1",
+      "acquisitionDate": "2024-04-13",
+      "disposalDate": "2025-04-13",
+      "unitsConsumed": 342.99,
+      "costPerUnit": 27.43,
+      "salePricePerUnit": 28.46
+    },
+    {
+      "id": "DEBT-002",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-2",
+      "acquisitionDate": "2024-09-13",
+      "disposalDate": "2030-09-13",
+      "unitsConsumed": 253.2,
+      "costPerUnit": 15.9,
+      "salePricePerUnit": 10.93
+    },
+    {
+      "id": "DEBT-003",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-3",
+      "acquisitionDate": "2023-07-14",
+      "disposalDate": "2027-09-14",
+      "unitsConsumed": 275.55,
+      "costPerUnit": 33.84,
+      "salePricePerUnit": 52.02
+    },
+    {
+      "id": "DEBT-004",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-4",
+      "acquisitionDate": "2023-09-15",
+      "disposalDate": "2026-03-15",
+      "unitsConsumed": 366.01,
+      "costPerUnit": 39.57,
+      "salePricePerUnit": 47.56
+    },
+    {
+      "id": "DEBT-005",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-5",
+      "acquisitionDate": "2024-06-15",
+      "disposalDate": "2030-12-15",
+      "unitsConsumed": 257.8,
+      "costPerUnit": 10.47,
+      "salePricePerUnit": 20.36
+    },
+    {
+      "id": "DEBT-006",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-6",
+      "acquisitionDate": "2023-04-14",
+      "disposalDate": "2028-04-14",
+      "unitsConsumed": 365.04,
+      "costPerUnit": 26.88,
+      "salePricePerUnit": 39.46
+    },
+    {
+      "id": "DEBT-007",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-7",
+      "acquisitionDate": "2023-04-10",
+      "disposalDate": "2027-06-10",
+      "unitsConsumed": 241.52,
+      "costPerUnit": 20.24,
+      "salePricePerUnit": 17.8
+    },
+    {
+      "id": "DEBT-008",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-8",
+      "acquisitionDate": "2024-09-13",
+      "disposalDate": "2027-03-13",
+      "unitsConsumed": 59.28,
+      "costPerUnit": 36.58,
+      "salePricePerUnit": 37.25
+    },
+    {
+      "id": "DEBT-009",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-9",
+      "acquisitionDate": "2023-08-12",
+      "disposalDate": "2027-11-12",
+      "unitsConsumed": 222.1,
+      "costPerUnit": 16.17,
+      "salePricePerUnit": 24.96
+    },
+    {
+      "id": "DEBT-010",
+      "family": "debt",
+      "instrumentKey": "SCH-DEBT-10",
+      "acquisitionDate": "2023-08-12",
+      "disposalDate": "2028-02-12",
+      "unitsConsumed": 210.87,
+      "costPerUnit": 21.29,
+      "salePricePerUnit": 26.13
+    },
+    {
+      "id": "FYAGG-001",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-01-03",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 144473.98
+        },
+        {
+          "disposalDate": "2024-09-04",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 134940.9
+        },
+        {
+          "disposalDate": "2024-04-04",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 18860.14
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-002",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-09-07",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -4149.24
+        },
+        {
+          "disposalDate": "2025-06-12",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 111610.65
+        },
+        {
+          "disposalDate": "2025-09-19",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 6560.59
+        },
+        {
+          "disposalDate": "2025-10-20",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -7199.22
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-003",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2024-03-23",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -4729.09
+        },
+        {
+          "disposalDate": "2023-04-19",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -19673.67
+        },
+        {
+          "disposalDate": "2024-03-14",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 146394.64
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-004",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2024-09-23",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 122174.52
+        },
+        {
+          "disposalDate": "2024-08-25",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 82231.34
+        },
+        {
+          "disposalDate": "2024-07-03",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 144548.94
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-005",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-07-11",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 137565.65
+        },
+        {
+          "disposalDate": "2025-07-13",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 50974.75
+        },
+        {
+          "disposalDate": "2025-05-04",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 79396.12
+        },
+        {
+          "disposalDate": "2025-07-17",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 147131.75
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-006",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2023-04-05",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -8942.34
+        },
+        {
+          "disposalDate": "2024-02-27",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 85814.31
+        },
+        {
+          "disposalDate": "2023-11-02",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -544.33
+        },
+        {
+          "disposalDate": "2023-08-27",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 58210.65
+        },
+        {
+          "disposalDate": "2023-06-06",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 35005.91
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-007",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2024-07-26",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -14756.03
+        },
+        {
+          "disposalDate": "2024-06-24",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -7130.33
+        },
+        {
+          "disposalDate": "2024-12-14",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 36413.85
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-008",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2026-02-13",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 143826.32
+        },
+        {
+          "disposalDate": "2025-06-13",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 92968.68
+        },
+        {
+          "disposalDate": "2025-05-22",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 112447.24
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-009",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2023-11-18",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -15690.58
+        },
+        {
+          "disposalDate": "2024-01-26",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 135768.95
+        },
+        {
+          "disposalDate": "2024-01-24",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 105522.91
+        },
+        {
+          "disposalDate": "2023-11-06",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -10434.17
+        },
+        {
+          "disposalDate": "2024-02-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 27532.31
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-010",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-01-14",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 116741.7
+        },
+        {
+          "disposalDate": "2024-05-02",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 115450.51
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-011",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2026-02-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 62941.49
+        },
+        {
+          "disposalDate": "2026-01-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 27098.35
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-012",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2023-09-05",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -13207.34
+        },
+        {
+          "disposalDate": "2023-12-14",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 148025.72
+        },
+        {
+          "disposalDate": "2024-01-26",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 6437.5
+        },
+        {
+          "disposalDate": "2023-07-13",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 23787.5
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-013",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-02-18",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -16540.09
+        },
+        {
+          "disposalDate": "2025-02-12",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 145778.04
+        },
+        {
+          "disposalDate": "2025-01-04",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 130745.31
+        },
+        {
+          "disposalDate": "2024-10-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 27185.33
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-014",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2025-06-05",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 29305.87
+        },
+        {
+          "disposalDate": "2026-01-26",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 18595.9
+        },
+        {
+          "disposalDate": "2025-12-11",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 146074.43
+        },
+        {
+          "disposalDate": "2025-10-19",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 82850.67
+        },
+        {
+          "disposalDate": "2025-09-05",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": -10659.8
+        }
+      ]
+    },
+    {
+      "id": "FYAGG-015",
+      "family": "fy_aggregation",
+      "disposals": [
+        {
+          "disposalDate": "2024-01-17",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 222.22
+        },
+        {
+          "disposalDate": "2023-06-12",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 145055.43
+        },
+        {
+          "disposalDate": "2023-09-25",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 140456.12
+        },
+        {
+          "disposalDate": "2023-07-12",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 118908.97
+        },
+        {
+          "disposalDate": "2023-11-23",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 17671.88
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-001",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2025-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 69781.81
+        },
+        {
+          "disposalDate": "2026-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 53459.7
+        },
+        {
+          "disposalDate": "2025-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 20723.4
+        },
+        {
+          "disposalDate": "2026-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 31354.64
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-002",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2026-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 74930.71
+        },
+        {
+          "disposalDate": "2027-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 65745
+        },
+        {
+          "disposalDate": "2026-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 25799.37
+        },
+        {
+          "disposalDate": "2027-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 15147.83
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-003",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2024-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 48288.36
+        },
+        {
+          "disposalDate": "2025-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 58706.5
+        },
+        {
+          "disposalDate": "2024-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 22613.82
+        },
+        {
+          "disposalDate": "2025-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 28530.89
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-004",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2025-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 48533.89
+        },
+        {
+          "disposalDate": "2026-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 58104.24
+        },
+        {
+          "disposalDate": "2025-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 25955.63
+        },
+        {
+          "disposalDate": "2026-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 26630.28
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-005",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2026-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 62405
+        },
+        {
+          "disposalDate": "2027-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 55807.17
+        },
+        {
+          "disposalDate": "2026-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 37390.02
+        },
+        {
+          "disposalDate": "2027-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 12054.95
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-006",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2024-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 63197.68
+        },
+        {
+          "disposalDate": "2025-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 57618.93
+        },
+        {
+          "disposalDate": "2024-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 22274.11
+        },
+        {
+          "disposalDate": "2025-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 31409.39
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-007",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2025-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 61431.83
+        },
+        {
+          "disposalDate": "2026-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 64516.04
+        },
+        {
+          "disposalDate": "2025-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 32637.77
+        },
+        {
+          "disposalDate": "2026-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 20883.88
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-008",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2026-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 80471.49
+        },
+        {
+          "disposalDate": "2027-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 66298.54
+        },
+        {
+          "disposalDate": "2026-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 44659.42
+        },
+        {
+          "disposalDate": "2027-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 16282.56
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-009",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2024-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 57278.01
+        },
+        {
+          "disposalDate": "2025-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 86969.75
+        },
+        {
+          "disposalDate": "2024-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 25984.4
+        },
+        {
+          "disposalDate": "2025-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 43156.5
+        }
+      ]
+    },
+    {
+      "id": "CROSSFY-010",
+      "family": "cross_fy",
+      "disposals": [
+        {
+          "disposalDate": "2025-03-31",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 73303.5
+        },
+        {
+          "disposalDate": "2026-04-01",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 74221.04
+        },
+        {
+          "disposalDate": "2025-03-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 21548.21
+        },
+        {
+          "disposalDate": "2026-04-15",
+          "classification": "equity_oriented",
+          "gainType": "ltcg",
+          "taxableGain": 26184.55
+        }
+      ]
+    },
+    {
+      "id": "EXIT-001",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-01-31",
+      "saleValueApportioned": 14933.07
+    },
+    {
+      "id": "EXIT-002",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-03-31",
+      "saleValueApportioned": 22586.23
+    },
+    {
+      "id": "EXIT-003",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-04-01",
+      "saleValueApportioned": 18479.91
+    },
+    {
+      "id": "EXIT-004",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-04-02",
+      "saleValueApportioned": 29342.81
+    },
+    {
+      "id": "EXIT-005",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-12-31",
+      "saleValueApportioned": 13068.26
+    },
+    {
+      "id": "EXIT-006",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2024-01-01",
+      "saleValueApportioned": 38203.4
+    },
+    {
+      "id": "EXIT-007",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2024-01-02",
+      "saleValueApportioned": 25046.05
+    },
+    {
+      "id": "EXIT-008",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2025-12-30",
+      "saleValueApportioned": 37937.33
+    },
+    {
+      "id": "EXIT-009",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2025-12-31",
+      "saleValueApportioned": 31002.62
+    },
+    {
+      "id": "EXIT-010",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2026-01-01",
+      "saleValueApportioned": 26254.78
+    },
+    {
+      "id": "EXIT-011",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2028-06-23",
+      "saleValueApportioned": 35239.5
+    },
+    {
+      "id": "EXIT-012",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-01-02",
+      "saleValueApportioned": 18946.12
+    },
+    {
+      "id": "EXIT-013",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2023-02-15",
+      "saleValueApportioned": 13035.12
+    },
+    {
+      "id": "EXIT-014",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2024-05-15",
+      "saleValueApportioned": 37866.89
+    },
+    {
+      "id": "EXIT-015",
+      "family": "exit_load",
+      "tiers": [
+        {
+          "uptoDays": 90,
+          "loadPct": 2
+        },
+        {
+          "uptoDays": 365,
+          "loadPct": 1
+        },
+        {
+          "uptoDays": 1095,
+          "loadPct": 0.5
+        }
+      ],
+      "acquisitionDate": "2023-01-01",
+      "disposalDate": "2025-03-11",
+      "saleValueApportioned": 11289.25
+    },
+    {
+      "id": "AMBIG-001",
+      "family": "ambiguous",
+      "basis": "unresolved_stale_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 75.21,
+      "costPerUnit": 44.43,
+      "salePricePerUnit": 76.33
+    },
+    {
+      "id": "AMBIG-002",
+      "family": "ambiguous",
+      "basis": "unresolved_no_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 82.06,
+      "costPerUnit": 32.26,
+      "salePricePerUnit": 80.99
+    },
+    {
+      "id": "AMBIG-003",
+      "family": "ambiguous",
+      "basis": "unresolved_no_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 213.47,
+      "costPerUnit": 31.16,
+      "salePricePerUnit": 31.16
+    },
+    {
+      "id": "AMBIG-004",
+      "family": "ambiguous",
+      "basis": "unresolved_stale_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 248.1,
+      "costPerUnit": 37.22,
+      "salePricePerUnit": 74.18
+    },
+    {
+      "id": "AMBIG-005",
+      "family": "ambiguous",
+      "basis": "unresolved_stale_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 219.7,
+      "costPerUnit": 45.64,
+      "salePricePerUnit": 54.87
+    },
+    {
+      "id": "AMBIG-006",
+      "family": "ambiguous",
+      "basis": "unresolved_no_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 78.69,
+      "costPerUnit": 20.34,
+      "salePricePerUnit": 61.44
+    },
+    {
+      "id": "AMBIG-007",
+      "family": "ambiguous",
+      "basis": "unresolved_no_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 163.29,
+      "costPerUnit": 53.54,
+      "salePricePerUnit": 88.97
+    },
+    {
+      "id": "AMBIG-008",
+      "family": "ambiguous",
+      "basis": "unresolved_stale_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 268.22,
+      "costPerUnit": 15.79,
+      "salePricePerUnit": 19.89
+    },
+    {
+      "id": "AMBIG-009",
+      "family": "ambiguous",
+      "basis": "unresolved_stale_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 56.3,
+      "costPerUnit": 30.9,
+      "salePricePerUnit": 57.75
+    },
+    {
+      "id": "AMBIG-010",
+      "family": "ambiguous",
+      "basis": "unresolved_no_data",
+      "acquisitionDate": "2022-01-10",
+      "disposalDate": "2023-08-20",
+      "unitsConsumed": 97.97,
+      "costPerUnit": 21.64,
+      "salePricePerUnit": 84.86
+    },
+    {
+      "id": "RATE-001",
+      "family": "rate_version",
+      "disposalDate": "2023-04-01"
+    },
+    {
+      "id": "RATE-002",
+      "family": "rate_version",
+      "disposalDate": "2024-01-15"
+    },
+    {
+      "id": "RATE-003",
+      "family": "rate_version",
+      "disposalDate": "2024-07-22"
+    },
+    {
+      "id": "RATE-004",
+      "family": "rate_version",
+      "disposalDate": "2024-07-23"
+    },
+    {
+      "id": "RATE-005",
+      "family": "rate_version",
+      "disposalDate": "2024-07-24"
+    },
+    {
+      "id": "RATE-006",
+      "family": "rate_version",
+      "disposalDate": "2025-03-31"
+    },
+    {
+      "id": "RATE-007",
+      "family": "rate_version",
+      "disposalDate": "2026-03-31"
+    },
+    {
+      "id": "RATE-008",
+      "family": "rate_version",
+      "disposalDate": "2026-04-01"
+    },
+    {
+      "id": "RATE-009",
+      "family": "rate_version",
+      "disposalDate": "2026-04-02"
+    },
+    {
+      "id": "RATE-010",
+      "family": "rate_version",
+      "disposalDate": "2027-01-01"
+    },
+    {
+      "id": "ACTTRANS-001",
+      "family": "act_transition",
+      "pairKey": "2020-05-10",
+      "side": "pre",
+      "acquisitionDate": "2020-05-10",
+      "disposalDate": "2026-03-31",
+      "costPerUnit": 42.5,
+      "salePricePerUnit": 118.75,
+      "unitsConsumed": 200,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "ACTTRANS-002",
+      "family": "act_transition",
+      "pairKey": "2020-05-10",
+      "side": "post",
+      "acquisitionDate": "2020-05-10",
+      "disposalDate": "2026-04-01",
+      "costPerUnit": 42.5,
+      "salePricePerUnit": 118.75,
+      "unitsConsumed": 200,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "ACTTRANS-003",
+      "family": "act_transition",
+      "pairKey": "2022-11-01",
+      "side": "pre",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2026-03-31",
+      "costPerUnit": 88.2,
+      "salePricePerUnit": 95.4,
+      "unitsConsumed": 60,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "ACTTRANS-004",
+      "family": "act_transition",
+      "pairKey": "2022-11-01",
+      "side": "post",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2026-04-01",
+      "costPerUnit": 88.2,
+      "salePricePerUnit": 95.4,
+      "unitsConsumed": 60,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "ACTTRANS-005",
+      "family": "act_transition",
+      "pairKey": "2019-02-14",
+      "side": "pre",
+      "acquisitionDate": "2019-02-14",
+      "disposalDate": "2026-03-31",
+      "costPerUnit": 15,
+      "salePricePerUnit": 210,
+      "unitsConsumed": 350,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "ACTTRANS-006",
+      "family": "act_transition",
+      "pairKey": "2019-02-14",
+      "side": "post",
+      "acquisitionDate": "2019-02-14",
+      "disposalDate": "2026-04-01",
+      "costPerUnit": 15,
+      "salePricePerUnit": 210,
+      "unitsConsumed": 350,
+      "isEquityOriented": true,
+      "fmvPerUnit": null
+    },
+    {
+      "id": "GRANDBOUND-001",
+      "family": "grand_boundary",
+      "pairKey": "30-55-90",
+      "side": "eligible",
+      "acquisitionDate": "2018-01-31",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 30,
+      "fmvPerUnit": 55,
+      "salePricePerUnit": 90,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRANDBOUND-002",
+      "family": "grand_boundary",
+      "pairKey": "30-55-90",
+      "side": "ineligible",
+      "acquisitionDate": "2018-02-01",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 30,
+      "fmvPerUnit": 55,
+      "salePricePerUnit": 90,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRANDBOUND-003",
+      "family": "grand_boundary",
+      "pairKey": "60-20-95",
+      "side": "eligible",
+      "acquisitionDate": "2018-01-31",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 60,
+      "fmvPerUnit": 20,
+      "salePricePerUnit": 95,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRANDBOUND-004",
+      "family": "grand_boundary",
+      "pairKey": "60-20-95",
+      "side": "ineligible",
+      "acquisitionDate": "2018-02-01",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 60,
+      "fmvPerUnit": 20,
+      "salePricePerUnit": 95,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRANDBOUND-005",
+      "family": "grand_boundary",
+      "pairKey": "25-70-40",
+      "side": "eligible",
+      "acquisitionDate": "2018-01-31",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 25,
+      "fmvPerUnit": 70,
+      "salePricePerUnit": 40,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "GRANDBOUND-006",
+      "family": "grand_boundary",
+      "pairKey": "25-70-40",
+      "side": "ineligible",
+      "acquisitionDate": "2018-02-01",
+      "disposalDate": "2026-06-15",
+      "costPerUnit": 25,
+      "fmvPerUnit": 70,
+      "salePricePerUnit": 40,
+      "unitsConsumed": 100,
+      "isEquityOriented": true
+    },
+    {
+      "id": "DEBTPRE-001",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-1",
+      "acquisitionDate": "2019-01-01",
+      "disposalDate": "2024-06-01",
+      "unitsConsumed": 1000,
+      "costPerUnit": 12,
+      "salePricePerUnit": 15,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-002",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-2",
+      "acquisitionDate": "2021-06-01",
+      "disposalDate": "2023-06-01",
+      "unitsConsumed": 1000,
+      "costPerUnit": 12,
+      "salePricePerUnit": 15,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-003",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-3",
+      "acquisitionDate": "2022-01-01",
+      "disposalDate": "2024-08-01",
+      "unitsConsumed": 200,
+      "costPerUnit": 25,
+      "salePricePerUnit": 32,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-004",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-4",
+      "acquisitionDate": "2022-06-01",
+      "disposalDate": "2024-06-15",
+      "unitsConsumed": 150,
+      "costPerUnit": 40,
+      "salePricePerUnit": 48,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-005",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-5",
+      "acquisitionDate": "2023-03-31",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 18,
+      "salePricePerUnit": 22,
+      "pairKey": "5-6"
+    },
+    {
+      "id": "DEBTPRE-006",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-6",
+      "acquisitionDate": "2023-04-01",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 18,
+      "salePricePerUnit": 22,
+      "pairKey": "5-6"
+    },
+    {
+      "id": "DEBTPRE-007",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-7",
+      "acquisitionDate": "2020-04-15",
+      "disposalDate": "2023-04-15",
+      "unitsConsumed": 300,
+      "costPerUnit": 20,
+      "salePricePerUnit": 26,
+      "pairKey": "7-8"
+    },
+    {
+      "id": "DEBTPRE-008",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-8",
+      "acquisitionDate": "2020-04-15",
+      "disposalDate": "2023-04-16",
+      "unitsConsumed": 300,
+      "costPerUnit": 20,
+      "salePricePerUnit": 26,
+      "pairKey": "7-8"
+    },
+    {
+      "id": "DEBTPRE-009",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-9",
+      "acquisitionDate": "2022-07-23",
+      "disposalDate": "2024-07-23",
+      "unitsConsumed": 250,
+      "costPerUnit": 30,
+      "salePricePerUnit": 37,
+      "pairKey": "9-10"
+    },
+    {
+      "id": "DEBTPRE-010",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-10",
+      "acquisitionDate": "2022-07-23",
+      "disposalDate": "2024-07-24",
+      "unitsConsumed": 250,
+      "costPerUnit": 30,
+      "salePricePerUnit": 37,
+      "pairKey": "9-10"
+    }
+  ]
+}

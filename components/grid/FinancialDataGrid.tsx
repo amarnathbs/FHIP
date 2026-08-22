@@ -26,6 +26,7 @@ interface Row extends GridRow {
   included: boolean;
   currency_code: string;
   expanded: boolean;
+  source_type?: string; // R3 — 'investment_intelligence_published' | 'manual' | undefined (non-investments resources never set this)
 }
 
 let customRowCounter = 0;
@@ -64,6 +65,22 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
     currency_code: record.currency_code,
     expanded: false,
   };
+}
+
+// R3 spec section 38/40 — direct-edit protection + source provenance badge.
+// Fields Investment Intelligence certifies from a source document must not
+// become independently editable here (matches the server-side enforcement
+// in app/api/investments/[id]/route.ts's PROTECTED_ON_PUBLISHED_ROWS — kept
+// in sync deliberately, both layers enforce the same rule). Only investments
+// rows can ever carry source_type='investment_intelligence_published'
+// (migration 0042); every other register's rows have no such field, so this
+// is a no-op everywhere else in the shared grid.
+const II_PUBLISHED_PROTECTED_FIELDS = new Set(['institution', 'current_value', 'cost_base', 'risk_profile', 'country_code']);
+function isIiPublished(row: Row): boolean {
+  return row.source_type === 'investment_intelligence_published';
+}
+function isFieldLockedForRow(row: Row, fieldName: string): boolean {
+  return isIiPublished(row) && II_PUBLISHED_PROTECTED_FIELDS.has(fieldName);
 }
 
 function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): boolean {
@@ -509,6 +526,8 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     <input
                       type="checkbox"
                       checked={row.included}
+                      disabled={isIiPublished(row)}
+                      title={isIiPublished(row) ? 'Imported via Investment Intelligence — use Unpublish there to remove it from net worth.' : undefined}
                       onChange={(e) => handleToggleInclude(row, e.target.checked)}
                     />
                   </td>
@@ -525,6 +544,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     ) : (
                       row.item_label
                     )}
+                    {isIiPublished(row) && (
+                      <div className="mt-1">
+                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Imported via Investment Intelligence</span>
+                        <a href="/investment-intelligence" className="ml-2 text-[11px] text-blue-600 hover:underline">
+                          Review
+                        </a>
+                      </div>
+                    )}
                     {errorsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
                     )}
@@ -535,7 +562,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   <td className="px-3 py-2">
                     <select
                       value={row.owner}
-                      disabled={!row.included}
+                      disabled={!row.included || isIiPublished(row)}
                       onChange={(e) => handleFieldChange(row.key, 'owner', e.target.value)}
                       className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
                     >
@@ -552,13 +579,13 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                         <input
                           type="checkbox"
                           checked={Boolean(row[f.name] ?? false)}
-                          disabled={!row.included}
+                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
                           onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
                         />
                       ) : f.type === 'select' ? (
                         <select
                           value={String(row[f.name] ?? '')}
-                          disabled={!row.included}
+                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
                           onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
                           className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
                         >
@@ -574,7 +601,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                           type={f.type}
                           step={f.step}
                           value={String(row[f.name] ?? '')}
-                          disabled={!row.included}
+                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
                           onChange={(e) =>
                             handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
                           }
@@ -586,7 +613,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
-                      disabled={!row.included}
+                      disabled={!row.included || isIiPublished(row)}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
                       className="w-20 rounded border px-2 py-1 disabled:bg-gray-50"
                     >

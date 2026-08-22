@@ -1,0 +1,18 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654326/00
+PAN : ABCDE0105F
+Investor Name : GEETA SHARMA
+Mode of Holding : Single
+
+AMC Name : HDFC Mutual Fund
+Scheme : HDFC Flexi Cap Fund - Growth (Regular Plan)
+ISIN : INF179K01YX6
+AMFI Code : 118835
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+02/05/2025   Redemption - Normal         6000.00  43.620  137.5500  206.380 [Ref: KRED0001]
+
+Closing Balance : 206.380 units as on 30/06/2025   Market Value : Rs 27180.25   NAV : Rs 131.7000

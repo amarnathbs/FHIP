@@ -1,0 +1,29 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654327/00
+PAN : ABCDE0106F
+Investor Name : AMIT SINGH
+Mode of Holding : Single
+
+AMC Name : HDFC Mutual Fund
+Scheme : HDFC Flexi Cap Fund - Growth (Regular Plan)
+ISIN : INF179K01YX6
+AMFI Code : 118835
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+11/04/2025   Switch Out To Nippon India Small Cap Fund  9000.00  68.350  131.6800  11.650 [Ref: KSW0001OUT]
+
+Closing Balance : 11.650 units as on 30/06/2025   Market Value : Rs 1534.30   NAV : Rs 131.7000
+
+AMC Name : Nippon India Mutual Fund
+Scheme : Nippon India Small Cap Fund - Growth (Regular Plan)
+ISIN : INF204K01UP8
+AMFI Code : 118779
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+11/04/2025   Switch In From HDFC Flexi Cap Fund  9000.00  77.860  115.6000  77.860 [Ref: KSW0001IN]
+
+Closing Balance : 77.860 units as on 30/06/2025   Market Value : Rs 8751.46   NAV : Rs 112.4000

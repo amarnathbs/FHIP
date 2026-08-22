@@ -1,0 +1,55 @@
+{
+  "fixtureId": "cams-idcw-dividend-and-reinvestment",
+  "title": "IDCW dividend payout (no unit impact) and IDCW reinvestment (unit impact)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040000700",
+      "holderName": "KAVYA REDDY",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "1201040000700",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "isin": "INF174K01LS2",
+      "amfiSchemeCode": "112307",
+      "transactionDateIso": "2025-02-20",
+      "canonicalType": "dividend",
+      "amount": "750.00",
+      "units": "0.000",
+      "nav": "45.2000",
+      "sourceReference": "DIV0001"
+    },
+    {
+      "folioNumber": "1201040000700",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "isin": "INF174K01LS2",
+      "amfiSchemeCode": "112307",
+      "transactionDateIso": "2025-05-20",
+      "canonicalType": "reinvestment",
+      "amount": "620.00",
+      "units": "13.500",
+      "nav": "45.9300",
+      "sourceReference": "DIV0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040000700",
+      "scheme": "Kotak Emerging Equity Fund - IDCW (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "513.500",
+      "value": "23672.35",
+      "nav": "46.1000"
+    }
+  ],
+  "notes": null
+}

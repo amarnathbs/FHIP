@@ -1,0 +1,20 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 31/03/2025
+
+Folio No : 7654335/00
+PAN : ABCDE0114F
+Investor Name : HARSH VARDHAN
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+11/01/2025   Purchase - Lumpsum          12000.00  44.280  271.0000  44.280 [Ref: KOVL0001]
+11/02/2025   SIP Instalment              4000.00  14.700  272.1000  58.980 [Ref: KOVL0002]
+11/03/2025   SIP Instalment              4000.00  14.500  275.8600  73.480 [Ref: KOVL0003]
+
+Closing Balance : 73.480 units as on 31/03/2025   Market Value : Rs 20270.19   NAV : Rs 275.8600

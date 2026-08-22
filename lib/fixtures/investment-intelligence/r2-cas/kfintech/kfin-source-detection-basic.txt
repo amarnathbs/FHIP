@@ -1,0 +1,18 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654321/00
+PAN : ABCDE0101F
+Investor Name : ANIL KUMAR
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+03/02/2025   Purchase - Lumpsum          20,000.00  143.680  139.2200  143.680 [Ref: KTXN0001]
+
+Closing Balance : 143.680 units as on 30/06/2025   Market Value : Rs 22,164.66   NAV : Rs 154.3000

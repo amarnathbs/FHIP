@@ -1,0 +1,23 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040001400
+PAN: ABCDE0014F
+Name: TARUN CHOPRA
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Jan-2025   Purchase                              10000.00  83.500  119.7600  83.500 [Ref: OVL0001]
+10-Feb-2025   SIP Purchase                          5000.00  41.200  121.3600  124.700 [Ref: OVL0002]
+10-Mar-2025   SIP Purchase                          5000.00  40.500  123.4600  165.200 [Ref: OVL0003]
+10-Apr-2025   SIP Purchase                          5000.00  39.800  125.6300  205.000 [Ref: OVL0004]
+10-May-2025   SIP Purchase                          5000.00  38.900  128.5300  243.900 [Ref: OVL0005]
+10-Jun-2025   SIP Purchase                          5000.00  38.100  131.2300  282.000 [Ref: OVL0006]
+
+Closing Unit Balance as on 30-Jun-2025 : 282.000 Units   Valuation : Rs. 38041.80   NAV as on 30-Jun-2025 : Rs. 134.9000
