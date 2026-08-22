@@ -1,0 +1,85 @@
+Content_ID,Draft_CTA_Label,Primary_Module,Suggested_Internal_Destination,Existing_CTA,Human_Approved,Status
+FH-001,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FH-002,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FH-006,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+MM-001,CTA: Review My Cash Flow.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+MM-004,CTA: Review My Cash Flow.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+ER-001,CTA: Check My Financial Resilience.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+MM-002,CTA: Review My Cash Flow.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+ER-002,CTA: Check My Financial Resilience.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+NW-003,CTA: See My Net Worth.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IP-002,CTA: Review My Protection,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-001,CTA: See My Net Worth,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-008,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+ER-003,CTA: Check My Financial Resilience.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+NW-001,CTA: See My Net Worth.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+DB-001,CTA: Review My Debt Position.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+ER-004,CTA: Check My Financial Resilience.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+DB-002,CTA: Review My Debt Position.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-009,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-012,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-014,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+DB-003,CTA: Review My Debt Position.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GL-003,CTA: Review My Goals.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GL-002,CTA: Review My Goals.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-001,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IN-002,CTA: Review My Investments.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IN-004,CTA: Review My Investments.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+MM-003,CTA: Review My Cash Flow.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+DB-004,CTA: Review My Debt Position.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RAU-003,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RIN-001,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+CB-002,CTA: View My Consolidated Financial Position,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RIN-002,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-025,CTA: Open My Report,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RIN-003,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-026,CTA: Open My Premium Report,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IP-001,CTA: Review My Protection,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+DN-001,CTA: Explore My Financial DNA,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FC-002,CTA: Explore My Forecast,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FC-003,CTA: Explore My Forecast,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+SB-001,CTA: View My Financial Health Score,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+SB-002,CTA: View My Financial Health Score,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-006,CTA: Review My Debt Position,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-001,Primary CTA: Check My Financial Health. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-004,CTA: Check My Financial Resilience,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-004,Primary CTA: Review My Cash Flow. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-005,CTA: Review My Debt Position,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-012,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-007,Primary CTA: Check My Financial Resilience. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-002,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-005,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-011,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-005,Primary CTA: Check My Financial Resilience. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-008,Primary CTA: Review My Investments. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-003,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-006,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-015,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-002,Primary CTA: Check My Financial Health. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-006,Primary CTA: Review My Debt Position. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-004,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-007,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-010,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GLO-013,,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+VID-003,Primary CTA: See My Net Worth. Secondary CTA: Watch/subscribe on @GKTC,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FH-003,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FH-004,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FH-005,CTA: Check My Financial Health.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+NW-004,CTA: See My Net Worth.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+GL-001,CTA: Review My Goals.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IN-001,CTA: Review My Investments.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+NW-002,CTA: See My Net Worth.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IN-003,CTA: Review My Investments.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+IN-005,CTA: Review My Investments.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RAU-002,CTA: Check My Retirement Readiness,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+RAU-001,CTA: Check My Retirement Readiness.,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+SB-003,CTA: View My Financial Health Score,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+FC-001,CTA: Explore My Forecast,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+CB-001,CTA: View My Consolidated Financial Position,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-002,CTA: Review My Cash Flow,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-007,CTA: Check My Financial Resilience,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-010,CTA: Review My Goals,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-003,CTA: Review My Cash Flow,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-009,CTA: View My Financial Health Score,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-008,CTA: View My Financial Health Score,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED
+EX-011,CTA: Review My Goals,,TBD -- Product Owner to confirm real route,NONE (resource_ctas has 0 rows),NOT_REVIEWED,CTA_MAPPING_REQUIRED

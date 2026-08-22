@@ -8,10 +8,11 @@ import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import { getLatestRecommendations } from '@/lib/services/recommendationsData';
 import { loadDataFreshness } from '@/lib/services/reportSnapshotResolver';
 import { buildDataQuality } from '@/lib/engines/reportSections';
-import { HealthScoreGauge } from '@/components/score/HealthScoreGauge';
-import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
+import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
+import { ResilienceStateCard } from '@/components/resilience/ResilienceStateCard';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
-import { VitalSignsStrip } from '@/components/dashboard/VitalSignsStrip';
+import { VitalSignsStrip, type DashboardContextLinks } from '@/components/dashboard/VitalSignsStrip';
+import { resolveContextResources } from '@/lib/resources/context/queries';
 import { PriorityActionsPanel } from '@/components/dashboard/PriorityActionsPanel';
 import { DataQualityPanel } from '@/components/dashboard/DataQualityPanel';
 import { FutureModulesSection } from '@/components/dashboard/placeholders';
@@ -58,7 +59,10 @@ export default async function DashboardPage() {
   const { payload: goalsPayload } = await computeGoalsPagePayload(user.id);
   const recommendationMatches = await getLatestRecommendations(user.id, supabase);
   const dataFreshness = await loadDataFreshness(user.id, supabase);
-  const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness });
+  const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness, healthScore });
+  // R1.6 (spec §66/§140): resolved once here (Server Component), threaded
+  // down as a plain prop — see VitalSignsStrip.tsx's header for why.
+  const dashboardContextLinks = (await resolveContextResources(supabase, ['dashboard.net_worth', 'dashboard.emergency_fund', 'dashboard.debt_service_ratio'])) as DashboardContextLinks;
 
   return (
       <div className="space-y-10">
@@ -77,19 +81,26 @@ export default async function DashboardPage() {
         {/* Health hero + four vital signs */}
         <section>
           <div className="relative">
-            <HealthScoreGauge score={healthScore.overallScore} statusLabel={healthScore.statusLabel} statusBand={healthScore.statusBand} />
-            <Link href="/score" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
-              View full breakdown →
-            </Link>
+            <HealthScoreStateCard
+              score={healthScore.overallScore}
+              statusLabel={healthScore.statusLabel}
+              statusBand={healthScore.statusBand}
+              eligibility={healthScore.eligibility}
+            />
+            {healthScore.eligibility.canDisplayNumericScore && (
+              <Link href="/score" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
+                View full breakdown →
+              </Link>
+            )}
           </div>
           <div className="mt-6">
-            <VitalSignsStrip summary={summary} />
+            <VitalSignsStrip summary={summary} contextLinks={dashboardContextLinks} />
           </div>
         </section>
 
         {/* Priority actions */}
         <section>
-          <PriorityActionsPanel matches={recommendationMatches} />
+          <PriorityActionsPanel matches={recommendationMatches} healthScoreState={healthScore.eligibility.state} />
         </section>
 
         {/* Trends */}
@@ -119,7 +130,14 @@ export default async function DashboardPage() {
           <BlockHeading>Risks &amp; Protection</BlockHeading>
           <div className="space-y-6">
             <div className="relative">
-              <ResilienceGauge score={resilience.overallScore} statusLabel={resilience.statusLabel} statusBand={resilience.statusBand} />
+              <ResilienceStateCard
+                score={resilience.overallScore}
+                statusLabel={resilience.statusLabel}
+                statusBand={resilience.statusBand}
+                confidence={resilience.confidence}
+                eligibility={resilience.eligibility}
+                compact
+              />
               <Link href="/resilience" className="mt-3 block text-center text-sm font-medium text-primary hover:underline">
                 View full resilience breakdown →
               </Link>

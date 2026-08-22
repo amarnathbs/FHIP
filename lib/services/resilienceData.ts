@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadSectionStatus } from '@/lib/services/financialSectionStatusData';
 import {
   computeResilience,
   MODEL_VERSION,
@@ -8,6 +9,7 @@ import {
   type ResilienceResult,
   type CommitmentRow,
 } from '@/lib/engines/resilience';
+import { computeResilienceEligibility, type ResilienceEligibility } from '@/lib/engines/resilienceEligibility';
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -22,6 +24,12 @@ export interface ResiliencePayload extends ResilienceResult {
   previousScore: number | null;
   scoreChange: number | null;
   history: ResilienceHistoryPoint[];
+  // Phase 0C.1: the canonical not_yet_available/preliminary/full state for
+  // Resilience — see lib/engines/resilienceEligibility.ts. Mirrors the
+  // Health Score's eligibility field so Dashboard and /resilience read the
+  // same single source of truth rather than each deriving their own guess
+  // from the raw component list.
+  eligibility: ResilienceEligibility;
 }
 
 // Builds the full ResilienceInput without persisting anything — used by the
@@ -58,6 +66,7 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
   ]);
 
   const dashboard = await loadDashboard(userId, supabase);
+  const sectionStatus = await loadSectionStatus(userId, dashboard, supabase);
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
   const isCurrentSnapshotRecent = snapshotRes.data?.snapshot_month === monthStart();
@@ -70,6 +79,7 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
     isCurrentSnapshotRecent,
     hasPriorMonthHistory: Boolean(priorScoreRes.data),
     config: configRes.data?.config as ResilienceConfig,
+    sectionStatus,
   };
 }
 
@@ -175,6 +185,7 @@ export async function loadResilience(userId: string, client?: SupabaseServerClie
   }
 
   const history = (historyRes.data ?? []) as ResilienceHistoryPoint[];
+  const eligibility = computeResilienceEligibility(result.components);
 
-  return { ...result, previousScore, scoreChange, history };
+  return { ...result, previousScore, scoreChange, history, eligibility };
 }

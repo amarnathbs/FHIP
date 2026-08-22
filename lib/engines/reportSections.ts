@@ -5,6 +5,7 @@ import { generateGoalInsights } from './goalInsights';
 import { computeKeyInsights } from './reportInsights';
 import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
+import type { FinancialSection } from './financialSectionStatus';
 
 export interface BuiltSection {
   sectionCode: SectionCode;
@@ -325,6 +326,12 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
 
 function buildHealthScore(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
   const hs = source.healthScore;
+  // Phase 0C (§24): a report must never present a Preliminary or
+  // Not-Yet-Scored result with Full-score authority. Reuses the same
+  // eligibility object Dashboard/Score already compute — never re-derives
+  // it — so a report can't disagree with what the live pages show.
+  const notYetScored = status === 'included' && hs?.eligibility.state === 'not_yet_scored';
+  const isPreliminary = status === 'included' && hs?.eligibility.state === 'preliminary';
   return {
     sectionCode: 'health_score',
     sectionTitle: SECTION_TITLES.health_score,
@@ -345,9 +352,21 @@ function buildHealthScore(source: ReportSourceData, status: SectionStatus, reaso
             riskOverrideReason: hs.riskOverrideReason,
             components: hs.components,
             recommendations: hs.recommendations,
+            // Phase 0C: the full eligibility object (not just a couple of
+            // derived fields) so the report can render the exact same
+            // Not-Yet-Scored / Preliminary / Full presentation Dashboard and
+            // /score use, via the same <HealthScoreStateCard>.
+            eligibility: hs.eligibility,
           }
         : {},
-    narrativeText: status === 'included' && hs ? scoreMovementNarrative(hs.overallScore, hs.previousScore, hs.positiveContributors.slice(0, 2)) : null,
+    narrativeText:
+      status !== 'included' || !hs
+        ? null
+        : notYetScored
+          ? "A Financial Health Score has not yet been calculated because some core financial information has not been reviewed."
+          : isPreliminary
+            ? `Preliminary Financial Health Score: ${hs.roundedScore}/100. Based on ${hs.eligibility.confidencePercent}% of the currently required financial picture.`
+            : scoreMovementNarrative(hs.overallScore, hs.previousScore, hs.positiveContributors.slice(0, 2)),
     chartData:
       status === 'included' && hs
         ? {
@@ -683,7 +702,25 @@ const FRESHNESS_LABELS: Record<string, string> = {
   insurance: 'Insurance',
 };
 
-export function buildDataQuality(source: Pick<ReportSourceData, 'dashboard' | 'dataFreshness'>): BuiltSection {
+// Phase 0C follow-up: distinct from 'complete'/'stale' (real balances present)
+// and from a plain 'missing' (never reviewed at all) — 'confirmed_zero' and
+// 'not_applicable' mean the user has actually reviewed the section, they
+// just have nothing to report there. Keeping these as their own states
+// stops a confirmed-zero Liabilities section from reading as "Missing" on
+// the same screen where the score already counts it as reviewed.
+export type DataQualityStatus = 'complete' | 'stale' | 'confirmed_zero' | 'not_applicable' | 'missing';
+
+export const DATA_QUALITY_STATUS_LABELS: Record<DataQualityStatus, string> = {
+  complete: 'Complete',
+  stale: 'Stale',
+  confirmed_zero: 'Confirmed zero',
+  not_applicable: 'Not applicable',
+  missing: 'Missing',
+};
+
+export function buildDataQuality(
+  source: Pick<ReportSourceData, 'dashboard' | 'dataFreshness' | 'healthScore'>
+): BuiltSection {
   const d = source.dashboard;
   const hasFlags: Record<string, boolean> = {
     income: d.hasIncome,
@@ -694,6 +731,7 @@ export function buildDataQuality(source: Pick<ReportSourceData, 'dashboard' | 'd
     retirement: d.hasRetirement,
     insurance: d.hasInsurance,
   };
+  const sectionStatus = source.healthScore?.sectionStatus;
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -701,17 +739,33 @@ export function buildDataQuality(source: Pick<ReportSourceData, 'dashboard' | 'd
     const lastUpdated = source.dataFreshness[category] ?? null;
     const present = hasFlags[category];
     const stale = lastUpdated !== null && new Date(lastUpdated) < sixMonthsAgo;
-    const status = !present ? 'missing' : stale ? 'stale' : 'complete';
-    return {
-      area: FRESHNESS_LABELS[category],
-      status,
-      lastUpdated,
-      reportTreatment: !present ? 'Not included — not treated as zero' : stale ? 'Included, limited confidence (stale)' : 'Included',
-    };
+    const explicit = sectionStatus?.[category as FinancialSection];
+
+    let status: DataQualityStatus;
+    let reportTreatment: string;
+    if (present) {
+      status = stale ? 'stale' : 'complete';
+      reportTreatment = stale ? 'Included, limited confidence (stale)' : 'Included';
+    } else if (explicit === 'reviewed_zero') {
+      status = 'confirmed_zero';
+      reportTreatment = 'Included as confirmed zero — reviewed by the user';
+    } else if (explicit === 'not_applicable') {
+      status = 'not_applicable';
+      reportTreatment = 'Excluded — marked not applicable by the user';
+    } else {
+      status = 'missing';
+      reportTreatment = 'Not included — not treated as zero';
+    }
+
+    return { area: FRESHNESS_LABELS[category], status, lastUpdated, reportTreatment };
   });
 
-  const completeCount = rows.filter((r) => r.status === 'complete').length;
+  // Confirmed-zero and not-applicable sections have been reviewed — they
+  // count toward completeness the same way a populated section does. Only
+  // 'stale' and 'missing' represent something still outstanding.
+  const completeCount = rows.filter((r) => r.status === 'complete' || r.status === 'confirmed_zero' || r.status === 'not_applicable').length;
   const dataCompletenessPct = (completeCount / rows.length) * 100;
+  const outstanding = rows.some((r) => r.status === 'stale' || r.status === 'missing');
 
   return {
     sectionCode: 'data_quality',
@@ -719,9 +773,9 @@ export function buildDataQuality(source: Pick<ReportSourceData, 'dashboard' | 'd
     displayOrder: 13,
     sectionStatus: 'included',
     sectionData: { rows, dataCompletenessPct },
-    narrativeText: rows.some((r) => r.status !== 'complete')
+    narrativeText: outstanding
       ? 'Some sections are based on partial or stale information — see the table below for details.'
-      : 'All core financial data areas are complete and current.',
+      : 'All core financial data areas are complete, current, or explicitly confirmed by the user.',
     chartData: { completeness: { pct: dataCompletenessPct, rows } },
     sourceReferences: {},
     confidenceLevel: null,

@@ -4,7 +4,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { loadResilience } from '@/lib/services/resilienceData';
-import { ResilienceGauge } from '@/components/resilience/ResilienceGauge';
+import { ResilienceStateCard } from '@/components/resilience/ResilienceStateCard';
 import { ComponentGrid } from '@/components/resilience/ComponentGrid';
 import { EmergencyFundDetail } from '@/components/resilience/EmergencyFundDetail';
 import { RiskRegister } from '@/components/resilience/RiskRegister';
@@ -13,6 +13,7 @@ import { CommitmentsManager, type Commitment } from '@/components/resilience/Com
 import { StressTestPanel } from '@/components/resilience/StressTestPanel';
 import { Methodology } from '@/components/resilience/Methodology';
 import { formatDateShort } from '@/lib/engines/date';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export default async function ResiliencePage() {
   const supabase = await createClient();
@@ -49,11 +50,18 @@ export default async function ResiliencePage() {
             How well your household could absorb a financial shock — job loss, an unexpected bill, or a market
             downturn — today.
           </p>
+          <WhatDoesThisMean contextKey="resilience.emergency_fund" compact={false} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-1">
-            <ResilienceGauge score={payload.overallScore} statusLabel={payload.statusLabel} statusBand={payload.statusBand} />
+            <ResilienceStateCard
+              score={payload.overallScore}
+              statusLabel={payload.statusLabel}
+              statusBand={payload.statusBand}
+              confidence={payload.confidence}
+              eligibility={payload.eligibility}
+            />
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="rounded-card border bg-white p-4">
@@ -63,7 +71,13 @@ export default async function ResiliencePage() {
               </p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-muted">Confidence</p>
+              {/* Phase 0C (§18): explicitly labelled "Resilience calculation
+                  confidence" rather than a bare "Confidence" — this is
+                  Resilience's own specialised measure (recency, verification
+                  history, per-category weighting), a different formula from
+                  the canonical Financial Data Confidence shown on /score, so
+                  it must not read as the same thing under the same word. */}
+              <p className="text-xs text-muted">Resilience calculation confidence</p>
               <p className="text-lg font-semibold text-ink">{payload.confidence.toFixed(0)}%</p>
             </div>
             <div className="rounded-card border bg-white p-4">

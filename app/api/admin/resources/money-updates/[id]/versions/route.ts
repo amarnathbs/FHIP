@@ -1,0 +1,20 @@
+import { createClient } from '@/lib/supabase/server';
+import { bad, ok } from '@/lib/api';
+import { getResourcePostVersions } from '@/lib/resources/editor/queries';
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return bad('unauthenticated', 401);
+
+  const { id } = await params;
+  try {
+    const versions = await getResourcePostVersions(supabase, id);
+    return ok(versions);
+  } catch (err) {
+    console.error('Resources money update versions list error:', err);
+    return bad('Could not load revision history.', 500);
+  }
+}

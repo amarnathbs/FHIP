@@ -1,0 +1,3510 @@
+{
+  "source_file": "docs/resources/r1-7-source/FHIP_R0-A_Resources_Content_Master.xlsx",
+  "source_hash": "91d26ecb296e41caef9f39ae0a714a224d0b31d9521e7f4095c0298ad07ac615",
+  "run_id": "r0a-1787149753526",
+  "run_timestamp": "2026-08-19T14:29:13.526Z",
+  "environment": "vqycarelcoijzwlpkpcz",
+  "total_rows": 218,
+  "inserted": 0,
+  "updated": 218,
+  "skipped": 0,
+  "failed": 0,
+  "post_ids": [
+    "13ccfc30-e300-4253-84cf-4898e3866b9d",
+    "7fac10b2-cdf7-455f-84cc-077c35ecb682",
+    "b05e780f-f694-4dfa-bd9a-86da7a5c6389",
+    "9b2cbbb5-2684-4af0-b3ae-4078f7618aba",
+    "3bd1e6c8-90c4-4dea-8018-e348e7585c39",
+    "7f0f6ab7-96a0-4481-9895-169ea6f71797",
+    "e06f7095-e7d5-4fc9-8435-a6e7ff7aa35e",
+    "def5aa65-db51-446e-a128-60696cdcdcc5",
+    "98570c75-1247-4eef-9d56-70e6ba7034c8",
+    "f0db2a3b-b9fb-4606-89e8-f366758d770d",
+    "a2aa45a0-f45f-462e-b250-887fbfe46485",
+    "b8cdf59a-8896-4015-b8a8-422a58fe4fef",
+    "3fd3f070-0cde-4eee-bc7b-966908689077",
+    "f9e7400d-8fd3-486e-9a12-7ce670a6ffc7",
+    "a186fe50-3f8f-4d62-b994-dcb6d6d1f17a",
+    "5fc52fc0-eb57-4749-88e5-04c95a9929af",
+    "f3147817-0ed4-4095-be9e-0d2c5254dea0",
+    "86b185b2-3f0c-4c41-b6a0-1d98d8640d2a",
+    "c2a48c3b-cb26-43bf-840f-4595db81ee01",
+    "d23cdf93-8c6d-4e07-94b7-d163425e6253",
+    "7fa9b695-0dcd-40a9-81cf-80344b5ae4a0",
+    "04ecf400-fcfe-4415-869c-cb15bc057af3",
+    "6a163243-20aa-451d-a7c4-85fadc7c8104",
+    "5f7a1ac7-e81e-4922-910b-d571e93b709f",
+    "d478050c-e828-489b-9b6b-dacc2f65c84f",
+    "083d1fb6-d45b-4460-87a7-843625cb0852",
+    "63afc3fc-04d2-48c0-b8fe-8be57db555b1",
+    "6ac0c9e0-0891-4c3c-9216-ac21111e777d",
+    "3a2cd051-88f0-4425-b991-5e8378a42446",
+    "a7a7603b-be31-40c4-a369-91dd5efa8147",
+    "c4ef3924-d2f5-4e67-96df-b131f83f6a41",
+    "b90648a2-7dba-45a1-bd8d-da07bc01c160",
+    "70e3ef5e-4726-41b0-aa2e-67f852c7ed3e",
+    "cdca6f9a-0260-4925-bd42-a2cafe715457",
+    "7651ef4f-64c5-43f0-a520-ed334ebc3b58",
+    "3a297013-64d5-4b86-b0f8-537c7ca0d53b",
+    "18bd776f-edf8-4169-bf04-9e285b0d3b26",
+    "ccc09569-dfe4-41fb-88f1-a6d075c4c260",
+    "6397f007-05b5-4bd6-b570-5c77f353ce41",
+    "624f1b5f-5c24-4f70-a149-87d223d84fd1",
+    "978348f7-e7b4-473c-ba37-40649549d960",
+    "7f493e73-0a84-4112-935a-03fd9d78728e",
+    "88a95144-cdf3-40e9-aef4-c2634196d052",
+    "abaf50b2-d4d9-4e7b-86d7-f97400fc209b",
+    "2dad9a64-5ec6-4968-9c18-b62ea941bc06",
+    "29a52ae0-a190-4776-81ae-523fb9ddb41d",
+    "35331f46-4b8c-470d-84f8-c38670b4e810",
+    "0b80d073-09df-4671-a94e-af337269ab0e",
+    "3ceaa05d-7a14-4c82-8762-93efb3bec818",
+    "4a95d22e-3b57-45e5-9a72-190128f39e4a",
+    "d278b29e-4332-4125-84a9-5b124862ddc7",
+    "3fa2e494-51be-417d-9458-eb2de91d2002",
+    "e5e1d40a-fc22-4785-b8ad-95c5511e861d",
+    "3d6addaf-3d2d-451b-8562-d13cc85eb53b",
+    "968dc305-659d-4847-8667-39facc87ff46",
+    "a3305f1e-eb06-47f4-990c-7af447803167",
+    "a2710cf3-5531-4107-bf8f-0bc6195a8776",
+    "ee30b155-fa60-4ebd-9711-9fc6cd6eb25b",
+    "7c31ccdd-8a69-42c4-929b-22334df65b55",
+    "148a6a4d-f067-4628-8ba9-6ffe479bb651",
+    "2a26e663-a173-4675-bca0-37bec5940975",
+    "793943d0-64d5-41ce-88e0-38b840bf05f4",
+    "f18123fc-3a92-454b-93db-ff6f8ae665e7",
+    "12fe1ba4-3c4e-458d-a50e-22c33d63e038",
+    "d878d088-b692-411e-955f-5368c7ed5812",
+    "81e22bd7-a573-4f42-9d99-723ae5b840ec",
+    "62f5ded9-d356-4f32-a40f-fcb4669129f6",
+    "43d0614c-6b1c-423a-90c0-b1a7ca22d73d",
+    "0b616407-e821-4611-86c0-64f1fb174f66",
+    "f0cdb908-2005-4f65-8495-0518371c0a0e",
+    "2cead627-9157-4f5b-a067-171a7f3e238c",
+    "94efc367-a8bb-4039-8adc-d84d3698123b",
+    "2ddaff42-3ccd-47b1-abcc-eca67fd53846",
+    "9b2c3f2d-b2a9-4864-8026-8b1a3083eefb",
+    "7efac5b8-e4af-4aca-b509-33be5caa7065",
+    "cf723faf-fdda-442b-b462-829c42331fb4",
+    "58d070eb-331a-4f56-9bc1-bf937f71f355",
+    "30a94de6-e51d-42fb-88a3-c2d8c18a6e8b",
+    "23dba735-6ea4-4624-b1fe-b182bcb9e548",
+    "f18ba467-cf93-480b-a304-22bfdd4b2d13",
+    "53cb8e28-147d-4857-82ba-aae4aca79f1d",
+    "f3694c44-ccec-49b1-8d2a-aae2731253fa",
+    "3e41f8f6-6dfe-433e-99b5-13f7f1176e87",
+    "449a99a0-b9aa-440c-b0e7-ebefdc27581d",
+    "8f5ff149-db81-4867-90a9-c7c0b0949bce",
+    "84ba8549-efb5-4e33-aa92-41861e35a968",
+    "2c7e4a90-3c7d-47d7-944f-c1eae3de372d",
+    "54d8e898-85c9-47e0-8050-882ea9cae512",
+    "17746b5b-a7b4-4d5f-a9b3-73340b46aa9a",
+    "b5020807-0d8a-4898-80a1-a759eecf24c8",
+    "310b5efe-4b82-47f7-b5a7-3495547b1920",
+    "8a5ccb96-2840-40b2-b740-56dfb9212877",
+    "0046bbe3-439d-4ee7-b921-f56c70637ba1",
+    "f518064c-ea7b-4d62-8011-b4f051482d65",
+    "d0bbdf4a-d8b2-42da-98f9-89d7128b619a",
+    "da9fec5b-b0ac-4d9e-9eff-296845344ed9",
+    "0639bd33-2416-47c7-afe1-63cce9be5565",
+    "3234dc83-2a33-4149-b68b-7437dab87dd6",
+    "d171b691-4d1c-4eb7-9ce5-3cf00ce4d4c5",
+    "454a3e77-43b6-4cc6-956a-2813f22a0e19",
+    "78a4e9d8-2146-41a4-8f8c-c2069fcc3dfb",
+    "b1a5456a-5ffa-4278-99fa-d573cc43a525",
+    "e7a6275b-35fe-4b03-b731-ea4bf29d830b",
+    "09bb3942-a86f-4cd3-8d20-6730964bbd90",
+    "fc1780cc-7a1c-4565-8e83-a12090ba4f41",
+    "99ef70c5-82e6-4ac9-99e6-a91d0ea25c54",
+    "885e430e-6efe-4363-85bc-0e0edb09d902",
+    "743657e8-048d-4b92-9e54-1f0af9b6cd1a",
+    "a0c21aae-f940-48f6-8d88-05f528a68bfc",
+    "9b0bfb35-54dc-45e4-9624-2f0b3306c046",
+    "e674bed5-9eb4-4a39-86de-b8a1f35ca2c6",
+    "05a3b4fe-4862-47b5-b0ad-56fe64a7b7aa",
+    "c9d02206-095b-49b6-b456-ae5b15f47fc4",
+    "5539f490-9350-44ae-93d1-87d09a310c76",
+    "03dc304f-fc1c-4cf8-b4ca-e73947b9d116",
+    "44f5bb00-dde9-4024-ad71-af8fe6d8cf19",
+    "51fc3c6e-ad58-4363-ad6a-f46ee9bea1fe",
+    "b5eae37d-4d8f-41af-bf32-6427ccc68140",
+    "70087550-cee9-482a-998d-8cc4615be748",
+    "043b7648-598f-4853-9cdc-df8c2652aabf",
+    "0179e339-241b-44b6-99f3-97d8aae89035",
+    "c58b5056-db1c-4ff3-9862-8812ef449764",
+    "e7136a35-5e0b-433a-b73e-c8c1e9f5aca8",
+    "99787735-1748-43b2-92d9-d690e0062c16",
+    "3d54cd2d-ddd6-454c-983d-e80da31e424f",
+    "d5579666-6b15-4d24-bed1-b2531b4134be",
+    "f93cad51-cdc5-41bf-aa56-15f698c36e2e",
+    "b6df579f-345f-4843-a4f4-b4cce7c816ee",
+    "27d69d6e-a41b-47e9-b57f-eaaf486749dc",
+    "c89e21bc-f4bb-4146-9ae9-fc8ea9511105",
+    "4979218e-629b-44c8-9d0c-047fd278dc18",
+    "4c60c458-a939-4dc6-a0c6-b7b141f3eec0",
+    "dfdb55c0-2899-4100-9446-7962f1c62c70",
+    "6f78306b-4439-42fa-beaa-f2bedb904159",
+    "55dd622a-907f-4d00-a006-d73fd35b0c15",
+    "d16e6e4f-2248-4ab6-ac63-41c601ce0a6f",
+    "24fbb5b4-f5c8-42e3-b2b8-15fba1582164",
+    "620f1199-af79-4952-ad5f-4b3bd989408e",
+    "4b28c6ab-11db-4b39-a35c-5cafa7a99998",
+    "ccc83712-f090-4503-a335-02fd037083fc",
+    "bc38ffdf-8bdc-4785-af79-17187834d03d",
+    "09b3c4a1-9b65-4645-875c-0657aa780fd4",
+    "f3c82889-cab4-4607-897b-878047753fb9",
+    "a7fc6f61-6dc5-4635-9e52-10c55c59dd85",
+    "ddd1945e-638d-49c4-9f78-ab2e09c97fe4",
+    "a81f351d-c54e-4235-af70-8ee395e87db3",
+    "f785a634-98b3-41a9-bf87-57d370d1aa82",
+    "c2d210e6-15e9-49cf-8b32-33eded98f86d",
+    "0a211726-be6e-4207-8f04-33c94df04846",
+    "aef801c0-ea4d-4e5e-aecd-6371369647e8",
+    "60053871-9fc7-4480-9087-6a2ab0f41467",
+    "ce48100f-227e-4c34-aab6-c6a562d79856",
+    "c4ddfdb8-2264-4cd6-8d53-ca00d7c2780e",
+    "e5faa37f-e74a-4202-badd-22535906e713",
+    "236596c9-dc23-4b7a-b3d6-6af7d22ee4dd",
+    "8ed0f943-bf52-43b4-990e-a5dc1b492355",
+    "aee2e289-8ba8-4359-8db7-663630a278b4",
+    "38999078-8b07-4cbb-9766-266f910bcd76",
+    "a281c9c0-706d-4d4a-b3e5-bcdc74783982",
+    "d49b562a-3839-4d80-a680-360ceaa4d6e5",
+    "cd2d2ff1-caa5-4a91-878f-6e3bfa54fd57",
+    "5ca02517-a899-45a7-a657-f00c93fb8bb3",
+    "b1535394-5af1-4d5c-8531-b87339e7ba75",
+    "ed362e15-6d90-4f83-a8bc-f79be591439e",
+    "1e2d8225-9ad7-4040-9499-90d614631d25",
+    "1bf6aca8-86f8-4af2-8818-025c58c30c05",
+    "6a278376-8122-4cfd-9864-4acbded7d355",
+    "c402fca0-6ab3-49a6-b2fa-8dbc0ae9da2a",
+    "6438c5c3-ff5a-4ba0-85b7-24e3ff1daceb",
+    "200d047b-9ca9-4520-ac70-88ca0f01ba25",
+    "06e3f61e-c039-4798-b3c6-1b90ed0ab77d",
+    "6d74d036-d3cd-4920-acb2-8cd468cb9e02",
+    "4bedc9e0-b48b-4480-83d1-fe156d707605",
+    "36214839-681e-4101-a233-ea2bff853f62",
+    "666c8e36-5b55-4ab6-9426-ddb48f2e4dc1",
+    "b933d52f-1ffd-4218-92ea-9f9e4615bd33",
+    "3bf99d02-6bbe-489f-9626-e96b4292b52d",
+    "34d7fdae-8431-4635-b710-b6587b0352ea",
+    "886cb9b4-0646-42d2-b513-1e32dd33d9df",
+    "e3eed01f-0858-466c-8ef7-5de309865a01",
+    "1b7298b7-fc19-4d66-87bb-290b6ed6859c",
+    "16f22a90-1dff-4e1e-b3d6-63dd0597ec81",
+    "08d077f4-74b7-4e11-859d-f28902e86bd5",
+    "73367f71-a9bb-4be4-9b41-76021ae5c939",
+    "ee60b047-6c0e-4c94-b85b-4659ba631c8c",
+    "c832d268-ce04-4418-a75e-b0c25f19f53e",
+    "a1e7d114-e863-4b42-b92c-dbcc6f887dae",
+    "f6acaaae-9ee6-4eb4-85e7-b713a95a2e81",
+    "87c0f1c5-eceb-4138-a980-364123f5d2d0",
+    "94cf8c83-788b-4c87-867d-793251cfb9db",
+    "20c8b0b4-d05b-4317-b429-9f372c54a3f5",
+    "08f2351c-acb3-495e-b1a2-1728ba3d9bbd",
+    "055bb71c-43da-40e2-b193-c5acfd9cece8",
+    "aab6cd1b-355e-433a-a43b-f5c56ac81443",
+    "41c63f68-7235-40a1-8f8a-1d8bf5b4e7af",
+    "fdf06d06-cd66-44fa-8ac7-da0c8662b6bf",
+    "06b87de7-4221-4461-9920-4e2c5a13e0dd",
+    "376d3ae0-76f7-40ac-af3f-63e190a12c01",
+    "46f2ea67-7ea3-425a-abb3-a57c270710c0",
+    "e9d4dbe6-90fe-460b-84f3-33cdec291b69",
+    "efde07d3-0791-4331-90b8-11c0998580f7",
+    "79d3318b-acc9-4145-b84c-b27b0bc2326b",
+    "59dedafa-cb6f-4050-a731-c3f73610898b",
+    "3b7e98a7-1444-4e75-a4a6-970feb89b606",
+    "5205cfbe-2139-4afa-8c17-994bfd58106e",
+    "51b8295b-f8da-4049-afef-bd09627451d8",
+    "457e2795-e611-490d-9f6e-e50f00ae1956",
+    "0f841223-f208-4ba0-82e7-79e34c9a0fb3",
+    "e9c8947b-db37-4a0c-9f24-d826facdd8e5",
+    "ab2351d1-e649-43d5-a45d-a387537ea124",
+    "74c3e492-696e-4aad-9777-90d355b1e49a",
+    "aa6d4198-2a15-4180-a7ad-a4d9c78585cb",
+    "63205251-98d9-4d64-a742-e9bb5e9e5e6b",
+    "de02abe7-a74a-4f00-8885-52b141535420",
+    "0262e374-ac84-4d62-a1b5-4306fdd2a06b",
+    "d27ee3e2-86d8-4669-b5dc-5ab79454acea",
+    "ea97c4b5-43f2-48f8-9298-52c2c9da3f2c",
+    "183e4b0e-d6ce-49b9-be95-99505238402d"
+  ],
+  "content_ids": [
+    "FH-001",
+    "FH-002",
+    "FH-003",
+    "FH-004",
+    "FH-005",
+    "FH-006",
+    "FH-007",
+    "FH-008",
+    "MM-001",
+    "MM-002",
+    "MM-003",
+    "MM-004",
+    "MM-005",
+    "MM-006",
+    "MM-007",
+    "MM-008",
+    "MM-009",
+    "MM-010",
+    "ER-001",
+    "ER-002",
+    "ER-003",
+    "ER-004",
+    "ER-005",
+    "ER-006",
+    "ER-007",
+    "ER-008",
+    "DB-001",
+    "DB-002",
+    "DB-003",
+    "DB-004",
+    "DB-005",
+    "DB-006",
+    "DB-007",
+    "DB-008",
+    "DB-009",
+    "DB-010",
+    "NW-001",
+    "NW-002",
+    "NW-003",
+    "NW-004",
+    "NW-005",
+    "NW-006",
+    "GL-001",
+    "GL-002",
+    "GL-003",
+    "GL-004",
+    "GL-005",
+    "GL-006",
+    "GL-007",
+    "GL-008",
+    "IN-001",
+    "IN-002",
+    "IN-003",
+    "IN-004",
+    "IN-005",
+    "IN-006",
+    "IN-007",
+    "IN-008",
+    "IN-009",
+    "IN-010",
+    "IN-011",
+    "IN-012",
+    "RAU-001",
+    "RAU-002",
+    "RAU-003",
+    "RAU-004",
+    "RAU-005",
+    "RAU-006",
+    "RAU-007",
+    "RAU-008",
+    "RIN-001",
+    "RIN-002",
+    "RIN-003",
+    "RIN-004",
+    "RIN-005",
+    "RIN-006",
+    "RIN-007",
+    "RIN-008",
+    "IP-001",
+    "IP-002",
+    "IP-003",
+    "IP-004",
+    "IP-005",
+    "IP-006",
+    "DN-001",
+    "DN-002",
+    "DN-003",
+    "DN-004",
+    "DN-005",
+    "DN-006",
+    "FC-001",
+    "FC-002",
+    "FC-003",
+    "FC-004",
+    "FC-005",
+    "FC-006",
+    "CB-001",
+    "CB-002",
+    "CB-003",
+    "CB-004",
+    "CB-005",
+    "CB-006",
+    "CB-007",
+    "CB-008",
+    "SB-001",
+    "SB-002",
+    "SB-003",
+    "SB-004",
+    "SB-005",
+    "SB-006",
+    "EX-001",
+    "EX-002",
+    "EX-003",
+    "EX-004",
+    "EX-005",
+    "EX-006",
+    "EX-007",
+    "EX-008",
+    "EX-009",
+    "EX-010",
+    "EX-011",
+    "EX-012",
+    "EX-013",
+    "EX-014",
+    "EX-015",
+    "EX-016",
+    "EX-017",
+    "EX-018",
+    "EX-019",
+    "EX-020",
+    "EX-021",
+    "EX-022",
+    "EX-023",
+    "EX-024",
+    "EX-025",
+    "EX-026",
+    "VID-001",
+    "VID-002",
+    "VID-003",
+    "VID-004",
+    "VID-005",
+    "VID-006",
+    "VID-007",
+    "VID-008",
+    "VID-009",
+    "VID-010",
+    "VID-011",
+    "VID-012",
+    "VID-013",
+    "VID-014",
+    "VID-015",
+    "VID-016",
+    "VID-017",
+    "VID-018",
+    "VID-019",
+    "VID-020",
+    "GLO-001",
+    "GLO-002",
+    "GLO-003",
+    "GLO-004",
+    "GLO-005",
+    "GLO-006",
+    "GLO-007",
+    "GLO-008",
+    "GLO-009",
+    "GLO-010",
+    "GLO-011",
+    "GLO-012",
+    "GLO-013",
+    "GLO-014",
+    "GLO-015",
+    "GLO-016",
+    "GLO-017",
+    "GLO-018",
+    "GLO-019",
+    "GLO-020",
+    "GLO-021",
+    "GLO-022",
+    "GLO-023",
+    "GLO-024",
+    "GLO-025",
+    "GLO-026",
+    "GLO-027",
+    "GLO-028",
+    "GLO-029",
+    "GLO-030",
+    "GLO-031",
+    "GLO-032",
+    "GLO-033",
+    "GLO-034",
+    "GLO-035",
+    "GLO-036",
+    "GLO-037",
+    "GLO-038",
+    "GLO-039",
+    "GLO-040",
+    "GLO-041",
+    "GLO-042",
+    "GLO-043",
+    "GLO-044",
+    "GLO-045",
+    "GLO-046",
+    "GLO-047",
+    "GLO-048",
+    "GLO-049",
+    "GLO-050",
+    "MU-001",
+    "MU-002",
+    "MU-003",
+    "MU-004",
+    "MU-005",
+    "MU-006",
+    "MU-007",
+    "MU-008",
+    "MU-009",
+    "MU-010",
+    "MU-011",
+    "MU-012"
+  ],
+  "inserted_post_ids": [],
+  "created_categories": [],
+  "created_tags": [],
+  "warnings": [],
+  "outcomes": [
+    {
+      "contentId": "FH-001",
+      "postId": "13ccfc30-e300-4253-84cf-4898e3866b9d",
+      "outcome": "updated",
+      "slug": "what-does-financial-health-actually-mean",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-002",
+      "postId": "7fac10b2-cdf7-455f-84cc-077c35ecb682",
+      "outcome": "updated",
+      "slug": "7-financial-numbers-every-household-should-know",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-003",
+      "postId": "b05e780f-f694-4dfa-bd9a-86da7a5c6389",
+      "outcome": "updated",
+      "slug": "financial-health-vs-wealth-what-s-the-difference",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-004",
+      "postId": "9b2cbbb5-2684-4af0-b3ae-4078f7618aba",
+      "outcome": "updated",
+      "slug": "why-a-high-income-doesn-t-automatically-mean-financial-security",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-005",
+      "postId": "3bd1e6c8-90c4-4dea-8018-e348e7585c39",
+      "outcome": "updated",
+      "slug": "how-often-should-you-review-your-financial-position",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-006",
+      "postId": "7f0f6ab7-96a0-4481-9895-169ea6f71797",
+      "outcome": "updated",
+      "slug": "the-four-foundations-of-household-financial-health",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-007",
+      "postId": "e06f7095-e7d5-4fc9-8435-a6e7ff7aa35e",
+      "outcome": "updated",
+      "slug": "how-to-do-a-personal-financial-health-check-up",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FH-008",
+      "postId": "def5aa65-db51-446e-a128-60696cdcdcc5",
+      "outcome": "updated",
+      "slug": "what-makes-financial-health-improve-over-time",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-001",
+      "postId": "98570c75-1247-4eef-9d56-70e6ba7034c8",
+      "outcome": "updated",
+      "slug": "household-cash-flow-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-002",
+      "postId": "f0db2a3b-b9fb-4606-89e8-f366758d770d",
+      "outcome": "updated",
+      "slug": "gross-income-vs-take-home-income",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-003",
+      "postId": "a2aa45a0-f45f-462e-b250-887fbfe46485",
+      "outcome": "updated",
+      "slug": "fixed-variable-essential-and-discretionary-expenses",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-004",
+      "postId": "b8cdf59a-8896-4015-b8a8-422a58fe4fef",
+      "outcome": "updated",
+      "slug": "how-to-calculate-and-improve-your-savings-rate",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-005",
+      "postId": "3fd3f070-0cde-4eee-bc7b-966908689077",
+      "outcome": "updated",
+      "slug": "why-your-bank-balance-doesn-t-tell-the-whole-financial-story",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-006",
+      "postId": "f9e7400d-8fd3-486e-9a12-7ce670a6ffc7",
+      "outcome": "updated",
+      "slug": "lifestyle-inflation-how-spending-rises-with-income",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-007",
+      "postId": "a186fe50-3f8f-4d62-b994-dcb6d6d1f17a",
+      "outcome": "updated",
+      "slug": "how-to-build-a-spending-plan-that-you-can-actually-maintain",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-008",
+      "postId": "5fc52fc0-eb57-4749-88e5-04c95a9929af",
+      "outcome": "updated",
+      "slug": "irregular-expenses-how-to-plan-for-bills-that-don-t-arrive-monthly",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-009",
+      "postId": "f3147817-0ed4-4095-be9e-0d2c5254dea0",
+      "outcome": "updated",
+      "slug": "cash-flow-surplus-vs-financial-progress",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MM-010",
+      "postId": "86b185b2-3f0c-4c41-b6a0-1d98d8640d2a",
+      "outcome": "updated",
+      "slug": "how-to-review-a-month-of-income-and-expenses",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-001",
+      "postId": "c2a48c3b-cb26-43bf-840f-4595db81ee01",
+      "outcome": "updated",
+      "slug": "what-is-an-emergency-fund",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-002",
+      "postId": "d23cdf93-8c6d-4e07-94b7-d163425e6253",
+      "outcome": "updated",
+      "slug": "how-many-months-of-expenses-should-you-keep",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-003",
+      "postId": "7fa9b695-0dcd-40a9-81cf-80344b5ae4a0",
+      "outcome": "updated",
+      "slug": "emergency-savings-vs-investments",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-004",
+      "postId": "04ecf400-fcfe-4415-869c-cb15bc057af3",
+      "outcome": "updated",
+      "slug": "what-happens-financially-if-your-income-stops",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-005",
+      "postId": "6a163243-20aa-451d-a7c4-85fadc7c8104",
+      "outcome": "updated",
+      "slug": "financial-resilience-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-006",
+      "postId": "5f7a1ac7-e81e-4922-910b-d571e93b709f",
+      "outcome": "updated",
+      "slug": "how-to-build-financial-resilience-step-by-step",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-007",
+      "postId": "d478050c-e828-489b-9b6b-dacc2f65c84f",
+      "outcome": "updated",
+      "slug": "why-liquidity-matters-even-when-you-have-significant-assets",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "ER-008",
+      "postId": "083d1fb6-d45b-4460-87a7-843625cb0852",
+      "outcome": "updated",
+      "slug": "how-to-stress-test-your-household-finances-for-an-emergency",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-001",
+      "postId": "63afc3fc-04d2-48c0-b8fe-8be57db555b1",
+      "outcome": "updated",
+      "slug": "good-debt-vs-bad-debt",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-002",
+      "postId": "6ac0c9e0-0891-4c3c-9216-ac21111e777d",
+      "outcome": "updated",
+      "slug": "understanding-your-debt-to-income-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-003",
+      "postId": "3a2cd051-88f0-4425-b991-5e8378a42446",
+      "outcome": "updated",
+      "slug": "understanding-your-debt-service-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-004",
+      "postId": "a7a7603b-be31-40c4-a369-91dd5efa8147",
+      "outcome": "updated",
+      "slug": "how-interest-rates-affect-your-loan-repayments",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-005",
+      "postId": "c4ef3924-d2f5-4e67-96df-b131f83f6a41",
+      "outcome": "updated",
+      "slug": "credit-card-debt-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-006",
+      "postId": "b90648a2-7dba-45a1-bd8d-da07bc01c160",
+      "outcome": "updated",
+      "slug": "why-minimum-credit-card-payments-can-become-expensive",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-007",
+      "postId": "70e3ef5e-4726-41b0-aa2e-67f852c7ed3e",
+      "outcome": "updated",
+      "slug": "snowball-vs-avalanche-debt-repayment-methods",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-008",
+      "postId": "cdca6f9a-0260-4925-bd42-a2cafe715457",
+      "outcome": "updated",
+      "slug": "mortgage-repayment-vs-investing-understanding-the-trade-off",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-009",
+      "postId": "7651ef4f-64c5-43f0-a520-ed334ebc3b58",
+      "outcome": "updated",
+      "slug": "how-to-prioritise-multiple-debts",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DB-010",
+      "postId": "3a297013-64d5-4b86-b0f8-537c7ca0d53b",
+      "outcome": "updated",
+      "slug": "how-debt-affects-your-financial-resilience-and-future-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-001",
+      "postId": "18bd776f-edf8-4169-bf04-9e285b0d3b26",
+      "outcome": "updated",
+      "slug": "what-is-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-002",
+      "postId": "ccc09569-dfe4-41fb-88f1-a6d075c4c260",
+      "outcome": "updated",
+      "slug": "assets-vs-liabilities-the-building-blocks-of-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-003",
+      "postId": "6397f007-05b5-4bd6-b570-5c77f353ce41",
+      "outcome": "updated",
+      "slug": "why-net-worth-can-matter-more-than-salary",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-004",
+      "postId": "624f1b5f-5c24-4f70-a149-87d223d84fd1",
+      "outcome": "updated",
+      "slug": "what-does-negative-net-worth-mean",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-005",
+      "postId": "978348f7-e7b4-473c-ba37-40649549d960",
+      "outcome": "updated",
+      "slug": "how-to-track-net-worth-over-time",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "NW-006",
+      "postId": "7f493e73-0a84-4112-935a-03fd9d78728e",
+      "outcome": "updated",
+      "slug": "liquid-assets-vs-illiquid-assets-why-the-difference-matters",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-001",
+      "postId": "88a95144-cdf3-40e9-aef4-c2634196d052",
+      "outcome": "updated",
+      "slug": "how-to-turn-financial-dreams-into-measurable-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-002",
+      "postId": "abaf50b2-d4d9-4e7b-86d7-f97400fc209b",
+      "outcome": "updated",
+      "slug": "short-medium-and-long-term-financial-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-003",
+      "postId": "2dad9a64-5ec6-4968-9c18-b62ea941bc06",
+      "outcome": "updated",
+      "slug": "how-inflation-changes-the-future-cost-of-your-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-004",
+      "postId": "29a52ae0-a190-4776-81ae-523fb9ddb41d",
+      "outcome": "updated",
+      "slug": "how-to-prioritise-competing-financial-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-005",
+      "postId": "35331f46-4b8c-470d-84f8-c38670b4e810",
+      "outcome": "updated",
+      "slug": "how-to-measure-whether-a-goal-is-on-track",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-006",
+      "postId": "0b80d073-09df-4671-a94e-af337269ab0e",
+      "outcome": "updated",
+      "slug": "saving-for-a-home-deposit-building-a-goal-plan",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-007",
+      "postId": "3ceaa05d-7a14-4c82-8762-93efb3bec818",
+      "outcome": "updated",
+      "slug": "planning-for-children-s-education-costs",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GL-008",
+      "postId": "4a95d22e-3b57-45e5-9a72-190128f39e4a",
+      "outcome": "updated",
+      "slug": "how-to-link-investments-to-specific-financial-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-001",
+      "postId": "d278b29e-4332-4125-84a9-5b124862ddc7",
+      "outcome": "updated",
+      "slug": "saving-vs-investing-when-does-each-make-sense",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-002",
+      "postId": "3fa2e494-51be-417d-9458-eb2de91d2002",
+      "outcome": "updated",
+      "slug": "investment-risk-explained-in-plain-english",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-003",
+      "postId": "e5e1d40a-fc22-4785-b8ad-95c5511e861d",
+      "outcome": "updated",
+      "slug": "risk-and-return-why-they-usually-move-together",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-004",
+      "postId": "3d6addaf-3d2d-451b-8562-d13cc85eb53b",
+      "outcome": "updated",
+      "slug": "diversification-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-005",
+      "postId": "968dc305-659d-4847-8667-39facc87ff46",
+      "outcome": "updated",
+      "slug": "asset-allocation-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-006",
+      "postId": "a3305f1e-eb06-47f4-990c-7af447803167",
+      "outcome": "updated",
+      "slug": "compounding-how-growth-builds-on-growth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-007",
+      "postId": "a2710cf3-5531-4107-bf8f-0bc6195a8776",
+      "outcome": "updated",
+      "slug": "understanding-your-investment-time-horizon",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-008",
+      "postId": "ee30b155-fa60-4ebd-9711-9fc6cd6eb25b",
+      "outcome": "updated",
+      "slug": "liquidity-in-investments-why-access-to-your-money-matters",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-009",
+      "postId": "7c31ccdd-8a69-42c4-929b-22334df65b55",
+      "outcome": "updated",
+      "slug": "market-volatility-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-010",
+      "postId": "148a6a4d-f067-4628-8ba9-6ffe479bb651",
+      "outcome": "updated",
+      "slug": "nominal-return-vs-real-return",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-011",
+      "postId": "2a26e663-a173-4675-bca0-37bec5940975",
+      "outcome": "updated",
+      "slug": "how-fees-can-affect-long-term-investment-outcomes",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IN-012",
+      "postId": "793943d0-64d5-41ce-88e0-38b840bf05f4",
+      "outcome": "updated",
+      "slug": "rebalancing-why-your-asset-mix-changes-over-time",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-001",
+      "postId": "f18123fc-3a92-454b-93db-ff6f8ae665e7",
+      "outcome": "updated",
+      "slug": "superannuation-explained-for-beginners",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-002",
+      "postId": "12fe1ba4-3c4e-458d-a50e-22c33d63e038",
+      "outcome": "updated",
+      "slug": "how-superannuation-contributions-build-retirement-savings",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-003",
+      "postId": "d878d088-b692-411e-955f-5368c7ed5812",
+      "outcome": "updated",
+      "slug": "understanding-retirement-readiness-in-australia",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-004",
+      "postId": "81e22bd7-a573-4f42-9d99-723ae5b840ec",
+      "outcome": "updated",
+      "slug": "how-inflation-affects-retirement-income-needs",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-005",
+      "postId": "62f5ded9-d356-4f32-a40f-fcb4669129f6",
+      "outcome": "updated",
+      "slug": "accumulation-vs-retirement-phase-the-big-picture",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-006",
+      "postId": "43d0614c-6b1c-423a-90c0-b1a7ca22d73d",
+      "outcome": "updated",
+      "slug": "how-to-think-about-your-retirement-time-horizon",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-007",
+      "postId": "0b616407-e821-4611-86c0-64f1fb174f66",
+      "outcome": "updated",
+      "slug": "consolidating-super-what-to-understand-before-you-act",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RAU-008",
+      "postId": "f0cdb908-2005-4f65-8495-0518371c0a0e",
+      "outcome": "updated",
+      "slug": "retirement-income-sources-in-australia-a-high-level-guide",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-001",
+      "postId": "2cead627-9157-4f5b-a067-171a7f3e238c",
+      "outcome": "updated",
+      "slug": "epf-explained-for-beginners",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-002",
+      "postId": "94efc367-a8bb-4039-8adc-d84d3698123b",
+      "outcome": "updated",
+      "slug": "ppf-explained-for-beginners",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-003",
+      "postId": "2ddaff42-3ccd-47b1-abcc-eca67fd53846",
+      "outcome": "updated",
+      "slug": "nps-explained-for-beginners",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-004",
+      "postId": "9b2c3f2d-b2a9-4864-8026-8b1a3083eefb",
+      "outcome": "updated",
+      "slug": "what-is-a-retirement-corpus",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-005",
+      "postId": "7efac5b8-e4af-4aca-b509-33be5caa7065",
+      "outcome": "updated",
+      "slug": "understanding-retirement-readiness-in-india",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-006",
+      "postId": "cf723faf-fdda-442b-b462-829c42331fb4",
+      "outcome": "updated",
+      "slug": "how-inflation-affects-retirement-planning-in-india",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-007",
+      "postId": "58d070eb-331a-4f56-9bc1-bf937f71f355",
+      "outcome": "updated",
+      "slug": "how-to-combine-multiple-retirement-accounts-into-one-view",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "RIN-008",
+      "postId": "30a94de6-e51d-42fb-88a3-c2d8c18a6e8b",
+      "outcome": "updated",
+      "slug": "retirement-income-planning-from-accumulation-to-drawdown",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-001",
+      "postId": "23dba735-6ea4-4624-b1fe-b182bcb9e548",
+      "outcome": "updated",
+      "slug": "why-insurance-is-part-of-financial-health",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-002",
+      "postId": "f18ba467-cf93-480b-a304-22bfdd4b2d13",
+      "outcome": "updated",
+      "slug": "life-insurance-explained-in-plain-english",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-003",
+      "postId": "53cb8e28-147d-4857-82ba-aae4aca79f1d",
+      "outcome": "updated",
+      "slug": "income-protection-and-income-replacement-risk",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-004",
+      "postId": "f3694c44-ccec-49b1-8d2a-aae2731253fa",
+      "outcome": "updated",
+      "slug": "health-insurance-and-household-financial-risk",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-005",
+      "postId": "3e41f8f6-6dfe-433e-99b5-13f7f1176e87",
+      "outcome": "updated",
+      "slug": "underinsurance-what-it-means-and-why-it-matters",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "IP-006",
+      "postId": "449a99a0-b9aa-440c-b0e7-ebefdc27581d",
+      "outcome": "updated",
+      "slug": "how-insurance-needs-change-across-life-stages",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-001",
+      "postId": "8f5ff149-db81-4867-90a9-c7c0b0949bce",
+      "outcome": "updated",
+      "slug": "why-financial-decisions-aren-t-just-about-mathematics",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-002",
+      "postId": "84ba8549-efb5-4e33-aa92-41861e35a968",
+      "outcome": "updated",
+      "slug": "how-spending-habits-affect-financial-health",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-003",
+      "postId": "2c7e4a90-3c7d-47d7-944f-c1eae3de372d",
+      "outcome": "updated",
+      "slug": "understanding-financial-risk-behaviour",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-004",
+      "postId": "54d8e898-85c9-47e0-8050-882ea9cae512",
+      "outcome": "updated",
+      "slug": "emotional-investing-and-common-behavioural-traps",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-005",
+      "postId": "17746b5b-a7b4-4d5f-a9b3-73340b46aa9a",
+      "outcome": "updated",
+      "slug": "present-bias-why-future-goals-lose-to-today-s-spending",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "DN-006",
+      "postId": "b5020807-0d8a-4898-80a1-a759eecf24c8",
+      "outcome": "updated",
+      "slug": "financial-confidence-vs-financial-capability",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-001",
+      "postId": "310b5efe-4b82-47f7-b5a7-3495547b1920",
+      "outcome": "updated",
+      "slug": "why-financial-forecasting-matters",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-002",
+      "postId": "8a5ccb96-2840-40b2-b740-56dfb9212877",
+      "outcome": "updated",
+      "slug": "forecast-vs-prediction-what-s-the-difference",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-003",
+      "postId": "0046bbe3-439d-4ee7-b921-f56c70637ba1",
+      "outcome": "updated",
+      "slug": "how-future-net-worth-can-be-estimated",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-004",
+      "postId": "f518064c-ea7b-4d62-8011-b4f051482d65",
+      "outcome": "updated",
+      "slug": "how-inflation-changes-financial-forecasts",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-005",
+      "postId": "d0bbdf4a-d8b2-42da-98f9-89d7128b619a",
+      "outcome": "updated",
+      "slug": "base-better-and-stress-scenarios-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "FC-006",
+      "postId": "da9fec5b-b0ac-4d9e-9eff-296845344ed9",
+      "outcome": "updated",
+      "slug": "why-financial-forecasts-need-regular-updating",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-001",
+      "postId": "0639bd33-2416-47c7-afe1-63cce9be5565",
+      "outcome": "updated",
+      "slug": "understanding-your-financial-life-across-australia-and-india",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-002",
+      "postId": "3234dc83-2a33-4149-b68b-7437dab87dd6",
+      "outcome": "updated",
+      "slug": "aud-and-inr-currency-risk-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-003",
+      "postId": "d171b691-4d1c-4eb7-9ce5-3cf00ce4d4c5",
+      "outcome": "updated",
+      "slug": "how-to-track-assets-held-in-different-countries",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-004",
+      "postId": "454a3e77-43b6-4cc6-956a-2813f22a0e19",
+      "outcome": "updated",
+      "slug": "what-is-cross-border-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-005",
+      "postId": "78a4e9d8-2146-41a4-8f8c-c2069fcc3dfb",
+      "outcome": "updated",
+      "slug": "how-exchange-rates-can-change-your-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-006",
+      "postId": "b1a5456a-5ffa-4278-99fa-d573cc43a525",
+      "outcome": "updated",
+      "slug": "managing-financial-goals-in-different-currencies",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-007",
+      "postId": "e7a6275b-35fe-4b03-b731-ea4bf29d830b",
+      "outcome": "updated",
+      "slug": "australian-residents-holding-assets-in-india-a-financial-health-view",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "CB-008",
+      "postId": "09bb3942-a86f-4cd3-8d20-6730964bbd90",
+      "outcome": "updated",
+      "slug": "nri-financial-health-bringing-indian-and-overseas-finances-together",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-001",
+      "postId": "fc1780cc-7a1c-4565-8e83-a12090ba4f41",
+      "outcome": "updated",
+      "slug": "what-is-a-financial-health-score",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-002",
+      "postId": "99ef70c5-82e6-4ac9-99e6-a91d0ea25c54",
+      "outcome": "updated",
+      "slug": "why-one-score-cannot-describe-your-entire-financial-position",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-003",
+      "postId": "885e430e-6efe-4363-85bc-0e0edb09d902",
+      "outcome": "updated",
+      "slug": "understanding-savings-debt-and-liquidity-ratios-together",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-004",
+      "postId": "743657e8-048d-4b92-9e54-1f0af9b6cd1a",
+      "outcome": "updated",
+      "slug": "what-does-financial-benchmarking-mean",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-005",
+      "postId": "a0c21aae-f940-48f6-8d88-05f528a68bfc",
+      "outcome": "updated",
+      "slug": "what-does-people-like-me-mean-in-financial-benchmarking",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "SB-006",
+      "postId": "9b0bfb35-54dc-45e4-9624-2f0b3306c046",
+      "outcome": "updated",
+      "slug": "why-your-financial-health-score-can-change-even-when-your-income-doesn-t",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-001",
+      "postId": "e674bed5-9eb4-4a39-86de-b8a1f35ca2c6",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-002",
+      "postId": "05a3b4fe-4862-47b5-b0ad-56fe64a7b7aa",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-cash-flow-surplus",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-003",
+      "postId": "c9d02206-095b-49b6-b456-ae5b15f47fc4",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-savings-rate",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-004",
+      "postId": "5539f490-9350-44ae-93d1-87d09a310c76",
+      "outcome": "updated",
+      "slug": "how-fhip-measures-emergency-fund-coverage",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-005",
+      "postId": "03dc304f-fc1c-4cf8-b4ca-e73947b9d116",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-debt-to-income-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-006",
+      "postId": "44f5bb00-dde9-4024-ad71-af8fe6d8cf19",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-debt-service-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-007",
+      "postId": "51fc3c6e-ad58-4363-ad6a-f46ee9bea1fe",
+      "outcome": "updated",
+      "slug": "how-fhip-measures-financial-resilience",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-008",
+      "postId": "b5eae37d-4d8f-41af-bf32-6427ccc68140",
+      "outcome": "updated",
+      "slug": "how-fhip-calculates-the-financial-health-score",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-009",
+      "postId": "70087550-cee9-482a-998d-8cc4615be748",
+      "outcome": "updated",
+      "slug": "how-to-read-the-fhip-financial-health-score",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-010",
+      "postId": "043b7648-598f-4853-9cdc-df8c2652aabf",
+      "outcome": "updated",
+      "slug": "how-fhip-measures-goal-readiness",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-011",
+      "postId": "0179e339-241b-44b6-99f3-97d8aae89035",
+      "outcome": "updated",
+      "slug": "how-fhip-tracks-goal-funding-progress",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-012",
+      "postId": "c58b5056-db1c-4ff3-9862-8812ef449764",
+      "outcome": "updated",
+      "slug": "how-fhip-measures-retirement-readiness",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-013",
+      "postId": "e7136a35-5e0b-433a-b73e-c8c1e9f5aca8",
+      "outcome": "updated",
+      "slug": "how-fhip-assesses-insurance-adequacy",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-014",
+      "postId": "99787735-1748-43b2-92d9-d690e0062c16",
+      "outcome": "updated",
+      "slug": "what-fhip-financial-dna-is-designed-to-show",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-015",
+      "postId": "3d54cd2d-ddd6-454c-983d-e80da31e424f",
+      "outcome": "updated",
+      "slug": "how-fhip-benchmarking-works",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-016",
+      "postId": "d5579666-6b15-4d24-bed1-b2531b4134be",
+      "outcome": "updated",
+      "slug": "what-people-like-me-means-inside-fhip",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-017",
+      "postId": "f93cad51-cdc5-41bf-aa56-15f698c36e2e",
+      "outcome": "updated",
+      "slug": "how-fhip-forecasts-future-net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-018",
+      "postId": "b6df579f-345f-4843-a4f4-b4cce7c816ee",
+      "outcome": "updated",
+      "slug": "how-fhip-forecasts-investment-growth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-019",
+      "postId": "27d69d6e-a41b-47e9-b57f-eaaf486749dc",
+      "outcome": "updated",
+      "slug": "how-fhip-forecasts-debt-reduction",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-020",
+      "postId": "c89e21bc-f4bb-4146-9ae9-fc8ea9511105",
+      "outcome": "updated",
+      "slug": "how-fhip-forecasts-retirement-outcomes",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-021",
+      "postId": "4979218e-629b-44c8-9d0c-047fd278dc18",
+      "outcome": "updated",
+      "slug": "how-fhip-forecasts-financial-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-022",
+      "postId": "4c60c458-a939-4dc6-a0c6-b7b141f3eec0",
+      "outcome": "updated",
+      "slug": "what-base-better-and-stress-scenarios-mean-in-fhip",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-023",
+      "postId": "dfdb55c0-2899-4100-9446-7962f1c62c70",
+      "outcome": "updated",
+      "slug": "how-fhip-handles-cross-border-assets-and-currencies",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-024",
+      "postId": "6f78306b-4439-42fa-beaa-f2bedb904159",
+      "outcome": "updated",
+      "slug": "how-fhip-uses-data-confidence",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-025",
+      "postId": "55dd622a-907f-4d00-a006-d73fd35b0c15",
+      "outcome": "updated",
+      "slug": "how-to-read-your-fhip-free-report",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "EX-026",
+      "postId": "d16e6e4f-2248-4ab6-ac63-41c601ce0a6f",
+      "outcome": "updated",
+      "slug": "how-to-read-your-fhip-premium-report",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-001",
+      "postId": "24fbb5b4-f5c8-42e3-b2b8-15fba1582164",
+      "outcome": "updated",
+      "slug": "what-is-financial-health",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-002",
+      "postId": "620f1199-af79-4952-ad5f-4b3bd989408e",
+      "outcome": "updated",
+      "slug": "7-numbers-every-household-should-know",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-003",
+      "postId": "4b28c6ab-11db-4b39-a35c-5cafa7a99998",
+      "outcome": "updated",
+      "slug": "net-worth-explained-in-5-minutes",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-004",
+      "postId": "ccc83712-f090-4503-a335-02fd037083fc",
+      "outcome": "updated",
+      "slug": "savings-rate-the-number-that-shows-what-you-keep",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-005",
+      "postId": "bc38ffdf-8bdc-4785-af79-17187834d03d",
+      "outcome": "updated",
+      "slug": "how-much-emergency-fund-do-you-really-need",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-006",
+      "postId": "09b3c4a1-9b65-4645-875c-0657aa780fd4",
+      "outcome": "updated",
+      "slug": "debt-to-income-ratio-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-007",
+      "postId": "f3c82889-cab4-4607-897b-878047753fb9",
+      "outcome": "updated",
+      "slug": "financial-resilience-can-your-finances-absorb-a-shock",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-008",
+      "postId": "a7fc6f61-6dc5-4635-9e52-10c55c59dd85",
+      "outcome": "updated",
+      "slug": "compounding-explained-visually",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-009",
+      "postId": "ddd1945e-638d-49c4-9f78-ab2e09c97fe4",
+      "outcome": "updated",
+      "slug": "diversification-and-asset-allocation-for-beginners",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-010",
+      "postId": "a81f351d-c54e-4235-af70-8ee395e87db3",
+      "outcome": "updated",
+      "slug": "how-inflation-changes-your-future-goals",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-011",
+      "postId": "f785a634-98b3-41a9-bf87-57d370d1aa82",
+      "outcome": "updated",
+      "slug": "financial-forecasting-why-looking-forward-matters",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-012",
+      "postId": "c2d210e6-15e9-49cf-8b32-33eded98f86d",
+      "outcome": "updated",
+      "slug": "base-vs-stress-scenario-a-simple-household-example",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-013",
+      "postId": "0a211726-be6e-4207-8f04-33c94df04846",
+      "outcome": "updated",
+      "slug": "financial-health-score-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-014",
+      "postId": "aef801c0-ea4d-4e5e-aecd-6371369647e8",
+      "outcome": "updated",
+      "slug": "how-to-read-your-fhip-financial-health-report",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-015",
+      "postId": "60053871-9fc7-4480-9087-6a2ab0f41467",
+      "outcome": "updated",
+      "slug": "australia-india-cross-border-net-worth-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-016",
+      "postId": "ce48100f-227e-4c34-aab6-c6a562d79856",
+      "outcome": "updated",
+      "slug": "aud-inr-currency-movements-and-your-wealth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-017",
+      "postId": "c4ddfdb8-2264-4cd6-8d53-ca00d7c2780e",
+      "outcome": "updated",
+      "slug": "superannuation-explained-for-beginners-vid-017",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-018",
+      "postId": "e5faa37f-e74a-4202-badd-22535906e713",
+      "outcome": "updated",
+      "slug": "epf-ppf-and-nps-the-big-picture",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-019",
+      "postId": "236596c9-dc23-4b7a-b3d6-6af7d22ee4dd",
+      "outcome": "updated",
+      "slug": "why-high-income-does-not-guarantee-financial-security",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "VID-020",
+      "postId": "8ed0f943-bf52-43b4-990e-a5dc1b492355",
+      "outcome": "updated",
+      "slug": "how-goals-debt-investments-and-retirement-compete-for-your-money",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_VIDEO",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-001",
+      "postId": "aee2e289-8ba8-4359-8db7-663630a278b4",
+      "outcome": "updated",
+      "slug": "asset",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-002",
+      "postId": "38999078-8b07-4cbb-9766-266f910bcd76",
+      "outcome": "updated",
+      "slug": "liability",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-003",
+      "postId": "a281c9c0-706d-4d4a-b3e5-bcdc74783982",
+      "outcome": "updated",
+      "slug": "net-worth",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-004",
+      "postId": "d49b562a-3839-4d80-a680-360ceaa4d6e5",
+      "outcome": "updated",
+      "slug": "gross-income",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-005",
+      "postId": "cd2d2ff1-caa5-4a91-878f-6e3bfa54fd57",
+      "outcome": "updated",
+      "slug": "net-income",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-006",
+      "postId": "5ca02517-a899-45a7-a657-f00c93fb8bb3",
+      "outcome": "updated",
+      "slug": "cash-flow",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-007",
+      "postId": "b1535394-5af1-4d5c-8531-b87339e7ba75",
+      "outcome": "updated",
+      "slug": "cash-flow-surplus",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-008",
+      "postId": "ed362e15-6d90-4f83-a8bc-f79be591439e",
+      "outcome": "updated",
+      "slug": "cash-flow-deficit",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-009",
+      "postId": "1e2d8225-9ad7-4040-9499-90d614631d25",
+      "outcome": "updated",
+      "slug": "fixed-expense",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-010",
+      "postId": "1bf6aca8-86f8-4af2-8818-025c58c30c05",
+      "outcome": "updated",
+      "slug": "variable-expense",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-011",
+      "postId": "6a278376-8122-4cfd-9864-4acbded7d355",
+      "outcome": "updated",
+      "slug": "essential-expense",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-012",
+      "postId": "c402fca0-6ab3-49a6-b2fa-8dbc0ae9da2a",
+      "outcome": "updated",
+      "slug": "discretionary-expense",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-013",
+      "postId": "6438c5c3-ff5a-4ba0-85b7-24e3ff1daceb",
+      "outcome": "updated",
+      "slug": "savings-rate",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-014",
+      "postId": "200d047b-9ca9-4520-ac70-88ca0f01ba25",
+      "outcome": "updated",
+      "slug": "emergency-fund",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-015",
+      "postId": "06e3f61e-c039-4798-b3c6-1b90ed0ab77d",
+      "outcome": "updated",
+      "slug": "liquidity",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-016",
+      "postId": "6d74d036-d3cd-4920-acb2-8cd468cb9e02",
+      "outcome": "updated",
+      "slug": "liquid-asset",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-017",
+      "postId": "4bedc9e0-b48b-4480-83d1-fe156d707605",
+      "outcome": "updated",
+      "slug": "illiquid-asset",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-018",
+      "postId": "36214839-681e-4101-a233-ea2bff853f62",
+      "outcome": "updated",
+      "slug": "principal",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-019",
+      "postId": "666c8e36-5b55-4ab6-9426-ddb48f2e4dc1",
+      "outcome": "updated",
+      "slug": "interest",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-020",
+      "postId": "b933d52f-1ffd-4218-92ea-9f9e4615bd33",
+      "outcome": "updated",
+      "slug": "debt",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-021",
+      "postId": "3bf99d02-6bbe-489f-9626-e96b4292b52d",
+      "outcome": "updated",
+      "slug": "mortgage",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-022",
+      "postId": "34d7fdae-8431-4635-b710-b6587b0352ea",
+      "outcome": "updated",
+      "slug": "credit-card-balance",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-023",
+      "postId": "886cb9b4-0646-42d2-b513-1e32dd33d9df",
+      "outcome": "updated",
+      "slug": "debt-to-income-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-024",
+      "postId": "e3eed01f-0858-466c-8ef7-5de309865a01",
+      "outcome": "updated",
+      "slug": "debt-service-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-025",
+      "postId": "1b7298b7-fc19-4d66-87bb-290b6ed6859c",
+      "outcome": "updated",
+      "slug": "compounding",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-026",
+      "postId": "16f22a90-1dff-4e1e-b3d6-63dd0597ec81",
+      "outcome": "updated",
+      "slug": "inflation",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-027",
+      "postId": "08d077f4-74b7-4e11-859d-f28902e86bd5",
+      "outcome": "updated",
+      "slug": "nominal-return",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-028",
+      "postId": "73367f71-a9bb-4be4-9b41-76021ae5c939",
+      "outcome": "updated",
+      "slug": "real-return",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-029",
+      "postId": "ee60b047-6c0e-4c94-b85b-4659ba631c8c",
+      "outcome": "updated",
+      "slug": "volatility",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-030",
+      "postId": "c832d268-ce04-4418-a75e-b0c25f19f53e",
+      "outcome": "updated",
+      "slug": "diversification",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-031",
+      "postId": "a1e7d114-e863-4b42-b92c-dbcc6f887dae",
+      "outcome": "updated",
+      "slug": "asset-allocation",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-032",
+      "postId": "f6acaaae-9ee6-4eb4-85e7-b713a95a2e81",
+      "outcome": "updated",
+      "slug": "time-horizon",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-033",
+      "postId": "87c0f1c5-eceb-4138-a980-364123f5d2d0",
+      "outcome": "updated",
+      "slug": "rebalancing",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-034",
+      "postId": "94cf8c83-788b-4c87-867d-793251cfb9db",
+      "outcome": "updated",
+      "slug": "financial-goal",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-035",
+      "postId": "20c8b0b4-d05b-4317-b429-9f372c54a3f5",
+      "outcome": "updated",
+      "slug": "goal-funding-ratio",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-036",
+      "postId": "08f2351c-acb3-495e-b1a2-1728ba3d9bbd",
+      "outcome": "updated",
+      "slug": "superannuation",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-037",
+      "postId": "055bb71c-43da-40e2-b193-c5acfd9cece8",
+      "outcome": "updated",
+      "slug": "epf",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-038",
+      "postId": "aab6cd1b-355e-433a-a43b-f5c56ac81443",
+      "outcome": "updated",
+      "slug": "ppf",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-039",
+      "postId": "41c63f68-7235-40a1-8f8a-1d8bf5b4e7af",
+      "outcome": "updated",
+      "slug": "nps",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-040",
+      "postId": "fdf06d06-cd66-44fa-8ac7-da0c8662b6bf",
+      "outcome": "updated",
+      "slug": "retirement-corpus",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-041",
+      "postId": "06b87de7-4221-4461-9920-4e2c5a13e0dd",
+      "outcome": "updated",
+      "slug": "insurance",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-042",
+      "postId": "376d3ae0-76f7-40ac-af3f-63e190a12c01",
+      "outcome": "updated",
+      "slug": "underinsurance",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-043",
+      "postId": "46f2ea67-7ea3-425a-abb3-a57c270710c0",
+      "outcome": "updated",
+      "slug": "financial-resilience",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-044",
+      "postId": "e9d4dbe6-90fe-460b-84f3-33cdec291b69",
+      "outcome": "updated",
+      "slug": "financial-health-score",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-045",
+      "postId": "efde07d3-0791-4331-90b8-11c0998580f7",
+      "outcome": "updated",
+      "slug": "benchmark",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-046",
+      "postId": "79d3318b-acc9-4145-b84c-b27b0bc2326b",
+      "outcome": "updated",
+      "slug": "peer-group",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-047",
+      "postId": "59dedafa-cb6f-4050-a731-c3f73610898b",
+      "outcome": "updated",
+      "slug": "forecast",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-048",
+      "postId": "3b7e98a7-1444-4e75-a4a6-970feb89b606",
+      "outcome": "updated",
+      "slug": "scenario-analysis",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-049",
+      "postId": "5205cfbe-2139-4afa-8c17-994bfd58106e",
+      "outcome": "updated",
+      "slug": "currency-risk",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "GLO-050",
+      "postId": "51b8295b-f8da-4049-afef-bd09627451d8",
+      "outcome": "updated",
+      "slug": "exchange-rate",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-001",
+      "postId": "457e2795-e611-490d-9f6e-e50f00ae1956",
+      "outcome": "updated",
+      "slug": "rba-cash-rate-decision-what-it-means-for-household-finances",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-002",
+      "postId": "0f841223-f208-4ba0-82e7-79e34c9a0fb3",
+      "outcome": "updated",
+      "slug": "australian-inflation-update-what-it-could-mean-for-your-budget",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-003",
+      "postId": "e9c8947b-db37-4a0c-9f24-d826facdd8e5",
+      "outcome": "updated",
+      "slug": "australian-superannuation-rule-change-what-users-should-know",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-004",
+      "postId": "ab2351d1-e649-43d5-a45d-a387537ea124",
+      "outcome": "updated",
+      "slug": "australian-tax-change-what-it-could-mean-for-household-cash-flow",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-005",
+      "postId": "74c3e492-696e-4aad-9777-90d355b1e49a",
+      "outcome": "updated",
+      "slug": "australian-mortgage-and-household-credit-update",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-006",
+      "postId": "aa6d4198-2a15-4180-a7ad-a4d9c78585cb",
+      "outcome": "updated",
+      "slug": "rbi-monetary-policy-decision-what-it-means-for-borrowers-and-savers",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-007",
+      "postId": "63205251-98d9-4d64-a742-e9bb5e9e5e6b",
+      "outcome": "updated",
+      "slug": "india-inflation-update-what-it-could-mean-for-household-budgets",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-008",
+      "postId": "de02abe7-a74a-4f00-8885-52b141535420",
+      "outcome": "updated",
+      "slug": "india-tax-change-what-it-could-mean-for-personal-finances",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-009",
+      "postId": "0262e374-ac84-4d62-a1b5-4306fdd2a06b",
+      "outcome": "updated",
+      "slug": "india-retirement-pension-rule-change-epf-nps-or-ppf-impact-explained",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-010",
+      "postId": "d27ee3e2-86d8-4669-b5dc-5ab79454acea",
+      "outcome": "updated",
+      "slug": "sebi-investor-rule-change-what-retail-investors-should-understand",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-011",
+      "postId": "ea97c4b5-43f2-48f8-9298-52c2c9da3f2c",
+      "outcome": "updated",
+      "slug": "aud-inr-currency-movement-what-cross-border-households-should-understand",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    },
+    {
+      "contentId": "MU-012",
+      "postId": "183e4b0e-d6ce-49b9-be95-99505238402d",
+      "outcome": "updated",
+      "slug": "major-australia-india-cross-border-finance-rule-change-what-users-should-know",
+      "slugSource": "existing_reuse",
+      "readiness": [
+        "READY_METADATA",
+        "NEEDS_BODY",
+        "NEEDS_AUTHOR",
+        "NEEDS_CONTEXT_REVIEW",
+        "NEEDS_CTA_REVIEW"
+      ]
+    }
+  ]
+}

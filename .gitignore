@@ -37,3 +37,4 @@ next-env.d.ts
 
 # FDH-1 closure: generated live-schema evidence artefacts (regenerate with scripts/fdh1_closure_*.mjs)
 scripts/.fdh1-*.json
+.r17d-reviewer-credentials.local.json

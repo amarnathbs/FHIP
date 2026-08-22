@@ -4,6 +4,7 @@ import { loadDashboard } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext, listForecastRuns, getForecastRunDetail } from '@/lib/services/forecastData';
 import { RunForecastPanel } from '@/components/forecast/RunForecastPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export default async function ForecastNetWorthPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
@@ -29,6 +30,7 @@ export default async function ForecastNetWorthPage({ searchParams }: { searchPar
           <div>
             <h1 className="text-2xl font-semibold text-trust">Net Worth Forecast</h1>
             <p className="mt-1 text-muted">Deterministic monthly net worth projection for the selected scenario.</p>
+            <WhatDoesThisMean contextKey="forecasting.net_worth" compact={false} />
           </div>
           <ScenarioSwitcher scenarios={scenarios} activeScenarioId={activeScenario.id} />
         </div>

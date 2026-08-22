@@ -1,6 +1,7 @@
 import { formatMoney } from '@/lib/engines/money';
 import type { GoalSummary } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from '@/lib/engines/goalAffordability';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export function GoalsSummaryHero({
   summary,
@@ -27,6 +28,7 @@ export function GoalsSummaryHero({
           </>
         )}
       </p>
+      <WhatDoesThisMean contextKey="goals.progress" compact={false} />
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
           <p className="text-xs text-gray-500">Combined target</p>

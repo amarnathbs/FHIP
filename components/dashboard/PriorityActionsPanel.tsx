@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { SectionCard } from './SectionCard';
 import type { StoredRecommendationMatch } from '@/lib/services/recommendationsData';
+import type { HealthScoreState } from '@/lib/engines/healthScoreEligibility';
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: '#C7362F',
@@ -9,8 +10,21 @@ const SEVERITY_COLOR: Record<string, string> = {
   low: '#5B677A',
 };
 
-export function PriorityActionsPanel({ matches }: { matches: StoredRecommendationMatch[] }) {
+// Phase 0C (UX-007): the single "No priority actions right now" message
+// used to cover both "we checked and found nothing to flag" and "we don't
+// have enough information yet" — indistinguishable to the reader. Reuses
+// the same Health Score eligibility state already computed for the
+// Dashboard/Score pages, rather than inventing a separate, unverifiable
+// "baseline not ready" detector this component has no real visibility into.
+export function PriorityActionsPanel({
+  matches,
+  healthScoreState,
+}: {
+  matches: StoredRecommendationMatch[];
+  healthScoreState: HealthScoreState;
+}) {
   const top = matches.filter((m) => !m.dismissed).slice(0, 5);
+  const insufficientData = healthScoreState === 'not_yet_scored';
 
   return (
     <SectionCard
@@ -18,7 +32,21 @@ export function PriorityActionsPanel({ matches }: { matches: StoredRecommendatio
       description={top.length > 0 ? 'Your highest-impact next steps, ranked by expected effect.' : undefined}
     >
       {top.length === 0 ? (
-        <p className="text-sm text-muted">No priority actions right now — check back after your next data update.</p>
+        insufficientData ? (
+          <div>
+            <p className="text-sm font-medium text-ink">We need more information before identifying your priorities.</p>
+            <p className="mt-1 text-sm text-muted">
+              Complete more of your Financial Picture so FHIP can identify the areas that may need attention.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm font-medium text-ink">No high-priority actions identified right now.</p>
+            <p className="mt-1 text-sm text-muted">
+              Based on the information currently available, we have not identified any high-priority actions.
+            </p>
+          </div>
+        )
       ) : (
         <ul className="space-y-3">
           {top.map((m) => (
