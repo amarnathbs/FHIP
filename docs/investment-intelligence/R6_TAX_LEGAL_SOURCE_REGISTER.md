@@ -86,7 +86,23 @@ secondary source as if it were primary.
 | Corroborating sources | ClearTax "Debt Mutual Fund Taxation in India" (definition: "specified mutual fund" = >65% debt/money-market, effective FY2023-24); Tax2win; HDFC Life "Debt Fund Tax Rules 2026"; taxclue.in "Debt Mutual Fund Tax ITA 2025" (fetched: "all gains at slab rate (no LTCG/indexation)... effective 1 April 2023 under Finance Act 2023... No grandfathering exists [for debt funds]") |
 | Verified date | 2026-08-22 |
 | Engine/rule version | Unchanged across all three rule versions |
-| Status | **CERTIFIED** as to the RATE/RULE. **DISCLOSED GAP (pre-existing, not newly introduced)**: the engine does NOT enforce `specifiedFundAcquiredOnOrAfter` as a per-lot gate — every lot already classified `debt_specified` upstream is treated as always-short-term regardless of its own acquisition date. See `tests/unit/iiR6FinalDebtFundBoundary.test.ts` and Section 9 below. |
+| Status | **CERTIFIED**, both the rate/rule AND the per-lot acquisition-date gate. **R6-DEBTFIX (2026-08-22) closed the previously-disclosed gap**: the engine now reads `specifiedFundAcquiredOnOrAfter` as a genuine per-lot gate in `capitalGainsEngine.ts`'s `debt_specified` branch — a lot's own `acquisitionDate` is compared against the 2023-04-01 cutoff before applying the always-short-term treatment. Lots acquired before the cutoff fall through to the `legacyRegime` documented in Section 4a below. See `tests/unit/iiR6FinalDebtFundBoundary.test.ts`, the `DEBTPRE-001..010` case family, and `docs/investment-intelligence/R6_DEBT_FUND_ACQUISITION_DATE_FIX.md` for the full fix history. |
+
+## 4a. Legacy pre-1-April-2023 debt/specified-fund treatment (the fix's own research)
+
+Governs any debt/specified-mutual-fund lot **acquired before** the 2023-04-01 Section 50AA cutoff above — such a lot is not a "specified mutual fund" disposal at all, and falls back to the pre-existing debt-fund capital-gains rules, which Budget 2024 then further split by a *second*, independent boundary (the lot's own acquisition date decides Section 4 vs. 4a; the *disposal* date decides which half of 4a applies).
+
+| Field | Value |
+|---|---|
+| Rule code | `debtSpecified.legacyRegime` in `ruleVersions.ts`; consumed in `capitalGainsEngine.ts`'s `debt_specified` branch |
+| Disposal before 23-Jul-2024 | Holding-period threshold **> 36 months = LTCG**; LTCG rate **20%** with Cost-Inflation-Index indexation under Section 112 as it stood before Budget 2024; STCG otherwise, at slab rate |
+| Disposal on/after 23-Jul-2024 | Holding-period threshold shortened to **> 24 months = LTCG**; LTCG rate flat **12.5%**, indexation **removed**; STCG otherwise, unchanged at slab rate |
+| Sources (pre-23-Jul-2024 regime) | HDFC Life "Debt Fund Tax Rules 2026"; ICICI Direct "Changes in taxation of non-equity funds from FY23-24" (fetched directly); ValueResearchOnline "How are debt funds bought before 2023 taxed?" (fetched directly, explicit quote: *"If you hold the funds for over three years, gains were qualified as long-term capital gain (LTCG) and are taxed at 20% with indexation"*); ClearTax — 4 independent sources agree exactly |
+| Sources (post-23-Jul-2024 regime) | ValueResearchOnline (fetched directly: *"Indexation benefit is available only for debt funds purchased before April 1, 2023, held for more than 36 months, and redeemed before July 23, 2024... After July 23, 2024, the requirement dropped to >24 months with the flat 12.5% rate but no indexation"*); PrimeInvestor "Budget 2024 – how your equity & debt investments are taxed now" (fetched directly, matching quote with exact numbers); ICICI Direct; Business Standard (search-corroborated) |
+| Ambiguity resolved | An initial lower-quality search suggested pre-2023 debt-fund lots got an optional 20%-indexed/12.5%-unindexed *choice* after 23-Jul-2024, the same way land/building did. Direct fetches of ValueResearchOnline and PrimeInvestor both explicitly deny this for debt funds ("no optional choice"); the 20%/12.5% choice is confirmed a land/building-only provision. The engine implements the debt-fund rule as mandatory-by-disposal-date, not a taxpayer election. |
+| Indexation safety | Where indexation is legally due (pre-23-Jul-2024 disposal window) the engine does **not** fabricate an indexed cost basis — no verified Cost-Inflation-Index table is wired into this codebase yet. `costBasisUsed` stays at the un-indexed acquisition cost, with an explicit note disclosing this and stating the true taxable gain would legally be lower once correctly indexed. No false precision. |
+| Verified date | 2026-08-22 (fix's own research), independently re-verified again 2026-08-22 during formal re-certification via a second, separate WebSearch pass (AMFI/TaxBuddy/Bajaj/TaxTMI for the acquisition boundary; ValueResearch/PrimeInvestor/BusinessToday for the disposal boundary) |
+| Confidence | **CERTIFIED** — independently corroborated twice, by two separate research passes, with matching conclusions both times |
 
 ## 5. Grandfathering — 31-Jan-2018 FMV step-up (Section 55(2)(ac))
 
@@ -146,11 +162,10 @@ this engine's scope (mutual fund unit disposals only).
    assumed. See `tests/unit/iiR6P1Certification.test.ts`'s GRANDBOUND family
    for the live behaviour this produces (grandfathering applied to a
    2026-06-15 disposal, i.e. under the 2025 Act).
-3. **Debt/specified-fund per-lot acquisition-date gate is not implemented.**
-   Pre-existing R6-P1 scope limitation (see item 4 above and
-   `ruleVersions.ts`'s own comment on `specifiedFundAcquiredOnOrAfter`), not
-   something Section 8/9 required touching — documented, not silently
-   carried forward as if fixed.
+3. ~~Debt/specified-fund per-lot acquisition-date gate is not implemented.~~
+   **CLOSED 2026-08-22 (R6-DEBTFIX)** — see Section 4 and the new Section 4a
+   above. Left here, struck through rather than deleted, so the defect's
+   history stays visible in this document rather than silently vanishing.
 
 ## Sources consulted (2026-08-22)
 
@@ -167,6 +182,15 @@ this engine's scope (mutual fund unit disposals only).
 - https://www.mstock.com/articles/income-tax-act-2025
 - https://cleartax.in/s/tax-on-debt-funds
 - https://www.hdfclife.com/investment-plans/debt-mutual-fund-taxation
+
+### Added 2026-08-22 (R6-DEBTFIX — Section 4a legacy debt-fund regime research)
+
+- ICICI Direct — "Changes in taxation of non-equity funds from FY23-24" (fetched directly)
+- ValueResearchOnline — "How are debt funds bought before 2023 taxed?" (fetched directly)
+- ValueResearchOnline — Budget 2024 indexation-removal explainer (fetched directly)
+- PrimeInvestor — "Budget 2024 – how your equity & debt investments are taxed now" (fetched directly)
+- Business Standard (search-corroborated, 23-Jul-2024 boundary)
+- AMFI, TaxBuddy, Bajaj Finserv, TaxTMI (independent second-pass corroboration during formal re-certification)
 
 ## Change log
 

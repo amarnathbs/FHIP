@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
 //
@@ -260,14 +260,23 @@ export function TaxIntelligenceClient() {
               </thead>
               <tbody>
                 {summary.disposalResults.map((d, i) => (
-                  <tr key={i} className="border-b border-line/50" data-testid="disposal-row">
-                    <td className="py-1 pr-2">{d.instrumentName}</td>
-                    <td className="py-1 pr-2">{d.acquisitionDate}</td>
-                    <td className="py-1 pr-2">{d.disposalDate}</td>
-                    <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
-                    <td className="py-1 pr-2 uppercase">{d.gainType}</td>
-                    <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
-                  </tr>
+                  <Fragment key={i}>
+                    <tr className={d.note ? 'border-b-0' : 'border-b border-line/50'} data-testid="disposal-row">
+                      <td className="py-1 pr-2">{d.instrumentName}</td>
+                      <td className="py-1 pr-2">{d.acquisitionDate}</td>
+                      <td className="py-1 pr-2">{d.disposalDate}</td>
+                      <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
+                      <td className="py-1 pr-2 uppercase">{d.gainType}</td>
+                      <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
+                    </tr>
+                    {d.note && (
+                      <tr className="border-b border-line/50" data-testid="disposal-row-note">
+                        <td colSpan={6} className="py-1 pb-2 pr-2 text-xs text-muted">
+                          {d.note}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
