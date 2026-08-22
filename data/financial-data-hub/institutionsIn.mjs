@@ -92,7 +92,8 @@ export const institutionsIn = [
     legal_name: 'Yes Bank Limited',
     website_domain: 'yesbank.in',
     aliases: ['YES BANK'],
-    notes: 'Underwent an RBI-led reconstruction scheme in 2020, with a consortium led by State Bank of India taking an equity stake.',
+    source_checked_at: '2026-08-22',
+    notes: 'Underwent an RBI-led reconstruction scheme in 2020, with a consortium led by State Bank of India taking an equity stake. CLOSURE-RESEARCH UPDATE 2026-08-22 (live web search): that SBI-led consortium stake has since been substantially sold down — Sumitomo Mitsui Banking Corporation (SMBC, Japan) completed a ~20% secondary purchase from SBI and other lenders in 2025 and, with RBI approval, an additional stake to reach ~24.2%, becoming Yes Bank\'s largest shareholder (SMBC nominee directors joined the board September 2025). Not a majority/controlling stake, so parent_group is deliberately left null rather than overstated. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('au_small_finance_bank', 'AU Small Finance Bank', 'bank', {
     legal_name: 'AU Small Finance Bank Limited',
@@ -111,10 +112,12 @@ export const institutionsIn = [
     aliases: ['ZERODHA'],
   }),
   inst('groww', 'Groww', 'broker', {
-    legal_name: 'Billionbrains Garage Ventures Private Limited',
+    legal_name: 'Billionbrains Garage Ventures Limited',
     website_domain: 'groww.in',
     capabilities: ['mutual_fund_platform'],
     aliases: ['GROWW'],
+    source_checked_at: '2026-08-22',
+    notes: 'CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search): the holding company converted from a private to a public limited company (board resolution 29 Jan 2025, fresh certificate of incorporation 11 Apr 2025) ahead of its November 2025 IPO; legal_name corrected from "...Private Limited" to "...Limited". The Groww consumer brand name is unchanged. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('nsdl', 'NSDL', 'depository', {
     legal_name: 'National Securities Depository Limited',
@@ -146,9 +149,10 @@ export const institutionsIn = [
   }),
   inst('protean_enps', 'Protean eGov Technologies (NPS)', 'retirement_provider', {
     legal_name: 'Protean eGov Technologies Limited',
-    website_domain: 'npscra.nsdl.co.in',
+    website_domain: 'npscra.proteantech.in',
     aliases: ['PROTEAN', 'NSDL E-GOV', 'NSDL E-GOVERNANCE', 'NPS TRUST'],
-    notes: 'Formerly NSDL e-Governance Infrastructure Limited; operates as a Central Recordkeeping Agency (CRA) for the National Pension System (NPS).',
+    source_checked_at: '2026-08-22',
+    notes: 'Formerly NSDL e-Governance Infrastructure Limited; operates as a Central Recordkeeping Agency (CRA) for the National Pension System (NPS). CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search): the NPS CRA informational site has migrated from the legacy npscra.nsdl.co.in domain to npscra.proteantech.in; website_domain corrected to the current live domain. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('income_tax_department_india', 'Income Tax Department (India)', 'government_payment_source', {
     legal_name: 'Income Tax Department, Government of India',

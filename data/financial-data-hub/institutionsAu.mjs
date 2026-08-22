@@ -66,8 +66,9 @@ export const institutionsAu = [
   inst('bank_australia', 'Bank Australia', 'bank', {
     legal_name: 'Bank Australia Limited',
     website_domain: 'bankaust.com.au',
-    aliases: ['BANK AUSTRALIA'],
-    notes: 'Customer-owned bank, formerly bankmecu.',
+    aliases: ['BANK AUSTRALIA', 'QUDOS BANK'],
+    source_checked_at: '2026-08-22',
+    notes: 'Customer-owned bank, formerly bankmecu. CLOSURE-RESEARCH UPDATE 2026-08-22 (live web search): Bank Australia Ltd completed its merger with Qudos Bank on 1 July 2025; both retail brands now operate under the single Bank Australia Ltd legal entity, so a "QUDOS BANK" statement narrative now resolves to this institution — added as an alias. A further prospective merger with P&N Group is under member consideration (vote expected 2027) and is NOT yet reflected here — not asserted as complete. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('amp_bank', 'AMP Bank', 'bank', {
     legal_name: 'AMP Bank Limited',
@@ -81,11 +82,12 @@ export const institutionsAu = [
     aliases: ['BOQ', 'BANK OF QUEENSLAND'],
   }),
   inst('me_bank', 'ME Bank', 'bank', {
-    legal_name: 'Members Equity Bank Pty Limited',
+    legal_name: 'Bank of Queensland Limited',
     parent_group: 'Bank of Queensland Group',
     website_domain: 'mebank.com.au',
     aliases: ['ME BANK', 'MEMBERS EQUITY BANK', 'ME'],
-    notes: 'LOWER-CONFIDENCE ENTRY: acquired by Bank of Queensland Group in 2021. Public reporting has described an ongoing migration/consolidation of the ME retail brand into BOQ Group\'s digital platforms; the exact current operational status could not be independently re-verified without live web access in this environment. Seeded as a historically significant AU institution with disclosed uncertainty rather than an asserted current operating status — see FDH2_INSTITUTION_MASTER.md section 4.',
+    source_checked_at: '2026-08-22',
+    notes: 'CLOSURE-RESEARCH VERIFIED 2026-08-22 (live web search): APRA revoked Members Equity Bank Limited\'s ADI licence following the transfer of ME Bank\'s banking assets and liabilities to Bank of Queensland Limited (BOQ) after BOQ\'s 2021 acquisition; ME Bank\'s own official site footer now states "ME Bank – a division of Bank of Queensland Limited ABN 32 009 656 740". ME Bank is therefore no longer a separately licensed legal entity — legal_name corrected from the pre-acquisition "Members Equity Bank Pty Limited" to the current licence holder. The ME retail brand remains actively operated. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('ubank', 'ubank', 'bank', {
     legal_name: 'ubank Limited',
@@ -107,11 +109,12 @@ export const institutionsAu = [
     aliases: ['HSBC', 'HSBC AUSTRALIA'],
   }),
   inst('suncorp_bank', 'Suncorp Bank', 'bank', {
-    legal_name: 'Suncorp-Metway Limited',
+    legal_name: 'Norfina Limited',
     parent_group: 'ANZ Group Holdings Limited',
     website_domain: 'suncorp.com.au',
-    aliases: ['SUNCORP', 'SUNCORP BANK', 'SUNCORP-METWAY'],
-    notes: 'LOWER-CONFIDENCE ENTRY: ANZ\'s acquisition of Suncorp Bank was publicly announced in 2022 and reported completed in 2024; the precise current legal/operational structure could not be independently re-verified without live web access — see FDH2_INSTITUTION_MASTER.md section 4.',
+    aliases: ['SUNCORP', 'SUNCORP BANK', 'SUNCORP-METWAY', 'NORFINA'],
+    source_checked_at: '2026-08-22',
+    notes: 'CLOSURE-RESEARCH VERIFIED 2026-08-22 (live web search): ANZ completed the $4.9bn acquisition of Suncorp Bank on 31 July 2024. As part of the transition, Suncorp-Metway Limited legally changed its name to Norfina Limited (same ABN 66 010 831 722), while continuing to trade under the Suncorp Bank brand (AFCA confirms complaints against "Suncorp Bank" are filed against Norfina Limited). Norfina Limited remains a separate ADI within the ANZ Group pending an eventual single-licence merger; legal_name corrected from the pre-rename "Suncorp-Metway Limited". See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('commsec', 'CommSec', 'broker', {
     legal_name: 'Commonwealth Securities Limited',
@@ -121,8 +124,11 @@ export const institutionsAu = [
   }),
   inst('selfwealth', 'SelfWealth', 'broker', {
     legal_name: 'SelfWealth Limited',
+    parent_group: 'Syfe (Svava Pte Ltd)',
     website_domain: 'selfwealth.com.au',
     aliases: ['SELFWEALTH'],
+    source_checked_at: '2026-08-22',
+    notes: 'CLOSURE-RESEARCH CORRECTED 2026-08-22 (live web search): SelfWealth was the subject of a competing 2024-2025 takeover contest (Bell Financial Group vs. AxiCorp vs. Syfe); Singapore-based fintech Syfe (via its holding vehicle Svava Pte Ltd) won with a binding $65m proposal after Bell declined to counter-bid (26 Feb 2025). SelfWealth was subsequently delisted from the ASX and now trades as "Selfwealth by Syfe". parent_group added to reflect the new ownership; the exact post-delisting legal-entity name could not be independently confirmed in this pass and legal_name is left as the last-known "SelfWealth Limited" rather than guessed. See FDH2_RESEARCH_EVIDENCE.md closure-research section.',
   }),
   inst('australiansuper', 'AustralianSuper', 'super_fund', {
     website_domain: 'australiansuper.com',

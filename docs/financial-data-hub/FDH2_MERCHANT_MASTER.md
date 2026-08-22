@@ -6,7 +6,10 @@
 merchant). This is deliberately a **smaller, verified library**, not a
 guessed-and-inflated one — every merchant is a real, well-known brand this
 session holds genuine confidence in; nothing was invented to raise the
-count.
+count. As of the 2026-08-22 closure-research pass (section 10), 2 of the
+123 rows (`catch_au`, `menulog`) are seeded with `active: false` — genuinely
+real, historically significant merchants kept for narrative-matching on
+older statements, but no longer operating.
 
 ## 2. Stable identity
 
@@ -119,3 +122,38 @@ attempted, since this session's non-live-web research method could not
 verify them responsibly (see the coverage matrix in
 `FDH2_COMPLETION_REPORT.md` for what is explicitly labelled
 `FUTURE-EXPANSION`).
+
+## 10. Closure-research pass (2026-08-22, migration `0057`)
+
+A dedicated live web-research pass genuinely verified the two merchants
+whose current operating status was previously only trained-knowledge
+recall, plus the two LOWER-CONFIDENCE-flagged entries:
+
+- **Catch.com.au (AU)** — Wesfarmers permanently closed Catch.com.au (last
+  trading day 30 April 2025) after sustained losses. Marked `active: false`
+  rather than left silently as an operating merchant; kept seeded for
+  narrative-matching on older statements.
+- **Menulog (AU)** — ceased Australian operations 26 November 2025 (Just
+  Eat Takeaway.com exited the Australian market). Marked `active: false`.
+- **JioHotstar (IN)** — the Disney+ Hotstar/JioCinema merger is confirmed
+  complete (14 Feb 2025, under the JioStar joint venture). The seeded facts
+  were accurate; the LOWER-CONFIDENCE flag is resolved and the `notes` field
+  updated to cite the live source rather than "reported".
+- **BYJU'S (IN)** — confirmed still under active insolvency proceedings in
+  India as of mid-2026 (not liquidated/dissolved: the Supreme Court
+  reinstated proceedings in October 2024 after a brief NCLAT closure).
+  Remains seeded and active for narrative-matching; the LOWER-CONFIDENCE
+  flag is resolved (the underlying uncertainty was real and remains real —
+  it is now backed by a dated live source).
+- **Zomato (IN)** — the Eternal Limited parent-entity rename is confirmed,
+  but the previously-stated year was wrong: shareholders approved the
+  rename on 6 February 2025 (effective March 2025), not 2024 as originally
+  seeded. Corrected in the source-data `notes`.
+
+No merchant was added in this pass beyond what was needed to correct these
+five existing rows — this was a verification pass, not an expansion pass.
+`active` is now a genuine per-merchant column throughout
+`data/financial-data-hub/merchantsAu.mjs`/`merchantsIn.mjs` (previously
+hardcoded `true` in the generator for every row); see
+`FDH2_RESEARCH_EVIDENCE.md`'s closure-research section for full source
+citations.

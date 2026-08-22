@@ -40,7 +40,7 @@ export const mccCategoryMap = [
   map('5541', { category_key: 'transport', subcategory_key: 'fuel', mapping_confidence: 'high', mapping_type: 'direct' }),
   map('5542', { category_key: 'transport', subcategory_key: 'fuel', mapping_confidence: 'high', mapping_type: 'direct' }),
   map('5511', { category_key: 'transport', subcategory_key: 'vehicle_purchase_lease', mapping_confidence: 'medium', mapping_type: 'direct' }),
-  map('5531', { category_key: 'transport', subcategory_key: 'vehicle_maintenance_registration', mapping_confidence: 'medium', mapping_type: 'direct' }),
+  map('5531', { category_key: 'transport', mapping_confidence: 'low', mapping_type: 'broad_group_only', ambiguity_flag: true, requires_additional_context: true, notes: 'CLOSURE-RESEARCH DOWNGRADED 2026-08-22 (live web search): the verified official description ("Auto and Home Supply Stores") and its standard trade classification explicitly note these establishments "frequently sell a substantial amount of home appliances, radios, and television sets" alongside automotive parts — a genuinely mixed-purpose store type, not a reliable direct signal for vehicle_maintenance_registration alone. Downgraded from direct/medium to broad_group_only/low with subcategory removed, per the "never force false precision" principle.' }),
   map('7538', { category_key: 'transport', subcategory_key: 'vehicle_maintenance_registration', mapping_confidence: 'high', mapping_type: 'direct' }),
   map('7523', { category_key: 'transport', subcategory_key: 'parking_tolls', mapping_confidence: 'high', mapping_type: 'direct' }),
 
