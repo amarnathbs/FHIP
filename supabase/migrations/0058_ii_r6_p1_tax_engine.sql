@@ -2,22 +2,32 @@
 -- Forward-only migration. Does NOT modify any already-applied migration.
 --
 -- ===========================================================================
--- MIGRATION NUMBERING CAVEAT — carried forward from 0044's header
+-- MIGRATION NUMBERING CAVEAT — carried forward from 0044's header, RESOLVED
 -- ===========================================================================
 -- The unresolved cross-lineage migration-numbering fork disclosed at FDH-0
 -- and worked on by a separate DB-governance task
 -- (feature branch fix/migration-lineage-ii-resources, doc
 -- docs/investment-intelligence/... ii_resources_migration_reconciliation)
--- is NOT resolved by this migration either. This branch was explicitly
--- forked from feature/investment-intelligence-r6-tax-cost-intelligence at
--- fd526ee — the R6-P0 tip — per the R6-P1 task brief, NOT from the
--- reconciliation branch's forward-emitted 0049. Within the INVESTMENT
--- INTELLIGENCE LINEAGE SPECIFICALLY (0031-0044), the next free number is
--- 0045. This migration does not attempt to reconcile against the FDH
--- stream's 0045-0048 or the reconciliation stream's 0049 — that is a
--- separate, already-tracked governance task. Whoever eventually merges this
--- branch must run it through the same reconciliation process before landing
--- on `main`.
+-- was NOT resolved by this migration when it was first written. This branch
+-- was originally forked from feature/investment-intelligence-r6-tax-cost-
+-- intelligence at fd526ee — the R6-P0 tip — per the R6-P1 task brief, NOT
+-- from the reconciliation branch's forward-emitted 0049, and within the
+-- INVESTMENT INTELLIGENCE LINEAGE SPECIFICALLY (0031-0044) the next free
+-- number at that time was 0045.
+--
+-- RESOLVED during R6-FINAL closure (2026-08-22): by the time this branch
+-- was reconciled against `main`, `main` already carried the full merged
+-- lineage through 0057 (Investment Intelligence 0031-0044, FDH-1 0045-0048,
+-- the migration-lineage reconciliation's 0049, FDH-2 0050-0057) — so this
+-- file's original name, 0045_ii_r6_p1_tax_engine.sql, collided with FDH-1's
+-- own, already-DEV-applied 0045_fdh_reference_foundation.sql. Confirmed via
+-- the collision guard (scripts/check-migration-versions.mjs) before
+-- renumbering, and confirmed this migration's own tables
+-- (ii_scheme_tax_classification, ii_exit_load_schedules,
+-- ii_tax_lot_consumptions, ii_capital_gains_computations) were still 404 in
+-- live DEV — i.e. genuinely never applied under either number — so this is
+-- a safe rename, not an edit to an already-applied migration. Renumbered to
+-- 0058, the next free version after main's 0057.
 --
 -- ===========================================================================
 -- SCOPE
