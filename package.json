@@ -21,7 +21,9 @@
     "resources:p0:verify": "tsx --env-file=.env.local scripts/resources/p0-content/verify-p0-content.ts",
     "resources:p0:reconcile": "tsx --env-file=.env.local scripts/resources/p0-content/query-cms-reconciliation.ts",
     "resources:p0:related-dry-run": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts",
-    "resources:p0:related-apply": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts -- --apply"
+    "resources:p0:related-apply": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts -- --apply",
+    "check:migrations": "node scripts/check-migration-versions.mjs",
+    "check:migrations:against-main": "node scripts/check-migration-versions-against-branch.mjs --against=origin/main"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

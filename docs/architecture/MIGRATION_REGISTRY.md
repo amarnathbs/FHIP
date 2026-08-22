@@ -12,6 +12,32 @@ node scripts/check-migration-versions.mjs   # reports the next free version
 The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
 and fails the build if two active migrations ever share a version again.
 
+**Cross-branch collision guard (added 2026-08-23, after the FDH-3/R6 `0058`
+collision).** The single-working-tree check above cannot catch two
+*different, unmerged* branches independently allocating the same version —
+that is exactly the failure mode that produced the `0058` collision
+documented below, and `check-migration-versions.mjs` could not have caught
+it because neither branch's checkout ever contained the other branch's file.
+Before merging any branch that carries a new migration:
+
+```sh
+npm run check:migrations:against-main
+# equivalent to:
+node scripts/check-migration-versions-against-branch.mjs --against=origin/main
+```
+
+This diffs `supabase/migrations` on your branch against `origin/main` (or
+any `--against=<ref>`) via `git ls-tree`/blob comparison — no checkout of the
+other ref required. A version claimed by two different filenames, or by the
+same filename with different content, fails the build; a version that
+matches byte-for-byte (legitimate shared ancestry after a real merge) does
+not. See `scripts/check-migration-versions-against-branch.mjs`,
+`tests/unit/migrationVersionsCrossBranch.test.ts`, and
+`docs/architecture/ADR_0058_FDH3_II_R6_RECONCILIATION.md` "Future
+prevention". This is currently a required **manual** pre-merge step (run it
+yourself before opening/merging a migration-carrying PR) — there is no CI
+pipeline in this repository to wire it into automatically yet.
+
 - **Next free version: `0064`**
 - Active migrations: 63 (`0001`-`0063`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
