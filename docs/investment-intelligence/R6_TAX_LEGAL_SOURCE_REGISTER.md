@@ -1,6 +1,6 @@
 # R6 Tax Legal Source Register
 
-Status: R6-FINAL closure pass, pre-DEV-application dispatch. Compiled 2026-08-22.
+Status: R6-SECURITY-FINAL closure pass (last update 2026-08-22). Originally compiled during R6-FINAL, 2026-08-22; grandfathering 2025-Act continuity (Section 5, former Open Item 2) resolved during R6-SECURITY-FINAL, same date.
 
 This register lists every production tax rule this engine encodes (in
 `lib/engines/investment-intelligence/tax/ruleVersions.ts`, mirrored into
@@ -104,19 +104,21 @@ Governs any debt/specified-mutual-fund lot **acquired before** the 2023-04-01 Se
 | Verified date | 2026-08-22 (fix's own research), independently re-verified again 2026-08-22 during formal re-certification via a second, separate WebSearch pass (AMFI/TaxBuddy/Bajaj/TaxTMI for the acquisition boundary; ValueResearch/PrimeInvestor/BusinessToday for the disposal boundary) |
 | Confidence | **CERTIFIED** — independently corroborated twice, by two separate research passes, with matching conclusions both times |
 
-## 5. Grandfathering — 31-Jan-2018 FMV step-up (Section 55(2)(ac))
+## 5. Grandfathering — 31-Jan-2018 FMV step-up (Section 55(2)(ac) → Section 90(7)-(9))
 
 | Field | Value |
 |---|---|
 | Rule code | `grandfathering.ts` `applyGrandfathering()` |
 | Topic | Cost-of-acquisition step-up for equity-oriented LTCG lots acquired before 1 Feb 2018 |
-| Governing Act (1961) | Income-tax Act, 1961, proviso to Section 55(2)(ac), introduced by Finance Act, 2018 alongside Section 112A |
-| Formula | `costBasis = max(actualCost, min(fmv31Jan2018, salePrice))` |
+| Governing Act (1961, disposals before 2026-04-01) | Income-tax Act, 1961, proviso to Section 55(2)(ac), introduced by Finance Act, 2018 alongside Section 112A |
+| Governing Act (2025, disposals on/after 2026-04-01) | Income-tax Act, 2025 [30 of 2025], **Section 90(7)-(9)** — see "R6-SECURITY-FINAL re-verification" row below |
+| Formula | `costBasis = max(actualCost, min(fmv31Jan2018, salePrice))` — IDENTICAL under both Acts |
 | Cutoff | Lots acquired on/before 2018-01-31 are eligible; 2018-02-01 onward are not |
 | Primary source | Formula independently verified by R6-P1 (pre-dating this pass) against ClearTax / HDFC Sky / ICICI Direct explainers, all in agreement — see `grandfathering.ts` header |
-| Re-verification this pass | WebSearch "Grandfathering Clause in LTCG" (multiple 2025-26-dated sources) all restate the identical max/min formula and 31-Jan-2018 cutoff, with no indication of a formula change |
-| Verified date | 2026-08-22 (re-verified; originally verified during R6-P1) |
-| Status | **CERTIFIED** for disposals under the 1961 Act. **OPEN ITEM** for continuity into the 2025 Act — see below. |
+| Re-verification (R6-FINAL, 2026-08-22) | WebSearch "Grandfathering Clause in LTCG" (multiple 2025-26-dated sources) all restate the identical max/min formula and 31-Jan-2018 cutoff, with no indication of a formula change |
+| **R6-SECURITY-FINAL re-verification (2026-08-22)** | **Direct 2025-Act citation found and verified.** Section 90(7) of the Income-tax Act, 2025 — a cost-of-acquisition provision applying "for the purposes of sections 72 and 73" (the Act's general capital-gains computation sections) — states: "cost of acquisition... in relation to a long-term capital asset, being an equity share in a company or a unit of an equity oriented fund or a unit of a business trust referred to in section 198, acquired before the 1st February, 2018, shall be higher of— (a) the actual cost of acquisition; or (b) the lower of— (i) the fair market value of such asset; and (ii) the full value of consideration received or accruing as a result of the transfer." Section 90(8) defines "fair market value" for the 31-Jan-2018 date identically to the 1961-Act convention (highest quoted price on a recognised exchange on that date, or the preceding trading date). This is the SAME `max(actualCost, min(fmv, saleConsideration))` formula already implemented — **no arithmetic change was required.** Independently corroborated by two separate secondary-source fetches (aubsp.com, eztax.in) quoting matching verbatim statutory text; direct fetches of incometaxindia.gov.in and indiankanoon.org again returned HTTP 403 (same disclosed pattern as Sections 196/198 in Section 1-2 above). |
+| Verified date | 2026-08-22 (R6-SECURITY-FINAL; formula-level re-verified 2026-08-22 during R6-FINAL; originally verified during R6-P1) |
+| Status | **CERTIFIED** for disposals under both the 1961 Act and the 2025 Act. The prior "OPEN ITEM" for 2025-Act continuity (R6-FINAL, 2026-08-22) is **CLOSED** — see Section 7 below. |
 
 ## 6. Effective-date boundaries — re-verified this pass
 
@@ -148,20 +150,20 @@ this engine's scope (mutual fund unit disposals only).
    casual paraphrase) — this session's assessment is that the CERTIFIED
    rulings above are reliable, but a future pass with primary-site access
    should re-confirm by reading the Act PDF directly.
-2. **Grandfathering continuity into the 2025 Act era.** No source found
-   during this research explicitly states "the Section 55(2)(ac) proviso is
-   re-enacted as new-Act Section X" — grandfathering is a cost-of-acquisition
-   computation, not a rate provision, so it is less prominently covered by
-   consumer tax-explainer sites than the headline STCG/LTCG rates. This
-   engine's `grandfathering.ts` applies the rule unconditionally by
-   acquisition date, independent of which Act governs the disposal — no
-   source suggests repeal, and the 2025 Act was repeatedly characterised as
-   a renumbering/consolidation exercise rather than a substantive
-   capital-gains policy change. Treated as **REASONABLY CERTAIN by inference,
-   not independently section-cited** — flagged here rather than silently
-   assumed. See `tests/unit/iiR6P1Certification.test.ts`'s GRANDBOUND family
-   for the live behaviour this produces (grandfathering applied to a
-   2026-06-15 disposal, i.e. under the 2025 Act).
+2. ~~**Grandfathering continuity into the 2025 Act era.**~~ **CLOSED
+   2026-08-22 (R6-SECURITY-FINAL)** — see Section 5 above. Direct statutory
+   authority found: Section 90(7)-(9) of the Income-tax Act, 2025 restates
+   the identical grandfathering formula for equity/equity-oriented-fund
+   units referred to in Section 198, acquired before 1 February 2018. No
+   code change was required (`grandfathering.ts` already applied the rule
+   unconditionally by acquisition date, which is now confirmed correct
+   rather than merely reasonable-by-inference). See
+   `tests/unit/iiR6P1Certification.test.ts`'s GRANDBOUND family and
+   `tests/unit/iiR6SecurityFinalClosure.test.ts` (new, this pass) for the
+   live behaviour this produces, including a same-facts pre-/post-1-Apr-2026
+   disposal-date pair proving numerically identical treatment across the Act
+   transition. Left struck-through rather than deleted so the item's history
+   stays visible, per this document's own convention (see item 3 below).
 3. ~~Debt/specified-fund per-lot acquisition-date gate is not implemented.~~
    **CLOSED 2026-08-22 (R6-DEBTFIX)** — see Section 4 and the new Section 4a
    above. Left here, struck through rather than deleted, so the defect's
@@ -182,6 +184,14 @@ this engine's scope (mutual fund unit disposals only).
 - https://www.mstock.com/articles/income-tax-act-2025
 - https://cleartax.in/s/tax-on-debt-funds
 - https://www.hdfclife.com/investment-plans/debt-mutual-fund-taxation
+
+## Sources consulted (2026-08-22, R6-SECURITY-FINAL — grandfathering 2025-Act closure)
+
+- https://eztax.in/income-tax-act-2025/section-90 — fetched successfully; quotes Section 90(7) grandfathering formula for equity shares/units acquired before 1 Feb 2018, and Section 90(8)(b) FMV definition
+- https://www.aubsp.com/income-tax-act-2025-section-90/ — fetched successfully; independently quotes the SAME Section 90(7) statutory text verbatim ("cost of acquisition... shall be higher of— (a) the actual cost of acquisition; or (b) the lower of...")
+- https://www.incometaxindia.gov.in/w/section-90-110 — official Act text (direct fetch 403, same disclosed pattern as Sections 196/198 above)
+- https://www.taxtmi.com/tmi_notes?id=1655 — "Clause 198 of the Income Tax Bill 2025 vs Section 112A" (search-indexed, corroborating context)
+- https://hivecalc.com/income-tax-india/section-198-long-term/ — fetched; confirmed Section 198 itself does NOT cover grandfathering (correctly scoped to Section 90 instead, not a false lead)
 
 ### Added 2026-08-22 (R6-DEBTFIX — Section 4a legacy debt-fund regime research)
 

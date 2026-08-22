@@ -5,7 +5,20 @@ covers the FULL R6-FINAL spec — the pre-DEV closure pass
 (`R6_FINAL_PRE_DEV_CLOSURE_REPORT.md`, commit `73d1ff7`) plus this
 live-DEV dispatch.
 
-## Verdict: **CONDITIONAL PASS**
+**SUPERSEDED, 2026-08-22 — see `R6_SECURITY_FINAL_CLOSURE_REPORT.md`.**
+The CONDITIONAL PASS below stood on one blocking condition (migration
+`0061` not yet applied to DEV) plus one disclosed legal-research open item
+(grandfathering 2025-Act continuity). Both are now closed: `0061` is
+confirmed applied and live-re-verified with valid-FK attacks (no longer
+"incidentally blocked by FK" — see `R6_FINAL_SECURITY_VERIFICATION.md`'s
+addendum), and the grandfathering continuity question was resolved with a
+direct Income-tax Act, 2025 Section 90(7)-(9) citation (see
+`R6_TAX_LEGAL_SOURCE_REGISTER.md` Section 5). R6 is now frozen —
+**UNCONDITIONAL FULL PASS** — per `R6_SECURITY_FINAL_CLOSURE_REPORT.md`.
+This document is retained verbatim below for its historical record of what
+was found and why the original verdict was conditional.
+
+## Verdict: **CONDITIONAL PASS** (as it stood at the time — see superseding note above)
 
 Every functional requirement is met, live-verified against real DEV data,
 independently recalculated for 10 of 12 mandatory scenarios, and 2 real

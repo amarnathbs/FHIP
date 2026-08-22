@@ -103,7 +103,7 @@ dispatch). **The vulnerability described above remains live in DEV until a
 human applies migration `0061`.** This is disclosed prominently and is the
 single most important open item from this dispatch.
 
-## What this means for the overall R6-FINAL verdict
+## What this means for the overall R6-FINAL verdict (as it stood at the time)
 
 Per the spec's own rule: a same-user forgery success is an R6 FAIL
 condition. Read literally, this dispatch cannot claim an unconditional
@@ -115,3 +115,100 @@ verified-safe fix is drafted and ready — but genuinely blocked on the same
 DDL-application dependency every other schema change in this project has
 needed a human for. This is a stronger and more honest position than
 either hiding the finding or claiming a fabricated unconditional PASS.
+
+---
+
+## ADDENDUM — R6-SECURITY-FINAL (2026-08-22): migration `0061` confirmed
+## APPLIED to DEV; the "incidentally blocked by FK" caveat is now RETIRED
+
+This dispatch first confirmed structurally (`git log`, `git status`) that no
+code changed since the CONDITIONAL PASS above, then re-ran the attacks live
+against current DEV and found **migration `0061` is now applied** (some
+human applied it between this report's original writing and this addendum —
+this session still has no DDL/RPC capability and did not apply it itself).
+Live re-verification, `scripts/ii_r6_security_final.mjs`, 12/12 PASS
+(`scripts/ii-r6-security-final/results.json`):
+
+- `SEC-FINAL-007`/`008` (re-run of `SEC-R6-014`/`020`): PATCH returns
+  HTTP 204 but the row is **unchanged** (0 rows matched the now-SELECT-only
+  policy — PostgREST's documented behaviour for an UPDATE/DELETE that
+  matches no RLS-visible row is a 200/204 with an empty body, not an error);
+  DELETE likewise returns HTTP 200 with an empty body and the row is
+  confirmed still present on re-read. **The former FAIL is now PASS,
+  confirmed live, not assumed from the migration's own text.**
+
+Separately, and this is the item R6-SECURITY-FINAL was specifically
+dispatched to close: the ORIGINAL `SEC-R6-011`/`012`/`013`/`015`/`016`/`018`
+INSERT tests above used payloads with **invalid foreign keys**
+(`crypto.randomUUID()` for `disposal_transaction_id`/
+`opening_transaction_id`, and — for the reference tables — instrument ids
+that already had a unique-constrained classification/exit-load row) or
+matched a table already carrying no INSERT grant of any kind. As drafted,
+the "PASS (blocked)" verdicts on those checks were **ambiguous**: a 403/409
+could have come from FK/unique-constraint violation OR from RLS, and the
+report's own words ("only incidentally, by an FK constraint... not by RLS
+design") already flagged this as a real gap in rigor, not just a phrasing
+choice.
+
+`scripts/ii_r6_security_final.mjs` closes that ambiguity by construction:
+every INSERT attack now uses IDs that are **real, owned by the attacking
+user (or — for the two reference tables — a real instrument with genuinely
+no existing classification/exit-load row)**, and every payload is
+constructed to **not collide with any unique index**, so a rejection can
+only be RLS/privilege. Result: **all 6 tables reject the valid-FK attack
+with `HTTP 403 42501 "new row violates row-level security policy"`** — a
+genuine RLS rejection, not an FK/unique-constraint side effect:
+
+| Table | Valid-FK INSERT (owning user) | Result |
+|---|---|---|
+| `ii_capital_gains_computations` | real disposal + real un-paired own lot | **403 42501 — RLS** |
+| `ii_tax_lot_consumptions` | real disposal + real un-paired own lot | **403 42501 — RLS** |
+| `ii_tax_lots` | real account/instrument/opening-transaction (all owned) | **403 42501 — RLS** |
+| `ii_scheme_tax_classification` | real, genuinely-unclassified instrument | **403 42501 — RLS** |
+| `ii_exit_load_schedules` | real, genuinely-unscheduled instrument | **403 42501 — RLS** |
+| `ii_tax_rule_versions` | real `country_code='IN'`, novel `version` string | **403 42501 — RLS** |
+
+Cross-user forgery (B inserting/patching/deleting a row attributed to A) and
+tenant isolation were also re-confirmed live (`SEC-FINAL-009..012`, all
+PASS). A genuine trusted-server-write regression was run through the real
+app route (`/api/investment-intelligence/tax/summary`, authenticated
+session, real cookie) after this re-verification: HTTP 200, 12
+`disposalResults` returned, `ii_capital_gains_computations` rows for the
+real test user confirmed persisted via a direct DB read — the RLS lockdown
+does not break the legitimate server-authoritative write path, because that
+path has always used the service-role client (`createAdminClient()`), never
+the request-scoped one. The result was also confirmed to genuinely reach
+the UI: navigating to `/investment-intelligence/tax` as the same
+authenticated test user renders the real persisted realised-gains table,
+tax-lot table, and disclaimers.
+
+**Revised verdict for the primary closure item: PASS, unconditionally.**
+No new migration was required — `0061`, once applied, was already
+sufficient; this session's job was to prove that with attacks that cannot
+be second-guessed as FK/constraint artifacts, which it now has, live,
+against current DEV.
+
+### Negative control (spec Section 26)
+
+This session did not, and could not safely, revert `0061`'s live DEV policy
+to reproduce the pre-fix state fresh (DEV is a shared environment used by
+every other module's live-security harness; reverting RLS on it, even
+briefly, would leave a real window where the ORIGINAL exploit — proven
+above to have genuinely worked — is live again for any other concurrent
+session/user, and this session has no DDL capability to atomically apply
+and revert). Per the spec's own fallback ("if local policy mutation is
+unsafe/impractical, document why and rely on the live pre-fix vs post-fix
+attack evidence"), the negative control instead rests on the two data
+points already on the record, from the SAME harness family:
+1. **Unsafe configuration → attack succeeds**: the CONDITIONAL-PASS section
+   above, `SEC-R6-014`/`014B`/`020`, run against the live, then-unfixed
+   policy, with exact before/after values captured (`taxable_gain` changed
+   to `-99999999` and back; `units_remaining` changed to `999999` and back;
+   a row DELETEd and restored).
+2. **Corrected configuration → attack rejected**: this addendum's
+   `SEC-FINAL-001..012`, run against the SAME tables, SAME attack shapes
+   (now with valid FKs, closing the earlier ambiguity), against the SAME
+   live DEV project, today.
+Both runs are against the real project (not a local/isolated copy), so this
+is the strongest evidence available without re-introducing a live window of
+real exposure.

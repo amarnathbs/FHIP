@@ -39,17 +39,30 @@
 // 2026-04-01-onward row below is therefore CERTIFIED (placeholder: false),
 // not a placeholder.
 //
-// One narrower question was NOT conclusively resolved at statutory-section
-// level: which 2025-Act section (if any distinct from the general
-// cost-of-acquisition Section 72) re-enacts the 31-Jan-2018 FMV
-// grandfathering step-up (originally the proviso to Section 55(2)(ac) of
+// R6-SECURITY-FINAL (2026-08-22) RESOLVED the one narrower question left
+// open by the pass above: which 2025-Act provision re-enacts the 31-Jan-2018
+// FMV grandfathering step-up (originally the proviso to Section 55(2)(ac) of
 // the 1961 Act) for LTCG disposals occurring on/after 1 April 2026 of lots
-// acquired before 1 February 2018. No source consulted suggested repeal,
-// and grandfathering.ts's formula is a cost-basis rule keyed on
-// ACQUISITION date (not disposal-date/governing-Act), so this engine
-// continues to apply it unconditionally — but this specific continuity is
-// disclosed as a research limitation, not silently assumed. See the source
-// register's "Open items" section.
+// acquired before 1 February 2018. Direct current-law authority was found:
+// Section 90(7)-(9) of the Income-tax Act, 2025 — "for the purposes of
+// sections 72 and 73" (the Act's general capital-gains computation
+// sections) — restates the IDENTICAL cost-of-acquisition rule for "a
+// long-term capital asset, being an equity share in a company or a unit of
+// an equity oriented fund or a unit of a business trust referred to in
+// section 198, acquired before the 1st February, 2018": higher of (a) the
+// actual cost of acquisition, or (b) the lower of the fair market value as
+// on 31 January 2018 and the sale consideration — i.e. the same
+// max(actualCost, min(fmv, saleConsideration)) formula this engine already
+// implements in grandfathering.ts, independently corroborated across two
+// separate secondary-source fetches quoting matching verbatim statutory
+// text (aubsp.com, eztax.in — both citing Section 90(7) with the identical
+// wording; official incometaxindia.gov.in/indiankanoon.org direct fetches
+// again returned HTTP 403, the same pattern already disclosed for
+// Sections 196/198 above). grandfathering.ts's formula is a cost-basis rule
+// keyed on ACQUISITION date, not disposal-date/governing-Act, so no code
+// change was required — the existing unconditional-by-acquisition-date
+// behaviour is now DIRECTLY SOURCED, not merely inferred. See
+// R6_TAX_LEGAL_SOURCE_REGISTER.md Section 5 for the full citation.
 
 import type { IsoDate } from './holdingPeriod';
 
@@ -241,8 +254,11 @@ export const RULE_1961_POST_20240723: TaxRuleVersion = {
  * 12.5%/Rs 1,25,000 figures, and the >=65% equity-oriented-fund test at
  * Section 198(8)). The debt/"specified mutual fund" always-short-term rule
  * was likewise confirmed to continue unchanged. Grandfathering continuity
- * for post-2026-04-01 disposals is a disclosed, narrower open item — see
- * module header and the source register's "Open items" section. */
+ * for post-2026-04-01 disposals — RESOLVED (R6-SECURITY-FINAL, 2026-08-22):
+ * Section 90(7)-(9) of the Income-tax Act, 2025 directly re-enacts the
+ * identical 31-Jan-2018 FMV step-up formula for equity/equity-oriented-fund
+ * units referred to in Section 198, acquired before 1 February 2018 — see
+ * module header and R6_TAX_LEGAL_SOURCE_REGISTER.md Section 5. */
 export const RULE_2025_ACT_POST_20260401: TaxRuleVersion = {
   ruleSetKey: 'in_mutual_fund_capital_gains',
   version: '2025_act_post_20260401',

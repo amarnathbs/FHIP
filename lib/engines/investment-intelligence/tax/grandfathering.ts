@@ -2,6 +2,18 @@
 // 31-Jan-2018 FMV rule) for equity-oriented mutual fund units acquired
 // before 1 February 2018.
 //
+// CURRENT-LAW STATUS (R6-SECURITY-FINAL, 2026-08-22): this formula applies
+// unconditionally by ACQUISITION date, independent of which Act governs the
+// disposal — CERTIFIED for both eras. For disposals under the Income-tax
+// Act, 1961 the source is Section 55(2)(ac) (below). For disposals on/after
+// 1 April 2026 under the Income-tax Act, 2025, DIRECT statutory authority
+// was found and verified: Section 90(7)-(9), "for the purposes of sections
+// 72 and 73", restates the identical higher-of/lower-of formula for equity
+// shares/equity-oriented-fund units/business-trust units referred to in
+// Section 198, acquired before 1 February 2018. This closes the prior
+// "reasonably certain by inference, not section-cited" open item — see
+// docs/investment-intelligence/R6_TAX_LEGAL_SOURCE_REGISTER.md Section 5.
+//
 // RESEARCHED FORMULA (verified against ClearTax/HDFC Sky/ICICI Direct
 // explainers of Section 55(2)(ac), all in agreement):
 //

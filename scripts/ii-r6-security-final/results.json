@@ -1,0 +1,79 @@
+{
+  "ranAt": "2026-08-22T13:30:08.583Z",
+  "tenantA": "922d1025-a658-4d23-8729-fee0d9f75001",
+  "tenantB": "2a92d1b2-6e79-4679-9964-3d847d9e32c2",
+  "results": [
+    {
+      "id": "SEC-FINAL-001",
+      "description": "ii_capital_gains_computations: valid-FK, non-colliding INSERT by owning user REJECTED (RLS, not FK)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_capital_gains_computations\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-002",
+      "description": "ii_tax_lot_consumptions: valid-FK, non-colliding INSERT by owning user REJECTED (RLS, not FK)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_tax_lot_consumptions\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-003",
+      "description": "ii_tax_lots: valid-FK new-lot INSERT by owning user REJECTED (RLS, not FK)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_tax_lots\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-004",
+      "description": "ii_scheme_tax_classification: valid-FK INSERT (unclassified real instrument) REJECTED (RLS, not unique-constraint)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_scheme_tax_classification\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-005",
+      "description": "ii_exit_load_schedules: valid-FK INSERT (unscheduled real instrument) REJECTED (RLS, not unique-constraint)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_exit_load_schedules\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-006",
+      "description": "ii_tax_rule_versions: valid-FK INSERT (novel version string, real country_code) REJECTED (RLS, not any constraint)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_tax_rule_versions\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-007",
+      "description": "Owning user cannot PATCH an existing ii_capital_gains_computations row",
+      "status": "PASS",
+      "detail": "PATCH HTTP 204; value before=5000 after=5000"
+    },
+    {
+      "id": "SEC-FINAL-008",
+      "description": "Owning user cannot DELETE an existing ii_capital_gains_computations row",
+      "status": "PASS",
+      "detail": "DELETE HTTP 200; row present after=true"
+    },
+    {
+      "id": "SEC-FINAL-009",
+      "description": "User B cannot SELECT user A's ii_capital_gains_computations row",
+      "status": "PASS",
+      "detail": "HTTP 200, rows=0"
+    },
+    {
+      "id": "SEC-FINAL-010",
+      "description": "User B cannot INSERT a row attributed to user A's user_id",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_capital_gains_computations\\\"\"}"
+    },
+    {
+      "id": "SEC-FINAL-011",
+      "description": "User B cannot PATCH user A's row",
+      "status": "PASS",
+      "detail": "HTTP 204; value after=5000"
+    },
+    {
+      "id": "SEC-FINAL-012",
+      "description": "User B cannot DELETE user A's row",
+      "status": "PASS",
+      "detail": "HTTP 200; row present after=true"
+    }
+  ]
+}
