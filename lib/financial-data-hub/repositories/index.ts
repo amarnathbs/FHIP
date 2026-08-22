@@ -12,6 +12,7 @@ import type {
   FdhCategory,
   FdhClassificationHistory,
   FdhClassificationRule,
+  FdhCsvMappingTemplate,
   FdhDataProvenance,
   FdhDataQualityResult,
   FdhDuplicateCandidate,
@@ -31,6 +32,7 @@ import type {
   FdhSubcategory,
   FdhTransaction,
   FdhTransactionAllocation,
+  FdhTransactionCorrection,
   FdhTransactionLink,
   FdhUserClassificationRule,
 } from '../domain/types';
@@ -185,6 +187,17 @@ export const evidenceLinksRepository = makeUserOwnedRepository<
   FdhEvidenceLink,
   FdhEvidenceLinkInput
 >('fdh_evidence_links');
+
+// --- R7 — Bank CSV Engine (migration 0064) -----------------------------------
+export const csvMappingTemplatesRepository = makeUserOwnedRepository<
+  FdhCsvMappingTemplate,
+  Omit<FdhCsvMappingTemplate, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+>('fdh_csv_mapping_templates');
+
+export const transactionCorrectionsRepository = makeUserOwnedRepository<
+  FdhTransactionCorrection,
+  Omit<FdhTransactionCorrection, 'id' | 'user_id' | 'created_at'>
+>('fdh_transaction_corrections');
 
 // --- Master data (read-only) ------------------------------------------------
 export const institutionsRepository = makeMasterDataRepository<FdhFinancialInstitution>(

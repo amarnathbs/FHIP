@@ -99,13 +99,24 @@ export type FdhUserOwnedTable = (typeof FDH_USER_OWNED_TABLES)[number];
 export const FDH3_USER_OWNED_TABLES_ADDED = ['fdh_upload_sessions'] as const;
 export const FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES = ['fdh_document_audit_events'] as const;
 
-/** The complete current user-owned table set (FDH-1 + FDH-3). Used by the
- * repository layer and by any FDH-3-scoped test; NOT used by the frozen
- * FDH-1/FDH-2 schema-contract tests above. */
+/**
+ * New user-scoped tables R7 creates (migration 0064). Both are ordinary
+ * owner-scoped `for all` tables — no service-role carve-out needed, unlike
+ * FDH-3's audit/session tables.
+ */
+export const R7_USER_OWNED_TABLES_ADDED = [
+  'fdh_csv_mapping_templates',
+  'fdh_transaction_corrections',
+] as const;
+
+/** The complete current user-owned table set (FDH-1 + FDH-3 + R7). Used by
+ * the repository layer and by any FDH-3/R7-scoped test; NOT used by the
+ * frozen FDH-1/FDH-2 schema-contract tests above. */
 export const FDH_ALL_USER_OWNED_TABLES = [
   ...FDH_USER_OWNED_TABLES,
   ...FDH3_USER_OWNED_TABLES_ADDED,
   ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
+  ...R7_USER_OWNED_TABLES_ADDED,
 ] as const;
 export type FdhAllUserOwnedTable = (typeof FDH_ALL_USER_OWNED_TABLES)[number];
 
@@ -121,6 +132,7 @@ export const FDH_TABLES = [
   ...FDH_ADMIN_ONLY_TABLES,
   ...FDH3_USER_OWNED_TABLES_ADDED,
   ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
+  ...R7_USER_OWNED_TABLES_ADDED,
 ] as const;
 export type FdhTable = (typeof FDH_TABLES)[number];
 

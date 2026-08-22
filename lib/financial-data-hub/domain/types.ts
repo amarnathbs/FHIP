@@ -63,6 +63,13 @@ import type {
   FdhDocumentAuditEventType,
   FdhUploadSessionFailureCode,
   FdhUploadSessionStatus,
+  FdhCsvDetectionStatus,
+  FdhCsvCertificationStatus,
+  FdhTransactionDedupStatus,
+  FdhTransactionTypeHint,
+  FdhCsvAmountConvention,
+  FdhCsvMappingTemplateStatus,
+  FdhTransactionCorrectionField,
 } from '../constants/enums';
 
 /** ISO-4217. The platform currently supports AUD/INR/USD (`currencies`). */
@@ -314,6 +321,22 @@ export interface FdhStatementUpload extends FdhOwnership {
   /** Soft duplicate-document pointer — see migration 0058's "DUPLICATE
    * DETECTION" note for why this replaced a hard uniqueness constraint. */
   duplicate_of_document_id: string | null;
+
+  // --- R7 (migration 0064) ---------------------------------------------
+  delimiter_detected: string | null;
+  encoding_detected: string | null;
+  header_row_index: number | null;
+  detection_status: FdhCsvDetectionStatus | null;
+  detection_confidence: UnitInterval | null;
+  detection_evidence: Record<string, unknown> | null;
+  mapping_template_id: string | null;
+  certification_status: FdhCsvCertificationStatus | null;
+  declared_row_count: number | null;
+  parsed_row_count: number | null;
+  certified_row_count: number | null;
+  duplicate_row_count: number;
+  adapter_key: string | null;
+  adapter_version: string | null;
 }
 
 /**
@@ -424,6 +447,20 @@ export interface FdhTransaction extends FdhOwnership {
 
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
+
+  // --- R7 (migration 0064) ---------------------------------------------
+  /** Layer-2 dedup: stable fingerprint of the exact source row. */
+  source_row_hash: string | null;
+  /** Layer-3 dedup: economic identity fingerprint. Excludes import batch. */
+  economic_fingerprint: string | null;
+  economic_fingerprint_version: string | null;
+  dedup_status: FdhTransactionDedupStatus;
+  /** Row-level running balance, when the source provides one. */
+  balance_after: number | null;
+  /** Structural, non-authoritative type hint. Never a final category. */
+  transaction_type_hint: FdhTransactionTypeHint;
+  parser_version_id: string | null;
+  mapping_template_id: string | null;
 }
 
 export interface FdhTransactionAllocation {
@@ -613,5 +650,58 @@ export interface FdhEvidenceLink {
   evidence_transaction_id: string | null;
   evidence_weight: UnitInterval | null;
   note_sanitised: string | null;
+  created_at: IsoTimestamp;
+}
+
+// ---------------------------------------------------------------------------
+// R7 — Bank CSV Engine (migration 0064)
+// ---------------------------------------------------------------------------
+
+/** A confirmed generic-CSV column mapping (spec section 22-23). */
+export interface FdhCsvMappingTemplate {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  institution_id: string | null;
+  source_fingerprint: string;
+  country_code: FdhCountryCode | null;
+  version: number;
+  status: FdhCsvMappingTemplateStatus;
+  amount_convention: FdhCsvAmountConvention;
+  date_format: string;
+  delimiter: string;
+  column_mapping: FdhCsvColumnMapping;
+  created_at: IsoTimestamp;
+  updated_at: IsoTimestamp;
+}
+
+/** Source column header (or index-as-string fallback) for each canonical
+ * field, or null when the source has no such column. */
+export interface FdhCsvColumnMapping {
+  transaction_date: string;
+  posting_date?: string | null;
+  value_date?: string | null;
+  description: string;
+  amount?: string | null;
+  debit?: string | null;
+  credit?: string | null;
+  dr_cr_indicator?: string | null;
+  balance?: string | null;
+  reference?: string | null;
+  currency?: string | null;
+}
+
+/** A layered user correction over a normalised transaction field (spec
+ * section 47). The raw source value is never overwritten; this is an
+ * additional fact layered on top. */
+export interface FdhTransactionCorrection {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+  field_name: FdhTransactionCorrectionField;
+  previous_value: unknown;
+  corrected_value: unknown;
+  reason: string | null;
+  corrected_at: IsoTimestamp;
   created_at: IsoTimestamp;
 }
