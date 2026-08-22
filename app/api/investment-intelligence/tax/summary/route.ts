@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireUser, ok, bad } from '@/lib/api';
-import { loadTaxDataset, persistCapitalGainsComputations } from '@/lib/services/investment-intelligence/taxRepository';
+import { loadTaxDataset, persistTaxLots, persistTaxLotConsumptions, persistCapitalGainsComputations, loadTaxProfile, toTaxProfileInput } from '@/lib/services/investment-intelligence/taxRepository';
 import { runTaxSimulation } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
+import type { TaxpayerType } from '@/lib/engines/investment-intelligence/tax/taxProfile';
+
+const VALID_TAXPAYER_TYPES = new Set(['RESIDENT_INDIVIDUAL', 'RESIDENT_HUF', 'NON_RESIDENT_INDIVIDUAL']);
 
 // Investment Intelligence R6-P1 — India Tax & Cost Intelligence summary for
 // the authenticated user.
@@ -33,6 +36,17 @@ export async function GET(request: Request) {
     return bad('Invalid date parameter: expected YYYY-MM-DD.');
   }
 
+  // R6-FINAL (Sections 20-23): explicit, EXPLICIT-ONLY tax-profile
+  // resolution. Precedence: an explicit per-request query override (used by
+  // the LIVE-R6-011/012 certification scenarios, and by any caller while
+  // migration 0060's persistence is pending) wins over a persisted profile,
+  // which wins over "no profile" (UNKNOWN_PROFILE, never assumed resident).
+  // Never inferred from any other field — see taxProfile.ts's header.
+  const overrideTaxpayerType = url.searchParams.get('taxpayerType');
+  if (overrideTaxpayerType && !VALID_TAXPAYER_TYPES.has(overrideTaxpayerType)) {
+    return bad('Invalid taxpayerType override: must be one of RESIDENT_INDIVIDUAL, RESIDENT_HUF, NON_RESIDENT_INDIVIDUAL.');
+  }
+
   try {
     const supabase = await createClient();
     const { dataset, warnings, empty } = await loadTaxDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
@@ -56,11 +70,27 @@ export async function GET(request: Request) {
       });
     }
 
-    // Residency: this session found no confirmed household-profile
-    // residency field to read from — see taxRepository.ts / residency.ts
-    // header comments and the R6-P1 completion report's "known limitations"
-    // section. Passing an empty profile means checkResidency() fails safe:
+    // R6-FINAL: resolve the explicit tax profile — override param first,
+    // else a persisted ii_tax_profiles row (once migration 0060 is applied;
+    // gracefully absent until then), else "no profile" (UNKNOWN_PROFILE).
+    const { profile: persistedProfile } = await loadTaxProfile(supabase, user.id);
+    const taxProfile = overrideTaxpayerType
+      ? { taxpayerType: overrideTaxpayerType as TaxpayerType, taxYear: url.searchParams.get('taxYear') }
+      : toTaxProfileInput(persistedProfile);
+
+    // Residency: derived from the SAME explicit taxProfile (never any other
+    // field) — a NON_RESIDENT_INDIVIDUAL/NON_RESIDENT profile flows straight
+    // into checkResidency() so NRI_SCOPE_DISCLAIMER attaches consistently
+    // with taxpayerContext.estimateBasis === 'INDIA_DOMESTIC_LAW_ESTIMATE'.
+    // No profile at all still fails safe exactly as before this dispatch:
     // status 'unknown', nriRulesMayApply true, NRI_SCOPE_DISCLAIMER shown.
+    const residencyProfile =
+      taxProfile.taxpayerType === 'NON_RESIDENT_INDIVIDUAL'
+        ? { residencyStatus: 'nri' as const }
+        : taxProfile.taxpayerType === 'RESIDENT_INDIVIDUAL' || taxProfile.taxpayerType === 'RESIDENT_HUF'
+          ? { residencyStatus: 'resident' as const }
+          : {};
+
     const result = runTaxSimulation({
       acquisitions,
       disposals,
@@ -68,9 +98,15 @@ export async function GET(request: Request) {
       fmv31Jan2018ByInstrument: dataset.fmv31Jan2018ByInstrument,
       salePricePerUnitByDisposal: dataset.salePricePerUnitByDisposal,
       exitLoadSchedules: dataset.exitLoadSchedules,
-      residencyProfile: {},
+      residencyProfile,
+      taxProfile,
     });
 
+    // Lots must be persisted first — ii_capital_gains_computations.lot_id
+    // is a not-null FK into ii_tax_lots (see persistTaxLots's header for the
+    // defect this fixes).
+    const lotsPersistence = await persistTaxLots(user.id, result.lots, dataset.accountIdByTransactionId);
+    const consumptionsPersistence = await persistTaxLotConsumptions(user.id, result.disposalResults);
     const persistence = await persistCapitalGainsComputations(user.id, result.disposalResults, result.exitLoadResults);
 
     return ok({
@@ -79,9 +115,16 @@ export async function GET(request: Request) {
       disclaimer: result.disclaimer,
       residencyNote: result.residencyNote ?? null,
       ruleVersionNote: result.ruleVersionNote ?? null,
+      taxpayerContext: result.taxpayerContext,
+      taxProfileSource: overrideTaxpayerType ? 'request_override' : persistedProfile ? 'persisted_profile' : 'none',
       engineVersion: result.engineVersion,
       asOfDate: dataset.asOfDate,
-      warnings: persistence.error ? [...warnings, { scope: 'persistence', detail: `Results could not be stored (${persistence.error}); the figures shown were recomputed from certified inputs.` }] : warnings,
+      warnings: [
+        ...warnings,
+        ...(lotsPersistence.error ? [{ scope: 'lots_persistence', detail: `Tax lots could not be stored (${lotsPersistence.error}); the figures shown were recomputed from certified inputs.` }] : []),
+        ...(consumptionsPersistence.error ? [{ scope: 'consumptions_persistence', detail: `Lot consumptions could not be stored (${consumptionsPersistence.error}); the figures shown were recomputed from certified inputs.` }] : []),
+        ...(persistence.error ? [{ scope: 'persistence', detail: `Results could not be stored (${persistence.error}); the figures shown were recomputed from certified inputs.` }] : []),
+      ],
       taxYearAggregation: result.taxYearAggregation,
       disposalResults: result.disposalResults.map((d) => ({
         instrumentId: d.instrumentKey,

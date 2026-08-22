@@ -297,6 +297,7 @@ describe('II R6-P1 Independent Certification (132 cases: 120 original + 12 R6-FI
       ruleVersionPlaceholder: false,
       saleValue: 0,
       costBasisUsed: 0,
+      costBasisPreGrandfathering: 0,
       taxableGain: d.taxableGain,
       grandfathering: null,
       note: '',

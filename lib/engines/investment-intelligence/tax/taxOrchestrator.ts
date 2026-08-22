@@ -11,6 +11,7 @@ import { aggregateTaxYear, type TaxYearAggregationResult } from './taxYearAggreg
 import { computeExitLoadForConsumptions, type ExitLoadSchedule, type LotExitLoadResult } from './exitLoad';
 import type { SchemeClassificationResult } from './schemeClassification';
 import { checkResidency, type ResidencyCheckResult, type ResidencyProfileInput } from './residency';
+import { resolveTaxpayerContext, type TaxProfileInput, type TaxpayerContextResult } from './taxProfile';
 import { withTaxDisclaimer, type Disclaimed } from './disclaimer';
 import { TAX_ENGINE_VERSION } from './taxVersioning';
 import type { TaxRuleVersion } from './ruleVersions';
@@ -29,6 +30,13 @@ export interface TaxSimulationInputs {
   salePricePerUnitByDisposal: ReadonlyMap<string, number>;
   exitLoadSchedules: readonly ExitLoadSchedule[];
   residencyProfile: ResidencyProfileInput;
+  /** R6-FINAL (Sections 20-22): explicit taxpayer-type/residency profile,
+   * supplied ONLY when a caller has an actual deliberate user input to pass
+   * — never inferred. Optional and additive: omitting it preserves every
+   * pre-existing caller's exact behaviour (falls back to the UNKNOWN_PROFILE
+   * branch, same as before this field existed). Does not change any
+   * computed rupee figure — see taxProfile.ts's header for why. */
+  taxProfile?: TaxProfileInput;
   ruleVersions?: readonly TaxRuleVersion[];
 }
 
@@ -40,6 +48,7 @@ export interface TaxSimulationResult {
   taxYearAggregation: TaxYearAggregationResult;
   exitLoadResults: LotExitLoadResult[];
   residency: ResidencyCheckResult;
+  taxpayerContext: TaxpayerContextResult;
 }
 
 export type TaxSimulationOutput = TaxSimulationResult & Disclaimed & { residencyNote?: string; ruleVersionNote?: string };
@@ -53,6 +62,7 @@ export function runTaxSimulation(inputs: TaxSimulationInputs): TaxSimulationOutp
     salePricePerUnitByDisposal,
     exitLoadSchedules,
     residencyProfile,
+    taxProfile,
     ruleVersions,
   } = inputs;
 
@@ -112,6 +122,7 @@ export function runTaxSimulation(inputs: TaxSimulationInputs): TaxSimulationOutp
 
   const taxYearAggregation = aggregateTaxYear(disposalResults, ruleVersions);
   const residency = checkResidency(residencyProfile);
+  const taxpayerContext = resolveTaxpayerContext(taxProfile ?? {});
 
   const result: TaxSimulationResult = {
     classification: 'SIMULATION',
@@ -121,6 +132,7 @@ export function runTaxSimulation(inputs: TaxSimulationInputs): TaxSimulationOutp
     taxYearAggregation,
     exitLoadResults,
     residency,
+    taxpayerContext,
   };
 
   const placeholderUsed = disposalResults.some((d) => d.ruleVersionPlaceholder);

@@ -29,15 +29,17 @@
 // retirement_accounts, income, expenses, liabilities, or any R3 publication
 // table. Tax simulation cannot change net worth.
 
+import { createHash } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from './pagination';
-import type { AcquisitionEvent, DisposalEvent, AcquisitionKind } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
+import type { AcquisitionEvent, DisposalEvent, AcquisitionKind, TaxLot } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
 import type { SchemeClassificationResult } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
 import type { ExitLoadSchedule } from '@/lib/engines/investment-intelligence/tax/exitLoad';
 import type { DisposalTaxResult } from '@/lib/engines/investment-intelligence/tax/capitalGainsEngine';
 import type { LotExitLoadResult } from '@/lib/engines/investment-intelligence/tax/exitLoad';
 import { TAX_ENGINE_VERSION } from '@/lib/engines/investment-intelligence/tax/taxVersioning';
+import type { TaxProfileInput, TaxpayerType, TaxResidencyStatus } from '@/lib/engines/investment-intelligence/tax/taxProfile';
 
 export interface LoadWarning {
   scope: string;
@@ -64,6 +66,13 @@ export interface TaxDataset {
   fmv31Jan2018ByInstrument: Map<string, number | null>;
   exitLoadSchedules: ExitLoadSchedule[];
   instrumentNames: Map<string, string>;
+  /** R6-FINAL fix (see persistTaxLots below): account_id per acquisition
+   * transaction id, needed to satisfy ii_tax_lots' not-null account_id FK
+   * when persisting lots. The pure engine's AcquisitionEvent/TaxLot types
+   * deliberately do not carry account_id (no engine change needed for this
+   * fix), so this side map is threaded through from the raw transaction
+   * read instead. */
+  accountIdByTransactionId: Map<string, string>;
 }
 
 /** true iff a Supabase error looks like "relation does not exist" — i.e. the
@@ -104,6 +113,7 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
   const acquisitionsByInstrument = new Map<string, AcquisitionEvent[]>();
   const disposalsByInstrument = new Map<string, DisposalEvent[]>();
   const salePricePerUnitByDisposal = new Map<string, number>();
+  const accountIdByTransactionId = new Map<string, string>(usable.map((r) => [r.id, r.account_id]));
 
   for (const r of usable) {
     const units = Number(r.units);
@@ -307,10 +317,129 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
       fmv31Jan2018ByInstrument,
       exitLoadSchedules,
       instrumentNames,
+      accountIdByTransactionId,
     },
     warnings,
     empty: false,
   };
+}
+
+// ---------------------------------------------------------------------------
+// R6-FINAL live-DEV fix (found during this dispatch's LIVE-R6-001 case):
+// `ii_capital_gains_computations.lot_id` carries a NOT-NULL foreign key to
+// `ii_tax_lots(id)` (migration 0058), but NOTHING in R6-P1 ever wrote a row
+// to `ii_tax_lots` — lots are computed purely in-memory by taxLotEngine.ts
+// and never persisted. The original code passed the RAW acquisition
+// transaction id (stripped of the "lot:" prefix) as `lot_id`, which is
+// never a real `ii_tax_lots.id` — so EVERY real disposal's persistence
+// attempt failed the FK constraint, silently (the try/catch below swallowed
+// it into a non-fatal `warnings` entry), meaning ii_capital_gains_computations
+// has never actually held a row in any environment despite the feature
+// "working" (recomputed fresh every request). Confirmed live: DEV showed
+// `violates foreign key constraint "ii_capital_gains_computations_lot_id_fkey"`
+// on every real tax/summary call before this fix.
+//
+// FIX: actually populate ii_tax_lots (the table's own schema — user_id,
+// account_id, instrument_id, opening_transaction_id, status,
+// acquisition_date, units_acquired/remaining, cost_per_unit — matches
+// TaxLot exactly, confirming this was the intended design, just never
+// wired up) using a DETERMINISTIC id derived from the lot's own stable
+// `lotId` (`lot:${sourceEventId}`, already unique per acquisition
+// transaction). Determinism — not `gen_random_uuid()` — is deliberate: it
+// makes lot persistence naturally idempotent (Section 43) without needing
+// a new unique index this session cannot add via DDL, and it is what lets
+// `persistCapitalGainsComputations` below derive the SAME id independently
+// to satisfy the FK, without a redundant lookup round-trip.
+// ---------------------------------------------------------------------------
+
+const TAX_LOT_ID_NAMESPACE = '6f1e9d2a-2c3b-4a10-9e77-9b6f0b6f5a11'; // fixed, arbitrary namespace for this app's deterministic tax-lot uuids
+
+/** RFC 4122 UUID v5 (SHA-1-based, deterministic) — no external dependency. */
+export function deterministicLotId(lotKey: string): string {
+  const namespaceBytes = Buffer.from(TAX_LOT_ID_NAMESPACE.replace(/-/g, ''), 'hex');
+  const hash = createHash('sha1').update(namespaceBytes).update(lotKey, 'utf8').digest();
+  const bytes = Buffer.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Upsert the current lot state (from `runTaxSimulation`'s `lots` output)
+ * into `ii_tax_lots`, so `ii_capital_gains_computations.lot_id` has a real
+ * row to reference. Idempotent: re-running against unchanged inputs
+ * produces the SAME row ids with the SAME field values (Section 43) —
+ * `deterministicLotId` guarantees this without needing a DB-level unique
+ * constraint this session cannot add.
+ */
+export async function persistTaxLots(userId: string, lots: readonly TaxLot[], accountIdByTransactionId: ReadonlyMap<string, string>): Promise<{ persisted: number; error: string | null }> {
+  if (lots.length === 0) return { persisted: 0, error: null };
+  try {
+    const admin = createAdminClient();
+    const payload = lots.map((l) => {
+      const sourceEventId = l.lotId.startsWith('lot:') ? l.lotId.slice(4) : l.lotId;
+      const accountId = accountIdByTransactionId.get(sourceEventId);
+      return {
+        id: deterministicLotId(l.lotId),
+        user_id: userId,
+        account_id: accountId ?? null,
+        instrument_id: l.instrumentKey,
+        opening_transaction_id: sourceEventId,
+        status: l.unitsRemaining <= 1e-6 ? 'closed' : l.unitsRemaining < l.unitsAcquired ? 'partially_closed' : 'open',
+        acquisition_date: l.acquisitionDate,
+        units_acquired: l.unitsAcquired,
+        units_remaining: l.unitsRemaining,
+        cost_per_unit: l.costPerUnit,
+        closed_at: l.unitsRemaining <= 1e-6 ? new Date().toISOString() : null,
+      };
+    });
+    const missingAccount = payload.filter((p) => !p.account_id);
+    if (missingAccount.length > 0) {
+      return { persisted: 0, error: `${missingAccount.length} lot(s) had no resolvable account_id — not persisted (ii_tax_lots.account_id is NOT NULL).` };
+    }
+    const { error } = await admin.from('ii_tax_lots').upsert(payload, { onConflict: 'id', ignoreDuplicates: false });
+    if (error) return { persisted: 0, error: error.message };
+    return { persisted: payload.length, error: null };
+  } catch (e) {
+    return { persisted: 0, error: e instanceof Error ? e.message : 'Unknown error persisting tax lots.' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// R6-FINAL live-DEV fix (found while building the Section 30 DB-inspection
+// checks): `ii_tax_lot_consumptions` (migration 0058's own FIFO consumption
+// ledger table — "which lot(s) a redemption consumed, how many units from
+// each") was declared in the schema and mentioned in this file's OWN header
+// comment, but NOTHING ever wrote to it — same defect class, same root
+// cause (schema built ahead of the write path, wiring never finished) as
+// the ii_tax_lots gap fixed above. Fixed the same way: derive the payload
+// straight from the certified DisposalTaxResult[] (which now carries
+// `costBasisPreGrandfathering` — see capitalGainsEngine.ts), using the SAME
+// deterministic lot_id so the FK resolves.
+// ---------------------------------------------------------------------------
+export async function persistTaxLotConsumptions(userId: string, disposalResults: DisposalTaxResult[]): Promise<{ persisted: number; error: string | null }> {
+  if (disposalResults.length === 0) return { persisted: 0, error: null };
+  try {
+    const admin = createAdminClient();
+    const payload = disposalResults
+      .filter((d) => d.classification !== 'unresolved') // unresolved disposals never opened a real lot_id-backed consumption record
+      .map((d) => ({
+        user_id: userId,
+        disposal_transaction_id: d.disposalEventId,
+        lot_id: deterministicLotId(d.lotId),
+        units_consumed: d.unitsConsumed,
+        cost_basis_pre_grandfathering: d.costBasisPreGrandfathering,
+        sale_value_apportioned: d.saleValue,
+        engine_version: TAX_ENGINE_VERSION,
+      }));
+    if (payload.length === 0) return { persisted: 0, error: null };
+    const { error } = await admin.from('ii_tax_lot_consumptions').upsert(payload, { onConflict: 'disposal_transaction_id,lot_id', ignoreDuplicates: false });
+    if (error) return { persisted: 0, error: error.message };
+    return { persisted: payload.length, error: null };
+  } catch (e) {
+    return { persisted: 0, error: e instanceof Error ? e.message : 'Unknown error persisting tax lot consumptions.' };
+  }
 }
 
 /**
@@ -319,6 +448,10 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
  * (never accepted from a client payload) — mirrors persistR5Results's
  * anti-forgery convention. A persistence failure never blocks returning a
  * correct, freshly-computed answer to the caller.
+ *
+ * CALL ORDER: `persistTaxLots` must be called first (and awaited) so the
+ * `lot_id` FK this function writes actually resolves — see that function's
+ * header for the full defect history.
  */
 export async function persistCapitalGainsComputations(
   userId: string,
@@ -335,7 +468,7 @@ export async function persistCapitalGainsComputations(
       return {
         user_id: userId,
         disposal_transaction_id: d.disposalEventId,
-        lot_id: d.lotId.startsWith('lot:') ? d.lotId.slice(4) : d.lotId,
+        lot_id: deterministicLotId(d.lotId),
         instrument_id: d.instrumentKey,
         classification: d.classification,
         gain_type: d.gainType,
@@ -360,4 +493,78 @@ export async function persistCapitalGainsComputations(
   } catch (e) {
     return { persisted: 0, error: e instanceof Error ? e.message : 'Unknown persistence error' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// R6-FINAL (Sections 20-23) — explicit tax-profile persistence.
+//
+// GRACEFUL DEGRADATION: migration 0060's ii_tax_profiles table requires DDL
+// this session cannot execute against DEV (see that migration's own header)
+// — it is NOT applied as of this dispatch. Reads degrade to "no profile on
+// record" (indistinguishable from a genuine, valid "not declared yet"
+// state — never a crash); writes return an explicit, honest "not available
+// in this environment yet" error rather than silently no-op'ing or throwing
+// an opaque 500.
+// ---------------------------------------------------------------------------
+
+export interface TaxProfileRecord {
+  taxpayerType: TaxpayerType;
+  taxResidencyStatus: TaxResidencyStatus & ('RESIDENT' | 'NON_RESIDENT');
+  taxYear: string | null;
+  updatedAt: string;
+}
+
+export async function loadTaxProfile(supabase: SupabaseClient, userId: string): Promise<{ profile: TaxProfileRecord | null; available: boolean }> {
+  const { data, error } = await supabase
+    .from('ii_tax_profiles')
+    .select('taxpayer_type, tax_residency_status, tax_year, updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTableError(error)) return { profile: null, available: false };
+    throw error;
+  }
+  if (!data) return { profile: null, available: true };
+  return {
+    available: true,
+    profile: {
+      taxpayerType: data.taxpayer_type as TaxpayerType,
+      taxResidencyStatus: data.tax_residency_status as 'RESIDENT' | 'NON_RESIDENT',
+      taxYear: data.tax_year,
+      updatedAt: data.updated_at,
+    },
+  };
+}
+
+export async function saveTaxProfile(userId: string, input: TaxProfileInput): Promise<{ saved: boolean; error: string | null }> {
+  if (!input.taxpayerType) return { saved: false, error: 'taxpayerType is required.' };
+  const residencyStatus: 'RESIDENT' | 'NON_RESIDENT' = input.taxpayerType === 'NON_RESIDENT_INDIVIDUAL' ? 'NON_RESIDENT' : 'RESIDENT';
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from('ii_tax_profiles')
+      .upsert(
+        { user_id: userId, taxpayer_type: input.taxpayerType, tax_residency_status: residencyStatus, tax_year: input.taxYear ?? null, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+    if (error) {
+      if (isMissingTableError(error)) return { saved: false, error: 'Tax-profile persistence is not yet available in this environment (migration 0060 pending). Your profile was not saved — pass it explicitly with each request in the meantime.' };
+      return { saved: false, error: error.message };
+    }
+    return { saved: true, error: null };
+  } catch (e) {
+    return { saved: false, error: e instanceof Error ? e.message : 'Unknown error saving tax profile.' };
+  }
+}
+
+/** Convert a persisted/explicit profile record into the engine's
+ * `TaxProfileInput` shape. Used identically whether the profile came from
+ * the DB (once 0060 lands) or from an explicit per-request override. */
+export function toTaxProfileInput(record: { taxpayerType?: string | null; taxResidencyStatus?: string | null; taxYear?: string | null } | null): TaxProfileInput {
+  if (!record) return {};
+  return {
+    taxpayerType: (record.taxpayerType as TaxpayerType) ?? null,
+    taxResidencyStatus: (record.taxResidencyStatus as TaxResidencyStatus) ?? null,
+    taxYear: record.taxYear ?? null,
+  };
 }

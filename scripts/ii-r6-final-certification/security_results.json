@@ -1,0 +1,133 @@
+{
+  "ranAt": "2026-08-22T02:50:10.882Z",
+  "tenantA": "922d1025-a658-4d23-8729-fee0d9f75001",
+  "tenantB": "5d112ccb-7cca-4688-9cb1-a52ba0c5daa9",
+  "results": [
+    {
+      "id": "SEC-R6-001",
+      "description": "User B cannot READ user A's ii_capital_gains_computations row (direct PostgREST)",
+      "status": "PASS",
+      "detail": "HTTP 200, rows=0"
+    },
+    {
+      "id": "SEC-R6-002",
+      "description": "User B cannot READ user A's ii_tax_lots row (direct PostgREST)",
+      "status": "PASS",
+      "detail": "HTTP 200, rows=0"
+    },
+    {
+      "id": "SEC-R6-003",
+      "description": "User B cannot READ user A's ii_tax_lot_consumptions row (direct PostgREST)",
+      "status": "PASS",
+      "detail": "HTTP 200, rows=0"
+    },
+    {
+      "id": "SEC-R6-004",
+      "description": "User B's own tax/summary call returns EMPTY (no bleed-through of A's disposals) via the real app route",
+      "status": "PASS",
+      "detail": "B disposalResults count=0, HTTP 200"
+    },
+    {
+      "id": "SEC-R6-005",
+      "description": "User A CAN read their own ii_capital_gains_computations row (positive control)",
+      "status": "PASS",
+      "detail": "HTTP 200, rows=1"
+    },
+    {
+      "id": "SEC-R6-006",
+      "description": "User A's own tax/summary call DOES return their real disposal data (positive control)",
+      "status": "PASS",
+      "detail": "A disposalResults count=12"
+    },
+    {
+      "id": "SEC-R6-007",
+      "description": "User B cannot simulate a redemption against user A's instrument/holdings (no holdings of their own)",
+      "status": "PASS",
+      "detail": "HTTP 422: {\"error\":\"No investment transactions are available yet — nothing to simulate a redemption against.\"}"
+    },
+    {
+      "id": "SEC-R6-008",
+      "description": "User B's tax-profile PUT, even with a spoofed A user_id in the body, never writes a profile row attributed to A",
+      "status": "PASS",
+      "detail": "A profile rows found after B's spoofed PUT: {\"code\":\"PGRST205\",\"details\":null,\"hint\":null,\"message\":\"Could not find the table 'public.ii_tax_profiles' in the schema cache\"}"
+    },
+    {
+      "id": "SEC-R6-009",
+      "description": "Every R6 app route rejects/redirects an unauthenticated request",
+      "status": "PASS",
+      "detail": "/api/investment-intelligence/tax/summary: HTTP 401 | /api/investment-intelligence/tax/lots: HTTP 401 | /api/investment-intelligence/tax/profile: HTTP 401 | /api/investment-intelligence/tax/cost-intelligence: HTTP 401"
+    },
+    {
+      "id": "SEC-R6-010",
+      "description": "Blocked cross-tenant read's error/empty response body does not leak A's taxable_gain value",
+      "status": "PASS",
+      "detail": "response body: []"
+    },
+    {
+      "id": "SEC-R6-011 (HARD GATE)",
+      "description": "Authenticated user A CANNOT directly forge a new ii_tax_lots row via PostgREST (even for their own user_id — writes must go through the server-side engine only)",
+      "status": "PASS",
+      "detail": "HTTP 409: {\"code\":\"23503\",\"details\":\"Key is not present in table \\\"ii_transactions\\\".\",\"hint\":null,\"message\":\"insert or update on table \\\"ii_tax_lots\\\" violates foreign key constraint \\\"ii_tax_lots_opening_transaction_id_fkey\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-012 (HARD GATE)",
+      "description": "Authenticated user A CANNOT directly forge a ii_tax_lot_consumptions row via PostgREST",
+      "status": "PASS",
+      "detail": "HTTP 409: {\"code\":\"23503\",\"details\":\"Key is not present in table \\\"ii_transactions\\\".\",\"hint\":null,\"message\":\"insert or update on table \\\"ii_tax_lot_consumptions\\\" violates foreign key constraint \\\"ii_tax_lot_consumptions_disposal_transaction_id_fkey\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-013 (HARD GATE)",
+      "description": "Authenticated user A CANNOT directly forge/tamper a ii_capital_gains_computations row via PostgREST (e.g. inject a fake huge loss)",
+      "status": "PASS",
+      "detail": "HTTP 409: {\"code\":\"23503\",\"details\":\"Key is not present in table \\\"ii_transactions\\\".\",\"hint\":null,\"message\":\"insert or update on table \\\"ii_capital_gains_computations\\\" violates foreign key constraint \\\"ii_capital_gains_computations_disposal_transaction_id_fk"
+    },
+    {
+      "id": "SEC-R6-014 (HARD GATE)",
+      "description": "Authenticated user A CANNOT tamper (PATCH) their own EXISTING ii_capital_gains_computations row via PostgREST",
+      "status": "FAIL",
+      "detail": "PATCH HTTP 204; current value after attempt: -99999999"
+    },
+    {
+      "id": "SEC-R6-014B (HARD GATE)",
+      "description": "Authenticated user A CANNOT tamper (PATCH) their own EXISTING ii_tax_lots row's units_remaining via PostgREST",
+      "status": "FAIL",
+      "detail": "PATCH HTTP 204; current value after attempt: 999999"
+    },
+    {
+      "id": "SEC-R6-015 (HARD GATE)",
+      "description": "Authenticated user A CANNOT insert a forged ii_tax_rule_versions row",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_tax_rule_versions\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-016 (HARD GATE)",
+      "description": "Authenticated user A CANNOT insert/reclassify a ii_scheme_tax_classification row",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_scheme_tax_classification\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-017 (HARD GATE)",
+      "description": "Authenticated user A CANNOT tamper an EXISTING ii_scheme_tax_classification row (flip equity_oriented to debt_specified)",
+      "status": "PASS",
+      "detail": "PATCH HTTP 204; current classification: equity_oriented"
+    },
+    {
+      "id": "SEC-R6-018 (HARD GATE)",
+      "description": "Authenticated user A CANNOT insert a forged ii_exit_load_schedules row",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_exit_load_schedules\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-019 (HARD GATE)",
+      "description": "User B CANNOT insert a ii_capital_gains_computations row attributed to A's user_id (cross-tenant forgery)",
+      "status": "PASS",
+      "detail": "HTTP 403: {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_capital_gains_computations\\\"\"}"
+    },
+    {
+      "id": "SEC-R6-020 (HARD GATE)",
+      "description": "Authenticated user A CANNOT DELETE their own EXISTING ii_capital_gains_computations row via PostgREST",
+      "status": "FAIL",
+      "detail": "DELETE HTTP 204; row still present after attempt: false"
+    }
+  ]
+}

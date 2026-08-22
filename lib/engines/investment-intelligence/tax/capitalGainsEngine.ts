@@ -32,6 +32,16 @@ export interface DisposalTaxResult {
   ruleVersionPlaceholder: boolean;
   saleValue: number;
   costBasisUsed: number;
+  /** R6-FINAL addition: the RAW pre-grandfathering cost basis
+   * (unitsConsumed * lot costPerUnit), i.e. `costBasisUsed` before any
+   * Section 55(2)(ac) FMV step-up is applied. Equal to `costBasisUsed`
+   * whenever grandfathering does not apply (debt/specified, unresolved,
+   * short-term, or actual-cost-wins branches) — only diverges when
+   * `grandfathering.basisSource === 'fmv_grandfathered'`. Added so
+   * ii_tax_lot_consumptions (migration 0058's own schema — see
+   * taxRepository.ts's persistTaxLotConsumptions) has a genuine value for
+   * its `cost_basis_pre_grandfathering` column, not a recomputation. */
+  costBasisPreGrandfathering: number;
   taxableGain: number | null;
   grandfathering: GrandfatheringResult | null;
   note: string;
@@ -72,6 +82,7 @@ export function computeDisposalTax(inputs: ComputeDisposalTaxInputs): DisposalTa
       ruleVersionPlaceholder: false,
       saleValue,
       costBasisUsed: c.costBasis,
+      costBasisPreGrandfathering: c.costBasis,
       taxableGain: null,
       grandfathering: null,
       note: `Scheme tax classification is unresolved (${classification.basis}) — excluded from confident tax figures. ${classification.note}`,
@@ -99,6 +110,7 @@ export function computeDisposalTax(inputs: ComputeDisposalTaxInputs): DisposalTa
       ruleVersionPlaceholder: rules.placeholder,
       saleValue,
       costBasisUsed: c.costBasis,
+      costBasisPreGrandfathering: c.costBasis,
       taxableGain,
       grandfathering: null, // grandfathering never applies to debt/specified funds
       note: 'Debt/specified mutual fund — always short-term at slab rate regardless of holding period (Finance Act 2023 rule); no indexation, no LTCG treatment.',
@@ -147,6 +159,7 @@ export function computeDisposalTax(inputs: ComputeDisposalTaxInputs): DisposalTa
     ruleVersionPlaceholder: rules.placeholder,
     saleValue,
     costBasisUsed,
+    costBasisPreGrandfathering: c.costBasis,
     taxableGain,
     grandfathering,
     note: isEquityOriented

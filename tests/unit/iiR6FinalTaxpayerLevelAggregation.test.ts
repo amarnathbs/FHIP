@@ -35,6 +35,7 @@ function fakeDisposal(instrumentKey: string, disposalDate: string, taxableGain: 
     ruleVersionPlaceholder: false,
     saleValue: 0,
     costBasisUsed: 0,
+    costBasisPreGrandfathering: 0,
     taxableGain,
     grandfathering: null,
     note: '',
