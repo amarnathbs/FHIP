@@ -1,8 +1,13 @@
 -- Investment Intelligence R6-DEBTFIX (2026-08-22) — reference-data sync.
 --
+-- RENUMBERED 0062 -> 0063 (2026-08-23, FDH-3 + Investment Intelligence R6
+-- lineage reconciliation) — see the (now-)0059 file's header for the full
+-- reasoning. SQL content unchanged.
+--
 -- Pure DML (UPDATE against existing rows), no DDL. Forward-only, idempotent
 -- (each UPDATE is a full-value overwrite of `rule_definition`, safe to
--- rerun). Mirrors the SAME data-mirroring precedent as migration `0059`:
+-- rerun). Mirrors the SAME data-mirroring precedent as migration `0060`
+-- (originally `0059`):
 -- the live-DEV UPDATE happened first via the service-role key (this
 -- session has no DDL capability, but plain DML against already-existing
 -- tables/rows needs none), and this migration captures the identical

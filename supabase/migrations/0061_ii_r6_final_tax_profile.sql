@@ -1,11 +1,16 @@
 -- Investment Intelligence R6-FINAL — persisted explicit tax-profile input
 -- (spec Sections 20-23). Forward-only.
 --
+-- RENUMBERED 0060 -> 0061 (2026-08-23, FDH-3 + Investment Intelligence R6
+-- lineage reconciliation) — see the (now-)0059 file's header for the full
+-- reasoning. SQL content unchanged.
+--
 -- DDL STATUS AS OF THIS DISPATCH (2026-08-22): NOT YET APPLIED TO DEV. This
 -- session has no DDL capability against DEV (confirmed structurally, same
 -- limitation disclosed throughout this project's history — see e.g.
--- migration 0058's own header before it was applied out-of-band by the
--- orchestrating session). Unlike 0059 (pure DML into already-existing
+-- migration 0059 (originally 0058)'s own header before it was applied
+-- out-of-band by the orchestrating session). Unlike 0060 (originally 0059,
+-- pure DML into already-existing
 -- tables, which this session COULD and did apply directly via the
 -- service-role key), this migration CREATEs a new table, which genuinely
 -- requires DDL this session cannot execute.

@@ -1,6 +1,12 @@
 -- Investment Intelligence R6-FINAL — production reference-data seed
 -- (spec Sections 13, 16). Forward-only, idempotent (on conflict do nothing).
 --
+-- RENUMBERED 0059 -> 0060 (2026-08-23, FDH-3 + Investment Intelligence R6
+-- lineage reconciliation) — see 0059's own header for the full reasoning
+-- (this file's whole 5-migration chain shifted forward by one slot each
+-- after FDH-3's independent, unrelated 0058 collided with R6's original
+-- 0058). SQL content unchanged.
+--
 -- This migration captures, for reproducibility in a fresh environment, the
 -- SAME rows that scripts/ii_r6_final_reference_seed.mjs inserted directly
 -- into DEV during the R6-FINAL live-DEV certification pass (2026-08-22) via

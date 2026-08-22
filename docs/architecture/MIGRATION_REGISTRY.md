@@ -12,8 +12,8 @@ node scripts/check-migration-versions.mjs   # reports the next free version
 The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
 and fails the build if two active migrations ever share a version again.
 
-- **Next free version: `0058`**
-- Active migrations: 57 (`0001`-`0057`), one file per version
+- **Next free version: `0064`**
+- Active migrations: 63 (`0001`-`0063`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -190,23 +190,61 @@ next version is 0059.`
 No `drop table`, no `drop column`, no `delete from`, no destructive
 `update` — verified by `tests/unit/fdh3SchemaContract.test.ts`.
 
-**Governance note (collision risk carried forward honestly).** Several
-Investment Intelligence R6 branches independently allocated `0058` on their
-own unmerged branches (see `investment_intelligence_r6` memory). Since none
-of those branches has merged to `main`, and this FDH-3 branch was built
-fresh from `main` per its own explicit instruction, `0058` is genuinely free
-on this lineage today. Whichever of these branches merges to `main` first
-keeps `0058`; any other branch still carrying that number must re-run the
-migration collision guard and renumber forward at merge time, per the
-existing project convention (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`).
+**Governance note — collision happened exactly as anticipated, now resolved
+(2026-08-23).** This section originally predicted that unmerged Investment
+Intelligence R6 branches had independently allocated `0058` too. What
+actually happened during the FDH-3 + Investment Intelligence R6 lineage
+reconciliation: both versions of "0058" — this file and
+`0058_ii_r6_p1_tax_engine.sql` on `feature/investment-intelligence-r6-
+security-final` — had by then already been independently applied to the
+SAME shared DEV database, each under its own original filename, before
+either branch was merged with the other. Product Owner decision (explicit,
+reasoned): **FDH-3 keeps `0058`** — it was built directly from canonical
+`main`'s own certified chain through `0057`, giving it the stronger claim
+as the natural continuation of that lineage, whereas R6's branch had forked
+from an earlier ancestor of `main` that predates FDH-3's fork point.
+Investment Intelligence R6's entire displaced 5-migration chain (originally
+`0058`-`0062`) was shifted forward by one slot each, to `0059`-`0063` — see
+the Investment Intelligence R6 section below and
+`docs/database-reconciliation/0058_CANONICAL_LINEAGE_DECISION.md` for the
+full reasoning. This is the fifth occurrence of this collision class in
+this project (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`).
 
-**Status as of this dispatch: NOT yet applied to DEV or production.** The
-private storage bucket (`fdh-source-documents`) IS already live in DEV —
-created via the Storage Admin API
+**Status: applied to DEV (2026-08-23) and independently re-verified live**
+(see `financial_data_hub_fdh3` memory / `FDH3_COMPLETION_REPORT.md`). The
+private storage bucket (`fdh-source-documents`) was already live in DEV
+before this migration — created via the Storage Admin API
 (`scripts/fdh3_create_storage_bucket.mjs`), independently of the SQL
-migration — and its private/size-limited/MIME-restricted configuration and
-core object lifecycle (upload, signed-read, delete, verified-absent) have
-been certified live (`scripts/fdh3_dev_certification.mjs`, 11/11). The
-`storage.objects` SELECT policy, the two new tables and the two
-FDH1-F1 triggers all live inside `0058` and require the same manual
-Dashboard-SQL-editor application as every prior FDH migration.
+migration. Once this migration applied, the `storage.objects` SELECT
+policy, the two new tables, and the two FDH1-F1 triggers all went live and
+were re-verified against real DEV data: real cross-tenant storage read/
+delete attempts correctly blocked (404/403, ground-truth confirmed
+untouched), and a real cross-tenant `fdh_upload_sessions` insert correctly
+rejected by the FDH1-F1 trigger while the same-tenant case correctly
+succeeded.
+
+## Investment Intelligence R6 (migrations `0059`-`0063`, originally `0058`-`0062`)
+
+Displaced by the collision above and shifted forward by one slot each
+during the same reconciliation (2026-08-23). SQL content byte-identical to
+the original files in every case except the renumbering headers and a
+handful of internal prose cross-references between the five files
+themselves (updated for accuracy, not functionally load-bearing).
+
+| Current file | Originally | Purpose |
+| --- | --- | --- |
+| `0059_ii_r6_p1_tax_engine.sql` | `0058_ii_r6_p1_tax_engine.sql` | R6-P1 tax-lot/FIFO schema (4 tables + seed) |
+| `0060_ii_r6_final_reference_seed.sql` | `0059_ii_r6_final_reference_seed.sql` | R6-FINAL reference-data seed |
+| `0061_ii_r6_final_tax_profile.sql` | `0060_ii_r6_final_tax_profile.sql` | New `ii_tax_profiles` table |
+| `0062_ii_r6_final_rls_forgery_fix.sql` | `0061_ii_r6_final_rls_forgery_fix.sql` | Same-user UPDATE/DELETE forgery fix |
+| `0063_ii_r6_debt_fund_fix_reference_seed.sql` | `0062_ii_r6_debt_fund_fix_reference_seed.sql` | Debt-fund acquisition-date rule metadata sync |
+
+**Status: all five already applied to DEV under their original numbers**
+(confirmed independently live multiple times across this project's history
+under those original filenames — see `investment_intelligence_r6` memory).
+This renumbering is a pure repository-bookkeeping fix: DEV was never
+tracking a filename, only the SQL text it already ran, and that SQL is
+unchanged here. **No re-application to DEV is needed or intended for these
+five files** — they are already live under their effects, just now
+correctly numbered in the repository so a fresh clean-rebuild replay is
+deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).

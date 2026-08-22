@@ -5,13 +5,17 @@
 -- 'read own ...' ... for select using (auth.uid() = user_id)" — the fix for
 -- the identical defect class found in R4/R5).
 --
+-- RENUMBERED 0061 -> 0062 (2026-08-23, FDH-3 + Investment Intelligence R6
+-- lineage reconciliation) — see the (now-)0059 file's header for the full
+-- reasoning. SQL content unchanged.
+--
 -- ===========================================================================
 -- FINDING (2026-08-22, R6-FINAL live-DEV security harness,
 -- scripts/ii_r6_final_security.mjs): SAME-USER FORGERY — CONFIRMED, NOT
 -- HYPOTHETICAL.
 -- ===========================================================================
 -- `ii_capital_gains_computations`, `ii_tax_lot_consumptions` (both created
--- by THIS release's own migration 0058) and `ii_tax_lots` (pre-existing
+-- by THIS release's own migration 0059 (originally 0058)) and `ii_tax_lots` (pre-existing
 -- since R1's migration 0033, but only now made practically exploitable —
 -- previously near-empty, now actively populated with real financial state
 -- by this dispatch's own persistTaxLots()/persistTaxLotConsumptions() fix)
@@ -54,7 +58,7 @@
 --
 -- ===========================================================================
 -- APPLICATION STATUS: NOT YET APPLIED TO DEV as of this dispatch (same DDL
--- limitation as migration 0060 — this session cannot execute ALTER/DROP
+-- limitation as migration 0061 (originally 0060) — this session cannot execute ALTER/DROP
 -- POLICY against DEV). THE VULNERABILITY DESCRIBED ABOVE REMAINS LIVE IN
 -- DEV UNTIL A HUMAN APPLIES THIS MIGRATION. This is disclosed prominently,
 -- not softened, per the dispatch's own explicit instruction.

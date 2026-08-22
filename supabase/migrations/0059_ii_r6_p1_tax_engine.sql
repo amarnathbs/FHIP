@@ -1,6 +1,19 @@
 -- Investment Intelligence R6-P1 — India Tax & Cost Intelligence schema.
 -- Forward-only migration. Does NOT modify any already-applied migration.
 --
+-- RENUMBERED 0058 -> 0059 (2026-08-23, FDH-3 + Investment Intelligence R6
+-- lineage reconciliation): collided with FDH-3's independently-allocated
+-- `0058_fdh3_document_lifecycle_upload_storage.sql`. Product Owner decision
+-- kept FDH-3 at 0058 (direct continuation of canonical main's own certified
+-- chain); this file and R6's whole 0058-0062 chain shifted forward by one
+-- slot each (this file's OWN earlier 0045->0058 renumbering history, below,
+-- is unaffected -- read "0058" there as this file's number at that time).
+-- Internal comments elsewhere in this chain that say "migration 0058/0059/
+-- 0060/0061" mean this file / the next four in sequence, at whatever number
+-- they held at the time each comment was written -- all five shifted by the
+-- same +1 offset. See docs/database-reconciliation/0058_CANONICAL_LINEAGE_
+-- DECISION.md for the full reasoning. SQL content unchanged.
+--
 -- ===========================================================================
 -- MIGRATION NUMBERING CAVEAT — carried forward from 0044's header, RESOLVED
 -- ===========================================================================

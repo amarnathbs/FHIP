@@ -3,6 +3,24 @@
 -- session, private-storage handoff, document audit trail, and a focused
 -- tenant-referential-integrity hardening for the relationships FDH-3
 -- introduces or actively exercises for the first time.
+--
+-- COLLISION NOTE (2026-08-23, FDH-3 + Investment Intelligence R6 lineage
+-- reconciliation): this migration was independently allocated "0058" on
+-- `feature/financial-data-hub-fdh-3-document-lifecycle`, forked directly
+-- from canonical `origin/main` at `c868de6` (the certified chain through
+-- `0057`). Investment Intelligence R6's `feature/investment-intelligence-
+-- r6-security-final` branch independently allocated the SAME number for an
+-- unrelated migration (`ii_r6_p1_tax_engine.sql`), having forked from an
+-- earlier ancestor of `main` that predates this FDH-3 fork point. Both
+-- migrations' SQL had already been independently applied to the same
+-- shared DEV database, under their own original filenames, before this
+-- reconciliation happened. Product Owner decision: FDH-3 keeps `0058`
+-- (the stronger claim, being the direct continuation of canonical `main`'s
+-- own certified chain); Investment Intelligence R6's displaced 5-migration
+-- chain (originally `0058`-`0062`) was shifted forward to `0059`-`0063`
+-- instead. See `docs/database-reconciliation/0058_CANONICAL_LINEAGE_
+-- DECISION.md` for the full reasoning. This file's own SQL content is
+-- unchanged by the reconciliation.
 -- =============================================================================
 -- SCOPE. FDH-3 is the first phase that writes real bytes to private object
 -- storage and the first phase to actually CREATE fdh_ingestion_jobs rows (the
