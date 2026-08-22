@@ -34,15 +34,34 @@ export const DOCUMENT_STATUS_TRANSITIONS: Record<
   FdhProcessingStatus,
   readonly FdhProcessingStatus[]
 > = {
-  created: ['uploaded', 'failed'],
-  uploaded: ['validating', 'failed'],
+  // FDH-3 ADDITION: 'rejected' is directly reachable from every pre-review
+  // stage, not only from validating/review_required/ready_for_approval/failed
+  // as FDH-1 originally defined it. FDH-1 shipped no upload route, so there
+  // was no way to reach these states in practice and therefore no user
+  // action to cancel from them. FDH-3's spec section 47 requires "allow the
+  // user to delete a document before processing/approval where safe" at ANY
+  // pre-approval stage — including immediately after upload, before
+  // validation has even run. The original design note ("rejected is a USER
+  // decision, reachable only once there is something for the user to look
+  // at") still holds for the REVIEW meaning of rejection; this widening adds
+  // the separate, equally legitimate CANCELLATION meaning
+  // (`services/uploadLifecycle.ts`'s `userDeleteDocument`), which does not
+  // require anything to have been extracted yet.
+  created: ['uploaded', 'failed', 'rejected'],
+  uploaded: ['validating', 'failed', 'rejected'],
   validating: ['queued', 'failed', 'rejected'],
-  queued: ['processing', 'failed'],
-  processing: ['extracted', 'review_required', 'failed'],
-  extracted: ['review_required', 'ready_for_approval', 'failed'],
+  queued: ['processing', 'failed', 'rejected'],
+  processing: ['extracted', 'review_required', 'failed', 'rejected'],
+  extracted: ['review_required', 'ready_for_approval', 'failed', 'rejected'],
   review_required: ['ready_for_approval', 'rejected', 'failed'],
   ready_for_approval: ['approved', 'review_required', 'rejected'],
   // Terminal for processing. The only onward move is into the purge lifecycle.
+  // An APPROVED document is never "rejected" — deleting one after approval is
+  // a purge-lifecycle action, not a review decision (spec section 47: "do not
+  // silently delete already-approved structured financial data unless that
+  // is a separate user data-delete workflow" — FDH-3 implements no
+  // extraction, so this edge exists for completeness but is not exercised by
+  // any FDH-3 flow today).
   approved: ['purge_pending'],
   // Terminal.
   rejected: [],

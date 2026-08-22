@@ -59,6 +59,10 @@ import type {
   FdhSourceType,
   FdhTransactionLinkType,
   FdhUserRuleType,
+  FdhDocumentAuditActorType,
+  FdhDocumentAuditEventType,
+  FdhUploadSessionFailureCode,
+  FdhUploadSessionStatus,
 } from '../constants/enums';
 
 /** ISO-4217. The platform currently supports AUD/INR/USD (`currencies`). */
@@ -300,6 +304,55 @@ export interface FdhStatementUpload extends FdhOwnership {
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
   approved_at: IsoTimestamp | null;
+  /** FDH-3 (migration 0058). Currently always 'supabase_storage'. */
+  storage_provider: string;
+  uploaded_at: IsoTimestamp | null;
+  validated_at: IsoTimestamp | null;
+  processing_started_at: IsoTimestamp | null;
+  processing_completed_at: IsoTimestamp | null;
+  purge_requested_at: IsoTimestamp | null;
+  /** Soft duplicate-document pointer — see migration 0058's "DUPLICATE
+   * DETECTION" note for why this replaced a hard uniqueness constraint. */
+  duplicate_of_document_id: string | null;
+}
+
+/**
+ * FDH-3 — a short-lived, single-document upload credential (migration 0058).
+ * Never a reusable permanent credential; see `domain/uploadSession.ts`.
+ */
+export interface FdhUploadSession {
+  id: string;
+  /** No `household_id` — unlike most FDH tables, `fdh_upload_sessions`
+   * (migration 0058) carries only `user_id`; a short-lived upload credential
+   * has no need for the optional household-context column. */
+  user_id: string;
+  document_id: string;
+  allowed_mime_type: string;
+  expected_max_size_bytes: number;
+  storage_bucket: string;
+  storage_key: string;
+  upload_status: FdhUploadSessionStatus;
+  failure_code: FdhUploadSessionFailureCode | null;
+  created_at: IsoTimestamp;
+  expires_at: IsoTimestamp;
+  completed_at: IsoTimestamp | null;
+  expired_at: IsoTimestamp | null;
+}
+
+/**
+ * FDH-3 — an append-only document-lifecycle audit event (migration 0058).
+ * `metadata` must never carry document content, a signed URL, a password or
+ * a stack trace — see FDH3_SECURITY_THREAT_MODEL.md "PII in logs".
+ */
+export interface FdhDocumentAuditEvent {
+  id: string;
+  user_id: string | null;
+  document_id: string | null;
+  event_type: FdhDocumentAuditEventType;
+  actor_type: FdhDocumentAuditActorType;
+  actor_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: IsoTimestamp;
 }
 
 export interface FdhIngestionJob {

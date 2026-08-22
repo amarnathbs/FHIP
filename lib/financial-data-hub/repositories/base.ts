@@ -14,12 +14,26 @@
  *      defence in depth, and it means a query that somehow ran with the
  *      service-role client would still be scoped.
  *
- * DELIBERATELY ABSENT. There is no `adminClient()` / service-role usage
- * anywhere in this module. Product Owner Decision 3 forbids standing admin
- * access to user financial documents, and the simplest way to guarantee that
- * is for FDH to own no code path that can bypass RLS.
- * `tests/unit/fdh1Isolation.test.ts` greps the whole FDH tree and fails if a
- * service-role import ever appears.
+ * SERVICE-ROLE USE (FDH-3 EXCEPTION). FDH-1/FDH-2 used no `adminClient()` /
+ * service-role client anywhere in this module, because neither phase touched
+ * private object storage. FDH-3 introduces real document bytes in a private
+ * bucket that has no INSERT/UPDATE/DELETE policy for the authenticated role
+ * (see migration 0058) — those writes are only reachable via the
+ * service-role client, identical to the existing report-exports and
+ * investment-source-documents precedent. `fdh_document_audit_events`
+ * similarly has no insert policy for the authenticated role, matching
+ * `ii_audit_events`. Raw-document PURGE is a system-triggered, cross-user
+ * sweep with no authenticated session to scope an RLS query by (spec section
+ * 99). That usage is confined to exactly three files —
+ * `lib/financial-data-hub/services/storage.ts`,
+ * `lib/financial-data-hub/services/auditLog.ts` and
+ * `lib/financial-data-hub/services/purge.ts` — none of which is ever called
+ * before an explicit authenticated + ownership check (or, for purge, a
+ * single already-identified document row rather than a caller-supplied
+ * filter) has already happened. Every OTHER file in this module remains
+ * service-role free. `tests/unit/fdh1Isolation.test.ts` greps the whole FDH
+ * tree and fails if a service-role import appears anywhere outside those
+ * three allowed files.
  *
  * NO PREMATURE ABSTRACTION. These repositories do exactly what FDH-1 needs to
  * be a coherent module boundary: they do not implement query builders,
@@ -27,7 +41,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { FdhMasterDataTable, FdhUserOwnedTable } from '../constants/tables';
+import type { FdhAllUserOwnedTable, FdhMasterDataTable } from '../constants/tables';
 
 /**
  * A repository over one user-owned FDH table.
@@ -36,7 +50,7 @@ import type { FdhMasterDataTable, FdhUserOwnedTable } from '../constants/tables'
  * input shape (never carrying `user_id` — the repository supplies it).
  */
 export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unknown>>(
-  table: FdhUserOwnedTable,
+  table: FdhAllUserOwnedTable,
 ) {
   return {
     table,

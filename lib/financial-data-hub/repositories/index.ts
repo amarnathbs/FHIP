@@ -43,6 +43,7 @@ import type {
   FdhIngestionJobInput,
   FdhStatementUploadCreateInput,
 } from '../validation/documents';
+import type { FdhDocumentAuditEvent, FdhUploadSession } from '../domain/types';
 import type {
   FdhDataProvenanceInput,
   FdhDataQualityResultInput,
@@ -75,6 +76,39 @@ export const ingestionJobsRepository = makeUserOwnedRepository<
   FdhIngestionJob,
   FdhIngestionJobInput
 >('fdh_ingestion_jobs');
+
+/** FDH-3 (migration 0058). A generic CRUD repository is appropriate here — a
+ * user may read, create and update (never re-parent) their own upload
+ * sessions through ordinary RLS-scoped queries; no service-role client is
+ * needed for this table. */
+export const uploadSessionsRepository = makeUserOwnedRepository<
+  FdhUploadSession,
+  Omit<FdhUploadSession, 'id' | 'user_id' | 'created_at' | 'completed_at' | 'expired_at'>
+>('fdh_upload_sessions');
+
+/**
+ * FDH-3 (migration 0058). READ-ONLY from the RLS-scoped client's point of
+ * view: `fdh_document_audit_events` carries no INSERT/UPDATE/DELETE policy
+ * for the authenticated role at all, so `makeUserOwnedRepository`'s write
+ * methods would simply fail against Postgres if exposed here — they are
+ * deliberately not exposed. Writing an event is
+ * `lib/financial-data-hub/services/auditLog.ts`'s job, via the service-role
+ * client, after the caller has already established ownership.
+ */
+export const documentAuditEventsRepository = {
+  table: 'fdh_document_audit_events' as const,
+
+  async listForUser(userId: string, limit = 200) {
+    const supabase = await createClient();
+    return supabase
+      .from('fdh_document_audit_events')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+      .returns<FdhDocumentAuditEvent[]>();
+  },
+};
 
 // --- Transactions -----------------------------------------------------------
 export const transactionsRepository = makeUserOwnedRepository<

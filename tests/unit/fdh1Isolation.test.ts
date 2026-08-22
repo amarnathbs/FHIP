@@ -95,7 +95,19 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
     }
   });
 
-  it('is imported by nothing outside itself', () => {
+  it('is imported by nothing outside itself, except the FDH-3 upload surface', () => {
+    // FDH-1/FDH-2 shipped zero consumers — pure architecture and schema.
+    // FDH-3 is the phase that finally ships a user-facing surface (spec
+    // section 8: upload UX, document-status UX, delete-document UX and the
+    // API routes behind them), so it is expected — and ONLY it — to import
+    // this module. Anything else importing 'financial-data-hub' would mean
+    // some OTHER part of the app (an engine, a report, a dashboard) reaching
+    // into FDH, which is still forbidden.
+    const FDH3_APPROVED_CONSUMER_DIRS = [
+      path.join(REPO_ROOT, 'app', 'api', 'financial-data-hub'),
+      path.join(REPO_ROOT, 'app', '(app)', 'financial-data-hub'),
+      path.join(REPO_ROOT, 'components', 'financial-data-hub'),
+    ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
       const root = path.join(REPO_ROOT, dir);
@@ -103,18 +115,33 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       for (const file of walk(root)) {
         if (file.startsWith(FDH_LIB)) continue;
         if (!/\.(ts|tsx)$/.test(file)) continue;
-        if (fs.readFileSync(file, 'utf8').includes('financial-data-hub')) consumers.push(file);
+        if (!fs.readFileSync(file, 'utf8').includes('financial-data-hub')) continue;
+        if (FDH3_APPROVED_CONSUMER_DIRS.some((approved) => file.startsWith(approved))) continue;
+        consumers.push(file);
       }
     }
-    expect(consumers, `FDH is imported by: ${consumers.join(', ')}`).toEqual([]);
+    expect(consumers, `FDH is imported by an unapproved consumer: ${consumers.join(', ')}`).toEqual([]);
   });
 
-  it('adds no route handler, no page and no component', () => {
-    // FDH-1 is architecture and schema only. A user-facing surface would mean
-    // an upload path, which is FDH-3 at the earliest.
+  it('adds only the approved FDH-3 document-lifecycle route set — no parser, no extraction route', () => {
+    // FDH-1/FDH-2 added zero routes. FDH-3 adds the upload-lifecycle surface
+    // ONLY (spec section 8-9: upload/status/delete/preview — explicitly NOT
+    // extraction, classification or parsing, which remain FDH-4+). Every
+    // route file found under app/ matching /financial-data|fdh/i must be one
+    // of these, and none may contain a parser/extraction/classification verb
+    // in its own path.
     const appDir = path.join(REPO_ROOT, 'app');
-    const fdhRoutes = walk(appDir).filter((f) => /financial-data|fdh/i.test(f));
-    expect(fdhRoutes).toEqual([]);
+    const fdhFiles = walk(appDir).filter((f) => /financial-data|fdh/i.test(f));
+    const FORBIDDEN_PATH_FRAGMENTS = [
+      'extract', 'parse', 'parser', 'classify', 'classification', 'ocr', 'reconcile',
+    ];
+    for (const file of fdhFiles) {
+      const relative = path.relative(REPO_ROOT, file).replace(/\\/g, '/');
+      for (const fragment of FORBIDDEN_PATH_FRAGMENTS) {
+        expect(relative.toLowerCase().includes(fragment), `${relative} names a forbidden FDH-4+ concept`).toBe(false);
+      }
+    }
+    expect(fdhFiles.length, 'FDH-3 should add at least its upload-lifecycle routes').toBeGreaterThan(0);
   });
 });
 
@@ -160,13 +187,34 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     expect(/input_population|input_proposal|fdh_input_/.test(FDH_MIGRATION_SQL)).toBe(false);
   });
 
-  it('never uses the service-role client, which bypasses RLS', () => {
+  it('uses the service-role client ONLY in the three FDH-3 files documented to need it', () => {
+    // FDH-1/FDH-2 used no service-role client anywhere (private storage and
+    // cross-user purge sweeps did not exist yet). FDH-3 introduces exactly
+    // three legitimate uses — see repositories/base.ts's module comment —
+    // and every one of them runs only after an explicit authenticated +
+    // ownership check (storage.ts, auditLog.ts) or against a single
+    // already-identified document row rather than a caller-supplied filter
+    // (purge.ts). No other file may reach for it.
+    const FDH3_SERVICE_ROLE_FILES = [
+      path.join(FDH_LIB, 'services', 'storage.ts'),
+      path.join(FDH_LIB, 'services', 'auditLog.ts'),
+      path.join(FDH_LIB, 'services', 'purge.ts'),
+    ];
+    let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {
+      const usesServiceRole = /adminClient|SUPABASE_SERVICE_ROLE_KEY|supabase\/admin/.test(FDH_CODE[i]);
+      if (!usesServiceRole) continue;
       expect(
-        /adminClient|SUPABASE_SERVICE_ROLE_KEY|supabase\/admin/.test(FDH_CODE[i]),
-        `${FDH_SOURCE_FILES[i]} reaches for a service-role client`,
-      ).toBe(false);
+        FDH3_SERVICE_ROLE_FILES.includes(FDH_SOURCE_FILES[i]),
+        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the three approved FDH-3 files`,
+      ).toBe(true);
+      usedByApprovedFile += 1;
     }
+    // Proves this check is not vacuous — the three approved files really do
+    // use it, so a future removal of all service-role usage would be caught
+    // by the "greater than 0" below just as much as a leak would be caught
+    // by the assertion above.
+    expect(usedByApprovedFile).toBe(FDH3_SERVICE_ROLE_FILES.length);
   });
 });
 
@@ -264,11 +312,36 @@ describe('FDH-1 investment boundary (Product Owner Decision 2)', () => {
 
 // ---------------------------------------------------------------------------
 describe('FDH-1 admin document boundary (Product Owner Decision 3)', () => {
-  it('exposes no admin route, viewer or download path', () => {
+  it('exposes no admin route or admin document viewer, anywhere', () => {
+    // This half of the original FDH-1 guarantee is untouched by FDH-3: no
+    // file in this module may ever gate on admin status to reach a document.
     for (let i = 0; i < FDH_CODE.length; i += 1) {
-      expect(/requireAdmin|adminRoute|createSignedUrl|storage\.from/.test(FDH_CODE[i]),
-        `${FDH_SOURCE_FILES[i]} builds an admin or storage access path`).toBe(false);
+      expect(/requireAdmin|adminRoute/.test(FDH_CODE[i]),
+        `${FDH_SOURCE_FILES[i]} builds an admin route`).toBe(false);
     }
+  });
+
+  it('confines storage/signed-URL access to services/storage.ts, and never combines it with admin auth', () => {
+    // FDH-1 forbade `createSignedUrl`/`storage.from` outright because no
+    // storage existed yet. FDH-3 legitimately needs both — but only for the
+    // OWNING USER's own document (services/storage.ts, called only after
+    // services/uploadLifecycle.ts and services/purge.ts have already
+    // established ownership). No admin-facing file may use either, which is
+    // the real invariant Product Owner Decision 3 requires.
+    const STORAGE_ACCESS_APPROVED_FILE = path.join(FDH_LIB, 'services', 'storage.ts');
+    for (let i = 0; i < FDH_CODE.length; i += 1) {
+      const usesStorageAccess = /createSignedUrl|storage\.from/.test(FDH_CODE[i]);
+      if (!usesStorageAccess) continue;
+      expect(
+        FDH_SOURCE_FILES[i],
+        `${FDH_SOURCE_FILES[i]} accesses storage/signed URLs outside the one approved file`,
+      ).toBe(STORAGE_ACCESS_APPROVED_FILE);
+    }
+    // adminBoundary.ts itself must never gain storage access — the strongest
+    // form of the "no admin document viewer" guarantee.
+    const adminBoundaryIndex = FDH_SOURCE_FILES.indexOf(path.join(FDH_LIB, 'constants', 'adminBoundary.ts'));
+    expect(adminBoundaryIndex).toBeGreaterThan(-1);
+    expect(/createSignedUrl|storage\.from|requireAdmin/.test(FDH_CODE[adminBoundaryIndex])).toBe(false);
   });
 
   it('never leaks a forbidden column into the admin allowlist', () => {
@@ -361,5 +434,33 @@ describe('FDH-1 admin document boundary (Product Owner Decision 3)', () => {
 
   it('creates no storage bucket and no storage policy', () => {
     expect(/storage\.objects|storage\.foldername|bucket_id/.test(FDH_MIGRATION_SQL)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('FDH-3 admin document boundary — no admin raw-document access anywhere', () => {
+  it('no admin surface in the whole application references the FDH module at all', () => {
+    // The strongest mechanical form of spec section 71: an admin does not
+    // gain raw-document visibility merely because of admin status, because
+    // there is literally no code path from any admin route/page into FDH.
+    const adminDirs = [
+      path.join(REPO_ROOT, 'app', 'api', 'admin'),
+      path.join(REPO_ROOT, 'app', '(app)', 'admin'),
+    ].filter((d) => fs.existsSync(d));
+    expect(adminDirs.length, 'expected at least one admin surface to exist').toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const dir of adminDirs) {
+      for (const file of walk(dir)) {
+        if (!/\.(ts|tsx)$/.test(file)) continue;
+        const src = fs.readFileSync(file, 'utf8');
+        if (/financial-data-hub|fdh_/.test(src)) offenders.push(file);
+      }
+    }
+    expect(offenders, `admin surface references FDH: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('fdh_upload_sessions and fdh_document_audit_events are both listed as no-standing-admin-access tables', () => {
+    expect(ADMIN_NO_STANDING_ACCESS_TABLES as readonly string[]).toContain('fdh_upload_sessions');
+    expect(ADMIN_NO_STANDING_ACCESS_TABLES as readonly string[]).toContain('fdh_document_audit_events');
   });
 });
