@@ -707,3 +707,87 @@ export type FdhRuleCandidateType = (typeof FDH_RULE_CANDIDATE_TYPES)[number];
 
 export const FDH_RULE_ACTION_KINDS_FDH2 = ['flag_candidate', 'annotate_payment_rail'] as const;
 export type FdhRuleActionKindFdh2 = (typeof FDH_RULE_ACTION_KINDS_FDH2)[number];
+
+// =============================================================================
+// FDH-3 — secure document upload, storage and purge lifecycle vocabularies.
+// =============================================================================
+
+/**
+ * Allowed document upload file types (spec section 17). Restricted to what
+ * upcoming parser phases actually need. XLSX is deliberately NOT included —
+ * it was only "optionally" approved by the spec, and no safe-handling review
+ * has been done for it, so it is left out rather than half-supported.
+ */
+export const FDH_ALLOWED_UPLOAD_MIME_TYPES = ['application/pdf', 'text/csv'] as const;
+export type FdhAllowedUploadMimeType = (typeof FDH_ALLOWED_UPLOAD_MIME_TYPES)[number];
+
+/**
+ * `fdh_upload_sessions.upload_status` — the session-level lifecycle, distinct
+ * from (and much smaller than) `fdh_statement_uploads.processing_status`.
+ * A session only ever tracks getting bytes safely into storage; everything
+ * after that is the document's own processing_status.
+ */
+export const FDH_UPLOAD_SESSION_STATUSES = [
+  'session_created',
+  'upload_in_progress',
+  'upload_complete',
+  'expired',
+  'failed',
+] as const;
+export type FdhUploadSessionStatus = (typeof FDH_UPLOAD_SESSION_STATUSES)[number];
+
+/**
+ * `fdh_upload_sessions.failure_code` — upload-MECHANICS errors (spec section
+ * 52), independently owned from `fdh_statement_uploads.error_code` (the
+ * frozen FDH-1 document-PROCESSING taxonomy) precisely so migration 0058
+ * never has to edit that frozen constraint. See migration 0058 for the full
+ * rationale.
+ */
+export const FDH_UPLOAD_SESSION_FAILURE_CODES = [
+  'unsupported_file_type',
+  'file_too_large',
+  'mime_mismatch',
+  'file_corrupt',
+  'password_required',
+  'upload_incomplete',
+  'storage_error',
+  'internal_error',
+] as const;
+export type FdhUploadSessionFailureCode = (typeof FDH_UPLOAD_SESSION_FAILURE_CODES)[number];
+
+/**
+ * UX-facing upload substates (spec section 14). These are DERIVED display
+ * values computed from `processing_status` + `error_code` + the upload
+ * session's own status — never a new database enum. See
+ * `lib/financial-data-hub/domain/uploadSubstate.ts`.
+ */
+export const FDH_UPLOAD_SUBSTATES = [
+  'UPLOAD_CREATED',
+  'UPLOAD_IN_PROGRESS',
+  'UPLOAD_COMPLETE',
+  'VALIDATION_PENDING',
+  'VALIDATED',
+  'FILE_REJECTED',
+] as const;
+export type FdhUploadSubstate = (typeof FDH_UPLOAD_SUBSTATES)[number];
+
+/** `fdh_document_audit_events.event_type` — the controlled audit taxonomy
+ * (spec section 56). */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES = [
+  'document_upload_created',
+  'document_upload_completed',
+  'document_validated',
+  'document_rejected',
+  'document_queued',
+  'document_user_deleted',
+  'document_purge_scheduled',
+  'document_purged',
+  'document_purge_failed',
+] as const;
+export type FdhDocumentAuditEventType = (typeof FDH_DOCUMENT_AUDIT_EVENT_TYPES)[number];
+
+/** Every lifecycle transition is attributable to exactly one of these (spec
+ * section 97). Deliberately excludes 'admin' — an admin never drives a
+ * document lifecycle transition (Product Owner Decision 3). */
+export const FDH_DOCUMENT_AUDIT_ACTOR_TYPES = ['user', 'system', 'service'] as const;
+export type FdhDocumentAuditActorType = (typeof FDH_DOCUMENT_AUDIT_ACTOR_TYPES)[number];

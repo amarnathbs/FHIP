@@ -157,3 +157,56 @@ Delivered to the orchestrating session as complete migration SQL, per this
 project's established controlled manual-application process (Product Owner
 applies via the Supabase Dashboard SQL editor) — this agent has no DDL
 execution capability against any live environment.
+
+## FDH-3 — Secure Document Lifecycle (migration 0058)
+
+**Allocation.** Built from `origin/main` at `c868de6` (57 active migrations).
+The migration collision guard was run before allocation:
+`OK: 57 active migrations, one file per version, next version is 0058.` One
+file was allocated — `0058_fdh3_document_lifecycle_upload_storage.sql` — and
+the guard was re-run after: `OK: 58 active migrations, one file per version,
+next version is 0059.`
+
+| File | Tables created | Existing tables altered (additive) |
+| --- | --- | --- |
+| `0058_fdh3_document_lifecycle_upload_storage.sql` | `fdh_upload_sessions`, `fdh_document_audit_events` | `fdh_statement_uploads` (+7 columns: `storage_provider`, `uploaded_at`, `validated_at`, `processing_started_at`, `processing_completed_at`, `purge_requested_at`, `duplicate_of_document_id`), `fdh_ingestion_jobs` (+1 trigger, no new column) |
+
+**Additive-only, with two disclosed, deliberate exceptions:**
+1. `drop index if exists uq_fdh_uploads_user_file_hash` — replaces a hard
+   per-user uniqueness constraint (which would have made a second upload of
+   the same file fail outright) with a soft `duplicate_of_document_id`
+   pointer, because the FDH-3 spec requires duplicate detection to be a
+   user-visible FLAG, never an automatic block. FDH-1 shipped no upload
+   route, so this constraint was never exercised in production before FDH-3
+   discovered the conflict. See the migration's own "DUPLICATE DETECTION"
+   comment for the full rationale.
+2. Two `before insert or update` triggers are added to the EXISTING
+   `fdh_ingestion_jobs` table (FDH1-F1 tenant-referential-integrity
+   hardening, spec section 5) — no column changes, additive in the sense
+   that no existing write path is narrowed; only cross-tenant writes that
+   were never valid in the first place are now refused at the database
+   layer as well as by RLS.
+
+No `drop table`, no `drop column`, no `delete from`, no destructive
+`update` — verified by `tests/unit/fdh3SchemaContract.test.ts`.
+
+**Governance note (collision risk carried forward honestly).** Several
+Investment Intelligence R6 branches independently allocated `0058` on their
+own unmerged branches (see `investment_intelligence_r6` memory). Since none
+of those branches has merged to `main`, and this FDH-3 branch was built
+fresh from `main` per its own explicit instruction, `0058` is genuinely free
+on this lineage today. Whichever of these branches merges to `main` first
+keeps `0058`; any other branch still carrying that number must re-run the
+migration collision guard and renumber forward at merge time, per the
+existing project convention (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`).
+
+**Status as of this dispatch: NOT yet applied to DEV or production.** The
+private storage bucket (`fdh-source-documents`) IS already live in DEV —
+created via the Storage Admin API
+(`scripts/fdh3_create_storage_bucket.mjs`), independently of the SQL
+migration — and its private/size-limited/MIME-restricted configuration and
+core object lifecycle (upload, signed-read, delete, verified-absent) have
+been certified live (`scripts/fdh3_dev_certification.mjs`, 11/11). The
+`storage.objects` SELECT policy, the two new tables and the two
+FDH1-F1 triggers all live inside `0058` and require the same manual
+Dashboard-SQL-editor application as every prior FDH migration.
