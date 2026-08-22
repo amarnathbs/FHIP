@@ -67,12 +67,45 @@ export interface EquityOrientedRules {
   indexationAllowed: false;
 }
 
+/** R6-DEBTFIX (2026-08-22): the pre-existing capital-gains treatment for a
+ * debt/specified-mutual-fund LOT ACQUIRED BEFORE `specifiedFundAcquiredOnOrAfter`
+ * (1 April 2023) — Section 50AA / the Finance Act 2023 always-short-term rule
+ * does NOT apply to such a lot; it retains the general Section 2(42A)/112
+ * capital-asset treatment that predates the 2023 carve-out. This nested
+ * regime is keyed by the RULE VERSION the lot's DISPOSAL falls into (same
+ * effective-dated resolution as everything else in this module) because the
+ * regime itself changed on 23 July 2024 (Finance (No. 2) Act, 2024 — see
+ * docs/investment-intelligence/R6_TAX_LEGAL_SOURCE_REGISTER.md Section 4a):
+ *   - Disposals before 23-Jul-2024: >36-month holding = LTCG @ 20%, WITH
+ *     Cost-Inflation-Index indexation (Section 112, pre-Budget-2024).
+ *   - Disposals on/after 23-Jul-2024: >24-month holding = LTCG @ 12.5%, NO
+ *     indexation (Budget 2024 removed indexation across most non-equity
+ *     asset classes, including this one — confirmed this is NOT the same as
+ *     the optional 20%-indexed/12.5%-unindexed CHOICE that Budget 2024 later
+ *     granted for land/building only; debt-fund LTCG has no such choice, it
+ *     is mandatorily the new figure for any disposal on/after 23-Jul-2024).
+ * Either side of that boundary, short-term gains remain taxed at slab rate,
+ * same as the always-short-term branch. */
+export interface LegacyDebtFundRegime {
+  ltcgHoldingPeriodMonths: number;
+  ltcgRatePct: number;
+  /** When true, real indexation benefit is legally available for this
+   * disposal-date window, but this engine does NOT compute an indexed cost
+   * basis (no verified Cost Inflation Index table wired in yet) — the
+   * caller must surface this as an honest limitation (see
+   * capitalGainsEngine.ts's note text for the debt_specified/pre-2023-
+   * acquisition/LTCG branch) rather than presenting the un-indexed figure as
+   * final. */
+  indexationAllowed: boolean;
+  stcgTaxedAtSlabRate: true;
+}
+
 export interface DebtSpecifiedRules {
-  /** The "specified mutual fund" rule (Finance Act 2023) applies to debt/
-   * specified funds ACQUIRED on/after this date — funds acquired before
-   * retain the pre-2023-04-01 regime, which this engine does not separately
-   * model (out of scope: pre-FY2023-24 debt-fund acquisitions are rare in a
-   * fresh II dataset and flagged unresolved rather than guessed). */
+  /** The "specified mutual fund" rule (Finance Act 2023, Section 50AA)
+   * applies to debt/specified funds ACQUIRED on/after this date — funds
+   * acquired before retain the pre-2023-04-01 regime, modelled by
+   * `legacyRegime` below (R6-DEBTFIX: previously this field was defined but
+   * never consumed as a per-lot gate; capitalGainsEngine.ts now reads it). */
   specifiedFundAcquiredOnOrAfter: IsoDate;
   alwaysShortTerm: true;
   indexationAllowed: false;
@@ -81,6 +114,9 @@ export interface DebtSpecifiedRules {
    * territory), so it reports the gain as short-term/slab-rate-applicable
    * and leaves the actual rate for the user's CA to apply. */
   taxedAtSlabRate: true;
+  /** Treatment for a lot acquired BEFORE `specifiedFundAcquiredOnOrAfter` —
+   * see `LegacyDebtFundRegime` above. */
+  legacyRegime: LegacyDebtFundRegime;
 }
 
 export interface RuleDefinition {
@@ -120,7 +156,11 @@ export const RULE_1961_PRE_20240723: TaxRuleVersion = {
     placeholder: false,
     sourceNote:
       'Income-tax Act 1961 as amended by Finance Act 2023 (specified mutual fund short-term rule, ' +
-      'effective FY2023-24) and pre-Budget-2024 Section 112A rates.',
+      'effective FY2023-24) and pre-Budget-2024 Section 112A rates. R6-DEBTFIX (2026-08-22): ' +
+      'debtSpecified.legacyRegime for lots acquired before 2023-04-01 researched and verified 20% ' +
+      'LTCG with CII indexation, 36-month threshold, under Section 112 as it stood before Budget ' +
+      '2024 (ClearTax, ICICI Direct "Changes in taxation of non-equity funds from FY23-24", ' +
+      'ValueResearchOnline — see R6_TAX_LEGAL_SOURCE_REGISTER.md Section 4a).',
     equityOriented: {
       domesticEquityThresholdPct: 65,
       stcgHoldingPeriodMonths: 12,
@@ -134,6 +174,12 @@ export const RULE_1961_PRE_20240723: TaxRuleVersion = {
       alwaysShortTerm: true,
       indexationAllowed: false,
       taxedAtSlabRate: true,
+      legacyRegime: {
+        ltcgHoldingPeriodMonths: 36,
+        ltcgRatePct: 20,
+        indexationAllowed: true,
+        stcgTaxedAtSlabRate: true,
+      },
     },
   },
 };
@@ -152,7 +198,14 @@ export const RULE_1961_POST_20240723: TaxRuleVersion = {
     sourceNote:
       'Finance (No. 2) Act, 2024, effective for transfers on/after 23 July 2024: equity STCG raised ' +
       'to 20%, LTCG raised to 12.5%, Section 112A exemption raised to ₹1,25,000/FY. Debt/specified-' +
-      'fund short-term-always rule (FY2023-24 Finance Act) unchanged.',
+      'fund short-term-always rule (FY2023-24 Finance Act) unchanged. R6-DEBTFIX (2026-08-22): ' +
+      'debtSpecified.legacyRegime for lots acquired before 2023-04-01 changed on this SAME 23-Jul-' +
+      '2024 boundary — Budget 2024 shortened the non-equity/debt-fund LTCG holding threshold from ' +
+      '36 to 24 months AND removed indexation, replacing 20%-with-indexation with a flat 12.5%-no-' +
+      'indexation rate (mandatory for this disposal-date window, NOT the optional 20%-indexed/' +
+      '12.5%-unindexed CHOICE Budget 2024 separately granted for land/building — confirmed distinct, ' +
+      'see R6_TAX_LEGAL_SOURCE_REGISTER.md Section 4a). Verified via ValueResearchOnline, ' +
+      'PrimeInvestor "Budget 2024 – how your equity & debt investments are taxed now", ICICI Direct.',
     equityOriented: {
       domesticEquityThresholdPct: 65,
       stcgHoldingPeriodMonths: 12,
@@ -166,6 +219,12 @@ export const RULE_1961_POST_20240723: TaxRuleVersion = {
       alwaysShortTerm: true,
       indexationAllowed: false,
       taxedAtSlabRate: true,
+      legacyRegime: {
+        ltcgHoldingPeriodMonths: 24,
+        ltcgRatePct: 12.5,
+        indexationAllowed: false,
+        stcgTaxedAtSlabRate: true,
+      },
     },
   },
 };
@@ -202,7 +261,16 @@ export const RULE_2025_ACT_POST_20260401: TaxRuleVersion = {
       'Act text and five independent corroborating secondary sources (2026-08-22) — see ' +
       'R6_TAX_LEGAL_SOURCE_REGISTER.md. Finance Act 2026 was also checked and introduces no capital-' +
       'gains changes for mutual fund units (its changes — buyback taxation, SGB secondary-market ' +
-      'gains — are outside this engine\'s mutual-fund-disposal scope).',
+      'gains — are outside this engine\'s mutual-fund-disposal scope). R6-DEBTFIX (2026-08-22): ' +
+      'debtSpecified.legacyRegime figures (24-month/12.5%/no-indexation) are carried forward ' +
+      'UNCHANGED from RULE_1961_POST_20240723 by INFERENCE — no source found during this pass ' +
+      'discusses the pre-2023-acquisition debt-fund legacy regime specifically under the 2025 Act ' +
+      '(same class of gap as the grandfathering-continuity open item above: a cost/rate mechanic, ' +
+      'not a headline provision, so less prominently covered by consumer tax explainers). ' +
+      'Reasonably certain given the 2025 Act was repeatedly characterised as a renumbering/' +
+      'consolidation exercise with no capital-gains policy change, but NOT independently section-' +
+      'cited — flagged as an open item, not silently assumed. See R6_TAX_LEGAL_SOURCE_REGISTER.md ' +
+      '"Open items".',
     equityOriented: {
       domesticEquityThresholdPct: 65,
       stcgHoldingPeriodMonths: 12,
@@ -216,6 +284,12 @@ export const RULE_2025_ACT_POST_20260401: TaxRuleVersion = {
       alwaysShortTerm: true,
       indexationAllowed: false,
       taxedAtSlabRate: true,
+      legacyRegime: {
+        ltcgHoldingPeriodMonths: 24,
+        ltcgRatePct: 12.5,
+        indexationAllowed: false,
+        stcgTaxedAtSlabRate: true,
+      },
     },
   },
 };

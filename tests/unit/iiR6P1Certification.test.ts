@@ -170,12 +170,16 @@ function makeClassification(kind: 'equity_oriented' | 'debt_specified' | 'unreso
   };
 }
 
-describe('II R6-P1 Independent Certification (132 cases: 120 original + 12 R6-FINAL closure)', () => {
-  it('generated exactly 132 cases (the original 120 are unchanged/permanent per spec Sec.34)', () => {
-    expect(cases.length).toBe(132);
+describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FINAL closure + 10 R6-DEBTFIX closure)', () => {
+  it('generated exactly 142 cases (the original 120 are unchanged/permanent per spec Sec.34)', () => {
+    expect(cases.length).toBe(142);
     const originalFamilies = ['fifo', 'grandfathering', 'boundary', 'debt', 'fy_aggregation', 'cross_fy', 'exit_load', 'ambiguous', 'rate_version'];
     const originalCount = cases.filter((c) => originalFamilies.includes(c.family)).length;
     expect(originalCount).toBe(120);
+    const r6finalCount = cases.filter((c) => ['act_transition', 'grand_boundary'].includes(c.family)).length;
+    expect(r6finalCount).toBe(12);
+    const debtFixCount = cases.filter((c) => c.family === 'debt_pre2023').length;
+    expect(debtFixCount).toBe(10);
   });
 
   describe('FIFO family', () => {
@@ -279,6 +283,111 @@ describe('II R6-P1 Independent Certification (132 cases: 120 original + 12 R6-FI
       compareNumber(c.id, 'costBasisUsed', result.costBasisUsed, exp.costBasisUsed, TOLERANCES.currency);
       compareNumber(c.id, 'taxableGain', result.taxableGain, exp.taxableGain, TOLERANCES.currency);
       expect(result.gainType, `${c.id}: debt/specified must ALWAYS be stcg regardless of holding period`).toBe('stcg');
+    });
+  });
+
+  describe('R6-DEBTFIX: legacy debt-fund family (lots acquired BEFORE 1 Apr 2023 Section 50AA cutoff)', () => {
+    const debtPreCases = cases.filter((c) => c.family === 'debt_pre2023');
+
+    it('the family has exactly 10 cases, including the exact live-DEV regression fixture (DEBTPRE-001)', () => {
+      expect(debtPreCases).toHaveLength(10);
+      const c1 = debtPreCases.find((c) => c.id === 'DEBTPRE-001')!;
+      expect(c1.acquisitionDate).toBe('2019-01-01');
+      expect(c1.disposalDate).toBe('2024-06-01');
+      expect(c1.unitsConsumed).toBe(1000);
+      expect(c1.costPerUnit).toBe(12);
+      expect(c1.salePricePerUnit).toBe(15);
+    });
+
+    function computeFor(c: CertCase) {
+      const consumption: LotConsumption = {
+        disposalEventId: `${c.id}-d`,
+        lotId: `${c.id}-l`,
+        instrumentKey: c.instrumentKey,
+        acquisitionDate: c.acquisitionDate,
+        kind: 'purchase',
+        disposalDate: c.disposalDate,
+        unitsConsumed: c.unitsConsumed,
+        costPerUnit: c.costPerUnit,
+        costBasis: c.unitsConsumed * c.costPerUnit,
+        saleValueApportioned: c.unitsConsumed * c.salePricePerUnit,
+      };
+      return computeDisposalTax({
+        consumption,
+        saleValuePerUnit: c.salePricePerUnit,
+        classification: makeClassification('debt_specified'),
+        fmv31Jan2018PerUnit: null,
+      });
+    }
+
+    it.each(debtPreCases)('$id', (c: CertCase) => {
+      const result = computeFor(c);
+      const exp = oracleById[c.id];
+      compareExact(c.id, 'gainType', result.gainType, exp.gainType);
+      compareExact(c.id, 'holdingDays', result.holdingDays, exp.holdingDays);
+      compareNumber(c.id, 'costBasisUsed', result.costBasisUsed, exp.costBasisUsed, TOLERANCES.currency);
+      compareNumber(c.id, 'taxableGain', result.taxableGain, exp.taxableGain, TOLERANCES.currency);
+      // No grandfathering, ever, for debt/specified funds (either branch).
+      expect(result.grandfathering, c.id).toBeNull();
+    });
+
+    it('REGRESSION (would have caught the original defect): DEBTPRE-001 — a debt-fund lot acquired 2019, held 1978 days, must resolve LTCG, not a fabricated/blanket STCG', () => {
+      const c1 = debtPreCases.find((c) => c.id === 'DEBTPRE-001')!;
+      const result = computeFor(c1);
+      expect(result.gainType).toBe('ltcg');
+      expect(result.holdingDays).toBe(1978);
+      // The original defect: this branch used to return 'stcg' unconditionally
+      // with the note "always short-term ... Finance Act 2023 rule" even
+      // though this lot's OWN acquisition date (2019-01-01) predates the
+      // Section 50AA cutoff (2023-04-01) by over four years.
+      expect(result.note).not.toMatch(/always short-term/i);
+      expect(result.note).toContain('2019-01-01');
+      // Honest degradation: indexation is legally available for this
+      // disposal-date window (pre-23-Jul-2024) but not computed — must be
+      // disclosed, not silently omitted or fabricated.
+      expect(result.note.toLowerCase()).toContain('indexation');
+      expect(result.note).not.toMatch(/indexed cost basis of ₹\d/i); // never a fabricated number
+    });
+
+    it('the Section 50AA acquisition-date GATE itself: identical disposal, one day apart on the acquisition side, flips legacy-regime vs always-STCG (DEBTPRE-005 vs DEBTPRE-006)', () => {
+      const before = debtPreCases.find((c) => c.id === 'DEBTPRE-005')!; // acquired 2023-03-31
+      const onCutoff = debtPreCases.find((c) => c.id === 'DEBTPRE-006')!; // acquired 2023-04-01
+      expect(before.acquisitionDate).toBe('2023-03-31');
+      expect(onCutoff.acquisitionDate).toBe('2023-04-01');
+      expect(before.disposalDate).toBe(onCutoff.disposalDate);
+      const beforeResult = computeFor(before);
+      const onCutoffResult = computeFor(onCutoff);
+      expect(beforeResult.gainType, 'acquired one day before the cutoff -> legacy regime -> LTCG').toBe('ltcg');
+      expect(onCutoffResult.gainType, 'acquired ON the cutoff -> Section 50AA -> always STCG').toBe('stcg');
+      expect(onCutoffResult.note).toMatch(/50AA/);
+    });
+
+    it('36-month legacy anniversary boundary, pre-23-Jul-2024 disposal (DEBTPRE-007 STCG / DEBTPRE-008 LTCG)', () => {
+      const atAnniversary = debtPreCases.find((c) => c.id === 'DEBTPRE-007')!;
+      const dayAfter = debtPreCases.find((c) => c.id === 'DEBTPRE-008')!;
+      expect(computeFor(atAnniversary).gainType).toBe('stcg');
+      expect(computeFor(dayAfter).gainType).toBe('ltcg');
+      const ltcgResult = computeFor(dayAfter);
+      expect(ltcgResult.note).toMatch(/20%/);
+      expect(ltcgResult.note.toLowerCase()).toContain('indexation');
+    });
+
+    it('24-month legacy anniversary boundary, exactly at/after the 23-Jul-2024 Budget boundary (DEBTPRE-009 STCG / DEBTPRE-010 LTCG)', () => {
+      const atAnniversary = debtPreCases.find((c) => c.id === 'DEBTPRE-009')!;
+      const dayAfter = debtPreCases.find((c) => c.id === 'DEBTPRE-010')!;
+      expect(computeFor(atAnniversary).gainType).toBe('stcg');
+      const ltcgResult = computeFor(dayAfter);
+      expect(ltcgResult.gainType).toBe('ltcg');
+      expect(ltcgResult.note).toMatch(/12\.5%/);
+      expect(ltcgResult.note).toMatch(/no indexation|NO indexation/);
+    });
+
+    it('DEBTPRE-004: LTCG under the (wrong) new 24-month rule but correctly STCG under the (right) old 36-month rule for its pre-Budget-2024 disposal date', () => {
+      const c = debtPreCases.find((c) => c.id === 'DEBTPRE-004')!;
+      const result = computeFor(c);
+      expect(result.holdingDays).toBeGreaterThan(24 * 30); // would look long-term under a naive 24-month rule
+      expect(result.holdingDays).toBeLessThan(36 * 30); // but is genuinely short of the correct 36-month threshold
+      expect(result.gainType, 'must use the 36-month threshold in force on this pre-23-Jul-2024 disposal date, not the newer 24-month one').toBe('stcg');
     });
   });
 

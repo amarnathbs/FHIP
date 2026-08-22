@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-08-22",
   "seed": "0x52365031",
-  "totalCases": 132,
+  "totalCases": 142,
   "cases": [
     {
       "id": "FIFO-001",
@@ -2445,6 +2445,116 @@
       "salePricePerUnit": 40,
       "unitsConsumed": 100,
       "isEquityOriented": true
+    },
+    {
+      "id": "DEBTPRE-001",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-1",
+      "acquisitionDate": "2019-01-01",
+      "disposalDate": "2024-06-01",
+      "unitsConsumed": 1000,
+      "costPerUnit": 12,
+      "salePricePerUnit": 15,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-002",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-2",
+      "acquisitionDate": "2021-06-01",
+      "disposalDate": "2023-06-01",
+      "unitsConsumed": 1000,
+      "costPerUnit": 12,
+      "salePricePerUnit": 15,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-003",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-3",
+      "acquisitionDate": "2022-01-01",
+      "disposalDate": "2024-08-01",
+      "unitsConsumed": 200,
+      "costPerUnit": 25,
+      "salePricePerUnit": 32,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-004",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-4",
+      "acquisitionDate": "2022-06-01",
+      "disposalDate": "2024-06-15",
+      "unitsConsumed": 150,
+      "costPerUnit": 40,
+      "salePricePerUnit": 48,
+      "pairKey": null
+    },
+    {
+      "id": "DEBTPRE-005",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-5",
+      "acquisitionDate": "2023-03-31",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 18,
+      "salePricePerUnit": 22,
+      "pairKey": "5-6"
+    },
+    {
+      "id": "DEBTPRE-006",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-6",
+      "acquisitionDate": "2023-04-01",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 18,
+      "salePricePerUnit": 22,
+      "pairKey": "5-6"
+    },
+    {
+      "id": "DEBTPRE-007",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-7",
+      "acquisitionDate": "2020-04-15",
+      "disposalDate": "2023-04-15",
+      "unitsConsumed": 300,
+      "costPerUnit": 20,
+      "salePricePerUnit": 26,
+      "pairKey": "7-8"
+    },
+    {
+      "id": "DEBTPRE-008",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-8",
+      "acquisitionDate": "2020-04-15",
+      "disposalDate": "2023-04-16",
+      "unitsConsumed": 300,
+      "costPerUnit": 20,
+      "salePricePerUnit": 26,
+      "pairKey": "7-8"
+    },
+    {
+      "id": "DEBTPRE-009",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-9",
+      "acquisitionDate": "2022-07-23",
+      "disposalDate": "2024-07-23",
+      "unitsConsumed": 250,
+      "costPerUnit": 30,
+      "salePricePerUnit": 37,
+      "pairKey": "9-10"
+    },
+    {
+      "id": "DEBTPRE-010",
+      "family": "debt_pre2023",
+      "instrumentKey": "SCH-DEBTPRE-10",
+      "acquisitionDate": "2022-07-23",
+      "disposalDate": "2024-07-24",
+      "unitsConsumed": 250,
+      "costPerUnit": 30,
+      "salePricePerUnit": 37,
+      "pairKey": "9-10"
     }
   ]
 }

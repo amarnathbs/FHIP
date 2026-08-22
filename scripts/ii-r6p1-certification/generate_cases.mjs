@@ -11,9 +11,10 @@
 // NEVER generated using production code — the oracle derives them
 // independently in Python from these raw inputs.
 //
-// Families (132 cases total — 120 original R6-P1 cases, permanent per the
+// Families (142 cases total — 120 original R6-P1 cases, permanent per the
 // R6-FINAL spec's Section 34, PLUS 12 R6-FINAL closure cases added
-// 2026-08-22 for Sections 10/11):
+// 2026-08-22 for Sections 10/11, PLUS 10 R6-DEBTFIX closure cases added
+// 2026-08-22 for the debt-fund acquisition-date-gate fix):
 //   FIFO-001..020       multi-lot partial consumption, exact-lot-boundary consumption
 //   GRAND-001..015       grandfathering three-way min/max/cap logic (all 3 branches)
 //   BOUND-001..015        12-month STCG/LTCG boundary (at / -1 day / +1 day)
@@ -27,6 +28,14 @@
 //                                 facts either side of 31-Mar/1-Apr-2026 -> same tax
 //   GRANDBOUND-001..006 (3 pairs) R6-FINAL Sec.11: grandfathering eligibility cutoff,
 //                                 31-Jan/1-Feb-2018, disposal under the 2025 Act
+//   DEBTPRE-001..010       R6-DEBTFIX (2026-08-22): debt/specified-mutual-fund lots
+//                          ACQUIRED BEFORE 1 April 2023 — Section 50AA does not apply;
+//                          legacy pre-2023 treatment (36mo/20%/indexed pre-23-Jul-2024,
+//                          24mo/12.5%/unindexed on/after), incl. the acquisition-date
+//                          gate boundary (paired against the always-STCG branch) and
+//                          both legacy sub-window's holding-period anniversaries.
+//                          DEBTPRE-001 reproduces the exact facts of the live-DEV
+//                          defect this family was added to fix.
 //
 // Run: node scripts/ii-r6p1-certification/generate_cases.mjs
 
@@ -387,10 +396,66 @@ for (const facts of grandBoundaryFacts) {
   }
 }
 
+// ===========================================================================
+// DEBTPRE-001..010 — R6-DEBTFIX (2026-08-22): debt/specified mutual fund
+// LOTS ACQUIRED BEFORE 1 April 2023. Section 50AA (Finance Act 2023) only
+// catches units acquired ON/AFTER that date — these fixtures exercise the
+// FIXED per-lot acquisition-date gate (previously documented in
+// ruleVersions.ts but never read by capitalGainsEngine.ts, so every debt lot
+// was forced to STCG regardless of its own acquisition date). Hand-crafted
+// (not PRNG), same style as ACTTRANS/GRANDBOUND, to hit exact boundaries:
+//   001: reproduces the LIVE-DEV defect exactly (acq 2019-01-01, disp
+//        2024-06-01, 1000 units @ cost 12/sale 15) -> must resolve LTCG.
+//   002: same acquisition, short holding -> STCG (legacy pre-Budget-2024).
+//   003: acquired 2022, disposed 2024-08-01 (>24mo, post-23-Jul-2024) ->
+//        LTCG at 12.5%, no indexation, fully exact (no indexation gap).
+//   004: holding period that is LTCG under the NEW 24mo rule but STCG under
+//        the CORRECT old 36mo rule for its (pre-23-Jul-2024) disposal date
+//        -> proves the right threshold is selected by disposal date, not
+//        just "long enough looks LTCG".
+//   005/006: acquisition-date gate boundary pair (2023-03-31 vs 2023-04-01,
+//        identical disposal) -> legacy regime vs always-STCG Section 50AA.
+//   007/008: 36-month anniversary boundary pair, pre-23-Jul-2024 disposal.
+//   009/010: 24-month anniversary boundary pair, exactly AT/one-day-after
+//        the 23-Jul-2024 Budget boundary itself.
+// ===========================================================================
+const debtPreFixtures = [
+  // NOTE: resolveRuleVersion (ruleVersions.ts) has no rule-version row
+  // covering a disposal date before 2023-04-01 (ALL_RULE_VERSIONS' earliest
+  // effectiveFrom) — a pre-existing, separate scope boundary this fix does
+  // not touch. Every fixture below therefore uses a disposalDate on/after
+  // 2023-04-01, even where the acquisition date is well before it.
+  { id: 1, acquisitionDate: '2019-01-01', disposalDate: '2024-06-01', unitsConsumed: 1000, costPerUnit: 12, salePricePerUnit: 15 }, // = the live-DEV defect fixture, exactly
+  { id: 2, acquisitionDate: '2021-06-01', disposalDate: '2023-06-01', unitsConsumed: 1000, costPerUnit: 12, salePricePerUnit: 15 }, // short holding -> STCG
+  { id: 3, acquisitionDate: '2022-01-01', disposalDate: '2024-08-01', unitsConsumed: 200, costPerUnit: 25, salePricePerUnit: 32 },
+  { id: 4, acquisitionDate: '2022-06-01', disposalDate: '2024-06-15', unitsConsumed: 150, costPerUnit: 40, salePricePerUnit: 48 },
+  { id: 5, acquisitionDate: '2023-03-31', disposalDate: '2025-06-01', unitsConsumed: 100, costPerUnit: 18, salePricePerUnit: 22 },
+  { id: 6, acquisitionDate: '2023-04-01', disposalDate: '2025-06-01', unitsConsumed: 100, costPerUnit: 18, salePricePerUnit: 22 },
+  { id: 7, acquisitionDate: '2020-04-15', disposalDate: '2023-04-15', unitsConsumed: 300, costPerUnit: 20, salePricePerUnit: 26 },
+  { id: 8, acquisitionDate: '2020-04-15', disposalDate: '2023-04-16', unitsConsumed: 300, costPerUnit: 20, salePricePerUnit: 26 },
+  { id: 9, acquisitionDate: '2022-07-23', disposalDate: '2024-07-23', unitsConsumed: 250, costPerUnit: 30, salePricePerUnit: 37 },
+  { id: 10, acquisitionDate: '2022-07-23', disposalDate: '2024-07-24', unitsConsumed: 250, costPerUnit: 30, salePricePerUnit: 37 },
+];
+const debtPrePairs = { 5: '6', 6: '5', 7: '8', 8: '7', 9: '10', 10: '9' };
+for (const f of debtPreFixtures) {
+  const id = `DEBTPRE-${String(f.id).padStart(3, '0')}`;
+  cases.push({
+    id,
+    family: 'debt_pre2023',
+    instrumentKey: `SCH-DEBTPRE-${f.id}`,
+    acquisitionDate: f.acquisitionDate,
+    disposalDate: f.disposalDate,
+    unitsConsumed: f.unitsConsumed,
+    costPerUnit: f.costPerUnit,
+    salePricePerUnit: f.salePricePerUnit,
+    pairKey: debtPrePairs[f.id] ? [f.id, Number(debtPrePairs[f.id])].sort((a, b) => a - b).join('-') : null,
+  });
+}
+
 // ---------------------------------------------------------------------------
 const total = cases.length;
-if (total !== 132) {
-  console.error(`Expected exactly 132 cases (120 original + 12 R6-FINAL closure cases), generated ${total}`);
+if (total !== 142) {
+  console.error(`Expected exactly 142 cases (120 original + 12 R6-FINAL closure + 10 R6-DEBTFIX closure cases), generated ${total}`);
   process.exit(1);
 }
 

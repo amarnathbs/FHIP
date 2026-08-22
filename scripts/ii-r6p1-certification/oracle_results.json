@@ -433,6 +433,76 @@
       "saleValue": 5510.03,
       "taxableGain": 1020.61
     },
+    "DEBTPRE-001": {
+      "costBasisUsed": 12000,
+      "gainType": "ltcg",
+      "holdingDays": 1978,
+      "saleValue": 15000,
+      "taxableGain": 3000
+    },
+    "DEBTPRE-002": {
+      "costBasisUsed": 12000,
+      "gainType": "stcg",
+      "holdingDays": 730,
+      "saleValue": 15000,
+      "taxableGain": 3000
+    },
+    "DEBTPRE-003": {
+      "costBasisUsed": 5000,
+      "gainType": "ltcg",
+      "holdingDays": 943,
+      "saleValue": 6400,
+      "taxableGain": 1400
+    },
+    "DEBTPRE-004": {
+      "costBasisUsed": 6000,
+      "gainType": "stcg",
+      "holdingDays": 745,
+      "saleValue": 7200,
+      "taxableGain": 1200
+    },
+    "DEBTPRE-005": {
+      "costBasisUsed": 1800,
+      "gainType": "ltcg",
+      "holdingDays": 793,
+      "saleValue": 2200,
+      "taxableGain": 400
+    },
+    "DEBTPRE-006": {
+      "costBasisUsed": 1800,
+      "gainType": "stcg",
+      "holdingDays": 792,
+      "saleValue": 2200,
+      "taxableGain": 400
+    },
+    "DEBTPRE-007": {
+      "costBasisUsed": 6000,
+      "gainType": "stcg",
+      "holdingDays": 1095,
+      "saleValue": 7800,
+      "taxableGain": 1800
+    },
+    "DEBTPRE-008": {
+      "costBasisUsed": 6000,
+      "gainType": "ltcg",
+      "holdingDays": 1096,
+      "saleValue": 7800,
+      "taxableGain": 1800
+    },
+    "DEBTPRE-009": {
+      "costBasisUsed": 7500,
+      "gainType": "stcg",
+      "holdingDays": 731,
+      "saleValue": 9250,
+      "taxableGain": 1750
+    },
+    "DEBTPRE-010": {
+      "costBasisUsed": 7500,
+      "gainType": "ltcg",
+      "holdingDays": 732,
+      "saleValue": 9250,
+      "taxableGain": 1750
+    },
     "EXIT-001": {
       "applicableLoadPct": 2,
       "exitLoadAmount": 298.66,

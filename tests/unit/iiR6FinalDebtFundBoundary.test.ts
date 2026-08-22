@@ -13,23 +13,25 @@
 // explicitly asked us to sanity-check — there is no finding here that a
 // spec-assumed boundary is NOT real; it IS real.
 //
-// HOWEVER: this pass also discovered (while tracing how the boundary would
-// actually need to be enforced) that R6-P1's engine does NOT currently
-// enforce this boundary AT THE PER-LOT LEVEL. `DebtSpecifiedRules.
-// specifiedFundAcquiredOnOrAfter` (ruleVersions.ts) is defined and
-// documented but never READ by capitalGainsEngine.ts — every lot already
-// classified `debt_specified` (upstream, by schemeClassification.ts /
-// taxRepository.ts's instrument-category data) is treated as always-
-// short-term regardless of its own acquisitionDate. ruleVersions.ts's own
-// comment on this field already discloses this as a deliberate R6-P1 scope
-// boundary ("out of scope: pre-FY2023-24 debt-fund acquisitions are rare in
-// a fresh II dataset and flagged unresolved rather than guessed") — this is
-// PRE-EXISTING, DISCLOSED behaviour, not something Section 8/9's placeholder
-// removal touches, and per this dispatch's explicit instruction not to
-// rebuild core engine logic, it is left as-is here. This test exists to (a)
-// confirm the boundary date is real via research, and (b) make the current,
-// disclosed non-enforcement an explicit, visible, regression-tested fact
-// rather than an implicit assumption nobody has actually checked lately.
+// R6-DEBTFIX (2026-08-22, superseding this file's original text): an
+// independent acceptance review confirmed the finding this file originally
+// only DISCLOSED — that R6-P1's engine did NOT enforce this boundary AT THE
+// PER-LOT LEVEL — was a real, live-DEV-confirmed defect, not an acceptable
+// scope boundary: a debt-fund lot acquired in 2019 and disposed after a
+// 1978-day (5.4-year) holding period was being reported as STCG when it
+// should have been evaluated as LTCG under the pre-2023 debt-fund regime.
+// capitalGainsEngine.ts now READS `DebtSpecifiedRules.
+// specifiedFundAcquiredOnOrAfter` as a genuine per-lot gate: a lot acquired
+// BEFORE the cutoff gets the legacy pre-2023 treatment (see
+// `ruleVersions.ts`'s `LegacyDebtFundRegime` and
+// `docs/investment-intelligence/R6_DEBT_FUND_ACQUISITION_DATE_FIX.md`), NOT
+// the always-short-term Section 50AA rule. This test file's assertions are
+// updated accordingly — the PRE-cutoff and POST-cutoff cases below now
+// correctly diverge instead of both being forced to STCG.
+//
+// See tests/unit/iiR6P1Certification.test.ts's "R6-DEBTFIX: legacy debt-fund
+// family" describe block (DEBTPRE-001..010, 142-case independent
+// certification pack) for the full, independently-oracled regression suite.
 
 import { describe, it, expect } from 'vitest';
 import { computeDisposalTax } from '@/lib/engines/investment-intelligence/tax/capitalGainsEngine';
@@ -63,13 +65,13 @@ function consumptionFor(acquisitionDate: string, disposalDate: string): LotConsu
   };
 }
 
-describe('R6-FINAL Sec.11: specified-mutual-fund (debt) 31-Mar-2023/1-Apr-2023 boundary', () => {
+describe('R6-FINAL Sec.11 / R6-DEBTFIX: specified-mutual-fund (debt) 31-Mar-2023/1-Apr-2023 boundary', () => {
   it('the rate table documents the boundary date, sourced and verified (Finance Act 2023, carried forward unchanged into the 2025 Act)', () => {
     expect(RULE_1961_POST_20240723.ruleDefinition.debtSpecified.specifiedFundAcquiredOnOrAfter).toBe('2023-04-01');
     expect(RULE_1961_POST_20240723.ruleDefinition.debtSpecified.alwaysShortTerm).toBe(true);
   });
 
-  it('DISCLOSED BEHAVIOUR: a lot already classified debt_specified is always-short-term regardless of ITS OWN acquisition date relative to the 2023-04-01 cutoff (the field is not consumed as a per-lot gate)', () => {
+  it('FIXED BEHAVIOUR (R6-DEBTFIX): a lot acquired BEFORE the 2023-04-01 cutoff now gets the legacy pre-2023 debt-fund treatment (LTCG here, long holding), while an otherwise-identical lot acquired ON/AFTER the cutoff still gets the always-STCG Section 50AA rule', () => {
     const preCutoff = computeDisposalTax({
       consumption: consumptionFor('2019-06-01', '2025-01-01'), // acquired well BEFORE the cutoff
       saleValuePerUnit: 25,
@@ -82,12 +84,20 @@ describe('R6-FINAL Sec.11: specified-mutual-fund (debt) 31-Mar-2023/1-Apr-2023 b
       classification: debtClassification(),
       fmv31Jan2018PerUnit: null,
     });
-    // Both sides get identical STCG-always treatment today — this IS the
-    // current, disclosed engine behaviour, held here as a named fact so a
-    // future change to it is a deliberate decision, not a silent drift.
-    expect(preCutoff.gainType).toBe('stcg');
-    expect(postCutoff.gainType).toBe('stcg');
+    // preCutoff: acquired 2019-06-01, disposed 2025-01-01 (>24 months,
+    // disposal on/after the 23-Jul-2024 Budget boundary) -> legacy regime,
+    // 24-month threshold -> LTCG.
+    expect(preCutoff.gainType).toBe('ltcg');
     expect(preCutoff.grandfathering).toBeNull();
+    expect(preCutoff.note).not.toMatch(/always short-term/i);
+    // postCutoff: acquired on/after the cutoff -> Section 50AA -> always STCG
+    // regardless of holding period (unchanged, pre-existing, correct
+    // behaviour).
+    expect(postCutoff.gainType).toBe('stcg');
     expect(postCutoff.grandfathering).toBeNull();
+    expect(postCutoff.note).toMatch(/50AA/);
+    // The whole point of the fix: these two lots, differing ONLY in
+    // acquisition date, must no longer collapse to the same treatment.
+    expect(preCutoff.gainType).not.toBe(postCutoff.gainType);
   });
 });

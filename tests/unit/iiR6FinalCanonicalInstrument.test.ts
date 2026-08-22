@@ -306,13 +306,18 @@ describe('R6-FINAL Sec.15: two same-named instruments never merge, resolved and 
     const resultB = computeDisposalTax({ consumption: consumptionB, saleValuePerUnit: 90, classification: classB, fmv31Jan2018PerUnit: 60 });
 
     // Same facts, different classification by canonical ID -> different
-    // treatment (LTCG+grandfathering for A, always-STCG for B).
+    // treatment (LTCG+grandfathering for A; B is debt/specified acquired
+    // 2016-06-01, well BEFORE the 1-Apr-2023 Section 50AA cutoff, so
+    // R6-DEBTFIX's legacy-regime gate applies -> LTCG too here [>10 years'
+    // holding clears both the 24- and 36-month legacy thresholds], but
+    // WITHOUT grandfathering, which never applies to debt/specified funds
+    // regardless of acquisition date).
     expect(resultA.classification).toBe('equity_oriented');
     expect(resultA.gainType).toBe('ltcg');
     expect(resultA.grandfathering?.eligible).toBe(true);
 
     expect(resultB.classification).toBe('debt_specified');
-    expect(resultB.gainType).toBe('stcg');
+    expect(resultB.gainType).toBe('ltcg');
     expect(resultB.grandfathering).toBeNull();
 
     // Grandfathering applied directly, keyed only by the facts passed for

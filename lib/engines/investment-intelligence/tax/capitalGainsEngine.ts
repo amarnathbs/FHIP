@@ -4,11 +4,19 @@
 // grandfathering (grandfathering.ts), and effective-dated rule resolution
 // (ruleVersions.ts, keyed by the DISPOSAL's own date).
 //
-// Debt/specified mutual funds NEVER get LTCG treatment — every gain is
-// short-term at slab rate regardless of holding period (Finance Act 2023
-// "specified mutual fund" rule). This engine does not even compute a
-// holding-period long-term test for a debt-specified lot; it is
-// unconditionally STCG.
+// A debt/specified mutual fund UNIT ACQUIRED ON/AFTER 1 April 2023 NEVER
+// gets LTCG treatment — every gain is short-term at slab rate regardless of
+// holding period (Section 50AA, Finance Act 2023 "specified mutual fund"
+// rule). A unit ACQUIRED BEFORE 1 April 2023 is NOT covered by Section 50AA
+// (which only catches acquisitions on/after that date) and instead retains
+// the pre-existing debt-fund treatment — R6-DEBTFIX (2026-08-22) fixed a
+// defect where this per-lot acquisition-date gate was documented in
+// ruleVersions.ts (`DebtSpecifiedRules.specifiedFundAcquiredOnOrAfter`) but
+// never actually read here, so every debt/specified lot — regardless of its
+// OWN acquisition date — was unconditionally forced to STCG. See
+// ruleVersions.ts's `LegacyDebtFundRegime` and
+// docs/investment-intelligence/R6_DEBT_FUND_ACQUISITION_DATE_FIX.md for the
+// full defect history, legal research, and live-DEV before/after proof.
 
 import { computeHoldingPeriod } from './holdingPeriod';
 import { applyGrandfathering, type GrandfatheringResult } from './grandfathering';
@@ -92,10 +100,72 @@ export function computeDisposalTax(inputs: ComputeDisposalTaxInputs): DisposalTa
   const ruleVersion = resolveRuleVersion(c.disposalDate, ruleVersions);
   const rules = ruleVersion.ruleDefinition;
 
-  // --- Debt/specified mutual fund: always short-term, no LTCG ever. -------
+  // --- Debt/specified mutual fund. -----------------------------------------
   if (classification.classification === 'debt_specified') {
-    const holding = computeHoldingPeriod(c.acquisitionDate, c.disposalDate, 12); // informational only
     const taxableGain = saleValue - c.costBasis;
+    const acquiredUnderSection50AA = c.acquisitionDate >= rules.debtSpecified.specifiedFundAcquiredOnOrAfter;
+
+    if (acquiredUnderSection50AA) {
+      // Section 50AA (Finance Act 2023): units acquired ON/AFTER the cutoff
+      // are always short-term at slab rate, regardless of holding period.
+      const holding = computeHoldingPeriod(c.acquisitionDate, c.disposalDate, 12); // informational only
+      return {
+        disposalEventId: c.disposalEventId,
+        lotId: c.lotId,
+        instrumentKey: c.instrumentKey,
+        acquisitionDate: c.acquisitionDate,
+        disposalDate: c.disposalDate,
+        unitsConsumed: c.unitsConsumed,
+        classification: classification.classification,
+        gainType: 'stcg', // always short-term, regardless of holding period
+        holdingDays: holding.holdingDays,
+        ruleVersion: ruleVersion.version,
+        ruleVersionPlaceholder: rules.placeholder,
+        saleValue,
+        costBasisUsed: c.costBasis,
+        costBasisPreGrandfathering: c.costBasis,
+        taxableGain,
+        grandfathering: null, // grandfathering never applies to debt/specified funds
+        note: `Debt/specified mutual fund unit acquired ${c.acquisitionDate}, on/after the 1 April 2023 Section 50AA cutoff (Finance Act 2023) — always short-term at slab rate regardless of holding period; no indexation, no LTCG treatment.`,
+      };
+    }
+
+    // Acquired BEFORE the Section 50AA cutoff: this lot is NOT a "specified
+    // mutual fund" disposal — it retains the pre-existing debt-fund
+    // treatment, evaluated under whichever legacy regime is in force on the
+    // DISPOSAL date (ruleVersions.ts's `LegacyDebtFundRegime` — the 36-
+    // month/20%-indexed regime before 23-Jul-2024, the 24-month/12.5%-
+    // unindexed regime on/after).
+    const legacy = rules.debtSpecified.legacyRegime;
+    const holding = computeHoldingPeriod(c.acquisitionDate, c.disposalDate, legacy.ltcgHoldingPeriodMonths);
+    const gainType: GainType = holding.isLongTerm ? 'ltcg' : 'stcg';
+
+    let note: string;
+    if (gainType === 'stcg') {
+      note =
+        `Debt/specified mutual fund unit acquired ${c.acquisitionDate}, BEFORE the 1 April 2023 ` +
+        `Section 50AA cutoff — not a "specified mutual fund" disposal, retains pre-2023 debt-fund ` +
+        `treatment. Held ${holding.holdingDays} days (<= ${legacy.ltcgHoldingPeriodMonths} months as ` +
+        `of the disposal date's rule window) — short-term at slab rate.`;
+    } else if (legacy.indexationAllowed) {
+      note =
+        `Debt/specified mutual fund unit acquired ${c.acquisitionDate}, BEFORE the 1 April 2023 ` +
+        `Section 50AA cutoff, disposed ${c.disposalDate} (pre-23-Jul-2024 rate window) — long-term ` +
+        `(held ${holding.holdingDays} days, > ${legacy.ltcgHoldingPeriodMonths} months) at ` +
+        `${legacy.ltcgRatePct}% under Section 112 as it stood before Budget 2024. Cost-Inflation-` +
+        `Index indexation benefit legally applies to this disposal but is NOT calculated by this ` +
+        `release (no verified CII table wired in) — the cost basis and taxable gain shown use the ` +
+        `UN-INDEXED acquisition cost only. Do not treat this taxable-gain figure as final; a correct ` +
+        `indexed cost basis would raise the cost basis and lower the taxable gain shown here.`;
+    } else {
+      note =
+        `Debt/specified mutual fund unit acquired ${c.acquisitionDate}, BEFORE the 1 April 2023 ` +
+        `Section 50AA cutoff, disposed ${c.disposalDate} (on/after the 23 July 2024 Budget 2024 ` +
+        `boundary) — long-term (held ${holding.holdingDays} days, > ${legacy.ltcgHoldingPeriodMonths} ` +
+        `months) at ${legacy.ltcgRatePct}% with NO indexation (Budget 2024 removed the indexation ` +
+        `benefit and shortened the LTCG holding threshold for this disposal-date window).`;
+    }
+
     return {
       disposalEventId: c.disposalEventId,
       lotId: c.lotId,
@@ -104,16 +174,16 @@ export function computeDisposalTax(inputs: ComputeDisposalTaxInputs): DisposalTa
       disposalDate: c.disposalDate,
       unitsConsumed: c.unitsConsumed,
       classification: classification.classification,
-      gainType: 'stcg', // always short-term, regardless of holding period
+      gainType,
       holdingDays: holding.holdingDays,
       ruleVersion: ruleVersion.version,
       ruleVersionPlaceholder: rules.placeholder,
       saleValue,
-      costBasisUsed: c.costBasis,
+      costBasisUsed: c.costBasis, // never indexed — see note when gainType === 'ltcg' && legacy.indexationAllowed
       costBasisPreGrandfathering: c.costBasis,
       taxableGain,
-      grandfathering: null, // grandfathering never applies to debt/specified funds
-      note: 'Debt/specified mutual fund — always short-term at slab rate regardless of holding period (Finance Act 2023 rule); no indexation, no LTCG treatment.',
+      grandfathering: null, // grandfathering (Sec 55(2)(ac)) is Section-112A/equity-linked; never applies to debt/specified funds
+      note,
     };
   }
 

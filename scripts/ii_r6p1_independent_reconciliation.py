@@ -191,15 +191,42 @@ def oracle_boundary(case: dict) -> dict:
     }
 
 
+SPECIFIED_FUND_CUTOFF = "2023-04-01"  # Section 50AA / Finance Act 2023
+BUDGET_2024_BOUNDARY = "2024-07-23"  # Finance (No. 2) Act, 2024
+
+
 def oracle_debt(case: dict) -> dict:
+    """Covers BOTH the 'debt' family (all fixtures acquired on/after the
+    Section 50AA cutoff -> always STCG, unchanged R6-P1 behaviour) and the
+    'debt_pre2023' family (R6-DEBTFIX, 2026-08-22: fixtures acquired BEFORE
+    the cutoff -> legacy debt-fund treatment, keyed by the DISPOSAL date's
+    own rule window, per ruleVersions.ts's LegacyDebtFundRegime / the
+    R6_TAX_LEGAL_SOURCE_REGISTER.md Section 4a research)."""
     acq = case["acquisitionDate"]
     disp = case["disposalDate"]
     units = case["unitsConsumed"]
     cost_basis = round(units * case["costPerUnit"], 2)
     sale_value = round(units * case["salePricePerUnit"], 2)
-    taxable_gain = round(sale_value - cost_basis, 2)
+    taxable_gain = round(sale_value - cost_basis, 2)  # never indexed, either branch
+
+    if acq >= SPECIFIED_FUND_CUTOFF:
+        # Section 50AA: always short-term, regardless of holding period.
+        return {
+            "gainType": "stcg",
+            "holdingDays": holding_days(acq, disp),
+            "costBasisUsed": cost_basis,
+            "saleValue": sale_value,
+            "taxableGain": taxable_gain,
+        }
+
+    # Acquired before the cutoff: legacy regime, threshold/rate depends on
+    # which side of the 23-Jul-2024 Budget boundary the DISPOSAL falls.
+    threshold_months = 36 if disp < BUDGET_2024_BOUNDARY else 24
+    anniversary = add_months_clamped(acq, threshold_months)
+    is_long_term = disp > anniversary
+    gain_type = "ltcg" if is_long_term else "stcg"
     return {
-        "gainType": "stcg",  # ALWAYS short-term, regardless of holding period
+        "gainType": gain_type,
         "holdingDays": holding_days(acq, disp),
         "costBasisUsed": cost_basis,
         "saleValue": sale_value,
@@ -332,6 +359,7 @@ FAMILY_ORACLES = {
     "grandfathering": oracle_grandfathering,
     "boundary": oracle_boundary,
     "debt": oracle_debt,
+    "debt_pre2023": oracle_debt,
     "fy_aggregation": oracle_fy_aggregation,
     "cross_fy": oracle_fy_aggregation,  # same aggregation logic, different fixture emphasis
     "exit_load": oracle_exit_load,

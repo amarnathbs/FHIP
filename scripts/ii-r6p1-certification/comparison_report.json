@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-22T03:11:20.360Z",
+  "generatedAt": "2026-08-22T11:18:37.194Z",
   "tolerances": {
     "currency": 0.01,
     "costPerUnit": 0.000001
   },
-  "caseCount": 132,
-  "comparisonCount": 604,
-  "passCount": 604,
+  "caseCount": 142,
+  "comparisonCount": 644,
+  "passCount": 644,
   "failCount": 0,
   "rows": [
     {
@@ -2607,6 +2607,366 @@
       "production": 1020.6107999999995,
       "independent": 1020.61,
       "variance": 0.0007999999994581231,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "holdingDays",
+      "production": 1978,
+      "independent": 1978,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "costBasisUsed",
+      "production": 12000,
+      "independent": 12000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-001",
+      "metric": "taxableGain",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "holdingDays",
+      "production": 730,
+      "independent": 730,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "costBasisUsed",
+      "production": 12000,
+      "independent": 12000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-002",
+      "metric": "taxableGain",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "holdingDays",
+      "production": 943,
+      "independent": 943,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "costBasisUsed",
+      "production": 5000,
+      "independent": 5000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-003",
+      "metric": "taxableGain",
+      "production": 1400,
+      "independent": 1400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "holdingDays",
+      "production": 745,
+      "independent": 745,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-004",
+      "metric": "taxableGain",
+      "production": 1200,
+      "independent": 1200,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "holdingDays",
+      "production": 793,
+      "independent": 793,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "costBasisUsed",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-005",
+      "metric": "taxableGain",
+      "production": 400,
+      "independent": 400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "holdingDays",
+      "production": 792,
+      "independent": 792,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "costBasisUsed",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-006",
+      "metric": "taxableGain",
+      "production": 400,
+      "independent": 400,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "holdingDays",
+      "production": 1095,
+      "independent": 1095,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-007",
+      "metric": "taxableGain",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "holdingDays",
+      "production": 1096,
+      "independent": 1096,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-008",
+      "metric": "taxableGain",
+      "production": 1800,
+      "independent": 1800,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "gainType",
+      "production": "stcg",
+      "independent": "stcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "holdingDays",
+      "production": 731,
+      "independent": 731,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "costBasisUsed",
+      "production": 7500,
+      "independent": 7500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-009",
+      "metric": "taxableGain",
+      "production": 1750,
+      "independent": 1750,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "holdingDays",
+      "production": 732,
+      "independent": 732,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "costBasisUsed",
+      "production": 7500,
+      "independent": 7500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "DEBTPRE-010",
+      "metric": "taxableGain",
+      "production": 1750,
+      "independent": 1750,
+      "variance": 0,
       "tolerance": 0.01,
       "result": "PASS"
     },
