@@ -261,6 +261,49 @@ export function isCreditCardDebt(debtType: string, masterItemKey?: string | null
   return masterItemKey === 'credit_card' || masterItemKey === 'store_card' || debtType === 'credit_card';
 }
 
+// ---------------------------------------------------------------------------
+// Debt-purpose split (Financial DNA debt-dependence redesign, App Review
+// Spec 1 §24-28) — a narrower, more specific signal than isGoodDebt() above.
+// isGoodDebt() answers "is this balance asset-backed/productive debt" (used
+// for the goodDebt/badDebt split); this answers "whose serviceability
+// benchmark applies" for Financial DNA, which the spec requires to keep
+// strictly separate: owner-occupied housing debt (~30% of gross income
+// reference band), investment/income-producing property debt (assessed
+// against household capacity after living costs, never penalised merely
+// for being debt), and everything else (consumer/other — must never
+// receive favourable treatment just because good investment debt exists
+// elsewhere in the household).
+//
+// Only 'home_loan' and 'investment_loan' are unambiguous single-purpose
+// catalogue items (supabase/seed_master_items.sql, 'liability' category).
+// 'construction_loan' is a genuine ambiguity the catalogue does not
+// resolve — it could fund a primary-residence build or an investment-
+// property build, and there is no data-model field to tell them apart
+// (same "mixed-purpose loan" limitation the redesign spec explicitly
+// scopes out — a liability row has exactly one debt_type/master_item_key).
+// Rather than guess it into the more lenient investment-capacity band, it
+// defaults to owner_occupied — the stricter, more conservative of the two
+// property bands — so an ambiguous loan is never accidentally given
+// favourable investment-style treatment. This is a disclosed heuristic,
+// not a verified purpose signal; see DebtPurposeAssessment.limitations in
+// lib/engines/financialDna.ts for the user-facing disclosure.
+//
+// Every other catalogue liability (personal_loan, car_loan, credit_card,
+// business_loan, margin_loan, hecs_help, etc.) falls into consumer_or_other
+// — deliberately conservative, since a wrong guess into a favourable
+// property band would be the more harmful error here.
+const OWNER_OCCUPIED_DEBT_MASTER_ITEMS = new Set(['home_loan', 'construction_loan']);
+const INVESTMENT_PROPERTY_DEBT_MASTER_ITEMS = new Set(['investment_loan']);
+
+export type DebtPurpose = 'owner_occupied' | 'investment_property' | 'consumer_or_other';
+
+export function classifyDebtPurpose(debtType: string, masterItemKey?: string | null): DebtPurpose {
+  const key = masterItemKey || debtType;
+  if (OWNER_OCCUPIED_DEBT_MASTER_ITEMS.has(key) || debtType === 'mortgage') return 'owner_occupied';
+  if (INVESTMENT_PROPERTY_DEBT_MASTER_ITEMS.has(key)) return 'investment_property';
+  return 'consumer_or_other';
+}
+
 // expense_category (lib/validation/expense.ts) has the same never-collected-
 // by-the-grid problem as asset_class/investment_type/debt_type above:
 // lib/grid/configs.ts's expenseGridConfig.fields never lists it, so every
@@ -410,6 +453,18 @@ export interface DashboardSummary {
   liabilitiesWithPayoff: { debtType: string; balance: number; monthsToPayoff: number | null }[];
   goodDebt: number;
   badDebt: number;
+  // Purpose split for Financial DNA's debt-dependence assessment (App
+  // Review Spec 1 §24-28) — see classifyDebtPurpose() above for the
+  // classification rule and its disclosed construction_loan heuristic.
+  // Currency-converted to the reporting currency, same as totalLiabilities/
+  // debtMonthlyRepayments above (so ratios computed against income are
+  // consistent), unlike goodDebt/badDebt which sum raw balances.
+  ownerOccupiedDebtBalance: number;
+  ownerOccupiedDebtMonthlyRepayment: number;
+  investmentPropertyDebtBalance: number;
+  investmentPropertyDebtMonthlyRepayment: number;
+  consumerOrOtherDebtBalance: number;
+  consumerOrOtherDebtMonthlyRepayment: number;
   variableRateDebtBalance: number;
   variableRateDebtRatio: number | null; // balance-weighted; null if no liability has interest_rate_type recorded
   upcomingRateResetBalance12m: number; // fixed-rate balance expiring within 12 months
@@ -641,6 +696,28 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   for (const l of input.liabilities) {
     if (isGoodDebt(l.debt_type, l.master_item_key)) goodDebt += l.balance;
     else badDebt += l.balance;
+  }
+
+  let ownerOccupiedDebtBalance = 0;
+  let ownerOccupiedDebtMonthlyRepayment = 0;
+  let investmentPropertyDebtBalance = 0;
+  let investmentPropertyDebtMonthlyRepayment = 0;
+  let consumerOrOtherDebtBalance = 0;
+  let consumerOrOtherDebtMonthlyRepayment = 0;
+  for (const l of input.liabilities) {
+    const purpose = classifyDebtPurpose(l.debt_type, l.master_item_key);
+    const balance = reportingValue(l.currency_code, l.balance);
+    const repayment = reportingValue(l.currency_code, l.monthly_repayment ?? 0);
+    if (purpose === 'owner_occupied') {
+      ownerOccupiedDebtBalance += balance;
+      ownerOccupiedDebtMonthlyRepayment += repayment;
+    } else if (purpose === 'investment_property') {
+      investmentPropertyDebtBalance += balance;
+      investmentPropertyDebtMonthlyRepayment += repayment;
+    } else {
+      consumerOrOtherDebtBalance += balance;
+      consumerOrOtherDebtMonthlyRepayment += repayment;
+    }
   }
 
   const liabilitiesWithRateType = input.liabilities.filter((l) => (l.interest_rate_type ?? null) !== null);
@@ -901,6 +978,12 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     liabilitiesWithPayoff,
     goodDebt,
     badDebt,
+    ownerOccupiedDebtBalance,
+    ownerOccupiedDebtMonthlyRepayment,
+    investmentPropertyDebtBalance,
+    investmentPropertyDebtMonthlyRepayment,
+    consumerOrOtherDebtBalance,
+    consumerOrOtherDebtMonthlyRepayment,
     variableRateDebtBalance,
     variableRateDebtRatio,
     upcomingRateResetBalance12m,
