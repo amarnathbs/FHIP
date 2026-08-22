@@ -61,6 +61,27 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section className="mt-8 space-y-3">
+        <h2 className="text-xl font-semibold">Financial document uploads</h2>
+        <p>
+          If you choose to upload a financial document (for example a bank, credit card, loan, payslip,
+          investment or superannuation/EPF/NPS statement) so FHIP can prepare structured financial
+          information for your review, that document is stored privately and is not available for routine
+          admin viewing. FHIP&apos;s administrators can see operational information about a document — its
+          type, source institution, and processing status — but cannot open, view or download the document
+          itself as a matter of routine access.
+        </p>
+        <p>
+          Once you have reviewed and approved the information extracted from a document, the underlying raw
+          file is scheduled for deletion according to FHIP&apos;s retention policy — it is not kept
+          indefinitely. We retain only the structured financial data, and the minimal provenance details
+          needed for your financial profile and for audit purposes, after the raw document has been deleted.
+          If a document upload fails or is rejected (for example because the file type isn&apos;t supported),
+          it is deleted promptly rather than retained. This deletion follows a short processing/retry window
+          rather than happening the instant you click approve.
+        </p>
+      </section>
+
+      <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">Data control</h2>
         <p>
           You can review, update, or remove information in your account at any time. Connected data sources
