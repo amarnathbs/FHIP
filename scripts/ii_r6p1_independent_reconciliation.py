@@ -62,8 +62,13 @@ def holding_days(acq: str, disp: str) -> int:
 # Rule versions — independently transcribed (not imported) from the same
 # researched sources cited in ruleVersions.ts: Finance Act 2023 (debt-
 # specified-fund rule, FY2023-24 onward), Finance (No. 2) Act 2024 (equity
-# rate change effective 23 July 2024), and the explicit 2025-Act placeholder
-# (in force from 1 April 2026, structure only, flagged non-authoritative).
+# rate change effective 23 July 2024), and the Income-tax Act 2025 (in force
+# from 1 April 2026). R6-FINAL closure (2026-08-22) independently re-verified
+# the 2025 Act row against indiankanoon.org's transcription of the enacted
+# Act text (Sections 196/198) plus five corroborating secondary sources —
+# same 20%/12.5%/Rs 1,25,000 figures as the pre-transition row, confirmed as
+# a renumbering with no rate change, not assumed. See
+# docs/investment-intelligence/R6_TAX_LEGAL_SOURCE_REGISTER.md.
 # ---------------------------------------------------------------------------
 RULE_VERSIONS = [
     {
@@ -85,10 +90,10 @@ RULE_VERSIONS = [
         "ltcg_exemption_inr": 125000,
     },
     {
-        "version": "2025_act_placeholder",
+        "version": "2025_act_post_20260401",
         "effective_from": "2026-04-01",
         "effective_to": None,
-        "placeholder": True,
+        "placeholder": False,
         "stcg_rate_pct": 20,
         "ltcg_rate_pct": 12.5,
         "ltcg_exemption_inr": 125000,
@@ -256,6 +261,72 @@ def oracle_rate_version(case: dict) -> dict:
     }
 
 
+def oracle_act_transition(case: dict) -> dict:
+    # R6-FINAL closure, Section 10: full disposal-tax computation (rule
+    # version + holding-period STCG/LTCG split + grandfathering-if-applicable)
+    # for a disposal dated either side of the 1961 Act -> 2025 Act boundary.
+    acq = case["acquisitionDate"]
+    disp = case["disposalDate"]
+    units = case["unitsConsumed"]
+    cost_per_unit = case["costPerUnit"]
+    sale_per_unit = case["salePricePerUnit"]
+    sale_value = round(units * sale_per_unit, 2)
+    cost_basis = round(units * cost_per_unit, 2)
+
+    rule = resolve_rule_version(disp)
+    anniversary = add_months_clamped(acq, 12)
+    is_long_term = disp > anniversary
+    gain_type = "ltcg" if is_long_term else "stcg"
+    # All ACTTRANS fixtures acquire on/after 2018-02-01 (post grandfathering
+    # cutoff), so grandfathering never applies here — cost basis is plain.
+    taxable_gain = round(sale_value - cost_basis, 2)
+
+    return {
+        "ruleVersion": rule["version"],
+        "placeholder": rule["placeholder"],
+        "gainType": gain_type,
+        "costBasisUsed": cost_basis,
+        "saleValue": sale_value,
+        "taxableGain": taxable_gain,
+    }
+
+
+def oracle_grand_boundary(case: dict) -> dict:
+    # R6-FINAL closure, Section 11: full disposal-tax computation straddling
+    # the 31-Jan/1-Feb-2018 grandfathering eligibility cutoff, disposed under
+    # the 2025 Act (disposalDate 2026-06-15) to also exercise continuity.
+    acq = case["acquisitionDate"]
+    disp = case["disposalDate"]
+    units = case["unitsConsumed"]
+    cost_per_unit = case["costPerUnit"]
+    fmv = case["fmvPerUnit"]
+    sale_per_unit = case["salePricePerUnit"]
+    sale_value = round(units * sale_per_unit, 2)
+
+    rule = resolve_rule_version(disp)
+    # All fixtures here are long-term by construction (2018 acquisition,
+    # 2026 disposal) — no need to re-derive the STCG/LTCG split.
+    eligible = acq < "2018-02-01"
+    if eligible:
+        lower_of_fmv_and_sale = min(fmv, sale_per_unit)
+        basis_per_unit = max(cost_per_unit, lower_of_fmv_and_sale)
+        basis_source = "fmv_grandfathered" if basis_per_unit > cost_per_unit else "actual_cost"
+    else:
+        basis_per_unit = cost_per_unit
+        basis_source = "not_applicable"
+    cost_basis = round(units * basis_per_unit, 2)
+    taxable_gain = round(sale_value - cost_basis, 2)
+
+    return {
+        "ruleVersion": rule["version"],
+        "grandfatheringEligible": eligible,
+        "basisSource": basis_source,
+        "costBasisUsed": cost_basis,
+        "saleValue": sale_value,
+        "taxableGain": taxable_gain,
+    }
+
+
 FAMILY_ORACLES = {
     "fifo": oracle_fifo,
     "grandfathering": oracle_grandfathering,
@@ -266,6 +337,8 @@ FAMILY_ORACLES = {
     "exit_load": oracle_exit_load,
     "ambiguous": oracle_ambiguous,
     "rate_version": oracle_rate_version,
+    "act_transition": oracle_act_transition,
+    "grand_boundary": oracle_grand_boundary,
 }
 
 
@@ -287,7 +360,10 @@ def main() -> int:
         results[case["id"]] = oracle(case)
         counts[fam] = counts.get(fam, 0) + 1
 
-    RESULTS_PATH.write_text(json.dumps({"cases": results}, indent=2, sort_keys=True), encoding="utf-8")
+    # newline='' prevents Python's universal-newline translation from turning
+    # json.dumps's '\n' line separators into CRLF on Windows — this repo's
+    # convention (and a prior CRLF-broke-an-exact-match-test incident) requires LF.
+    RESULTS_PATH.write_text(json.dumps({"cases": results}, indent=2, sort_keys=True), encoding="utf-8", newline="")
     print(f"Computed {len(results)} oracle results -> {RESULTS_PATH}")
     print("By family:", counts)
     return 0

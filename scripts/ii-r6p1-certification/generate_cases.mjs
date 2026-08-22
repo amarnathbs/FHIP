@@ -11,7 +11,9 @@
 // NEVER generated using production code — the oracle derives them
 // independently in Python from these raw inputs.
 //
-// Families (120 cases total):
+// Families (132 cases total — 120 original R6-P1 cases, permanent per the
+// R6-FINAL spec's Section 34, PLUS 12 R6-FINAL closure cases added
+// 2026-08-22 for Sections 10/11):
 //   FIFO-001..020       multi-lot partial consumption, exact-lot-boundary consumption
 //   GRAND-001..015       grandfathering three-way min/max/cap logic (all 3 branches)
 //   BOUND-001..015        12-month STCG/LTCG boundary (at / -1 day / +1 day)
@@ -21,6 +23,10 @@
 //   EXIT-001..015         exit-load holding-period-dependent computation
 //   AMBIG-001..010        ambiguous/missing classification -> must flag, not guess
 //   RATE-001..010         effective-dated rule-version resolution (1961/2025 Act)
+//   ACTTRANS-001..006 (3 pairs)   R6-FINAL Sec.10: 1961->2025 Act transition, identical
+//                                 facts either side of 31-Mar/1-Apr-2026 -> same tax
+//   GRANDBOUND-001..006 (3 pairs) R6-FINAL Sec.11: grandfathering eligibility cutoff,
+//                                 31-Jan/1-Feb-2018, disposal under the 2025 Act
 //
 // Run: node scripts/ii-r6p1-certification/generate_cases.mjs
 
@@ -306,15 +312,90 @@ for (let i = 1; i <= 10; i++) {
   cases.push({ id, family: 'rate_version', disposalDate });
 }
 
+// ===========================================================================
+// ACTTRANS-001..006 (3 pairs) — R6-FINAL closure, Section 10: the 1961 Act ->
+// 2025 Act transition (31-Mar-2026 / 1-Apr-2026). Each pair holds every fact
+// (acquisition date, cost, sale price) IDENTICAL except the disposal date,
+// which sits one day on either side of the boundary. This proves: (a) the
+// correct governing rule version is selected purely from the DISPOSAL date,
+// (b) the computed taxable gain is numerically IDENTICAL across the pair —
+// research (R6_TAX_LEGAL_SOURCE_REGISTER.md) found the 2025 Act re-enacts
+// Sections 111A/112A with NO rate change, so a naive "the Act changed, the
+// numbers must differ" assumption would be WRONG here, and (c) a disposal
+// dated 31-Mar-2026 keeps 1961-Act rules even when computed long after the
+// 2025 Act is in force (no retroactive re-rating).
+// ===========================================================================
+const actTransitionFacts = [
+  { acquisitionDate: '2020-05-10', costPerUnit: 42.5, salePricePerUnit: 118.75, unitsConsumed: 200 },
+  { acquisitionDate: '2022-11-01', costPerUnit: 88.2, salePricePerUnit: 95.4, unitsConsumed: 60 },
+  { acquisitionDate: '2019-02-14', costPerUnit: 15.0, salePricePerUnit: 210.0, unitsConsumed: 350 },
+];
+let atIdx = 1;
+for (const facts of actTransitionFacts) {
+  for (const disposalDate of ['2026-03-31', '2026-04-01']) {
+    const id = `ACTTRANS-${String(atIdx).padStart(3, '0')}`;
+    atIdx++;
+    cases.push({
+      id,
+      family: 'act_transition',
+      pairKey: facts.acquisitionDate, // groups the two sides of one pair
+      side: disposalDate === '2026-03-31' ? 'pre' : 'post',
+      acquisitionDate: facts.acquisitionDate,
+      disposalDate,
+      costPerUnit: facts.costPerUnit,
+      salePricePerUnit: facts.salePricePerUnit,
+      unitsConsumed: facts.unitsConsumed,
+      isEquityOriented: true,
+      fmvPerUnit: null, // acquisitions here are all post-cutoff (>= 2018-02-01), grandfathering never applies
+    });
+  }
+}
+
+// ===========================================================================
+// GRANDBOUND-001..006 (3 pairs) — R6-FINAL closure, Section 11: re-verify the
+// 31-Jan-2018 / 1-Feb-2018 grandfathering ELIGIBILITY cutoff specifically
+// (distinct from BOUND's 12-month STCG/LTCG holding-period boundary). Each
+// pair holds cost/FMV/sale price identical, acquisition date one day on
+// either side of the cutoff, disposal far in the future (post 1-Apr-2026,
+// under the 2025 Act) so this also exercises the disclosed "grandfathering
+// continuity into the 2025 Act era" behaviour (see ruleVersions.ts module
+// header + R6_TAX_LEGAL_SOURCE_REGISTER.md "Open items").
+// ===========================================================================
+const grandBoundaryFacts = [
+  { costPerUnit: 30.0, fmvPerUnit: 55.0, salePricePerUnit: 90.0 }, // fmv_benefit branch
+  { costPerUnit: 60.0, fmvPerUnit: 20.0, salePricePerUnit: 95.0 }, // no_effect branch (fmv < cost)
+  { costPerUnit: 25.0, fmvPerUnit: 70.0, salePricePerUnit: 40.0 }, // capped_at_sale branch
+];
+let gbIdx = 1;
+for (const facts of grandBoundaryFacts) {
+  for (const acquisitionDate of ['2018-01-31', '2018-02-01']) {
+    const id = `GRANDBOUND-${String(gbIdx).padStart(3, '0')}`;
+    gbIdx++;
+    cases.push({
+      id,
+      family: 'grand_boundary',
+      pairKey: `${facts.costPerUnit}-${facts.fmvPerUnit}-${facts.salePricePerUnit}`,
+      side: acquisitionDate === '2018-01-31' ? 'eligible' : 'ineligible',
+      acquisitionDate,
+      disposalDate: '2026-06-15', // post-2025-Act-transition disposal
+      costPerUnit: facts.costPerUnit,
+      fmvPerUnit: facts.fmvPerUnit,
+      salePricePerUnit: facts.salePricePerUnit,
+      unitsConsumed: 100,
+      isEquityOriented: true,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 const total = cases.length;
-if (total !== 120) {
-  console.error(`Expected exactly 120 cases, generated ${total}`);
+if (total !== 132) {
+  console.error(`Expected exactly 132 cases (120 original + 12 R6-FINAL closure cases), generated ${total}`);
   process.exit(1);
 }
 
 const outPath = path.join(__dirname, 'cases.json');
-writeFileSync(outPath, JSON.stringify({ generatedAt: '2026-08-21', seed: '0x52365031', totalCases: total, cases }, null, 2));
+writeFileSync(outPath, JSON.stringify({ generatedAt: '2026-08-22', seed: '0x52365031', totalCases: total, cases }, null, 2));
 console.log(`Wrote ${total} cases to ${outPath}`);
 
 const byFamily = {};

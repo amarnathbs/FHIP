@@ -306,7 +306,10 @@ def main():
     for case in cases:
         result = compute_case(case)
         results.append({"id": case["id"], "family": case["family"], "result": result})
-    with open(out_path, "w", encoding="utf-8") as f:
+    # newline='' prevents Python's universal-newline translation from turning
+    # json.dump's '\n' line separators into CRLF on Windows — this repo's
+    # convention (and a prior CRLF-broke-an-exact-match-test incident) requires LF.
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
         json.dump(results, f, indent=2)
     print(f"Wrote {len(results)} oracle results to {out_path}")
 

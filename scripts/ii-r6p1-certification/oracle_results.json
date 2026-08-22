@@ -1,5 +1,53 @@
 {
   "cases": {
+    "ACTTRANS-001": {
+      "costBasisUsed": 8500.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 23750.0,
+      "taxableGain": 15250.0
+    },
+    "ACTTRANS-002": {
+      "costBasisUsed": 8500.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 23750.0,
+      "taxableGain": 15250.0
+    },
+    "ACTTRANS-003": {
+      "costBasisUsed": 5292.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 5724.0,
+      "taxableGain": 432.0
+    },
+    "ACTTRANS-004": {
+      "costBasisUsed": 5292.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 5724.0,
+      "taxableGain": 432.0
+    },
+    "ACTTRANS-005": {
+      "costBasisUsed": 5250,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 73500,
+      "taxableGain": 68250
+    },
+    "ACTTRANS-006": {
+      "costBasisUsed": 5250,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 73500,
+      "taxableGain": 68250
+    },
     "AMBIG-001": {
       "gainType": "unresolved",
       "taxableGain": null
@@ -128,7 +176,7 @@
         "FY2026-27": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 84814.34,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 84814.34
@@ -148,7 +196,7 @@
         "FY2027-28": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 80892.83,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 80892.83
@@ -188,7 +236,7 @@
         "FY2026-27": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 84734.52,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 84734.52
@@ -208,7 +256,7 @@
         "FY2027-28": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 67862.12,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 67862.12
@@ -248,7 +296,7 @@
         "FY2026-27": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 85399.92,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 85399.92
@@ -268,7 +316,7 @@
         "FY2027-28": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 82581.1,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 82581.1
@@ -308,7 +356,7 @@
         "FY2026-27": {
           "contributingDisposalCount": 2,
           "exemptionApplied": 100405.59,
-          "exemptionRuleVersion": "2025_act_placeholder",
+          "exemptionRuleVersion": "2025_act_post_20260401",
           "exemptionThresholdInr": 125000,
           "taxableLtcgAfterExemption": 0.0,
           "totalLtcgBeforeExemption": 100405.59
@@ -1065,6 +1113,54 @@
       "basisSource": "fmv_unavailable",
       "costBasisPerUnit": 55.2
     },
+    "GRANDBOUND-001": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisUsed": 5500,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9000,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-002": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 3000,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9000,
+      "taxableGain": 6000
+    },
+    "GRANDBOUND-003": {
+      "basisSource": "actual_cost",
+      "costBasisUsed": 6000,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9500,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-004": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 6000,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9500,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-005": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisUsed": 4000,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 4000,
+      "taxableGain": 0
+    },
+    "GRANDBOUND-006": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 2500,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 4000,
+      "taxableGain": 1500
+    },
     "RATE-001": {
       "ltcgExemptionThresholdInr": 100000,
       "ltcgRatePct": 10,
@@ -1117,22 +1213,22 @@
     "RATE-008": {
       "ltcgExemptionThresholdInr": 125000,
       "ltcgRatePct": 12.5,
-      "placeholder": true,
-      "ruleVersion": "2025_act_placeholder",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
       "stcgRatePct": 20
     },
     "RATE-009": {
       "ltcgExemptionThresholdInr": 125000,
       "ltcgRatePct": 12.5,
-      "placeholder": true,
-      "ruleVersion": "2025_act_placeholder",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
       "stcgRatePct": 20
     },
     "RATE-010": {
       "ltcgExemptionThresholdInr": 125000,
       "ltcgRatePct": 12.5,
-      "placeholder": true,
-      "ruleVersion": "2025_act_placeholder",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
       "stcgRatePct": 20
     }
   }

@@ -1017,7 +1017,10 @@ def main():
             raise SystemExit("Unknown family: %s" % fam)
         results.append({"id": c["id"], "family": fam, "certify": c["certify"], "expected": out})
 
-    with open(os.path.join(CERT_DIR, "oracle_results.json"), "w", encoding="utf-8") as f:
+    # newline='' prevents Python's universal-newline translation from turning
+    # json.dump's '\n' line separators into CRLF on Windows — this repo's
+    # convention (and a prior CRLF-broke-an-exact-match-test incident) requires LF.
+    with open(os.path.join(CERT_DIR, "oracle_results.json"), "w", encoding="utf-8", newline="") as f:
         json.dump({"oracle": "ii_r5_independent_reconciliation.py",
                    "importsProductionCode": False,
                    "xirrAlgorithm": "pure-bisection (production uses safeguarded Newton-Raphson)",

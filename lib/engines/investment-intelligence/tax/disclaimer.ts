@@ -24,8 +24,16 @@ export const NRI_SCOPE_DISCLAIMER =
   'considerations, Section 195) are not modelled in this release. If you are an NRI, ' +
   'this simulation does not apply to you — consult a tax professional.';
 
-/** Attached whenever the placeholder 2025 Act rule version is used for a
- * disposal dated on/after 1 April 2026. */
+/** Structural mechanism, currently dormant: attaches whenever a rule
+ * version's `ruleDefinition.placeholder` flag is true. As of the R6-FINAL
+ * closure (2026-08-22) the 2025 Act row was certified against primary/
+ * corroborated sources (see ruleVersions.ts + R6_TAX_LEGAL_SOURCE_REGISTER.md)
+ * and no longer carries `placeholder: true` — so `placeholderRuleUsed` is
+ * false for every disposal today. The flag/disclaimer plumbing is kept in
+ * place (not deleted) so a future Finance Act amendment that genuinely
+ * cannot be verified in time can be flagged the same way again without an
+ * engine change — see Section 9 of the R6-FINAL spec ("RULE_NOT_CERTIFIED /
+ * REVIEW_REQUIRED" pattern). */
 export const PLACEHOLDER_RULE_DISCLAIMER =
   'PLACEHOLDER — pending final Income-tax Act, 2025 rules. This disposal falls on or after ' +
   '1 April 2026 when the 2025 Act is in force, but its specific rates/thresholds were not yet ' +

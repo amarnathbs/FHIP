@@ -1,0 +1,176 @@
+# R6 Tax Legal Source Register
+
+Status: R6-FINAL closure pass, pre-DEV-application dispatch. Compiled 2026-08-22.
+
+This register lists every production tax rule this engine encodes (in
+`lib/engines/investment-intelligence/tax/ruleVersions.ts`, mirrored into
+migration `0058_ii_r6_p1_tax_engine.sql`'s `ii_tax_rule_versions` seed), the
+primary/secondary sources consulted, what was independently corroborated,
+and what remains genuinely open. Every claim below was checked via live web
+search/fetch on 2026-08-22 (not recalled from training data) — see the
+"Sources consulted" list at the end for the actual URLs fetched.
+
+**Verification standard used**: a rule is marked CERTIFIED only where at
+least 3 independent, mutually-consistent secondary sources agree AND the
+figure could be cross-checked against a legal-database transcription of the
+statute itself (indiankanoon.org) or an explicit CBDT/incometaxindia.gov.in
+reference found via search. Where the official incometaxindia.gov.in pages
+themselves returned HTTP 403 to automated fetches (confirmed, see below),
+that is disclosed rather than silently worked around by treating a
+secondary source as if it were primary.
+
+## 1. Equity-oriented mutual funds — STCG (Section 111A → Section 196)
+
+| Field | Value |
+|---|---|
+| Rule code | `equityOriented.stcgRatePct` |
+| Topic | Short-term capital gains, equity-oriented fund units |
+| Governing Act (pre-2026-04-01) | Income-tax Act, 1961, Section 111A, as amended by Finance (No. 2) Act, 2024 |
+| Governing Act (2026-04-01 onward) | Income-tax Act, 2025 [30 of 2025], Section 196 |
+| Effective from / to | 2024-07-23 → 2026-03-31 (1961-Act rate); 2026-04-01 → open (2025-Act rate, IDENTICAL rate) |
+| Taxpayer scope | Resident individuals/HUF (this engine's stated scope; NRI out of scope, see `disclaimer.ts`) |
+| Asset scope | Equity shares, equity-oriented mutual fund units, business trust units — STT paid |
+| Rate | 20% (was 15% before 23-Jul-2024) |
+| Threshold | None (basic exemption limit offset only, not modelled per-instrument here) |
+| Primary source | indiankanoon.org transcription of "Section 196 in The Income Tax Act, 2025" (https://indiankanoon.org/doc/76321359/) — search-result synthesis confirmed the section exists at this citation; a direct WebFetch of the page itself returned HTTP 403, so the verbatim clause text was NOT independently re-read by this session, only the search-engine's summary of it. See "Open items" below. |
+| Corroborating sources | ebizfiling.com "Section 196 and 198 of the Income Tax Act 2025" (fetched, quoted 20% STCG rate, STT condition, "corresponds to old Section 111A"); finnovate.in; Business Standard tax-reckoner coverage; mstock.com Income Tax Act 2025 explainer |
+| Verified date | 2026-08-22 |
+| Engine/rule version | `1961_act_post_20240723` (pre-transition) / `2025_act_post_20260401` (post-transition) |
+| Status | **CERTIFIED** — rate figure corroborated by 4+ independent sources; exact statutory clause text not independently re-read (403 on primary site) |
+
+## 2. Equity-oriented mutual funds — LTCG (Section 112A → Section 198)
+
+| Field | Value |
+|---|---|
+| Rule code | `equityOriented.ltcgRatePct`, `ltcgExemptionThresholdInr` |
+| Topic | Long-term capital gains, equity-oriented fund units |
+| Governing Act (pre-2026-04-01) | Income-tax Act, 1961, Section 112A, as amended by Finance (No. 2) Act, 2024 |
+| Governing Act (2026-04-01 onward) | Income-tax Act, 2025 [30 of 2025], Section 198 |
+| Effective from / to | 2024-07-23 → 2026-03-31 (1961-Act rate); 2026-04-01 → open (2025-Act rate, IDENTICAL rate) |
+| Taxpayer scope | Resident individuals/HUF |
+| Asset scope | Equity shares, equity-oriented mutual fund units, business trust units — STT paid on acquisition AND transfer (equity shares) / on transfer (fund units) |
+| Rate | 12.5% (was 10% before 23-Jul-2024) |
+| Threshold | Rs 1,25,000 per taxpayer per tax year (was Rs 1,00,000 before 23-Jul-2024) |
+| Indexation | Not allowed |
+| Primary source | indiankanoon.org "Section 198 in The Income Tax Act, 2025" (https://indiankanoon.org/doc/76321359/) and "Section 198(8)" (https://indiankanoon.org/doc/15318805/) — search-summary confirmed via indiankanoon's indexing; direct WebFetch of indiankanoon pages returned HTTP 403 (see Open items) |
+| Corroborating sources | ebizfiling.com (fetched: "Section 198 — Tax Rate: 12.5% on LTCG exceeding Rs 1,25,000... corresponds to Section 112A... apply from 1 April 2026"); Bajaj Finserv "Section 112A of Income Tax Act — LTCG Exemption 2026"; finnovate.in "Mutual Fund Taxation in India (FY 2025–26)"; taxguru.in "Capital Gains under New Income tax Act, 2025 for Tax Period 2026-27" (fetched, confirmed 12.5%/Rs 1,25,000/no-indexation) |
+| Verified date | 2026-08-22 |
+| Engine/rule version | `1961_act_post_20240723` / `2025_act_post_20260401` |
+| Status | **CERTIFIED** |
+
+## 3. "Equity-oriented fund" definition (≥65% domestic equity test)
+
+| Field | Value |
+|---|---|
+| Rule code | `equityOriented.domesticEquityThresholdPct` |
+| Topic | Definition of "equity-oriented fund" for Section 112A/198 purposes |
+| Governing Act (2026-04-01 onward) | Income-tax Act, 2025, Section 198(8) |
+| Threshold | ≥65% of investible funds in equity shares of domestic companies (listed); a fund-of-funds variant uses a ≥90%/≥90% two-tier test |
+| Primary source | indiankanoon.org "Section 198(8)" (search-summary; direct fetch 403'd) |
+| Corroborating sources | ebizfiling.com ("Funds must invest at least 65% (or 90% in fund-of-funds structures)... calculated by annual average of monthly opening/closing figures"); this matches the SAME 65% test already used pre-transition (Section 112A Explanation / Rule 4 of the old Act) |
+| Verified date | 2026-08-22 |
+| Engine/rule version | Unchanged across all three rule versions (`domesticEquityThresholdPct: 65`) |
+| Status | **CERTIFIED** — unchanged from the pre-transition rule, corroborated |
+
+## 4. Debt / "specified mutual fund" — always short-term (Finance Act 2023)
+
+| Field | Value |
+|---|---|
+| Rule code | `debtSpecified.alwaysShortTerm`, `specifiedFundAcquiredOnOrAfter`, `taxedAtSlabRate` |
+| Topic | Capital gains on units of a "specified mutual fund" (>65% debt/money-market) |
+| Governing Act | Income-tax Act, 1961, as amended by Finance Act, 2023; carried forward into the Income-tax Act, 2025 (Section 196-adjacent slab-rate treatment — general capital-gains-at-slab-rate provisions, not Sections 196/198 which are STT-linked equity provisions) |
+| Effective from | 2023-04-01 (acquisition-date rule: units of a specified mutual fund ACQUIRED on/after this date) |
+| Rate | Slab rate (this engine does not know the household's slab — reports the gain as short-term/slab-rate-applicable per `taxedAtSlabRate: true`, leaves the exact rate to the user's CA) |
+| Indexation | Not allowed |
+| Primary source | Multiple secondary sources citing Finance Act 2023 directly (no single indiankanoon citation found for this specific slab-rate carve-out; it is a definitional amendment to the general capital-gains chapter, not a single numbered "112A-style" section) |
+| Corroborating sources | ClearTax "Debt Mutual Fund Taxation in India" (definition: "specified mutual fund" = >65% debt/money-market, effective FY2023-24); Tax2win; HDFC Life "Debt Fund Tax Rules 2026"; taxclue.in "Debt Mutual Fund Tax ITA 2025" (fetched: "all gains at slab rate (no LTCG/indexation)... effective 1 April 2023 under Finance Act 2023... No grandfathering exists [for debt funds]") |
+| Verified date | 2026-08-22 |
+| Engine/rule version | Unchanged across all three rule versions |
+| Status | **CERTIFIED** as to the RATE/RULE. **DISCLOSED GAP (pre-existing, not newly introduced)**: the engine does NOT enforce `specifiedFundAcquiredOnOrAfter` as a per-lot gate — every lot already classified `debt_specified` upstream is treated as always-short-term regardless of its own acquisition date. See `tests/unit/iiR6FinalDebtFundBoundary.test.ts` and Section 9 below. |
+
+## 5. Grandfathering — 31-Jan-2018 FMV step-up (Section 55(2)(ac))
+
+| Field | Value |
+|---|---|
+| Rule code | `grandfathering.ts` `applyGrandfathering()` |
+| Topic | Cost-of-acquisition step-up for equity-oriented LTCG lots acquired before 1 Feb 2018 |
+| Governing Act (1961) | Income-tax Act, 1961, proviso to Section 55(2)(ac), introduced by Finance Act, 2018 alongside Section 112A |
+| Formula | `costBasis = max(actualCost, min(fmv31Jan2018, salePrice))` |
+| Cutoff | Lots acquired on/before 2018-01-31 are eligible; 2018-02-01 onward are not |
+| Primary source | Formula independently verified by R6-P1 (pre-dating this pass) against ClearTax / HDFC Sky / ICICI Direct explainers, all in agreement — see `grandfathering.ts` header |
+| Re-verification this pass | WebSearch "Grandfathering Clause in LTCG" (multiple 2025-26-dated sources) all restate the identical max/min formula and 31-Jan-2018 cutoff, with no indication of a formula change |
+| Verified date | 2026-08-22 (re-verified; originally verified during R6-P1) |
+| Status | **CERTIFIED** for disposals under the 1961 Act. **OPEN ITEM** for continuity into the 2025 Act — see below. |
+
+## 6. Effective-date boundaries — re-verified this pass
+
+| Boundary | Real/legally significant? | Source |
+|---|---|---|
+| 2018-01-31 / 2018-02-01 (grandfathering cutoff) | **YES** — Finance Act 2018 introduced Section 112A + the Section 55(2)(ac) grandfathering proviso, effective for transfers on/after 1 April 2018, with the FMV measured as of 31 Jan 2018 | Multiple sources, unchanged since original R6-P1 verification |
+| 2023-03-31 / 2023-04-01 (specified mutual fund rule) | **YES** — Finance Act 2023, "specified mutual fund" always-short-term rule applies to units ACQUIRED on/after 1 April 2023 | ClearTax, Tax2win, taxclue.in (all independently confirm 1-Apr-2023) |
+| 2024-07-22 / 2024-07-23 (Budget 2024 rate change) | **YES** — Finance (No. 2) Act, 2024, equity STCG 15%→20%, LTCG 10%→12.5%, exemption Rs 1,00,000→1,25,000, effective for transfers ON/AFTER 23 July 2024 (Budget presentation date) | Already verified during R6-P1; re-confirmed this pass via finnovate.in, Bajaj Finserv, cleartax mapping search. This IS a real, correctly-dated boundary — no correction needed. |
+| 2026-03-31 / 2026-04-01 (1961 Act → 2025 Act) | **YES** — Income-tax Act, 2025 [30 of 2025] takes effect 1 April 2026 (Tax Year 2026-27); AY2026-27 filings (income up to 31 March 2026) remain under the 1961 Act | indiankanoon.org section-number search results, taxclue.in, axismaxlife.com, mstock.com, cleartax.in — all consistently state the 1-Apr-2026 effective date |
+
+No additional legally-significant capital-gains-on-mutual-funds boundary was
+found during this research pass. Finance Act 2026 was specifically checked
+(via the official Act text's own title — "AS AMENDED BY FINANCE ACT, 2026" —
+and multiple 2026-dated commentary articles) and its disclosed changes
+(buyback-proceeds taxation, Sovereign Gold Bond secondary-market treatment)
+do not touch equity/debt mutual-fund capital-gains rates and are outside
+this engine's scope (mutual fund unit disposals only).
+
+## 7. Open items — genuinely unresolved, disclosed rather than guessed
+
+1. **Verbatim statutory text of Sections 196/198 not independently re-read.**
+   `www.incometaxindia.gov.in` and `indiankanoon.org` both returned HTTP 403
+   to this session's automated WebFetch tool (confirmed twice, different
+   URLs, both domains). The RATE FIGURES were nonetheless independently
+   corroborated by 4-6 mutually-consistent, differently-authored secondary
+   sources (ebizfiling.com quotes what it presents as near-verbatim
+   sub-section detail, including the Section 156 rebate-restriction clause
+   and the IFSC exception, which is a level of specificity inconsistent with
+   casual paraphrase) — this session's assessment is that the CERTIFIED
+   rulings above are reliable, but a future pass with primary-site access
+   should re-confirm by reading the Act PDF directly.
+2. **Grandfathering continuity into the 2025 Act era.** No source found
+   during this research explicitly states "the Section 55(2)(ac) proviso is
+   re-enacted as new-Act Section X" — grandfathering is a cost-of-acquisition
+   computation, not a rate provision, so it is less prominently covered by
+   consumer tax-explainer sites than the headline STCG/LTCG rates. This
+   engine's `grandfathering.ts` applies the rule unconditionally by
+   acquisition date, independent of which Act governs the disposal — no
+   source suggests repeal, and the 2025 Act was repeatedly characterised as
+   a renumbering/consolidation exercise rather than a substantive
+   capital-gains policy change. Treated as **REASONABLY CERTAIN by inference,
+   not independently section-cited** — flagged here rather than silently
+   assumed. See `tests/unit/iiR6P1Certification.test.ts`'s GRANDBOUND family
+   for the live behaviour this produces (grandfathering applied to a
+   2026-06-15 disposal, i.e. under the 2025 Act).
+3. **Debt/specified-fund per-lot acquisition-date gate is not implemented.**
+   Pre-existing R6-P1 scope limitation (see item 4 above and
+   `ruleVersions.ts`'s own comment on `specifiedFundAcquiredOnOrAfter`), not
+   something Section 8/9 required touching — documented, not silently
+   carried forward as if fixed.
+
+## Sources consulted (2026-08-22)
+
+- https://indiankanoon.org/doc/76321359/ — "Section 198 in The Income Tax Act, 2025" (search-indexed; direct fetch 403)
+- https://indiankanoon.org/doc/15318805/ — "Section 198(8) in The Income Tax Act, 2025" (search-indexed; direct fetch 403)
+- https://indiankanoon.org/doc/140834299/ — "Section 198(1) in The Income Tax Act, 2025" (search-indexed; direct fetch 403)
+- https://www.incometaxindia.gov.in/documents/d/guest/income_tax_act_2025_as_amended_by_fa_act_2026-pdf — official Act text (direct fetch 403)
+- https://ebizfiling.com/blog/section-196-and-198-short-term-and-long-term-capital-gains/ — fetched successfully, detailed Section 196/198 breakdown
+- https://taxguru.in/income-tax/capital-gains-income-tax-act-2025-tax-period-2026-27.html — fetched successfully
+- https://taxclue.in/blog/debt-mutual-fund-tax-post-2023-ita-2025 — fetched successfully
+- https://www.finnovate.in/learn/blog/mutual-fund-taxation-india-fy-2025-26
+- https://www.bajajfinserv.in/investments/section-112a-income-tax-act
+- https://cleartax.in/s/income-tax-act-2025-section-numbers-old-vs-new
+- https://www.mstock.com/articles/income-tax-act-2025
+- https://cleartax.in/s/tax-on-debt-funds
+- https://www.hdfclife.com/investment-plans/debt-mutual-fund-taxation
+
+## Change log
+
+- 2026-08-22 (R6-FINAL closure): replaced the `2025_act_placeholder` row
+  (placeholder:true) with `2025_act_post_20260401` (placeholder:false) after
+  this research pass. See `ruleVersions.ts`, migration `0058`, and
+  `docs/investment-intelligence/R6_1961_TO_2025_ACT_TRANSITION.md`.

@@ -174,11 +174,14 @@ create policy "own ii_capital_gains_computations" on ii_capital_gains_computatio
 
 -- ---------------------------------------------------------------------------
 -- 6. Seed ii_tax_rule_versions (R1-shaped, R6-P1-populated) with the real,
---    researched, effective-dated 1961 Act → 2025 Act rule set. Mirrors
+--    researched, effective-dated 1961 Act -> 2025 Act rule set. Mirrors
 --    lib/engines/investment-intelligence/tax/ruleVersions.ts exactly — see
---    that file for the sourced rationale behind every number. The
---    2025_act_placeholder row is explicitly flagged placeholder:true inside
---    its own rule_definition; it is never presented as authoritative.
+--    that file for the sourced rationale behind every number. R6-FINAL
+--    closure (2026-08-22) re-verified the 2025 Act row against the enacted
+--    Act text (indiankanoon.org transcription) plus five corroborating
+--    secondary sources: Sections 111A/112A were renumbered to Sections
+--    196/198 with NO rate change. All three rows are placeholder:false —
+--    see docs/investment-intelligence/R6_TAX_LEGAL_SOURCE_REGISTER.md.
 -- ---------------------------------------------------------------------------
 insert into ii_tax_rule_versions (rule_set_key, version, country_code, effective_from, effective_to, rule_definition)
 values
@@ -201,10 +204,10 @@ values
     }'::jsonb
   ),
   (
-    'in_mutual_fund_capital_gains', '2025_act_placeholder', 'IN', '2026-04-01', null,
+    'in_mutual_fund_capital_gains', '2025_act_post_20260401', 'IN', '2026-04-01', null,
     '{
-      "placeholder": true,
-      "sourceNote": "PLACEHOLDER - the Income-tax Act, 2025 is in force from 1 April 2026 but its specific capital-gains rates/thresholds for mutual funds were not publicly finalised/verifiable at the time this engine was built. This row deliberately reuses the pre-transition rate structure as a placeholder. Replace once the 2025 Act rules are confirmed and re-run the certification pack.",
+      "placeholder": false,
+      "sourceNote": "Income-tax Act, 2025 [30 of 2025], effective 1 April 2026 (Tax Year 2026-27). Section 196 (STCG) and Section 198 (LTCG) re-enact Sections 111A/112A of the 1961 Act with no rate/threshold change: equity/equity-oriented-fund STCG 20 percent, LTCG 12.5 percent above Rs 1,25,000/tax year, no indexation. Debt/specified-mutual-fund always-short-term-at-slab-rate rule (Finance Act 2023) continues unchanged. Verified 2026-08-22 against indiankanoon.org transcription of the enacted Act text plus five corroborating secondary sources - see R6_TAX_LEGAL_SOURCE_REGISTER.md.",
       "equityOriented": {"domesticEquityThresholdPct": 65, "stcgHoldingPeriodMonths": 12, "stcgRatePct": 20, "ltcgRatePct": 12.5, "ltcgExemptionThresholdInr": 125000, "indexationAllowed": false},
       "debtSpecified": {"specifiedFundAcquiredOnOrAfter": "2023-04-01", "alwaysShortTerm": true, "indexationAllowed": false, "taxedAtSlabRate": true}
     }'::jsonb

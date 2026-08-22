@@ -80,6 +80,9 @@ interface CertCase {
   saleValueApportioned: number;
   // ambiguous
   basis: SchemeClassificationResult['basis'];
+  // act_transition / grand_boundary
+  pairKey: string;
+  side: string;
 }
 interface OracleFyEntry {
   exemptionThresholdInr: number;
@@ -116,6 +119,8 @@ interface OracleEntry {
   stcgRatePct: number;
   ltcgRatePct: number;
   ltcgExemptionThresholdInr: number;
+  // grand_boundary
+  grandfatheringEligible: boolean;
 }
 
 const CERT_DIR = path.resolve(__dirname, '../../scripts/ii-r6p1-certification');
@@ -165,9 +170,12 @@ function makeClassification(kind: 'equity_oriented' | 'debt_specified' | 'unreso
   };
 }
 
-describe('II R6-P1 Independent Certification (120 cases)', () => {
-  it('generated exactly 120 cases', () => {
-    expect(cases.length).toBe(120);
+describe('II R6-P1 Independent Certification (132 cases: 120 original + 12 R6-FINAL closure)', () => {
+  it('generated exactly 132 cases (the original 120 are unchanged/permanent per spec Sec.34)', () => {
+    expect(cases.length).toBe(132);
+    const originalFamilies = ['fifo', 'grandfathering', 'boundary', 'debt', 'fy_aggregation', 'cross_fy', 'exit_load', 'ambiguous', 'rate_version'];
+    const originalCount = cases.filter((c) => originalFamilies.includes(c.family)).length;
+    expect(originalCount).toBe(120);
   });
 
   describe('FIFO family', () => {
@@ -426,10 +434,158 @@ describe('II R6-P1 Independent Certification (120 cases)', () => {
       expect(r1.version).toBe('1961_act_pre_20240723');
     });
 
-    it('every rule version is exposed, including the explicitly-flagged placeholder', () => {
+    it('every rule version is exposed, and the 2025 Act row is certified (no placeholder remains)', () => {
       expect(ALL_RULE_VERSIONS).toHaveLength(3);
-      const placeholder = ALL_RULE_VERSIONS.find((v) => v.version === '2025_act_placeholder')!;
-      expect(placeholder.ruleDefinition.placeholder).toBe(true);
+      const act2025 = ALL_RULE_VERSIONS.find((v) => v.version === '2025_act_post_20260401')!;
+      expect(act2025).toBeDefined();
+      expect(act2025.ruleDefinition.placeholder).toBe(false);
+      expect(ALL_RULE_VERSIONS.every((v) => v.ruleDefinition.placeholder === false)).toBe(true);
+    });
+  });
+
+  describe('R6-FINAL Sec.10: 1961 Act -> 2025 Act transition, paired at 31-Mar/1-Apr-2026', () => {
+    const actCases = cases.filter((c) => c.family === 'act_transition');
+    it.each(actCases)('$id ($side, $disposalDate)', (c: CertCase) => {
+      const consumption: LotConsumption = {
+        disposalEventId: `${c.id}-d`,
+        lotId: `${c.id}-l`,
+        instrumentKey: 'SCH-ACTTRANS',
+        acquisitionDate: c.acquisitionDate,
+        kind: 'purchase',
+        disposalDate: c.disposalDate,
+        unitsConsumed: c.unitsConsumed,
+        costPerUnit: c.costPerUnit,
+        costBasis: c.unitsConsumed * c.costPerUnit,
+        saleValueApportioned: c.unitsConsumed * c.salePricePerUnit,
+      };
+      const result = computeDisposalTax({
+        consumption,
+        saleValuePerUnit: c.salePricePerUnit,
+        classification: makeClassification('equity_oriented'),
+        fmv31Jan2018PerUnit: null,
+      });
+      const exp = oracleById[c.id];
+      compareExact(c.id, 'ruleVersion', result.ruleVersion, exp.ruleVersion);
+      compareExact(c.id, 'ruleVersionPlaceholder', result.ruleVersionPlaceholder, exp.placeholder);
+      compareExact(c.id, 'gainType', result.gainType, exp.gainType);
+      compareNumber(c.id, 'costBasisUsed', result.costBasisUsed, exp.costBasisUsed, TOLERANCES.currency);
+      compareNumber(c.id, 'taxableGain', result.taxableGain, exp.taxableGain, TOLERANCES.currency);
+    });
+
+    it('the 2026-03-31/2026-04-01 pair carries a DIFFERENT rule version but an IDENTICAL taxable gain', () => {
+      // The adversarial assertion Section 10 asks for: a naive implementer
+      // might assume an Act transition always changes the numbers. Research
+      // (R6_TAX_LEGAL_SOURCE_REGISTER.md) found Sections 111A/112A were
+      // renumbered to 196/198 with NO rate change, so the correct behaviour
+      // is "version label changes, arithmetic does not" — and this proves it
+      // on the real engine, not just by inspecting ruleVersions.ts data.
+      const groups = new Map<string, CertCase[]>();
+      for (const c of actCases) {
+        const g = groups.get(c.pairKey) ?? [];
+        g.push(c);
+        groups.set(c.pairKey, g);
+      }
+      expect(groups.size).toBe(3);
+      for (const [pairKey, pair] of groups) {
+        expect(pair, pairKey).toHaveLength(2);
+        const pre = pair.find((c) => c.side === 'pre')!;
+        const post = pair.find((c) => c.side === 'post')!;
+        const preResult = computeDisposalTax({
+          consumption: {
+            disposalEventId: 'pre', lotId: 'pre', instrumentKey: 'X', acquisitionDate: pre.acquisitionDate,
+            kind: 'purchase', disposalDate: pre.disposalDate, unitsConsumed: pre.unitsConsumed,
+            costPerUnit: pre.costPerUnit, costBasis: pre.unitsConsumed * pre.costPerUnit,
+            saleValueApportioned: pre.unitsConsumed * pre.salePricePerUnit,
+          },
+          saleValuePerUnit: pre.salePricePerUnit,
+          classification: makeClassification('equity_oriented'),
+          fmv31Jan2018PerUnit: null,
+        });
+        const postResult = computeDisposalTax({
+          consumption: {
+            disposalEventId: 'post', lotId: 'post', instrumentKey: 'X', acquisitionDate: post.acquisitionDate,
+            kind: 'purchase', disposalDate: post.disposalDate, unitsConsumed: post.unitsConsumed,
+            costPerUnit: post.costPerUnit, costBasis: post.unitsConsumed * post.costPerUnit,
+            saleValueApportioned: post.unitsConsumed * post.salePricePerUnit,
+          },
+          saleValuePerUnit: post.salePricePerUnit,
+          classification: makeClassification('equity_oriented'),
+          fmv31Jan2018PerUnit: null,
+        });
+        expect(preResult.ruleVersion, pairKey).toBe('1961_act_post_20240723');
+        expect(postResult.ruleVersion, pairKey).toBe('2025_act_post_20260401');
+        expect(preResult.ruleVersion).not.toBe(postResult.ruleVersion);
+        expect(postResult.taxableGain, pairKey).toBeCloseTo(preResult.taxableGain!, 6);
+        expect(postResult.costBasisUsed, pairKey).toBeCloseTo(preResult.costBasisUsed, 6);
+      }
+    });
+
+    it('a disposal dated 31-Mar-2026 keeps 1961-Act rules even if the engine runs long after 1-Apr-2026 (no retroactive re-rating)', () => {
+      const d = '2026-03-31';
+      const r1 = resolveRuleVersion(d);
+      // Simulate "time passing" by simply re-resolving the SAME fixed
+      // disposal date again — resolveRuleVersion has no wall-clock input at
+      // all, so this is the strongest proof available that re-running the
+      // computation next year cannot change a historical transaction's rules.
+      const r2 = resolveRuleVersion(d);
+      expect(r1.version).toBe('1961_act_post_20240723');
+      expect(r2.version).toBe(r1.version);
+    });
+  });
+
+  describe('R6-FINAL Sec.11: grandfathering eligibility cutoff, paired at 31-Jan/1-Feb-2018', () => {
+    const gbCases = cases.filter((c) => c.family === 'grand_boundary');
+    it.each(gbCases)('$id ($side, $acquisitionDate)', (c: CertCase) => {
+      const consumption: LotConsumption = {
+        disposalEventId: `${c.id}-d`,
+        lotId: `${c.id}-l`,
+        instrumentKey: 'SCH-GRANDBOUND',
+        acquisitionDate: c.acquisitionDate,
+        kind: 'purchase',
+        disposalDate: c.disposalDate,
+        unitsConsumed: c.unitsConsumed,
+        costPerUnit: c.costPerUnit,
+        costBasis: c.unitsConsumed * c.costPerUnit,
+        saleValueApportioned: c.unitsConsumed * c.salePricePerUnit,
+      };
+      const result = computeDisposalTax({
+        consumption,
+        saleValuePerUnit: c.salePricePerUnit,
+        classification: makeClassification('equity_oriented'),
+        fmv31Jan2018PerUnit: c.fmvPerUnit,
+      });
+      const exp = oracleById[c.id];
+      compareExact(c.id, 'ruleVersion', result.ruleVersion, exp.ruleVersion);
+      compareExact(c.id, 'grandfatheringEligible', result.grandfathering?.eligible ?? false, exp.grandfatheringEligible);
+      compareExact(c.id, 'basisSource', result.grandfathering?.basisSource ?? 'not_applicable', exp.basisSource);
+      compareNumber(c.id, 'costBasisUsed', result.costBasisUsed, exp.costBasisUsed, TOLERANCES.currency);
+      compareNumber(c.id, 'taxableGain', result.taxableGain, exp.taxableGain, TOLERANCES.currency);
+      // Every case in this family disposes on 2026-06-15, under the 2025 Act
+      // — this is the disclosed continuity behaviour from ruleVersions.ts's
+      // module header: grandfathering is applied (or not) purely from
+      // acquisitionDate, unconditional on which Act governs the disposal.
+      expect(result.ruleVersion).toBe('2025_act_post_20260401');
+    });
+
+    it('acquiring one day earlier (31-Jan-2018 vs 1-Feb-2018) flips grandfathering eligibility, all else equal', () => {
+      const groups = new Map<string, CertCase[]>();
+      for (const c of gbCases) {
+        const g = groups.get(c.pairKey) ?? [];
+        g.push(c);
+        groups.set(c.pairKey, g);
+      }
+      expect(groups.size).toBe(3);
+      for (const [pairKey, pair] of groups) {
+        expect(pair, pairKey).toHaveLength(2);
+        const eligible = pair.find((c) => c.side === 'eligible')!;
+        const ineligible = pair.find((c) => c.side === 'ineligible')!;
+        expect(eligible.acquisitionDate, pairKey).toBe('2018-01-31');
+        expect(ineligible.acquisitionDate, pairKey).toBe('2018-02-01');
+        const eligibleExp = oracleById[eligible.id];
+        const ineligibleExp = oracleById[ineligible.id];
+        expect(eligibleExp.grandfatheringEligible, pairKey).toBe(true);
+        expect(ineligibleExp.grandfatheringEligible, pairKey).toBe(false);
+      }
     });
   });
 

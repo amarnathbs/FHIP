@@ -137,28 +137,73 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
   for (const list of acquisitionsByInstrument.values()) list.sort((a, b) => (a.acquisitionDate < b.acquisitionDate ? -1 : 1));
   for (const list of disposalsByInstrument.values()) list.sort((a, b) => (a.disposalDate < b.disposalDate ? -1 : 1));
 
+  // NOTE ON PAGINATION: every read below that can return more than one row
+  // per instrument (or, for a large-enough household, more than 1000 rows
+  // total across ALL matched instrument ids) goes through fetchAllRows, not
+  // a bare `.in(...)` select — see lib/services/investment-intelligence/
+  // pagination.ts's header for why a bare select silently truncates at
+  // PostgREST's db-max-rows with no error anywhere. This was audited and
+  // fixed in the R6-FINAL closure pass (2026-08-22): the ii_prices_nav read
+  // below is the sharpest case — a single equity-oriented fund's daily NAV
+  // history up to the 31-Jan-2018 grandfathering cutoff can itself exceed
+  // 1000 rows, and a silent truncation there does not just drop rows, it
+  // silently DENIES a real grandfathering tax benefit for instruments whose
+  // price rows fall past the truncation point (reported as
+  // fmv_unavailable instead of the true FMV). Each query below carries a
+  // unique, deterministic order (a single-column primary/unique key, or a
+  // composite unique-together pair) as fetchAllRows's contract requires.
   const instrumentIds = [...new Set(usable.map((r) => r.instrument_id))];
-  const { data: instrumentRows } = await supabase.from('ii_instruments').select('id, instrument_name, country_of_domicile').in('id', instrumentIds);
-  const instrumentNames = new Map((instrumentRows ?? []).map((r) => [r.id as string, r.instrument_name as string]));
+
+  interface InstrumentRow {
+    id: string;
+    instrument_name: string;
+    country_of_domicile: string | null;
+  }
+  let instrumentNames = new Map<string, string>();
+  try {
+    const instrumentRows = await fetchAllRows<InstrumentRow>(() =>
+      supabase.from('ii_instruments').select('id, instrument_name, country_of_domicile').in('id', instrumentIds).order('id', { ascending: true })
+    );
+    instrumentNames = new Map(instrumentRows.map((r) => [r.id, r.instrument_name]));
+  } catch (e) {
+    warnings.push({ scope: 'instruments', detail: `Instrument names could not be read (${e instanceof Error ? e.message : String(e)}).` });
+  }
 
   // --- Scheme tax classification (durable cache table, R6-P1's own). -----
   const classificationByInstrument = new Map<string, SchemeClassificationResult>();
   {
-    const { data, error } = await supabase.from('ii_scheme_tax_classification').select('instrument_id, classification, domestic_equity_pct, basis, disclosure_date, note').in('instrument_id', instrumentIds);
-    if (error && !isMissingTableError(error)) {
-      warnings.push({ scope: 'classification', detail: `Scheme classification could not be read (${error.message}).` });
-    } else if (error && isMissingTableError(error)) {
-      warnings.push({ scope: 'classification', detail: 'ii_scheme_tax_classification is not yet available in this environment (migration 0045 not applied) — every scheme is treated as unresolved.' });
-    } else {
-      for (const row of data ?? []) {
-        classificationByInstrument.set(row.instrument_id as string, {
-          instrumentKey: row.instrument_id as string,
+    interface ClassificationRow {
+      instrument_id: string;
+      classification: string;
+      domestic_equity_pct: number | null;
+      basis: string;
+      disclosure_date: string | null;
+      note: string | null;
+    }
+    try {
+      const rows = await fetchAllRows<ClassificationRow>(() =>
+        supabase
+          .from('ii_scheme_tax_classification')
+          .select('instrument_id, classification, domestic_equity_pct, basis, disclosure_date, note')
+          .in('instrument_id', instrumentIds)
+          .order('instrument_id', { ascending: true }) // unique(instrument_id) — single-column key is sufficient
+      );
+      for (const row of rows) {
+        classificationByInstrument.set(row.instrument_id, {
+          instrumentKey: row.instrument_id,
           classification: row.classification as SchemeClassificationResult['classification'],
-          domesticEquityPct: row.domestic_equity_pct as number | null,
+          domesticEquityPct: row.domestic_equity_pct,
           basis: row.basis as SchemeClassificationResult['basis'],
-          disclosureDate: row.disclosure_date as string | null,
-          note: (row.note as string | null) ?? '',
+          disclosureDate: row.disclosure_date,
+          note: row.note ?? '',
         });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (isMissingTableError({ message })) {
+        warnings.push({ scope: 'classification', detail: 'ii_scheme_tax_classification is not yet available in this environment (migration 0058 not applied) — every scheme is treated as unresolved.' });
+      } else {
+        warnings.push({ scope: 'classification', detail: `Scheme classification could not be read (${message}).` });
       }
     }
   }
@@ -176,25 +221,36 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
   }
 
   // --- 31-Jan-2018 grandfathering FMV, from R2's ii_prices_nav series. ---
+  // Deliberately paginated (fetchAllRows), not a bare select: a single
+  // instrument's full pre-1961-cutoff daily NAV history can itself exceed
+  // 1000 rows, and the query below needs EVERY row (not just the first
+  // page) to correctly pick the closest date <= 2018-01-31 per instrument —
+  // see the module-level pagination note above.
   const fmv31Jan2018ByInstrument = new Map<string, number | null>();
   {
-    const { data, error } = await supabase
-      .from('ii_prices_nav')
-      .select('instrument_id, price_date, price')
-      .in('instrument_id', instrumentIds)
-      .lte('price_date', '2018-01-31')
-      .order('instrument_id', { ascending: true })
-      .order('price_date', { ascending: false }); // most recent on/before 31-Jan-2018 first
-    if (error) {
-      warnings.push({ scope: 'grandfathering_fmv', detail: `31-Jan-2018 FMV lookup failed (${error.message}) — grandfathering will use acquisition cost only.` });
-    } else {
+    interface PriceRow {
+      instrument_id: string;
+      price_date: string;
+      price: number;
+    }
+    try {
+      const rows = await fetchAllRows<PriceRow>(() =>
+        supabase
+          .from('ii_prices_nav')
+          .select('instrument_id, price_date, price')
+          .in('instrument_id', instrumentIds)
+          .lte('price_date', '2018-01-31')
+          .order('instrument_id', { ascending: true })
+          .order('price_date', { ascending: false }) // unique(instrument_id, price_date) — composite key, most recent on/before cutoff first
+      );
       const seen = new Set<string>();
-      for (const row of data ?? []) {
-        const id = row.instrument_id as string;
-        if (seen.has(id)) continue; // first row per instrument is the closest date <= cutoff (DESC order)
-        seen.add(id);
-        fmv31Jan2018ByInstrument.set(id, Number(row.price));
+      for (const row of rows) {
+        if (seen.has(row.instrument_id)) continue; // first row per instrument is the closest date <= cutoff (DESC order)
+        seen.add(row.instrument_id);
+        fmv31Jan2018ByInstrument.set(row.instrument_id, Number(row.price));
       }
+    } catch (e) {
+      warnings.push({ scope: 'grandfathering_fmv', detail: `31-Jan-2018 FMV lookup failed (${e instanceof Error ? e.message : String(e)}) — grandfathering will use acquisition cost only.` });
     }
   }
   for (const id of instrumentIds) {
@@ -204,19 +260,35 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
   // --- Exit-load schedules. ------------------------------------------------
   const exitLoadSchedules: ExitLoadSchedule[] = [];
   {
-    const { data, error } = await supabase.from('ii_exit_load_schedules').select('instrument_id, tiers, effective_from, effective_to').in('instrument_id', instrumentIds);
-    if (error && !isMissingTableError(error)) {
-      warnings.push({ scope: 'exit_load', detail: `Exit-load schedules could not be read (${error.message}).` });
-    } else if (error && isMissingTableError(error)) {
-      warnings.push({ scope: 'exit_load', detail: 'ii_exit_load_schedules is not yet available in this environment (migration 0045 not applied) — exit load will not be shown.' });
-    } else {
-      for (const row of data ?? []) {
+    interface ExitLoadRow {
+      instrument_id: string;
+      tiers: Array<{ uptoDays: number; loadPct: number }>;
+      effective_from: string;
+      effective_to: string | null;
+    }
+    try {
+      const rows = await fetchAllRows<ExitLoadRow>(() =>
+        supabase
+          .from('ii_exit_load_schedules')
+          .select('instrument_id, tiers, effective_from, effective_to')
+          .in('instrument_id', instrumentIds)
+          .order('instrument_id', { ascending: true })
+          .order('effective_from', { ascending: true }) // unique(instrument_id, effective_from) — composite key; a scheme can have >1 schedule version over time
+      );
+      for (const row of rows) {
         exitLoadSchedules.push({
-          instrumentKey: row.instrument_id as string,
-          tiers: row.tiers as Array<{ uptoDays: number; loadPct: number }>,
-          effectiveFrom: row.effective_from as string,
-          effectiveTo: row.effective_to as string | null,
+          instrumentKey: row.instrument_id,
+          tiers: row.tiers,
+          effectiveFrom: row.effective_from,
+          effectiveTo: row.effective_to,
         });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (isMissingTableError({ message })) {
+        warnings.push({ scope: 'exit_load', detail: 'ii_exit_load_schedules is not yet available in this environment (migration 0058 not applied) — exit load will not be shown.' });
+      } else {
+        warnings.push({ scope: 'exit_load', detail: `Exit-load schedules could not be read (${message}).` });
       }
     }
   }

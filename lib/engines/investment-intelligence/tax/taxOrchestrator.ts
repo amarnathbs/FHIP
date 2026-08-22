@@ -85,7 +85,26 @@ export function runTaxSimulation(inputs: TaxSimulationInputs): TaxSimulationOutp
       );
     }
 
-    const schedule = exitLoadSchedules.find((s) => s.instrumentKey === disposal.instrumentKey);
+    // R6-FINAL closure (2026-08-22) fix: a scheme can have MORE THAN ONE
+    // exit-load schedule version over time (migration 0058's
+    // unique(instrument_id, effective_from) explicitly anticipates this —
+    // AMCs do revise exit-load tiers). The original `.find()` picked
+    // whichever schedule row happened to be FIRST for the instrument in
+    // whatever order the repository read them, with NO check against the
+    // DISPOSAL's own date — i.e. exactly the Section 33 NC-5 defect shape
+    // ("apply a current exit-load schedule to a historical lot"). Fixed to
+    // select the schedule version actually in force on the disposal date,
+    // mirroring resolveRuleVersion's own effective-dated pattern.
+    const applicableSchedules = exitLoadSchedules.filter(
+      (s) =>
+        s.instrumentKey === disposal.instrumentKey &&
+        disposal.disposalDate >= s.effectiveFrom &&
+        (s.effectiveTo === null || disposal.disposalDate <= s.effectiveTo)
+    );
+    // Non-overlapping schedule periods are expected; if more than one still
+    // matches, the most recently-effective one wins (never silently picks
+    // an arbitrary one).
+    const schedule = applicableSchedules.sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0];
     if (schedule) {
       exitLoadResults.push(...computeExitLoadForConsumptions(consumptions, schedule));
     }

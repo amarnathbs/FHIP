@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-21T11:37:26.264Z",
+  "generatedAt": "2026-08-22T01:03:20.519Z",
   "tolerances": {
     "currency": 0.01,
     "costPerUnit": 0.000001
   },
-  "caseCount": 120,
-  "comparisonCount": 544,
-  "passCount": 544,
+  "caseCount": 132,
+  "comparisonCount": 604,
+  "passCount": 604,
   "failCount": 0,
   "rows": [
     {
@@ -4893,8 +4893,8 @@
     {
       "case": "RATE-008",
       "metric": "ruleVersion",
-      "production": "2025_act_placeholder",
-      "independent": "2025_act_placeholder",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -4902,8 +4902,8 @@
     {
       "case": "RATE-008",
       "metric": "placeholder",
-      "production": true,
-      "independent": true,
+      "production": false,
+      "independent": false,
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -4938,8 +4938,8 @@
     {
       "case": "RATE-009",
       "metric": "ruleVersion",
-      "production": "2025_act_placeholder",
-      "independent": "2025_act_placeholder",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -4947,8 +4947,8 @@
     {
       "case": "RATE-009",
       "metric": "placeholder",
-      "production": true,
-      "independent": true,
+      "production": false,
+      "independent": false,
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -4983,8 +4983,8 @@
     {
       "case": "RATE-010",
       "metric": "ruleVersion",
-      "production": "2025_act_placeholder",
-      "independent": "2025_act_placeholder",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -4992,8 +4992,8 @@
     {
       "case": "RATE-010",
       "metric": "placeholder",
-      "production": true,
-      "independent": true,
+      "production": false,
+      "independent": false,
       "variance": 0,
       "tolerance": "exact",
       "result": "PASS"
@@ -5021,6 +5021,546 @@
       "metric": "ltcgExemptionThresholdInr",
       "production": 125000,
       "independent": 125000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "costBasisUsed",
+      "production": 8500,
+      "independent": 8500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-001",
+      "metric": "taxableGain",
+      "production": 15250,
+      "independent": 15250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "costBasisUsed",
+      "production": 8500,
+      "independent": 8500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-002",
+      "metric": "taxableGain",
+      "production": 15250,
+      "independent": 15250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "costBasisUsed",
+      "production": 5292,
+      "independent": 5292,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-003",
+      "metric": "taxableGain",
+      "production": 432,
+      "independent": 432,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "costBasisUsed",
+      "production": 5292,
+      "independent": 5292,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-004",
+      "metric": "taxableGain",
+      "production": 432,
+      "independent": 432,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "ruleVersion",
+      "production": "1961_act_post_20240723",
+      "independent": "1961_act_post_20240723",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "costBasisUsed",
+      "production": 5250,
+      "independent": 5250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-005",
+      "metric": "taxableGain",
+      "production": 68250,
+      "independent": 68250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "ruleVersionPlaceholder",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "gainType",
+      "production": "ltcg",
+      "independent": "ltcg",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "costBasisUsed",
+      "production": 5250,
+      "independent": 5250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "ACTTRANS-006",
+      "metric": "taxableGain",
+      "production": 68250,
+      "independent": 68250,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "costBasisUsed",
+      "production": 5500,
+      "independent": 5500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-001",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "costBasisUsed",
+      "production": 3000,
+      "independent": 3000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-002",
+      "metric": "taxableGain",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "basisSource",
+      "production": "actual_cost",
+      "independent": "actual_cost",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-003",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "costBasisUsed",
+      "production": 6000,
+      "independent": 6000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-004",
+      "metric": "taxableGain",
+      "production": 3500,
+      "independent": 3500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "grandfatheringEligible",
+      "production": true,
+      "independent": true,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "basisSource",
+      "production": "fmv_grandfathered",
+      "independent": "fmv_grandfathered",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "costBasisUsed",
+      "production": 4000,
+      "independent": 4000,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-005",
+      "metric": "taxableGain",
+      "production": 0,
+      "independent": 0,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "ruleVersion",
+      "production": "2025_act_post_20260401",
+      "independent": "2025_act_post_20260401",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "grandfatheringEligible",
+      "production": false,
+      "independent": false,
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "basisSource",
+      "production": "not_applicable",
+      "independent": "not_applicable",
+      "variance": 0,
+      "tolerance": "exact",
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "costBasisUsed",
+      "production": 2500,
+      "independent": 2500,
+      "variance": 0,
+      "tolerance": 0.01,
+      "result": "PASS"
+    },
+    {
+      "case": "GRANDBOUND-006",
+      "metric": "taxableGain",
+      "production": 1500,
+      "independent": 1500,
       "variance": 0,
       "tolerance": 0.01,
       "result": "PASS"
