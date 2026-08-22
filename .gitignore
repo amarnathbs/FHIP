@@ -39,3 +39,6 @@ ii-r1-live-dev-test-results.local.json
 
 # R4 UX verification fixture scratch state (contains DEV test-user ids)
 scripts/.ii_r4_ux_fixture.json
+
+# FDH-1 closure: generated live-schema evidence artefacts (regenerate with scripts/fdh1_closure_*.mjs)
+scripts/.fdh1-*.json
