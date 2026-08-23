@@ -1,0 +1,6 @@
+Account Number,Account Name,Transaction Date,Transaction Description,Cheque/Reference Number,Debit Amount,Credit Amount
+123456789,Business Account,01/01/2026,Office Supplies Pty Ltd,REF1001,120.00,
+123456789,Business Account,02/01/2026,Client Payment ABC Corp,REF1002,,4500.00
+123456789,Business Account,03/01/2026,Telstra Business,REF1003,89.95,
+123456789,Business Account,05/01/2026,Software Subscription,REF1004,49.00,
+123456789,Business Account,07/01/2026,Client Payment DEF Corp,REF1005,,2200.00

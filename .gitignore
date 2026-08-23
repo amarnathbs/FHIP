@@ -43,3 +43,8 @@ scripts/.ii_r4_ux_fixture.json
 # FDH-1 closure: generated live-schema evidence artefacts (regenerate with scripts/fdh1_closure_*.mjs)
 scripts/.fdh1-*.json
 .r17d-reviewer-credentials.local.json
+
+# R7/FDH-4 live-certification scratch: local synthetic fixtures and result
+# dumps generated per-run by scripts/r7final_*.mjs and scripts/fdh4_live_*.ts
+# — never committed (large, disposable, regenerated per session).
+.r7scratch/

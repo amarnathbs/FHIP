@@ -31,7 +31,15 @@ export {
   AU_CBA_DEBIT_CREDIT_V1,
   AU_WESTPAC_SINGLE_SIGNED_V1,
   AU_NAB_DEBIT_CREDIT_V1,
+  AU_ANZ_DEBIT_CREDIT_V1,
+  AU_MACQUARIE_DEBIT_CREDIT_V1,
 } from './auAdapters';
-export { IN_SBI_DR_CR_V1, IN_HDFC_DEBIT_CREDIT_V1, IN_ICICI_DR_CR_V1 } from './inAdapters';
+export {
+  IN_SBI_DR_CR_V1,
+  IN_HDFC_DEBIT_CREDIT_V1,
+  IN_ICICI_DR_CR_V1,
+  IN_AXIS_DEBIT_CREDIT_V1,
+  IN_KOTAK_DEBIT_CREDIT_V1,
+} from './inAdapters';
 export { GENERIC_SINGLE_SIGNED_V1, GENERIC_DEBIT_CREDIT_V1 } from './genericAdapters';
 export type { BankCsvAdapter } from './types';
