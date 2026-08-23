@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
   FDH_CSV_AMOUNT_CONVENTIONS,
   FDH_CSV_CERTIFICATION_STATUSES,
   FDH_CSV_DETECTION_STATUSES,
@@ -129,7 +130,12 @@ describe('R7 new-column check constraints match their TypeScript vocabularies', 
     const slice = SQL.slice(idx, idx + 1200);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    // Scoped to migration 0064's OWN frozen SQL text — FDH-3 + R7 only.
+    // R8 (migration 0067) widens this same constraint again with its own
+    // 4 additional event types; that widening is verified separately by
+    // tests/unit/r8SchemaContract.test.ts against migration 0067's SQL,
+    // never against this frozen 0064-scoped assertion.
+    expect(values.sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES, ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED].sort());
   });
 });
 

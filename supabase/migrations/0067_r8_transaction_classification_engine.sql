@@ -285,8 +285,8 @@ begin
     -- 'ended' series (a genuinely restarted subscription becomes a new
     -- series through re-detection, not a status flip).
     if new.status is distinct from old.status then
-      if old.status = 'candidate' and new.status = 'active' then
-        null; -- confirming a candidate
+      if old.status = 'candidate' and new.status in ('active', 'ended') then
+        null; -- confirming a candidate, or dismissing one the user doesn't want tracked
       elsif old.status = 'active' and new.status in ('paused', 'ended') then
         null; -- user pausing/ending an active series
       elsif old.status = 'paused' and new.status in ('active', 'ended') then

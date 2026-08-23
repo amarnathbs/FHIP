@@ -1,0 +1,286 @@
+{
+  "economic_type": [
+    {
+      "id": "ET-01",
+      "economic_type": "income",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-02",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-03",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-04",
+      "economic_type": "income",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-05",
+      "economic_type": "income",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-06",
+      "economic_type": "income",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-07",
+      "economic_type": "debt_interest",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-08",
+      "economic_type": "fee",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-09",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-10",
+      "economic_type": "refund",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-11",
+      "economic_type": "fee",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-12",
+      "economic_type": "cash_withdrawal",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-13",
+      "economic_type": "cash_withdrawal",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-14",
+      "economic_type": "refund",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-15",
+      "economic_type": "refund",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-16",
+      "economic_type": "refund",
+      "category_key": null,
+      "source": "narrative_pattern"
+    },
+    {
+      "id": "ET-17",
+      "economic_type": "expense",
+      "category_key": "groceries",
+      "source": "merchant"
+    },
+    {
+      "id": "ET-18",
+      "economic_type": "expense",
+      "category_key": "groceries",
+      "source": "merchant"
+    },
+    {
+      "id": "ET-19",
+      "economic_type": "expense",
+      "category_key": "entertainment_subscriptions",
+      "source": "merchant"
+    },
+    {
+      "id": "ET-20",
+      "economic_type": "expense",
+      "category_key": "entertainment_subscriptions",
+      "source": "merchant"
+    },
+    {
+      "id": "ET-21",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-22",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-23",
+      "economic_type": "unknown",
+      "category_key": null,
+      "source": "unresolved"
+    },
+    {
+      "id": "ET-24",
+      "economic_type": "expense",
+      "category_key": "groceries",
+      "source": "merchant"
+    },
+    {
+      "id": "ET-25",
+      "economic_type": "expense",
+      "category_key": "groceries",
+      "source": "merchant"
+    }
+  ],
+  "transfers": [
+    {
+      "id": "TR-01",
+      "pairs": [
+        {
+          "from": "a",
+          "to": "b",
+          "days": 0
+        }
+      ]
+    },
+    {
+      "id": "TR-02-same-account-no-match",
+      "pairs": []
+    },
+    {
+      "id": "TR-03-outside-window-no-match",
+      "pairs": []
+    },
+    {
+      "id": "TR-04-different-currency-no-match",
+      "pairs": []
+    },
+    {
+      "id": "TR-05-same-direction-no-match",
+      "pairs": []
+    },
+    {
+      "id": "TR-06-closest-date-wins",
+      "pairs": [
+        {
+          "from": "a",
+          "to": "b-close",
+          "days": 0
+        }
+      ]
+    },
+    {
+      "id": "TR-07-multiple-independent-pairs",
+      "pairs": [
+        {
+          "from": "a1",
+          "to": "b1",
+          "days": 0
+        },
+        {
+          "from": "a2",
+          "to": "b2",
+          "days": 1
+        }
+      ]
+    }
+  ],
+  "refunds": [
+    {
+      "id": "RF-01-full-refund",
+      "links": [
+        {
+          "refund": "refund",
+          "original": "orig"
+        }
+      ]
+    },
+    {
+      "id": "RF-02-partial-refund",
+      "links": [
+        {
+          "refund": "refund",
+          "original": "orig"
+        }
+      ]
+    },
+    {
+      "id": "RF-03-exceeds-original-no-match",
+      "links": []
+    },
+    {
+      "id": "RF-04-different-account-no-match",
+      "links": []
+    },
+    {
+      "id": "RF-05-before-original-no-match",
+      "links": []
+    }
+  ],
+  "recurring": [
+    {
+      "id": "RC-01-monthly",
+      "series": [
+        {
+          "frequency": "monthly",
+          "members": [
+            "t1",
+            "t2",
+            "t3"
+          ],
+          "insufficient_history": false
+        }
+      ]
+    },
+    {
+      "id": "RC-02-weekly",
+      "series": [
+        {
+          "frequency": "weekly",
+          "members": [
+            "t1",
+            "t2",
+            "t3"
+          ],
+          "insufficient_history": false
+        }
+      ]
+    },
+    {
+      "id": "RC-03-insufficient-history",
+      "series": [
+        {
+          "frequency": "monthly",
+          "members": [
+            "t1",
+            "t2"
+          ],
+          "insufficient_history": true
+        }
+      ]
+    },
+    {
+      "id": "RC-04-random-no-series",
+      "series": []
+    }
+  ]
+}

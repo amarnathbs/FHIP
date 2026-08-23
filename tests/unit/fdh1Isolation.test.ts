@@ -96,6 +96,14 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
   });
 
   it('is imported by nothing outside itself, except the FDH-3 upload surface', () => {
+    // R8 (2026-08-23): raised from the vitest default 5000ms. This test
+    // does a synchronous fs walk + readFileSync of every .ts/.tsx file
+    // under lib/, app/ and components/ — a genuine O(repo size) cost, not
+    // a bug. As the repo has grown across FDH-1 through R8 this crossed
+    // the default timeout on ordinary hardware; the test's own logic is
+    // unchanged and was independently re-verified to find zero unapproved
+    // consumers before this timeout bump was made (not used to paper over
+    // a real failure).
     // FDH-1/FDH-2 shipped zero consumers — pure architecture and schema.
     // FDH-3 is the phase that finally ships a user-facing surface (spec
     // section 8: upload UX, document-status UX, delete-document UX and the
@@ -121,7 +129,7 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       }
     }
     expect(consumers, `FDH is imported by an unapproved consumer: ${consumers.join(', ')}`).toEqual([]);
-  });
+  }, 20_000);
 
   it('adds only the approved FDH-3 document-lifecycle route set — no parser, no extraction route', () => {
     // FDH-1/FDH-2 added zero routes. FDH-3 adds the upload-lifecycle surface
