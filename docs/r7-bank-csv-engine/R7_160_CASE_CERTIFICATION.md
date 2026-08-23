@@ -1,5 +1,11 @@
 # R7 — 160+ Case Independent Certification
 
+## R7-FINAL re-run (this session, live-DEV closure pass)
+
+Re-executed fresh, from scratch, after this session's 3 live-only-discovered application-code fixes landed: `npx vitest run tests/unit/r7*.test.ts` → **198 passed, 0 failed** (identical count). `npx tsx scripts/r7_oracle_compare.ts` → **174 comparisons, 0 failures** (identical). `node scripts/r7_security_certification.mjs` → **45 passed, 0 failed** (identical, and this re-run happened WITH migration `0065`'s function also present — no regression). `node scripts/db-rebuild-check/replay.mjs` → **65/65 migrations** (was 64/64; `0065` added this session, drafted but not yet applied to live DEV), 172 tables, 0 without RLS. No case was removed to make the suite green; the numbers are unchanged because the 3 fixes were all in code paths these particular suites don't exercise (in-memory pipeline tests never call the DB-read function that broke; the PGlite security cert seeds data directly rather than through the real processing service) — which is exactly why live-DEV testing (see `R7_FINAL_LIVE_DEV_VERIFICATION.md`) was the only method that could ever have caught them.
+
+---
+
 ## Summary
 
 | Metric | Count |

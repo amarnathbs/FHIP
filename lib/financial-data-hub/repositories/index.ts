@@ -131,7 +131,7 @@ export const transactionLinksRepository = makeUserOwnedRepository<
 export const duplicateCandidatesRepository = makeUserOwnedRepository<
   FdhDuplicateCandidate,
   FdhDuplicateCandidateInput
->('fdh_duplicate_candidates');
+>('fdh_duplicate_candidates', { hasUpdatedAtColumn: false });
 
 export const recurringTransactionsRepository = makeUserOwnedRepository<
   FdhRecurringTransaction,
@@ -197,7 +197,7 @@ export const csvMappingTemplatesRepository = makeUserOwnedRepository<
 export const transactionCorrectionsRepository = makeUserOwnedRepository<
   FdhTransactionCorrection,
   Omit<FdhTransactionCorrection, 'id' | 'user_id' | 'created_at'>
->('fdh_transaction_corrections');
+>('fdh_transaction_corrections', { hasUpdatedAtColumn: false });
 
 // --- Master data (read-only) ------------------------------------------------
 export const institutionsRepository = makeMasterDataRepository<FdhFinancialInstitution>(

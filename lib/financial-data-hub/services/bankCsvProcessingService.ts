@@ -408,15 +408,38 @@ export async function processBankCsvDocument(userId: string, documentId: string)
     }
 
     // Duplicate-candidate provenance (Layer 4, spec 34/36).
+    //
+    // LIVE-DEV-DISCOVERED FIX (R7-FINAL live certification): a WITHIN-FILE
+    // duplicate candidate (the matched row is earlier in this SAME upload,
+    // not a prior persisted transaction) carries a `pending-row-N` placeholder
+    // in `matchedTransactionId` (orchestrator.ts's in-memory dedup index,
+    // populated before any DB write happens — see its own comment). That
+    // placeholder is never a real `fdh_transactions.id`, but by THIS point in
+    // the function every accepted row (including row N) has already been
+    // bulk-inserted, so `rowNumberToId` can resolve it to the real id the
+    // same way `newId` already does for the later row. Previously this was
+    // unconditionally skipped, which silently persisted `dedup_status =
+    // 'duplicate_candidate'` on both transactions with NO backing
+    // `fdh_duplicate_candidates` row at all — the user-facing
+    // duplicate-resolution API requires exactly that row's id, so a
+    // within-file candidate pair had no way to ever be resolved. Cross-import
+    // candidates (matched against a PRIOR statement's already-persisted
+    // transaction) are unaffected — `matchedTransactionId` there was never a
+    // placeholder.
     const rowNumberToId = new Map(insertedIds.map((r) => [r.source_row, r.id]));
     let duplicateCandidateCount = 0;
     for (const t of rowsToInsert) {
       if (t.dedupStatus !== 'duplicate_candidate' || !t.matchedTransactionId) continue;
       const newId = rowNumberToId.get(t.sourceRowNumber);
-      if (!newId || t.matchedTransactionId.startsWith('pending-row-')) continue;
+      let matchedId: string | null = t.matchedTransactionId;
+      if (matchedId.startsWith('pending-row-')) {
+        const matchedRowNumber = Number(matchedId.slice('pending-row-'.length));
+        matchedId = rowNumberToId.get(matchedRowNumber) ?? null;
+      }
+      if (!newId || !matchedId || matchedId === newId) continue;
       await adminInsert('fdh_duplicate_candidates', {
         user_id: userId,
-        transaction_id_a: t.matchedTransactionId,
+        transaction_id_a: matchedId,
         transaction_id_b: newId,
         match_method: t.matchMethod ?? 'fuzzy_amount_date',
         confidence: t.dedupConfidence,

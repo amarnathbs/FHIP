@@ -51,7 +51,27 @@ import type { FdhAllUserOwnedTable, FdhMasterDataTable } from '../constants/tabl
  */
 export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unknown>>(
   table: FdhAllUserOwnedTable,
+  options?: {
+    /**
+     * LIVE-DEV-DISCOVERED FIX (R7-FINAL live certification). `update()`
+     * used to unconditionally inject `updated_at` into every UPDATE, but
+     * not every FDH table actually has that column — `fdh_duplicate_
+     * candidates` (FDH-1, migration 0047) and `fdh_transaction_corrections`
+     * (R7, migration 0064, deliberately append-only) never had one. Because
+     * every OTHER table this factory serves does have `updated_at`, that
+     * mismatch went unnoticed until R7's `resolveDuplicateCandidate()`
+     * became the FIRST real caller of `.update()` on
+     * `fdh_duplicate_candidates` — the resulting PostgREST schema-cache
+     * error was silently discarded (the caller never checked `.error`),
+     * so the API returned `{resolved: true}` while the candidate row
+     * itself never actually left `status: 'pending'`. Default stays `true`
+     * so every other table's existing behaviour is unchanged; only the two
+     * tables confirmed to lack the column opt out.
+     */
+    hasUpdatedAtColumn?: boolean;
+  },
 ) {
+  const hasUpdatedAtColumn = options?.hasUpdatedAtColumn ?? true;
   return {
     table,
 
@@ -99,7 +119,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
       void _ignored;
       return supabase
         .from(table)
-        .update({ ...safePatch, updated_at: new Date().toISOString() })
+        .update(hasUpdatedAtColumn ? { ...safePatch, updated_at: new Date().toISOString() } : safePatch)
         .eq('id', id)
         .eq('user_id', userId)
         .select()

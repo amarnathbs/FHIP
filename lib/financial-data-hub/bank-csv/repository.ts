@@ -19,7 +19,7 @@ import type { DateRange } from './reconciliation';
 interface FingerprintRow {
   id: string;
   economic_fingerprint: string | null;
-  reference_raw: string | null;
+  source_reference: string | null;
   balance_after: number | null;
 }
 
@@ -35,7 +35,7 @@ export async function loadDedupIndexForAccount(userId: string, financialAccountI
   const rows = await fetchAllRows<FingerprintRow>(() =>
     supabase
       .from('fdh_transactions')
-      .select('id, economic_fingerprint, reference_raw, balance_after')
+      .select('id, economic_fingerprint, source_reference, balance_after')
       .eq('user_id', userId)
       .eq('financial_account_id', financialAccountId)
       .not('economic_fingerprint', 'is', null)
@@ -48,7 +48,7 @@ export async function loadDedupIndexForAccount(userId: string, financialAccountI
   const index: DedupIndex = new Map();
   for (const row of rows) {
     if (!row.economic_fingerprint) continue;
-    const hasStrongEvidence = Boolean(row.reference_raw) || row.balance_after !== null;
+    const hasStrongEvidence = Boolean(row.source_reference) || row.balance_after !== null;
     const entry = { transactionId: row.id, hasStrongEvidence };
     const existing = index.get(row.economic_fingerprint);
     if (existing) existing.push(entry);

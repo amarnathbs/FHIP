@@ -1,5 +1,22 @@
 # R7 — Bank CSV Engine: Acceptance Report
 
+## R7-FINAL UPDATE (live DEV verification performed)
+
+Everything below this notice is the ORIGINAL acceptance report, written when live DEV verification was genuinely blocked (no DDL credential). That blocker is now resolved (migration 0064 confirmed live), and live DEV verification has now been PERFORMED for real — see `R7_FINAL_LIVE_DEV_VERIFICATION.md`, `R7_FINAL_SECURITY_VERIFICATION.md`, `R7_INDEPENDENT_LIVE_RECONCILIATION.md`.
+
+**Result**: all 15 live cases PASS, all 10 independent live reconciliations PASS, cross-user security PASS — but **one genuine, live-only-discoverable, unresolved security/reconciliation defect was found**: a user can forge their own document's `reconciliation_status` via direct PostgREST (migration 0064's authoritative-field trigger protects every column it introduces but missed this pre-existing FDH-1 column). A fix is drafted and RED→GREEN proven (`supabase/migrations/0065_r7_final_reconciliation_status_forgery_fix.sql`) but **not applied** to live DEV (no DDL credential this session).
+
+Three OTHER live-only defects were found and (unlike the one above, which needs DDL) fixed at the application-code layer this session, then re-verified clean end-to-end:
+1. `reference_raw`/`source_reference` column-name mismatch in `bank-csv/repository.ts` — broke **100%** of live `/process` calls.
+2. Within-file duplicate candidates never got a real `fdh_duplicate_candidates` row (`bankCsvProcessingService.ts`'s `pending-row-N` placeholder was never resolved).
+3. The generic repository's `update()` unconditionally wrote a nonexistent `updated_at` column on `fdh_duplicate_candidates`/`fdh_transaction_corrections`, silently breaking every legitimate duplicate-resolution while the API still reported success.
+
+Per spec §45-47's own acceptance rules, a genuine unresolved forgery affecting "reconciliation"/"security" excludes both UNCONDITIONAL FULL PASS and CONDITIONAL PASS. **Final verdict: FAIL** (bounded to the single `reconciliation_status` trigger gap — every other dimension of the release, including all money/date/dedup/account-identity/canonical-ownership logic, genuinely proved correct live). See the final response for the complete classification.
+
+---
+
+## Original acceptance report (pre-live-DEV, superseded above where it conflicts)
+
 ## Acceptance checklist (spec §90)
 
 ### Architecture
@@ -70,7 +87,7 @@
 | Raw storage private | CARRIED FORWARD, not re-proven | FDH-3's existing bucket/policy, unmodified by R7 |
 | Admin has no standing raw-content access | PASS | no admin route added; `pg_roles` check |
 | Trusted service processing still works | PASS (real-Postgres) | service-write regression, 3/3 |
-| **Live DEV** (real Supabase project) | **NOT PERFORMED** | `R7_LIVE_DEV_VERIFICATION.md` — genuinely blocked, disclosed |
+| **Live DEV** (real Supabase project) | **PERFORMED — 1 genuine unresolved gap** | `R7_FINAL_SECURITY_VERIFICATION.md` — `reconciliation_status` forgery succeeds; fix drafted (migration 0065), not applied |
 
 ### Certification
 | Item | Status | Evidence |
@@ -81,8 +98,8 @@
 | 20 manual reconciliations | PASS | `R7_MANUAL_RECONCILIATION.md` |
 | 5 negative controls RED→GREEN | PASS | NC1/NC2/NC3/NC5 in vitest + a 5th (RLS/trigger-disable) in the real-Postgres security script |
 | 999/1000/1001/2500/5001/10000 tests | PASS | `r7LargeFile.test.ts`, 8/8 |
-| **Live DEV 15 cases** | **NOT PERFORMED** | blocked, disclosed |
-| **10 independent live reconciliations** | **NOT PERFORMED** | blocked, disclosed |
+| **Live DEV 15 cases** | **PASS — 15/15** | `R7_FINAL_LIVE_DEV_VERIFICATION.md` |
+| **10 independent live reconciliations** | **PASS — 10/10** | `R7_INDEPENDENT_LIVE_RECONCILIATION.md` |
 
 ### Regression
 | Item | Status | Evidence |
