@@ -1,8 +1,16 @@
 /**
  * R8 — repeatable schema-verification test, mirroring
  * tests/unit/fdh2SchemaContract.test.ts / fdh3SchemaContract.test.ts /
- * r7SchemaContract.test.ts's method: parse migration 0067 from disk and
+ * r7SchemaContract.test.ts's method: parse migration 0068 from disk and
  * assert structural facts rather than trust prose.
+ *
+ * NUMBERING NOTE: originally drafted against 0067; renamed to 0068 when a
+ * parallel Investment Intelligence R9 migration independently and
+ * legitimately claimed 0067 on its own sibling branch (see
+ * scripts/r8_security_certification.mjs's identical fix for the same
+ * renumbering). This file's own hardcoded filename was missed at the time
+ * — found live via `npx vitest run` during R8's live-DEV certification
+ * follow-up and fixed here.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -11,7 +19,7 @@ import path from 'node:path';
 import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
-const FILE = '0067_r8_transaction_classification_engine.sql';
+const FILE = '0068_r8_transaction_classification_engine.sql';
 const RAW = fs.readFileSync(path.join(MIGRATION_DIR, FILE), 'utf8');
 const SQL = RAW.split('\n')
   .map((line) => {
@@ -20,7 +28,7 @@ const SQL = RAW.split('\n')
   })
   .join('\n');
 
-describe('R8 migration 0067 — structural facts', () => {
+describe('R8 migration 0068 — structural facts', () => {
   it('adds exactly the two disclosed additive columns and nothing else via "add column"/"alter table ... add column"', () => {
     // fdh_transaction_links gains match_evidence; fdh_transactions gains
     // recurring_transaction_id. No other "add column" appears in this file.
