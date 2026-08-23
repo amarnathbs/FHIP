@@ -12,12 +12,12 @@
 -- mapping, spec section 22-23) and fdh_transaction_corrections (layered user
 -- corrections, spec section 47).
 --
--- WIDENING DISCIPLINE. Two closed vocabularies need new values that do not
--- exist in the frozen FDH-1/FDH-3 check constraints:
---   1. fdh_document_audit_events.event_type (owned by migration 0058, itself
---      byte-checked by tests/unit/fdh3SchemaContract.test.ts) — needs 10 new
---      bank-CSV-specific event types (spec section 48).
--- Both follow the EXACT precedent set by migrations 0051/0052 widening
+-- WIDENING DISCIPLINE. One closed vocabulary needs new values that do not
+-- exist in the frozen FDH-3 check constraint:
+--   fdh_document_audit_events.event_type (owned by migration 0058, itself
+--   byte-checked by tests/unit/fdh3SchemaContract.test.ts) — needs 10 new
+--   bank-CSV-specific event types (spec section 48).
+-- This follows the EXACT precedent set by migrations 0051/0052 widening
 -- fdh_financial_institutions.institution_type and fdh_classification_rules.
 -- rule_type: `drop constraint if exists ... ; add constraint ...` with the
 -- widened value list, verified by a NEW schema-contract test scoped to this
