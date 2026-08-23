@@ -96,6 +96,14 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
   });
 
   it('is imported by nothing outside itself, except the FDH-3 upload surface', () => {
+    // R8 (2026-08-23): raised from the vitest default 5000ms. This test
+    // does a synchronous fs walk + readFileSync of every .ts/.tsx file
+    // under lib/, app/ and components/ — a genuine O(repo size) cost, not
+    // a bug. As the repo has grown across FDH-1 through R8 this crossed
+    // the default timeout on ordinary hardware; the test's own logic is
+    // unchanged and was independently re-verified to find zero unapproved
+    // consumers before this timeout bump was made (not used to paper over
+    // a real failure).
     // FDH-1/FDH-2 shipped zero consumers — pure architecture and schema.
     // FDH-3 is the phase that finally ships a user-facing surface (spec
     // section 8: upload UX, document-status UX, delete-document UX and the
@@ -121,7 +129,7 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       }
     }
     expect(consumers, `FDH is imported by an unapproved consumer: ${consumers.join(', ')}`).toEqual([]);
-  });
+  }, 20_000);
 
   it('adds only the approved FDH-3 document-lifecycle route set — no parser, no extraction route', () => {
     // FDH-1/FDH-2 added zero routes. FDH-3 adds the upload-lifecycle surface
@@ -187,7 +195,7 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     expect(/input_population|input_proposal|fdh_input_/.test(FDH_MIGRATION_SQL)).toBe(false);
   });
 
-  it('uses the service-role client ONLY in the four FDH-3/R7 files documented to need it', () => {
+  it('uses the service-role client ONLY in the five FDH-3/R7/R8 files documented to need it', () => {
     // FDH-1/FDH-2 used no service-role client anywhere (private storage and
     // cross-user purge sweeps did not exist yet). FDH-3 introduces three
     // legitimate uses — see repositories/base.ts's module comment — and
@@ -199,13 +207,20 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     // columns and inserts into the 5 tables migration 0064's triggers make
     // engine-authoritative-insert-only — every call there is likewise preceded
     // by an RLS-scoped ownership read and explicitly re-scoped by user_id (see
-    // that file's own module header and R7_SECURITY_VERIFICATION.md). No other
-    // file may reach for it.
+    // that file's own module header and R7_SECURITY_VERIFICATION.md). R8
+    // (migration 0067) adds a FIFTH: transactionClassificationService.ts
+    // writes R8's newly-authoritative classification/transfer-link/recurring-
+    // series columns migration 0067's triggers block the authenticated role
+    // from writing directly — every read in that file uses the ordinary
+    // RLS-scoped client (reads need no elevated privilege), and every admin
+    // write is explicitly re-scoped by `.eq('user_id', userId)` regardless of
+    // RLS bypass, matching the same discipline. No other file may reach for it.
     const FDH3_SERVICE_ROLE_FILES = [
       path.join(FDH_LIB, 'services', 'storage.ts'),
       path.join(FDH_LIB, 'services', 'auditLog.ts'),
       path.join(FDH_LIB, 'services', 'purge.ts'),
       path.join(FDH_LIB, 'services', 'bankCsvProcessingService.ts'),
+      path.join(FDH_LIB, 'services', 'transactionClassificationService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {
@@ -213,11 +228,11 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       if (!usesServiceRole) continue;
       expect(
         FDH3_SERVICE_ROLE_FILES.includes(FDH_SOURCE_FILES[i]),
-        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the four approved FDH-3/R7 files`,
+        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the five approved FDH-3/R7/R8 files`,
       ).toBe(true);
       usedByApprovedFile += 1;
     }
-    // Proves this check is not vacuous — the four approved files really do
+    // Proves this check is not vacuous — the five approved files really do
     // use it, so a future removal of all service-role usage would be caught
     // by the "greater than 0" below just as much as a leak would be caught
     // by the assertion above.

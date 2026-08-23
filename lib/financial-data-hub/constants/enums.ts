@@ -812,13 +812,30 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED = [
   'import_reconciled',
 ] as const;
 
-/** The complete current audit-event-type set (FDH-3 + R7). Used everywhere
- * OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e. by
- * `FdhDocumentAuditEventType` itself, so every caller can use the R7 event
- * types without a second parallel type. */
+/**
+ * R8 WIDENING (spec sections 32, 46-48, 53, 61): 3 classification-review
+ * audit event types, additive to the FDH-3/R7 set above. Migration
+ * `0067_r8_transaction_classification_engine.sql` widens the check
+ * constraint on `fdh_document_audit_events.event_type` to match;
+ * `tests/unit/r8SchemaContract.test.ts` verifies the two never drift apart,
+ * scoped to migration 0067 only — mirroring the exact `r7SchemaContract
+ * .test.ts` precedent for the R7 widening above.
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED = [
+  'transaction_classification_run',
+  'transaction_link_reviewed',
+  'recurring_series_reviewed',
+  'personal_rule_created',
+] as const;
+
+/** The complete current audit-event-type set (FDH-3 + R7 + R8). Used
+ * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
+ * by `FdhDocumentAuditEventType` itself, so every caller can use the R7/R8
+ * event types without a second parallel type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

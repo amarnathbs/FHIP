@@ -1,0 +1,166 @@
+{
+  "economic_type_cases": [
+    { "id": "ET-01", "description": "MONTHLY SALARY CREDIT", "credit_debit": "credit" },
+    { "id": "ET-02", "description": "SALARY SACRIFICE ADJUSTMENT", "credit_debit": "debit" },
+    { "id": "ET-03", "description": "SALARY PACKAGING NOVATED LEASE", "credit_debit": "debit" },
+    { "id": "ET-04", "description": "PAYROLL DEPOSIT ACME PTY LTD", "credit_debit": "credit" },
+    { "id": "ET-05", "description": "WAGES WEEKLY PAY", "credit_debit": "credit" },
+    { "id": "ET-06", "description": "INTEREST CREDITED SAVINGS", "credit_debit": "credit" },
+    { "id": "ET-07", "description": "INTEREST CHARGED OVERDRAFT", "credit_debit": "debit" },
+    { "id": "ET-08", "description": "ACCOUNT FEE MONTHLY", "credit_debit": "debit" },
+    { "id": "ET-09", "description": "ACCOUNT FEE WAIVED THIS MONTH", "credit_debit": "debit" },
+    { "id": "ET-10", "description": "ACCOUNT FEE REFUND", "credit_debit": "credit" },
+    { "id": "ET-11", "description": "MONTHLY FEE CARD SERVICES", "credit_debit": "debit" },
+    { "id": "ET-12", "description": "ATM WITHDRAWAL CBD BRANCH", "credit_debit": "debit" },
+    { "id": "ET-13", "description": "CASH WITHDRAWAL SHOPPING CENTRE", "credit_debit": "debit" },
+    { "id": "ET-14", "description": "REFUND ONLINE STORE ORDER 4471", "credit_debit": "credit" },
+    { "id": "ET-15", "description": "REVERSAL DUPLICATE CHARGE", "credit_debit": "credit" },
+    { "id": "ET-16", "description": "CHARGEBACK DISPUTED TRANSACTION", "credit_debit": "credit" },
+    { "id": "ET-17", "description": "WOOLWORTHS 1234 MELBOURNE", "credit_debit": "debit" },
+    { "id": "ET-18", "description": "COLES SUPERMARKET SYDNEY", "credit_debit": "debit" },
+    { "id": "ET-19", "description": "NETFLIX.COM SUBSCRIPTION", "credit_debit": "debit" },
+    { "id": "ET-20", "description": "SPOTIFY PREMIUM MONTHLY", "credit_debit": "debit" },
+    { "id": "ET-21", "description": "UNRECOGNISABLE MERCHANT NARRATIVE XYZ", "credit_debit": "debit" },
+    { "id": "ET-22", "description": "RANDOM EFTPOS PURCHASE 9981", "credit_debit": "debit" },
+    { "id": "ET-23", "description": "GENERIC DIRECT DEBIT PAYMENT", "credit_debit": "debit" },
+    { "id": "ET-24", "description": "WOOLWORTHS ONLINE ORDER", "credit_debit": "debit" },
+    { "id": "ET-25", "description": "COLES EXPRESS FUEL", "credit_debit": "debit" }
+  ],
+  "transfer_cases": [
+    {
+      "id": "TR-01",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b", "financial_account_id": "acc-2", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "TR-02-same-account-no-match",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "TR-03-outside-window-no-match",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-01-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b", "financial_account_id": "acc-2", "transaction_date": "2026-06-15", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "TR-04-different-currency-no-match",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b", "financial_account_id": "acc-2", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "INR", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "TR-05-same-direction-no-match",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b", "financial_account_id": "acc-2", "transaction_date": "2026-03-01", "amount_original": "500.00", "currency_original": "AUD", "credit_debit": "debit" }
+      ]
+    },
+    {
+      "id": "TR-06-closest-date-wins",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "200.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b-far", "financial_account_id": "acc-2", "transaction_date": "2026-03-04", "amount_original": "200.00", "currency_original": "AUD", "credit_debit": "credit" },
+        { "id": "b-close", "financial_account_id": "acc-3", "transaction_date": "2026-03-01", "amount_original": "200.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "TR-07-multiple-independent-pairs",
+      "date_window_days": 3,
+      "transactions": [
+        { "id": "a1", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b1", "financial_account_id": "acc-2", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "credit" },
+        { "id": "a2", "financial_account_id": "acc-1", "transaction_date": "2026-03-10", "amount_original": "250.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "b2", "financial_account_id": "acc-2", "transaction_date": "2026-03-11", "amount_original": "250.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    }
+  ],
+  "refund_cases": [
+    {
+      "id": "RF-01-full-refund",
+      "is_refund_ids": ["refund"],
+      "transactions": [
+        { "id": "orig", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "refund", "financial_account_id": "acc-1", "transaction_date": "2026-03-05", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "RF-02-partial-refund",
+      "is_refund_ids": ["refund"],
+      "transactions": [
+        { "id": "orig", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "refund", "financial_account_id": "acc-1", "transaction_date": "2026-03-05", "amount_original": "40.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "RF-03-exceeds-original-no-match",
+      "is_refund_ids": ["refund"],
+      "transactions": [
+        { "id": "orig", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "50.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "refund", "financial_account_id": "acc-1", "transaction_date": "2026-03-05", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "RF-04-different-account-no-match",
+      "is_refund_ids": ["refund"],
+      "transactions": [
+        { "id": "orig", "financial_account_id": "acc-other", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "refund", "financial_account_id": "acc-1", "transaction_date": "2026-03-05", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    },
+    {
+      "id": "RF-05-before-original-no-match",
+      "is_refund_ids": ["refund"],
+      "transactions": [
+        { "id": "orig", "financial_account_id": "acc-1", "transaction_date": "2026-03-10", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "debit" },
+        { "id": "refund", "financial_account_id": "acc-1", "transaction_date": "2026-03-01", "amount_original": "100.00", "currency_original": "AUD", "credit_debit": "credit" }
+      ]
+    }
+  ],
+  "recurring_cases": [
+    {
+      "id": "RC-01-monthly",
+      "transactions": [
+        { "id": "t1", "financial_account_id": "acc-1", "merchant_id": "m-netflix", "transaction_date": "2026-01-05", "credit_debit": "debit" },
+        { "id": "t2", "financial_account_id": "acc-1", "merchant_id": "m-netflix", "transaction_date": "2026-02-04", "credit_debit": "debit" },
+        { "id": "t3", "financial_account_id": "acc-1", "merchant_id": "m-netflix", "transaction_date": "2026-03-06", "credit_debit": "debit" }
+      ]
+    },
+    {
+      "id": "RC-02-weekly",
+      "transactions": [
+        { "id": "t1", "financial_account_id": "acc-1", "merchant_id": "m-gym", "transaction_date": "2026-01-05", "credit_debit": "debit" },
+        { "id": "t2", "financial_account_id": "acc-1", "merchant_id": "m-gym", "transaction_date": "2026-01-12", "credit_debit": "debit" },
+        { "id": "t3", "financial_account_id": "acc-1", "merchant_id": "m-gym", "transaction_date": "2026-01-19", "credit_debit": "debit" }
+      ]
+    },
+    {
+      "id": "RC-03-insufficient-history",
+      "transactions": [
+        { "id": "t1", "financial_account_id": "acc-1", "merchant_id": "m-netflix", "transaction_date": "2026-01-05", "credit_debit": "debit" },
+        { "id": "t2", "financial_account_id": "acc-1", "merchant_id": "m-netflix", "transaction_date": "2026-02-04", "credit_debit": "debit" }
+      ]
+    },
+    {
+      "id": "RC-04-random-no-series",
+      "transactions": [
+        { "id": "t1", "financial_account_id": "acc-1", "merchant_id": "m-supermarket", "transaction_date": "2026-01-02", "credit_debit": "debit" },
+        { "id": "t2", "financial_account_id": "acc-1", "merchant_id": "m-supermarket", "transaction_date": "2026-01-09", "credit_debit": "debit" },
+        { "id": "t3", "financial_account_id": "acc-1", "merchant_id": "m-supermarket", "transaction_date": "2026-01-13", "credit_debit": "debit" },
+        { "id": "t4", "financial_account_id": "acc-1", "merchant_id": "m-supermarket", "transaction_date": "2026-01-28", "credit_debit": "debit" }
+      ]
+    }
+  ]
+}

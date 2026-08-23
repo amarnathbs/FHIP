@@ -48,3 +48,8 @@ scripts/.fdh1-*.json
 # dumps generated per-run by scripts/r7final_*.mjs and scripts/fdh4_live_*.ts
 # — never committed (large, disposable, regenerated per session).
 .r7scratch/
+
+# R8 live-certification scratch: local result dumps generated per-run by
+# scripts/r8_live_dev_certification.mjs — never committed (disposable,
+# regenerated per session, same pattern as .r7scratch above).
+.r8scratch/
