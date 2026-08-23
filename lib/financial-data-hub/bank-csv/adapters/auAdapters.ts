@@ -92,4 +92,63 @@ export const AU_NAB_DEBIT_CREDIT_V1: BankCsvAdapter = {
   },
 };
 
-export const AU_ADAPTERS = [AU_CBA_DEBIT_CREDIT_V1, AU_WESTPAC_SINGLE_SIGNED_V1, AU_NAB_DEBIT_CREDIT_V1];
+export const AU_ANZ_DEBIT_CREDIT_V1: BankCsvAdapter = {
+  id: 'au_anz_debit_credit_v1',
+  institutionCode: 'anz',
+  country: 'AU',
+  version: '1.0.0',
+  certificationState: 'certified',
+  displayName: 'ANZ — Debit/Credit CSV export',
+  signature: {
+    requiredHeaders: ['Date', 'Transaction Description', 'Debit Amount', 'Credit Amount', 'Balance'],
+    expectedColumnCount: 5,
+  },
+  amountConvention: 'debit_credit_columns',
+  dateFormat: 'DD/MM/YYYY',
+  delimiter: ',',
+  columnRoles: {
+    transactionDate: 'Date',
+    description: 'Transaction Description',
+    debit: 'Debit Amount',
+    credit: 'Credit Amount',
+    balance: 'Balance',
+  },
+  scoreHeader(header) {
+    return scoreHeaderAgainstSignature(header, this.signature);
+  },
+};
+
+export const AU_MACQUARIE_DEBIT_CREDIT_V1: BankCsvAdapter = {
+  id: 'au_macquarie_debit_credit_v1',
+  institutionCode: 'macquarie_bank',
+  country: 'AU',
+  version: '1.0.0',
+  certificationState: 'certified',
+  displayName: 'Macquarie Bank — Business daily-file CSV export',
+  signature: {
+    requiredHeaders: ['Transaction Date', 'Transaction Description', 'Debit Amount', 'Credit Amount'],
+    optionalHeaders: ['Account Number', 'Account Name', 'Cheque/Reference Number'],
+    expectedColumnCount: 7,
+  },
+  amountConvention: 'debit_credit_columns',
+  dateFormat: 'DD/MM/YYYY',
+  delimiter: ',',
+  columnRoles: {
+    transactionDate: 'Transaction Date',
+    description: 'Transaction Description',
+    debit: 'Debit Amount',
+    credit: 'Credit Amount',
+    reference: 'Cheque/Reference Number',
+  },
+  scoreHeader(header) {
+    return scoreHeaderAgainstSignature(header, this.signature);
+  },
+};
+
+export const AU_ADAPTERS = [
+  AU_CBA_DEBIT_CREDIT_V1,
+  AU_WESTPAC_SINGLE_SIGNED_V1,
+  AU_NAB_DEBIT_CREDIT_V1,
+  AU_ANZ_DEBIT_CREDIT_V1,
+  AU_MACQUARIE_DEBIT_CREDIT_V1,
+];

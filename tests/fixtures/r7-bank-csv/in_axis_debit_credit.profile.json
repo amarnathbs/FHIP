@@ -1,0 +1,15 @@
+{
+  "adapter_id": "in_axis_debit_credit_v1",
+  "delimiter": ",",
+  "header_row_index": 0,
+  "amount_convention": "debit_credit_columns",
+  "date_format": "DD/MM/YYYY",
+  "column_roles": {
+    "transaction_date": "Tran Date",
+    "description": "Particulars",
+    "debit": "Debit",
+    "credit": "Credit",
+    "balance": "Balance",
+    "reference": "Chq No"
+  }
+}
