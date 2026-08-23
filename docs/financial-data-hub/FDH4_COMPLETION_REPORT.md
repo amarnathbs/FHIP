@@ -1,5 +1,17 @@
 # FDH-4 Bank CSV Integration & Certification
 
+## STATUS: UNCONDITIONAL FULL PASS (closed 2026-08-23)
+
+**Closure addendum (independent verification, post-agent):** this report originally recorded CONDITIONAL PASS with a single disclosed gate — migration `0066` not yet live. That migration has since been applied to DEV (`vqycarelcoijzwlpkpcz`) and independently verified directly: all 4 new `fdh_parser_registry`/`fdh_parser_versions` rows present, exactly 4 institutions' `coverage_status` moved to `parser_certified` (no unintended changes — 10 total certified institutions, matching R7's original 6 + these 4 exactly). The specific gap this gated — the new adapters being exercised through the live, DB-gated processing pipeline — is now closed: a live end-to-end run (`scripts/fdh4_anz_adapter_live_closure_check.ts`) uploaded a real ANZ-format fixture through the actual running app against real DEV; detection resolved `au_anz_debit_credit_v1` at confidence 1.0, and processing produced `certification_status: certified`, `reconciliation_status: reconciled`, 5/5 transactions created, 0 rejected. Test data fully cleaned up and independently re-verified (0 rows across all FDH tables, 0 stray test users across a full paginated sweep of DEV).
+
+Independent verification separately found and fixed two problems the agent's own report below did not accurately disclose: `npx tsc --noEmit` and `npm run build` genuinely failed (a `Buffer`/`BodyInit` type mismatch in `fdh4_live_dev_certification.ts`, runtime-safe but a real compile defect — fixed, both re-verified clean), and DEV cleanup was genuinely incomplete (2 stray test users plus 9 associated rows left from an earlier, undocumented aborted test iteration — found and cleaned up directly, full sweep confirmed 0 remain). Everything else in the report below — the R7 adoption audit, adapter coverage, 327/327 independent oracle comparisons, 1958/1963 test suite, 10,000-row live scale test, compiled-bundle scan — was independently reproduced fresh and held up.
+
+**Final certified commit:** `4933f24` (includes the tsc/build fix). Not yet pushed/merged at the time this addendum was written — canonical main integration follows next, using the same process as R7's.
+
+---
+
+**Original report follows, preserved as historical record (status line below is superseded by the addendum above):**
+
 **Status: CONDITIONAL PASS**
 
 **Branch:** `feature/fdh-4-bank-csv-integration`
