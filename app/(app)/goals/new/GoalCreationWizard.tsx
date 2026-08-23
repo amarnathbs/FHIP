@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 const STEPS = ['Goal Type', 'Define', 'Target', 'Contribution Plan', 'Review'] as const;
 
-interface GoalTypeRef {
+export interface GoalTypeRef {
   type_key: string;
   category: string;
   type_label: string;
@@ -47,6 +47,21 @@ const INITIAL: FormState = {
   importance_type: 'important',
 };
 
+// Pure decision logic for Step 0's goal-type selection, extracted so it can
+// be unit tested without mounting the component. goal_name is only
+// prefilled from the type's label while the user hasn't yet typed their own
+// edit into the Step 1 Goal Name field (goalNameTouched) — this keeps the
+// prefill in sync across type changes made before the user types anything,
+// without ever clobbering a name they've already manually edited.
+export function goalTypeSelectPatch(t: GoalTypeRef, goalNameTouched: boolean): Partial<FormState> {
+  return {
+    goal_type: t.type_key,
+    user_priority: t.default_priority,
+    importance_type: t.default_importance_type,
+    ...(goalNameTouched ? {} : { goal_name: t.type_label }),
+  };
+}
+
 export function GoalCreationWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -54,6 +69,11 @@ export function GoalCreationWizard() {
   const [goalTypes, setGoalTypes] = useState<GoalTypeRef[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Tracks whether the user has ever manually typed into the Goal Name field
+  // (Step 1). Until they do, selecting/re-selecting a goal type (Step 0)
+  // keeps the name in sync with the type's label; once they've typed their
+  // own edit, a later type change must not clobber it.
+  const [goalNameTouched, setGoalNameTouched] = useState(false);
 
   useEffect(() => {
     fetch('/api/reference/goal-types')
@@ -136,13 +156,7 @@ export function GoalCreationWizard() {
                   {types.map((t) => (
                     <button
                       key={t.type_key}
-                      onClick={() =>
-                        update({
-                          goal_type: t.type_key,
-                          user_priority: t.default_priority,
-                          importance_type: t.default_importance_type,
-                        })
-                      }
+                      onClick={() => update(goalTypeSelectPatch(t, goalNameTouched))}
                       className={`rounded border px-3 py-2 text-sm ${
                         form.goal_type === t.type_key ? 'border-trust bg-blue-50 text-trust' : 'text-gray-700 hover:border-trust'
                       }`}
@@ -163,7 +177,10 @@ export function GoalCreationWizard() {
               <label className="block text-sm text-gray-600">Goal name</label>
               <input
                 value={form.goal_name}
-                onChange={(e) => update({ goal_name: e.target.value })}
+                onChange={(e) => {
+                  setGoalNameTouched(true);
+                  update({ goal_name: e.target.value });
+                }}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm"
               />
             </div>

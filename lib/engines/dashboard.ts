@@ -55,6 +55,7 @@ export interface RetirementRow {
   employer_contribution: number | null;
   personal_contribution: number | null;
   contribution_frequency: Frequency | null;
+  master_item_key?: string | null;
   country_code?: string | null;
   currency_code?: string | null;
 }
@@ -260,6 +261,102 @@ export function isCreditCardDebt(debtType: string, masterItemKey?: string | null
   return masterItemKey === 'credit_card' || masterItemKey === 'store_card' || debtType === 'credit_card';
 }
 
+// ---------------------------------------------------------------------------
+// Debt-purpose split (Financial DNA debt-dependence redesign, App Review
+// Spec 1 §24-28) — a narrower, more specific signal than isGoodDebt() above.
+// isGoodDebt() answers "is this balance asset-backed/productive debt" (used
+// for the goodDebt/badDebt split); this answers "whose serviceability
+// benchmark applies" for Financial DNA, which the spec requires to keep
+// strictly separate: owner-occupied housing debt (~30% of gross income
+// reference band), investment/income-producing property debt (assessed
+// against household capacity after living costs, never penalised merely
+// for being debt), and everything else (consumer/other — must never
+// receive favourable treatment just because good investment debt exists
+// elsewhere in the household).
+//
+// Only 'home_loan' and 'investment_loan' are unambiguous single-purpose
+// catalogue items (supabase/seed_master_items.sql, 'liability' category).
+// 'construction_loan' is a genuine ambiguity the catalogue does not
+// resolve — it could fund a primary-residence build or an investment-
+// property build, and there is no data-model field to tell them apart
+// (same "mixed-purpose loan" limitation the redesign spec explicitly
+// scopes out — a liability row has exactly one debt_type/master_item_key).
+// Rather than guess it into the more lenient investment-capacity band, it
+// defaults to owner_occupied — the stricter, more conservative of the two
+// property bands — so an ambiguous loan is never accidentally given
+// favourable investment-style treatment. This is a disclosed heuristic,
+// not a verified purpose signal; see DebtPurposeAssessment.limitations in
+// lib/engines/financialDna.ts for the user-facing disclosure.
+//
+// Every other catalogue liability (personal_loan, car_loan, credit_card,
+// business_loan, margin_loan, hecs_help, etc.) falls into consumer_or_other
+// — deliberately conservative, since a wrong guess into a favourable
+// property band would be the more harmful error here.
+const OWNER_OCCUPIED_DEBT_MASTER_ITEMS = new Set(['home_loan', 'construction_loan']);
+const INVESTMENT_PROPERTY_DEBT_MASTER_ITEMS = new Set(['investment_loan']);
+
+export type DebtPurpose = 'owner_occupied' | 'investment_property' | 'consumer_or_other';
+
+export function classifyDebtPurpose(debtType: string, masterItemKey?: string | null): DebtPurpose {
+  const key = masterItemKey || debtType;
+  if (OWNER_OCCUPIED_DEBT_MASTER_ITEMS.has(key) || debtType === 'mortgage') return 'owner_occupied';
+  if (INVESTMENT_PROPERTY_DEBT_MASTER_ITEMS.has(key)) return 'investment_property';
+  return 'consumer_or_other';
+}
+
+// expense_category (lib/validation/expense.ts) has the same never-collected-
+// by-the-grid problem as asset_class/investment_type/debt_type above:
+// lib/grid/configs.ts's expenseGridConfig.fields never lists it, so every
+// expense row saved through the live app leaves it at its Zod default
+// 'other' — a filter keyed on expense_category alone is dead code for every
+// real user. master_item_key is the reliable signal instead, matching this
+// file's own established fix pattern (MASTER_ASSET_ITEM_TO_BUCKET,
+// MASTER_INVESTMENT_ITEM_TO_BUCKET, GOOD_DEBT_MASTER_ITEMS above).
+//
+// Only expense-catalogue items that mirror a Liability row's own
+// monthly_repayment cash outflow belong in this set (supabase/seed_master_
+// items.sql, 'expense' category): 'mortgage' and 'car_loan_repayments'.
+// 'rent' is deliberately excluded even though it sits right next to
+// 'mortgage' in the catalogue — renting has no liability-side counterpart
+// (there is no "rent" liability to double-count against), so excluding it
+// here would just make coreSurvivalMonthlyExpenses/essentialMonthlyExpenses
+// wrong for every renting household, not fix a real double-count.
+const DEBT_REPAYMENT_MASTER_ITEMS = new Set(['mortgage', 'car_loan_repayments']);
+export function isDebtRepaymentExpense(row: ExpenseRow): boolean {
+  if (row.master_item_key) return DEBT_REPAYMENT_MASTER_ITEMS.has(row.master_item_key);
+  return row.expense_category === 'debt_repayment';
+}
+
+// Chunk 3a (docs/app-review-2026-08/CHUNK3A_CANONICAL_SCHEMA.md §4) found
+// and disclosed this live defect, and Chunk 3b's AR-0-cited discovery
+// re-confirmed it live against real DEV data (45 affected rows across 39
+// users as of 2026-08-21): these 6 catalogue items are contribution
+// *flows* (Spec 2 §34-36's "account vs contribution" distinction), not
+// standalone account balances, but the pre-existing flat
+// retirement_accounts grid let a user tick e.g. "Employer Contributions"
+// and type a number straight into current_balance — summed by
+// totalRetirement below as if it were a real super balance, phantom-
+// double-counting against the user's actual account. Chunk 3b deprecates
+// these 6 catalogue items (supabase/migrations/0073) and backfills the
+// real existing rows into the new retirement_contributions table
+// (migration 0074) where evidence allows, but this exclusion set is the
+// actual fix and is independent of both migrations being applied — it
+// works whether master_item_key is 'employer_contributions' etc. on an
+// is_active or since-deprecated catalogue row, so a legacy row a user
+// saved before either migration lands is corrected immediately, not just
+// once the catalogue deprecation and grid orphaned-key fallback exist.
+const CONTRIBUTION_TYPE_MASTER_ITEMS = new Set([
+  'employer_contributions',
+  'salary_sacrifice',
+  'personal_concessional',
+  'non_concessional',
+  'government_co_contribution',
+  'spouse_contribution',
+]);
+export function isRetirementContributionRow(masterItemKey?: string | null): boolean {
+  return Boolean(masterItemKey) && CONTRIBUTION_TYPE_MASTER_ITEMS.has(masterItemKey as string);
+}
+
 function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): number {
   return rows.reduce((sum, r) => sum + toMonthly(Number(r[amountField]), r[freqField] as Frequency), 0);
 }
@@ -356,6 +453,18 @@ export interface DashboardSummary {
   liabilitiesWithPayoff: { debtType: string; balance: number; monthsToPayoff: number | null }[];
   goodDebt: number;
   badDebt: number;
+  // Purpose split for Financial DNA's debt-dependence assessment (App
+  // Review Spec 1 §24-28) — see classifyDebtPurpose() above for the
+  // classification rule and its disclosed construction_loan heuristic.
+  // Currency-converted to the reporting currency, same as totalLiabilities/
+  // debtMonthlyRepayments above (so ratios computed against income are
+  // consistent), unlike goodDebt/badDebt which sum raw balances.
+  ownerOccupiedDebtBalance: number;
+  ownerOccupiedDebtMonthlyRepayment: number;
+  investmentPropertyDebtBalance: number;
+  investmentPropertyDebtMonthlyRepayment: number;
+  consumerOrOtherDebtBalance: number;
+  consumerOrOtherDebtMonthlyRepayment: number;
   variableRateDebtBalance: number;
   variableRateDebtRatio: number | null; // balance-weighted; null if no liability has interest_rate_type recorded
   upcomingRateResetBalance12m: number; // fixed-rate balance expiring within 12 months
@@ -447,12 +556,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
 
-  // 'debt_repayment'-category expense rows and the liabilities table's
-  // monthly_repayment represent the same cash outflow when a user tracks a
-  // loan repayment as an expense line — excluded here so debtMonthlyRepayments
-  // (below) is the only source of debt cash-flow, matching this field's own
-  // long-standing "excludes debt repayments, tracked separately" comment.
-  const nonDebtExpenses = input.expenses.filter((r) => r.expense_category !== 'debt_repayment');
+  // Debt-repayment expense rows (isDebtRepaymentExpense, above — keyed on
+  // master_item_key, not the never-collected expense_category) and the
+  // liabilities table's monthly_repayment represent the same cash outflow
+  // when a user tracks a loan repayment as an expense line — excluded here
+  // so debtMonthlyRepayments (below) is the only source of debt cash-flow,
+  // matching this field's own long-standing "excludes debt repayments,
+  // tracked separately" comment.
+  const nonDebtExpenses = input.expenses.filter((r) => !isDebtRepaymentExpense(r));
   const essentialMonthlyExpenses = sumMonthly(
     nonDebtExpenses.filter((r) => r.is_essential),
     'amount',
@@ -512,7 +623,11 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
 
   const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
-  const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
+  // Excludes Class-F contribution-type rows (isRetirementContributionRow,
+  // above) — see that helper's comment for the phantom-balance defect this
+  // fixes (Chunk 3a discovery, Chunk 3b live-confirmed and corrected).
+  const retirementBalanceRows = input.retirement.filter((r) => !isRetirementContributionRow(r.master_item_key));
+  const totalRetirement = retirementBalanceRows.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
   const totalLiabilities = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
 
@@ -547,7 +662,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   }
   const assetsByCountry = byCountry(input.assets, 'current_value', 'country_code');
   const liabilitiesByCountry = byCountry(input.liabilities, 'balance', 'country_code');
-  const retirementByCountry = byCountry(input.retirement, 'current_balance', 'country_code');
+  // Uses the same Class-F-excluded row set as totalRetirement above, for
+  // internal consistency — otherwise a per-country breakdown could sum to
+  // more than the (corrected) headline totalRetirement figure.
+  const retirementByCountry = byCountry(retirementBalanceRows, 'current_balance', 'country_code');
 
   const liquidAssets = allocationMap.get('cash') ?? 0;
   const emergencyFundMonths = essentialMonthlyExpenses > 0 ? liquidAssets / essentialMonthlyExpenses : null;
@@ -578,6 +696,28 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   for (const l of input.liabilities) {
     if (isGoodDebt(l.debt_type, l.master_item_key)) goodDebt += l.balance;
     else badDebt += l.balance;
+  }
+
+  let ownerOccupiedDebtBalance = 0;
+  let ownerOccupiedDebtMonthlyRepayment = 0;
+  let investmentPropertyDebtBalance = 0;
+  let investmentPropertyDebtMonthlyRepayment = 0;
+  let consumerOrOtherDebtBalance = 0;
+  let consumerOrOtherDebtMonthlyRepayment = 0;
+  for (const l of input.liabilities) {
+    const purpose = classifyDebtPurpose(l.debt_type, l.master_item_key);
+    const balance = reportingValue(l.currency_code, l.balance);
+    const repayment = reportingValue(l.currency_code, l.monthly_repayment ?? 0);
+    if (purpose === 'owner_occupied') {
+      ownerOccupiedDebtBalance += balance;
+      ownerOccupiedDebtMonthlyRepayment += repayment;
+    } else if (purpose === 'investment_property') {
+      investmentPropertyDebtBalance += balance;
+      investmentPropertyDebtMonthlyRepayment += repayment;
+    } else {
+      consumerOrOtherDebtBalance += balance;
+      consumerOrOtherDebtMonthlyRepayment += repayment;
+    }
   }
 
   const liabilitiesWithRateType = input.liabilities.filter((l) => (l.interest_rate_type ?? null) !== null);
@@ -838,6 +978,12 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     liabilitiesWithPayoff,
     goodDebt,
     badDebt,
+    ownerOccupiedDebtBalance,
+    ownerOccupiedDebtMonthlyRepayment,
+    investmentPropertyDebtBalance,
+    investmentPropertyDebtMonthlyRepayment,
+    consumerOrOtherDebtBalance,
+    consumerOrOtherDebtMonthlyRepayment,
     variableRateDebtBalance,
     variableRateDebtRatio,
     upcomingRateResetBalance12m,

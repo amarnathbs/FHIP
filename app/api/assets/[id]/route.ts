@@ -1,6 +1,6 @@
 import { requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
-import { assetSchema } from '@/lib/validation/asset';
+import { assetPatchSchema } from '@/lib/validation/asset';
 
 const registry = makeRegistry('assets');
 
@@ -8,7 +8,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const parsed = assetSchema.partial().safeParse(await req.json());
+  const parsed = assetPatchSchema.safeParse(await req.json());
   if (!parsed.success) return bad(parsed.error.message, 422);
   const { data, error } = await registry.update(user.id, id, parsed.data);
   return error ? bad(error.message) : ok(data);

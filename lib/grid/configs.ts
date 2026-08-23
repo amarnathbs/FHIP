@@ -50,8 +50,11 @@ export const assetGridConfig: GridConfig = {
   reviewSection: 'assets',
   fields: [
     { name: 'current_value', label: 'Current Market Value', type: 'number', step: '0.01', required: true },
-    { name: 'purchase_price', label: 'Purchase Price', type: 'number', step: '0.01' },
-    { name: 'purchase_date', label: 'Purchase Date', type: 'date' },
+    // Chunk 3a item 1 (Spec 1 §9): shown/required per-row based on the
+    // selected catalogue item's metadata instead of uniformly for every
+    // asset type — see lib/grid/fieldVisibility.ts.
+    { name: 'purchase_price', label: 'Purchase Price', type: 'number', step: '0.01', metadataDriven: true },
+    { name: 'purchase_date', label: 'Purchase Date', type: 'date', metadataDriven: true },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],

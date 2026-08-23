@@ -78,7 +78,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
         .eq('is_active', true),
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, master_item_key, country_code, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase

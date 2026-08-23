@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, getLatestSnapshotAsOf, type LatestSnapshot } from '@/lib/services/dashboardData';
+import { isRetirementContributionRow } from '@/lib/engines/dashboard';
 import { resolveAssumptions, getAssumptionValue, type RawForecastAssumption, type RawGlobalAssumption } from '@/lib/engines/forecast/assumptions';
 import { runForecastCalculation, computeForecastInputHash, isForecastTypeSupported, FORECAST_ENGINE_VERSION } from '@/lib/engines/forecast/engine';
 import type { NetWorthCalculatorInput, PlannedFinancialEvent } from '@/lib/engines/forecast/netWorthCalculator';
@@ -22,6 +23,28 @@ import { computeAllocatedMonthlyContribution, type AllocatedContributionInvestme
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 const DEFAULT_MONTHS = 120; // 10 years, matches the longest Forecast Overview horizon in the spec
+
+// lib/engines/dashboard.ts's totalRetirement fix (Chunk 3b, isRetirementContributionRow)
+// excludes Class-F contribution-type retirement_accounts rows (employer_contributions,
+// salary_sacrifice, personal_concessional, non_concessional, government_co_contribution,
+// spouse_contribution) from being summed as phantom balances, but every retirement_accounts
+// query in this file that goes around loadDashboard() (cross-border and retirement forecast
+// inputs, and the cross-border variance actual) re-implements the raw current_balance sum
+// independently and was never updated with the same exclusion — the same live defect,
+// unfixed on these three paths. This reuses the canonical dashboard.ts predicate rather than
+// re-deriving the exclusion set, so the two can never drift apart.
+// Deliberately excludes ONLY the balance figure — the employer_contribution/
+// personal_contribution *flow* fields on the very same Class-F rows still feed the
+// monthly-contribution figures at each call site below, unfiltered, exactly as
+// dashboard.ts's own retirementEmployerMonthlyContribution/retirementPersonalMonthlyContribution
+// do (lib/engines/dashboard.ts:715-729) — a contribution row's contribution amount is real
+// and should still count; only its current_balance is the phantom double-count.
+export function sumRetirementBalanceExcludingContributions<T extends { current_balance: number | null; master_item_key?: string | null }>(
+  rows: T[],
+  valueOf: (row: T) => number = (row) => row.current_balance ?? 0
+): number {
+  return rows.filter((r) => !isRetirementContributionRow(r.master_item_key)).reduce((sum, r) => sum + valueOf(r), 0);
+}
 
 export async function getOrCreateForecastProfile(userId: string, client?: SupabaseServerClient) {
   const supabase = client ?? (await createClient());
@@ -422,7 +445,7 @@ async function buildCalculatorInput(
         .eq('currency_code', foreignCurrency),
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, master_item_key')
         .eq('user_id', userId)
         .eq('is_active', true)
         .eq('currency_code', foreignCurrency),
@@ -444,7 +467,10 @@ async function buildCalculatorInput(
     const foreignInvestmentMonthlyContribution = (investmentsResult.data ?? []).reduce((sum, i) => sum + (i.annual_contribution ?? 0) / 12, 0);
     const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
     const foreignLiabilityMonthlyRepayment = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + (l.monthly_repayment ?? 0), 0);
-    const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
+    // Excludes Class-F contribution-type rows from the balance (see
+    // sumRetirementBalanceExcludingContributions above) — the contribution
+    // fields below deliberately stay unfiltered.
+    const foreignRetirement = sumRetirementBalanceExcludingContributions(retirementResult.data ?? []);
     const foreignRetirementMonthlyContribution = (retirementResult.data ?? []).reduce((sum, r) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[r.contribution_frequency ?? 'monthly'] ?? 1;
       return sum + ((r.employer_contribution ?? 0) + (r.personal_contribution ?? 0)) * factor;
@@ -472,7 +498,7 @@ async function buildCalculatorInput(
     const [accountsResult, dobResult] = await Promise.all([
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, master_item_key')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).single(),
@@ -496,7 +522,10 @@ async function buildCalculatorInput(
       const rowCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : retirementReportingCurrency;
       return convertToReportingCurrency(amount, rowCurrency, retirementReportingCurrency, retirementFxRateAudInr);
     };
-    const currentBalance = accounts.reduce((sum, a) => sum + toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code), 0);
+    // Excludes Class-F contribution-type rows from the balance (see
+    // sumRetirementBalanceExcludingContributions above) — the contribution
+    // fields below deliberately stay unfiltered.
+    const currentBalance = sumRetirementBalanceExcludingContributions(accounts, (a) => toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code));
     const CONTRIBUTION_FREQUENCY_TO_MONTHLY: Record<string, number> = {
       weekly: 52 / 12,
       fortnightly: 26 / 12,
@@ -1210,11 +1239,13 @@ async function getCurrentActualValue(
     supabase.from('assets').select('current_value').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
     supabase.from('investments').select('current_value').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
     supabase.from('liabilities').select('balance').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-    supabase.from('retirement_accounts').select('current_balance').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
+    supabase.from('retirement_accounts').select('current_balance, master_item_key').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
   ]);
   const foreignAssets = (assetsResult.data ?? []).reduce((sum, a) => sum + a.current_value, 0);
   const foreignInvestments = (investmentsResult.data ?? []).reduce((sum, i) => sum + i.current_value, 0);
-  const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
+  // Excludes Class-F contribution-type rows from the balance (see
+  // sumRetirementBalanceExcludingContributions above).
+  const foreignRetirement = sumRetirementBalanceExcludingContributions(retirementResult.data ?? []);
   const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
   const netForeignLocal = foreignAssets + foreignInvestments + foreignRetirement - foreignLiabilities;
   const fxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);

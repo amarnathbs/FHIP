@@ -38,8 +38,12 @@ prevention". This is currently a required **manual** pre-merge step (run it
 yourself before opening/merging a migration-carrying PR) — there is no CI
 pipeline in this repository to wire it into automatically yet.
 
-- **Next free version: `0064`**
-- Active migrations: 63 (`0001`-`0063`), one file per version
+- **Next free version: `0075`** (as of the `feature/app-review-input-integrity-production` /
+  `origin/main` reconciliation below, 2026-08-23; this line tracks that
+  integration branch's own view and may lag further work landed only on
+  `origin/main` in the meantime — always re-run `check-migration-versions.mjs`
+  before trusting a specific number)
+- Active migrations: 74 on this integration branch (`0001`-`0074`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -274,3 +278,55 @@ unchanged here. **No re-application to DEV is needed or intended for these
 five files** — they are already live under their effects, just now
 correctly numbered in the repository so a fresh clean-rebuild replay is
 deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).
+
+## App Review + Assets/Investments/Retirement Consolidation (migrations `0066`-`0074`, originally `0031`-`0039`)
+
+**The sixth occurrence of this collision class** (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`).
+`feature/app-review-input-integrity-production` forked from canonical `main`
+at `fe7a094` (migrations `0001`-`0030` only) and, over Chunks 1/3a/3b,
+independently allocated `0031`-`0039` for its own unrelated schema (asset
+`collectables`/`collectibles` spelling fix, `currency_override`, catalogue
+category metadata + seed, SMSF structured model, retirement member/
+contribution model, India retirement catalogue, taxonomy-consolidation
+deprecation, retirement-contributions backfill) while `origin/main`
+independently allocated the *same* nine version numbers to Investment
+Intelligence R1/R2 (`0031_ii_reference_foundation.sql` through
+`0039_ii_r2_audit_and_document_lifecycle.sql`). Caught by
+`check-migration-versions-against-branch.mjs` /
+`tests/unit/migrationVersionsCrossBranch.test.ts` before merge, exactly the
+tool's intended job.
+
+**Decision (same rule as the `0058` reconciliation above): `origin/main`'s
+chain keeps its numbers** — it is the direct, already-`0001`-`0065`-applied-
+to-DEV continuation of canonical `main`, whereas none of this branch's nine
+migrations had been applied to DEV or production under any number (see each
+Chunk's own completion notes — every one was "written and locally verified
+only" at time of writing). This branch's entire nine-migration chain is
+shifted forward, unchanged in content except renumbering headers and a
+handful of internal/external prose cross-references between the files
+(functionally inert), to the first nine free slots after `origin/main`'s
+`0065`:
+
+| Current file | Originally | Purpose |
+| --- | --- | --- |
+| `0066_asset_collectibles_spelling.sql` | `0031_asset_collectibles_spelling.sql` | Asset-category `collectables`→`collectibles` spelling fix |
+| `0067_currency_override.sql` | `0032_currency_override.sql` | Explicit `currency_override` escape hatch (4 registers) |
+| `0068_master_item_category_metadata.sql` | `0033_master_item_category_metadata.sql` | Catalogue category-metadata columns |
+| `0069_master_item_category_metadata_seed.sql` | `0034_master_item_category_metadata_seed.sql` | Seeds the above for the current catalogue |
+| `0070_smsf_structured_model.sql` | `0035_smsf_structured_model.sql` | SMSF Summary/Detailed structured model |
+| `0071_retirement_member_contribution_model.sql` | `0036_retirement_member_contribution_model.sql` | Retirement member/contribution separation |
+| `0072_india_retirement_catalogue.sql` | `0037_india_retirement_catalogue.sql` | India retirement catalogue items (EPF/PPF/NPS) |
+| `0073_taxonomy_consolidation_deprecation.sql` | `0038_taxonomy_consolidation_deprecation.sql` | Assets/Investments/Retirement taxonomy deprecation |
+| `0074_retirement_contributions_backfill.sql` | `0039_retirement_contributions_backfill.sql` | Class-F retirement-contribution row backfill |
+
+**Status: none of the nine have been applied to DEV or production under
+either their old or new numbers.** This renumbering therefore has zero DEV/
+production impact in either direction — unlike the `0058`/R6 case, there is
+no already-applied SQL text to reconcile against, only unapplied files that
+needed a collision-free home before merge. Verified after renumbering:
+`check-migration-versions-against-branch.mjs --against=origin/main` clean,
+`tests/unit/migrationVersionsCrossBranch.test.ts` "zero collisions against
+origin/main" passing, and every internal/external prose cross-reference
+between these nine files (plus their citations in `lib/`, `tests/unit/`, and
+`docs/app-review-2026-08/`) updated to match — see the merge commit for the
+full file list.

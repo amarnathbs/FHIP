@@ -47,6 +47,37 @@ export interface DnaMetrics {
   passiveIncomeRatio: number | null;
   incomeSourceCount: number;
   netWorthGrowthPct: number | null;
+
+  // -------------------------------------------------------------------
+  // Debt-purpose split (App Review Spec 1 §24-28) — sourced from
+  // dashboard.ts's classifyDebtPurpose()/DashboardSummary purpose fields,
+  // never recomputed here. See assessDebtPurpose() below for how these
+  // feed the three separately-banded debt-dependence assessments.
+  // -------------------------------------------------------------------
+  ownerOccupiedDebtBalance: number;
+  ownerOccupiedDebtMonthlyRepayment: number;
+  investmentPropertyDebtBalance: number;
+  investmentPropertyDebtMonthlyRepayment: number;
+  consumerOrOtherDebtBalance: number;
+  consumerOrOtherDebtMonthlyRepayment: number;
+  // Household rental/Airbnb income — used only as an informational
+  // corroborating signal in the investment-property explanation text (see
+  // "rental-income to specific property" note in assessDebtPurpose), never
+  // to change a threshold. There is no schema link from a specific rental-
+  // income row to a specific investment-property liability (confirmed:
+  // Chunk 3a/3b added linked_liability_id only for SMSF-held property,
+  // supabase/migrations/0035; the plain assets/income grids have no such
+  // link), so this is a household-level aggregate, not a verified per-
+  // property match.
+  investmentPropertyRentalIncomeMonthly: number;
+  // Reference-band inputs, computed once here so assessDebtPurpose() stays
+  // a pure function of DnaMetrics and every number in it is traceable back
+  // to a DashboardSummary field.
+  ownerOccupiedDebtToGrossIncomeRatio: number | null; // repayment / gross monthly income (Spec 1 §24: ~30% reference)
+  investmentPropertyDebtCapacity: number | null; // income - 1.5x living expenses - owner-occupied repayment (Spec 1 §25 worked example)
+  investmentPropertyDebtToCapacityRatio: number | null; // repayment / capacity
+  consumerOrOtherDebtServiceRatio: number | null; // consumer/other repayment / income — kept separate per Spec 1 §26 / DNA-05
+  propertyPurposeDebtRatio: number | null; // (owner-occupied + investment-property balance) / total liabilities — the real purpose signal behind property_focused_investor, replacing a blended debtToIncome guess
 }
 
 export interface DnaProfileInput {
@@ -83,6 +114,44 @@ export function computeDnaMetrics(input: {
   const essentialExpenseRatio = income > 0 ? d.essentialMonthlyExpenses / income : null;
   const netWorthGrowthPct =
     d.snapshots.length >= 2 ? percentChange(d.netWorth, d.snapshots[0].net_worth) : null;
+
+  // Spec 1 §24: owner-occupied debt is assessed against GROSS household
+  // income (explicitly, not net) — the only place in this file gross is
+  // used as the serviceability denominator rather than income/incomeForSurplus.
+  const ownerOccupiedDebtToGrossIncomeRatio =
+    d.grossMonthlyIncome > 0 ? d.ownerOccupiedDebtMonthlyRepayment / d.grossMonthlyIncome : null;
+
+  // Spec 1 §25 worked example: capacity = income - 1.5x living expenses -
+  // other already-committed debt repayments. d.totalMonthlyExpenses is
+  // essential + lifestyle expenses and already EXCLUDES every debt
+  // repayment (dashboard.ts's own "excludes debt repayments, tracked
+  // separately" contract for that field) — i.e. it already is the worked
+  // example's "living expenses excl. mortgage". Owner-occupied AND
+  // consumer/other repayments are both netted out before assessing what's
+  // left for investment debt: both are real, already-committed cash
+  // outflows, so genuine capacity must account for both — this does NOT
+  // mean consumer debt's OWN assessment (below) is influenced by
+  // investment debt; the netting only runs this one direction. Uses the
+  // same net-with-gross-fallback income basis as `income` above (this
+  // file's established convention), since capacity is a cash-flow concept
+  // — what's actually available to spend — not a gross-income reference
+  // band like the owner-occupied rule above.
+  const investmentPropertyDebtCapacity =
+    income > 0
+      ? income - 1.5 * d.totalMonthlyExpenses - d.ownerOccupiedDebtMonthlyRepayment - d.consumerOrOtherDebtMonthlyRepayment
+      : null;
+  const investmentPropertyDebtToCapacityRatio =
+    investmentPropertyDebtCapacity !== null && investmentPropertyDebtCapacity > 0
+      ? d.investmentPropertyDebtMonthlyRepayment / investmentPropertyDebtCapacity
+      : null;
+
+  const consumerOrOtherDebtServiceRatio =
+    income > 0 ? d.consumerOrOtherDebtMonthlyRepayment / income : null;
+  const propertyPurposeDebtRatio =
+    d.totalLiabilities > 0
+      ? (d.ownerOccupiedDebtBalance + d.investmentPropertyDebtBalance) / d.totalLiabilities
+      : null;
+
   return {
     age: input.age,
     dependantsCount: input.dependantsCount,
@@ -103,6 +172,156 @@ export function computeDnaMetrics(input: {
       d.grossMonthlyIncome > 0 ? d.passiveMonthlyIncome / d.grossMonthlyIncome : null,
     incomeSourceCount: d.incomeSourceCount,
     netWorthGrowthPct,
+    ownerOccupiedDebtBalance: d.ownerOccupiedDebtBalance,
+    ownerOccupiedDebtMonthlyRepayment: d.ownerOccupiedDebtMonthlyRepayment,
+    investmentPropertyDebtBalance: d.investmentPropertyDebtBalance,
+    investmentPropertyDebtMonthlyRepayment: d.investmentPropertyDebtMonthlyRepayment,
+    consumerOrOtherDebtBalance: d.consumerOrOtherDebtBalance,
+    consumerOrOtherDebtMonthlyRepayment: d.consumerOrOtherDebtMonthlyRepayment,
+    investmentPropertyRentalIncomeMonthly: d.rentalMonthlyIncome,
+    ownerOccupiedDebtToGrossIncomeRatio,
+    investmentPropertyDebtCapacity,
+    investmentPropertyDebtToCapacityRatio,
+    consumerOrOtherDebtServiceRatio,
+    propertyPurposeDebtRatio,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Debt-purpose assessment (App Review Spec 1 §24-28) — the core of the
+// Financial DNA debt-dependence redesign. Three debt purposes are kept
+// analytically distinct throughout and NEVER blended into one number:
+// owner-occupied home debt, investment/income-producing property debt, and
+// consumer/other debt. A "worst of the three" rule (never an average)
+// governs the overall debt_dependence trait below, so a good investment-
+// debt outcome can never dilute a bad consumer-debt signal (Spec's DNA-05
+// case), and a genuinely excessive investment-debt case is still flagged
+// even though investment debt is not judged identically to consumer debt.
+//
+// Age/income threshold matrix (Spec 1 §27): NOT implemented here. Only the
+// two rules the spec spells out with real numbers — the owner-occupied 30%
+// reference band and the investment-property capacity formula — are built.
+// See the completion report for this as an explicit Product-Owner-approval
+// item, per the spec's own instruction not to invent one silently.
+// ---------------------------------------------------------------------------
+export type DebtDependenceLevel = 'low' | 'moderate' | 'high' | 'excessive';
+
+export interface DebtPurposeBandAssessment {
+  monthlyRepayment: number;
+  balance: number;
+  level: DebtDependenceLevel;
+  explanation: string;
+}
+
+export interface DebtPurposeAssessment {
+  ownerOccupied: DebtPurposeBandAssessment & { ratioOfGrossIncome: number | null; referenceBandPct: number };
+  investmentProperty: DebtPurposeBandAssessment & {
+    householdCapacity: number | null;
+    livingCostBuffer: number | null;
+    ratioOfCapacity: number | null;
+  };
+  consumerOrOther: DebtPurposeBandAssessment & { ratioOfIncome: number | null };
+  // Known, disclosed limitations of this assessment — surfaced to the user/
+  // report rather than silently assumed away.
+  limitations: string[];
+}
+
+const OWNER_OCCUPIED_REFERENCE_BAND_PCT = 0.3; // Spec 1 §24: ~30% of gross household income
+const LIVING_COST_BUFFER_MULTIPLE = 1.5; // Spec 1 §25 worked example
+
+function ownerOccupiedLevel(ratio: number | null): DebtDependenceLevel {
+  if (ratio === null) return 'low';
+  if (ratio <= 0.3) return 'low';
+  if (ratio <= 0.4) return 'moderate';
+  if (ratio <= 0.5) return 'high';
+  return 'excessive';
+}
+
+function investmentPropertyLevel(monthlyRepayment: number, capacity: number | null): DebtDependenceLevel {
+  if (monthlyRepayment <= 0) return 'low';
+  if (capacity === null) return 'moderate'; // can't assess capacity (e.g. no income data yet) — don't silently claim "low"
+  if (capacity <= 0) return 'excessive';
+  const ratio = monthlyRepayment / capacity;
+  if (ratio <= 1) return 'low';
+  if (ratio <= 1.2) return 'moderate';
+  if (ratio <= 1.5) return 'high';
+  return 'excessive';
+}
+
+function consumerLevel(ratio: number | null): DebtDependenceLevel {
+  // Same 0.15/0.35 band already live on this file's debt_dependence trait
+  // (levelFromRatio(m.debtServiceRatio, 0.15, 0.35) below) — reused here,
+  // not a new threshold, now applied to the purpose-isolated figure.
+  if (ratio === null) return 'low';
+  if (ratio < 0.15) return 'low';
+  if (ratio < 0.35) return 'moderate';
+  return 'high';
+}
+
+export function assessDebtPurpose(m: DnaMetrics): DebtPurposeAssessment {
+  const ownerLevel = ownerOccupiedLevel(m.ownerOccupiedDebtToGrossIncomeRatio);
+  const investmentLevel = investmentPropertyLevel(
+    m.investmentPropertyDebtMonthlyRepayment,
+    m.investmentPropertyDebtCapacity
+  );
+  const consumerDebtLevel = consumerLevel(m.consumerOrOtherDebtServiceRatio);
+
+  // Informational corroborating signal only (see the DnaMetrics field
+  // comment above) — never changes a level or threshold, only the
+  // explanation text.
+  const investmentRentalSentence =
+    m.investmentPropertyDebtMonthlyRepayment > 0
+      ? m.investmentPropertyRentalIncomeMonthly > 0
+        ? ' The household also records rental/Airbnb income, a supporting signal — not a verified link to this specific debt.'
+        : ' No rental or Airbnb income is currently recorded against this household, even though investment-property debt is present.'
+      : '';
+
+  const investmentCapacityRatioForDisplay: number | null =
+    m.investmentPropertyDebtCapacity !== null && m.investmentPropertyDebtCapacity <= 0
+      ? m.investmentPropertyDebtToCapacityRatio ?? 2 // no positive capacity to divide by — display as clearly over 100%
+      : m.investmentPropertyDebtToCapacityRatio;
+
+  return {
+    ownerOccupied: {
+      monthlyRepayment: m.ownerOccupiedDebtMonthlyRepayment,
+      balance: m.ownerOccupiedDebtBalance,
+      level: ownerLevel,
+      ratioOfGrossIncome: m.ownerOccupiedDebtToGrossIncomeRatio,
+      referenceBandPct: OWNER_OCCUPIED_REFERENCE_BAND_PCT,
+      explanation:
+        m.ownerOccupiedDebtToGrossIncomeRatio === null
+          ? 'Owner-occupied home debt cannot be assessed without income data.'
+          : `Owner-occupied home debt repayments use ${fmtPct(m.ownerOccupiedDebtToGrossIncomeRatio)} of gross household income, against an indicative reference of around ${fmtPct(OWNER_OCCUPIED_REFERENCE_BAND_PCT)}.`,
+    },
+    investmentProperty: {
+      monthlyRepayment: m.investmentPropertyDebtMonthlyRepayment,
+      balance: m.investmentPropertyDebtBalance,
+      level: investmentLevel,
+      householdCapacity: m.investmentPropertyDebtCapacity,
+      livingCostBuffer: m.investmentPropertyDebtCapacity === null ? null : LIVING_COST_BUFFER_MULTIPLE,
+      ratioOfCapacity: m.investmentPropertyDebtToCapacityRatio,
+      explanation:
+        m.investmentPropertyDebtMonthlyRepayment <= 0
+          ? 'No investment or income-producing property debt is currently recorded.'
+          : m.investmentPropertyDebtCapacity === null
+            ? 'Investment property debt capacity cannot be assessed without income data.'
+            : `Investment property debt repayments are assessed against household capacity after living costs (a 1.5x living-expense buffer), not against a flat income percentage — repayments are currently ${fmtPct(investmentCapacityRatioForDisplay)} of that capacity.${investmentRentalSentence}`,
+    },
+    consumerOrOther: {
+      monthlyRepayment: m.consumerOrOtherDebtMonthlyRepayment,
+      balance: m.consumerOrOtherDebtBalance,
+      level: consumerDebtLevel,
+      ratioOfIncome: m.consumerOrOtherDebtServiceRatio,
+      explanation:
+        m.consumerOrOtherDebtServiceRatio === null
+          ? 'Consumer/other debt cannot be assessed without income data.'
+          : `Consumer and other debt (credit cards, personal loans and similar) uses ${fmtPct(m.consumerOrOtherDebtServiceRatio)} of income — assessed on its own, independent of any investment or owner-occupied debt held elsewhere in the household.`,
+    },
+    limitations: [
+      'A single loan that is genuinely mixed-purpose (for example an offset-linked loan partly redrawn for an investment) cannot be split — each liability is classified under one purpose only, from its recorded debt type.',
+      "Construction loans have no recorded purpose distinction in the data model and default to the owner-occupied band (the stricter of the two property bands) rather than the more lenient investment-capacity band.",
+      'Rental/Airbnb income is matched to investment-property debt at the household level only — there is no per-property link between a specific income row and a specific liability.',
+    ],
   };
 }
 
@@ -156,14 +375,30 @@ const PROFILE_DEFINITIONS: ProfileDefinition[] = [
     code: 'property_focused_investor',
     rules: [
       { metric: 'propertyConcentration', idealMin: 0.6, idealMax: 1, weight: 4 },
-      { metric: 'debtToIncome', idealMin: 3, idealMax: 10, weight: 2 },
+      // Replaces a blended debtToIncome 3-10x band (App Review Spec 1
+      // §24-28 discovery: "infers a leveraged property pattern purely from
+      // a blended debtToIncome band, with zero actual purpose signal").
+      // propertyPurposeDebtRatio is the real signal: what share of total
+      // debt is actually owner-occupied/investment-property debt, from
+      // dashboard.ts's classifyDebtPurpose(). A household with high
+      // blended DTI from e.g. margin/business debt alone no longer reads
+      // as "leveraged property" without real property debt behind it.
+      { metric: 'propertyPurposeDebtRatio', idealMin: 0.5, idealMax: 1, weight: 2 },
       { metric: 'liquidAssetRatio', idealMin: 0, idealMax: 0.2, weight: 2 },
     ],
   },
   {
     code: 'debt_constrained_builder',
     rules: [
-      { metric: 'debtServiceRatio', idealMin: 0.35, idealMax: 1, weight: 4 },
+      // Replaces blended debtServiceRatio (App Review Spec 1 §26 / DNA-05:
+      // consumer debt must never benefit from investment-debt treatment —
+      // the converse also holds here: a household whose investment-property
+      // debt is large but genuinely serviceable within capacity must not be
+      // pulled into "debt constrained" by that debt alone). Same approved
+      // 0.35 threshold as before, now applied to the purpose-isolated
+      // consumer/other figure so this profile reflects actual consumer debt
+      // burden, not a blend that good investment debt can inflate.
+      { metric: 'consumerOrOtherDebtServiceRatio', idealMin: 0.35, idealMax: 1, weight: 4 },
       { metric: 'propertyConcentration', idealMin: 0, idealMax: 0.4, weight: 2 },
       { metric: 'savingsRate', idealMin: -0.5, idealMax: 0.05, weight: 2 },
       { metric: 'emergencyFundMonths', idealMin: 0, idealMax: 2, weight: 2 },
@@ -288,6 +523,15 @@ export interface DnaResult {
   traits: DnaTrait[];
   dataCompletenessPct: number;
   modelVersion: string;
+  // Observed Financial Behaviour (App Review Spec 1 §28): this entire
+  // result is derived from actual financial data the household has
+  // recorded — never blended with Self-Reported Behaviour from the
+  // separate, future behavioural questionnaire referenced elsewhere in the
+  // DNA page/architecture. debtPurposeAssessment is the concrete output of
+  // the debt-dependence redesign (§24-26): three analytically separate
+  // debt-purpose bands, never averaged into one number.
+  debtPurposeAssessment: DebtPurposeAssessment;
+  behaviourSource: 'observed_financial_data';
 }
 
 export interface DnaTrait {
@@ -307,7 +551,30 @@ function levelFromRatio(value: number | null, lowMax: number, moderateMax: numbe
   return 'high';
 }
 
+const DEBT_LEVEL_SEVERITY: Record<DebtDependenceLevel, number> = { low: 0, moderate: 1, high: 2, excessive: 3 };
+
+// "Worst of the three" — never an average — so a good investment-debt
+// outcome can never dilute a bad consumer-debt signal, and a genuinely
+// excessive investment-debt case is still surfaced (Spec 1 §26 / DNA-05).
+function worstDebtLevel(...levels: DebtDependenceLevel[]): DebtDependenceLevel {
+  return levels.reduce((worst, l) => (DEBT_LEVEL_SEVERITY[l] > DEBT_LEVEL_SEVERITY[worst] ? l : worst));
+}
+
+// DnaTrait.level is a pre-existing 3-tier type consumed by the DNA page UI
+// (components/dna/sections.tsx's LEVEL_COLOR/LEVEL_LABEL/LEVEL_WIDTH), so
+// 'excessive' collapses into 'high' for display — the full 4-tier detail
+// remains available in DnaResult.debtPurposeAssessment for anything that
+// needs it (e.g. a future report section).
+function toTraitLevel(level: DebtDependenceLevel): 'low' | 'moderate' | 'high' {
+  return level === 'excessive' ? 'high' : level;
+}
+
+function buildDebtDependenceExplanation(a: DebtPurposeAssessment): string {
+  return `${a.ownerOccupied.explanation} ${a.investmentProperty.explanation} ${a.consumerOrOther.explanation}`;
+}
+
 function generateTraits(m: DnaMetrics): DnaTrait[] {
+  const debtPurpose = assessDebtPurpose(m);
   return [
     {
       code: 'savings_discipline',
@@ -330,11 +597,19 @@ function generateTraits(m: DnaMetrics): DnaTrait[] {
     {
       code: 'debt_dependence',
       label: 'Debt dependence',
-      level: levelFromRatio(m.debtServiceRatio, 0.15, 0.35),
+      // Redesigned per App Review Spec 1 §24-28: no longer a single
+      // blended debtServiceRatio band. Owner-occupied, investment-property
+      // and consumer/other debt are assessed separately (assessDebtPurpose
+      // above) and the trait shows the worst of the three, never an
+      // average — see buildDebtDependenceExplanation for the full,
+      // purpose-separated narrative.
+      level: toTraitLevel(
+        worstDebtLevel(debtPurpose.ownerOccupied.level, debtPurpose.investmentProperty.level, debtPurpose.consumerOrOther.level)
+      ),
       direction: 'unknown',
       value: m.debtServiceRatio,
-      targetRangeLabel: 'under 15% of net income',
-      explanation: `Debt repayments use ${fmtPct(m.debtServiceRatio)} of your net monthly income.`,
+      targetRangeLabel: 'owner-occupied ~30% of gross income; investment property within household capacity; consumer/other under 15% of income',
+      explanation: buildDebtDependenceExplanation(debtPurpose),
     },
     {
       code: 'liquidity_strength',
@@ -425,6 +700,8 @@ export function classifyFinancialDna(input: DnaProfileInput): DnaResult {
       traits: [],
       dataCompletenessPct: 0,
       modelVersion: MODEL_VERSION,
+      debtPurposeAssessment: assessDebtPurpose(metrics),
+      behaviourSource: 'observed_financial_data',
     };
   }
 
@@ -501,6 +778,8 @@ export function classifyFinancialDna(input: DnaProfileInput): DnaResult {
     traits: generateTraits(metrics),
     dataCompletenessPct,
     modelVersion: MODEL_VERSION,
+    debtPurposeAssessment: assessDebtPurpose(metrics),
+    behaviourSource: 'observed_financial_data',
   };
 }
 
@@ -557,7 +836,11 @@ function generateExplanations(
 
     case 'property_focused_investor':
       push(drivers, 'classification', 'property_concentration', m.propertyConcentration, 0.6, `Property represents ${fmtPct(m.propertyConcentration)} of your total assets.`);
-      push(drivers, 'classification', 'debt_to_income', m.debtToIncome, 3, `Debt is ${m.debtToIncome?.toFixed(1) ?? 'not available'}× your annual gross income, consistent with a leveraged property pattern.`);
+      // Real purpose signal (owner-occupied + investment-property balance,
+      // from master_item_key) rather than a blended debtToIncome guess —
+      // see propertyPurposeDebtRatio's definition and the PROFILE_DEFINITIONS
+      // comment above for why this replaced the old debt_to_income driver.
+      push(drivers, 'classification', 'property_purpose_debt_ratio', m.propertyPurposeDebtRatio, 0.5, `${fmtPct(m.propertyPurposeDebtRatio)} of your total debt is owner-occupied or investment-property debt, consistent with a leveraged property pattern.`);
       push(drivers, 'classification', 'liquid_asset_ratio', m.liquidAssetRatio, 0.2, `Liquid assets represent only ${fmtPct(m.liquidAssetRatio)} of your total assets.`);
       push(strengths, 'strength', 'property_concentration', m.propertyConcentration, null, 'A tangible, substantial asset base with long-term growth potential.');
       push(risks, 'risk', 'property_concentration', m.propertyConcentration, null, 'High property concentration increases exposure to property-cycle and interest-rate movements.');
@@ -567,10 +850,13 @@ function generateExplanations(
       break;
 
     case 'debt_constrained_builder':
-      push(drivers, 'classification', 'debt_service_ratio', m.debtServiceRatio, 0.35, `Debt repayments currently represent ${fmtPct(m.debtServiceRatio)} of your net monthly income.`);
+      // Consumer/other debt specifically, not a blend that good investment
+      // or owner-occupied debt could inflate or offset (App Review Spec 1
+      // §26 / DNA-05) — see consumerOrOtherDebtServiceRatio's definition.
+      push(drivers, 'classification', 'consumer_or_other_debt_service_ratio', m.consumerOrOtherDebtServiceRatio, 0.35, `Consumer and other debt repayments currently represent ${fmtPct(m.consumerOrOtherDebtServiceRatio)} of your income.`);
       push(drivers, 'classification', 'emergency_fund_months', m.emergencyFundMonths, 2, `Liquid reserves cover ${m.emergencyFundMonths?.toFixed(1) ?? 'a limited number of'} months of essential expenses.`);
       push(strengths, 'strength', 'income_source_count', m.incomeSourceCount, null, 'Existing income capacity provides a base to accelerate improvement once debt reduces.');
-      push(risks, 'risk', 'debt_service_ratio', m.debtServiceRatio, null, 'A high debt-service ratio leaves little monthly flexibility for saving or unexpected costs.');
+      push(risks, 'risk', 'consumer_or_other_debt_service_ratio', m.consumerOrOtherDebtServiceRatio, null, 'A high consumer-debt burden leaves little monthly flexibility for saving or unexpected costs.');
       push(risks, 'risk', 'emergency_fund_months', m.emergencyFundMonths, null, 'Limited emergency capacity increases reliance on further borrowing if a shock occurs.');
       actions.push({ code: 'prioritise_high_cost_debt', title: 'Prioritise your highest-cost debt', explanation: 'Consider directing available surplus toward your highest-interest debt first.', priority: 'high', relatedModule: 'liabilities', relatedMetric: 'debt_service_ratio', estimatedEffect: 'Faster reduction in the debt costing you the most.' });
       actions.push({ code: 'avoid_new_debt', title: 'Avoid adding new consumer debt', explanation: 'Consider avoiding new short-term or consumer borrowing while repayments remain high relative to income.', priority: 'high', relatedModule: 'liabilities', relatedMetric: 'debt_to_income', estimatedEffect: 'Prevents the repayment burden from increasing further.' });

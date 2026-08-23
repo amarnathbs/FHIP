@@ -2,20 +2,48 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
-import { OWNER_OPTIONS } from '@/lib/constants';
+import { OWNER_OPTIONS, expectedCurrencyForCountry } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
+import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
+import { resolveFieldVisibility, isMetadataFieldMissing } from '@/lib/grid/fieldVisibility';
+import { activeItemKeys, findOrphanedRecords, resolveOrphanedLabel } from '@/lib/grid/rowMerge';
 import type { GridConfig } from '@/lib/grid/types';
 
 interface MasterItem {
   item_key: string;
   item_label: string;
   sort_order: number;
+  // Chunk 3a item 1 (Spec 1 §9) — category metadata (migrations 0033/0034),
+  // read by resolveFieldVisibility() to conditionally show/hide/require
+  // fields like purchase_date/purchase_price per catalogue item rather than
+  // uniformly for the whole category. Optional/undefined degrades safely to
+  // today's always-shown, never-required behaviour.
+  requires_purchase_date?: boolean;
+  supports_purchase_date?: boolean;
+  requires_purchase_price?: boolean;
+  supports_purchase_price?: boolean;
+}
+
+const ITEM_META_FIELDS = [
+  'requires_purchase_date',
+  'supports_purchase_date',
+  'requires_purchase_price',
+  'supports_purchase_price',
+] as const;
+
+function metaFromMaster(item: MasterItem): Partial<Row> {
+  const meta: Partial<Row> = {};
+  for (const key of ITEM_META_FIELDS) {
+    if (item[key] !== undefined) meta[key] = item[key];
+  }
+  return meta;
 }
 
 interface SavedRecord {
   id: string;
   master_item_key: string | null;
   currency_code: string;
+  currency_override?: boolean;
   owner: string;
   [key: string]: unknown;
 }
@@ -25,7 +53,21 @@ interface Row extends GridRow {
   id: string | null;
   included: boolean;
   currency_code: string;
+  // Explicit, user-set carve-out for a genuinely foreign-currency holding —
+  // see currencyMismatch()/currencyMismatchBlocked() below. Never silently
+  // defaulted true except for the 'foreign_currency' catalogue item, which
+  // is inherently cross-currency by design.
+  currency_override?: boolean;
+  country_code?: string;
   expanded: boolean;
+  // Chunk 3b prerequisite fix: true for a saved row whose master_item_key
+  // points at a catalogue item that is no longer active (e.g. deprecated by
+  // this sub-chunk's taxonomy-consolidation migration, or 0031's
+  // collectables/collectibles fix). Distinct from is_custom — the item name
+  // is still catalogue-sourced (not user-editable), it just no longer has a
+  // matching row in the active tickable list. Never silently dropped from
+  // the grid; see load() below.
+  is_archived?: boolean;
   source_type?: string; // R3 — 'investment_intelligence_published' | 'manual' | undefined (non-investments resources never set this)
 }
 
@@ -47,23 +89,42 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
     included: false,
     owner: 'self',
     currency_code: defaultCurrency,
+    // 'foreign_currency' is inherently a deliberate cross-currency holding
+    // (Assets catalogue) — default its override on so it isn't silently
+    // hard-blocked before the user ever touches country/currency.
+    currency_override: item.item_key === 'foreign_currency',
     expanded: false,
     ...fieldDefaults(config),
+    ...metaFromMaster(item),
   };
 }
 
-function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolean, label: string): Row {
+function rowFromRecord(
+  record: SavedRecord,
+  config: GridConfig,
+  isCustom: boolean,
+  label: string,
+  item?: MasterItem,
+  isArchived?: boolean
+): Row {
   return {
     ...record,
     key: record.master_item_key ?? `custom-${record.id}`,
     id: record.id,
     master_item_key: record.master_item_key,
     is_custom: isCustom,
+    is_archived: Boolean(isArchived),
     item_label: label,
     included: true,
     owner: record.owner,
     currency_code: record.currency_code,
+    currency_override: Boolean(record.currency_override),
     expanded: false,
+    // A saved row's own field values (e.g. an already-saved purchase_date)
+    // take precedence over the spread above via ...record already having
+    // set them; this only backfills the item's supports_*/requires_* flags,
+    // which a saved record never carries itself.
+    ...(item ? metaFromMaster(item) : {}),
   };
 }
 
@@ -87,6 +148,15 @@ function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): b
   if (config.frequencyField && !row[config.frequencyField]) return false;
   if (!row.currency_code) return false;
   if (row.is_custom && duplicates.has(row.item_label.trim().toLowerCase())) return false;
+  if (currencyMismatchBlocked(row)) return false;
+  // Chunk 3a item 1: a metadata-driven field the selected catalogue item
+  // marks as required (requires_purchase_date/requires_purchase_price) must
+  // be filled in before the row can save. Every populated item ships with
+  // both flags false today (see migration 0034's notes), so this is a no-op
+  // in practice until the Product Owner opts a specific item in.
+  for (const f of config.fields) {
+    if (f.metadataDriven && isMetadataFieldMissing(row, f)) return false;
+  }
   const value = row[config.valueField];
   return value !== '' && value !== undefined && value !== null;
 }
@@ -116,13 +186,27 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
-  rowsRef.current = rows;
+  // Kept in sync via an effect rather than assigned during render — a plain
+  // ref write in the render body trips react-hooks/refs ("Cannot access
+  // refs during render"). rowsRef is only ever read from saveRow(), which
+  // fires from an async setTimeout callback (scheduleSave), never from
+  // another component's render, so this has no effect on behavior.
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [masterItems, savedRecords, profile, sectionStatusRows] = await Promise.all([
-        fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}`),
+      // Chunk 3b prerequisite fix: fetch the FULL catalogue (active +
+      // deprecated) in one call. The active subset drives the tickable
+      // master-item list exactly as before; the full set is kept around so
+      // a saved row whose master_item_key points at a now-deprecated item
+      // can still resolve a real item_label instead of silently vanishing
+      // (see AR-0's migration 0031 disclosure and this sub-chunk's own
+      // taxonomy-consolidation deprecations).
+      const [allMasterItems, savedRecords, profile, sectionStatusRows] = await Promise.all([
+        fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}&includeInactive=true`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
         fetchJson<{
           preferred_currency: 'AUD' | 'INR' | null;
@@ -156,19 +240,46 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
         setReviewConfirmed(reviewed?.status === 'reviewed_with_data' && savedRecords.length > 0);
       }
 
+      // includeInactive=true returns both; only is_active !== false items
+      // populate the tickable list (matches the plain, non-includeInactive
+      // endpoint's own .eq('is_active', true) filter — is_active is
+      // undefined only if a caller queries an older selection, in which
+      // case it degrades to "treat as active", same as every other
+      // optional metadata field on this interface).
+      const activeKeySet = activeItemKeys(allMasterItems);
+      const activeMasterItems = allMasterItems.filter((item) => activeKeySet.has(item.item_key));
       const byMasterKey = new Map(savedRecords.filter((r) => r.master_item_key).map((r) => [r.master_item_key!, r]));
-      const merged = masterItems
+      const fullCatalogByKey = new Map(allMasterItems.map((item) => [item.item_key, item]));
+      const merged = activeMasterItems
         .slice()
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((item) => {
           const saved = byMasterKey.get(item.item_key);
-          return saved ? rowFromRecord(saved, config, false, item.item_label) : rowFromMaster(item, currency, config);
+          return saved
+            ? rowFromRecord(saved, config, false, item.item_label, item)
+            : rowFromMaster(item, currency, config);
         });
       const customRows = savedRecords
         .filter((r) => !r.master_item_key)
         .map((r) => rowFromRecord(r, config, true, String(r[config.nameField] ?? '')));
+      // Orphaned rows (Chunk 3b prerequisite fix): a saved record has a
+      // master_item_key, but it isn't in the active catalogue (deprecated
+      // since the row was saved) — it is not a custom row (has a real
+      // master_item_key) and was skipped by the merged.map() above (only
+      // active items are iterated), so without this it would disappear
+      // from the grid entirely even though the DB row and its value are
+      // completely untouched. See lib/grid/rowMerge.ts (unit-tested
+      // separately) for the pure lookup logic. Rendered as a normal
+      // (non-custom-editable-name), clearly-marked "Archived item" row —
+      // still includable/editable/deletable via the exact same code paths
+      // as any other saved row.
+      const archivedRows = findOrphanedRecords(savedRecords, activeMasterItems).map((r) => {
+        const catalogItem = fullCatalogByKey.get(r.master_item_key!);
+        const label = resolveOrphanedLabel(r, fullCatalogByKey, config.nameField);
+        return rowFromRecord(r, config, false, label, catalogItem, true);
+      });
 
-      setRows([...merged, ...customRows]);
+      setRows([...merged, ...archivedRows, ...customRows]);
     }
     load();
     return () => {
@@ -202,6 +313,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     if (!row || !isRowSaveable(row, config, findDuplicateCustomNames(rowsRef.current ?? []))) return;
 
     const body: Record<string, unknown> = { owner: row.owner, currency_code: row.currency_code };
+    // Only ever included when true. currency_override is a real DB column
+    // only once migration 0032 is applied — omitting the key entirely for
+    // the (overwhelmingly common) non-override case means an ordinary save
+    // never touches that column at all, so it keeps working unchanged
+    // whether or not the migration has landed yet. Only the narrow,
+    // deliberate override path is affected until then (see
+    // lib/validation/asset.ts's matching comment on the schema side).
+    if (row.currency_override) body.currency_override = true;
     body[config.nameField] = row.item_label;
     if (row.master_item_key) body.master_item_key = row.master_item_key;
     for (const f of config.fields) body[f.name] = row[f.name] === '' ? undefined : row[f.name];
@@ -238,7 +357,18 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   }
 
   function handleFieldChange(key: string, field: string, value: unknown) {
-    updateRow(key, { [field]: value } as Partial<Row>);
+    const patch: Partial<Row> = { [field]: value } as Partial<Row>;
+    if (field === 'country_code') {
+      // Country is the source of truth for currency, not the other way
+      // around — auto-set currency to the new country's expected currency
+      // every time country changes, and require the user to re-confirm any
+      // override explicitly rather than silently carrying a stale one
+      // across countries (that silent-carry-over is the original bug).
+      const expected = expectedCurrencyForCountry(value as string);
+      patch.currency_override = false;
+      if (expected) patch.currency_code = expected;
+    }
+    updateRow(key, patch);
     scheduleSave(key);
   }
 
@@ -360,6 +490,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
   const missingRequiredCount = included.filter((r) => {
     if (!r.owner || !r.currency_code) return true;
     if (config.frequencyField && !r[config.frequencyField]) return true;
+    if (config.fields.some((f) => f.metadataDriven && isMetadataFieldMissing(r, f))) return true;
     return false;
   }).length;
 
@@ -380,6 +511,15 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
     if (warnings.length) warningsByRow.set(r.key, warnings);
   }
   const totalWarnings = Array.from(warningsByRow.values()).reduce((s, w) => s + w.length, 0);
+
+  // Country/currency mismatch is a hard block (see isRowSaveable), with an
+  // explicit override carve-out. The set below drives the checkbox+warning
+  // UI and stays populated even once overridden, so the checkbox (and the
+  // ability to un-check it) remains visible.
+  const currencyMismatchRows = new Set<string>();
+  for (const r of included) {
+    if (currencyMismatch(r)) currencyMismatchRows.add(r.key);
+  }
 
   if (!rows) {
     return (
@@ -544,6 +684,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     ) : (
                       row.item_label
                     )}
+                    {row.is_archived && (
+                      <span
+                        className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-muted"
+                        title="This item is no longer offered as a new catalogue entry, but your saved value is untouched and still fully editable."
+                      >
+                        Archived item
+                      </span>
+                    )}
                     {isIiPublished(row) && (
                       <div className="mt-1">
                         <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Imported via Investment Intelligence</span>
@@ -573,53 +721,92 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       ))}
                     </select>
                   </td>
-                  {config.fields.map((f) => (
-                    <td key={f.name} className="px-3 py-2">
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
-                        />
-                      )}
-                    </td>
-                  ))}
+                  {config.fields.map((f) => {
+                    // Chunk 3a item 1 (Spec 1 §9): purchase_date/
+                    // purchase_price (and any future metadataDriven field)
+                    // are shown/required/read-only per-row based on the
+                    // selected catalogue item — see lib/grid/fieldVisibility.ts.
+                    // Every non-metadataDriven field keeps its unconditional
+                    // always-shown behaviour exactly as before. Combined with
+                    // isFieldLockedForRow, independently: a field can be
+                    // read-only either because the catalogue item says so
+                    // (vis.readOnly) or because the row is Investment
+                    // Intelligence-published (isFieldLockedForRow) — either
+                    // reason disables editing.
+                    const vis = resolveFieldVisibility(row, f);
+                    const locked = vis.readOnly || isFieldLockedForRow(row, f.name);
+                    return (
+                      <td key={f.name} className="px-3 py-2">
+                        {!vis.show ? (
+                          <span className="text-muted">—</span>
+                        ) : f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={!row.included || locked}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || locked}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || locked}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className={`w-28 rounded border px-2 py-1 disabled:bg-gray-50 ${
+                              vis.required && !String(row[f.name] ?? '') ? 'border-caution' : ''
+                            }`}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
                       disabled={!row.included || isIiPublished(row)}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className="w-20 rounded border px-2 py-1 disabled:bg-gray-50"
+                      className={`w-20 rounded border px-2 py-1 disabled:bg-gray-50 ${
+                        currencyMismatchBlocked(row) ? 'border-risk' : ''
+                      }`}
                     >
                       <option value="AUD">AUD</option>
                       <option value="INR">INR</option>
                     </select>
+                    {currencyMismatchRows.has(row.key) && (
+                      <div className="mt-1 w-44">
+                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
+                          {currencyMismatchBlocked(row)
+                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
+                            : 'Confirmed as an intentionally different currency.'}
+                        </p>
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row.currency_override)}
+                            disabled={!row.included}
+                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
+                          />
+                          This holding is genuinely in a different currency
+                        </label>
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {row.is_custom && (
@@ -657,6 +844,11 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   ) : (
                     row.item_label
                   )}
+                  {row.is_archived && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-muted">
+                      Archived item
+                    </span>
+                  )}
                 </label>
                 {row.included && (
                   <button
@@ -689,51 +881,82 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                       ))}
                     </select>
                   </div>
-                  {config.fields.map((f) => (
-                    <div key={f.name}>
-                      <label className="block text-xs text-muted">{f.label}</label>
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-full rounded border px-2 py-1"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-full rounded border px-2 py-1"
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {config.fields.map((f) => {
+                    // See the desktop table's identical comment above —
+                    // Chunk 3a item 1 (Spec 1 §9).
+                    const vis = resolveFieldVisibility(row, f);
+                    if (!vis.show) return null;
+                    return (
+                      <div key={f.name}>
+                        <label className="block text-xs text-muted">
+                          {f.label}
+                          {vis.required && <span className="text-risk"> *</span>}
+                        </label>
+                        {f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={vis.readOnly}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-full rounded border px-2 py-1"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={vis.readOnly}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                   <div>
                     <label className="block text-xs text-muted">Currency</label>
                     <select
                       value={row.currency_code}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className="w-full rounded border px-2 py-1"
+                      className={`w-full rounded border px-2 py-1 ${
+                        currencyMismatchBlocked(row) ? 'border-risk' : ''
+                      }`}
                     >
                       <option value="AUD">AUD</option>
                       <option value="INR">INR</option>
                     </select>
+                    {currencyMismatchRows.has(row.key) && (
+                      <div className="mt-1">
+                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
+                          {currencyMismatchBlocked(row)
+                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
+                            : 'Confirmed as an intentionally different currency.'}
+                        </p>
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row.currency_override)}
+                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
+                          />
+                          This holding is genuinely in a different currency
+                        </label>
+                      </div>
+                    )}
                   </div>
                   {row.is_custom && (
                     <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">
