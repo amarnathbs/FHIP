@@ -760,14 +760,24 @@ async function main() {
   // CLEANUP — delete every test user (cascades through every FK'd table) and
   // the standalone ii_instruments rows (no user_id, don't cascade), then
   // INDEPENDENTLY RE-VERIFY the deletion actually worked by re-querying.
+  //
+  // ORDERING BUG FOUND AND FIXED (this session, live-DEV re-run): deleting
+  // ii_instruments BEFORE the owning users failed with a live FK violation
+  // for LIVE-R9-015/016's synthetic instruments — user-scoped rows that
+  // reference the instrument (e.g. ii_sip_series, tax-lot rows surfaced via
+  // their own source_module evidence) still existed at that point, since
+  // they only cascade away when the OWNING USER is deleted. Users must be
+  // deleted first; the standalone ii_instruments rows (which carry no
+  // user_id of their own) are then safely deletable with nothing left
+  // referencing them.
   // =========================================================================
   console.log('\n--- CLEANUP ---');
-  for (const inst of cleanup.instruments) {
-    await sb(`/rest/v1/ii_instruments?id=eq.${inst}`, { method: 'DELETE' });
-  }
   for (const u of cleanup.users) {
     const del = await sb(`/auth/v1/admin/users/${u.id}`, { method: 'DELETE' });
     console.log(`deleted user ${u.tag} (${u.id}): HTTP ${del.status}`);
+  }
+  for (const inst of cleanup.instruments) {
+    await sb(`/rest/v1/ii_instruments?id=eq.${inst}`, { method: 'DELETE' });
   }
 
   console.log('\n--- CLEANUP VERIFICATION (independent re-query, not assumed) ---');
