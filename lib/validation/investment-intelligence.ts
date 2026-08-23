@@ -22,6 +22,26 @@ export const iiGoalAllocationSchema = z.object({
   linkedInvestmentId: z.string().uuid().optional().nullable(), // only present once the position is actually published
 });
 
+// R9 — lifecycle write (PUT /investment-intelligence/goal-allocations/:id).
+// Deliberately narrower than the create schema: goalId and
+// investmentPositionId cannot be changed (that would be a new allocation,
+// not an update to this one) — only the allocation itself and, optionally,
+// re-pointing linkedInvestmentId when the position has since been
+// published (spec section 69 — bounded, not broad table UPDATE).
+export const iiGoalAllocationUpdateSchema = z.object({
+  allocationType: z.enum(['percentage', 'fixed_amount', 'residual']),
+  allocationValue: z.number().min(0).nullable(),
+  linkedInvestmentId: z.string().uuid().optional().nullable(),
+});
+
+// R9 — Review Centre user actions (spec section 69). Users may acknowledge
+// or dismiss an eligible review item with an optional free-text note; they
+// cannot set severity, evidence, status transitions beyond these two
+// actions, or any other authoritative field (spec section 48).
+export const iiReviewActionSchema = z.object({
+  note: z.string().max(1000).optional().nullable(),
+});
+
 export const iiSourceDocumentUploadMetaSchema = z.object({
   sourceKey: z.string().min(1),
   documentType: z.enum(['cas_statement', 'demat_statement', 'contract_note', 'manual_entry_record', 'other']).default('other'),

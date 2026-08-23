@@ -1,0 +1,248 @@
+{
+  "ranAt": "2026-08-23T22:08:54.689Z",
+  "stamp": 1787522719909,
+  "results": [
+    {
+      "id": "LIVE-R9-001",
+      "description": "Single goal, one investment, 100% allocation",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"data\":{\"allocationId\":\"803800b8-49aa-4188-987d-a02c9d79c0eb\"}} | persisted goal_funding_sources: {\"id\":\"6554288a-6048-4250-b03f-565eaca1030e\",\"goal_id\":\"610add07-d7a9-4105-a42d-880bc860c6b2\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"source_type\":\"investment\",\"linked_asset_id\":null,\"linked_investment_id\":\"a38f6509-76da-4505-a220-5bc01d8b45c9\",\"linked_retirement_id\":null,\"allocated_amount\":120000,\"allocation_percentage\":100,\"currency_code\":null,\"availability_date\":null,\"restricted_flag\":false,\"is_active\":true,\"created_at\":\"2026-08-23T22:05:26.81431+00:00\",\"updated_at\":\"2026-08-23T22:05:26.81431+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-002",
+      "description": "Multiple goals from one 100000 investment, 50/30/20 split, sums to exactly 100000",
+      "status": "PASS",
+      "detail": "persisted amounts: A=50000, B=30000, C=20000, sum=100000"
+    },
+    {
+      "id": "LIVE-R9-003",
+      "description": "Two investments (40000+60000) fully allocated to one goal",
+      "status": "PASS",
+      "detail": "persisted funding sources for goal: [{\"inv\":\"ffa6108d-77e6-4201-a237-6dc62b36cc49\",\"amt\":40000},{\"inv\":\"4be54f8f-a661-4ab8-b0f6-b09361bb1c57\",\"amt\":60000}]"
+    },
+    {
+      "id": "LIVE-R9-004",
+      "description": "Fully unallocated investment surfaces as an info-severity unallocated_investment Review Centre observation, never an error",
+      "status": "PASS",
+      "detail": "refresh HTTP 200 {\"data\":{\"created\":1,\"updated\":0,\"superseded\":0,\"error\":null}} | item: {\"id\":\"5591f7a4-b702-482f-9a91-abec8785d777\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"goal\",\"category\":\"unallocated_investment\",\"severity\":\"info\",\"compliance_classification\":\"observation\",\"title\":\"Investment not linked to a financial goal\",\"description\":\"A portion of your investment portfolio is not currently linked to a financial goal (77777.77 AUD unallocated of 77777.77 AUD).\",\"evidence\":{\"allocatedPct\":0,\"currencyCode\":\"AUD\",\"currentValue\":77777.77,\"investmentId\":\"8d43cdf5-c3d5-4661-93b5-f2a587e1d11d\",\"allocatedValue\":0,\"unallocatedValue\":77777.77},\"source_module\":\"ii_publishing\",\"source_record_id\":\"8d43cdf5-c3d5-4661-93b5-f2a587e1d11d\",\"source_record_version\":null,\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"unallocated_investment\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"8aec4a8034995085024157333d64efc4a64f123d7c7fbb0fb1d61a47baca81ea\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:05:47.643101+00:00\",\"updated_at\":\"2026-08-23T22:05:47.643101+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-005",
+      "description": "Over-allocation blocked: 70% + 40% (110%) rejected with 409, exactly the first allocation persists, no orphaned row",
+      "status": "PASS",
+      "detail": "70%: HTTP 200 | 40% attempt: HTTP 409 {\"error\":\"This balance is already 70% allocated to other goals — allocating another 40% would exceed 100%. Reduce the percentage or the existing allocations first.\"} | persisted funding sources for this investment: 1 | active ii_goal_allocations rows: 1"
+    },
+    {
+      "id": "LIVE-R9-006",
+      "description": "On-track goal (fully funded, currentAmount==targetAmount) is never flagged by goal_forecast_gap",
+      "status": "PASS",
+      "detail": "trackStatus=on_track, flaggedThisGoal=false"
+    },
+    {
+      "id": "LIVE-R9-007",
+      "description": "Off-track/at-risk goal with an active funding source produces a medium-severity goal_forecast_gap review item",
+      "status": "PASS",
+      "detail": "trackStatus=off_track, item={\"id\":\"9aea3bac-b968-4ecb-a81d-be6e456eb939\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"goal\",\"category\":\"goal_forecast_gap\",\"severity\":\"medium\",\"compliance_classification\":\"observation\",\"title\":\"\\\"LIVE-R9-007 Off-Track Goal\\\" forecast is off track\",\"description\":\"This goal's current forecast is below its target by 932040.22 AUD.\",\"evidence\":{\"goalId\":\"07485572-2930-423f-9a7b-a38463060672\",\"trackStatus\":\"off_track\",\"currencyCode\":\"AUD\",\"targetAmountFuture\":932040.2164891011,\"forecastModelVersion\":\"goals-1.0.0\",\"fundingGapAtTargetDate\":932040.2164891011,\"projectedTargetDateValue\":0},\"source_module\":\"goals\",\"source_record_id\":\"07485572-2930-423f-9a7b-a38463060672\",\"source_record_version\":\"goals-1.0.0\",\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"goal_forecast_gap\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"b905614ee5e867bed028ef14a9df2087501327137ee1a3d0123f8213123a6b86\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:06:13.547102+00:00\",\"updated_at\":\"2026-08-23T22:06:13.547102+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-008",
+      "description": "Goal change (current_amount raised to fully fund it) flips trackStatus and the previously-open review item is marked resolved on next refresh, not silently dropped",
+      "status": "PASS",
+      "detail": "new trackStatus=on_track, before-open-item=9aea3bac-b968-4ecb-a81d-be6e456eb939, after-status=resolved, resolved_at=2026-08-23T22:06:22.867+00:00"
+    },
+    {
+      "id": "LIVE-R9-009",
+      "description": "Investment value change (200000->350000) is re-derived live on next refresh, not served from stale evidence",
+      "status": "PASS",
+      "detail": "before unallocated=140000 (expected 140000), after unallocated=245000 (expected 244999.99999999997)"
+    },
+    {
+      "id": "LIVE-R9-010",
+      "description": "Re-running review/refresh twice in a row over unchanged data creates 0 new rows the second time and never produces two open rows for the same identity_key",
+      "status": "PASS",
+      "detail": "refresh1={\"data\":{\"created\":0,\"updated\":3,\"superseded\":0,\"error\":null}}, refresh2={\"data\":{\"created\":0,\"updated\":3,\"superseded\":0,\"error\":null}}, open/ack rows before=3 mid=3 after=3, unique identity keys=true | DIAGNOSTIC same goal_forecast_gap item's evidence before-refresh1 vs after-refresh1(mid): undefined VS undefined (identity_key same? true, row id same (not superseded)? true)"
+    },
+    {
+      "id": "LIVE-R9-011",
+      "description": "Retirement-category goal: investment allocation processed via the SAME goal-allocation path (no separate retirement engine), and R9 never writes a retirement_accounts row",
+      "status": "PASS",
+      "detail": "allocRes HTTP 200, detail goalCategory=retirement, retirement_accounts rows written by this test=0"
+    },
+    {
+      "id": "LIVE-R9-012",
+      "description": "Cross-currency goal (AUD + INR linked investments): each funding-source row keeps its own raw currency value, no invented FX conversion or silent merge",
+      "status": "PASS",
+      "detail": "AUD row amount=50000, INR row amount=500000"
+    },
+    {
+      "id": "LIVE-R9-013",
+      "description": "Data-quality review item (stale_valuation, 95-day-old II-published valuation) with correct provenance back to ii_publishing",
+      "status": "PASS",
+      "detail": "item={\"id\":\"444cd8ca-d685-4149-9630-de40d76bfc5a\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"data_quality\",\"category\":\"stale_valuation\",\"severity\":\"low\",\"compliance_classification\":\"observation\",\"title\":\"Investment valuation has not been refreshed recently\",\"description\":\"This investment was last refreshed 94 days ago, beyond the 90-day threshold.\",\"evidence\":{\"ageDays\":94,\"investmentId\":\"68cf6536-c608-4227-b34a-e4f0135ecda0\",\"lastRefreshedAt\":\"2026-05-20T22:07:15.137+00:00\",\"staleDaysThreshold\":90},\"source_module\":\"ii_publishing\",\"source_record_id\":\"68cf6536-c608-4227-b34a-e4f0135ecda0\",\"source_record_version\":null,\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"stale_valuation\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"9e246d2ba4e4c8bb00059889d40c573e008f4bbaf6f0af01e061480ef3a70b3f\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:07:22.217482+00:00\",\"updated_at\":\"2026-08-23T22:07:22.217482+00:00\"} | refresh={\"data\":{\"created\":2,\"updated\":3,\"superseded\":0,\"error\":null}} | all stale_valuation items for user=[\"68cf6536-c608-4227-b34a-e4f0135ecda0\"] | seeded investment row={\"id\":\"68cf6536-c608-4227-b34a-e4f0135ecda0\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"investment_name\":\"LIVE-R9-013 Stale Investment\",\"investment_type\":\"managed_fund\",\"current_value\":80000,\"currency_code\":\"AUD\",\"country_code\":\"AU\",\"is_active\":true,\"created_at\":\"2026-08-23T22:07:15.434137+00:00\",\"updated_at\":\"2026-08-23T22:07:15.434137+00:00\",\"owner\":\"self\",\"master_item_key\":null,\"institution\":null,\"cost_base\":null,\"annual_contribution\":null,\"risk_profile\":null,\"notes\":null,\"source_type\":\"investment_intelligence_published\",\"ii_publication_id\":null,\"ii_canonical_account_id\":null,\"ii_canonical_instrument_id\":null,\"pre_publication_manual_snapshot\":null,\"ii_linked_at\":null,\"ii_last_refreshed_at\":\"2026-05-20T22:07:15.137+00:00\",\"ii_source_quality_status\":null}"
+    },
+    {
+      "id": "LIVE-R9-014",
+      "description": "Performance review item (benchmark_underperformance, -5% active return) with correct provenance back to R4 ii_analytics_results, consumed not recomputed",
+      "status": "PASS",
+      "detail": "item={\"id\":\"b8584339-d479-4434-8527-0bc9aa94f1de\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"performance\",\"category\":\"benchmark_underperformance\",\"severity\":\"medium\",\"compliance_classification\":\"observation\",\"title\":\"Position trailing its benchmark\",\"description\":\"This position's since-inception return trails its benchmark by 5.00 percentage points, based on certified R4 performance analytics.\",\"evidence\":{\"activeReturn\":-0.05,\"instrumentId\":\"73f5f9c5-51b0-46d2-8fe7-adaaa6bc4bbb\",\"engineVersion\":\"r9-live-cert-test-v1\",\"thresholdFraction\":0.02},\"source_module\":\"ii_r4_performance\",\"source_record_id\":\"73f5f9c5-51b0-46d2-8fe7-adaaa6bc4bbb\",\"source_record_version\":\"r9-live-cert-test-v1\",\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"benchmark_underperformance\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"400f910a92e8174bd578ac826b587c55374275c778663f6698bf8f991f80c873\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:07:31.27375+00:00\",\"updated_at\":\"2026-08-23T22:07:31.27375+00:00\"} | refresh={\"data\":{\"created\":1,\"updated\":5,\"superseded\":0,\"error\":null}} | all benchmark_underperformance items=[\"73f5f9c5-51b0-46d2-8fe7-adaaa6bc4bbb\"] | seeded ii_analytics_results row={\"id\":\"658e4925-727d-4ece-add7-c869d0e83235\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"scope_type\":\"scheme\",\"scope_id\":\"73f5f9c5-51b0-46d2-8fe7-adaaa6bc4bbb\",\"metric_key\":\"scheme_active_return\",\"metric_version\":\"r9-live-cert-test-v1\",\"engine_version\":\"r9-live-cert-test-v1\",\"data_as_of_date\":\"2026-08-23\",\"input_snapshot_version\":\"r9-live-cert-test-snapshot-v1\",\"benchmark_mapping_version\":null,\"nav_data_version\":null,\"benchmark_data_version\":null,\"risk_free_version\":null,\"quality_status\":\"ok\",\"quality_reason\":null,\"result_value\":{\"value\":{\"family\":\"test\",\"activeReturn\":-0.05,\"benchmarkKey\":\"test\"},\"status\":\"ok\"},\"created_at\":\"2026-08-23T22:07:24.074969+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-015",
+      "description": "SIP review item (sip_interruption, 100 days since last MONTHLY contribution) with correct provenance back to R5 ii_sip_series",
+      "status": "PASS",
+      "detail": "item={\"id\":\"90cbf9a6-99e4-45c7-8147-5e11005e0472\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"sip\",\"category\":\"sip_interruption\",\"severity\":\"low\",\"compliance_classification\":\"observation\",\"title\":\"SIP contribution pattern interrupted\",\"description\":\"This recurring investment series has missed approximately 2 expected monthly instalment(s) since its last detected contribution.\",\"evidence\":{\"cadence\":\"MONTHLY\",\"sipSeriesId\":\"d506e139-38bb-4534-b77c-b9cd5b19668c\",\"instrumentId\":\"e553c823-252f-4702-9ae3-fba1fef2e9dd\",\"missedInstalments\":2,\"detectionConfidence\":\"CONFIRMED_SOURCE\",\"latestContributionDate\":\"2026-05-15\"},\"source_module\":\"ii_r5_sip_xray\",\"source_record_id\":\"d506e139-38bb-4534-b77c-b9cd5b19668c\",\"source_record_version\":\"r9-live-cert-test-v1\",\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"sip_interruption\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"d3a2df47a62317c0ed1726bc13ce79070f30efbf9ef917693d670a13ed5105be\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:07:40.870363+00:00\",\"updated_at\":\"2026-08-23T22:07:40.870363+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-016",
+      "description": "Tax-cost review item (exit_load_exposure, 1.0% exit load) with correct provenance back to R6 ii_capital_gains_computations, tax not recomputed",
+      "status": "PASS",
+      "detail": "computationId=8bc1a946-bf29-4401-964e-6e1718b3d4fe, exitLoadItem={\"id\":\"7f134748-7a10-4860-906c-34d2f694611d\",\"user_id\":\"13f63450-47a8-4ae6-8312-32b49ea8076f\",\"review_type\":\"tax_cost\",\"category\":\"exit_load_exposure\",\"severity\":\"low\",\"compliance_classification\":\"observation\",\"title\":\"Potential exit-load exposure\",\"description\":\"A lot in this holding would incur an exit load of 1.00% if disposed today, based on certified R6 exit-load schedules.\",\"evidence\":{\"lotId\":\"742506ae-cabb-44e0-9fa0-e69635b3a5e9\",\"exitLoadPct\":1,\"instrumentId\":\"38fca4b5-6201-496f-95a6-8a988f0991f6\",\"engineVersion\":\"r9-live-cert-test-v1\"},\"source_module\":\"ii_r6_tax\",\"source_record_id\":\"742506ae-cabb-44e0-9fa0-e69635b3a5e9\",\"source_record_version\":\"r9-live-cert-test-v1\",\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"exit_load_exposure\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"1dce01cd6afed17a5e993b0ce3b58bee62069dbf47e003384492a594cf81757a\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:07:51.172216+00:00\",\"updated_at\":\"2026-08-23T22:07:51.172216+00:00\"}"
+    },
+    {
+      "id": "LIVE-R9-017",
+      "description": "Review resolution lifecycle: open->acknowledged (user action)->resolved (condition vanished on refresh), and open->dismissed (user action), all DB-persisted with timestamps",
+      "status": "PASS",
+      "detail": "ack: status=acknowledged at=2026-08-23T22:07:54.232+00:00 | resolve: status=resolved at=2026-08-23T22:08:02.999+00:00 | dismiss: status=dismissed at=2026-08-23T22:08:14.953+00:00"
+    },
+    {
+      "id": "LIVE-R9-018",
+      "description": "User B genuinely blocked from User A's review items (list never includes A, direct-id acknowledge rejected, goal detail 404) — A's row provably untouched",
+      "status": "PASS",
+      "detail": "B list leaked A? false | B acknowledge-A-item HTTP 400 {\"error\":\"Review item not found\"} | B goal-detail-of-A HTTP 404 | A's item status before=open after=open"
+    },
+    {
+      "id": "LIVE-R9-019a",
+      "description": "Same-user forgery: goalId in request body must match the goal in the URL path — mismatched goalId rejected (422), not silently coerced to the path value",
+      "status": "PASS",
+      "detail": "HTTP 422 {\"error\":\"goalId in body does not match the goal in the URL path\"}"
+    },
+    {
+      "id": "LIVE-R9-019b",
+      "description": "Same-user forgery: user attempts direct PostgREST PATCH of severity/status on their OWN ii_review_items row (own JWT, bypassing the app's bounded acknowledge/dismiss API)",
+      "status": "PASS",
+      "detail": "original severity=info status=open | PATCH HTTP 400 {\"code\":\"P0001\",\"details\":null,\"hint\":null,\"message\":\"ii_review_items: authoritative fields may not be written directly by the authenticated role\"} | row after: {\"severity\":\"info\",\"status\":\"open\"}"
+    },
+    {
+      "id": "LIVE-R9-019c",
+      "description": "Same-user forgery: user attempts direct PostgREST PATCH of evidence on their OWN ii_review_items row",
+      "status": "PASS",
+      "detail": "PATCH HTTP 400 | evidence after: {\"allocatedPct\":0,\"currencyCode\":\"AUD\",\"currentValue\":1000,\"investmentId\":\"afb5c985-e4b4-4c85-8406-de36b60e6aac\",\"allocatedValue\":0,\"unallocatedValue\":1000}"
+    },
+    {
+      "id": "LIVE-R9-019d",
+      "description": "Same-user forgery: user attempts direct INSERT/UPDATE of ii_review_rule_registry (system thresholds) with their own JWT — structurally blocked (service-role-write-only, no authenticated write policy)",
+      "status": "PASS",
+      "detail": "INSERT HTTP 403, forged rows visible=0 | UPDATE HTTP 200, unallocated_investment.default_severity after=info"
+    },
+    {
+      "id": "LIVE-R9-020",
+      "description": ">1000-row pagination guard: 1001 allocated filler investments + 1 unallocated marker (sorted last by id, past PostgREST's default 1000-row cap) — the marker's review item must exist with the correct value, proving fetchAllPages actually reached row 1002, not silently truncated at 1000",
+      "status": "PASS",
+      "detail": "total investments seeded/visible=1002 (expected 1002) | refresh HTTP 200 {\"data\":{\"created\":2,\"updated\":0,\"superseded\":0,\"error\":null}} | marker item={\"id\":\"5ffd384e-0ede-4879-a42e-9af30d19e6f9\",\"user_id\":\"7e3c31a4-6f31-411c-905d-0f04c679cf47\",\"review_type\":\"goal\",\"category\":\"unallocated_investment\",\"severity\":\"info\",\"compliance_classification\":\"observation\",\"title\":\"Investment not linked to a financial goal\",\"description\":\"A portion of your investment portfolio is not currently linked to a financial goal (918273.45 AUD unallocated of 918273.45 AUD).\",\"evidence\":{\"allocatedPct\":0,\"currencyCode\":\"AUD\",\"currentValue\":918273.45,\"investmentId\":\"ffffffff-ffff-4fff-8fff-ffffffffffff\",\"allocatedValue\":0,\"unallocatedValue\":918273.45},\"source_module\":\"ii_publishing\",\"source_record_id\":\"ffffffff-ffff-4fff-8fff-ffffffffffff\",\"source_record_version\":null,\"review_engine_version\":\"review-1.0.0\",\"rule_key\":\"unallocated_investment\",\"rule_version\":\"r9-1.0.0\",\"identity_key\":\"b500124e89f6f588044dc45943323d62acce31dd4b9f2e3507bdac1b21816364\",\"as_of_date\":\"2026-08-23\",\"status\":\"open\",\"superseded_by_id\":null,\"user_note\":null,\"acknowledged_at\":null,\"resolved_at\":null,\"dismissed_at\":null,\"created_at\":\"2026-08-23T22:08:45.667836+00:00\",\"updated_at\":\"2026-08-23T22:08:45.667836+00:00\"} | total unallocated_investment items=1 (expected exactly 1)"
+    }
+  ],
+  "reconciliations": [
+    {
+      "id": "RECONCILE-R9-01",
+      "description": "Goal allocation math: single goal 100% of a 120000 investment",
+      "independentValue": 120000,
+      "productionValue": 120000,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-02",
+      "description": "Goal allocation math: 3-way 50/30/20 split sums to exactly the source investment value (no double counting)",
+      "independentValue": 100000,
+      "productionValue": 100000,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-03",
+      "description": "Goal allocation math: two investments fully allocated to one goal sum to 100000",
+      "independentValue": 100000,
+      "productionValue": 100000,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-04",
+      "description": "Allocation cap decision: 70% existing + 40% candidate = 110% must exceed the 100% cap",
+      "independentValue": true,
+      "productionValue": true,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-09",
+      "description": "Goal forecast gap gate: on_track goal never flagged regardless of funding",
+      "independentValue": false,
+      "productionValue": false,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-10",
+      "description": "Goal forecast gap gate: off_track WITH active funding source -> flagged",
+      "independentValue": true,
+      "productionValue": true,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-06",
+      "description": "Portfolio unallocated split re-derives from the live current_value after a revaluation (200000->350000, 30% allocated)",
+      "independentValue": {
+        "before": 140000,
+        "after": 245000
+      },
+      "productionValue": {
+        "before": 140000,
+        "after": 245000
+      },
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-05",
+      "description": "Goal allocation math: retirement-category goal, single investment 100% allocation",
+      "independentValue": 300000,
+      "productionValue": 300000,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-07",
+      "description": "Goal-linked value across 2 currencies: sum is the raw arithmetic sum (no FX invented) and spans >1 currency",
+      "independentValue": 550000,
+      "productionValue": 550000,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-08",
+      "description": "Portfolio unallocated split at scale (1002 investments, marker at the very end of id-sort order): marker's unallocatedValue must equal its full current_value",
+      "independentValue": 918273.45,
+      "productionValue": 918273.45,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-11",
+      "description": "Goal forecast gap gate re-derived after LIVE-R9-008's goal-change: on_track -> no OPEN goal_forecast_gap item for this goal",
+      "independentValue": false,
+      "productionValue": false,
+      "match": true
+    },
+    {
+      "id": "RECONCILE-R9-12",
+      "description": "Allocation cap boundary at exactly 100% (70%+30%) must NOT be rejected (indepAtCap=false means \"does not exceed\")",
+      "independentValue": false,
+      "productionValue": false,
+      "match": true
+    }
+  ],
+  "cleanup": {
+    "users": [
+      "13f63450-47a8-4ae6-8312-32b49ea8076f",
+      "b41b2103-e6d6-4493-a3a3-100065a695ed",
+      "7e3c31a4-6f31-411c-905d-0f04c679cf47"
+    ],
+    "instruments": [
+      "73f5f9c5-51b0-46d2-8fe7-adaaa6bc4bbb",
+      "e553c823-252f-4702-9ae3-fba1fef2e9dd",
+      "38fca4b5-6201-496f-95a6-8a988f0991f6"
+    ]
+  }
+}

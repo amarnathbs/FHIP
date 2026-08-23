@@ -221,3 +221,64 @@ export type IiAuditEventTypeR3 =
   | 'publication_failed'
   | 'conflict_detected'
   | 'conflict_resolved';
+
+// ---------------------------------------------------------------------------
+// R9 — Goals, Forecasting & Review Centre. See R9_ARCHITECTURE.md and
+// R9_REVIEW_CENTRE_RULES.md. Note the Review Centre reuses the EXISTING
+// IiInsightClassification taxonomy (observation/education/simulation/
+// personalised_advice) rather than inventing a parallel one — R9 review
+// items are restricted at the validation layer (and the migration 0067
+// check constraint) to the first three; personalised_advice is never
+// produced by the deterministic review engine (spec sections 40-42).
+export type IiReviewType = 'data_quality' | 'goal' | 'portfolio' | 'performance' | 'sip' | 'tax_cost';
+export type IiReviewSeverity = 'info' | 'low' | 'medium' | 'high';
+export type IiReviewComplianceClassification = Exclude<IiInsightClassification, 'personalised_advice'>;
+export type IiReviewSourceModule =
+  | 'goals'
+  | 'forecasting'
+  | 'retirement'
+  | 'ii_publishing'
+  | 'ii_r4_performance'
+  | 'ii_r5_sip_xray'
+  | 'ii_r6_tax'
+  | 'ii_data_quality';
+export type IiReviewStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed' | 'superseded';
+
+export interface IiReviewItem {
+  id: string;
+  user_id: string;
+  review_type: IiReviewType;
+  category: string;
+  severity: IiReviewSeverity;
+  compliance_classification: IiReviewComplianceClassification;
+  title: string;
+  description: string;
+  evidence: Record<string, unknown>;
+  source_module: IiReviewSourceModule;
+  source_record_id: string | null;
+  source_record_version: string | null;
+  review_engine_version: string;
+  rule_key: string;
+  rule_version: string;
+  identity_key: string;
+  as_of_date: string;
+  status: IiReviewStatus;
+  superseded_by_id: string | null;
+  user_note: string | null;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+  dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type IiAuditEventTypeR9 =
+  | IiAuditEventTypeR3
+  | 'goal_allocation_created'
+  | 'goal_allocation_changed'
+  | 'goal_allocation_removed'
+  | 'forecast_integration_run'
+  | 'review_item_created'
+  | 'review_item_resolved'
+  | 'review_acknowledged'
+  | 'review_dismissed';

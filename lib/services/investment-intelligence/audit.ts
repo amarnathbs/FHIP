@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { IiActorType, IiAuditEventTypeR3 } from './types';
+import type { IiActorType, IiAuditEventTypeR9 } from './types';
 
 // R0_AUDIT_REQUIREMENTS.md section 3: ii_audit_events has NO insert policy
 // for the authenticated role at all — every insert happens through the
@@ -10,7 +10,7 @@ import type { IiActorType, IiAuditEventTypeR3 } from './types';
 // a future call site copy-pasting an insert.
 export interface AuditEventInput {
   userId: string | null;
-  eventType: IiAuditEventTypeR3;
+  eventType: IiAuditEventTypeR9;
   subjectType: string;
   subjectId?: string | null;
   actorType: IiActorType;
