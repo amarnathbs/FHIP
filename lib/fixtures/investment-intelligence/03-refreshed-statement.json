@@ -1,0 +1,33 @@
+{
+  "fixtureKey": "03-refreshed-statement",
+  "sourceKey": "cams",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "cas_statement",
+  "originalFilename": "cams-cas-household-a-refreshed-q2.pdf",
+  "account": {
+    "accountType": "mf_folio",
+    "institutionName": "HDFC Mutual Fund",
+    "folioNumber": "TESTFIX-FOLIO-000101"
+  },
+  "instrument": {
+    "instrumentName": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+    "instrumentClass": "mutual_fund",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": [
+      { "scheme": "amfi_scheme_code", "value": "TESTFIX-AMFI-HDFCFC-001", "countryCode": "IN" }
+    ]
+  },
+  "transactions": [
+    { "transactionType": "sip", "transactionDate": "2025-04-10", "units": 44.1, "pricePerUnit": 113.4, "grossAmount": 5000, "sourceReference": "TESTFIX-TXN-000101-4" },
+    { "transactionType": "sip", "transactionDate": "2025-05-10", "units": 43.0, "pricePerUnit": 116.3, "grossAmount": 5000, "sourceReference": "TESTFIX-TXN-000101-5" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-05-31",
+    "units": 680.47,
+    "value": 78900,
+    "qualityStatus": "certified"
+  },
+  "supersedesFixtureKey": "01-single-fund-cas"
+}

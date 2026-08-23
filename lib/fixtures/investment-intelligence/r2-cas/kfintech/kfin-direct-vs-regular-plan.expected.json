@@ -1,0 +1,63 @@
+{
+  "fixtureId": "kfin-direct-vs-regular-plan",
+  "title": "Direct-plan and Regular-plan variants of the same scheme, held as distinct instruments",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654329/00",
+      "holderName": "KIRAN BHAT",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654329/00",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)",
+      "isin": "INF109K01VQ1",
+      "amfiSchemeCode": "120716",
+      "transactionDateIso": "2025-01-22",
+      "canonicalType": "purchase",
+      "amount": "15000.00",
+      "units": "111.600",
+      "nav": "134.4000",
+      "sourceReference": "KDR0001D"
+    },
+    {
+      "folioNumber": "7654329/00",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)",
+      "isin": "INF109K01VR9",
+      "amfiSchemeCode": "120717",
+      "transactionDateIso": "2025-01-22",
+      "canonicalType": "purchase",
+      "amount": "15000.00",
+      "units": "107.850",
+      "nav": "139.0800",
+      "sourceReference": "KDR0001R"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "7654329/00",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "111.600",
+      "value": "15981.12",
+      "nav": "143.2000"
+    },
+    {
+      "folioNumber": "7654329/00",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "107.850",
+      "value": "14937.22",
+      "nav": "138.5000"
+    }
+  ],
+  "notes": null
+}

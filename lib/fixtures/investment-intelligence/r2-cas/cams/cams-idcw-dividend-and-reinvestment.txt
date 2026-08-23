@@ -1,0 +1,19 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000700
+PAN: ABCDE0007F
+Name: KAVYA REDDY
+Holding Mode: SI
+
+AMC Name: Kotak Mutual Fund
+Scheme Name: Kotak Emerging Equity Fund - IDCW (Regular Plan)
+ISIN: INF174K01LS2
+AMFI Code: 112307
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+20-Feb-2025   IDCW Payout                           750.00  0.000  45.2000  500.000 [Ref: DIV0001]
+20-May-2025   IDCW Reinvestment                     620.00  13.500  45.9300  513.500 [Ref: DIV0002]
+
+Closing Unit Balance as on 30-Jun-2025 : 513.500 Units   Valuation : Rs. 23672.35   NAV as on 30-Jun-2025 : Rs. 46.1000

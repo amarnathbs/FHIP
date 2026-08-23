@@ -60,7 +60,12 @@ export type FdhMasterDataTable = (typeof FDH_MASTER_DATA_TABLES)[number];
 export const FDH_ADMIN_ONLY_TABLES = ['fdh_global_learning_candidates'] as const;
 export type FdhAdminOnlyTable = (typeof FDH_ADMIN_ONLY_TABLES)[number];
 
-/** Household financial data. Every one carries `user_id` and owner-only RLS. */
+/** FROZEN — household financial data as FDH-1 shipped it (migrations
+ * 0045-0048). Every one carries `user_id` and owner-only RLS. Used by
+ * `tests/unit/fdh1SchemaContract.test.ts` and
+ * `tests/unit/fdh2SchemaContract.test.ts`, both correctly scoped to migrations
+ * that predate FDH-3 — this list must stay exactly what FDH-1 shipped. FDH-3's
+ * own additions live in `FDH3_USER_OWNED_TABLES_ADDED` below. */
 export const FDH_USER_OWNED_TABLES = [
   'fdh_financial_accounts',
   'fdh_statement_uploads',
@@ -80,6 +85,41 @@ export const FDH_USER_OWNED_TABLES = [
 ] as const;
 export type FdhUserOwnedTable = (typeof FDH_USER_OWNED_TABLES)[number];
 
+/**
+ * New user-scoped tables FDH-3 creates (migration 0058). Both carry `user_id`
+ * and owner-scoped RLS, but `fdh_document_audit_events` is MORE restricted
+ * than the generic user-owned shape: owner SELECT only, no user-facing
+ * INSERT/UPDATE/DELETE policy at all — every insert happens through the
+ * service-role client from `lib/financial-data-hub/services/auditLog.ts`
+ * (same precedent as `ii_audit_events`). It therefore gets a bespoke
+ * repository in `repositories/index.ts` rather than
+ * `makeUserOwnedRepository`, and is tracked separately from
+ * `FDH_APPEND_ONLY_TABLES` (append-only there still means user-insertable).
+ */
+export const FDH3_USER_OWNED_TABLES_ADDED = ['fdh_upload_sessions'] as const;
+export const FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES = ['fdh_document_audit_events'] as const;
+
+/**
+ * New user-scoped tables R7 creates (migration 0064). Both are ordinary
+ * owner-scoped `for all` tables — no service-role carve-out needed, unlike
+ * FDH-3's audit/session tables.
+ */
+export const R7_USER_OWNED_TABLES_ADDED = [
+  'fdh_csv_mapping_templates',
+  'fdh_transaction_corrections',
+] as const;
+
+/** The complete current user-owned table set (FDH-1 + FDH-3 + R7). Used by
+ * the repository layer and by any FDH-3/R7-scoped test; NOT used by the
+ * frozen FDH-1/FDH-2 schema-contract tests above. */
+export const FDH_ALL_USER_OWNED_TABLES = [
+  ...FDH_USER_OWNED_TABLES,
+  ...FDH3_USER_OWNED_TABLES_ADDED,
+  ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
+  ...R7_USER_OWNED_TABLES_ADDED,
+] as const;
+export type FdhAllUserOwnedTable = (typeof FDH_ALL_USER_OWNED_TABLES)[number];
+
 /** FROZEN — the complete table set FDH-1 shipped (migrations 0045-0048).
  * Used only by fdh1SchemaContract.test.ts's "creates exactly this set" and
  * "RLS enabled on every table" checks, which are correctly scoped to those
@@ -90,6 +130,9 @@ export const FDH_TABLES = [
   ...FDH_MASTER_DATA_TABLES,
   ...FDH_USER_OWNED_TABLES,
   ...FDH_ADMIN_ONLY_TABLES,
+  ...FDH3_USER_OWNED_TABLES_ADDED,
+  ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
+  ...R7_USER_OWNED_TABLES_ADDED,
 ] as const;
 export type FdhTable = (typeof FDH_TABLES)[number];
 

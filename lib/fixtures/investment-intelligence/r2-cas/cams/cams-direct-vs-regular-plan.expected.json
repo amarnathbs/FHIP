@@ -1,0 +1,63 @@
+{
+  "fixtureId": "cams-direct-vs-regular-plan",
+  "title": "Direct-plan and Regular-plan variants of the same scheme, held as distinct instruments",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040000800",
+      "holderName": "ARJUN KAPOOR",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "1201040000800",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)",
+      "isin": "INF109K01VQ1",
+      "amfiSchemeCode": "120716",
+      "transactionDateIso": "2025-01-20",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "74.400",
+      "nav": "134.4000",
+      "sourceReference": "DR0001D"
+    },
+    {
+      "folioNumber": "1201040000800",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)",
+      "isin": "INF109K01VR9",
+      "amfiSchemeCode": "120717",
+      "transactionDateIso": "2025-01-20",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "71.900",
+      "nav": "139.0800",
+      "sourceReference": "DR0001R"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "1201040000800",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "74.400",
+      "value": "10654.08",
+      "nav": "143.2000"
+    },
+    {
+      "folioNumber": "1201040000800",
+      "scheme": "ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "71.900",
+      "value": "9958.15",
+      "nav": "138.5000"
+    }
+  ],
+  "notes": null
+}

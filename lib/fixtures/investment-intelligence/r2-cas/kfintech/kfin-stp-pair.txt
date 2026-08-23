@@ -1,0 +1,29 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654330/00
+PAN : ABCDE0109F
+Investor Name : DIVYA NAIDU
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+01/03/2025   STP Out To Mirae Asset Large Cap Fund  4000.00  29.110  137.4000  170.890 [Ref: KSTP0001OUT]
+
+Closing Balance : 170.890 units as on 30/06/2025   Market Value : Rs 52736.65   NAV : Rs 308.6000
+
+AMC Name : Mirae Asset Mutual Fund
+Scheme : Mirae Asset Large Cap Fund - Growth (Regular Plan)
+ISIN : INF769K01AY9
+AMFI Code : 118826
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+01/03/2025   STP In From SBI Bluechip Fund  4000.00  25.600  156.2500  25.600 [Ref: KSTP0001IN]
+
+Closing Balance : 25.600 units as on 30/06/2025   Market Value : Rs 3898.88   NAV : Rs 152.3000

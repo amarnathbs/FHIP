@@ -1,0 +1,20 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654331/00
+PAN : ABCDE0110F
+Investor Name : ARUN NAIR
+Mode of Holding : Single
+
+AMC Name : HDFC Mutual Fund
+Scheme : HDFC Flexi Cap Fund - Growth (Regular Plan)
+ISIN : INF179K01YX6
+AMFI Code : 118835
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+15/02/2025   SWP Instalment              3000.00  10.900  275.0000  389.100 [Ref: KSWP0001]
+15/03/2025   SWP Instalment              3000.00  11.050  273.0000  378.050 [Ref: KSWP0002]
+15/04/2025   SWP Instalment              3000.00  11.200  271.0000  366.850 [Ref: KSWP0003]
+
+Closing Balance : 366.850 units as on 30/06/2025   Market Value : Rs 48314.15   NAV : Rs 131.7000

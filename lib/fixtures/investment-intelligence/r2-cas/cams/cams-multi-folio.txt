@@ -1,0 +1,34 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000301
+PAN: ABCDE0003F
+Name: ANITA DESAI
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+05-Feb-2025   Purchase                              5000.00  41.750  119.7600  41.750 [Ref: TXN0201]
+
+Closing Unit Balance as on 30-Jun-2025 : 41.750 Units   Valuation : Rs. 5628.00   NAV as on 30-Jun-2025 : Rs. 134.8000
+
+Folio No: 1201040000302
+PAN: ABCDE0003F
+Name: ANITA DESAI
+Holding Mode: SI
+
+AMC Name: SBI Mutual Fund
+Scheme Name: SBI Bluechip Fund - Growth (Regular Plan)
+ISIN: INF200K01UP0
+AMFI Code: 103504
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+05-Mar-2025   Purchase                              12000.00  45.400  264.3200  45.400 [Ref: TXN0202]
+
+Closing Unit Balance as on 30-Jun-2025 : 45.400 Units   Valuation : Rs. 11989.00   NAV as on 30-Jun-2025 : Rs. 264.1000

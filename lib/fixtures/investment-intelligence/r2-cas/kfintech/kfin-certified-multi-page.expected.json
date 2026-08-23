@@ -1,0 +1,175 @@
+{
+  "fixtureId": "kfin-certified-multi-page",
+  "title": "Complete-from-inception history, twelve transactions (multiple transaction pages), reconciling exactly",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654334/00",
+      "holderName": "NIKHIL DESHPANDE",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 12,
+  "transactions": [
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-01-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.963",
+      "nav": "270.0000",
+      "sourceReference": "KMP0001"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-01-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "12.868",
+      "nav": "272.0000",
+      "sourceReference": "KMP0002"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.774",
+      "nav": "274.0000",
+      "sourceReference": "KMP0003"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "12.681",
+      "nav": "276.0000",
+      "sourceReference": "KMP0004"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-03-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.590",
+      "nav": "278.0000",
+      "sourceReference": "KMP0005"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-03-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "12.500",
+      "nav": "280.0000",
+      "sourceReference": "KMP0006"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-04-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.411",
+      "nav": "282.0000",
+      "sourceReference": "KMP0007"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-04-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "12.324",
+      "nav": "284.0000",
+      "sourceReference": "KMP0008"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-05-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.238",
+      "nav": "286.0000",
+      "sourceReference": "KMP0009"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-05-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "12.153",
+      "nav": "288.0000",
+      "sourceReference": "KMP0010"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-06-06",
+      "canonicalType": "sip",
+      "amount": "3500.00",
+      "units": "12.069",
+      "nav": "290.0000",
+      "sourceReference": "KMP0011"
+    },
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-06-21",
+      "canonicalType": "purchase",
+      "amount": "3500.00",
+      "units": "11.986",
+      "nav": "292.0000",
+      "sourceReference": "KMP0012"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654334/00",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "149.557",
+      "value": "43969.76",
+      "nav": "294.0000"
+    }
+  ],
+  "notes": null
+}

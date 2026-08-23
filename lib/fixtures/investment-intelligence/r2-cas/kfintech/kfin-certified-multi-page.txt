@@ -1,0 +1,29 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654334/00
+PAN : ABCDE0113F
+Investor Name : NIKHIL DESHPANDE
+Mode of Holding : Single
+
+AMC Name : SBI Mutual Fund
+Scheme : SBI Bluechip Fund - Growth (Regular Plan)
+ISIN : INF200K01UP0
+AMFI Code : 103504
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+06/01/2025   SIP Instalment              3500.00  12.963  270.0000  12.963 [Ref: KMP0001]
+21/01/2025   Purchase - Lumpsum          3500.00  12.868  272.0000  25.831 [Ref: KMP0002]
+06/02/2025   SIP Instalment              3500.00  12.774  274.0000  38.605 [Ref: KMP0003]
+21/02/2025   Purchase - Lumpsum          3500.00  12.681  276.0000  51.286 [Ref: KMP0004]
+06/03/2025   SIP Instalment              3500.00  12.590  278.0000  63.876 [Ref: KMP0005]
+21/03/2025   Purchase - Lumpsum          3500.00  12.500  280.0000  76.376 [Ref: KMP0006]
+06/04/2025   SIP Instalment              3500.00  12.411  282.0000  88.787 [Ref: KMP0007]
+21/04/2025   Purchase - Lumpsum          3500.00  12.324  284.0000  101.111 [Ref: KMP0008]
+06/05/2025   SIP Instalment              3500.00  12.238  286.0000  113.349 [Ref: KMP0009]
+21/05/2025   Purchase - Lumpsum          3500.00  12.153  288.0000  125.502 [Ref: KMP0010]
+06/06/2025   SIP Instalment              3500.00  12.069  290.0000  137.571 [Ref: KMP0011]
+21/06/2025   Purchase - Lumpsum          3500.00  11.986  292.0000  149.557 [Ref: KMP0012]
+
+Closing Balance : 149.557 units as on 30/06/2025   Market Value : Rs 43969.76   NAV : Rs 294.0000

@@ -1,0 +1,103 @@
+{
+  "fixtureId": "cams-overlap-jan-jun",
+  "title": "Statement 2 of an incremental-import pair: cumulative Jan-Jun (Jan-Mar transactions repeated + Apr-Jun new)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040001400",
+      "holderName": "TARUN CHOPRA",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 6,
+  "transactions": [
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-01-10",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500",
+      "nav": "119.7600",
+      "sourceReference": "OVL0001"
+    },
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.200",
+      "nav": "121.3600",
+      "sourceReference": "OVL0002"
+    },
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-03-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.500",
+      "nav": "123.4600",
+      "sourceReference": "OVL0003"
+    },
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-04-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.800",
+      "nav": "125.6300",
+      "sourceReference": "OVL0004"
+    },
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-05-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.900",
+      "nav": "128.5300",
+      "sourceReference": "OVL0005"
+    },
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-06-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.100",
+      "nav": "131.2300",
+      "sourceReference": "OVL0006"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040001400",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "282.000",
+      "value": "38041.80",
+      "nav": "134.9000"
+    }
+  ],
+  "notes": null
+}

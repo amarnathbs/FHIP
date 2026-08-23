@@ -1,0 +1,466 @@
+[
+  {
+    "id": "TC001",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.8392960662525879,
+      "years": 9.005479452054795,
+      "cagr": 0.07001002307221116
+    }
+  },
+  {
+    "id": "TC002",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.6393333333333333,
+      "years": 1.0
+    }
+  },
+  {
+    "id": "TC003",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.7413642384105961,
+      "years": 3.0027397260273974,
+      "cagr": 0.20288269533154324
+    }
+  },
+  {
+    "id": "TC004",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.9513082437275984,
+      "years": 1.0
+    }
+  },
+  {
+    "id": "TC005",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 1.4918098159509205,
+      "years": 9.005479452054795,
+      "cagr": 0.10670125723401958
+    }
+  },
+  {
+    "id": "TC006",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.010523364485981235,
+      "years": 4.002739726027397,
+      "cagr": 0.0026187264113588515
+    }
+  },
+  {
+    "id": "TC007",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.3315075376884422,
+      "years": 9.005479452054795,
+      "cagr": 0.03230386268226715
+    }
+  },
+  {
+    "id": "TC008",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.1360150375939848,
+      "years": 5.002739726027397,
+      "cagr": 0.025819026379857446
+    }
+  },
+  {
+    "id": "TC009",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.7402125000000002,
+      "years": 7.005479452054795,
+      "cagr": 0.08229305196856651
+    }
+  },
+  {
+    "id": "TC010",
+    "family": "cagr",
+    "result": {
+      "status": "ok",
+      "pointToPointReturn": 0.9171698113207547,
+      "years": 3.0027397260273974,
+      "cagr": 0.24203612208019454
+    }
+  },
+  {
+    "id": "TC11",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.1859248638153076,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC12",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.29779555320739737,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC13",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.14486710906028752,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC14",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": -0.1713063162565231,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC15",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.04412617087364197,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC16",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.9005018043518067,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC17",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": -0.08996613442897798,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC18",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": -0.1680644780397415,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC19",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.2687853074073792,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC20",
+    "family": "xirr",
+    "result": {
+      "status": "ok",
+      "rate": 0.24896428585052488,
+      "method": "oracle-pure-bisection-v1"
+    }
+  },
+  {
+    "id": "TC21",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.3516142207611732,
+      "subPeriodCount": 3
+    }
+  },
+  {
+    "id": "TC22",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.2257667749264527,
+      "subPeriodCount": 4
+    }
+  },
+  {
+    "id": "TC23",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.06641929004103786,
+      "subPeriodCount": 2
+    }
+  },
+  {
+    "id": "TC24",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.5182487341658106,
+      "subPeriodCount": 2
+    }
+  },
+  {
+    "id": "TC25",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": -0.07639901385436687,
+      "subPeriodCount": 3
+    }
+  },
+  {
+    "id": "TC26",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.8282520105250941,
+      "subPeriodCount": 4
+    }
+  },
+  {
+    "id": "TC27",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": -0.09241574317181023,
+      "subPeriodCount": 3
+    }
+  },
+  {
+    "id": "TC28",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": -0.1395237992593953,
+      "subPeriodCount": 2
+    }
+  },
+  {
+    "id": "TC29",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.33877480206263666,
+      "subPeriodCount": 2
+    }
+  },
+  {
+    "id": "TC30",
+    "family": "twrr",
+    "result": {
+      "status": "ok",
+      "twrr": 0.12382645615776733,
+      "subPeriodCount": 4
+    }
+  },
+  {
+    "id": "TC31",
+    "family": "blendedBenchmark",
+    "result": {
+      "status": "ok",
+      "blendedReturn": -0.054954772884899694,
+      "coveragePct": 1.0
+    }
+  },
+  {
+    "id": "TC32",
+    "family": "blendedBenchmark",
+    "result": {
+      "status": "ok",
+      "blendedReturn": 0.014185167236434593,
+      "coveragePct": 1.0
+    }
+  },
+  {
+    "id": "TC33",
+    "family": "blendedBenchmark",
+    "result": {
+      "status": "ok",
+      "blendedReturn": 0.012867093052450818,
+      "coveragePct": 1.0
+    }
+  },
+  {
+    "id": "TC34",
+    "family": "blendedBenchmark",
+    "result": {
+      "status": "ok",
+      "blendedReturn": 0.04387281813576793,
+      "coveragePct": 1.0
+    }
+  },
+  {
+    "id": "TC35",
+    "family": "blendedBenchmark",
+    "result": {
+      "status": "ok",
+      "blendedReturn": -0.08686526459394384,
+      "coveragePct": 1.0
+    }
+  },
+  {
+    "id": "TC36",
+    "family": "activeReturn",
+    "result": {
+      "status": "ok",
+      "activeReturn": 0.205177
+    }
+  },
+  {
+    "id": "TC37",
+    "family": "activeReturn",
+    "result": {
+      "status": "ok",
+      "activeReturn": 0.106599
+    }
+  },
+  {
+    "id": "TC38",
+    "family": "activeReturn",
+    "result": {
+      "status": "ok",
+      "activeReturn": 0.16988
+    }
+  },
+  {
+    "id": "TC39",
+    "family": "activeReturn",
+    "result": {
+      "status": "ok",
+      "activeReturn": -0.011319000000000001
+    }
+  },
+  {
+    "id": "TC40",
+    "family": "activeReturn",
+    "result": {
+      "status": "ok",
+      "activeReturn": 0.04581
+    }
+  },
+  {
+    "id": "TC41",
+    "family": "riskBundle",
+    "result": {
+      "annualisedVolatility": 0.12649815390142077,
+      "beta": 0.3113312341989579,
+      "trackingError": 0.1474838763351139,
+      "sharpe": 1.9060570305958666,
+      "maxDrawdown": -0.048264586048717306,
+      "status": "ok"
+    }
+  },
+  {
+    "id": "TC42",
+    "family": "riskBundle",
+    "result": {
+      "annualisedVolatility": 0.156859656163106,
+      "beta": -0.4803305966111412,
+      "trackingError": 0.24273692375410838,
+      "sharpe": 0.6071832241321528,
+      "maxDrawdown": -0.1224203846742632,
+      "status": "ok"
+    }
+  },
+  {
+    "id": "TC43",
+    "family": "riskBundle",
+    "result": {
+      "annualisedVolatility": 0.13802057690625802,
+      "beta": -0.04610369245069749,
+      "trackingError": 0.17132247552782986,
+      "sharpe": 0.5720325428125693,
+      "maxDrawdown": -0.1093657185205138,
+      "status": "ok"
+    }
+  },
+  {
+    "id": "TC44",
+    "family": "riskBundle",
+    "result": {
+      "annualisedVolatility": 0.1605442677979277,
+      "beta": 0.3719911476243042,
+      "trackingError": 0.1713788665277633,
+      "sharpe": 1.2356095829835902,
+      "maxDrawdown": -0.06698507124197495,
+      "status": "ok"
+    }
+  },
+  {
+    "id": "TC45",
+    "family": "riskBundle",
+    "result": {
+      "annualisedVolatility": 0.15319124212271928,
+      "beta": 0.14799185912774973,
+      "trackingError": 0.1891712837082261,
+      "sharpe": -0.48684416565927163,
+      "maxDrawdown": -0.29826260805730376,
+      "status": "ok"
+    }
+  },
+  {
+    "id": "TC046",
+    "family": "xirr",
+    "result": {
+      "status": "unavailable",
+      "reason": "ALL_SAME_SIGN"
+    }
+  },
+  {
+    "id": "TC047",
+    "family": "twrr",
+    "result": {
+      "status": "unavailable",
+      "reason": "MISSING_BOUNDARY_VALUATION",
+      "detail": "2021-06-15"
+    }
+  },
+  {
+    "id": "TC048",
+    "family": "cagr",
+    "result": {
+      "status": "unavailable",
+      "reason": "ZERO_OR_NEGATIVE_BEGINNING_VALUE"
+    }
+  },
+  {
+    "id": "TC049",
+    "family": "riskBundle",
+    "result": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    }
+  },
+  {
+    "id": "TC050",
+    "family": "xirr",
+    "result": {
+      "status": "unavailable",
+      "reason": "INSUFFICIENT_HISTORY"
+    }
+  }
+]

@@ -1,0 +1,103 @@
+{
+  "fixtureId": "cams-sip-history",
+  "title": "Six-month SIP purchase history, single scheme",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040000400",
+      "holderName": "VIKRAM RAO",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 6,
+  "transactions": [
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-01-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750",
+      "nav": "119.7600",
+      "sourceReference": "SIP0001"
+    },
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.494",
+      "nav": "120.5000",
+      "sourceReference": "SIP0002"
+    },
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-03-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "42.052",
+      "nav": "118.9000",
+      "sourceReference": "SIP0003"
+    },
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-04-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.883",
+      "nav": "122.3000",
+      "sourceReference": "SIP0004"
+    },
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-05-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.968",
+      "nav": "125.1000",
+      "sourceReference": "SIP0005"
+    },
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-06-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.119",
+      "nav": "124.6300",
+      "sourceReference": "SIP0006"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040000400",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "246.266",
+      "value": "30692.13",
+      "nav": "124.6300"
+    }
+  ],
+  "notes": null
+}

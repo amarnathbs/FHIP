@@ -1,0 +1,23 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000400
+PAN: ABCDE0004F
+Name: VIKRAM RAO
+Holding Mode: SI
+
+AMC Name: Axis Mutual Fund
+Scheme Name: Axis Small Cap Fund - Growth (Direct Plan)
+ISIN: INF846K01EW2
+AMFI Code: 135944
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+05-Jan-2025   SIP Purchase                          5000.00  41.750  119.7600  41.750 [Ref: SIP0001]
+05-Feb-2025   SIP Purchase                          5000.00  41.494  120.5000  83.244 [Ref: SIP0002]
+05-Mar-2025   SIP Purchase                          5000.00  42.052  118.9000  125.296 [Ref: SIP0003]
+05-Apr-2025   SIP Purchase                          5000.00  40.883  122.3000  166.179 [Ref: SIP0004]
+05-May-2025   SIP Purchase                          5000.00  39.968  125.1000  206.147 [Ref: SIP0005]
+05-Jun-2025   SIP Purchase                          5000.00  40.119  124.6300  246.266 [Ref: SIP0006]
+
+Closing Unit Balance as on 30-Jun-2025 : 246.266 Units   Valuation : Rs. 30692.13   NAV as on 30-Jun-2025 : Rs. 124.6300
