@@ -223,3 +223,20 @@ export type FdhTransactionAllocationInput = z.infer<typeof fdhTransactionAllocat
 export type FdhTransactionLinkInput = z.infer<typeof fdhTransactionLinkSchema>;
 export type FdhDuplicateCandidateInput = z.infer<typeof fdhDuplicateCandidateSchema>;
 export type FdhRecurringTransactionInput = z.infer<typeof fdhRecurringTransactionSchema>;
+
+// ---------------------------------------------------------------------------
+// R8 — bounded review-decision inputs (spec sections 32, 53, 61). Neither
+// schema accepts the underlying match/detection facts themselves — only the
+// narrow decision migration 0067's triggers permit an authenticated user to
+// make (link: pending -> confirmed/rejected; series: candidate -> active,
+// active -> paused/ended, paused -> active/ended).
+// ---------------------------------------------------------------------------
+export const fdhTransactionLinkReviewSchema = z.object({
+  decision: z.enum(['confirm', 'reject']),
+});
+export type FdhTransactionLinkReviewInput = z.infer<typeof fdhTransactionLinkReviewSchema>;
+
+export const fdhRecurringSeriesReviewSchema = z.object({
+  decision: z.enum(['confirm', 'pause', 'resume', 'end']),
+});
+export type FdhRecurringSeriesReviewInput = z.infer<typeof fdhRecurringSeriesReviewSchema>;

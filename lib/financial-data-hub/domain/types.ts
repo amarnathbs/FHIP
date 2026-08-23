@@ -168,6 +168,16 @@ export interface FdhMerchant {
   active: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
+
+  // --- FDH-2 (migration 0052) — merchant-level LIKELIHOOD metadata only.
+  // Never asserts a specific transaction IS recurring; R8's recurring
+  // detection treats these as one input signal among several.
+  recurring_possible: boolean | null;
+  typical_frequency: string | null;
+  fixed_amount_expected: boolean | null;
+  variable_amount_possible: boolean | null;
+  recurring_type: string | null;
+  is_payment_processor: boolean | null;
 }
 
 export interface FdhMerchantAlias {
@@ -237,18 +247,48 @@ export type FdhRuleMatchDefinition =
   | { match_kind: 'description_contains'; needle_normalised: string; case_sensitive?: boolean }
   | { match_kind: 'institution_narrative'; institution_id: string; narrative_normalised: string }
   | { match_kind: 'source_provided_category'; source_category_key: string }
-  | { match_kind: 'account_scoped_default'; financial_account_id: string };
+  | { match_kind: 'account_scoped_default'; financial_account_id: string }
+  /** FDH-2 addition (`lib/financial-data-hub/validation/classification.ts`).
+   * Widened here in R8 — this domain type had drifted behind the Zod schema
+   * (which already supported it) since no consumer needed the full shape
+   * until now. */
+  | {
+      match_kind: 'narrative_pattern';
+      required_terms_normalised: string[];
+      excluded_terms_normalised?: string[];
+      source_context?: FdhDocumentType;
+      country_code?: FdhCountryCode;
+    }
+  /** FDH-2 addition. Never paired with a `classify` action. */
+  | { match_kind: 'payment_rail_narrative'; rail_key: string; narrative_terms_normalised: string[] };
 
-/** What a matching rule does. Also pure data. */
-export type FdhRuleActionDefinition = {
-  action_kind: 'classify';
-  economic_transaction_type?: FdhEconomicTransactionType;
-  category_id?: string;
-  subcategory_id?: string;
-  merchant_id?: string;
-  set_transfer_flag?: boolean;
-  set_subscription_flag?: boolean;
-};
+/** What a matching rule does. Also pure data. Widened in R8 to match the
+ * FDH-2-era Zod schema (`fdhRuleActionDefinitionSchema`), which already
+ * supported `flag_candidate`/`annotate_payment_rail` before any consumer
+ * needed the full shape. */
+export type FdhRuleActionDefinition =
+  | {
+      action_kind: 'classify';
+      economic_transaction_type?: FdhEconomicTransactionType;
+      category_id?: string;
+      subcategory_id?: string;
+      merchant_id?: string;
+      set_transfer_flag?: boolean;
+      set_subscription_flag?: boolean;
+    }
+  /** Structurally non-authoritative — never carries an economic type,
+   * category or subcategory (spec section 32/34: a rule may SUGGEST a
+   * transfer/settlement/investment-funding candidate, never COMMIT one). */
+  | {
+      action_kind: 'flag_candidate';
+      candidate_type:
+        | 'transfer_candidate'
+        | 'liability_settlement_candidate'
+        | 'investment_funding_candidate'
+        | 'possible_duplicate_review';
+      note?: string;
+    }
+  | { action_kind: 'annotate_payment_rail'; rail_key: string };
 
 // ---------------------------------------------------------------------------
 // User-owned data
@@ -461,6 +501,11 @@ export interface FdhTransaction extends FdhOwnership {
   transaction_type_hint: FdhTransactionTypeHint;
   parser_version_id: string | null;
   mapping_template_id: string | null;
+
+  // --- R8 (migration 0067) ---------------------------------------------
+  /** Which fdh_recurring_transactions series this row belongs to, if any.
+   * System-authoritative — an authenticated client may never write it. */
+  recurring_transaction_id: string | null;
 }
 
 export interface FdhTransactionAllocation {
@@ -491,6 +536,8 @@ export interface FdhTransactionLink {
   status: FdhLinkStatus;
   created_by_method: FdhLinkCreationMethod;
   user_confirmed: boolean;
+  /** R8 (migration 0067): structured deterministic evidence for the link. */
+  match_evidence: Record<string, unknown> | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
 }
