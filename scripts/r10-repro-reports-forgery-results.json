@@ -1,0 +1,40 @@
+{
+  "userId": "c1c6b40e-2469-4b65-8986-5b5adb3b0304",
+  "results": [
+    {
+      "name": "ATTACK-1 forge report status/completeness/snapshot ref",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "insert or update on table \"reports\" violates foreign key constraint \"reports_financial_snapshot_id_fkey\""
+    },
+    {
+      "name": "ATTACK-2 forge report_sections financial numbers/narrative",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "FORGERY-SUCCEEDED",
+      "verdict": "UNEXPECTED",
+      "detail": "{\"id\":\"1dfbbe3b-273d-4cd7-9e80-97fa6635c0a6\",\"report_id\":\"2cfc2ac5-05ad-4ecd-a452-964c788fe92c\",\"user_id\":\"c1c6b40e-2469-4b65-8986-5b5adb3b0304\",\"section_code\":\"net_worth_summary\",\"section_title\":\"Net Worth Summary\",\"display_order\":1,\"section_status\":\"included\",\"section_data_json\":{\"forged\":true,\"currency\":\"AUD\",\"netWorth\":99999999},\"narrative_text\":\"FORGED: you are a billionaire.\",\"chart_data_json\":null,\"source_references_json\":null,\"confidence_level\":null,\"limitation_text\":null,\"created_at\":\"2026-08-23T23:06:02.861931+00:00\"}"
+    },
+    {
+      "name": "ATTACK-3 forge report_snapshots provenance row",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "FORGERY-SUCCEEDED",
+      "verdict": "UNEXPECTED",
+      "detail": "{\"id\":\"b8b00fbd-9293-4377-9ec0-3e25c0ed197f\",\"report_id\":\"2cfc2ac5-05ad-4ecd-a452-964c788fe92c\",\"user_id\":\"c1c6b40e-2469-4b65-8986-5b5adb3b0304\",\"snapshot_type\":\"financial\",\"source_entity_id\":null,\"source_version\":\"forged-engine-9.9.9\",\"source_as_of_date\":null,\"payload_hash\":null,\"snapshot_metadata_json\":{\"forged\":true},\"created_at\":\"2026-08-23T23:06:03.609612+00:00\"}"
+    },
+    {
+      "name": "ATTACK-4 forge report_exports ready status + arbitrary storage_path",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "FORGERY-SUCCEEDED",
+      "verdict": "UNEXPECTED",
+      "detail": "{\"id\":\"f6773135-6591-499b-9a9d-2892b57e3bb6\",\"report_id\":\"2cfc2ac5-05ad-4ecd-a452-964c788fe92c\",\"requested_by_user_id\":\"c1c6b40e-2469-4b65-8986-5b5adb3b0304\",\"export_format\":\"pdf\",\"status\":\"ready\",\"storage_path\":\"c1c6b40e-2469-4b65-8986-5b5adb3b0304/2cfc2ac5-05ad-4ecd-a452-964c788fe92c/forged-not-a-real-render.pdf\",\"file_name\":\"forged.pdf\",\"file_size_bytes\":null,\"checksum\":null,\"renderer_version\":null,\"requested_at\":\"2026-08-23T23:06:03.839798+00:00\",\"completed_at\":null,\"expires_at\":null,\"download_count\":0,\"error_code\":null,\"render_token\":null,\"render_token_expires_at\":null}"
+    },
+    {
+      "name": "ATTACK-5 forge report_generation_runs audit outcome",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "FORGERY-SUCCEEDED",
+      "verdict": "UNEXPECTED",
+      "detail": "{\"id\":\"c68f7651-9ed2-4dfe-ab47-513326d43f72\",\"user_id\":\"c1c6b40e-2469-4b65-8986-5b5adb3b0304\",\"report_id\":null,\"job_id\":\"87183375-d721-450d-a9be-2026fc135ba0\",\"trigger_type\":\"manual\",\"started_at\":\"2026-08-23T23:06:04.087665+00:00\",\"completed_at\":null,\"input_versions\":null,\"output_status\":\"succeeded\",\"retry_count\":0,\"failure_details\":null,\"worker_version\":\"report-worker-1.0.0\"}"
+    }
+  ]
+}
