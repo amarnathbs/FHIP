@@ -187,18 +187,25 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     expect(/input_population|input_proposal|fdh_input_/.test(FDH_MIGRATION_SQL)).toBe(false);
   });
 
-  it('uses the service-role client ONLY in the three FDH-3 files documented to need it', () => {
+  it('uses the service-role client ONLY in the four FDH-3/R7 files documented to need it', () => {
     // FDH-1/FDH-2 used no service-role client anywhere (private storage and
-    // cross-user purge sweeps did not exist yet). FDH-3 introduces exactly
-    // three legitimate uses — see repositories/base.ts's module comment —
-    // and every one of them runs only after an explicit authenticated +
+    // cross-user purge sweeps did not exist yet). FDH-3 introduces three
+    // legitimate uses — see repositories/base.ts's module comment — and
+    // every one of them runs only after an explicit authenticated +
     // ownership check (storage.ts, auditLog.ts) or against a single
     // already-identified document row rather than a caller-supplied filter
-    // (purge.ts). No other file may reach for it.
+    // (purge.ts). R7 (migration 0064) adds a FOURTH: bankCsvProcessingService.ts
+    // writes the R7 authoritative detection/certification/dedup/reconciliation
+    // columns and inserts into the 5 tables migration 0064's triggers make
+    // engine-authoritative-insert-only — every call there is likewise preceded
+    // by an RLS-scoped ownership read and explicitly re-scoped by user_id (see
+    // that file's own module header and R7_SECURITY_VERIFICATION.md). No other
+    // file may reach for it.
     const FDH3_SERVICE_ROLE_FILES = [
       path.join(FDH_LIB, 'services', 'storage.ts'),
       path.join(FDH_LIB, 'services', 'auditLog.ts'),
       path.join(FDH_LIB, 'services', 'purge.ts'),
+      path.join(FDH_LIB, 'services', 'bankCsvProcessingService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {
@@ -206,11 +213,11 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       if (!usesServiceRole) continue;
       expect(
         FDH3_SERVICE_ROLE_FILES.includes(FDH_SOURCE_FILES[i]),
-        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the three approved FDH-3 files`,
+        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the four approved FDH-3/R7 files`,
       ).toBe(true);
       usedByApprovedFile += 1;
     }
-    // Proves this check is not vacuous — the three approved files really do
+    // Proves this check is not vacuous — the four approved files really do
     // use it, so a future removal of all service-role usage would be caught
     // by the "greater than 0" below just as much as a leak would be caught
     // by the assertion above.

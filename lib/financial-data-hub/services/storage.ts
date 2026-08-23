@@ -84,6 +84,23 @@ export async function createDocumentPreviewUrl(
   return { ok: true, url: data.signedUrl };
 }
 
+/**
+ * R7 (spec section 17) — the ONE path a trusted parser/service may read raw
+ * document bytes back for processing. Never exposed to a browser: only
+ * `bank-csv/*` server-side processing services call this, always after the
+ * caller has already verified ownership via an RLS-scoped query (identical
+ * discipline to every other function in this file).
+ */
+export async function downloadDocumentObject(
+  storageKey: string,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; message: string }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(FDH_SOURCE_DOCUMENTS_BUCKET).download(storageKey);
+  if (error || !data) return { ok: false, message: error?.message ?? 'could not download document' };
+  const arrayBuffer = await data.arrayBuffer();
+  return { ok: true, bytes: new Uint8Array(arrayBuffer) };
+}
+
 /** Purge step 2/3 (spec section 42-43): remove the object, then verify it is
  * actually gone. Never returns "purged" on a delete call alone — the caller
  * (`services/purge.ts`) always calls `verifyDocumentObjectAbsent` next and
