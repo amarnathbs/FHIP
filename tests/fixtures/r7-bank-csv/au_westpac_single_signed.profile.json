@@ -1,0 +1,14 @@
+{
+  "adapter_id": "au_westpac_single_signed_v1",
+  "delimiter": ",",
+  "header_row_index": 0,
+  "amount_convention": "single_signed",
+  "date_format": "DD/MM/YYYY",
+  "column_roles": {
+    "transaction_date": "Date",
+    "description": "Narrative",
+    "amount": "Amount",
+    "balance": "Balance",
+    "reference": "Serial"
+  }
+}
