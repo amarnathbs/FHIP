@@ -105,8 +105,15 @@ export function normalizeDescription(raw: string): string {
 
 /** Deterministic structural type hints (spec 40) — bounded, explainable
  * substring rules over the NORMALISED description. Never a final category,
- * never AI-derived (spec 41). Order matters: first match wins. */
-function inferTypeHint(descriptionClean: string, creditDebit: FdhCreditDebit): FdhTransactionTypeHint {
+ * never AI-derived (spec 41). Order matters: first match wins.
+ *
+ * EXPORTED (FDH-5 addition) — this is pure, source-agnostic structural
+ * logic (a description string + a direction in, a hint out) with nothing
+ * CSV-specific about it, so `bank-pdf/normalize.ts` calls this EXACT
+ * function rather than re-implementing the same substring rules a second
+ * time (spec 3's "reuse it" principle). No existing CSV behaviour changes —
+ * only the export visibility widens. */
+export function inferTypeHint(descriptionClean: string, creditDebit: FdhCreditDebit): FdhTransactionTypeHint {
   const d = descriptionClean.toLowerCase();
   if (/\batm\b|\bcash withdrawal\b/.test(d)) return 'atm_candidate';
   if (/\binterest\b|\bint\.?\s*credit\b/.test(d)) return 'interest_candidate';

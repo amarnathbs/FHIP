@@ -16,8 +16,25 @@ export const SUPPORTED_DATE_FORMATS = [
   'YYYY-MM-DD',
   'DD-MM-YYYY',
   'DD.MM.YYYY',
+  // FDH-5 ADDITION (spec section 28): AU/India bank PDF statements commonly
+  // print month-name dates ("10 Aug 2026", "10-Aug-2026") that no CSV export
+  // R7/FDH-4 certified ever used, so no PDF-only parallel date module is
+  // created — this shared module is EXTENDED additively instead (spec
+  // section 3's "reuse it" principle applies to shared utilities, not only
+  // to the dedup/reconciliation engines). No existing format's behaviour
+  // changes; `inferDateFormat()` (CSV auto-detection only) intentionally does
+  // NOT gain these two candidates — PDF adapters supply their date format
+  // explicitly from certified evidence (spec 27), exactly like a CSV
+  // adapter's own `dateFormat` field, never by locale-guessing.
+  'DD-Mon-YYYY',
+  'DD Mon YYYY',
 ] as const;
 export type SupportedDateFormat = (typeof SUPPORTED_DATE_FORMATS)[number];
+
+const MONTH_ABBREVIATIONS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+};
 
 export interface DateParseResult {
   ok: boolean;
@@ -91,6 +108,24 @@ export function parseDateWithFormat(raw: string, format: SupportedDateFormat): D
       const day = Number(m[1]);
       const month = Number(m[2]);
       const year = Number(m[3]);
+      return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
+    }
+    case 'DD-Mon-YYYY': {
+      const m = s.match(/^(\d{1,2})-([A-Za-z]{3,4})-(\d{4})$/);
+      if (!m) return fail;
+      const day = Number(m[1]);
+      const month = MONTH_ABBREVIATIONS[m[2].toLowerCase()];
+      const year = Number(m[3]);
+      if (!month) return fail;
+      return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
+    }
+    case 'DD Mon YYYY': {
+      const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,4})\s+(\d{4})$/);
+      if (!m) return fail;
+      const day = Number(m[1]);
+      const month = MONTH_ABBREVIATIONS[m[2].toLowerCase()];
+      const year = Number(m[3]);
+      if (!month) return fail;
       return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
     }
     default:
