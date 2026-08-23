@@ -1,6 +1,19 @@
 # R7 — Bank CSV Engine: Acceptance Report
 
-## R7-FINAL UPDATE (live DEV verification performed)
+## R7 — BANK CSV ENGINE
+## STATUS: TERMINAL UNCONDITIONAL FULL PASS
+
+**Final certified branch:** `feature/r7-live-dev-verification`
+**Final certified SHA:** `e042c81`
+**Date closed:** 2026-08-23
+
+The `reconciliation_status` forgery gap disclosed below (originally the sole reason for the `FAIL` verdict recorded at the time) has since been closed: migration `0065` was applied to DEV, and the original valid-FK attack was independently re-run live and confirmed blocked (fresh test user, real PostgREST PATCH, `400`/`P0001`, ground truth unforged). Full terminal record, including the honestly-preserved FAIL→closed lifecycle and the complete acceptance checklist: `docs/financial-data-hub/R7_TERMINAL_COMPLETION_REPORT.md`.
+
+**MAIN MERGE: NOT AUTHORISED BY THIS TASK. PRODUCTION: UNTOUCHED, NOT AUTHORISED BY THIS TASK.**
+
+---
+
+## R7-FINAL UPDATE (live DEV verification performed) — historical record, preserved as-is below
 
 Everything below this notice is the ORIGINAL acceptance report, written when live DEV verification was genuinely blocked (no DDL credential). That blocker is now resolved (migration 0064 confirmed live), and live DEV verification has now been PERFORMED for real — see `R7_FINAL_LIVE_DEV_VERIFICATION.md`, `R7_FINAL_SECURITY_VERIFICATION.md`, `R7_INDEPENDENT_LIVE_RECONCILIATION.md`.
 
