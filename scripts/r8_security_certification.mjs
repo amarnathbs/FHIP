@@ -103,8 +103,8 @@ console.log('--- Building baseline DB through migration 0066 (pre-fix, RED expec
 const dbBefore = await buildDb(66);
 await seedBaseline(dbBefore);
 
-console.log('--- Building full DB through migration 0067 (post-fix, GREEN expected) ---');
-const db = await buildDb(67);
+console.log('--- Building full DB through migration 0068 (post-fix, GREEN expected) ---');
+const db = await buildDb(68);
 await seedBaseline(db);
 
 // =============================================================================
