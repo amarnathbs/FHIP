@@ -12,6 +12,7 @@ import type {
   FdhCategory,
   FdhClassificationHistory,
   FdhClassificationRule,
+  FdhCsvMappingTemplate,
   FdhDataProvenance,
   FdhDataQualityResult,
   FdhDuplicateCandidate,
@@ -31,6 +32,7 @@ import type {
   FdhSubcategory,
   FdhTransaction,
   FdhTransactionAllocation,
+  FdhTransactionCorrection,
   FdhTransactionLink,
   FdhUserClassificationRule,
 } from '../domain/types';
@@ -43,6 +45,7 @@ import type {
   FdhIngestionJobInput,
   FdhStatementUploadCreateInput,
 } from '../validation/documents';
+import type { FdhDocumentAuditEvent, FdhUploadSession } from '../domain/types';
 import type {
   FdhDataProvenanceInput,
   FdhDataQualityResultInput,
@@ -76,6 +79,39 @@ export const ingestionJobsRepository = makeUserOwnedRepository<
   FdhIngestionJobInput
 >('fdh_ingestion_jobs');
 
+/** FDH-3 (migration 0058). A generic CRUD repository is appropriate here — a
+ * user may read, create and update (never re-parent) their own upload
+ * sessions through ordinary RLS-scoped queries; no service-role client is
+ * needed for this table. */
+export const uploadSessionsRepository = makeUserOwnedRepository<
+  FdhUploadSession,
+  Omit<FdhUploadSession, 'id' | 'user_id' | 'created_at' | 'completed_at' | 'expired_at'>
+>('fdh_upload_sessions');
+
+/**
+ * FDH-3 (migration 0058). READ-ONLY from the RLS-scoped client's point of
+ * view: `fdh_document_audit_events` carries no INSERT/UPDATE/DELETE policy
+ * for the authenticated role at all, so `makeUserOwnedRepository`'s write
+ * methods would simply fail against Postgres if exposed here — they are
+ * deliberately not exposed. Writing an event is
+ * `lib/financial-data-hub/services/auditLog.ts`'s job, via the service-role
+ * client, after the caller has already established ownership.
+ */
+export const documentAuditEventsRepository = {
+  table: 'fdh_document_audit_events' as const,
+
+  async listForUser(userId: string, limit = 200) {
+    const supabase = await createClient();
+    return supabase
+      .from('fdh_document_audit_events')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+      .returns<FdhDocumentAuditEvent[]>();
+  },
+};
+
 // --- Transactions -----------------------------------------------------------
 export const transactionsRepository = makeUserOwnedRepository<
   FdhTransaction,
@@ -95,7 +131,7 @@ export const transactionLinksRepository = makeUserOwnedRepository<
 export const duplicateCandidatesRepository = makeUserOwnedRepository<
   FdhDuplicateCandidate,
   FdhDuplicateCandidateInput
->('fdh_duplicate_candidates');
+>('fdh_duplicate_candidates', { hasUpdatedAtColumn: false });
 
 export const recurringTransactionsRepository = makeUserOwnedRepository<
   FdhRecurringTransaction,
@@ -151,6 +187,17 @@ export const evidenceLinksRepository = makeUserOwnedRepository<
   FdhEvidenceLink,
   FdhEvidenceLinkInput
 >('fdh_evidence_links');
+
+// --- R7 — Bank CSV Engine (migration 0064) -----------------------------------
+export const csvMappingTemplatesRepository = makeUserOwnedRepository<
+  FdhCsvMappingTemplate,
+  Omit<FdhCsvMappingTemplate, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+>('fdh_csv_mapping_templates');
+
+export const transactionCorrectionsRepository = makeUserOwnedRepository<
+  FdhTransactionCorrection,
+  Omit<FdhTransactionCorrection, 'id' | 'user_id' | 'created_at'>
+>('fdh_transaction_corrections', { hasUpdatedAtColumn: false });
 
 // --- Master data (read-only) ------------------------------------------------
 export const institutionsRepository = makeMasterDataRepository<FdhFinancialInstitution>(

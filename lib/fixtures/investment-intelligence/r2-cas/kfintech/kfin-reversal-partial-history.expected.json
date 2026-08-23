@@ -1,0 +1,55 @@
+{
+  "fixtureId": "kfin-reversal-partial-history",
+  "title": "A purchase reversed two days later; statement opens with a pre-existing balance not explained within it (partial history)",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-03-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654333/00",
+      "holderName": "SHWETA AGARWAL",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "7654333/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-03-18",
+      "canonicalType": "purchase",
+      "amount": "4000.00",
+      "units": "29.400",
+      "nav": "136.0500",
+      "sourceReference": "KREV0001"
+    },
+    {
+      "folioNumber": "7654333/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-03-20",
+      "canonicalType": "reversal",
+      "amount": "4000.00",
+      "units": "29.400",
+      "nav": "136.0500",
+      "sourceReference": "KREV0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654333/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "60.000",
+      "value": "7902.00",
+      "nav": "131.7000"
+    }
+  ],
+  "notes": null
+}

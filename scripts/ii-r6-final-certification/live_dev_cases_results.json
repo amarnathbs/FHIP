@@ -1,0 +1,99 @@
+{
+  "ranAt": "2026-08-22T02:43:53.384Z",
+  "results": [
+    {
+      "id": "LIVE-R6-001",
+      "description": "Simple realised equity gain (single lot, LTCG)",
+      "status": "PASS",
+      "detail": "independent: gainType=ltcg taxableGain=15000 | production: gainType=ltcg taxableGain=15000 | HTTP 200",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-001-DB",
+      "description": "Persisted ii_capital_gains_computations row matches (tenant, gain, rule version)",
+      "status": "PASS",
+      "detail": "db row: {\"id\":\"2dcdfc97-131e-4b21-8bbb-64ab6b8bd3e6\",\"user_id\":\"922d1025-a658-4d23-8729-fee0d9f75001\",\"disposal_transaction_id\":\"ab16b01f-16b4-45a2-a45f-6260f9779ed1\",\"lot_id\":\"24d010e1-c4f3-5ce7-861f-2f386fde0fee\",\"instrument_id\":\"40df5d0c-5d8b-4560-ae85-b29a5a6c57d4\",\"classification\":\"equity_oriented\",\"gain_type\":\"ltcg\",\"holding_days\":522,\"rule_version\":\"1961_act_pre_20240723\",\"rule_version_placeholder\":false,\"sale_value\":35000,\"cost_basis_used\":20000,\"taxable_gain\":15000,\"grandfathering_eligible\":false,\"grandfathering_basis_source\":\"not_applicable\",\"exit_load_pct\":null,\"exit_load_amount\":null,\"engine_version\":\"tax-engine-r6-p1-v2\",\"computed_at\":\"2026-08-22T02:43:10.324864+00:00\",\"note\":\"Equity-oriented, LTCG (holding period 522 days, anniversary 2024-01-10).\"}"
+    },
+    {
+      "id": "LIVE-R6-002",
+      "description": "Multi-lot FIFO (redemption spans 2 of 3 lots, oldest consumed first)",
+      "status": "PASS",
+      "detail": "independent: 2 lots consumed, totalGain=6600 | production: 2 lots, totalGain=6600",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-002-FIFO-ORDER",
+      "description": "FIFO consumption order verified independently (oldest lot first: 500 then 200, not reverse)",
+      "status": "PASS",
+      "detail": "units consumed per lot: [{\"acq\":\"2022-01-05\",\"units\":500},{\"acq\":\"2022-06-05\",\"units\":200}]"
+    },
+    {
+      "id": "LIVE-R6-003",
+      "description": "Partial multi-lot redemption leaves correct remaining-units balance",
+      "status": "PASS",
+      "detail": "independent: gain=3200, remaining=600 | production: gain=3200, remaining=600, status=partially_consumed",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-004",
+      "description": "Switch transaction: switch_out taxed as a disposal, switch_in opens a fresh lot with the switch date",
+      "status": "PASS",
+      "detail": "independent: switch-out gain=3000, new lot units=500 acq=2024-01-15 | production: switch-out gain=3000, new lot units=500 acq=2024-01-15 kind=switch_in",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-005",
+      "description": "Grandfathering: real 31-Jan-2018 FMV applied via the three-way comparison",
+      "status": "PASS",
+      "detail": "independent: basis=25/unit, gain=4000 | production: basisSource=fmv_grandfathered, gain=4000",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-006",
+      "description": "Specified/debt fund held 5+ years is STILL classified STCG (never LTCG), real classification row used",
+      "status": "PASS",
+      "detail": "independent: gainType=stcg (held 1978 days), gain=3000 | production: gainType=stcg, classification=debt_specified, gain=3000",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-007",
+      "description": "Multi-fund LTCG exemption threshold applied ONCE per taxpayer per FY, not once per fund",
+      "status": "PASS",
+      "detail": "independent: gross LTCG=160000, exemption=125000, taxable=35000 | production bucket: {\"financialYear\":\"FY2024-25\",\"exemptionThresholdInr\":125000,\"exemptionRuleVersion\":\"1961_act_post_20240723\",\"totalLtcgBeforeExemption\":160000,\"exemptionApplied\":125000,\"taxableLtcgAfterExemption\":35000,\"contributingDisposalCount\":2,\"unresolvedExcludedCount\":0}",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-008",
+      "description": "Mixed-lot exit load: one lot beyond the 365-day tier (0%), one within it (1%), computed per-lot not per-disposal",
+      "status": "PASS",
+      "detail": "independent: lot1(580d)=0%, lot2(92d)=1% | production: [{\"days\":580,\"pct\":0},{\"days\":92,\"pct\":1}]",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-009",
+      "description": "Direct vs Regular plan: two fully separate canonical positions, never merged, genuinely different gain outcomes",
+      "status": "PASS",
+      "detail": "independent: direct gain=30000.00, regular gain=28645.83 (direct > regular, reflecting lower TER) | production: direct=30000, regular=28645.829984000004",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-010",
+      "description": "INR-denominated tax figure is unaffected by AUD household/reporting currency — no currency conversion leaks into the tax computation",
+      "status": "PASS",
+      "detail": "independent: INR gain=9000 (untouched by any AUD conversion) | production: 9000",
+      "independentlyRecalculated": true
+    },
+    {
+      "id": "LIVE-R6-011",
+      "description": "Missing tax-profile: taxpayerContext genuinely UNKNOWN_PROFILE, never silently assumed resident",
+      "status": "PASS",
+      "detail": "taxpayerContext={\"taxpayerType\":\"UNKNOWN\",\"residencyStatus\":\"UNKNOWN\",\"estimateBasis\":\"UNKNOWN_PROFILE\",\"dtaaEvaluated\":false,\"profileComplete\":false,\"taxpayerTypeNote\":\"No explicit tax profile has been provided (taxpayer type / residency status). Residency-dependent treatment cannot be confirmed — flagged as unknown rather than assumed resident.\"}, taxProfileSource=none"
+    },
+    {
+      "id": "LIVE-R6-012",
+      "description": "Non-resident: genuine INDIA_DOMESTIC_LAW_ESTIMATE figure computed, DTAA explicitly NOT evaluated/fabricated, NRI scope disclaimer attached",
+      "status": "PASS",
+      "detail": "taxpayerContext={\"taxpayerType\":\"NON_RESIDENT_INDIVIDUAL\",\"residencyStatus\":\"NON_RESIDENT\",\"estimateBasis\":\"INDIA_DOMESTIC_LAW_ESTIMATE\",\"dtaaEvaluated\":false,\"profileComplete\":true,\"taxpayerTypeNote\":\"INDIA_DOMESTIC_LAW_ESTIMATE: Sections 111A/112A rates apply identically to residents and non-residents for equity/equity-oriented-fund disposals under Indian domestic law, so this figure reflects genuine Indian domestic-law tax treatment. DTAA_NOT_EVALUATED: any Double Taxation Avoidance Agreement between India and your country of tax residence that might reduce or eliminate this liability is NOT evaluated by this engine — consult a tax professional for treaty relief. Differential TDS (Section 195) is also not modelled.\"}, gain=1000 (expected 1000), residencyNote present=true"
+    }
+  ]
+}

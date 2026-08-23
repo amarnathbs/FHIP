@@ -1,0 +1,55 @@
+{
+  "fixtureId": "cams-fractional-units-large-values",
+  "title": "Large Indian-comma-formatted amounts with fractional (3-decimal) units",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040001100",
+      "holderName": "SANJAY GUPTA",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "1201040001100",
+      "scheme": "Mirae Asset Large Cap Fund - Growth (Direct Plan)",
+      "isin": "INF769K01AX1",
+      "amfiSchemeCode": "118825",
+      "transactionDateIso": "2025-01-08",
+      "canonicalType": "purchase",
+      "amount": "1250000.00",
+      "units": "8734.567",
+      "nav": "143.1290",
+      "sourceReference": "LG0001"
+    },
+    {
+      "folioNumber": "1201040001100",
+      "scheme": "Mirae Asset Large Cap Fund - Growth (Direct Plan)",
+      "isin": "INF769K01AX1",
+      "amfiSchemeCode": "118825",
+      "transactionDateIso": "2025-04-08",
+      "canonicalType": "purchase",
+      "amount": "875000.50",
+      "units": "5678.912",
+      "nav": "154.1110",
+      "sourceReference": "LG0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040001100",
+      "scheme": "Mirae Asset Large Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "14413.479",
+      "value": "2313363.38",
+      "nav": "160.5000"
+    }
+  ],
+  "notes": null
+}

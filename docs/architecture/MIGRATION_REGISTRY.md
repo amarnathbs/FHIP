@@ -12,8 +12,34 @@ node scripts/check-migration-versions.mjs   # reports the next free version
 The same check runs inside `npm test` (`tests/unit/migrationVersions.test.ts`)
 and fails the build if two active migrations ever share a version again.
 
-- **Next free version: `0058`**
-- Active migrations: 57 (`0001`-`0057`), one file per version
+**Cross-branch collision guard (added 2026-08-23, after the FDH-3/R6 `0058`
+collision).** The single-working-tree check above cannot catch two
+*different, unmerged* branches independently allocating the same version —
+that is exactly the failure mode that produced the `0058` collision
+documented below, and `check-migration-versions.mjs` could not have caught
+it because neither branch's checkout ever contained the other branch's file.
+Before merging any branch that carries a new migration:
+
+```sh
+npm run check:migrations:against-main
+# equivalent to:
+node scripts/check-migration-versions-against-branch.mjs --against=origin/main
+```
+
+This diffs `supabase/migrations` on your branch against `origin/main` (or
+any `--against=<ref>`) via `git ls-tree`/blob comparison — no checkout of the
+other ref required. A version claimed by two different filenames, or by the
+same filename with different content, fails the build; a version that
+matches byte-for-byte (legitimate shared ancestry after a real merge) does
+not. See `scripts/check-migration-versions-against-branch.mjs`,
+`tests/unit/migrationVersionsCrossBranch.test.ts`, and
+`docs/architecture/ADR_0058_FDH3_II_R6_RECONCILIATION.md` "Future
+prevention". This is currently a required **manual** pre-merge step (run it
+yourself before opening/merging a migration-carrying PR) — there is no CI
+pipeline in this repository to wire it into automatically yet.
+
+- **Next free version: `0064`**
+- Active migrations: 63 (`0001`-`0063`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -157,3 +183,94 @@ Delivered to the orchestrating session as complete migration SQL, per this
 project's established controlled manual-application process (Product Owner
 applies via the Supabase Dashboard SQL editor) — this agent has no DDL
 execution capability against any live environment.
+
+## FDH-3 — Secure Document Lifecycle (migration 0058)
+
+**Allocation.** Built from `origin/main` at `c868de6` (57 active migrations).
+The migration collision guard was run before allocation:
+`OK: 57 active migrations, one file per version, next version is 0058.` One
+file was allocated — `0058_fdh3_document_lifecycle_upload_storage.sql` — and
+the guard was re-run after: `OK: 58 active migrations, one file per version,
+next version is 0059.`
+
+| File | Tables created | Existing tables altered (additive) |
+| --- | --- | --- |
+| `0058_fdh3_document_lifecycle_upload_storage.sql` | `fdh_upload_sessions`, `fdh_document_audit_events` | `fdh_statement_uploads` (+7 columns: `storage_provider`, `uploaded_at`, `validated_at`, `processing_started_at`, `processing_completed_at`, `purge_requested_at`, `duplicate_of_document_id`), `fdh_ingestion_jobs` (+1 trigger, no new column) |
+
+**Additive-only, with two disclosed, deliberate exceptions:**
+1. `drop index if exists uq_fdh_uploads_user_file_hash` — replaces a hard
+   per-user uniqueness constraint (which would have made a second upload of
+   the same file fail outright) with a soft `duplicate_of_document_id`
+   pointer, because the FDH-3 spec requires duplicate detection to be a
+   user-visible FLAG, never an automatic block. FDH-1 shipped no upload
+   route, so this constraint was never exercised in production before FDH-3
+   discovered the conflict. See the migration's own "DUPLICATE DETECTION"
+   comment for the full rationale.
+2. Two `before insert or update` triggers are added to the EXISTING
+   `fdh_ingestion_jobs` table (FDH1-F1 tenant-referential-integrity
+   hardening, spec section 5) — no column changes, additive in the sense
+   that no existing write path is narrowed; only cross-tenant writes that
+   were never valid in the first place are now refused at the database
+   layer as well as by RLS.
+
+No `drop table`, no `drop column`, no `delete from`, no destructive
+`update` — verified by `tests/unit/fdh3SchemaContract.test.ts`.
+
+**Governance note — collision happened exactly as anticipated, now resolved
+(2026-08-23).** This section originally predicted that unmerged Investment
+Intelligence R6 branches had independently allocated `0058` too. What
+actually happened during the FDH-3 + Investment Intelligence R6 lineage
+reconciliation: both versions of "0058" — this file and
+`0058_ii_r6_p1_tax_engine.sql` on `feature/investment-intelligence-r6-
+security-final` — had by then already been independently applied to the
+SAME shared DEV database, each under its own original filename, before
+either branch was merged with the other. Product Owner decision (explicit,
+reasoned): **FDH-3 keeps `0058`** — it was built directly from canonical
+`main`'s own certified chain through `0057`, giving it the stronger claim
+as the natural continuation of that lineage, whereas R6's branch had forked
+from an earlier ancestor of `main` that predates FDH-3's fork point.
+Investment Intelligence R6's entire displaced 5-migration chain (originally
+`0058`-`0062`) was shifted forward by one slot each, to `0059`-`0063` — see
+the Investment Intelligence R6 section below and
+`docs/database-reconciliation/0058_CANONICAL_LINEAGE_DECISION.md` for the
+full reasoning. This is the fifth occurrence of this collision class in
+this project (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`).
+
+**Status: applied to DEV (2026-08-23) and independently re-verified live**
+(see `financial_data_hub_fdh3` memory / `FDH3_COMPLETION_REPORT.md`). The
+private storage bucket (`fdh-source-documents`) was already live in DEV
+before this migration — created via the Storage Admin API
+(`scripts/fdh3_create_storage_bucket.mjs`), independently of the SQL
+migration. Once this migration applied, the `storage.objects` SELECT
+policy, the two new tables, and the two FDH1-F1 triggers all went live and
+were re-verified against real DEV data: real cross-tenant storage read/
+delete attempts correctly blocked (404/403, ground-truth confirmed
+untouched), and a real cross-tenant `fdh_upload_sessions` insert correctly
+rejected by the FDH1-F1 trigger while the same-tenant case correctly
+succeeded.
+
+## Investment Intelligence R6 (migrations `0059`-`0063`, originally `0058`-`0062`)
+
+Displaced by the collision above and shifted forward by one slot each
+during the same reconciliation (2026-08-23). SQL content byte-identical to
+the original files in every case except the renumbering headers and a
+handful of internal prose cross-references between the five files
+themselves (updated for accuracy, not functionally load-bearing).
+
+| Current file | Originally | Purpose |
+| --- | --- | --- |
+| `0059_ii_r6_p1_tax_engine.sql` | `0058_ii_r6_p1_tax_engine.sql` | R6-P1 tax-lot/FIFO schema (4 tables + seed) |
+| `0060_ii_r6_final_reference_seed.sql` | `0059_ii_r6_final_reference_seed.sql` | R6-FINAL reference-data seed |
+| `0061_ii_r6_final_tax_profile.sql` | `0060_ii_r6_final_tax_profile.sql` | New `ii_tax_profiles` table |
+| `0062_ii_r6_final_rls_forgery_fix.sql` | `0061_ii_r6_final_rls_forgery_fix.sql` | Same-user UPDATE/DELETE forgery fix |
+| `0063_ii_r6_debt_fund_fix_reference_seed.sql` | `0062_ii_r6_debt_fund_fix_reference_seed.sql` | Debt-fund acquisition-date rule metadata sync |
+
+**Status: all five already applied to DEV under their original numbers**
+(confirmed independently live multiple times across this project's history
+under those original filenames — see `investment_intelligence_r6` memory).
+This renumbering is a pure repository-bookkeeping fix: DEV was never
+tracking a filename, only the SQL text it already ran, and that SQL is
+unchanged here. **No re-application to DEV is needed or intended for these
+five files** — they are already live under their effects, just now
+correctly numbered in the repository so a fresh clean-rebuild replay is
+deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).

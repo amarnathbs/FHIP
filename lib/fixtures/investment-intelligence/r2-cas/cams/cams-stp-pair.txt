@@ -1,0 +1,29 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000900
+PAN: ABCDE0009F
+Name: MEERA PILLAI
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+01-Feb-2025   STP Out To Nippon India Small Cap Fund  3000.00  22.420  133.8300  127.580 [Ref: STP0001OUT]
+
+Closing Unit Balance as on 30-Jun-2025 : 127.580 Units   Valuation : Rs. 17210.54   NAV as on 30-Jun-2025 : Rs. 134.9000
+
+AMC Name: Nippon India Mutual Fund
+Scheme Name: Nippon India Small Cap Fund - Growth (Direct Plan)
+ISIN: INF204K01UN3
+AMFI Code: 118778
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+01-Feb-2025   STP In From HDFC Flexi Cap Fund       3000.00  27.200  110.2900  27.200 [Ref: STP0001IN]
+
+Closing Unit Balance as on 30-Jun-2025 : 27.200 Units   Valuation : Rs. 3144.32   NAV as on 30-Jun-2025 : Rs. 115.6000

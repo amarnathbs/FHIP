@@ -1,0 +1,39 @@
+{
+  "fixtureKey": "04-discrepant-reconciliation",
+  "sourceKey": "kfintech",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "cas_statement",
+  "originalFilename": "kfintech-cas-household-a-discrepant.pdf",
+  "account": {
+    "accountType": "mf_folio",
+    "institutionName": "SBI Mutual Fund",
+    "folioNumber": "TESTFIX-FOLIO-000103"
+  },
+  "instrument": {
+    "instrumentName": "SBI Bluechip Fund - Growth (Direct Plan)",
+    "instrumentClass": "mutual_fund",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": [
+      { "scheme": "amfi_scheme_code", "value": "TESTFIX-AMFI-SBIBC-001", "countryCode": "IN" }
+    ]
+  },
+  "transactions": [
+    { "transactionType": "purchase", "transactionDate": "2025-02-01", "units": 200, "pricePerUnit": 50, "grossAmount": 10000, "sourceReference": "TESTFIX-TXN-000103-1" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-04-30",
+    "units": 200,
+    "value": 45000,
+    "qualityStatus": "warning"
+  },
+  "reconciliation": {
+    "discrepancyType": "value_mismatch",
+    "discrepancyDetails": {
+      "priorCertifiedValue": 11200,
+      "newStatementValue": 45000,
+      "note": "TEST FIXTURE — newer statement value not explained by transactions in between; opened for user/admin review, not auto-certified."
+    }
+  }
+}

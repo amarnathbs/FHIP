@@ -51,6 +51,16 @@ export const ADMIN_VISIBLE_STATEMENT_UPLOAD_COLUMNS = [
   'created_at',
   'updated_at',
   'approved_at',
+  // FDH-3 (migration 0058) additions. All five are pure processing-duration
+  // timestamps — the same operational category as created_at/updated_at/
+  // approved_at above, and no more identifying. storage_provider is a
+  // constant today ('supabase_storage') and carries no path or key.
+  'storage_provider',
+  'uploaded_at',
+  'validated_at',
+  'processing_started_at',
+  'processing_completed_at',
+  'purge_requested_at',
 ] as const satisfies readonly (keyof FdhStatementUpload)[];
 
 export type AdminVisibleStatementUploadColumn =
@@ -78,6 +88,8 @@ export const ADMIN_FORBIDDEN_STATEMENT_UPLOAD_COLUMNS: Record<string, string> = 
   file_size_bytes: 'Not needed operationally; a size is a weak content fingerprint.',
   purge_reason: 'Free text; may contain a support-conversation detail about the user.',
   last_purge_error_sanitised: 'Free text; sanitisation is best-effort, so it is not admin-visible.',
+  // FDH-3 (migration 0058) addition.
+  duplicate_of_document_id: "Joins to another of the user's own documents; reveals upload history shape.",
 };
 
 /**
@@ -98,6 +110,11 @@ export const ADMIN_NO_STANDING_ACCESS_TABLES = [
   'fdh_data_provenance',
   'fdh_evidence_links',
   'fdh_financial_accounts',
+  // FDH-3 (migration 0058) additions. Upload sessions carry an opaque
+  // storage_key; audit events carry lifecycle metadata. Neither is an
+  // approved admin projection — an admin surface must not read either table.
+  'fdh_upload_sessions',
+  'fdh_document_audit_events',
 ] as const;
 
 /**

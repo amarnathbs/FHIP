@@ -1,0 +1,29 @@
+{
+  "fixtureKey": "06-term-deposit",
+  "sourceKey": "manual",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "manual_entry_record",
+  "originalFilename": "manual-term-deposit-household-a.json",
+  "account": {
+    "accountType": "bank_linked",
+    "institutionName": "HDFC Bank",
+    "accountNumberMasked": "XXXXXX4321"
+  },
+  "instrument": {
+    "instrumentName": "Bank Fixed Deposit (generic, India)",
+    "instrumentClass": "fixed_deposit",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": []
+  },
+  "transactions": [
+    { "transactionType": "purchase", "transactionDate": "2025-01-20", "units": null, "pricePerUnit": null, "grossAmount": 200000, "sourceReference": "TESTFIX-TXN-000105-1" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-03-31",
+    "units": 0,
+    "value": 203400,
+    "qualityStatus": "certified"
+  }
+}

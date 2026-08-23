@@ -1,0 +1,43 @@
+{
+  "fixtureId": "cams-redemption",
+  "title": "Partial redemption reducing a pre-existing holding",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040000500",
+      "holderName": "SUNIL MEHTA",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "1201040000500",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-04-15",
+      "canonicalType": "redemption",
+      "amount": "5000.00",
+      "units": "38.109",
+      "nav": "131.2000",
+      "sourceReference": "RED0001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040000500",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "161.891",
+      "value": "21839.10",
+      "nav": "134.9000"
+    }
+  ],
+  "notes": null
+}

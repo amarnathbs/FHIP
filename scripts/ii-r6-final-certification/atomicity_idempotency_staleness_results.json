@@ -1,0 +1,78 @@
+{
+  "ranAt": "2026-08-22T02:55:38.242Z",
+  "userId": "922d1025-a658-4d23-8729-fee0d9f75001",
+  "results": [
+    {
+      "id": "IDEMPOTENT-1",
+      "description": "Two consecutive identical tax/summary calls produce byte-identical disposalResults",
+      "status": "PASS",
+      "detail": "run1 vs run2 equal: true"
+    },
+    {
+      "id": "IDEMPOTENT-2",
+      "description": "Two consecutive identical tax/summary calls create NO duplicate ii_capital_gains_computations rows",
+      "status": "PASS",
+      "detail": "row count before=12, after 2 calls=12"
+    },
+    {
+      "id": "IDEMPOTENT-3",
+      "description": "Repeated calls create NO duplicate ii_tax_lots / ii_tax_lot_consumptions rows",
+      "status": "PASS",
+      "detail": "lots 14->14, consumptions 12->12"
+    },
+    {
+      "id": "ATOMICITY-1",
+      "description": "Partial-state precondition constructed: gains table empty for this user, lots table untouched",
+      "status": "PASS",
+      "detail": "gains rows now=0, lots rows=14"
+    },
+    {
+      "id": "ATOMICITY-2",
+      "description": "API response is UNAFFECTED by the missing persisted-gains rows — figures come from fresh recomputation, never a stale/partial DB read",
+      "status": "PASS",
+      "detail": "disposalResults returned: 12 (expected 12)"
+    },
+    {
+      "id": "ATOMICITY-3",
+      "description": "The gains-persistence gap is fully self-healed by the same call that served the correct API response — no manual repair needed",
+      "status": "PASS",
+      "detail": "rows restored: 12 (expected 12)"
+    },
+    {
+      "id": "STALENESS-TXN-CORRECTION",
+      "description": "Correcting a real transaction (price_per_unit) immediately changes the recomputed taxable gain by the expected amount — no stale cached figure survives",
+      "status": "PASS",
+      "detail": "before=15000, after=10000, expected delta=-5000, actual delta=-5000"
+    },
+    {
+      "id": "STALENESS-TXN-CORRECTION-RESTORE",
+      "description": "Reverting the correction reverts the recomputed figure back to the original (proves live recomputation both directions, not one-way caching)",
+      "status": "PASS",
+      "detail": "restored=15000, original=15000"
+    },
+    {
+      "id": "STALENESS-CLASSIFICATION-CHANGE",
+      "description": "Flipping a real ii_scheme_tax_classification row immediately changes the recomputed classification/gainType — no stale cached figure survives",
+      "status": "PASS",
+      "detail": "before=equity_oriented, after=unresolved, afterGain=null"
+    },
+    {
+      "id": "STALENESS-CLASSIFICATION-CHANGE-RESTORE",
+      "description": "Reverting the classification reverts the recomputed figure",
+      "status": "PASS",
+      "detail": "restored classification=equity_oriented"
+    },
+    {
+      "id": "STALENESS-PROFILE-CHANGE",
+      "description": "Tax-profile override changes taxpayerContext immediately on the very next call, and reverts immediately when the override is removed — no caching lag in either direction",
+      "status": "PASS",
+      "detail": "sequence: UNKNOWN_PROFILE -> INDIA_DOMESTIC_LAW_ESTIMATE -> UNKNOWN_PROFILE"
+    },
+    {
+      "id": "STALENESS-RULE-CHANGE",
+      "description": "Tax-rule change invalidation",
+      "status": "DISCLOSED-GAP",
+      "detail": "ii_tax_rule_versions is not read by the engine (confirmed via code search) — rule changes are code-level (ALL_RULE_VERSIONS + TAX_ENGINE_VERSION bump), not DB-driven, so there is no live DB-driven staleness scenario to demonstrate. See detail in R6_FINAL_LIVE_DEV_VERIFICATION.md."
+    }
+  ]
+}

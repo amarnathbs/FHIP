@@ -1,0 +1,29 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000800
+PAN: ABCDE0008F
+Name: ARJUN KAPOOR
+Holding Mode: SI
+
+AMC Name: ICICI Prudential Mutual Fund
+Scheme Name: ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)
+ISIN: INF109K01VQ1
+AMFI Code: 120716
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+20-Jan-2025   Purchase                              10000.00  74.400  134.4000  74.400 [Ref: DR0001D]
+
+Closing Unit Balance as on 30-Jun-2025 : 74.400 Units   Valuation : Rs. 10654.08   NAV as on 30-Jun-2025 : Rs. 143.2000
+
+AMC Name: ICICI Prudential Mutual Fund
+Scheme Name: ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)
+ISIN: INF109K01VR9
+AMFI Code: 120717
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+20-Jan-2025   Purchase                              10000.00  71.900  139.0800  71.900 [Ref: DR0001R]
+
+Closing Unit Balance as on 30-Jun-2025 : 71.900 Units   Valuation : Rs. 9958.15   NAV as on 30-Jun-2025 : Rs. 138.5000

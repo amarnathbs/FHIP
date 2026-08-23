@@ -1,0 +1,31 @@
+{
+  "fixtureKey": "05-nps-account",
+  "sourceKey": "manual",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "manual_entry_record",
+  "originalFilename": "manual-nps-tier1-household-a.json",
+  "account": {
+    "accountType": "retirement",
+    "institutionName": "NSDL - National Pension System",
+    "folioNumber": "TESTFIX-PRAN-000104"
+  },
+  "instrument": {
+    "instrumentName": "National Pension System Tier I - Equity (E)",
+    "instrumentClass": "other",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": [
+      { "scheme": "internal_provisional", "value": "TESTFIX-NPS-TIER1-E-001", "countryCode": "IN" }
+    ]
+  },
+  "transactions": [
+    { "transactionType": "purchase", "transactionDate": "2025-01-05", "units": null, "pricePerUnit": null, "grossAmount": 60000, "sourceReference": "TESTFIX-TXN-000104-1" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-03-31",
+    "units": 0,
+    "value": 63500,
+    "qualityStatus": "warning"
+  }
+}

@@ -1,0 +1,1305 @@
+{
+  "cases": {
+    "ACTTRANS-001": {
+      "costBasisUsed": 8500.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 23750.0,
+      "taxableGain": 15250.0
+    },
+    "ACTTRANS-002": {
+      "costBasisUsed": 8500.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 23750.0,
+      "taxableGain": 15250.0
+    },
+    "ACTTRANS-003": {
+      "costBasisUsed": 5292.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 5724.0,
+      "taxableGain": 432.0
+    },
+    "ACTTRANS-004": {
+      "costBasisUsed": 5292.0,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 5724.0,
+      "taxableGain": 432.0
+    },
+    "ACTTRANS-005": {
+      "costBasisUsed": 5250,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "saleValue": 73500,
+      "taxableGain": 68250
+    },
+    "ACTTRANS-006": {
+      "costBasisUsed": 5250,
+      "gainType": "ltcg",
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 73500,
+      "taxableGain": 68250
+    },
+    "AMBIG-001": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-002": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-003": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-004": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-005": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-006": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-007": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-008": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-009": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "AMBIG-010": {
+      "gainType": "unresolved",
+      "taxableGain": null
+    },
+    "BOUND-001": {
+      "anniversaryDate": "2022-04-01",
+      "holdingDays": 364,
+      "isLongTerm": false
+    },
+    "BOUND-002": {
+      "anniversaryDate": "2022-06-15",
+      "holdingDays": 366,
+      "isLongTerm": true
+    },
+    "BOUND-003": {
+      "anniversaryDate": "2021-02-28",
+      "holdingDays": 365,
+      "isLongTerm": false
+    },
+    "BOUND-004": {
+      "anniversaryDate": "2023-01-31",
+      "holdingDays": 364,
+      "isLongTerm": false
+    },
+    "BOUND-005": {
+      "anniversaryDate": "2020-12-01",
+      "holdingDays": 367,
+      "isLongTerm": true
+    },
+    "BOUND-006": {
+      "anniversaryDate": "2022-04-01",
+      "holdingDays": 365,
+      "isLongTerm": false
+    },
+    "BOUND-007": {
+      "anniversaryDate": "2022-06-15",
+      "holdingDays": 364,
+      "isLongTerm": false
+    },
+    "BOUND-008": {
+      "anniversaryDate": "2021-02-28",
+      "holdingDays": 366,
+      "isLongTerm": true
+    },
+    "BOUND-009": {
+      "anniversaryDate": "2023-01-31",
+      "holdingDays": 365,
+      "isLongTerm": false
+    },
+    "BOUND-010": {
+      "anniversaryDate": "2020-12-01",
+      "holdingDays": 365,
+      "isLongTerm": false
+    },
+    "BOUND-011": {
+      "anniversaryDate": "2022-04-01",
+      "holdingDays": 366,
+      "isLongTerm": true
+    },
+    "BOUND-012": {
+      "anniversaryDate": "2022-06-15",
+      "holdingDays": 365,
+      "isLongTerm": false
+    },
+    "BOUND-013": {
+      "anniversaryDate": "2021-02-28",
+      "holdingDays": 364,
+      "isLongTerm": false
+    },
+    "BOUND-014": {
+      "anniversaryDate": "2023-01-31",
+      "holdingDays": 366,
+      "isLongTerm": true
+    },
+    "BOUND-015": {
+      "anniversaryDate": "2020-12-01",
+      "holdingDays": 366,
+      "isLongTerm": false
+    },
+    "CROSSFY-001": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 90505.21,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 90505.21
+        },
+        "FY2026-27": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 84814.34,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 84814.34
+        }
+      }
+    },
+    "CROSSFY-002": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 100730.08,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 100730.08
+        },
+        "FY2027-28": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 80892.83,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 80892.83
+        }
+      }
+    },
+    "CROSSFY-003": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 70902.18,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 70902.18
+        },
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 87237.39,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 87237.39
+        }
+      }
+    },
+    "CROSSFY-004": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 74489.52,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 74489.52
+        },
+        "FY2026-27": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 84734.52,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 84734.52
+        }
+      }
+    },
+    "CROSSFY-005": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 99795.02,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 99795.02
+        },
+        "FY2027-28": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 67862.12,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 67862.12
+        }
+      }
+    },
+    "CROSSFY-006": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 85471.79,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 85471.79
+        },
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 89028.32,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 89028.32
+        }
+      }
+    },
+    "CROSSFY-007": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 94069.6,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 94069.6
+        },
+        "FY2026-27": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 85399.92,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 85399.92
+        }
+      }
+    },
+    "CROSSFY-008": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 130.91,
+          "totalLtcgBeforeExemption": 125130.91
+        },
+        "FY2027-28": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 82581.1,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 82581.1
+        }
+      }
+    },
+    "CROSSFY-009": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 83262.41,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 83262.41
+        },
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 5126.25,
+          "totalLtcgBeforeExemption": 130126.25
+        }
+      }
+    },
+    "CROSSFY-010": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 94851.71,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 94851.71
+        },
+        "FY2026-27": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 100405.59,
+          "exemptionRuleVersion": "2025_act_post_20260401",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 100405.59
+        }
+      }
+    },
+    "DEBT-001": {
+      "costBasisUsed": 9408.22,
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "saleValue": 9761.5,
+      "taxableGain": 353.28
+    },
+    "DEBT-002": {
+      "costBasisUsed": 4025.88,
+      "gainType": "stcg",
+      "holdingDays": 2191,
+      "saleValue": 2767.48,
+      "taxableGain": -1258.4
+    },
+    "DEBT-003": {
+      "costBasisUsed": 9324.61,
+      "gainType": "stcg",
+      "holdingDays": 1523,
+      "saleValue": 14334.11,
+      "taxableGain": 5009.5
+    },
+    "DEBT-004": {
+      "costBasisUsed": 14483.02,
+      "gainType": "stcg",
+      "holdingDays": 912,
+      "saleValue": 17407.44,
+      "taxableGain": 2924.42
+    },
+    "DEBT-005": {
+      "costBasisUsed": 2699.17,
+      "gainType": "stcg",
+      "holdingDays": 2374,
+      "saleValue": 5248.81,
+      "taxableGain": 2549.64
+    },
+    "DEBT-006": {
+      "costBasisUsed": 9812.28,
+      "gainType": "stcg",
+      "holdingDays": 1827,
+      "saleValue": 14404.48,
+      "taxableGain": 4592.2
+    },
+    "DEBT-007": {
+      "costBasisUsed": 4888.36,
+      "gainType": "stcg",
+      "holdingDays": 1522,
+      "saleValue": 4299.06,
+      "taxableGain": -589.3
+    },
+    "DEBT-008": {
+      "costBasisUsed": 2168.46,
+      "gainType": "stcg",
+      "holdingDays": 911,
+      "saleValue": 2208.18,
+      "taxableGain": 39.72
+    },
+    "DEBT-009": {
+      "costBasisUsed": 3591.36,
+      "gainType": "stcg",
+      "holdingDays": 1553,
+      "saleValue": 5543.62,
+      "taxableGain": 1952.26
+    },
+    "DEBT-010": {
+      "costBasisUsed": 4489.42,
+      "gainType": "stcg",
+      "holdingDays": 1645,
+      "saleValue": 5510.03,
+      "taxableGain": 1020.61
+    },
+    "DEBTPRE-001": {
+      "costBasisUsed": 12000,
+      "gainType": "ltcg",
+      "holdingDays": 1978,
+      "saleValue": 15000,
+      "taxableGain": 3000
+    },
+    "DEBTPRE-002": {
+      "costBasisUsed": 12000,
+      "gainType": "stcg",
+      "holdingDays": 730,
+      "saleValue": 15000,
+      "taxableGain": 3000
+    },
+    "DEBTPRE-003": {
+      "costBasisUsed": 5000,
+      "gainType": "ltcg",
+      "holdingDays": 943,
+      "saleValue": 6400,
+      "taxableGain": 1400
+    },
+    "DEBTPRE-004": {
+      "costBasisUsed": 6000,
+      "gainType": "stcg",
+      "holdingDays": 745,
+      "saleValue": 7200,
+      "taxableGain": 1200
+    },
+    "DEBTPRE-005": {
+      "costBasisUsed": 1800,
+      "gainType": "ltcg",
+      "holdingDays": 793,
+      "saleValue": 2200,
+      "taxableGain": 400
+    },
+    "DEBTPRE-006": {
+      "costBasisUsed": 1800,
+      "gainType": "stcg",
+      "holdingDays": 792,
+      "saleValue": 2200,
+      "taxableGain": 400
+    },
+    "DEBTPRE-007": {
+      "costBasisUsed": 6000,
+      "gainType": "stcg",
+      "holdingDays": 1095,
+      "saleValue": 7800,
+      "taxableGain": 1800
+    },
+    "DEBTPRE-008": {
+      "costBasisUsed": 6000,
+      "gainType": "ltcg",
+      "holdingDays": 1096,
+      "saleValue": 7800,
+      "taxableGain": 1800
+    },
+    "DEBTPRE-009": {
+      "costBasisUsed": 7500,
+      "gainType": "stcg",
+      "holdingDays": 731,
+      "saleValue": 9250,
+      "taxableGain": 1750
+    },
+    "DEBTPRE-010": {
+      "costBasisUsed": 7500,
+      "gainType": "ltcg",
+      "holdingDays": 732,
+      "saleValue": 9250,
+      "taxableGain": 1750
+    },
+    "EXIT-001": {
+      "applicableLoadPct": 2,
+      "exitLoadAmount": 298.66,
+      "holdingDays": 30
+    },
+    "EXIT-002": {
+      "applicableLoadPct": 2,
+      "exitLoadAmount": 451.72,
+      "holdingDays": 89
+    },
+    "EXIT-003": {
+      "applicableLoadPct": 2,
+      "exitLoadAmount": 369.6,
+      "holdingDays": 90
+    },
+    "EXIT-004": {
+      "applicableLoadPct": 1,
+      "exitLoadAmount": 293.43,
+      "holdingDays": 91
+    },
+    "EXIT-005": {
+      "applicableLoadPct": 1,
+      "exitLoadAmount": 130.68,
+      "holdingDays": 364
+    },
+    "EXIT-006": {
+      "applicableLoadPct": 1,
+      "exitLoadAmount": 382.03,
+      "holdingDays": 365
+    },
+    "EXIT-007": {
+      "applicableLoadPct": 0.5,
+      "exitLoadAmount": 125.23,
+      "holdingDays": 366
+    },
+    "EXIT-008": {
+      "applicableLoadPct": 0.5,
+      "exitLoadAmount": 189.69,
+      "holdingDays": 1094
+    },
+    "EXIT-009": {
+      "applicableLoadPct": 0.5,
+      "exitLoadAmount": 155.01,
+      "holdingDays": 1095
+    },
+    "EXIT-010": {
+      "applicableLoadPct": 0,
+      "exitLoadAmount": 0.0,
+      "holdingDays": 1096
+    },
+    "EXIT-011": {
+      "applicableLoadPct": 0,
+      "exitLoadAmount": 0.0,
+      "holdingDays": 2000
+    },
+    "EXIT-012": {
+      "applicableLoadPct": 2,
+      "exitLoadAmount": 378.92,
+      "holdingDays": 1
+    },
+    "EXIT-013": {
+      "applicableLoadPct": 2,
+      "exitLoadAmount": 260.7,
+      "holdingDays": 45
+    },
+    "EXIT-014": {
+      "applicableLoadPct": 0.5,
+      "exitLoadAmount": 189.33,
+      "holdingDays": 500
+    },
+    "EXIT-015": {
+      "applicableLoadPct": 0.5,
+      "exitLoadAmount": 56.45,
+      "holdingDays": 800
+    },
+    "FIFO-001": {
+      "byDisposal": {
+        "FIFO-001-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-07",
+              "costBasis": 24074.51,
+              "unitsConsumed": 316.52
+            },
+            {
+              "acquisitionDate": "2019-08-02",
+              "costBasis": 1728.9,
+              "unitsConsumed": 20.79
+            }
+          ],
+          "totalCostBasis": 25803.41,
+          "totalUnitsConsumed": 337.31
+        }
+      }
+    },
+    "FIFO-002": {
+      "byDisposal": {
+        "FIFO-002-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-06-17",
+              "costBasis": 23748.32,
+              "unitsConsumed": 258.64
+            },
+            {
+              "acquisitionDate": "2019-10-16",
+              "costBasis": 16252.39,
+              "unitsConsumed": 202.8
+            }
+          ],
+          "totalCostBasis": 40000.71,
+          "totalUnitsConsumed": 461.44
+        }
+      }
+    },
+    "FIFO-003": {
+      "byDisposal": {
+        "FIFO-003-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-06-21",
+              "costBasis": 8369.72,
+              "unitsConsumed": 85.65
+            },
+            {
+              "acquisitionDate": "2019-09-11",
+              "costBasis": 1103.39,
+              "unitsConsumed": 26.29
+            }
+          ],
+          "totalCostBasis": 9473.11,
+          "totalUnitsConsumed": 111.94
+        }
+      }
+    },
+    "FIFO-004": {
+      "byDisposal": {
+        "FIFO-004-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-06-05",
+              "costBasis": 4153.35,
+              "unitsConsumed": 126.05
+            }
+          ],
+          "totalCostBasis": 4153.35,
+          "totalUnitsConsumed": 126.05
+        }
+      }
+    },
+    "FIFO-005": {
+      "byDisposal": {
+        "FIFO-005-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-14",
+              "costBasis": 10572.21,
+              "unitsConsumed": 328.84
+            },
+            {
+              "acquisitionDate": "2019-05-25",
+              "costBasis": 11516.56,
+              "unitsConsumed": 366.07
+            }
+          ],
+          "totalCostBasis": 22088.77,
+          "totalUnitsConsumed": 694.91
+        }
+      }
+    },
+    "FIFO-006": {
+      "byDisposal": {
+        "FIFO-006-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-26",
+              "costBasis": 9146.24,
+              "unitsConsumed": 459.61
+            },
+            {
+              "acquisitionDate": "2019-06-24",
+              "costBasis": 637.85,
+              "unitsConsumed": 9.88
+            }
+          ],
+          "totalCostBasis": 9784.09,
+          "totalUnitsConsumed": 469.49
+        }
+      }
+    },
+    "FIFO-007": {
+      "byDisposal": {
+        "FIFO-007-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-11",
+              "costBasis": 7333.12,
+              "unitsConsumed": 267.73
+            }
+          ],
+          "totalCostBasis": 7333.12,
+          "totalUnitsConsumed": 267.73
+        }
+      }
+    },
+    "FIFO-008": {
+      "byDisposal": {
+        "FIFO-008-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-06",
+              "costBasis": 9813.02,
+              "unitsConsumed": 101.28
+            }
+          ],
+          "totalCostBasis": 9813.02,
+          "totalUnitsConsumed": 101.28
+        }
+      }
+    },
+    "FIFO-009": {
+      "byDisposal": {
+        "FIFO-009-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-02-21",
+              "costBasis": 971.12,
+              "unitsConsumed": 86.63
+            }
+          ],
+          "totalCostBasis": 971.12,
+          "totalUnitsConsumed": 86.63
+        }
+      }
+    },
+    "FIFO-010": {
+      "byDisposal": {
+        "FIFO-010-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-05-12",
+              "costBasis": 12025.08,
+              "unitsConsumed": 336.46
+            },
+            {
+              "acquisitionDate": "2019-11-15",
+              "costBasis": 3477.22,
+              "unitsConsumed": 73.39
+            }
+          ],
+          "totalCostBasis": 15502.3,
+          "totalUnitsConsumed": 409.85
+        }
+      }
+    },
+    "FIFO-011": {
+      "byDisposal": {
+        "FIFO-011-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-03-31",
+              "costBasis": 16651.8,
+              "unitsConsumed": 344.33
+            },
+            {
+              "acquisitionDate": "2019-09-01",
+              "costBasis": 6082.58,
+              "unitsConsumed": 168.82
+            }
+          ],
+          "totalCostBasis": 22734.38,
+          "totalUnitsConsumed": 513.15
+        }
+      }
+    },
+    "FIFO-012": {
+      "byDisposal": {
+        "FIFO-012-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-04-30",
+              "costBasis": 18925.26,
+              "unitsConsumed": 232.64
+            },
+            {
+              "acquisitionDate": "2019-06-29",
+              "costBasis": 10123.44,
+              "unitsConsumed": 261.25
+            }
+          ],
+          "totalCostBasis": 29048.7,
+          "totalUnitsConsumed": 493.89
+        }
+      }
+    },
+    "FIFO-013": {
+      "byDisposal": {
+        "FIFO-013-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-05-16",
+              "costBasis": 3674.59,
+              "unitsConsumed": 119.46
+            }
+          ],
+          "totalCostBasis": 3674.59,
+          "totalUnitsConsumed": 119.46
+        }
+      }
+    },
+    "FIFO-014": {
+      "byDisposal": {
+        "FIFO-014-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-07-09",
+              "costBasis": 26651.71,
+              "unitsConsumed": 398.56
+            }
+          ],
+          "totalCostBasis": 26651.71,
+          "totalUnitsConsumed": 398.56
+        }
+      }
+    },
+    "FIFO-015": {
+      "byDisposal": {
+        "FIFO-015-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-02-06",
+              "costBasis": 4756.69,
+              "unitsConsumed": 152.85
+            }
+          ],
+          "totalCostBasis": 4756.69,
+          "totalUnitsConsumed": 152.85
+        }
+      }
+    },
+    "FIFO-016": {
+      "byDisposal": {
+        "FIFO-016-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-07-12",
+              "costBasis": 3312.07,
+              "unitsConsumed": 322.5
+            }
+          ],
+          "totalCostBasis": 3312.07,
+          "totalUnitsConsumed": 322.5
+        }
+      }
+    },
+    "FIFO-017": {
+      "byDisposal": {
+        "FIFO-017-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-05-04",
+              "costBasis": 26523.87,
+              "unitsConsumed": 386.42
+            },
+            {
+              "acquisitionDate": "2019-09-08",
+              "costBasis": 7549.04,
+              "unitsConsumed": 336.26
+            },
+            {
+              "acquisitionDate": "2020-02-16",
+              "costBasis": 2428.6,
+              "unitsConsumed": 27.12
+            }
+          ],
+          "totalCostBasis": 36501.51,
+          "totalUnitsConsumed": 749.8
+        }
+      }
+    },
+    "FIFO-018": {
+      "byDisposal": {
+        "FIFO-018-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-07-03",
+              "costBasis": 1276.31,
+              "unitsConsumed": 81.92
+            },
+            {
+              "acquisitionDate": "2019-08-29",
+              "costBasis": 14426.91,
+              "unitsConsumed": 266.13
+            }
+          ],
+          "totalCostBasis": 15703.22,
+          "totalUnitsConsumed": 348.05
+        }
+      }
+    },
+    "FIFO-019": {
+      "byDisposal": {
+        "FIFO-019-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-06-11",
+              "costBasis": 8328.58,
+              "unitsConsumed": 390.28
+            },
+            {
+              "acquisitionDate": "2019-07-26",
+              "costBasis": 11278.28,
+              "unitsConsumed": 119.12
+            }
+          ],
+          "totalCostBasis": 19606.86,
+          "totalUnitsConsumed": 509.4
+        }
+      }
+    },
+    "FIFO-020": {
+      "byDisposal": {
+        "FIFO-020-disp-0": {
+          "consumedLots": [
+            {
+              "acquisitionDate": "2019-03-17",
+              "costBasis": 35281.73,
+              "unitsConsumed": 372.76
+            },
+            {
+              "acquisitionDate": "2019-09-24",
+              "costBasis": 4927.66,
+              "unitsConsumed": 233.76
+            }
+          ],
+          "totalCostBasis": 40209.39,
+          "totalUnitsConsumed": 606.52
+        }
+      }
+    },
+    "FYAGG-001": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 3,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 173275.02,
+          "totalLtcgBeforeExemption": 298275.02
+        }
+      }
+    },
+    "FYAGG-002": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 4,
+          "exemptionApplied": 106822.78,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 106822.78
+        }
+      }
+    },
+    "FYAGG-003": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 3,
+          "exemptionApplied": 100000,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 21991.88,
+          "totalLtcgBeforeExemption": 121991.88
+        }
+      }
+    },
+    "FYAGG-004": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 3,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 223954.8,
+          "totalLtcgBeforeExemption": 348954.8
+        }
+      }
+    },
+    "FYAGG-005": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 4,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 290068.27,
+          "totalLtcgBeforeExemption": 415068.27
+        }
+      }
+    },
+    "FYAGG-006": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 5,
+          "exemptionApplied": 100000,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 69544.2,
+          "totalLtcgBeforeExemption": 169544.2
+        }
+      }
+    },
+    "FYAGG-007": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 3,
+          "exemptionApplied": 14527.49,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 14527.49
+        }
+      }
+    },
+    "FYAGG-008": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 3,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 224242.24,
+          "totalLtcgBeforeExemption": 349242.24
+        }
+      }
+    },
+    "FYAGG-009": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 5,
+          "exemptionApplied": 100000,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 142699.42,
+          "totalLtcgBeforeExemption": 242699.42
+        }
+      }
+    },
+    "FYAGG-010": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 107192.21,
+          "totalLtcgBeforeExemption": 232192.21
+        }
+      }
+    },
+    "FYAGG-011": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 2,
+          "exemptionApplied": 90039.84,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 0.0,
+          "totalLtcgBeforeExemption": 90039.84
+        }
+      }
+    },
+    "FYAGG-012": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 4,
+          "exemptionApplied": 100000,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 65043.38,
+          "totalLtcgBeforeExemption": 165043.38
+        }
+      }
+    },
+    "FYAGG-013": {
+      "byFinancialYear": {
+        "FY2024-25": {
+          "contributingDisposalCount": 4,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 162168.59,
+          "totalLtcgBeforeExemption": 287168.59
+        }
+      }
+    },
+    "FYAGG-014": {
+      "byFinancialYear": {
+        "FY2025-26": {
+          "contributingDisposalCount": 5,
+          "exemptionApplied": 125000,
+          "exemptionRuleVersion": "1961_act_post_20240723",
+          "exemptionThresholdInr": 125000,
+          "taxableLtcgAfterExemption": 141167.07,
+          "totalLtcgBeforeExemption": 266167.07
+        }
+      }
+    },
+    "FYAGG-015": {
+      "byFinancialYear": {
+        "FY2023-24": {
+          "contributingDisposalCount": 5,
+          "exemptionApplied": 100000,
+          "exemptionRuleVersion": "1961_act_pre_20240723",
+          "exemptionThresholdInr": 100000,
+          "taxableLtcgAfterExemption": 322314.62,
+          "totalLtcgBeforeExemption": 422314.62
+        }
+      }
+    },
+    "GRAND-001": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 53.15
+    },
+    "GRAND-002": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 46.13
+    },
+    "GRAND-003": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 35.84
+    },
+    "GRAND-004": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 47.82
+    },
+    "GRAND-005": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 43.6
+    },
+    "GRAND-006": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 35.2
+    },
+    "GRAND-007": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 47.98
+    },
+    "GRAND-008": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisPerUnit": 41.3
+    },
+    "GRAND-009": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 17.23
+    },
+    "GRAND-010": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 49.95
+    },
+    "GRAND-011": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 36.8
+    },
+    "GRAND-012": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 48.73
+    },
+    "GRAND-013": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 47.44
+    },
+    "GRAND-014": {
+      "basisSource": "actual_cost",
+      "costBasisPerUnit": 52.23
+    },
+    "GRAND-015": {
+      "basisSource": "fmv_unavailable",
+      "costBasisPerUnit": 55.2
+    },
+    "GRANDBOUND-001": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisUsed": 5500,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9000,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-002": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 3000,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9000,
+      "taxableGain": 6000
+    },
+    "GRANDBOUND-003": {
+      "basisSource": "actual_cost",
+      "costBasisUsed": 6000,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9500,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-004": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 6000,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 9500,
+      "taxableGain": 3500
+    },
+    "GRANDBOUND-005": {
+      "basisSource": "fmv_grandfathered",
+      "costBasisUsed": 4000,
+      "grandfatheringEligible": true,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 4000,
+      "taxableGain": 0
+    },
+    "GRANDBOUND-006": {
+      "basisSource": "not_applicable",
+      "costBasisUsed": 2500,
+      "grandfatheringEligible": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "saleValue": 4000,
+      "taxableGain": 1500
+    },
+    "RATE-001": {
+      "ltcgExemptionThresholdInr": 100000,
+      "ltcgRatePct": 10,
+      "placeholder": false,
+      "ruleVersion": "1961_act_pre_20240723",
+      "stcgRatePct": 15
+    },
+    "RATE-002": {
+      "ltcgExemptionThresholdInr": 100000,
+      "ltcgRatePct": 10,
+      "placeholder": false,
+      "ruleVersion": "1961_act_pre_20240723",
+      "stcgRatePct": 15
+    },
+    "RATE-003": {
+      "ltcgExemptionThresholdInr": 100000,
+      "ltcgRatePct": 10,
+      "placeholder": false,
+      "ruleVersion": "1961_act_pre_20240723",
+      "stcgRatePct": 15
+    },
+    "RATE-004": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "stcgRatePct": 20
+    },
+    "RATE-005": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "stcgRatePct": 20
+    },
+    "RATE-006": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "stcgRatePct": 20
+    },
+    "RATE-007": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "1961_act_post_20240723",
+      "stcgRatePct": 20
+    },
+    "RATE-008": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "stcgRatePct": 20
+    },
+    "RATE-009": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "stcgRatePct": 20
+    },
+    "RATE-010": {
+      "ltcgExemptionThresholdInr": 125000,
+      "ltcgRatePct": 12.5,
+      "placeholder": false,
+      "ruleVersion": "2025_act_post_20260401",
+      "stcgRatePct": 20
+    }
+  }
+}

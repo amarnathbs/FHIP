@@ -43,8 +43,38 @@ import {
   isTransactionSafeToPurgeRaw,
 } from '../domain/privacy';
 import { toAdminOperationalMetadata } from '../constants/adminBoundary';
+import { isFdhDocumentUploadEnabled } from '../constants/featureFlags';
+import * as uploadLifecycle from './uploadLifecycle';
+import * as purge from './purge';
 
 export * as accountsRepositories from '../repositories';
+
+/**
+ * FDH-3 upload-lifecycle service surface (spec section 8/27). Unlike the
+ * decision-only surfaces below, these DO have real effects — they write
+ * storage bytes and rows — because FDH-3 is the phase that introduces
+ * document ingestion. See each function's own module comment in
+ * `./uploadLifecycle.ts` for its authorization discipline.
+ */
+export const documentUploadService = {
+  createUploadSession: uploadLifecycle.createUploadSession,
+  completeUpload: uploadLifecycle.completeUpload,
+  getDocumentStatus: uploadLifecycle.getDocumentStatus,
+  listDocuments: uploadLifecycle.listDocuments,
+  deleteDocument: uploadLifecycle.userDeleteDocument,
+  requestDocumentPreview: uploadLifecycle.requestDocumentPreview,
+  isUploadEnabled: isFdhDocumentUploadEnabled,
+};
+
+/** FDH-3 purge service surface (spec section 41-43, 99). See
+ * `./purge.ts`'s module comment for the invocation contract — no scheduler
+ * is wired up; this is called from `scripts/fdh3_run_purge_sweep.mjs`. */
+export const documentPurgeService = {
+  scheduleApprovedDocumentPurge: purge.scheduleApprovedDocumentPurge,
+  runPurgeAttempt: purge.runPurgeAttempt,
+  findDuePurges: purge.findDuePurges,
+  sweepAbandonedUploadSessions: purge.sweepAbandonedUploadSessions,
+};
 
 /**
  * Document lifecycle service surface.

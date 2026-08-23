@@ -1,0 +1,55 @@
+{
+  "fixtureId": "cams-reversal-partial-history",
+  "title": "A purchase reversed two days later; statement opens with a pre-existing balance not explained within it (partial history)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-03-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "1201040001200",
+      "holderName": "NEHA VERMA",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "1201040001200",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-03-12",
+      "canonicalType": "purchase",
+      "amount": "5000.00",
+      "units": "37.200",
+      "nav": "134.4000",
+      "sourceReference": "REV0001"
+    },
+    {
+      "folioNumber": "1201040001200",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-03-14",
+      "canonicalType": "reversal",
+      "amount": "5000.00",
+      "units": "37.200",
+      "nav": "134.4000",
+      "sourceReference": "REV0002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "1201040001200",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "120.000",
+      "value": "16188.00",
+      "nav": "134.9000"
+    }
+  ],
+  "notes": null
+}
