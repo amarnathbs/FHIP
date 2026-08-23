@@ -9,21 +9,27 @@ import { STATUS_LABELS, formatAdminDate, formatAdminDateTime } from '@/lib/resou
 // R1.4 (spec §67): specialist content types link to their own dedicated
 // editor from this read-only detail page, rather than forcing the generic
 // R1.3 editor (which never supported these content types to begin with).
-// Article/Guide/FHIP Explainer intentionally still have no Edit link here —
-// that gap pre-dates R1.4 (see the file header comment above) and is out of
-// this phase's scope to fix; noted in the R1.4 completion report.
+//
+// Article/Guide/FHIP Explainer route to the generic R1.3 editor
+// (/admin/resources/content/[id]/edit, ResourceEditor + WorkflowPanel) —
+// that editor has existed since R1.3, but this detail page never linked to
+// it for these 3 content types, so an admin landing here via "View" had no
+// way back into the editor (and thus no Submit-for-Review/Approve/Publish
+// controls) without manually typing /edit onto the URL. Closed here.
 const SPECIALIST_EDIT_ROUTES: Record<string, (id: string) => { href: string; label: string }> = {
   video: (id) => ({ href: `/admin/resources/videos/${id}/edit`, label: 'Edit Video' }),
   glossary: (id) => ({ href: `/admin/resources/glossary/${id}/edit`, label: 'Edit Glossary Definition' }),
   money_update: (id) => ({ href: `/admin/resources/money-updates/${id}/edit`, label: 'Edit Money Update' }),
   money_update_template: (id) => ({ href: `/admin/resources/money-updates/${id}/edit`, label: 'Edit Money Update Template' }),
+  article: (id) => ({ href: `/admin/resources/content/${id}/edit`, label: 'Edit Article' }),
+  guide: (id) => ({ href: `/admin/resources/content/${id}/edit`, label: 'Edit Guide' }),
+  fhip_explainer: (id) => ({ href: `/admin/resources/content/${id}/edit`, label: 'Edit FHIP Explainer' }),
 };
 
-// Read-only content detail view — spec §22-23, §61-63. NOT an editor: no
-// content_blocks are fetched or rendered here, and there is no Edit control
-// (content editing is explicitly R1.3+ scope, spec §19/§23 — "if Edit
-// belongs to R1.3, disable/hide it"; this build hides it entirely rather
-// than shipping a disabled button with nothing behind it yet).
+// Read-only content detail view — spec §22-23, §61-63. NOT an editor itself:
+// no content_blocks are fetched or rendered here. It links out to the real
+// editor (SPECIALIST_EDIT_ROUTES above, one entry per content_type) for
+// every type that has one, rather than duplicating editing UI on this page.
 export default async function ResourceContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireResourceAdminAccess();
   const { id } = await params;
@@ -67,7 +73,6 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
           {post.content_id ?? 'No content ID'} · <ResourceTypeBadge contentType={post.content_type} /> ·{' '}
           <ResourceJurisdictionBadge jurisdiction={post.jurisdiction} />
         </p>
-        {/* Content creation/editing is R1.3 scope — no Edit control here yet for Article/Guide/FHIP Explainer (spec §19/§23). */}
         {SPECIALIST_EDIT_ROUTES[post.content_type] && (
           <Link href={SPECIALIST_EDIT_ROUTES[post.content_type](post.id).href} className="mt-2 inline-block text-sm font-semibold text-trust hover:underline">
             {SPECIALIST_EDIT_ROUTES[post.content_type](post.id).label}
