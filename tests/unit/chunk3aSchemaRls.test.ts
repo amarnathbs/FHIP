@@ -49,8 +49,8 @@ function assertOwnerOnlyRls(sql: string, table: string) {
 }
 
 describe('Chunk 3a — new table RLS matches the established owner-only pattern', () => {
-  it('smsf_holdings (migration 0035)', () => {
-    const sql = readMigration('0035_smsf_structured_model.sql');
+  it('smsf_holdings (migration 0070)', () => {
+    const sql = readMigration('0070_smsf_structured_model.sql');
     expect(sql).toMatch(/create table smsf_holdings/i);
     // Every row must carry its own user_id — no table in this schema relies
     // on an implicit/joined ownership check.
@@ -58,8 +58,8 @@ describe('Chunk 3a — new table RLS matches the established owner-only pattern'
     assertOwnerOnlyRls(sql, 'smsf_holdings');
   });
 
-  it('retirement_contributions (migration 0036)', () => {
-    const sql = readMigration('0036_retirement_member_contribution_model.sql');
+  it('retirement_contributions (migration 0071)', () => {
+    const sql = readMigration('0071_retirement_member_contribution_model.sql');
     expect(sql).toMatch(/create table retirement_contributions/i);
     expect(sql).toMatch(/user_id uuid not null references auth\.users\(id\) on delete cascade/i);
     assertOwnerOnlyRls(sql, 'retirement_contributions');
@@ -74,11 +74,11 @@ describe('Chunk 3a — new table RLS matches the established owner-only pattern'
 describe('Chunk 3a — additive-only guarantees, verified textually', () => {
   it('none of the new migration files contain a DROP or destructive statement', () => {
     for (const file of [
-      '0033_master_item_category_metadata.sql',
-      '0034_master_item_category_metadata_seed.sql',
-      '0035_smsf_structured_model.sql',
-      '0036_retirement_member_contribution_model.sql',
-      '0037_india_retirement_catalogue.sql',
+      '0068_master_item_category_metadata.sql',
+      '0069_master_item_category_metadata_seed.sql',
+      '0070_smsf_structured_model.sql',
+      '0071_retirement_member_contribution_model.sql',
+      '0072_india_retirement_catalogue.sql',
     ]) {
       const sql = readMigration(file).toLowerCase();
       expect(sql, `${file} must not DROP anything`).not.toMatch(/\bdrop\s+(table|column)\b/);
@@ -87,8 +87,8 @@ describe('Chunk 3a — additive-only guarantees, verified textually', () => {
     }
   });
 
-  it('0033 uses "add column if not exists" for every new master_financial_items column (safe against a re-run)', () => {
-    const sql = readMigration('0033_master_item_category_metadata.sql');
+  it('0068 uses "add column if not exists" for every new master_financial_items column (safe against a re-run)', () => {
+    const sql = readMigration('0068_master_item_category_metadata.sql');
     const addColumnLines = sql.match(/add column[^,;]+/gi) ?? [];
     expect(addColumnLines.length).toBeGreaterThan(0);
     for (const line of addColumnLines) {
@@ -96,8 +96,8 @@ describe('Chunk 3a — additive-only guarantees, verified textually', () => {
     }
   });
 
-  it('0037 inserts India retirement items with "on conflict ... do nothing" (safe, additive)', () => {
-    const sql = readMigration('0037_india_retirement_catalogue.sql');
+  it('0072 inserts India retirement items with "on conflict ... do nothing" (safe, additive)', () => {
+    const sql = readMigration('0072_india_retirement_catalogue.sql');
     expect(sql).toMatch(/insert into master_financial_items/i);
     expect(sql).toMatch(/on conflict \(category, item_key\) do nothing/i);
     for (const key of ['epf', 'ppf', 'nps']) {

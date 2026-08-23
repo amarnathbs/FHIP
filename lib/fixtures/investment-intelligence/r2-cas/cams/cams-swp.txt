@@ -1,0 +1,20 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040001000
+PAN: ABCDE0010F
+Name: ROHAN JOSHI
+Holding Mode: SI
+
+AMC Name: SBI Mutual Fund
+Scheme Name: SBI Bluechip Fund - Growth (Regular Plan)
+ISIN: INF200K01UP0
+AMFI Code: 103504
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+01-Feb-2025   SWP Withdrawal                        2000.00  15.200  131.5000  284.800 [Ref: SWP0001]
+01-Mar-2025   SWP Withdrawal                        2000.00  15.300  130.5000  269.500 [Ref: SWP0002]
+01-Apr-2025   SWP Withdrawal                        2000.00  15.400  129.5000  254.100 [Ref: SWP0003]
+
+Closing Unit Balance as on 30-Jun-2025 : 254.100 Units   Valuation : Rs. 67107.81   NAV as on 30-Jun-2025 : Rs. 264.1000

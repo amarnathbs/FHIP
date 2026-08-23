@@ -261,10 +261,17 @@ test.describe('Admin navigation', () => {
   test.use({ storageState: ADMIN_AUTH, viewport: { width: 1440, height: 900 } });
 
   test('Admin item is visible for an admin user and opens the existing admin page', async ({ page }) => {
+    // "Admin" is now a collapsible section (matching the Forecasting
+    // dropdown pattern) nesting Benchmarks/Recommendations plus, for
+    // Resources-role admins, the Resources/Content/Workflow/Discovery
+    // groups — not a direct link itself.
     await page.goto('/dashboard');
-    const adminLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Admin', exact: true });
-    await expect(adminLink).toBeVisible();
-    await adminLink.click();
+    const adminToggle = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Admin', exact: true });
+    await expect(adminToggle).toBeVisible();
+    await adminToggle.click();
+    const benchmarksLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Benchmarks', exact: true });
+    await expect(benchmarksLink).toBeVisible();
+    await benchmarksLink.click();
     await expect(page).toHaveURL(/\/admin\/benchmarks/);
   });
 });

@@ -21,7 +21,7 @@ export interface MasterFinancialItem {
   // true even though this column isn't filtered on client-side there).
   is_active?: boolean;
   // Chunk 3a item 1 (Spec 1 §9 / Spec 2 §46) — category metadata added by
-  // migrations 0033/0034. Optional so this interface stays valid even if a
+  // migrations 0068/0069. Optional so this interface stays valid even if a
   // caller queries an older selection that omits them.
   requires_purchase_date?: boolean;
   supports_purchase_date?: boolean;
@@ -55,7 +55,7 @@ export async function listMasterItems(category: MasterItemCategory) {
 // Chunk 3b prerequisite fix (grid orphaned-master_item_key gap, see
 // components/grid/FinancialDataGrid.tsx's load()): a saved row's
 // master_item_key can point at a catalogue item that has since been
-// deprecated (is_active = false) — 0031's collectables/collectibles fix and
+// deprecated (is_active = false) — 0066's collectables/collectibles fix and
 // this sub-chunk's ~28 additional deprecations both create this situation.
 // The row itself is never deleted, so its label must still be resolvable
 // for display. This variant deliberately omits the is_active filter so the

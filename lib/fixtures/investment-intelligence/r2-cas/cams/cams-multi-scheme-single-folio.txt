@@ -1,0 +1,29 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000200
+PAN: ABCDE0002F
+Name: PRIYA NAIR
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Jan-2025   Purchase                              20000.00  166.940  119.7900  166.940 [Ref: TXN0101]
+
+Closing Unit Balance as on 30-Jun-2025 : 166.940 Units   Valuation : Rs. 22500.90   NAV as on 30-Jun-2025 : Rs. 134.8000
+
+AMC Name: SBI Mutual Fund
+Scheme Name: SBI Bluechip Fund - Growth (Regular Plan)
+ISIN: INF200K01UP0
+AMFI Code: 103504
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+15-Jan-2025   Purchase                              15000.00  62.100  241.5500  62.100 [Ref: TXN0102]
+
+Closing Unit Balance as on 30-Jun-2025 : 62.100 Units   Valuation : Rs. 16400.30   NAV as on 30-Jun-2025 : Rs. 264.1000

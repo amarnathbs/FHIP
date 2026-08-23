@@ -6,7 +6,7 @@ import { activeItemKeys, findOrphanedRecords, resolveOrphanedLabel } from '@/lib
 // master_financial_items row, or fell back to the custom-row path only
 // when master_item_key IS NULL — a saved row whose key points at a
 // deprecated item matched neither path and silently vanished from the
-// grid. This is the same gap Chunk 1's migration 0031 explicitly withheld
+// grid. This is the same gap Chunk 1's migration 0066 explicitly withheld
 // applying to DEV until it was fixed.
 describe('activeItemKeys', () => {
   it('includes only items with is_active !== false', () => {

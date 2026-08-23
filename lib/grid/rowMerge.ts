@@ -1,5 +1,5 @@
 // Chunk 3b prerequisite fix (the FinancialDataGrid.tsx orphaned-
-// master_item_key gap flagged by Chunk 1's migration 0031 disclosure and
+// master_item_key gap flagged by Chunk 1's migration 0066 disclosure and
 // AR-0's discovery doc): a saved row's master_item_key can point at a
 // catalogue item that has since been deprecated (is_active = false).
 // FinancialDataGrid.tsx's load() previously only rendered a saved row if
@@ -39,7 +39,7 @@ export function findOrphanedRecords<T extends MinimalSavedRecord>(savedRecords: 
 /**
  * Best-available display label for an orphaned row: the deprecated
  * catalogue item's own item_label if that row still exists (deprecated
- * items are never deleted, only is_active=false'd — see migration 0031's
+ * items are never deleted, only is_active=false'd — see migration 0066's
  * own discipline), otherwise the saved record's own name field (covers the
  * theoretical case where the catalogue row itself is gone entirely), and
  * finally the raw master_item_key as a last resort so the row is never

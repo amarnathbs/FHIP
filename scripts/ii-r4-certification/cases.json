@@ -1,0 +1,1693 @@
+[
+  {
+    "id": "TC001",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 1",
+    "input": {
+      "beginningValue": 483,
+      "beginningDate": "2014-01-20",
+      "endingValue": 888.38,
+      "endingDate": "2023-01-20"
+    }
+  },
+  {
+    "id": "TC002",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 2",
+    "input": {
+      "beginningValue": 180,
+      "beginningDate": "2012-04-03",
+      "endingValue": 295.08,
+      "endingDate": "2013-04-03"
+    }
+  },
+  {
+    "id": "TC003",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 3",
+    "input": {
+      "beginningValue": 755,
+      "beginningDate": "2010-11-22",
+      "endingValue": 1314.73,
+      "endingDate": "2013-11-22"
+    }
+  },
+  {
+    "id": "TC004",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 4",
+    "input": {
+      "beginningValue": 558,
+      "beginningDate": "2013-06-25",
+      "endingValue": 1088.83,
+      "endingDate": "2014-06-25"
+    }
+  },
+  {
+    "id": "TC005",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 5",
+    "input": {
+      "beginningValue": 326,
+      "beginningDate": "2011-10-23",
+      "endingValue": 812.33,
+      "endingDate": "2020-10-22"
+    }
+  },
+  {
+    "id": "TC006",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 6",
+    "input": {
+      "beginningValue": 535,
+      "beginningDate": "2011-10-15",
+      "endingValue": 540.63,
+      "endingDate": "2015-10-15"
+    }
+  },
+  {
+    "id": "TC007",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 7",
+    "input": {
+      "beginningValue": 597,
+      "beginningDate": "2014-06-03",
+      "endingValue": 794.91,
+      "endingDate": "2023-06-03"
+    }
+  },
+  {
+    "id": "TC008",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 8",
+    "input": {
+      "beginningValue": 798,
+      "beginningDate": "2012-11-04",
+      "endingValue": 906.54,
+      "endingDate": "2017-11-04"
+    }
+  },
+  {
+    "id": "TC009",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 9",
+    "input": {
+      "beginningValue": 800,
+      "beginningDate": "2012-11-09",
+      "endingValue": 1392.17,
+      "endingDate": "2019-11-10"
+    }
+  },
+  {
+    "id": "TC010",
+    "family": "cagr",
+    "description": "Lump-sum point-to-point / CAGR case 10",
+    "input": {
+      "beginningValue": 583,
+      "beginningDate": "2012-01-26",
+      "endingValue": 1117.71,
+      "endingDate": "2015-01-26"
+    }
+  },
+  {
+    "id": "TC11",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 11",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2015-06-07",
+          "amount": -2693
+        },
+        {
+          "date": "2015-07-10",
+          "amount": -4338
+        },
+        {
+          "date": "2015-12-21",
+          "amount": -1840
+        },
+        {
+          "date": "2016-07-17",
+          "amount": 10447.99
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC12",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 12",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2017-08-06",
+          "amount": -2917
+        },
+        {
+          "date": "2018-06-01",
+          "amount": -949
+        },
+        {
+          "date": "2019-03-26",
+          "amount": -3514
+        },
+        {
+          "date": "2019-10-07",
+          "amount": -3487
+        },
+        {
+          "date": "2020-02-15",
+          "amount": -3894
+        },
+        {
+          "date": "2020-11-11",
+          "amount": 23379.12
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC13",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 13",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2017-03-23",
+          "amount": -3565
+        },
+        {
+          "date": "2018-01-18",
+          "amount": -2953
+        },
+        {
+          "date": "2018-03-07",
+          "amount": -4271
+        },
+        {
+          "date": "2018-11-26",
+          "amount": -1747
+        },
+        {
+          "date": "2019-03-16",
+          "amount": -845
+        },
+        {
+          "date": "2019-07-07",
+          "amount": 16355.23
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC14",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 14",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2017-07-06",
+          "amount": -666
+        },
+        {
+          "date": "2017-08-05",
+          "amount": -3248
+        },
+        {
+          "date": "2018-05-07",
+          "amount": -4449
+        },
+        {
+          "date": "2018-11-28",
+          "amount": -892
+        },
+        {
+          "date": "2019-10-04",
+          "amount": -3299
+        },
+        {
+          "date": "2019-12-25",
+          "amount": 9655.3
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC15",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 15",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2019-10-12",
+          "amount": -4825
+        },
+        {
+          "date": "2020-05-11",
+          "amount": -3755
+        },
+        {
+          "date": "2021-02-09",
+          "amount": -2096
+        },
+        {
+          "date": "2021-07-28",
+          "amount": -2856
+        },
+        {
+          "date": "2022-01-26",
+          "amount": 14473.41
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC16",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 16",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2017-08-17",
+          "amount": -1437
+        },
+        {
+          "date": "2017-10-19",
+          "amount": -2258
+        },
+        {
+          "date": "2018-07-08",
+          "amount": 6125.57
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC17",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 17",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2018-08-06",
+          "amount": -4527
+        },
+        {
+          "date": "2018-10-31",
+          "amount": -1250
+        },
+        {
+          "date": "2019-06-29",
+          "amount": -4618
+        },
+        {
+          "date": "2020-05-10",
+          "amount": -4251
+        },
+        {
+          "date": "2021-03-02",
+          "amount": -1427
+        },
+        {
+          "date": "2021-09-01",
+          "amount": 13222.83
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC18",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 18",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2018-01-27",
+          "amount": -3931
+        },
+        {
+          "date": "2018-03-01",
+          "amount": -2120
+        },
+        {
+          "date": "2018-11-11",
+          "amount": -1685
+        },
+        {
+          "date": "2019-08-14",
+          "amount": 6046.44
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC19",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 19",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2015-09-14",
+          "amount": -4355
+        },
+        {
+          "date": "2015-10-31",
+          "amount": -2502
+        },
+        {
+          "date": "2016-07-06",
+          "amount": -2678
+        },
+        {
+          "date": "2017-04-11",
+          "amount": 13079.7
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC20",
+    "family": "xirr",
+    "description": "Irregular multi-flow XIRR case 20",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2017-02-08",
+          "amount": -4133
+        },
+        {
+          "date": "2017-04-30",
+          "amount": -4571
+        },
+        {
+          "date": "2017-12-25",
+          "amount": 10309.68
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC21",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 21",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 3122
+        },
+        {
+          "date": "2018-08-19",
+          "value": 3998.64
+        },
+        {
+          "date": "2019-01-18",
+          "value": 5822.35
+        },
+        {
+          "date": "2019-07-10",
+          "value": 6923.39
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-08-19",
+          "amount": 478.8
+        },
+        {
+          "date": "2019-01-18",
+          "amount": 909.52
+        },
+        {
+          "date": "2019-07-10",
+          "amount": 1242.17
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC22",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 22",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 2360
+        },
+        {
+          "date": "2018-05-30",
+          "value": 2519.63
+        },
+        {
+          "date": "2018-12-29",
+          "value": 3095.56
+        },
+        {
+          "date": "2019-03-22",
+          "value": 2842.39
+        },
+        {
+          "date": "2019-06-13",
+          "value": 2056.43
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-05-30",
+          "amount": 454.68
+        },
+        {
+          "date": "2018-12-29",
+          "amount": 334.07
+        },
+        {
+          "date": "2019-03-22",
+          "amount": -942.44
+        },
+        {
+          "date": "2019-06-13",
+          "amount": -915.1
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC23",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 23",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 4045
+        },
+        {
+          "date": "2018-04-13",
+          "value": 4316.7
+        },
+        {
+          "date": "2018-08-12",
+          "value": 3938.7
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-04-13",
+          "amount": 535.98
+        },
+        {
+          "date": "2018-08-12",
+          "amount": -986.5
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC24",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 24",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 1224
+        },
+        {
+          "date": "2018-09-14",
+          "value": 1849.9
+        },
+        {
+          "date": "2019-01-30",
+          "value": 2087.01
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-09-14",
+          "amount": 340.3
+        },
+        {
+          "date": "2019-01-30",
+          "amount": -190.24
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC25",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 25",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 4223
+        },
+        {
+          "date": "2018-07-15",
+          "value": 4953.28
+        },
+        {
+          "date": "2018-11-22",
+          "value": 5912.75
+        },
+        {
+          "date": "2019-07-27",
+          "value": 6553.37
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-07-15",
+          "amount": 418.17
+        },
+        {
+          "date": "2018-11-22",
+          "amount": 1540.24
+        },
+        {
+          "date": "2019-07-27",
+          "amount": 792.75
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC26",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 26",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 1434
+        },
+        {
+          "date": "2018-03-13",
+          "value": 1500.3
+        },
+        {
+          "date": "2018-08-17",
+          "value": 1913.28
+        },
+        {
+          "date": "2018-10-24",
+          "value": 1888.92
+        },
+        {
+          "date": "2019-03-13",
+          "value": 2459.62
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-03-13",
+          "amount": -256.71
+        },
+        {
+          "date": "2018-08-17",
+          "amount": 239.29
+        },
+        {
+          "date": "2018-10-24",
+          "amount": -213.72
+        },
+        {
+          "date": "2019-03-13",
+          "amount": 161.02
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC27",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 27",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 3582
+        },
+        {
+          "date": "2018-07-29",
+          "value": 4951.11
+        },
+        {
+          "date": "2019-04-14",
+          "value": 2689.28
+        },
+        {
+          "date": "2019-09-30",
+          "value": 2910.95
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-07-29",
+          "amount": 603.67
+        },
+        {
+          "date": "2019-04-14",
+          "amount": -1621.15
+        },
+        {
+          "date": "2019-09-30",
+          "amount": 601.03
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC28",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 28",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 4773
+        },
+        {
+          "date": "2018-08-11",
+          "value": 3407.55
+        },
+        {
+          "date": "2019-03-03",
+          "value": 3078.83
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-08-11",
+          "amount": -865.22
+        },
+        {
+          "date": "2019-03-03",
+          "amount": -196.56
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC29",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 29",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 3094
+        },
+        {
+          "date": "2018-08-22",
+          "value": 4216.19
+        },
+        {
+          "date": "2018-12-14",
+          "value": 4120.83
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-08-22",
+          "amount": 756.28
+        },
+        {
+          "date": "2018-12-14",
+          "amount": -926.75
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC30",
+    "family": "twrr",
+    "description": "Multi-sub-period TWRR case 30",
+    "input": {
+      "valuations": [
+        {
+          "date": "2018-01-01",
+          "value": 2668
+        },
+        {
+          "date": "2018-04-27",
+          "value": 2512.37
+        },
+        {
+          "date": "2018-08-25",
+          "value": 3153.91
+        },
+        {
+          "date": "2018-12-13",
+          "value": 3823.16
+        },
+        {
+          "date": "2019-07-25",
+          "value": 2922.85
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2018-04-27",
+          "amount": -515.69
+        },
+        {
+          "date": "2018-08-25",
+          "amount": 340.57
+        },
+        {
+          "date": "2018-12-13",
+          "amount": 810.34
+        },
+        {
+          "date": "2019-07-25",
+          "amount": -616.15
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC31",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 31",
+    "input": {
+      "periods": [
+        {
+          "periodStart": "2020-01-01",
+          "periodEnd": "2020-01-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.079271
+          }
+        },
+        {
+          "periodStart": "2020-01-31",
+          "periodEnd": "2020-03-01",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.072326
+          }
+        },
+        {
+          "periodStart": "2020-03-01",
+          "periodEnd": "2020-03-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.071093
+          }
+        },
+        {
+          "periodStart": "2020-03-31",
+          "periodEnd": "2020-04-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.065889
+          }
+        },
+        {
+          "periodStart": "2020-04-30",
+          "periodEnd": "2020-05-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.012196
+          }
+        },
+        {
+          "periodStart": "2020-05-30",
+          "periodEnd": "2020-06-29",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.021324
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC32",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 32",
+    "input": {
+      "periods": [
+        {
+          "periodStart": "2020-01-01",
+          "periodEnd": "2020-01-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.059559
+          }
+        },
+        {
+          "periodStart": "2020-01-31",
+          "periodEnd": "2020-03-01",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.078475
+          }
+        },
+        {
+          "periodStart": "2020-03-01",
+          "periodEnd": "2020-03-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.000017
+          }
+        },
+        {
+          "periodStart": "2020-03-31",
+          "periodEnd": "2020-04-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.011604
+          }
+        },
+        {
+          "periodStart": "2020-04-30",
+          "periodEnd": "2020-05-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.0509
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC33",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 33",
+    "input": {
+      "periods": [
+        {
+          "periodStart": "2020-01-01",
+          "periodEnd": "2020-01-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.02222
+          }
+        },
+        {
+          "periodStart": "2020-01-31",
+          "periodEnd": "2020-03-01",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.01922
+          }
+        },
+        {
+          "periodStart": "2020-03-01",
+          "periodEnd": "2020-03-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.006974
+          }
+        },
+        {
+          "periodStart": "2020-03-31",
+          "periodEnd": "2020-04-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.023488
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC34",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 34",
+    "input": {
+      "periods": [
+        {
+          "periodStart": "2020-01-01",
+          "periodEnd": "2020-01-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.078996,
+            "H1": 0.046556
+          }
+        },
+        {
+          "periodStart": "2020-01-31",
+          "periodEnd": "2020-03-01",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.053644,
+            "H1": -0.021579
+          }
+        },
+        {
+          "periodStart": "2020-03-01",
+          "periodEnd": "2020-03-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.018649,
+            "H1": 0.031596
+          }
+        },
+        {
+          "periodStart": "2020-03-31",
+          "periodEnd": "2020-04-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.026269,
+            "H1": 0.009186
+          }
+        },
+        {
+          "periodStart": "2020-04-30",
+          "periodEnd": "2020-05-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.056682,
+            "H1": 0.053308
+          }
+        },
+        {
+          "periodStart": "2020-05-30",
+          "periodEnd": "2020-06-29",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 0.4982,
+              "hasBenchmarkMapping": true
+            },
+            {
+              "instrumentId": "H1",
+              "weight": 0.5018,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.067271,
+            "H1": 0.028589
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC35",
+    "family": "blendedBenchmark",
+    "description": "Blended benchmark case 35",
+    "input": {
+      "periods": [
+        {
+          "periodStart": "2020-01-01",
+          "periodEnd": "2020-01-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.079936
+          }
+        },
+        {
+          "periodStart": "2020-01-31",
+          "periodEnd": "2020-03-01",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.039364
+          }
+        },
+        {
+          "periodStart": "2020-03-01",
+          "periodEnd": "2020-03-31",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": 0.010608
+          }
+        },
+        {
+          "periodStart": "2020-03-31",
+          "periodEnd": "2020-04-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.077386
+          }
+        },
+        {
+          "periodStart": "2020-04-30",
+          "periodEnd": "2020-05-30",
+          "weights": [
+            {
+              "instrumentId": "H0",
+              "weight": 1,
+              "hasBenchmarkMapping": true
+            }
+          ],
+          "benchmarkReturnsByInstrument": {
+            "H0": -0.055993
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC36",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 36",
+    "input": {
+      "portfolioMetric": 0.106404,
+      "benchmarkMetric": -0.098773,
+      "metricFamily": "TWRR"
+    }
+  },
+  {
+    "id": "TC37",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 37",
+    "input": {
+      "portfolioMetric": 0.116913,
+      "benchmarkMetric": 0.010314,
+      "metricFamily": "TWRR"
+    }
+  },
+  {
+    "id": "TC38",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 38",
+    "input": {
+      "portfolioMetric": 0.141108,
+      "benchmarkMetric": -0.028772,
+      "metricFamily": "TWRR"
+    }
+  },
+  {
+    "id": "TC39",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 39",
+    "input": {
+      "portfolioMetric": 0.011381,
+      "benchmarkMetric": 0.0227,
+      "metricFamily": "TWRR"
+    }
+  },
+  {
+    "id": "TC40",
+    "family": "activeReturn",
+    "description": "Active return (same-family) case 40",
+    "input": {
+      "portfolioMetric": 0.095465,
+      "benchmarkMetric": 0.049655,
+      "metricFamily": "TWRR"
+    }
+  },
+  {
+    "id": "TC41",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 41 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "input": {
+      "fundReturns": [
+        0.039989,
+        0.016745,
+        0.005068,
+        0.015565,
+        -0.036805,
+        0.005775,
+        -0.017571,
+        0.048674,
+        0.064875,
+        -0.001616,
+        -0.012162,
+        0.039043,
+        -0.024609,
+        -0.014685,
+        0.097476,
+        0.079323,
+        0.050992,
+        0.055815,
+        0.045778,
+        -0.019683,
+        0.011176,
+        0.045927
+      ],
+      "benchReturns": [
+        0.073393,
+        0.041688,
+        -0.000917,
+        -0.034036,
+        0.009472,
+        -0.014129,
+        -0.011525,
+        0.003594,
+        0.006646,
+        -0.069278,
+        0.068578,
+        0.007966,
+        -0.001112,
+        -0.044397,
+        0.023213,
+        0.057239,
+        -0.019283,
+        -0.014967,
+        0.047113,
+        -0.010914,
+        -0.005741,
+        -0.008586
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC42",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 42 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "input": {
+      "fundReturns": [
+        -0.033467,
+        0.062873,
+        0.047194,
+        -0.052022,
+        -0.007677,
+        0.005167,
+        0.066938,
+        -0.010363,
+        -0.0353,
+        -0.014694,
+        -0.067074,
+        0.066171,
+        0.011878,
+        0.048484,
+        0.008913,
+        0.061436,
+        0.078311,
+        -0.012438
+      ],
+      "benchReturns": [
+        0.028662,
+        0.042246,
+        -0.007602,
+        0.001894,
+        0.011792,
+        -0.028992,
+        -0.033044,
+        0.050151,
+        0.052343,
+        0.115468,
+        0.029658,
+        -0.035441,
+        0.048331,
+        0.012189,
+        0.023743,
+        -0.018678,
+        0.010115,
+        -0.018242
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC43",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 43 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "input": {
+      "fundReturns": [
+        0.020867,
+        0.013306,
+        -0.006957,
+        -0.042269,
+        0.015911,
+        0.041865,
+        -0.009855,
+        0.044733,
+        0.06355,
+        -0.041948,
+        0.003196,
+        0.007624,
+        0.030776,
+        0.021479,
+        -0.052332,
+        0.032071,
+        0.019032,
+        -0.049273,
+        -0.060082,
+        0.012452,
+        -0.005187,
+        0.070836,
+        0.012665,
+        0.019308,
+        -0.050541,
+        -0.006737,
+        0.053119,
+        0.005821,
+        0.081235,
+        -0.028385,
+        0.06062,
+        0.083755
+      ],
+      "benchReturns": [
+        0.037095,
+        0.003198,
+        -0.002046,
+        0.008855,
+        -0.013863,
+        0.034409,
+        0.035356,
+        0.007137,
+        0.04528,
+        0.009736,
+        0.040143,
+        0.029108,
+        -0.020544,
+        0.038056,
+        0.026319,
+        -0.00934,
+        -0.033185,
+        0.049248,
+        -0.047388,
+        0.007797,
+        -0.003131,
+        0.04432,
+        -0.019527,
+        -0.021205,
+        0.014012,
+        0.052916,
+        -0.008531,
+        -0.040351,
+        0.019832,
+        0.007163,
+        -0.014015,
+        -0.029917
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC44",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 44 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "input": {
+      "fundReturns": [
+        0.023148,
+        -0.033542,
+        -0.014699,
+        0.063871,
+        0.034766,
+        0.044307,
+        -0.054006,
+        0.009454,
+        -0.022957,
+        0.09394,
+        -0.054794,
+        0.037992,
+        -0.028063,
+        0.082176,
+        0.058515,
+        0.024593,
+        0.005923,
+        0.043571,
+        -0.041388,
+        0.023705,
+        -0.027821,
+        0.096312,
+        0.091185,
+        -0.044893,
+        0.050735,
+        0.079414,
+        0.044083,
+        -0.002274,
+        0.024113,
+        0.016295,
+        0.056225,
+        -0.060651,
+        0.029971
+      ],
+      "benchReturns": [
+        -0.029457,
+        -0.047832,
+        -0.028262,
+        0.007089,
+        0.024645,
+        0.019464,
+        0.015579,
+        -0.042673,
+        -0.005954,
+        -0.032949,
+        -0.003297,
+        0.024603,
+        -0.071833,
+        0.032634,
+        0.050496,
+        -0.02615,
+        0.035365,
+        -0.036182,
+        0.019918,
+        -0.038793,
+        -0.031568,
+        0.028153,
+        0.020081,
+        -0.03881,
+        0.005237,
+        -0.011374,
+        0.027471,
+        0.021228,
+        0.020339,
+        0.094182,
+        -0.015929,
+        -0.007756,
+        -0.011036
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC45",
+    "family": "riskBundle",
+    "description": "Risk metrics bundle case 45 (volatility/beta/Sharpe/tracking error/max drawdown)",
+    "input": {
+      "fundReturns": [
+        -0.076797,
+        0.025955,
+        -0.022077,
+        0.014764,
+        0.013972,
+        -0.020739,
+        -0.026374,
+        -0.057818,
+        -0.035719,
+        0.006536,
+        0.033723,
+        -0.08728,
+        0.057672,
+        -0.012575,
+        -0.058842,
+        -0.013662,
+        -0.019027,
+        -0.058863,
+        0.010131,
+        0.036428,
+        0.004325,
+        0.005352,
+        0.028762,
+        0.023274,
+        -0.023049,
+        0.060353,
+        0.036332,
+        -0.019872,
+        -0.017799,
+        0.120093,
+        -0.027548,
+        -0.02629,
+        0.079022,
+        0.020373
+      ],
+      "benchReturns": [
+        0.012541,
+        0.049271,
+        0.04387,
+        0.062119,
+        0.055653,
+        0.009909,
+        -0.025128,
+        0.005988,
+        0.002967,
+        0.024915,
+        0.067003,
+        -0.005224,
+        -0.009336,
+        -0.048256,
+        -0.00064,
+        -0.025756,
+        -0.049472,
+        0.031972,
+        0.044129,
+        0.061695,
+        -0.043686,
+        -0.001406,
+        -0.067291,
+        0.050197,
+        -0.005341,
+        -0.037557,
+        -0.046751,
+        -0.020965,
+        0.02805,
+        0.023677,
+        -0.014621,
+        0.054234,
+        0.035086,
+        0.050499
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC046",
+    "family": "xirr",
+    "description": "All-outflow cash flows (no positive flow) — must be unavailable",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2021-01-01",
+          "amount": -100
+        },
+        {
+          "date": "2021-06-01",
+          "amount": -50
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC047",
+    "family": "twrr",
+    "description": "Missing boundary valuation at an external-flow date — must be unavailable",
+    "input": {
+      "valuations": [
+        {
+          "date": "2021-01-01",
+          "value": 1000
+        },
+        {
+          "date": "2022-01-01",
+          "value": 1200
+        }
+      ],
+      "externalFlows": [
+        {
+          "date": "2021-06-15",
+          "amount": 200
+        }
+      ]
+    }
+  },
+  {
+    "id": "TC048",
+    "family": "cagr",
+    "description": "Zero beginning value — must be unavailable",
+    "input": {
+      "beginningValue": 0,
+      "beginningDate": "2021-01-01",
+      "endingValue": 100,
+      "endingDate": "2022-01-01"
+    }
+  },
+  {
+    "id": "TC049",
+    "family": "riskBundle",
+    "description": "Too few observations for beta/volatility (n=3) — must be unavailable",
+    "input": {
+      "fundReturns": [
+        0.01,
+        0.02,
+        -0.01
+      ],
+      "benchReturns": [
+        0.01,
+        0.02,
+        -0.01
+      ],
+      "periodsPerYear": 12,
+      "annualisedRiskFreeRate": 0.065
+    }
+  },
+  {
+    "id": "TC050",
+    "family": "xirr",
+    "description": "Single cash flow only — insufficient history, must be unavailable",
+    "input": {
+      "cashFlows": [
+        {
+          "date": "2021-01-01",
+          "amount": -1000
+        }
+      ]
+    }
+  }
+]

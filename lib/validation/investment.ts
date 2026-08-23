@@ -12,7 +12,7 @@ const investmentBaseSchema = z.object({
   country_code: z.enum(['AU', 'IN']).optional(),
   // See lib/validation/asset.ts's identical field for why this is
   // .optional() with no .default() — a default would break every save to
-  // this table until migration 0032 (currency_override column) is applied.
+  // this table until migration 0067 (currency_override column) is applied.
   currency_override: z.boolean().optional(),
   institution: z.string().optional(),
   cost_base: z.number().min(0).optional(),

@@ -93,5 +93,5 @@ for (const e of excluded) {
   sql += `-- id=${e.id} user_id=${e.user_id} master_item_key=${e.master_item_key} reason: ${e.reason}\n`;
 }
 
-fs.writeFileSync('D:/FHIP/.claude/worktrees/agent-a28d2ff4c7c436129/supabase/migrations/0039_retirement_contributions_backfill.sql', sql);
-console.log('\nWritten to supabase/migrations/0039_retirement_contributions_backfill.sql');
+fs.writeFileSync('D:/FHIP/.claude/worktrees/agent-a28d2ff4c7c436129/supabase/migrations/0074_retirement_contributions_backfill.sql', sql);
+console.log('\nWritten to supabase/migrations/0074_retirement_contributions_backfill.sql');

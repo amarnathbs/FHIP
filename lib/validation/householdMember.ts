@@ -15,7 +15,7 @@ export const householdMemberSchema = z.object({
       message: 'Date of birth must imply a plausible age (0-100)',
     }),
   // Chunk 3a item 4 (Spec 1 §22, Spec 2 §30): captured once per member here
-  // rather than per retirement account — see migration 0036. Optional; only
+  // rather than per retirement account — see migration 0071. Optional; only
   // meaningful for relationship = 'self'/'spouse'/'partner' members, but not
   // hard-restricted to those at the schema level (the UI is expected to
   // only surface the field for those relationships).

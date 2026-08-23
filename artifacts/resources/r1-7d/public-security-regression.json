@@ -1,0 +1,851 @@
+{
+  "summary": {
+    "base_url": "http://127.0.0.1:3317",
+    "total_checks": 111,
+    "passed": 111,
+    "failed": 0,
+    "exposed_detail_routes": 0,
+    "representatives": {
+      "approved_green_article": {
+        "content_id": "DB-001",
+        "status": "approved",
+        "content_type": "article"
+      },
+      "approved_guide": {
+        "content_id": "FH-005",
+        "status": "approved",
+        "content_type": "guide"
+      },
+      "approved_fhip_explainer": {
+        "content_id": "EX-001",
+        "status": "approved",
+        "content_type": "fhip_explainer"
+      },
+      "approved_glossary": {
+        "content_id": "GLO-001",
+        "status": "approved",
+        "content_type": "glossary"
+      },
+      "approved_amber": {
+        "content_id": "CB-001",
+        "status": "approved",
+        "content_type": "article"
+      },
+      "approved_cross_border": {
+        "content_id": "CB-001",
+        "status": "approved",
+        "content_type": "article"
+      },
+      "draft_video_script": {
+        "content_id": "VID-001",
+        "status": "draft",
+        "content_type": "video"
+      }
+    },
+    "by_area": {
+      "detail_route": {
+        "pass": 84,
+        "fail": 0
+      },
+      "search": {
+        "pass": 14,
+        "fail": 0
+      },
+      "sitemap": {
+        "pass": 2,
+        "fail": 0
+      },
+      "listing_surface": {
+        "pass": 4,
+        "fail": 0
+      },
+      "rls_anonymous": {
+        "pass": 4,
+        "fail": 0
+      },
+      "db_invariant": {
+        "pass": 3,
+        "fail": 0
+      }
+    }
+  },
+  "checks": [
+    {
+      "area": "detail_route",
+      "subject": "CB-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "CB-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "DB-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "DB-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "DB-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "DB-004 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "DN-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "ER-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "ER-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "ER-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "ER-004 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-001 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-002 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-003 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-004 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-005 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-006 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-007 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-008 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-009 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-010 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-011 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-012 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-025 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "EX-026 (approved/fhip_explainer)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FC-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FC-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FC-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-004 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-005 (approved/guide)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "FH-006 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GL-001 (approved/guide)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GL-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GL-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-001 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-002 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-003 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-004 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-005 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-006 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-007 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-008 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-009 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-010 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-011 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-012 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-013 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-014 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "GLO-015 (approved/glossary)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IN-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IN-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IN-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IN-004 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IN-005 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IP-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "IP-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "MM-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "MM-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "MM-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "MM-004 (approved/guide)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "NW-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "NW-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "NW-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "NW-004 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RAU-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RAU-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RAU-003 (approved/guide)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RIN-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RIN-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "RIN-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "SB-001 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "SB-002 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "SB-003 (approved/article)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-001 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-002 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-003 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-004 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-005 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-006 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-007 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "detail_route",
+      "subject": "VID-008 (draft/video)",
+      "expected": "non-200, title not rendered",
+      "actual": "HTTP 404",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "DB-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "FH-005 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "EX-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "GLO-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "CB-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "VID-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "CB-001 unique body text",
+      "expected": "no link to the record in public search results",
+      "actual": "HTTP 200 + not found",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "DB-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "FH-005 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "EX-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "GLO-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "CB-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "VID-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "search",
+      "subject": "CB-001 exact title",
+      "expected": "no link to the record in results",
+      "actual": "slug absent",
+      "pass": true
+    },
+    {
+      "area": "sitemap",
+      "subject": "sitemap.xml reachable",
+      "expected": "HTTP 200",
+      "actual": "HTTP 200",
+      "pass": true
+    },
+    {
+      "area": "sitemap",
+      "subject": "0 of the 84 unpublished P0 slugs present",
+      "expected": "0",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "area": "listing_surface",
+      "subject": "/resources",
+      "expected": "no link to any P0 record rendered",
+      "actual": "HTTP 200, leaked=0",
+      "pass": true
+    },
+    {
+      "area": "listing_surface",
+      "subject": "/resources/glossary",
+      "expected": "no link to any P0 record rendered",
+      "actual": "HTTP 200, leaked=0",
+      "pass": true
+    },
+    {
+      "area": "listing_surface",
+      "subject": "/resources/videos",
+      "expected": "no link to any P0 record rendered",
+      "actual": "HTTP 200, leaked=0",
+      "pass": true
+    },
+    {
+      "area": "listing_surface",
+      "subject": "/resources/money-updates",
+      "expected": "no link to any P0 record rendered",
+      "actual": "HTTP 200, leaked=0",
+      "pass": true
+    },
+    {
+      "area": "rls_anonymous",
+      "subject": "anonymous PostgREST read of the 84 P0 rows",
+      "expected": "0 rows",
+      "actual": "0 rows",
+      "pass": true
+    },
+    {
+      "area": "rls_anonymous",
+      "subject": "anonymous read of resource_workflow_history",
+      "expected": "0 rows",
+      "actual": "0 rows",
+      "pass": true
+    },
+    {
+      "area": "rls_anonymous",
+      "subject": "anonymous read of resource_audit_log",
+      "expected": "0 rows",
+      "actual": "0 rows",
+      "pass": true
+    },
+    {
+      "area": "rls_anonymous",
+      "subject": "anonymous read of resource_post_versions",
+      "expected": "0 rows",
+      "actual": "0 rows",
+      "pass": true
+    },
+    {
+      "area": "db_invariant",
+      "subject": "published_at non-null across the 84",
+      "expected": "0",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "area": "db_invariant",
+      "subject": "is_indexable true across the 84",
+      "expected": "0",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "area": "db_invariant",
+      "subject": "visibility other than private across the 84",
+      "expected": "0",
+      "actual": "0",
+      "pass": true
+    }
+  ]
+}

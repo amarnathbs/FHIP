@@ -1,0 +1,32 @@
+{
+  "fixtureKey": "02-multi-fund-cas-second-scheme",
+  "sourceKey": "cams",
+  "countryCode": "IN",
+  "currencyCode": "INR",
+  "documentType": "cas_statement",
+  "originalFilename": "cams-cas-household-a-multi-fund.pdf",
+  "account": {
+    "accountType": "mf_folio",
+    "institutionName": "ICICI Prudential Mutual Fund",
+    "folioNumber": "TESTFIX-FOLIO-000102"
+  },
+  "instrument": {
+    "instrumentName": "ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)",
+    "instrumentClass": "mutual_fund",
+    "countryOfDomicile": "IN",
+    "baseCurrency": "INR",
+    "identifiers": [
+      { "scheme": "amfi_scheme_code", "value": "TESTFIX-AMFI-ICICIN50-001", "countryCode": "IN" }
+    ]
+  },
+  "transactions": [
+    { "transactionType": "purchase", "transactionDate": "2025-01-15", "units": 1000, "pricePerUnit": 25, "grossAmount": 25000, "sourceReference": "TESTFIX-TXN-000102-1" },
+    { "transactionType": "dividend", "transactionDate": "2025-03-01", "units": null, "pricePerUnit": null, "grossAmount": 300, "sourceReference": "TESTFIX-TXN-000102-2" }
+  ],
+  "holdingSnapshot": {
+    "asOfDate": "2025-03-31",
+    "units": 1000,
+    "value": 26100,
+    "qualityStatus": "certified"
+  }
+}

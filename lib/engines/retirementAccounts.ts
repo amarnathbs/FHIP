@@ -6,7 +6,7 @@
 // personal_contribution fields right (lib/engines/dashboard.ts:540 sums only
 // current_balance into totalRetirement; the two contribution fields feed a
 // separate retirementContributionRate metric, never added to the balance).
-// This module gives the NEW retirement_contributions table (migration 0036)
+// This module gives the NEW retirement_contributions table (migration 0071)
 // the same guarantee for the Class-F catalogue items — see the discovery
 // doc's Class-F finding: today, ticking e.g. "Employer Contributions" in the
 // Retirement grid creates an ordinary retirement_accounts row like any other,

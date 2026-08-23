@@ -1,0 +1,462 @@
+{
+  "repaired": 76,
+  "remaining_drift": 0,
+  "plan": [
+    {
+      "content_id": "ER-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:03.815486+00:00",
+      "to": "2026-08-21T03:02:57.047741+00:00"
+    },
+    {
+      "content_id": "EX-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:04.512959+00:00",
+      "to": "2026-08-21T03:02:57.713702+00:00"
+    },
+    {
+      "content_id": "ER-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:01.671194+00:00",
+      "to": "2026-08-21T03:02:55.047866+00:00"
+    },
+    {
+      "content_id": "ER-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:03.129263+00:00",
+      "to": "2026-08-21T03:02:56.385917+00:00"
+    },
+    {
+      "content_id": "FH-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:15.922793+00:00",
+      "to": "2026-08-21T03:03:09.117551+00:00"
+    },
+    {
+      "content_id": "FH-006",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:19.91818+00:00",
+      "to": "2026-08-21T03:03:12.447456+00:00"
+    },
+    {
+      "content_id": "MM-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:38.085084+00:00",
+      "to": "2026-08-21T03:03:31.013162+00:00"
+    },
+    {
+      "content_id": "MM-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:40.170785+00:00",
+      "to": "2026-08-21T03:03:32.971521+00:00"
+    },
+    {
+      "content_id": "NW-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:41.721812+00:00",
+      "to": "2026-08-21T03:03:34.415217+00:00"
+    },
+    {
+      "content_id": "RIN-002",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:48.139616+00:00",
+      "to": "2026-08-21T03:03:41.256201+00:00"
+    },
+    {
+      "content_id": "ER-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:02.424941+00:00",
+      "to": "2026-08-21T03:02:55.711658+00:00"
+    },
+    {
+      "content_id": "MM-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:38.702892+00:00",
+      "to": "2026-08-21T03:03:31.703911+00:00"
+    },
+    {
+      "content_id": "NW-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:42.428106+00:00",
+      "to": "2026-08-21T03:03:35.117822+00:00"
+    },
+    {
+      "content_id": "FC-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:14.684773+00:00",
+      "to": "2026-08-21T03:03:07.731201+00:00"
+    },
+    {
+      "content_id": "GLO-008",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:27.258785+00:00",
+      "to": "2026-08-21T03:03:20.076853+00:00"
+    },
+    {
+      "content_id": "DB-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:04:58.218733+00:00",
+      "to": "2026-08-21T03:02:51.733886+00:00"
+    },
+    {
+      "content_id": "NW-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:40.996113+00:00",
+      "to": "2026-08-21T03:03:33.695689+00:00"
+    },
+    {
+      "content_id": "DB-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:04:58.917106+00:00",
+      "to": "2026-08-21T03:02:52.415719+00:00"
+    },
+    {
+      "content_id": "FH-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:16.587855+00:00",
+      "to": "2026-08-21T03:03:09.810956+00:00"
+    },
+    {
+      "content_id": "GLO-009",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:27.910103+00:00",
+      "to": "2026-08-21T03:03:20.740811+00:00"
+    },
+    {
+      "content_id": "GLO-012",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:29.936984+00:00",
+      "to": "2026-08-21T03:03:22.641463+00:00"
+    },
+    {
+      "content_id": "GLO-014",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:31.289999+00:00",
+      "to": "2026-08-21T03:03:24.055071+00:00"
+    },
+    {
+      "content_id": "DB-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:04:59.611409+00:00",
+      "to": "2026-08-21T03:02:53.083711+00:00"
+    },
+    {
+      "content_id": "FH-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:17.260859+00:00",
+      "to": "2026-08-21T03:03:10.512186+00:00"
+    },
+    {
+      "content_id": "IN-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:32.752211+00:00",
+      "to": "2026-08-21T03:03:25.466859+00:00"
+    },
+    {
+      "content_id": "GL-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:21.97574+00:00",
+      "to": "2026-08-21T03:03:14.57759+00:00"
+    },
+    {
+      "content_id": "IP-002",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:37.406534+00:00",
+      "to": "2026-08-21T03:03:30.315455+00:00"
+    },
+    {
+      "content_id": "SB-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:51.234434+00:00",
+      "to": "2026-08-21T03:03:44.21012+00:00"
+    },
+    {
+      "content_id": "GL-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:21.31968+00:00",
+      "to": "2026-08-21T03:03:13.879081+00:00"
+    },
+    {
+      "content_id": "GLO-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:22.674213+00:00",
+      "to": "2026-08-21T03:03:15.217097+00:00"
+    },
+    {
+      "content_id": "IN-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:33.41553+00:00",
+      "to": "2026-08-21T03:03:26.171852+00:00"
+    },
+    {
+      "content_id": "IN-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:34.771946+00:00",
+      "to": "2026-08-21T03:03:27.49684+00:00"
+    },
+    {
+      "content_id": "MM-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:39.433632+00:00",
+      "to": "2026-08-21T03:03:32.266079+00:00"
+    },
+    {
+      "content_id": "DB-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:00.277035+00:00",
+      "to": "2026-08-21T03:02:53.732505+00:00"
+    },
+    {
+      "content_id": "RAU-003",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:46.14016+00:00",
+      "to": "2026-08-21T03:03:39.088122+00:00"
+    },
+    {
+      "content_id": "CB-002",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:04:57.537903+00:00",
+      "to": "2026-08-21T03:02:51.069896+00:00"
+    },
+    {
+      "content_id": "RIN-001",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:47.122234+00:00",
+      "to": "2026-08-21T03:03:40.172744+00:00"
+    },
+    {
+      "content_id": "EX-025",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:12.60775+00:00",
+      "to": "2026-08-21T03:03:05.669119+00:00"
+    },
+    {
+      "content_id": "EX-026",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:13.303107+00:00",
+      "to": "2026-08-21T03:03:06.368578+00:00"
+    },
+    {
+      "content_id": "IP-001",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:36.318848+00:00",
+      "to": "2026-08-21T03:03:29.26393+00:00"
+    },
+    {
+      "content_id": "RIN-003",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:49.137623+00:00",
+      "to": "2026-08-21T03:03:42.311401+00:00"
+    },
+    {
+      "content_id": "DN-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:00.985155+00:00",
+      "to": "2026-08-21T03:02:54.3821+00:00"
+    },
+    {
+      "content_id": "FC-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:15.262302+00:00",
+      "to": "2026-08-21T03:03:08.419591+00:00"
+    },
+    {
+      "content_id": "SB-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:49.854798+00:00",
+      "to": "2026-08-21T03:03:42.865699+00:00"
+    },
+    {
+      "content_id": "SB-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:50.556993+00:00",
+      "to": "2026-08-21T03:03:43.541784+00:00"
+    },
+    {
+      "content_id": "EX-006",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:07.84084+00:00",
+      "to": "2026-08-21T03:03:01.020255+00:00"
+    },
+    {
+      "content_id": "EX-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:06.438627+00:00",
+      "to": "2026-08-21T03:02:59.675359+00:00"
+    },
+    {
+      "content_id": "EX-005",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:07.135788+00:00",
+      "to": "2026-08-21T03:03:00.369635+00:00"
+    },
+    {
+      "content_id": "EX-012",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:11.88464+00:00",
+      "to": "2026-08-21T03:03:04.962603+00:00"
+    },
+    {
+      "content_id": "GLO-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:23.337994+00:00",
+      "to": "2026-08-21T03:03:15.887393+00:00"
+    },
+    {
+      "content_id": "GLO-005",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:25.352506+00:00",
+      "to": "2026-08-21T03:03:18.006088+00:00"
+    },
+    {
+      "content_id": "GLO-011",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:29.265731+00:00",
+      "to": "2026-08-21T03:03:21.966068+00:00"
+    },
+    {
+      "content_id": "GLO-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:24.031976+00:00",
+      "to": "2026-08-21T03:03:16.617852+00:00"
+    },
+    {
+      "content_id": "GLO-006",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:25.893339+00:00",
+      "to": "2026-08-21T03:03:18.70837+00:00"
+    },
+    {
+      "content_id": "GLO-015",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:31.965084+00:00",
+      "to": "2026-08-21T03:03:24.769292+00:00"
+    },
+    {
+      "content_id": "GLO-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:24.711217+00:00",
+      "to": "2026-08-21T03:03:17.325261+00:00"
+    },
+    {
+      "content_id": "GLO-007",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:26.558877+00:00",
+      "to": "2026-08-21T03:03:19.408791+00:00"
+    },
+    {
+      "content_id": "GLO-010",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:28.571732+00:00",
+      "to": "2026-08-21T03:03:21.43996+00:00"
+    },
+    {
+      "content_id": "GLO-013",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:30.638702+00:00",
+      "to": "2026-08-21T03:03:23.36425+00:00"
+    },
+    {
+      "content_id": "FH-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:17.960897+00:00",
+      "to": "2026-08-21T03:03:11.216421+00:00"
+    },
+    {
+      "content_id": "FH-005",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:18.6457+00:00",
+      "to": "2026-08-21T03:03:11.768932+00:00"
+    },
+    {
+      "content_id": "GL-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:20.616336+00:00",
+      "to": "2026-08-21T03:03:13.177846+00:00"
+    },
+    {
+      "content_id": "NW-004",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:43.109669+00:00",
+      "to": "2026-08-21T03:03:35.842359+00:00"
+    },
+    {
+      "content_id": "IN-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:34.093468+00:00",
+      "to": "2026-08-21T03:03:26.852679+00:00"
+    },
+    {
+      "content_id": "IN-005",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:35.450905+00:00",
+      "to": "2026-08-21T03:03:28.126228+00:00"
+    },
+    {
+      "content_id": "RAU-002",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:45.18106+00:00",
+      "to": "2026-08-21T03:03:37.995155+00:00"
+    },
+    {
+      "content_id": "RAU-001",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:05:44.110763+00:00",
+      "to": "2026-08-21T03:03:36.898651+00:00"
+    },
+    {
+      "content_id": "CB-001",
+      "column": "compliance_approved_at",
+      "from": "2026-08-21T03:04:56.501979+00:00",
+      "to": "2026-08-21T03:02:50.214442+00:00"
+    },
+    {
+      "content_id": "EX-002",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:05.043582+00:00",
+      "to": "2026-08-21T03:02:58.373676+00:00"
+    },
+    {
+      "content_id": "FC-001",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:13.981488+00:00",
+      "to": "2026-08-21T03:03:07.0384+00:00"
+    },
+    {
+      "content_id": "EX-007",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:08.507291+00:00",
+      "to": "2026-08-21T03:03:01.534355+00:00"
+    },
+    {
+      "content_id": "EX-010",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:10.589211+00:00",
+      "to": "2026-08-21T03:03:03.620555+00:00"
+    },
+    {
+      "content_id": "EX-003",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:05.72878+00:00",
+      "to": "2026-08-21T03:02:59.020925+00:00"
+    },
+    {
+      "content_id": "EX-009",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:09.901484+00:00",
+      "to": "2026-08-21T03:03:02.927105+00:00"
+    },
+    {
+      "content_id": "EX-008",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:09.20495+00:00",
+      "to": "2026-08-21T03:03:02.225636+00:00"
+    },
+    {
+      "content_id": "EX-011",
+      "column": "editorial_approved_at",
+      "from": "2026-08-21T03:05:11.237363+00:00",
+      "to": "2026-08-21T03:03:04.285932+00:00"
+    }
+  ]
+}

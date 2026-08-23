@@ -57,9 +57,9 @@ the category-metadata columns below.
 
 ## 2. Category metadata on `master_financial_items` (item 1, Spec 1 §9 / Spec 2 §46)
 
-**Migration**: `supabase/migrations/0033_master_item_category_metadata.sql`
+**Migration**: `supabase/migrations/0068_master_item_category_metadata.sql`
 (adds columns, all additive with safe defaults) +
-`0034_master_item_category_metadata_seed.sql` (populates the 88 existing
+`0069_master_item_category_metadata_seed.sql` (populates the 88 existing
 asset/investment/retirement rows — 39 + 32 + 17 per the discovery doc's
 pre-Chunk-1 count; the live catalogue now also has the `collectibles` row
 Chunk 1 added under `asset`, which is populated too).
@@ -112,7 +112,7 @@ full reasoning):
 
 ## 3. SMSF Summary/Detailed mode (items 2-3, Spec 2 §23, §38-42)
 
-**Migration**: `supabase/migrations/0035_smsf_structured_model.sql`.
+**Migration**: `supabase/migrations/0070_smsf_structured_model.sql`.
 
 - `retirement_accounts.smsf_mode` (`summary` \| `detailed` \| null). Null
   for every account today (including every existing `smsf`-type account) —
@@ -155,7 +155,7 @@ is 3b's data-migration job.
 
 ## 4. Retirement member/account/contribution separation (items 4-5, Spec 1 §21-22, Spec 2 §29-36)
 
-**Migration**: `supabase/migrations/0036_retirement_member_contribution_model.sql`.
+**Migration**: `supabase/migrations/0071_retirement_member_contribution_model.sql`.
 
 ### Member-concept inspection (parallel to item 1's inspection)
 
@@ -236,7 +236,7 @@ fix possible.
 
 ## 5. India retirement catalogue: EPF, PPF, NPS (item 6, Spec 2 §32)
 
-**Migration**: `supabase/migrations/0037_india_retirement_catalogue.sql`.
+**Migration**: `supabase/migrations/0072_india_retirement_catalogue.sql`.
 Pure addition — no existing retirement catalogue row touched. Three new
 active `retirement`-category rows: `epf`, `ppf`, `nps`, `sort_order`
 180/190/200 (continuing after the existing max of 170, so no other item's
@@ -329,11 +329,11 @@ database.
 ## 8. Files changed
 
 **New migrations**:
-- `supabase/migrations/0033_master_item_category_metadata.sql`
-- `supabase/migrations/0034_master_item_category_metadata_seed.sql`
-- `supabase/migrations/0035_smsf_structured_model.sql`
-- `supabase/migrations/0036_retirement_member_contribution_model.sql`
-- `supabase/migrations/0037_india_retirement_catalogue.sql`
+- `supabase/migrations/0068_master_item_category_metadata.sql`
+- `supabase/migrations/0069_master_item_category_metadata_seed.sql`
+- `supabase/migrations/0070_smsf_structured_model.sql`
+- `supabase/migrations/0071_retirement_member_contribution_model.sql`
+- `supabase/migrations/0072_india_retirement_catalogue.sql`
 
 **New library code**:
 - `lib/engines/smsf.ts` — SMSF Summary/Detailed aggregation (item 2)

@@ -1,0 +1,15 @@
+{
+  "adapter_id": "in_sbi_dr_cr_v1",
+  "delimiter": ",",
+  "header_row_index": 0,
+  "amount_convention": "dr_cr_indicator",
+  "date_format": "DD/MM/YYYY",
+  "column_roles": {
+    "transaction_date": "Txn Date",
+    "description": "Description",
+    "amount": "Amount",
+    "dr_cr_indicator": "Dr/Cr",
+    "balance": "Balance",
+    "reference": "Ref No"
+  }
+}

@@ -46,7 +46,7 @@ describe('sumRetirementBalanceExcludingContributions (Forecasting phantom-balanc
     expect(sumRetirementBalanceExcludingContributions(rows)).toBe(50000);
   });
 
-  it('a legacy row saved before catalogue deprecation (migration 0038) is corrected immediately — keys off master_item_key, not is_active', () => {
+  it('a legacy row saved before catalogue deprecation (migration 0073) is corrected immediately — keys off master_item_key, not is_active', () => {
     const rows = [
       { current_balance: 100000, master_item_key: 'smsf' },
       { current_balance: 6000, master_item_key: 'salary_sacrifice' },

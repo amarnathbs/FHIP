@@ -1,0 +1,54 @@
+{
+  "passed": 8,
+  "total": 8,
+  "results": [
+    {
+      "check": "human edit lands successfully (baseline)",
+      "expected": "ok",
+      "actual": "ok",
+      "pass": true
+    },
+    {
+      "check": "stale write (old updated_at) is rejected, not silently applied",
+      "expected": "conflict",
+      "actual": "conflict",
+      "pass": true
+    },
+    {
+      "check": "the human's edit survived the stale overwrite attempt",
+      "expected": "A HUMAN EDITED THIS AFTER REVIEW.",
+      "actual": "A HUMAN EDITED THIS AFTER REVIEW.",
+      "pass": true
+    },
+    {
+      "check": "review-hash guard detects content changed since review",
+      "expected": "hash mismatch detected (approval withheld)",
+      "actual": "hash mismatch detected (approval withheld)",
+      "pass": true
+    },
+    {
+      "check": "rollback restores the reviewed content hash-identically",
+      "expected": "d0359d64409fb68e",
+      "actual": "d0359d64409fb68e",
+      "pass": true
+    },
+    {
+      "check": "approval of unchanged content proceeds normally",
+      "expected": "approved",
+      "actual": "approved",
+      "pass": true
+    },
+    {
+      "check": "approved fixture is still unpublished (published_at null, is_indexable false)",
+      "expected": "published_at=null is_indexable=false",
+      "actual": "published_at=null is_indexable=false",
+      "pass": true
+    },
+    {
+      "check": "disposable fixture fully removed",
+      "expected": "not found",
+      "actual": "not found",
+      "pass": true
+    }
+  ]
+}

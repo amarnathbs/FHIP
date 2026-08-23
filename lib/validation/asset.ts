@@ -14,7 +14,7 @@ const assetBaseSchema = z.object({
   // saveRow(): the client only ever includes this key in the request body
   // when it's true, specifically so a false/absent value never gets
   // synthesized into the object handed to Supabase. currency_override is a
-  // real DB column only once migration 0032 is applied; until then, a
+  // real DB column only once migration 0067 is applied; until then, a
   // .default(false) here would inject the key into every single save
   // (even ones that never touch currency/country) and break all writes to
   // this table with a "column not found" error — .optional() with no

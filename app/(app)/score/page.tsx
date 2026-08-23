@@ -3,13 +3,14 @@ import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
-import { HealthScoreGauge } from '@/components/score/HealthScoreGauge';
+import { HealthScoreStateCard } from '@/components/score/HealthScoreStateCard';
 import { ComponentGrid } from '@/components/score/ComponentGrid';
 import { ExplanationPanel } from '@/components/score/ExplanationPanel';
 import { WhatIfSimulator } from '@/components/score/WhatIfSimulator';
 import { CheckInsPanel } from '@/components/score/CheckInsPanel';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { formatDateShort } from '@/lib/engines/date';
+import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
 export default async function ScorePage() {
   const supabase = await createClient();
@@ -40,11 +41,17 @@ export default async function ScorePage() {
           <p className="mt-1 text-muted">
             One clear measure of your overall financial position, explained component by component.
           </p>
+          <WhatDoesThisMean contextKey="scores.financial_health_score" compact={false} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-1">
-            <HealthScoreGauge score={payload.overallScore} statusLabel={payload.statusLabel} statusBand={payload.statusBand} />
+            <HealthScoreStateCard
+              score={payload.overallScore}
+              statusLabel={payload.statusLabel}
+              statusBand={payload.statusBand}
+              eligibility={payload.eligibility}
+            />
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="rounded-card border bg-white p-4">
@@ -54,20 +61,18 @@ export default async function ScorePage() {
               </p>
             </div>
             <div className="rounded-card border bg-white p-4">
-              <p className="text-xs text-muted">Data confidence</p>
-              <p className="text-lg font-semibold text-ink">{payload.dataConfidence.toFixed(0)}%</p>
+              <p className="text-xs text-muted">Financial data confidence</p>
+              <p className="text-lg font-semibold capitalize text-ink">
+                {payload.eligibility.confidenceTier} ({payload.eligibility.confidencePercent}%)
+              </p>
+              <p className="text-xs text-muted">
+                {payload.eligibility.reviewedSections} of {payload.eligibility.totalRelevantSections} sections reviewed
+              </p>
             </div>
             <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Last calculated</p>
               <p className="text-lg font-semibold text-ink">{formatDateShort(new Date(), currency)}</p>
             </div>
-            {payload.dataConfidence < 70 && (
-              <div className="col-span-2 rounded-card border border-dashed bg-gray-50 p-4 text-sm text-gray-600 sm:col-span-3">
-                This score is provisional because important financial information is missing. Complete more of your
-                data (Income, Expenses, Assets, Liabilities, Investments, Retirement, Insurance) for a more reliable
-                result.
-              </div>
-            )}
             {payload.riskOverrideApplied && (
               <div className="col-span-2 rounded-card border border-risk bg-red-50 p-4 text-sm text-risk sm:col-span-3">
                 {payload.riskOverrideReason}

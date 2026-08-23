@@ -337,7 +337,7 @@ describe('computeDashboard Class-F retirement contribution-row exclusion (Chunk 
 
   it('a legacy row saved before catalogue deprecation is corrected immediately — the fix keys off master_item_key, not catalogue is_active', () => {
     // This is the point of keying the exclusion on master_item_key directly
-    // rather than requiring migration 0038 to be applied first: a household
+    // rather than requiring migration 0073 to be applied first: a household
     // whose contribution row predates any migration still gets the correct
     // totalRetirement the moment this code ships.
     const d = computeDashboard(
@@ -361,7 +361,7 @@ describe('computeDashboard Class-F retirement contribution-row exclusion (Chunk 
 // Net Worth (totalAssets + totalInvestments + totalRetirement - totalLiabilities)
 // is structurally invariant no matter which of the three modules an
 // SMSF-labelled row happens to sit in. This is what makes Chunk 3b's
-// deprecate-the-catalogue-entry-only migration (0038) safe: it never moves
+// deprecate-the-catalogue-entry-only migration (0073) safe: it never moves
 // a row between tables, so it cannot change any total.
 describe('computeDashboard SMSF three-way overlap — Net Worth invariant under module placement', () => {
   it('the same total SMSF value produces the same Net Worth whether recorded via the asset, investment, or retirement module', () => {
@@ -417,18 +417,18 @@ describe('computeDashboard SMSF three-way overlap — Net Worth invariant under 
 // module/key reclassification (deprecating one side of a duplicate-concept
 // pair, e.g. asset.term_deposits in favour of investment.term_deposits)
 // must never, by itself, change Net Worth for any existing row — migration
-// 0038 never moves or edits a user's stored row, so this is definitionally
+// 0073 never moves or edits a user's stored row, so this is definitionally
 // true, but this test proves the invariant computeDashboard itself relies
 // on: total value is summed independently per table, so relabelling which
 // catalogue module is "canonical" going forward cannot retroactively change
 // an already-saved row's contribution to Net Worth.
 describe('computeDashboard pure-reclassification zero-variance (Chunk 3b Spec 2 §60 gate)', () => {
-  it('a deprecated-key asset row still contributes its full value to Net Worth (migration 0038 never touches the row itself)', () => {
+  it('a deprecated-key asset row still contributes its full value to Net Worth (migration 0073 never touches the row itself)', () => {
     const before = computeDashboard(
       { ...EMPTY, assets: [{ current_value: 45000, asset_class: 'shares', master_item_key: 'shares' }] },
       'AUD'
     );
-    // Simulates "after migration 0038": the catalogue's asset.shares item is
+    // Simulates "after migration 0073": the catalogue's asset.shares item is
     // now is_active=false, but the row's own master_item_key is untouched —
     // computeDashboard has no is_active concept at all, it only sees the
     // row, so the value is unaffected.

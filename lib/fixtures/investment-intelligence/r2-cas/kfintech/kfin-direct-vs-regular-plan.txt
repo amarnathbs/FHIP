@@ -1,0 +1,29 @@
+KFINTECH Consolidated Account Statement
+Period : 01/01/2025 to 30/06/2025
+
+Folio No : 7654329/00
+PAN : ABCDE0108F
+Investor Name : KIRAN BHAT
+Mode of Holding : Single
+
+AMC Name : ICICI Prudential Mutual Fund
+Scheme : ICICI Prudential Nifty 50 Index Fund - Growth (Direct Plan)
+ISIN : INF109K01VQ1
+AMFI Code : 120716
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+22/01/2025   Purchase - Lumpsum          15000.00  111.600  134.4000  111.600 [Ref: KDR0001D]
+
+Closing Balance : 111.600 units as on 30/06/2025   Market Value : Rs 15981.12   NAV : Rs 143.2000
+
+AMC Name : ICICI Prudential Mutual Fund
+Scheme : ICICI Prudential Nifty 50 Index Fund - Growth (Regular Plan)
+ISIN : INF109K01VR9
+AMFI Code : 120717
+RTA : KFINTECH
+
+Txn Date     Transaction Type            Amount        Units      Price(NAV)   Balance Units
+22/01/2025   Purchase - Lumpsum          15000.00  107.850  139.0800  107.850 [Ref: KDR0001R]
+
+Closing Balance : 107.850 units as on 30/06/2025   Market Value : Rs 14937.22   NAV : Rs 138.5000

@@ -68,6 +68,7 @@ interface Row extends GridRow {
   // matching row in the active tickable list. Never silently dropped from
   // the grid; see load() below.
   is_archived?: boolean;
+  source_type?: string; // R3 — 'investment_intelligence_published' | 'manual' | undefined (non-investments resources never set this)
 }
 
 let customRowCounter = 0;
@@ -127,6 +128,22 @@ function rowFromRecord(
   };
 }
 
+// R3 spec section 38/40 — direct-edit protection + source provenance badge.
+// Fields Investment Intelligence certifies from a source document must not
+// become independently editable here (matches the server-side enforcement
+// in app/api/investments/[id]/route.ts's PROTECTED_ON_PUBLISHED_ROWS — kept
+// in sync deliberately, both layers enforce the same rule). Only investments
+// rows can ever carry source_type='investment_intelligence_published'
+// (migration 0042); every other register's rows have no such field, so this
+// is a no-op everywhere else in the shared grid.
+const II_PUBLISHED_PROTECTED_FIELDS = new Set(['institution', 'current_value', 'cost_base', 'risk_profile', 'country_code']);
+function isIiPublished(row: Row): boolean {
+  return row.source_type === 'investment_intelligence_published';
+}
+function isFieldLockedForRow(row: Row, fieldName: string): boolean {
+  return isIiPublished(row) && II_PUBLISHED_PROTECTED_FIELDS.has(fieldName);
+}
+
 function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): boolean {
   if (config.frequencyField && !row[config.frequencyField]) return false;
   if (!row.currency_code) return false;
@@ -151,12 +168,22 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+type ZeroAnswer = 'yes' | 'no' | 'unsure' | null;
+
 export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subNav?: React.ReactNode }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [notApplicable, setNotApplicable] = useState(false);
+  // Phase 0C: explicit Yes/No(/Not sure) confirmation for Liabilities and
+  // Insurance — null means "not yet answered", distinct from 'yes' (which
+  // isn't itself persisted; see handleZeroAnswer below).
+  const [zeroAnswer, setZeroAnswer] = useState<ZeroAnswer>(null);
+  // Phase 0C.1: the "I've added everything relevant to me" completion
+  // confirmation — one row existing is only 'in_progress', not
+  // 'reviewed_with_data', until this is explicitly set. Reversible.
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
   // Kept in sync via an effect rather than assigned during render — a plain
@@ -178,7 +205,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
       // can still resolve a real item_label instead of silently vanishing
       // (see AR-0's migration 0031 disclosure and this sub-chunk's own
       // taxonomy-consolidation deprecations).
-      const [allMasterItems, savedRecords, profile] = await Promise.all([
+      const [allMasterItems, savedRecords, profile, sectionStatusRows] = await Promise.all([
         fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}&includeInactive=true`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
         fetchJson<{
@@ -187,11 +214,31 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
           not_applicable_retirement?: boolean;
           not_applicable_insurance?: boolean;
         }>('/api/user/profile').catch(() => null),
+        config.reviewSection
+          ? fetchJson<{ section: string; status: string }[]>('/api/user/section-status').catch(() => [])
+          : Promise.resolve([]),
       ]);
       if (cancelled) return;
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
       if (config.notApplicable) setNotApplicable(Boolean(profile?.[config.notApplicable.profileField]));
+      if (config.zeroConfirmation) {
+        const confirmed = sectionStatusRows.find((r) => r.section === config.zeroConfirmation!.section);
+        // A "No" confirmation on record always shows as answered. Otherwise,
+        // real rows already on file imply an unspoken "Yes" — the radio
+        // reflects that rather than sitting blank above data that's clearly
+        // already there.
+        if (confirmed?.status === 'reviewed_zero') setZeroAnswer('no');
+        else if (savedRecords.length > 0) setZeroAnswer('yes');
+      }
+      if (config.reviewSection) {
+        const reviewed = sectionStatusRows.find((r) => r.section === config.reviewSection);
+        // Only trust the confirmation while it's still backed by real rows —
+        // matches effectiveSectionStatus()'s server-side "stale confirmation
+        // reverts" rule, so the button doesn't show "Reviewed" for a section
+        // whose rows were since deleted.
+        setReviewConfirmed(reviewed?.status === 'reviewed_with_data' && savedRecords.length > 0);
+      }
 
       // includeInactive=true returns both; only is_active !== false items
       // populate the tickable list (matches the plain, non-includeInactive
@@ -327,12 +374,72 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
 
   async function handleNotApplicableToggle(checked: boolean) {
     if (!config.notApplicable) return;
+    const previous = notApplicable;
     setNotApplicable(checked);
-    await fetchJson('/api/user/profile', {
+    try {
+      // Phase 0C.1 fix: the eligibility engine (computeHealthScoreEligibility,
+      // scoreInvestment/scoreRetirement) reads exclusively from
+      // user_financial_section_status now — the user_profiles boolean below
+      // is kept only for backwards-compatible display/back-fill, it is no
+      // longer what the score itself checks. Without this second write, a
+      // NEW not-applicable confirmation made after Phase 0C shipped would
+      // update the profile column but never actually reach the eligibility
+      // engine, silently failing to exclude the section from the score.
+      await Promise.all([
+        fetchJson('/api/user/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [config.notApplicable.profileField]: checked }),
+        }),
+        config.reviewSection
+          ? fetchJson('/api/user/section-status', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ section: config.reviewSection, status: checked ? 'not_applicable' : null }),
+            })
+          : Promise.resolve(),
+      ]);
+    } catch {
+      setNotApplicable(previous); // best effort; revert the toggle if either save failed
+    }
+  }
+
+  // Phase 0C: only 'no' is ever actually persisted (as a 'reviewed_zero'
+  // section-status confirmation) — 'yes' and 'unsure' both clear any
+  // standing confirmation, since real rows (for 'yes') or simply not
+  // knowing yet (for 'unsure') aren't states that need to be remembered
+  // explicitly. Reversible: switching answers always re-fires this.
+  async function handleZeroAnswer(answer: 'yes' | 'no' | 'unsure') {
+    if (!config.zeroConfirmation) return;
+    const previous = zeroAnswer;
+    setZeroAnswer(answer);
+    await fetchJson('/api/user/section-status', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [config.notApplicable.profileField]: checked }),
-    }).catch(() => setNotApplicable(!checked)); // best effort; revert the toggle if the save failed
+      body: JSON.stringify({
+        section: config.zeroConfirmation.section,
+        status: answer === 'no' ? 'reviewed_zero' : null,
+      }),
+    }).catch(() => setZeroAnswer(previous)); // best effort; revert if the save failed
+  }
+
+  // Phase 0C.1: the explicit "I've added everything relevant to me"
+  // confirmation for positive-data sections. Setting it persists
+  // 'reviewed_with_data'; clearing it (the reversible "still adding" path)
+  // deletes the confirmation so the section falls back to whatever
+  // effectiveSectionStatus() derives from row presence alone (in_progress).
+  async function handleReviewConfirm(confirmed: boolean) {
+    if (!config.reviewSection) return;
+    const previous = reviewConfirmed;
+    setReviewConfirmed(confirmed);
+    await fetchJson('/api/user/section-status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        section: config.reviewSection,
+        status: confirmed ? 'reviewed_with_data' : null,
+      }),
+    }).catch(() => setReviewConfirmed(previous)); // best effort; revert if the save failed
   }
 
   function addCustomRow() {
@@ -449,6 +556,78 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
           </label>
         )}
 
+        {config.zeroConfirmation && (
+          <fieldset className="rounded-card border border-line bg-white p-3 text-sm">
+            <legend className="px-1 font-medium text-ink">{config.zeroConfirmation.question}</legend>
+            <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`zero-confirmation-${config.category}`}
+                  checked={zeroAnswer === 'yes'}
+                  onChange={() => handleZeroAnswer('yes')}
+                />
+                Yes
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`zero-confirmation-${config.category}`}
+                  checked={zeroAnswer === 'no'}
+                  onChange={() => handleZeroAnswer('no')}
+                />
+                {config.zeroConfirmation.noLabel}
+              </label>
+              {config.zeroConfirmation.includeUnsure && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`zero-confirmation-${config.category}`}
+                    checked={zeroAnswer === 'unsure'}
+                    onChange={() => handleZeroAnswer('unsure')}
+                  />
+                  Not sure / review later
+                </label>
+              )}
+            </div>
+            {zeroAnswer === 'no' && (
+              <p className="mt-2 text-xs text-muted">
+                Recorded — this counts as a confirmed answer in your Financial Health Score, not missing data.
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {/* Phase 0C.1: completion confirmation for positive-data sections.
+            Only shown once there's something to review, and hidden once a
+            zero-confirmation ("No, I have none of this") already resolves
+            the section — there's nothing left to mark complete. */}
+        {config.reviewSection && included.length > 0 && zeroAnswer !== 'no' && !notApplicable && (
+          <div className="rounded-card border border-line bg-white p-3 text-sm">
+            {reviewConfirmed ? (
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">✓ Reviewed — you've confirmed {config.title} is complete.</span>
+                <button onClick={() => handleReviewConfirm(false)} className="text-xs text-trust hover:underline">
+                  Still adding more? Mark as in progress
+                </button>
+              </p>
+            ) : (
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="text-muted">
+                  This section counts as still in progress until you confirm it's complete — that affects your Financial
+                  Health Score confidence.
+                </span>
+                <button
+                  onClick={() => handleReviewConfirm(true)}
+                  className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                >
+                  I've added everything relevant to me
+                </button>
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
@@ -487,6 +666,8 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     <input
                       type="checkbox"
                       checked={row.included}
+                      disabled={isIiPublished(row)}
+                      title={isIiPublished(row) ? 'Imported via Investment Intelligence — use Unpublish there to remove it from net worth.' : undefined}
                       onChange={(e) => handleToggleInclude(row, e.target.checked)}
                     />
                   </td>
@@ -511,6 +692,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                         Archived item
                       </span>
                     )}
+                    {isIiPublished(row) && (
+                      <div className="mt-1">
+                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Imported via Investment Intelligence</span>
+                        <a href="/investment-intelligence" className="ml-2 text-[11px] text-blue-600 hover:underline">
+                          Review
+                        </a>
+                      </div>
+                    )}
                     {errorsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
                     )}
@@ -521,7 +710,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   <td className="px-3 py-2">
                     <select
                       value={row.owner}
-                      disabled={!row.included}
+                      disabled={!row.included || isIiPublished(row)}
                       onChange={(e) => handleFieldChange(row.key, 'owner', e.target.value)}
                       className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
                     >
@@ -538,8 +727,14 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                     // are shown/required/read-only per-row based on the
                     // selected catalogue item — see lib/grid/fieldVisibility.ts.
                     // Every non-metadataDriven field keeps its unconditional
-                    // always-shown behaviour exactly as before.
+                    // always-shown behaviour exactly as before. Combined with
+                    // isFieldLockedForRow, independently: a field can be
+                    // read-only either because the catalogue item says so
+                    // (vis.readOnly) or because the row is Investment
+                    // Intelligence-published (isFieldLockedForRow) — either
+                    // reason disables editing.
                     const vis = resolveFieldVisibility(row, f);
+                    const locked = vis.readOnly || isFieldLockedForRow(row, f.name);
                     return (
                       <td key={f.name} className="px-3 py-2">
                         {!vis.show ? (
@@ -548,13 +743,13 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                           <input
                             type="checkbox"
                             checked={Boolean(row[f.name] ?? false)}
-                            disabled={!row.included || vis.readOnly}
+                            disabled={!row.included || locked}
                             onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
                           />
                         ) : f.type === 'select' ? (
                           <select
                             value={String(row[f.name] ?? '')}
-                            disabled={!row.included || vis.readOnly}
+                            disabled={!row.included || locked}
                             onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
                             className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
                           >
@@ -570,7 +765,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                             type={f.type}
                             step={f.step}
                             value={String(row[f.name] ?? '')}
-                            disabled={!row.included || vis.readOnly}
+                            disabled={!row.included || locked}
                             onChange={(e) =>
                               handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
                             }
@@ -585,7 +780,7 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
-                      disabled={!row.included}
+                      disabled={!row.included || isIiPublished(row)}
                       onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
                       className={`w-20 rounded border px-2 py-1 disabled:bg-gray-50 ${
                         currencyMismatchBlocked(row) ? 'border-risk' : ''

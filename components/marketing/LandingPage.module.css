@@ -186,11 +186,15 @@
   color: var(--muted);
   display: none;
 }
-/* Raised from 860px: below 980px the nav links are hidden anyway (see
-   .primaryNav below), but between 980-1180px both the tagline and the full
-   nav were competing for the same shrinking space — this keeps the
-   tagline hidden until there's room for it alongside a comfortable nav. */
-@media (min-width: 1180px) { .logo small { display: inline; } }
+/* Raised from 1180px: adding the Resources link (7th nav item) pushed the
+   header's real content width (~1258px at 1.75rem gaps) past its 1160px
+   box everywhere below ~1350px — confirmed live (documentElement.scrollWidth
+   > window.innerWidth, "Start free" clipped off the right edge) at the
+   common 1280px laptop width specifically. The tagline is the single
+   biggest reclaimable chunk (~212px) and is redundant with the logo mark +
+   "FHIP" wordmark right next to it, so it now stays hidden across the whole
+   band where the full nav is otherwise tight. */
+@media (min-width: 1350px) { .logo small { display: inline; } }
 
 .primaryNav {
   display: none;
@@ -203,7 +207,11 @@
 .primaryNav a { text-decoration: none; padding: 0.25rem 0; white-space: nowrap; }
 .primaryNav a:hover { color: var(--ink); }
 @media (min-width: 980px) { .primaryNav { display: flex; } }
-@media (min-width: 980px) and (max-width: 1180px) { .primaryNav { gap: 1.1rem; } }
+/* Extended from 1180px to 1350px to match the tagline threshold above —
+   the tight gap needs to stay in effect for exactly as long as the tagline
+   stays hidden, otherwise there's a dead band where neither saving applies
+   and the header can still overflow. */
+@media (min-width: 980px) and (max-width: 1350px) { .primaryNav { gap: 1.1rem; } }
 
 .headerActions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
 .btn {

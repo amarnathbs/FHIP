@@ -1,0 +1,67 @@
+{
+  "fixtureId": "kfin-swp",
+  "title": "Systematic Withdrawal Plan, three monthly instalments",
+  "sourceKey": "kfintech",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "7654331/00",
+      "holderName": "ARUN NAIR",
+      "holdingModeRaw": "Single"
+    }
+  ],
+  "transactionCount": 3,
+  "transactions": [
+    {
+      "folioNumber": "7654331/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-02-15",
+      "canonicalType": "swp",
+      "amount": "3000.00",
+      "units": "10.900",
+      "nav": "275.0000",
+      "sourceReference": "KSWP0001"
+    },
+    {
+      "folioNumber": "7654331/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "swp",
+      "amount": "3000.00",
+      "units": "11.050",
+      "nav": "273.0000",
+      "sourceReference": "KSWP0002"
+    },
+    {
+      "folioNumber": "7654331/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "isin": "INF179K01YX6",
+      "amfiSchemeCode": "118835",
+      "transactionDateIso": "2025-04-15",
+      "canonicalType": "swp",
+      "amount": "3000.00",
+      "units": "11.200",
+      "nav": "271.0000",
+      "sourceReference": "KSWP0003"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "7654331/00",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "366.850",
+      "value": "48314.15",
+      "nav": "131.7000"
+    }
+  ],
+  "notes": null
+}

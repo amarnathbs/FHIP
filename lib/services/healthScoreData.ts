@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { buildResilienceInput } from '@/lib/services/resilienceData';
+import { loadSectionStatus } from '@/lib/services/financialSectionStatusData';
 import { computeResilience } from '@/lib/engines/resilience';
 import { ageFromDob } from '@/lib/engines/age';
 import {
@@ -11,6 +12,8 @@ import {
   type HealthScoreResult,
   type CheckIns,
 } from '@/lib/engines/healthScore';
+import { computeHealthScoreEligibility, type HealthScoreEligibility } from '@/lib/engines/healthScoreEligibility';
+import type { FinancialSection, FinancialSectionStatus } from '@/lib/engines/financialSectionStatus';
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -25,6 +28,19 @@ export interface HealthScorePayload extends HealthScoreResult {
   previousScore: number | null;
   scoreChange: number | null;
   history: HealthScoreHistoryPoint[];
+  // Phase 0C: the canonical not_yet_scored/preliminary/full state — see
+  // lib/engines/healthScoreEligibility.ts. Dashboard, /score, and Reports
+  // all read this same field rather than deriving their own state, so they
+  // can never disagree about which of the three a household is in.
+  eligibility: HealthScoreEligibility;
+  // Phase 0C follow-up: exposing the raw per-section map (not just the
+  // rolled-up eligibility numbers) so other presentation surfaces — e.g. the
+  // dashboard's Data Quality panel and the report's data-quality table — can
+  // tell "reviewed and confirmed zero/not applicable" apart from "genuinely
+  // never reviewed" instead of falling back to raw row-presence and calling
+  // a confirmed-zero section "Missing" right next to a score that already
+  // counted it as reviewed.
+  sectionStatus: Record<FinancialSection, FinancialSectionStatus>;
 }
 
 // Builds the full HealthScoreInput without persisting anything — used by the
@@ -34,17 +50,19 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
   const supabase = client ?? (await createClient());
 
   const [profileRes, householdRes, checkInsRes, configRes] = await Promise.all([
-    supabase
-      .from('user_profiles')
-      .select('date_of_birth, employment_status, not_applicable_investments, not_applicable_retirement, not_applicable_insurance')
-      .eq('user_id', userId)
-      .single(),
+    // not_applicable_investments/retirement/insurance (migration 0029) are no
+    // longer read here — Phase 0C's user_financial_section_status table
+    // (loadSectionStatus, below) is now the canonical source; those columns
+    // are left in place, untouched, only as the one-time backfill source
+    // migration 0031 already used.
+    supabase.from('user_profiles').select('date_of_birth, employment_status').eq('user_id', userId).single(),
     supabase.from('households').select('dependants_count').eq('user_id', userId).maybeSingle(),
     supabase.from('health_check_ins').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('health_score_config').select('config').eq('is_active', true).single(),
   ]);
 
   const dashboard = await loadDashboard(userId, supabase);
+  const sectionStatus = await loadSectionStatus(userId, dashboard, supabase);
   const config = configRes.data?.config as HealthScoreConfig;
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
@@ -60,11 +78,7 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
     checkIns: (checkInsRes.data as CheckIns | null) ?? null,
     resilienceResult,
     config,
-    notApplicable: {
-      investments: profileRes.data?.not_applicable_investments ?? false,
-      retirement: profileRes.data?.not_applicable_retirement ?? false,
-      insurance: profileRes.data?.not_applicable_insurance ?? false,
-    },
+    sectionStatus,
   };
 }
 
@@ -82,6 +96,7 @@ export async function loadHealthScore(userId: string, client?: SupabaseServerCli
   ]);
 
   const result = computeHealthScore(input);
+  const eligibility = computeHealthScoreEligibility(input.sectionStatus, result.components);
 
   const { data: previousRow } = await supabase
     .from('financial_health_scores')
@@ -155,5 +170,5 @@ export async function loadHealthScore(userId: string, client?: SupabaseServerCli
 
   const history = (historyRes.data ?? []) as HealthScoreHistoryPoint[];
 
-  return { ...result, previousScore, scoreChange, history };
+  return { ...result, previousScore, scoreChange, history, eligibility, sectionStatus: input.sectionStatus };
 }

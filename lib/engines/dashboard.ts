@@ -337,9 +337,9 @@ export function isDebtRepaymentExpense(row: ExpenseRow): boolean {
 // and type a number straight into current_balance — summed by
 // totalRetirement below as if it were a real super balance, phantom-
 // double-counting against the user's actual account. Chunk 3b deprecates
-// these 6 catalogue items (supabase/migrations/0038) and backfills the
+// these 6 catalogue items (supabase/migrations/0073) and backfills the
 // real existing rows into the new retirement_contributions table
-// (migration 0039) where evidence allows, but this exclusion set is the
+// (migration 0074) where evidence allows, but this exclusion set is the
 // actual fix and is independent of both migrations being applied — it
 // works whether master_item_key is 'employer_contributions' etc. on an
 // is_active or since-deprecated catalogue row, so a legacy row a user

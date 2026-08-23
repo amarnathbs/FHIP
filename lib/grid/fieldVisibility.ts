@@ -2,7 +2,7 @@
 // (currently purchase_date/purchase_price on the Assets grid) should be
 // shown, hard-required, or shown-but-read-only for one row, based on the
 // selected catalogue item's master_financial_items metadata
-// (supports_<field>/requires_<field> — see migrations 0033/0034).
+// (supports_<field>/requires_<field> — see migrations 0068/0069).
 //
 // Pure and framework-free so it is directly unit-testable without a DOM;
 // components/grid/FinancialDataGrid.tsx calls this for every metadataDriven
@@ -33,7 +33,7 @@ export function resolveFieldVisibility(row: FieldVisibilityRow, field: GridField
   // preserve today's behaviour exactly: always shown, never required.
   // Same fallback applies to any master-catalogue row whose metadata hasn't
   // been populated yet (supports_* undefined) so this never regresses
-  // ahead of migrations 0033/0034 actually being applied.
+  // ahead of migrations 0068/0069 actually being applied.
   const supportsKey = `supports_${field.name}`;
   const requiresKey = `requires_${field.name}`;
   const supportsRaw = row[supportsKey];

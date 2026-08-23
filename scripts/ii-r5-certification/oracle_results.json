@@ -1,0 +1,3161 @@
+{
+  "oracle": "ii_r5_independent_reconciliation.py",
+  "importsProductionCode": false,
+  "xirrAlgorithm": "pure-bisection (production uses safeguarded Newton-Raphson)",
+  "resultCount": 89,
+  "results": [
+    {
+      "id": "SIP-001",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 36,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          36
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.1265950662150862,
+        "actualSipXirrReason": null,
+        "terminalValue": 230315.70274439544,
+        "seriesUnitsRemaining": 1443.050627,
+        "expectedPeriods": 36,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-002",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "QUARTERLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 12,
+        "trend": "FLAT",
+        "allCadences": [
+          "QUARTERLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          12
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12579220659128626,
+        "actualSipXirrReason": null,
+        "terminalValue": 232249.11831737906,
+        "seriesUnitsRemaining": 1455.164506,
+        "expectedPeriods": 12,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "POSSIBLE_PAUSE",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-003",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "IRREGULAR",
+        "confidence": "AMBIGUOUS",
+        "contributionCount": 4,
+        "trend": "MIXED",
+        "allCadences": [
+          "IRREGULAR"
+        ],
+        "allConfidences": [
+          "AMBIGUOUS"
+        ],
+        "allContributionCounts": [
+          4
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.13193963865604025,
+        "actualSipXirrReason": null,
+        "terminalValue": 161757.987117,
+        "seriesUnitsRemaining": 1013.5,
+        "consistencyPct": null,
+        "expectedPeriods": null,
+        "skippedPeriods": null,
+        "activityStatus": "UNKNOWN",
+        "notConfirmed": true
+      }
+    },
+    {
+      "id": "SIP-004",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 29,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          29
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12601920493383661,
+        "actualSipXirrReason": null,
+        "terminalValue": 190596.23218287047,
+        "seriesUnitsRemaining": 1194.186975,
+        "expectedPeriods": 30,
+        "skippedPeriods": 1,
+        "consistencyPct": 0.9666666666666667,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-005",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 26,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          26
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12598933825764108,
+        "actualSipXirrReason": null,
+        "terminalValue": 170633.16123952004,
+        "seriesUnitsRemaining": 1069.107696,
+        "expectedPeriods": 30,
+        "skippedPeriods": 4,
+        "consistencyPct": 0.8666666666666667,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-006",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 36,
+        "trend": "INCREASING",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          36
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12678493661311224,
+        "actualSipXirrReason": null,
+        "terminalValue": 252286.69353720514,
+        "seriesUnitsRemaining": 1580.710594,
+        "expectedPeriods": 36,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-007",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "DECREASING",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12615694588312182,
+        "actualSipXirrReason": null,
+        "terminalValue": 292750.21764197317,
+        "seriesUnitsRemaining": 1834.236138,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-008",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 24,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          24
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12605653959704793,
+        "actualSipXirrReason": null,
+        "terminalValue": 162293.24820665203,
+        "seriesUnitsRemaining": 1016.853696,
+        "expectedPeriods": 24,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-009",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 24,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          24
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.1315961022107513,
+        "actualSipXirrReason": null,
+        "terminalValue": 114412.24560665204,
+        "seriesUnitsRemaining": 716.853696,
+        "expectedPeriods": 24,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-010",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.13292149165616135,
+        "actualSipXirrReason": null,
+        "terminalValue": 182065.83655140898,
+        "seriesUnitsRemaining": 1140.7395,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-011",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.14695907715853535,
+        "actualSipXirrReason": null,
+        "terminalValue": 197307.955712409,
+        "seriesUnitsRemaining": 1236.2395,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-012",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": -0.16586894329026103,
+        "actualSipXirrReason": null,
+        "terminalValue": 100170.3005115563,
+        "seriesUnitsRemaining": 1124.332652,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-013",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.32218540090048914,
+        "actualSipXirrReason": null,
+        "terminalValue": 288803.8119900573,
+        "seriesUnitsRemaining": 1049.45372,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-014",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "AMBIGUOUS",
+        "contributionCount": 2,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "AMBIGUOUS"
+        ],
+        "allContributionCounts": [
+          2
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.48368715590884687,
+        "actualSipXirrReason": null,
+        "terminalValue": 12672.505354800001,
+        "seriesUnitsRemaining": 79.4,
+        "expectedPeriods": 2,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": true
+      }
+    },
+    {
+      "id": "SIP-015",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 24,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          24
+        ],
+        "actualSipXirrStatus": "unavailable",
+        "actualSipXirrReason": "ATTRIBUTION_UNAVAILABLE",
+        "actualSipXirr": null,
+        "terminalValue": null,
+        "expectedPeriods": 24,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-016",
+      "family": "sip",
+      "certify": [
+        "seriesCount",
+        "cadence",
+        "confidence",
+        "contributionCount"
+      ],
+      "expected": {
+        "seriesCount": 2,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 30,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY",
+          "QUARTERLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE",
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          10,
+          30
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12633323513233335,
+        "actualSipXirrReason": null,
+        "terminalValue": 197307.955712409,
+        "seriesUnitsRemaining": 1236.2395,
+        "expectedPeriods": 30,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-017",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "IRREGULAR",
+        "confidence": "AMBIGUOUS",
+        "contributionCount": 4,
+        "trend": "FLAT",
+        "allCadences": [
+          "IRREGULAR"
+        ],
+        "allConfidences": [
+          "AMBIGUOUS"
+        ],
+        "allContributionCounts": [
+          4
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.11427937822503734,
+        "actualSipXirrReason": null,
+        "terminalValue": 54584.342963999996,
+        "seriesUnitsRemaining": 342.0,
+        "consistencyPct": null,
+        "expectedPeriods": null,
+        "skippedPeriods": null,
+        "activityStatus": "UNKNOWN",
+        "notConfirmed": true
+      }
+    },
+    {
+      "id": "SIP-018",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "WEEKLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 40,
+        "trend": "FLAT",
+        "allCadences": [
+          "WEEKLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          40
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12296881869639037,
+        "actualSipXirrReason": null,
+        "terminalValue": 57361.29842941225,
+        "seriesUnitsRemaining": 359.399106,
+        "expectedPeriods": 40,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-019",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 40,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          40
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.11797296517674111,
+        "actualSipXirrReason": null,
+        "terminalValue": 276534.37604779884,
+        "seriesUnitsRemaining": 1732.635248,
+        "expectedPeriods": 40,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LIKELY_STOPPED",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-020",
+      "family": "sip",
+      "certify": [
+        "cadence",
+        "confidence",
+        "contributionCount",
+        "actualSipXirr",
+        "consistencyPct",
+        "activityStatus"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "MONTHLY",
+        "confidence": "CONFIRMED_SOURCE",
+        "contributionCount": 29,
+        "trend": "FLAT",
+        "allCadences": [
+          "MONTHLY"
+        ],
+        "allConfidences": [
+          "CONFIRMED_SOURCE"
+        ],
+        "allContributionCounts": [
+          29
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.12919826482218927,
+        "actualSipXirrReason": null,
+        "terminalValue": 203310.3121684139,
+        "seriesUnitsRemaining": 1283.946755,
+        "expectedPeriods": 29,
+        "skippedPeriods": 0,
+        "consistencyPct": 1.0,
+        "activityStatus": "LATE",
+        "notConfirmed": false
+      }
+    },
+    {
+      "id": "SIP-BENCH-001",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": 0.12272267651365837,
+        "syntheticUnits": 9.182012027235087,
+        "terminalValue": 228647.59849408738,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-002",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": 0.12390501423302339,
+        "syntheticUnits": 7.891228275168406,
+        "terminalValue": 196504.90425563234,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-003",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "unavailable",
+        "benchmarkSipReason": "MISSING_BENCHMARK",
+        "benchmarkSipXirr": null,
+        "syntheticUnits": null,
+        "terminalValue": null,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-004",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "unavailable",
+        "benchmarkSipReason": "INCOMPLETE_BENCHMARK_HISTORY",
+        "benchmarkSipXirr": null,
+        "syntheticUnits": null,
+        "terminalValue": null,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-005",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": 0.24755409625853647,
+        "syntheticUnits": 7.4656683507850214,
+        "terminalValue": 251175.61661240223,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-006",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": -0.10218369433918273,
+        "syntheticUnits": 9.121269364641526,
+        "terminalValue": 117755.76522545567,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-007",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": 0.006476383803237697,
+        "syntheticUnits": 15.16758758259185,
+        "terminalValue": 152219.20791972752,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-008",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": -0.11540687600412639,
+        "syntheticUnits": 7.730642378941347,
+        "terminalValue": 99802.74374369955,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-009",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "unavailable",
+        "benchmarkSipReason": "BENCHMARK_TERMINAL_UNAVAILABLE",
+        "benchmarkSipXirr": null,
+        "syntheticUnits": null,
+        "terminalValue": null,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "SIP-BENCH-010",
+      "family": "benchmark_sip",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipXirr",
+        "syntheticUnits",
+        "terminalValue"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "ok",
+        "benchmarkSipReason": null,
+        "benchmarkSipXirr": 0.12216674911411246,
+        "syntheticUnits": 7.765991913311328,
+        "terminalValue": 193386.30744941795,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "STEP-001",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 210000.0,
+        "unitsAccumulated": 1636.7992430191307,
+        "terminalValue": 261238.62936892343,
+        "simulationXirr": 0.12643809252040233
+      }
+    },
+    {
+      "id": "STEP-002",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 223884.0,
+        "unitsAccumulated": 1735.1411357733223,
+        "terminalValue": 276934.32411109796,
+        "simulationXirr": 0.12651406626537215
+      }
+    },
+    {
+      "id": "STEP-003",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 238530.0,
+        "unitsAccumulated": 1838.5900019122912,
+        "terminalValue": 293445.1088729881,
+        "simulationXirr": 0.12658506184438012
+      }
+    },
+    {
+      "id": "STEP-004",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 153078.0,
+        "unitsAccumulated": 1183.765204288683,
+        "terminalValue": 188932.88274778653,
+        "simulationXirr": 0.126542928663257
+      }
+    },
+    {
+      "id": "STEP-005",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 223884.0,
+        "unitsAccumulated": 1736.1303099147237,
+        "terminalValue": 277092.19960988563,
+        "simulationXirr": 0.1262654678753461
+      }
+    },
+    {
+      "id": "STEP-006",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 42,
+        "totalContributed": 223884.0,
+        "unitsAccumulated": 1867.0537285784744,
+        "terminalValue": 166341.63628552828,
+        "simulationXirr": -0.1664661685467581
+      }
+    },
+    {
+      "id": "STEP-007",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 54,
+        "totalContributed": 322386.0,
+        "unitsAccumulated": 2590.4552760583633,
+        "terminalValue": 413445.31936044735,
+        "simulationXirr": 0.11934978050208883
+      }
+    },
+    {
+      "id": "STEP-008",
+      "family": "simulation",
+      "certify": [
+        "simulationStatus",
+        "contributionCount",
+        "totalContributed",
+        "unitsAccumulated",
+        "terminalValue",
+        "simulationXirr"
+      ],
+      "expected": {
+        "simulationStatus": "ok",
+        "contributionCount": 37,
+        "totalContributed": 185000.0,
+        "unitsAccumulated": 1636.1433328737485,
+        "terminalValue": 216987.30035843264,
+        "simulationXirr": 0.10368755542818692
+      }
+    },
+    {
+      "id": "XRAY-001",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 1.0,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-002",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S10",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S3",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S4",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S5",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S6",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S7",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S8",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S9",
+            "effectiveWeight": 0.1,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 0.9999999999999999,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 0.9999999999999999,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 1.1102230246251565e-16,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-003",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.36,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S3",
+            "effectiveWeight": 0.27999999999999997,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.24,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S4",
+            "effectiveWeight": 0.12,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-004",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.35,
+            "schemeCount": 2
+          },
+          {
+            "canonicalId": "S3",
+            "effectiveWeight": 0.275,
+            "schemeCount": 2
+          },
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.25,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S5",
+            "effectiveWeight": 0.125,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-005",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.6,
+            "schemeCount": 2
+          },
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.39999999999999997,
+            "schemeCount": 2
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-006",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S10",
+            "effectiveWeight": 0.125,
+            "schemeCount": 5
+          },
+          {
+            "canonicalId": "S7",
+            "effectiveWeight": 0.125,
+            "schemeCount": 5
+          },
+          {
+            "canonicalId": "S8",
+            "effectiveWeight": 0.125,
+            "schemeCount": 5
+          },
+          {
+            "canonicalId": "S9",
+            "effectiveWeight": 0.125,
+            "schemeCount": 5
+          },
+          {
+            "canonicalId": "S11",
+            "effectiveWeight": 0.11666666666666667,
+            "schemeCount": 4
+          },
+          {
+            "canonicalId": "S12",
+            "effectiveWeight": 0.1,
+            "schemeCount": 3
+          },
+          {
+            "canonicalId": "S6",
+            "effectiveWeight": 0.08333333333333334,
+            "schemeCount": 4
+          },
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.075,
+            "schemeCount": 2
+          },
+          {
+            "canonicalId": "S5",
+            "effectiveWeight": 0.05,
+            "schemeCount": 3
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.041666666666666664,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S4",
+            "effectiveWeight": 0.025,
+            "schemeCount": 2
+          },
+          {
+            "canonicalId": "S3",
+            "effectiveWeight": 0.008333333333333333,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-007",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S3",
+            "effectiveWeight": 0.48,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.27999999999999997,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S-REL",
+            "effectiveWeight": 0.24,
+            "schemeCount": 2
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-008",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "exactExposureX"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "OA",
+            "effectiveWeight": 0.54,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "OB",
+            "effectiveWeight": 0.32000000000000006,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "X",
+            "effectiveWeight": 0.14,
+            "schemeCount": 2
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": 0.14
+      }
+    },
+    {
+      "id": "XRAY-009",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.7,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.3,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": true,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-010",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.85,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.15,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-011",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.37,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 0.87,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 0.87,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.13,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-012",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.6,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 0.6,
+        "schemeCoverage": 0.6,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.4,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-013",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 1.0,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "VERY_STALE",
+        "oldestHoldingsDate": "2023-04-30",
+        "newestHoldingsDate": "2023-04-30",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": true,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-014",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "VERY_STALE",
+        "oldestHoldingsDate": "2023-09-30",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 245,
+        "mixedDateWarning": true,
+        "hasStaleStatus": true,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "XRAY-015",
+      "family": "xray",
+      "certify": [
+        "lookThroughStatus",
+        "exposures",
+        "effectiveCoverage",
+        "cashWeight",
+        "unresolvedWeight",
+        "noSnapshotWeight",
+        "freshness"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 1.0,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-05-31",
+        "newestHoldingsDate": "2024-05-31",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "OVERLAP-001",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 1.0,
+        "commonSecurityCount": 3,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-002",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.0,
+        "commonSecurityCount": 0,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-003",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.05,
+        "commonSecurityCount": 1,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-004",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.6000000000000001,
+        "commonSecurityCount": 3,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-005",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.42000000000000004,
+        "commonSecurityCount": 2,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-006",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.3,
+        "commonSecurityCount": 1,
+        "hasQualityWarning": true,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-007",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.7,
+        "commonSecurityCount": 1,
+        "hasQualityWarning": false,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-008",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry",
+        "hasQualityWarning"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 1.0,
+        "commonSecurityCount": 1,
+        "hasQualityWarning": true,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-009",
+      "family": "overlap",
+      "certify": [
+        "overlapStatus",
+        "weightedOverlap",
+        "commonSecurityCount",
+        "symmetry",
+        "hasQualityWarning"
+      ],
+      "expected": {
+        "overlapStatus": "ok",
+        "weightedOverlap": 0.9,
+        "commonSecurityCount": 2,
+        "hasQualityWarning": true,
+        "symmetry": true
+      }
+    },
+    {
+      "id": "OVERLAP-010",
+      "family": "overlap",
+      "certify": [
+        "matrixSize",
+        "matrixSymmetric",
+        "matrixBounded",
+        "matrixValues"
+      ],
+      "expected": {
+        "matrixSize": 10,
+        "matrixSymmetric": true,
+        "matrixBounded": true,
+        "matrixValues": [
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.08,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.08,
+          0.0,
+          0.0,
+          0.0,
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.08,
+          0.0,
+          0.0,
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.08,
+          0.0,
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.08,
+          0.7,
+          0.45,
+          0.3,
+          0.18,
+          0.7,
+          0.45,
+          0.3,
+          0.7,
+          0.45,
+          0.7
+        ]
+      }
+    },
+    {
+      "id": "CONC-001",
+      "family": "concentration",
+      "certify": [
+        "top1",
+        "top5",
+        "top10",
+        "hhi"
+      ],
+      "expected": {
+        "top1": 1.0,
+        "top5": 1.0,
+        "top10": 1.0,
+        "hhi": 1.0,
+        "sectorBuckets": [],
+        "sectorClassifiedWeight": 0.0,
+        "sectorUnclassifiedWeight": 1.0,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 1.0
+      }
+    },
+    {
+      "id": "CONC-002",
+      "family": "concentration",
+      "certify": [
+        "top1",
+        "top5",
+        "top10",
+        "hhi"
+      ],
+      "expected": {
+        "top1": 0.1,
+        "top5": 0.5,
+        "top10": 1.0,
+        "hhi": 0.10000000000000002,
+        "sectorBuckets": [],
+        "sectorClassifiedWeight": 0.0,
+        "sectorUnclassifiedWeight": 0.9999999999999999,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 0.9999999999999999
+      }
+    },
+    {
+      "id": "CONC-003",
+      "family": "concentration",
+      "certify": [
+        "top1",
+        "top5",
+        "top10",
+        "hhi"
+      ],
+      "expected": {
+        "top1": 0.15,
+        "top5": 0.54,
+        "top10": 0.6933333333333334,
+        "hhi": 0.07550666666666667,
+        "sectorBuckets": [],
+        "sectorClassifiedWeight": 0.0,
+        "sectorUnclassifiedWeight": 0.9999999999999992,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 0.9999999999999992
+      }
+    },
+    {
+      "id": "CONC-004",
+      "family": "concentration",
+      "certify": [
+        "top1",
+        "top5",
+        "top10",
+        "hhi"
+      ],
+      "expected": {
+        "top1": 0.375,
+        "top5": 1.0,
+        "top10": 1.0,
+        "hhi": 0.2790625,
+        "sectorBuckets": [],
+        "sectorClassifiedWeight": 0.0,
+        "sectorUnclassifiedWeight": 1.0,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 1.0
+      }
+    },
+    {
+      "id": "CONC-005",
+      "family": "concentration",
+      "certify": [
+        "sectorBuckets",
+        "sectorClassifiedWeight",
+        "sectorUnclassifiedWeight"
+      ],
+      "expected": {
+        "top1": 0.36,
+        "top5": 1.0,
+        "top10": 1.0,
+        "hhi": 0.2672,
+        "sectorBuckets": [
+          {
+            "key": "FIN",
+            "effectiveWeight": 0.44
+          },
+          {
+            "key": "ENERGY",
+            "effectiveWeight": 0.36
+          },
+          {
+            "key": "TECH",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "sectorClassifiedWeight": 1.0,
+        "sectorUnclassifiedWeight": 0.0,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 1.0
+      }
+    },
+    {
+      "id": "CONC-006",
+      "family": "concentration",
+      "certify": [
+        "marketCapBuckets",
+        "marketCapClassifiedWeight",
+        "marketCapUnclassifiedWeight"
+      ],
+      "expected": {
+        "top1": 0.35,
+        "top5": 1.0,
+        "top10": 1.0,
+        "hhi": 0.27499999999999997,
+        "sectorBuckets": [],
+        "sectorClassifiedWeight": 0.0,
+        "sectorUnclassifiedWeight": 1.0,
+        "marketCapBuckets": [
+          {
+            "key": "LARGE",
+            "effectiveWeight": 0.6499999999999999
+          },
+          {
+            "key": "MID",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "SMALL",
+            "effectiveWeight": 0.15
+          }
+        ],
+        "marketCapClassifiedWeight": 1.0,
+        "marketCapUnclassifiedWeight": 0.0
+      }
+    },
+    {
+      "id": "CONC-007",
+      "family": "concentration",
+      "certify": [
+        "sectorBuckets",
+        "sectorClassifiedWeight",
+        "sectorUnclassifiedWeight"
+      ],
+      "expected": {
+        "top1": 0.4,
+        "top5": 1.0,
+        "top10": 1.0,
+        "hhi": 0.34500000000000003,
+        "sectorBuckets": [
+          {
+            "key": "FIN",
+            "effectiveWeight": 0.4
+          },
+          {
+            "key": "TECH",
+            "effectiveWeight": 0.25
+          }
+        ],
+        "sectorClassifiedWeight": 0.65,
+        "sectorUnclassifiedWeight": 0.35,
+        "marketCapBuckets": [],
+        "marketCapClassifiedWeight": 0.0,
+        "marketCapUnclassifiedWeight": 1.0
+      }
+    },
+    {
+      "id": "CONC-008",
+      "family": "amc_concentration",
+      "certify": [
+        "amcBuckets",
+        "amcUnattributedWeight"
+      ],
+      "expected": {
+        "amcBuckets": [
+          {
+            "amcId": "AMC-A",
+            "weight": 0.6363636363636364,
+            "schemeCount": 2
+          },
+          {
+            "amcId": "AMC-B",
+            "weight": 0.2727272727272727,
+            "schemeCount": 1
+          }
+        ],
+        "amcUnattributedWeight": 0.09090909090909091
+      }
+    },
+    {
+      "id": "DEBT-001",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "GT_10Y",
+            "effectiveWeight": 0.1
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "ISS-A",
+            "effectiveWeight": 0.5
+          },
+          {
+            "issuerId": "ISS-C",
+            "effectiveWeight": 0.30000000000000004
+          },
+          {
+            "issuerId": "ISS-B",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.4
+          },
+          {
+            "key": "A",
+            "effectiveWeight": 0.1
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "ok",
+        "weightedDuration": 3.94,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-002",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.3
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "GOI",
+            "effectiveWeight": 0.5
+          },
+          {
+            "issuerId": "ISS-A",
+            "effectiveWeight": 0.3
+          },
+          {
+            "issuerId": "ISS-B",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "SOVEREIGN",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.3
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "ok",
+        "weightedDuration": 3.7100000000000004,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-003",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.4
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.4
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I3",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I4",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I5",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "SOVEREIGN",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "A",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "BELOW_A",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "ok",
+        "weightedDuration": 3.98,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-004",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.4
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.6
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.6
+          },
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.4
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.4
+          },
+          {
+            "key": "UNRATED",
+            "effectiveWeight": 0.6
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "ok",
+        "weightedDuration": 2.88,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-005",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "LT_1Y",
+            "effectiveWeight": 0.15
+          },
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.2
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.25
+          },
+          {
+            "key": "GT_10Y",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I4",
+            "effectiveWeight": 0.25
+          },
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I3",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I5",
+            "effectiveWeight": 0.2
+          },
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.15
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.35
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.45
+          },
+          {
+            "key": "A",
+            "effectiveWeight": 0.2
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "ok",
+        "weightedDuration": 4.6850000000000005,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-006",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.5
+          },
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "unavailable",
+        "weightedDuration": null,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-007",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.5
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.5
+          },
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.5
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "unavailable",
+        "creditBuckets": [],
+        "consolidationSuppressed": true,
+        "durationStatus": "ok",
+        "weightedDuration": 3.2,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DEBT-008",
+      "family": "debt",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "maturityStatus",
+        "maturityBuckets",
+        "durationStatus",
+        "weightedDuration",
+        "issuerBuckets"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y1_3",
+            "effectiveWeight": 0.3
+          },
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.7
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.7
+          },
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.3
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "AAA",
+            "effectiveWeight": 0.3
+          },
+          {
+            "key": "AA",
+            "effectiveWeight": 0.7
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "unavailable",
+        "weightedDuration": null,
+        "noFabricatedDuration": true
+      }
+    },
+    {
+      "id": "DQ-R5-001",
+      "family": "data_quality",
+      "certify": [
+        "lookThroughStatus",
+        "noFabricatedZeroSectors",
+        "effectiveCoverage"
+      ],
+      "expected": {
+        "lookThroughStatus": "unavailable",
+        "exposures": [],
+        "effectiveCoverage": 0.0,
+        "cashWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 1.0,
+        "freshness": "MISSING",
+        "noFabricatedZeroSectors": true
+      }
+    },
+    {
+      "id": "DQ-R5-002",
+      "family": "data_quality",
+      "certify": [
+        "lookThroughStatus",
+        "effectiveCoverage",
+        "noSnapshotWeight"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 0.5,
+        "schemeCoverage": 0.5,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.5,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "DQ-R5-003",
+      "family": "data_quality",
+      "certify": [
+        "lookThroughStatus",
+        "effectiveCoverage",
+        "noSnapshotWeight"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.95,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 0.95,
+        "schemeCoverage": 0.95,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.05,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "DQ-R5-004",
+      "family": "data_quality",
+      "certify": [
+        "freshness",
+        "hasStaleStatus"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 1.0,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "VERY_STALE",
+        "oldestHoldingsDate": "2023-06-30",
+        "newestHoldingsDate": "2023-06-30",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": true,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "DQ-R5-005",
+      "family": "data_quality",
+      "certify": [
+        "mixedDateWarning",
+        "mixedDateSpreadDays",
+        "oldestHoldingsDate",
+        "newestHoldingsDate"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          },
+          {
+            "canonicalId": "S2",
+            "effectiveWeight": 0.5,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.0,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "VERY_STALE",
+        "oldestHoldingsDate": "2023-11-30",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 184,
+        "mixedDateWarning": true,
+        "hasStaleStatus": true,
+        "hasUnresolvedStatus": false,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "DQ-R5-006",
+      "family": "data_quality",
+      "certify": [
+        "unresolvedWeight",
+        "hasUnresolvedStatus",
+        "weightIdentity"
+      ],
+      "expected": {
+        "lookThroughStatus": "ok",
+        "exposures": [
+          {
+            "canonicalId": "S1",
+            "effectiveWeight": 0.55,
+            "schemeCount": 1
+          }
+        ],
+        "effectiveCoverage": 1.0,
+        "schemeCoverage": 1.0,
+        "holdingsCoverageWithinSchemes": 1.0,
+        "cashWeight": 0.0,
+        "derivativeWeight": 0.0,
+        "otherWeight": 0.0,
+        "unresolvedWeight": 0.45,
+        "noSnapshotWeight": 0.0,
+        "undisclosedRemainderWeight": 0.0,
+        "freshness": "CURRENT",
+        "oldestHoldingsDate": "2024-06-01",
+        "newestHoldingsDate": "2024-06-01",
+        "mixedDateSpreadDays": 0,
+        "mixedDateWarning": false,
+        "hasStaleStatus": false,
+        "hasUnresolvedStatus": true,
+        "noFabricatedZeroSectors": true,
+        "weightIdentity": 1.0,
+        "exactExposureX": null
+      }
+    },
+    {
+      "id": "DQ-R5-007",
+      "family": "data_quality",
+      "certify": [
+        "benchmarkSipStatus",
+        "benchmarkSipReason",
+        "noFabricatedBenchmarkRate"
+      ],
+      "expected": {
+        "benchmarkSipStatus": "unavailable",
+        "benchmarkSipReason": "MISSING_BENCHMARK",
+        "benchmarkSipXirr": null,
+        "syntheticUnits": null,
+        "terminalValue": null,
+        "noFabricatedBenchmarkRate": true
+      }
+    },
+    {
+      "id": "DQ-R5-008",
+      "family": "data_quality",
+      "certify": [
+        "confidence",
+        "notConfirmed"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "UNKNOWN",
+        "confidence": "NOT_SIP",
+        "contributionCount": 1,
+        "trend": "FLAT",
+        "allCadences": [
+          "UNKNOWN"
+        ],
+        "allConfidences": [
+          "NOT_SIP"
+        ],
+        "allContributionCounts": [
+          1
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.3101018880665651,
+        "actualSipXirrReason": null,
+        "terminalValue": 5200.0,
+        "seriesUnitsRemaining": 40.0,
+        "consistencyPct": null,
+        "expectedPeriods": null,
+        "skippedPeriods": null,
+        "activityStatus": "UNKNOWN",
+        "notConfirmed": true
+      }
+    },
+    {
+      "id": "DQ-R5-009",
+      "family": "data_quality",
+      "certify": [
+        "confidence",
+        "notConfirmed"
+      ],
+      "expected": {
+        "seriesCount": 1,
+        "cadence": "IRREGULAR",
+        "confidence": "AMBIGUOUS",
+        "contributionCount": 4,
+        "trend": "FLAT",
+        "allCadences": [
+          "IRREGULAR"
+        ],
+        "allConfidences": [
+          "AMBIGUOUS"
+        ],
+        "allContributionCounts": [
+          4
+        ],
+        "actualSipXirrStatus": "ok",
+        "actualSipXirr": 0.05883425713429458,
+        "actualSipXirrReason": null,
+        "terminalValue": 31360.0,
+        "seriesUnitsRemaining": 224.0,
+        "consistencyPct": null,
+        "expectedPeriods": null,
+        "skippedPeriods": null,
+        "activityStatus": "UNKNOWN",
+        "notConfirmed": true
+      }
+    },
+    {
+      "id": "DQ-R5-010",
+      "family": "data_quality",
+      "certify": [
+        "creditStatus",
+        "creditBuckets",
+        "durationStatus",
+        "noFabricatedDuration"
+      ],
+      "expected": {
+        "maturityStatus": "ok",
+        "maturityBuckets": [
+          {
+            "key": "Y3_5",
+            "effectiveWeight": 0.6
+          },
+          {
+            "key": "Y5_10",
+            "effectiveWeight": 0.4
+          }
+        ],
+        "issuerBuckets": [
+          {
+            "issuerId": "I1",
+            "effectiveWeight": 0.6
+          },
+          {
+            "issuerId": "I2",
+            "effectiveWeight": 0.4
+          }
+        ],
+        "issuerUnattributedWeight": 0.0,
+        "creditStatus": "ok",
+        "creditBuckets": [
+          {
+            "key": "UNRATED",
+            "effectiveWeight": 1.0
+          }
+        ],
+        "consolidationSuppressed": false,
+        "durationStatus": "unavailable",
+        "weightedDuration": null,
+        "noFabricatedDuration": true
+      }
+    }
+  ]
+}

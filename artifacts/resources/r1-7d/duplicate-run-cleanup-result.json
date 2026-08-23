@@ -1,0 +1,22 @@
+{
+  "boundary_created_at": "2026-08-21T03:04:55.777254+00:00",
+  "workflow_rows_before": 324,
+  "workflow_rows_to_delete": 162,
+  "workflow_rows_after": 162,
+  "audit_rows_to_delete": 162,
+  "shapes_to_delete": {
+    "approved->editorial_review": 76,
+    "editorial_review->compliance_review": 10,
+    "compliance_review->approved": 10,
+    "editorial_review->approved": 66
+  },
+  "shapes_retained": {
+    "draft->editorial_review": 76,
+    "editorial_review->compliance_review": 10,
+    "compliance_review->approved": 10,
+    "editorial_review->approved": 66
+  },
+  "applied": true,
+  "workflow_rows_now": 162,
+  "audit_rows_now": 498
+}

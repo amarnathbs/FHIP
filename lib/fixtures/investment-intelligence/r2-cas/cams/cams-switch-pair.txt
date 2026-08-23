@@ -1,0 +1,29 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 1201040000600
+PAN: ABCDE0006F
+Name: DEEPA IYER
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Mar-2025   Switch Out To SBI Bluechip Fund       12000.00  89.660  133.8300  10.340 [Ref: SW0001OUT]
+
+Closing Unit Balance as on 30-Jun-2025 : 10.340 Units   Valuation : Rs. 1394.87   NAV as on 30-Jun-2025 : Rs. 134.9000
+
+AMC Name: SBI Mutual Fund
+Scheme Name: SBI Bluechip Fund - Growth (Regular Plan)
+ISIN: INF200K01UP0
+AMFI Code: 103504
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Mar-2025   Switch In From HDFC Flexi Cap Fund    12000.00  45.400  264.3200  45.400 [Ref: SW0001IN]
+
+Closing Unit Balance as on 30-Jun-2025 : 45.400 Units   Valuation : Rs. 11990.14   NAV as on 30-Jun-2025 : Rs. 264.1000

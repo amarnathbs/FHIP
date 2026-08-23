@@ -65,6 +65,12 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'DNA', href: '/dna' },
       { type: 'link', label: 'Resilience', href: '/resilience' },
       { type: 'link', label: 'Twin / Benchmark', href: '/financial-twin' },
+      // Investment Intelligence (India) R2: statement upload / Portfolio
+      // Truth review only — this area does NOT feed Investments/Assets/
+      // Dashboard yet (no FHIP publishing in R2, spec section 32). Kept
+      // as its own nav entry, not merged into "Investment & Retirement"
+      // above, so that separation is visible to the user too.
+      { type: 'link', label: 'Investment Intelligence (India)', href: '/investment-intelligence' },
     ],
   },
   {
@@ -78,6 +84,67 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'Reports', href: '/reports' },
     ],
   },
+];
+
+// R1.2 Admin Resources shell nav — spec §41. Shown to any user holding at
+// least one Resources role or Super Admin (hasResourcesAccess, from
+// /api/admin/me); RLS remains the actual access boundary underneath this,
+// this list is UX-only (spec §90/§43: "Do not hide content solely for
+// security... Navigation hiding is only UX"). Future routes named in the
+// spec (§8 — videos/glossary/faqs/categories/etc.) are deliberately not
+// listed here at all, rather than shown disabled, per spec §8's "omit until
+// implementation" option.
+// R1.3 adds "New Content" (spec §10) — role-gated server-side by
+// /admin/resources/content/new itself (canCreateResource()), not by this
+// list; a Resources-role user without create rights simply sees a friendly
+// "you don't have permission" message on that page rather than the link
+// being hidden, matching this list's own stated convention above.
+const RESOURCES_ITEMS: { label: string; href: string }[] = [
+  { label: 'Dashboard', href: '/admin/resources' },
+  { label: 'New Content', href: '/admin/resources/content/new' },
+  { label: 'All Content', href: '/admin/resources/content' },
+];
+
+// The two pre-existing Super Admin surfaces (Benchmarks, Recommendations) —
+// pulled into the same collapsible "Admin" section as everything below so
+// there's one admin entry point in the sidebar, not three independent
+// flat sections at the top level.
+const ADMIN_GENERAL_ITEMS: { label: string; href: string }[] = [
+  { label: 'Benchmarks', href: '/admin/benchmarks' },
+  { label: 'Recommendations', href: '/admin/recommendations' },
+];
+
+// R1.4 (spec §64): specialist content-type shortcuts so admins can reach
+// Video/Glossary/FAQ/Money Update management without going through All
+// Content for every workflow (spec §110). A separate group from
+// RESOURCES_ITEMS/WORKFLOW_ITEMS below, matching the spec's own suggested
+// CONTENT / WORKFLOW grouping.
+const CONTENT_TYPE_ITEMS: { label: string; href: string }[] = [
+  { label: 'Videos', href: '/admin/resources/videos' },
+  { label: 'Glossary', href: '/admin/resources/glossary' },
+  { label: 'FAQs', href: '/admin/resources/faqs' },
+  { label: 'Money Updates', href: '/admin/resources/money-updates' },
+];
+
+const WORKFLOW_ITEMS: { label: string; href: string }[] = [
+  { label: 'Drafts', href: '/admin/resources/content/drafts' },
+  { label: 'Review Queue', href: '/admin/resources/content/review' },
+  { label: 'Scheduled', href: '/admin/resources/content/scheduled' },
+  { label: 'Published', href: '/admin/resources/content/published' },
+  { label: 'Review Due', href: '/admin/resources/content/review-due' },
+  { label: 'Archived', href: '/admin/resources/content/archived' },
+];
+
+// R1.6 (spec §75): "Add operational links: Search & Discovery, Related
+// Content, CTAs, Context Mapping — only where real management surfaces
+// exist. Do not add dead links." Search itself has no admin management
+// surface (it's fully deterministic/automatic, nothing to curate beyond the
+// content already managed above), so no "Search & Discovery" link is added
+// — only the three that have real screens behind them.
+const DISCOVERY_ITEMS: { label: string; href: string }[] = [
+  { label: 'Related Content', href: '/admin/resources/related' },
+  { label: 'CTAs', href: '/admin/resources/ctas' },
+  { label: 'Context Mapping', href: '/admin/resources/context' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -98,13 +165,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasResourcesAccess, setHasResourcesAccess] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting group only if the initial page load lands
   // inside it; thereafter the user's own expand/collapse choice persists
   // across navigation (a persistent sidebar, unlike the old floating
   // top-bar dropdown, has no overlay-conflict reason to force-close it).
-  const [openDropdown, setOpenDropdown] = useState<string | null>(() => (pathname.startsWith('/forecast') ? 'forecasting' : null));
+  const [openDropdown, setOpenDropdown] = useState<string | null>(() =>
+    pathname.startsWith('/forecast') ? 'forecasting' : pathname.startsWith('/admin') ? 'admin' : null
+  );
   // Multi-item groups (Your finances, Plan & improve, Review & share) are
   // collapsible via their header, same idea as the Forecasting dropdown but
   // one level up — collapsing the section, not just one entry inside it.
@@ -131,7 +201,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/admin/me')
       .then((r) => r.json())
       .then((j) => {
-        if (!cancelled) setIsAdmin(Boolean(j.data?.isAdmin));
+        if (!cancelled) {
+          setIsAdmin(Boolean(j.data?.isAdmin));
+          setHasResourcesAccess(Boolean(j.data?.hasResourcesAccess));
+        }
       })
       .catch(() => {});
     return () => {
@@ -277,35 +350,86 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
 
-        {isAdmin && (
-          <div>
-            <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">Account</p>
-            <ul className="space-y-0.5">
-              <li>
-                <Link
-                  href="/admin/benchmarks"
-                  aria-current={isActive(pathname, '/admin/benchmarks') ? 'page' : undefined}
-                  className={`block rounded px-3 py-2 text-sm ${
-                    isActive(pathname, '/admin/benchmarks') ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  Admin
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/admin/recommendations"
-                  aria-current={isActive(pathname, '/admin/recommendations') ? 'page' : undefined}
-                  className={`block rounded px-3 py-2 text-sm ${
-                    isActive(pathname, '/admin/recommendations') ? 'bg-white/10 font-semibold text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  Recs Admin
-                </Link>
-              </li>
-            </ul>
-          </div>
-        )}
+        {(isAdmin || hasResourcesAccess) && (() => {
+          // Single collapsible "Admin" entry, same dropdown mechanism as
+          // Forecasting (one openDropdown slot, Escape-to-close-and-refocus)
+          // rather than three-plus independent flat sections at the top
+          // level — an admin landing on any /admin/* route now sees exactly
+          // one place to look, auto-expanded (see openDropdown's initial
+          // state above), instead of hunting across separate headers for
+          // e.g. which of six items is the pending-review queue.
+          const adminGroups: { label: string; items: { label: string; href: string }[]; matchMode: 'exact' | 'prefix' }[] = [
+            ...(isAdmin ? [{ label: 'General', items: ADMIN_GENERAL_ITEMS, matchMode: 'exact' as const }] : []),
+            ...(hasResourcesAccess
+              ? [
+                  { label: 'Resources', items: RESOURCES_ITEMS, matchMode: 'exact' as const },
+                  { label: 'Content', items: CONTENT_TYPE_ITEMS, matchMode: 'prefix' as const },
+                  { label: 'Workflow', items: WORKFLOW_ITEMS, matchMode: 'exact' as const },
+                  { label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const },
+                ]
+              : []),
+          ];
+          const groupItemActive = (item: { href: string }, matchMode: 'exact' | 'prefix') =>
+            matchMode === 'exact' ? pathname === item.href : isActive(pathname, item.href);
+          const adminActive = adminGroups.some((g) => g.items.some((i) => groupItemActive(i, g.matchMode)));
+          return (
+            <div
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && openDropdown === 'admin') {
+                  setOpenDropdown(null);
+                  dropdownTriggerRefs.current.admin?.focus();
+                }
+              }}
+            >
+              <button
+                ref={(el) => {
+                  dropdownTriggerRefs.current.admin = el;
+                }}
+                type="button"
+                aria-expanded={openDropdown === 'admin'}
+                aria-controls={`${scope}-admin-group`}
+                aria-current={adminActive ? 'page' : undefined}
+                onClick={() => setOpenDropdown((o) => (o === 'admin' ? null : 'admin'))}
+                className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide ${
+                  adminActive ? 'text-white' : 'text-white/50 hover:text-white/70'
+                }`}
+              >
+                Admin
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openDropdown === 'admin' ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              {openDropdown === 'admin' && (
+                <div id={`${scope}-admin-group`} role="menu" aria-label="Admin" className="ml-2 space-y-2 border-l border-white/10 pl-3">
+                  {adminGroups.map((group) => (
+                    <div key={group.label} role="none">
+                      <p role="presentation" className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                        {group.label}
+                      </p>
+                      <ul role="group" aria-label={group.label} className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const itemActive = groupItemActive(item, group.matchMode);
+                          return (
+                            <li key={item.href} role="none">
+                              <Link
+                                href={item.href}
+                                role="menuitem"
+                                aria-current={itemActive ? 'page' : undefined}
+                                className={`block rounded px-3 py-1.5 text-sm ${
+                                  itemActive ? 'bg-white/10 font-semibold text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                                }`}
+                              >
+                                {item.label}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </nav>
       <div className="border-t border-white/10 p-3">
         <button

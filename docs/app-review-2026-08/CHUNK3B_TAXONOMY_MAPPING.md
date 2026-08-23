@@ -3,8 +3,8 @@
 Old->new catalogue mapping for the "FHIP — Assets, Investments & Retirement"
 spec ("Spec 2") §6 format, covering every item AR-0's discovery doc
 (`docs/app-review-2026-08/AR0_DISCOVERY_AND_BASELINE.md` §3.6) flagged.
-Implemented by `supabase/migrations/0038_taxonomy_consolidation_deprecation.sql`
-and `0039_retirement_contributions_backfill.sql`, off Chunk 3a's canonical
+Implemented by `supabase/migrations/0073_taxonomy_consolidation_deprecation.sql`
+and `0074_retirement_contributions_backfill.sql`, off Chunk 3a's canonical
 schema (`0033`-`0037`). Real-DEV-data evidence for every row below is in
 `docs/app-review-2026-08/CHUNK3B_MIGRATION_AUDIT.md`.
 

@@ -46,7 +46,7 @@ describe('resolveFieldVisibility', () => {
     expect(resolveFieldVisibility(row, purchaseDateField)).toEqual({ show: true, required: false, readOnly: false });
   });
 
-  it('undefined metadata (e.g. before migrations 0033/0034 land) degrades safely to always-shown, never-required', () => {
+  it('undefined metadata (e.g. before migrations 0068/0069 land) degrades safely to always-shown, never-required', () => {
     const row = {};
     expect(resolveFieldVisibility(row, purchaseDateField)).toEqual({ show: true, required: false, readOnly: false });
   });

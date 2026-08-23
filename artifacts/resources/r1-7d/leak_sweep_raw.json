@@ -1,0 +1,236 @@
+[
+  {
+    "content_id": "EX-001",
+    "pattern_matched": "editorial review",
+    "block_type": "paragraph",
+    "snippet": "This Resource is a FHIP Explainer, so the product itself is the authority. Before publication, the editorial reviewer must compare this wording with the current production aggregation in the Dashboard/service engine, current data dictionary, calculation version and cross-module reconciliation tests."
+  },
+  {
+    "content_id": "EX-001",
+    "pattern_matched": "before publication",
+    "block_type": "key_takeaways",
+    "snippet": "High-level FHIP formula: included non-investment assets + included investments + included retirement balances - included liabilities. | Use active, eligible canonical records and count each economic item once; derived equity, goal links or cross-border classifications are not extra assets. | Convert"
+  },
+  {
+    "content_id": "EX-001",
+    "pattern_matched": "production methodology",
+    "block_type": "paragraph",
+    "snippet": "Only records that the production methodology considers active and included should contribute. Archived, duplicated or otherwise excluded representations should not be added merely because they exist in a table or report."
+  },
+  {
+    "content_id": "EX-001",
+    "pattern_matched": "reviewer",
+    "block_type": "paragraph",
+    "snippet": "This Resource is a FHIP Explainer, so the product itself is the authority. Before publication, the editorial reviewer must compare this wording with the current production aggregation in the Dashboard/service engine, current data dictionary, calculation version and cross-module reconciliation tests."
+  },
+  {
+    "content_id": "EX-001",
+    "pattern_matched": "the editorial reviewer must",
+    "block_type": "paragraph",
+    "snippet": "This Resource is a FHIP Explainer, so the product itself is the authority. Before publication, the editorial reviewer must compare this wording with the current production aggregation in the Dashboard/service engine, current data dictionary, calculation version and cross-module reconciliation tests."
+  },
+  {
+    "content_id": "RAU-003",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "Moneysmart - Plan for your retirement; current planning sequence and retirement planner links (updated June 2026). | Moneysmart - How much super should I have; no single right retirement target and current benchmark context (updated July 2026). | Moneysmart - Super and the Age Pension; separate supe"
+  },
+  {
+    "content_id": "RIN-001",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "Employees' Provident Fund Organisation (EPFO) - current FAQ: standard employee and employer contribution rates and employer EPF/EPS split. | EPFO Employer Information Booklet / scheme material - wage ceiling, EPS diversion, EDLI and contribution administration. | EPFO scheme and annual-report materi"
+  },
+  {
+    "content_id": "EX-025",
+    "pattern_matched": "before publication",
+    "block_type": "paragraph",
+    "snippet": "Read the FHIP Free Report as a guided explanation of one canonical household financial snapshot, not as a separate calculator. Start with the report identity, reporting period/currency and data confidence; then read the Financial Health Score and plain-English summary; review cash flow, assets, liab"
+  },
+  {
+    "content_id": "RIN-003",
+    "pattern_matched": "compliance review",
+    "block_type": "paragraph",
+    "snippet": "Because these rules are detailed and have changed, this beginner Resource should not hard-code a simplified 'X% must always be annuitised' statement as if it were timeless. Before publication, the compliance reviewer should verify the latest PFRDA exit table and any sector-specific differences."
+  },
+  {
+    "content_id": "RIN-003",
+    "pattern_matched": "before publication",
+    "block_type": "key_takeaways",
+    "snippet": "NPS is market-linked, so the account value can rise or fall and no return is guaranteed. | Tier I is the core pension account; Tier II is a separate optional investment account subject to eligibility rules. | Subscribers can select pension-fund and asset-allocation options within PFRDA's framework. "
+  },
+  {
+    "content_id": "RIN-003",
+    "pattern_matched": "reviewer",
+    "block_type": "paragraph",
+    "snippet": "Because these rules are detailed and have changed, this beginner Resource should not hard-code a simplified 'X% must always be annuitised' statement as if it were timeless. Before publication, the compliance reviewer should verify the latest PFRDA exit table and any sector-specific differences."
+  },
+  {
+    "content_id": "RIN-003",
+    "pattern_matched": "compliance reviewer should",
+    "block_type": "paragraph",
+    "snippet": "Because these rules are detailed and have changed, this beginner Resource should not hard-code a simplified 'X% must always be annuitised' statement as if it were timeless. Before publication, the compliance reviewer should verify the latest PFRDA exit table and any sector-specific differences."
+  },
+  {
+    "content_id": "RIN-003",
+    "pattern_matched": "should not hard-code",
+    "block_type": "paragraph",
+    "snippet": "Because these rules are detailed and have changed, this beginner Resource should not hard-code a simplified 'X% must always be annuitised' statement as if it were timeless. Before publication, the compliance reviewer should verify the latest PFRDA exit table and any sector-specific differences."
+  },
+  {
+    "content_id": "EX-026",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "FHIP Premium Report V3 Advisor-Style Redesign and Storytelling Library Proposal - report philosophy, 16-22 page target, storytelling architecture, page-by-page direction and deterministic narrative engine. | FHIP UX Redesign Master Plan - Free vs Premium report experience, document-like reading mode"
+  },
+  {
+    "content_id": "DN-001",
+    "pattern_matched": "editorial review",
+    "block_type": "bulleted_list",
+    "snippet": "OECD - Smarter financial education: Key lessons from behavioural insights for financial literacy initiatives (2019). | Consumer Financial Protection Bureau - Pathways to financial well-being: Research brief (2018). | Consumer Financial Protection Bureau - financial well-being research and measuremen"
+  },
+  {
+    "content_id": "EX-006",
+    "pattern_matched": "before publication",
+    "block_type": "paragraph",
+    "snippet": "Older project artifacts may contain a gross-income DSR convention. That historical inconsistency is precisely why this Explainer is product-dependent: before publication, compare the draft with the current production code and active calculation version. If production differs, resolve the methodology"
+  },
+  {
+    "content_id": "VID-001",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "EX-004",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as a real FHIP test"
+  },
+  {
+    "content_id": "EX-004",
+    "pattern_matched": "production methodology",
+    "block_type": "paragraph",
+    "snippet": "The production methodology should return a safe governed result, normally Not Available or an explicitly defined special case, rather than divide by zero."
+  },
+  {
+    "content_id": "VID-004",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "EX-005",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "FHIP Benchmark/Twin metric catalogue - debt-to-income defined as total debt / gross annual income. | FHIP 50-user and India scenario reconciliation evidence - balance-based DTI values reconcile to liabilities / annual gross income. | FHIP production Liabilities, Income and Scores calculation code pl"
+  },
+  {
+    "content_id": "EX-012",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as real FHIP test/r"
+  },
+  {
+    "content_id": "VID-007",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "VID-005",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "VID-008",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "VID-002",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "VID-006",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "VID-003",
+    "pattern_matched": "cms",
+    "block_type": "callout",
+    "snippet": "Script and transcript draft complete. YouTube is the source of truth. Do not create a fake YouTube ID, URL, duration, thumbnail, view count or publication date. Publish on @GKTC first, then add the real metadata to the FHIP CMS record."
+  },
+  {
+    "content_id": "RAU-001",
+    "pattern_matched": "before publication",
+    "block_type": "heading",
+    "snippet": "Current-rule snapshot - verify again before publication"
+  },
+  {
+    "content_id": "EX-002",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "FHIP current-state canonical metric reconciliation and 50-user expected dataset - monthly surplus and outflow definitions. | FHIP production Dashboard / canonical cash-flow service and active calculation-version record - authoritative before publication. | FHIP data dictionary - income, expense, lia"
+  },
+  {
+    "content_id": "EX-007",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as a real FHIP test"
+  },
+  {
+    "content_id": "EX-007",
+    "pattern_matched": "production methodology",
+    "block_type": "paragraph",
+    "snippet": "FHIP Financial Resilience is a governed composite assessment of how well a household may be able to absorb and recover from financial pressure. It is not calculated from one ratio. The Resilience engine brings together approved evidence such as emergency liquidity, essential expenses, income concent"
+  },
+  {
+    "content_id": "EX-010",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as real FHIP test/r"
+  },
+  {
+    "content_id": "EX-003",
+    "pattern_matched": "before publication",
+    "block_type": "bulleted_list",
+    "snippet": "FHIP 50-user Expected_Current_Metrics and accuracy reconciliation - current-state savings-rate formula and zero-income N/A handling. | FHIP production Dashboard / score service and active calculation-version record - authoritative before publication. | FHIP Benchmark/Twin metric catalogue - review a"
+  },
+  {
+    "content_id": "EX-003",
+    "pattern_matched": "production methodology",
+    "block_type": "paragraph",
+    "snippet": "Very small denominators can create unstable percentages. The production methodology should define any near-zero handling rule and keep it versioned; this article must not invent one."
+  },
+  {
+    "content_id": "EX-009",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as real FHIP test/r"
+  },
+  {
+    "content_id": "EX-008",
+    "pattern_matched": "product owner",
+    "block_type": "paragraph",
+    "snippet": "Only if the Product Owner chooses to and the values are verified against the current production score engine and active methodology version."
+  },
+  {
+    "content_id": "EX-008",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as real FHIP test/r"
+  },
+  {
+    "content_id": "EX-011",
+    "pattern_matched": "before publication",
+    "block_type": "warning",
+    "snippet": "This FHIP Explainer is for general information and product-methodology transparency. It does not take account of your objectives, financial situation or needs and is not personal financial, investment, credit, tax or legal advice. Worked figures are illustrative unless identified as real FHIP test/r"
+  }
+]
