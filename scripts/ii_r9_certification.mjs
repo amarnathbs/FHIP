@@ -66,6 +66,26 @@ async function asTenant(uid, fn) {
   try { return await fn(); } finally { await db.exec(`reset role;`); }
 }
 async function asService(fn) {
+  // R9-LIVE-CERT FIX: must ALSO overwrite request.jwt.claims's role to
+  // 'service_role', not just reset the Postgres role -- set_config(...,
+  // false) is session-scoped, so a stale 'authenticated' claim from a prior
+  // asTenant() call would otherwise still be visible to auth.role() even
+  // after `reset role`, which the new authoritative-write trigger
+  // (migration 0069) checks directly. Matches the established pattern in
+  // scripts/r7_security_certification.mjs's asService(). Use this for data
+  // reads/writes that need to look like the real service-role client.
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: '00000000-0000-0000-0000-000000000000', role: 'service_role' })]);
+  await db.exec(`set role service_role;`);
+  try { return await fn(); } finally { await db.exec(`reset role;`); }
+}
+// Plain table-owner/superuser context -- for DDL only (the RLS-toggle
+// negative control needs ALTER TABLE privilege, which service_role does
+// not have and should not have). Distinct from asService() on purpose:
+// conflating the two broke the RLS-toggle negative control the first time
+// this fix was written (service_role lacks ownership; superuser bypasses
+// RLS but is a different Postgres role from what auth.role() should ever
+// report for a real request).
+async function asOwner(fn) {
   await db.exec(`reset role;`);
   return fn();
 }
@@ -114,12 +134,12 @@ await asTenant(A, async () => {
 });
 
 console.log('\n=== NEGATIVE CONTROLS (isolation deliberately removed -> leak MUST appear; spec section 93) ===');
-await asService(async () => db.exec(`alter table ii_review_items disable row level security;`));
+await asOwner(async () => db.exec(`alter table ii_review_items disable row level security;`));
 await asTenant(A, async () => {
   const r = await db.query(`select count(*)::int c from ii_review_items where user_id = '${B}'`);
   check('control: RLS off on ii_review_items -> Tenant A DOES see Tenant B (proves the test is not vacuous)', r.rows[0].c === 1, `(saw ${r.rows[0].c}, expected 1)`);
 });
-await asService(async () => db.exec(`alter table ii_review_items enable row level security;`));
+await asOwner(async () => db.exec(`alter table ii_review_items enable row level security;`));
 await asTenant(A, async () => {
   const r = await db.query(`select count(*)::int c from ii_review_items where user_id = '${B}'`);
   check('control: isolation restored on ii_review_items', r.rows[0].c === 0, `(saw ${r.rows[0].c})`);
@@ -169,11 +189,14 @@ await asService(async () => {
     check('a second ACTIVE publication for the SAME (account_id, instrument_id) is rejected', /duplicate key|unique constraint/i.test(e.message), `(${e.message.slice(0, 150)})`);
   }
   // Negative control: prove this specific guarantee is not vacuous by dropping the index and repeating.
-  await db.exec(`drop index uidx_ii_fhip_publications_one_active_position;`);
+  // Index DROP/CREATE needs table-owner privilege, which service_role does
+  // not have -- nest asOwner() for the DDL only, keep the data write itself
+  // under the outer service-role context.
+  await asOwner(async () => db.exec(`drop index uidx_ii_fhip_publications_one_active_position;`));
   const r = await db.query(`insert into ii_fhip_publications (user_id, canonical_position_id, publication_target, account_id, instrument_id, status) values ('${A}','${snap2}','investments','${acctId}','${instrId}','published') returning id`);
   check('control: with the guard index dropped, a second active publication for the same position DOES succeed (proves the test above is not vacuous)', r.rows.length === 1);
   await db.query(`delete from ii_fhip_publications where canonical_position_id = '${snap2}'`);
-  await db.exec(`create unique index uidx_ii_fhip_publications_one_active_position on ii_fhip_publications(account_id, instrument_id) where status = 'published';`);
+  await asOwner(async () => db.exec(`create unique index uidx_ii_fhip_publications_one_active_position on ii_fhip_publications(account_id, instrument_id) where status = 'published';`));
 });
 
 console.log(`\nR9 CERTIFICATION: ${pass} passed, ${fail} failed`);

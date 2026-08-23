@@ -239,6 +239,38 @@ export async function runReviewCentreRefresh(userId: string): Promise<{ created:
 //     is known) and insert a fresh 'open' row.
 // A candidate that no longer appears at all (condition resolved) causes its
 // still-open row to be marked 'resolved' — see resolveVanishedItems below.
+// R9-LIVE-CERT FIX (found via live-DEV certification, LIVE-R9-010): evidence
+// for rules that consume a LIVE canonical engine (goal_forecast_gap consumes
+// computeGoalsPagePayload's forecast on every refresh, spec section 27 --
+// R9 must never cache/duplicate that engine) is not guaranteed byte-stable
+// between two calls a few seconds apart -- the underlying forecast math is
+// continuous-time-sensitive, so a monetary figure like fundingGapAtTargetDate
+// -- observed 932040.2164891011 on one call -- can legitimately differ in a
+// trailing decimal on the next call with literally nothing else changed.
+// A raw JSON.stringify equality check treats that float wobble as "the
+// evidence changed", superseding and recreating the row on every single
+// refresh even when the underlying observation (e.g. trackStatus, already
+// part of identity_key) is identical -- exactly the "no duplicate review
+// spam" failure spec section 50 forbids. Round every numeric leaf to money
+// precision (2dp) before comparing, so a real change (a materially
+// different figure) is still caught, but sub-cent recomputation noise from
+// the live-consumed engine is not mistaken for a changed observation.
+function normalizeForComparison(value: unknown): unknown {
+  if (typeof value === 'number') return Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
+  if (Array.isArray(value)) return value.map(normalizeForComparison);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = normalizeForComparison((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
+}
+function evidenceEquivalent(a: unknown, b: unknown): boolean {
+  return JSON.stringify(normalizeForComparison(a)) === JSON.stringify(normalizeForComparison(b));
+}
+
 async function upsertReviewItems(admin: SupabaseClient, userId: string, candidates: ReviewItemCandidate[]): Promise<{ created: number; updated: number; superseded: number }> {
   let created = 0;
   let updated = 0;
@@ -281,7 +313,7 @@ async function upsertReviewItems(admin: SupabaseClient, userId: string, candidat
       continue;
     }
 
-    const evidenceUnchanged = JSON.stringify(existing.evidence) === JSON.stringify(c.evidence);
+    const evidenceUnchanged = evidenceEquivalent(existing.evidence, c.evidence);
     if (evidenceUnchanged) {
       // Refresh as_of_date only — same evidence, no need to supersede.
       await admin.from('ii_review_items').update({ as_of_date: c.asOfDate, updated_at: new Date().toISOString() }).eq('id', existing.id as string);
@@ -289,6 +321,21 @@ async function upsertReviewItems(admin: SupabaseClient, userId: string, candidat
       continue;
     }
 
+    // R9-LIVE-CERT FIX (found via live-DEV certification, LIVE-R9-009/010):
+    // the OLD open/acknowledged row MUST be superseded BEFORE the new 'open'
+    // row is inserted — uidx_ii_review_items_open_identity (migration 0067)
+    // allows at most one open/acknowledged row per (user_id, identity_key),
+    // so inserting the new 'open' row first while the old row is still
+    // open/acknowledged unconditionally violates that unique index (a real,
+    // 100%-reproducible bug: every evidence change on a re-run 500'd the
+    // whole refresh). This is exactly the order migration 0067's own header
+    // comment already documents as required ("the superseded row is no
+    // longer open/acknowledged when the new one is inserted") — the
+    // implementation just had the two statements swapped. superseded_by_id
+    // is filled in with a second small update once the new row's id is
+    // known (it cannot be known before the insert).
+    const { error: supersedeOldErr } = await admin.from('ii_review_items').update({ status: 'superseded', updated_at: new Date().toISOString() }).eq('id', existing.id as string);
+    if (supersedeOldErr) throw new Error(supersedeOldErr.message);
     const { data: fresh, error: insertErr } = await admin
       .from('ii_review_items')
       .insert({
@@ -313,7 +360,7 @@ async function upsertReviewItems(admin: SupabaseClient, userId: string, candidat
       .select('id')
       .single();
     if (insertErr || !fresh) throw new Error(insertErr?.message ?? 'Failed to insert superseding review item');
-    await admin.from('ii_review_items').update({ status: 'superseded', superseded_by_id: fresh.id as string, updated_at: new Date().toISOString() }).eq('id', existing.id as string);
+    await admin.from('ii_review_items').update({ superseded_by_id: fresh.id as string, updated_at: new Date().toISOString() }).eq('id', existing.id as string);
     superseded += 1;
     created += 1;
   }
