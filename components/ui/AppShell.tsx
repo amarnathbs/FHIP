@@ -101,8 +101,8 @@ const NAV_GROUPS: NavGroup[] = [
 // being hidden, matching this list's own stated convention above.
 const RESOURCES_ITEMS: { label: string; href: string }[] = [
   { label: 'Dashboard', href: '/admin/resources' },
-  { label: 'New Content', href: '/admin/resources/content/new' },
   { label: 'All Content', href: '/admin/resources/content' },
+  { label: 'New Content', href: '/admin/resources/content/new' },
 ];
 
 // The two pre-existing Super Admin surfaces (Benchmarks, Recommendations) —
@@ -401,9 +401,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div id={`${scope}-admin-group`} role="menu" aria-label="Admin" className="ml-2 space-y-2 border-l border-white/10 pl-3">
                   {adminGroups.map((group) => (
                     <div key={group.label} role="none">
-                      <p role="presentation" className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
-                        {group.label}
-                      </p>
+                      {/* "Content" is a static grouping label with no link/dropdown of its
+                          own — the items below it are the real navigation. Hidden per
+                          request; the group's items and their aria-label still identify
+                          it for assistive tech. */}
+                      {group.label !== 'Content' && (
+                        <p role="presentation" className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                          {group.label}
+                        </p>
+                      )}
                       <ul role="group" aria-label={group.label} className="space-y-0.5">
                         {group.items.map((item) => {
                           const itemActive = groupItemActive(item, group.matchMode);
