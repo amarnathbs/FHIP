@@ -39,6 +39,6 @@ export async function POST(req: Request) {
     },
     parsed.data.linkedInvestmentId ?? null
   );
-  if (result.error) return bad(result.error, 500);
+  if (result.error) return bad(result.error, result.capExceeded ? 409 : 500);
   return ok({ allocationId: result.allocationId });
 }
