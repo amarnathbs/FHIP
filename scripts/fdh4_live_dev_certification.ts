@@ -106,7 +106,7 @@ async function uploadCsv(cookie: string, meta: Record<string, string>, bytes: Bu
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null) qs.set(k, String(v));
   const res = await fetch(`${APP}/api/financial-data-hub/bank-csv/upload?${qs.toString()}`, {
-    method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes,
+    method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: new Uint8Array(bytes),
   });
   const text = await res.text();
   let json: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any -- dynamic JSON response body in certification tooling
