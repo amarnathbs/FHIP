@@ -16,7 +16,11 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES } from '@/lib/financial-data-hub/constants/enums';
+import {
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
+} from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0068_r8_transaction_classification_engine.sql';
@@ -41,13 +45,21 @@ describe('R8 migration 0068 — structural facts', () => {
     expect(/drop\s+table/i.test(SQL)).toBe(false);
   });
 
-  it('the widened fdh_document_audit_events.event_type constraint matches the FULL (FDH-3 + R7 + R8) TypeScript vocabulary', () => {
+  it('the widened fdh_document_audit_events.event_type constraint matches migration 0068\'s OWN combined (FDH-3 + R7 + R8) TypeScript vocabulary', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 1500);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    // Scoped to migration 0068's OWN frozen SQL text — FDH-3 + R7 + R8 only.
+    // FDH-5 (migration 0070) widens this same constraint again with its own
+    // 11 additional event types; that widening is verified separately by
+    // tests/unit/fdh5SchemaContract.test.ts against migration 0070's SQL,
+    // never against this frozen 0068-scoped assertion — identical
+    // discipline to this file's own header note on the 0067->0068 rename.
+    expect(values.sort()).toEqual(
+      [...FDH_DOCUMENT_AUDIT_EVENT_TYPES, ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED, ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED].sort(),
+    );
   });
 
   it('creates exactly the 6 new/widened trigger functions this release introduces', () => {
