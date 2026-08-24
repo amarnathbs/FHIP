@@ -35,6 +35,11 @@ const PREMIUM_SECTION_TITLES: Record<PremiumSectionCode, string> = {
   cross_border_full: 'Full Cross-Border Wealth Breakdown',
   stress_testing: 'Financial Stress Testing',
   personal_action_plan: 'Your Personal Action Plan',
+  investment_performance: 'Investment Performance',
+  sip_contribution: 'Contribution (SIP) Behaviour',
+  portfolio_xray: 'Portfolio X-Ray & Diversification',
+  tax_and_cost: 'Tax & Cost Intelligence',
+  priority_review_items: 'Priority Review Items',
   appendices: 'Appendices — Recorded Data',
 };
 
@@ -581,11 +586,160 @@ function buildPersonalActionPlan(source: ReportSourceData): BuiltSection {
   };
 }
 
+// ---------------------------------------------------------------------------
+// II-R10 continuation — Investment Intelligence chapters (spec sections
+// 21-32). Every one of these consumes a lib/services/investmentIntelligenceReportData.ts
+// result verbatim: the section's raw sectionData IS the engine's own result
+// object (same rule as buildInvestmentAnalysis et al. — Rule 15, "nothing
+// here recalculates anything"). Narrative text is built ONLY from fields the
+// engine itself already marks safe to render (SIP's `observations`,
+// review items' own `title`/`description`, or simple counts/status checks),
+// never a new interpretation of a raw number.
+// ---------------------------------------------------------------------------
+
+export function buildInvestmentPerformance(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const perf = premium.investmentPerformance;
+  if (!perf) return empty('investment_performance', 27, 'Investment performance analytics are not yet available — this requires recorded investment transactions with enough history to calculate a return.');
+
+  const { results } = perf;
+  const portfolioCount = results.portfolios.length;
+  const currencies = results.portfolios.map((p) => p.currencyCode).join(', ');
+  const calculable = results.portfolios.filter((p) => p.portfolioXirr.status === 'CALCULATED').length;
+
+  return {
+    sectionCode: 'investment_performance',
+    sectionTitle: PREMIUM_SECTION_TITLES.investment_performance,
+    displayOrder: 27,
+    sectionStatus: 'included',
+    sectionData: { results },
+    narrativeText:
+      portfolioCount > 1
+        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR/TWRR) as of ${results.asOfDate}.`
+        : portfolioCount === 1
+          ? `Your investment portfolio's XIRR, TWRR and benchmark comparison as of ${results.asOfDate} are shown below, where enough history exists to calculate them.`
+          : null,
+    chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
+    sourceReferences: { module: 'ii-r4-performance', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
+    confidenceLevel: null,
+    limitationText: 'Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.',
+  };
+}
+
+export function buildSipContribution(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const sip = premium.sip;
+  if (!sip) return empty('sip_contribution', 28, 'No recurring (SIP-style) investment contribution activity was detected — this requires at least one series of regular contributions into the same holding.');
+
+  const { results } = sip;
+  const observations = results.analytics.flatMap((a) => a.observations);
+
+  return {
+    sectionCode: 'sip_contribution',
+    sectionTitle: PREMIUM_SECTION_TITLES.sip_contribution,
+    displayOrder: 28,
+    sectionStatus: 'included',
+    sectionData: { results },
+    narrativeText: `${results.presentableCount} of ${results.seriesCount} recurring contribution series detected as of ${results.asOfDate} have enough history to present analytics. The observations below are generated directly by the platform's SIP engine from your recorded contribution history.`,
+    chartData: {
+      series: results.analytics.map((a) => ({ seriesKey: a.series.seriesKey, actualXirr: a.actualXirr, benchmarkSip: a.benchmarkSip })),
+      observations,
+    },
+    sourceReferences: { module: 'ii-r5-sip', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
+    confidenceLevel: null,
+    limitationText: 'Contribution-consistency analysis is observational — it describes recorded activity and does not recommend changing your contribution amount, frequency or destination fund.',
+  };
+}
+
+export function buildPortfolioXray(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const xray = premium.xray;
+  if (!xray) return empty('portfolio_xray', 29, 'Portfolio X-Ray requires fund-level look-through holding data, which is not yet available for your recorded investments.');
+
+  const { results } = xray;
+  const sortedSectorBuckets = results.sectorExposure.status === 'ok' ? [...results.sectorExposure.buckets].sort((a, b) => b.effectiveWeight - a.effectiveWeight) : [];
+  const topSector = sortedSectorBuckets[0] ?? null;
+
+  return {
+    sectionCode: 'portfolio_xray',
+    sectionTitle: PREMIUM_SECTION_TITLES.portfolio_xray,
+    displayOrder: 29,
+    sectionStatus: 'included',
+    sectionData: { results },
+    narrativeText:
+      `This look-through analysis is an attribution view of holdings your funds already contain — it does not add to your recorded net worth. As of ${results.asOfDate}` +
+      (topSector ? `, your largest sector exposure through look-through holdings is ${topSector.label} at approximately ${(topSector.effectiveWeight * 100).toFixed(0)}%.` : '.'),
+    chartData: { sectorExposure: results.sectorExposure, securityConcentration: results.securityConcentration, schemeConcentration: results.schemeConcentration },
+    sourceReferences: { module: 'ii-r5-xray', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
+    confidenceLevel: results.classificationVersion,
+    limitationText: 'Look-through figures depend on the completeness of published fund factsheet/portfolio-disclosure data and may not reflect the most recent fund rebalancing.',
+  };
+}
+
+export function buildTaxAndCost(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const tax = premium.taxAndCost;
+  if (!tax) return empty('tax_and_cost', 30, 'No capital-gains events were found — this chapter only applies once investment units have been redeemed or switched out, and where India tax-and-cost intelligence is applicable.');
+
+  const { results } = tax;
+  const disposalCount = results.disposalResults.length;
+  const exitLoadCount = results.exitLoadResults.length;
+
+  return {
+    sectionCode: 'tax_and_cost',
+    sectionTitle: PREMIUM_SECTION_TITLES.tax_and_cost,
+    displayOrder: 30,
+    sectionStatus: 'included',
+    sectionData: { results, taxProfileSource: tax.taxProfileSource },
+    narrativeText: `${disposalCount} disposal${disposalCount === 1 ? '' : 's'} produced a capital-gains result as of ${tax.asOfDate}${exitLoadCount > 0 ? `, and ${exitLoadCount} redemption${exitLoadCount === 1 ? '' : 's'} carried an exit-load observation` : ''}. ${results.disclaimer}`,
+    chartData: { taxYearAggregation: results.taxYearAggregation },
+    sourceReferences: { module: 'ii-r6-tax-cost', engineVersion: results.engineVersion, asOfDate: tax.asOfDate, taxProfileSource: tax.taxProfileSource },
+    confidenceLevel: null,
+    limitationText: results.residencyNote ?? results.ruleVersionNote ?? 'This is a simulation based on recorded transaction data and the applicable rule version shown — it is not personal tax advice.',
+  };
+}
+
+const REVIEW_SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+export function buildPriorityReviewItems(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const review = premium.reviewItems;
+  if (!review || review.openItems.length === 0) return empty('priority_review_items', 31, 'No open Investment Intelligence review items were found for this period.');
+
+  const sorted = [...review.openItems].sort((a, b) => (REVIEW_SEVERITY_RANK[a.severity] ?? 9) - (REVIEW_SEVERITY_RANK[b.severity] ?? 9));
+
+  return {
+    sectionCode: 'priority_review_items',
+    sectionTitle: PREMIUM_SECTION_TITLES.priority_review_items,
+    displayOrder: 31,
+    sectionStatus: 'included',
+    sectionData: {
+      // title/description are already the engine's own deterministic,
+      // approved text (Review Centre spec section 33) — rendered verbatim,
+      // not reinterpreted or re-ranked by a second priority formula (spec
+      // section 95: "Do not let report ordering invent a second priority
+      // formula" — the sort above is purely by the engine's own severity
+      // field, not a new score).
+      items: sorted.map((item) => ({
+        title: item.title,
+        description: item.description,
+        severity: item.severity,
+        category: item.category,
+        complianceClassification: item.compliance_classification,
+        sourceModule: item.source_module,
+        asOfDate: item.as_of_date,
+        ruleKey: item.rule_key,
+        ruleVersion: item.rule_version,
+      })),
+    },
+    narrativeText: `${review.totalOpenCount} open Investment Intelligence review item${review.totalOpenCount === 1 ? '' : 's'} ${review.totalOpenCount === 1 ? 'is' : 'are'} listed below, most important first. These are generated by the Review Centre's own deterministic rules — this report does not re-evaluate or re-rank them beyond ordering by their own recorded severity.`,
+    chartData: null,
+    sourceReferences: { module: 'ii-r9-review-centre' },
+    confidenceLevel: null,
+    limitationText: 'These are deterministic observations, not personalised financial advice. Visit the Review Centre to acknowledge or dismiss individual items.',
+  };
+}
+
 function buildAppendices(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   return {
     sectionCode: 'appendices',
     sectionTitle: PREMIUM_SECTION_TITLES.appendices,
-    displayOrder: 27,
+    displayOrder: 32,
     sectionStatus: 'included',
     sectionData: {
       investments: premium.investments,
@@ -620,6 +774,11 @@ export function buildPremiumSections(source: ReportSourceData, isFirstReport: bo
     buildCrossBorderFull(source),
     buildStressTesting(source),
     buildPersonalActionPlan(source),
+    buildInvestmentPerformance(source, premium),
+    buildSipContribution(source, premium),
+    buildPortfolioXray(source, premium),
+    buildTaxAndCost(source, premium),
+    buildPriorityReviewItems(source, premium),
     buildAppendices(source, premium),
   ];
 }

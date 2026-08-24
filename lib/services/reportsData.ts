@@ -278,6 +278,25 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
             },
           ]
         : []),
+      // II-R10 continuation — provenance rows for the five Investment
+      // Intelligence chapters (spec sections 47, 66-68), one per chapter
+      // that was actually populated for this report. Each source_version is
+      // the ENGINE's own engineVersion string, never a value R10 invents.
+      ...(source.premium?.investmentPerformance
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_performance', source_version: source.premium.investmentPerformance.results.engineVersion, source_as_of_date: source.premium.investmentPerformance.results.asOfDate }]
+        : []),
+      ...(source.premium?.sip
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_sip', source_version: source.premium.sip.results.engineVersion, source_as_of_date: source.premium.sip.results.asOfDate }]
+        : []),
+      ...(source.premium?.xray
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_xray', source_version: source.premium.xray.results.engineVersion, source_as_of_date: source.premium.xray.results.asOfDate }]
+        : []),
+      ...(source.premium?.taxAndCost
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_tax', source_version: source.premium.taxAndCost.results.engineVersion, source_as_of_date: source.premium.taxAndCost.asOfDate }]
+        : []),
+      ...(source.premium?.reviewItems
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_review', source_version: 'ii-r9-review-centre', source_as_of_date: source.asOfDate, snapshot_metadata_json: { openItemCount: source.premium.reviewItems.totalOpenCount } }]
+        : []),
     ]);
 
     if (revisesReportId) {

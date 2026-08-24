@@ -13,6 +13,18 @@ import type { CommitmentRow } from '@/lib/engines/resilience';
 import { buildForecastReportData, type ForecastReportData } from '@/lib/services/forecastReportData';
 import { loadReportContent, type ReportContent } from '@/lib/services/reportContentData';
 import { buildReportActionMatches, type ReportActionItem } from '@/lib/services/recommendationsData';
+import {
+  loadInvestmentPerformanceForReport,
+  loadSipForReport,
+  loadXrayForReport,
+  loadTaxForReport,
+  loadReviewItemsForReport,
+  type ReportPerformanceData,
+  type ReportSipData,
+  type ReportXrayData,
+  type ReportTaxData,
+  type ReportReviewData,
+} from '@/lib/services/investmentIntelligenceReportData';
 
 export interface ReportProfile {
   fullName: string | null;
@@ -101,6 +113,18 @@ export interface PremiumSourceData {
   // drift from the correctly-converted canonical figure shown elsewhere in
   // the same report.
   fxRateAudInr: number;
+  // II-R10 continuation — Investment Intelligence chapters (spec sections
+  // 21-32). Each is null when the module has no data for this user (spec
+  // section 39-40: never a page of fabricated zeros) or is not applicable
+  // for their country (e.g. Tax & Cost is India-only per spec section
+  // 54-55). Populated via lib/services/investmentIntelligenceReportData.ts,
+  // which calls the exact same canonical dataset+orchestrator pair each
+  // module's own live page/API uses — never a local recalculation.
+  investmentPerformance: ReportPerformanceData | null;
+  sip: ReportSipData | null;
+  xray: ReportXrayData | null;
+  taxAndCost: ReportTaxData | null;
+  reviewItems: ReportReviewData | null;
 }
 
 export interface ReportSourceData {
@@ -238,6 +262,11 @@ export async function resolveReportSourceData(
       forecastReportData,
       goalSnapshotsRes,
       fxRateAudInr,
+      investmentPerformance,
+      sip,
+      xray,
+      taxAndCost,
+      reviewItems,
     ] = await Promise.all([
       supabase
         .from('investments')
@@ -272,6 +301,15 @@ export async function resolveReportSourceData(
         .order('snapshot_month', { ascending: true })
         .limit(400),
       getFxRateAudInr(supabase),
+      // II-R10 continuation chapters. Each loader already fails safe to
+      // null internally (spec section 39) — the .catch() here is defence
+      // in depth only, so one chapter's failure can never abort the whole
+      // premium report generation.
+      loadInvestmentPerformanceForReport(userId, supabase).catch(() => null),
+      loadSipForReport(userId, supabase).catch(() => null),
+      loadXrayForReport(userId, supabase).catch(() => null),
+      loadTaxForReport(userId, supabase).catch(() => null),
+      loadReviewItemsForReport(userId).catch(() => null),
     ]);
 
     const historyByMonth = new Map<string, { onTrackCount: number; activeCount: number }>();
@@ -296,6 +334,11 @@ export async function resolveReportSourceData(
       forecastReportData,
       goalsOnTrackHistory,
       fxRateAudInr,
+      investmentPerformance,
+      sip,
+      xray,
+      taxAndCost,
+      reviewItems,
     };
   }
 
