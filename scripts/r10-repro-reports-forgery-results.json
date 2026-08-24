@@ -1,12 +1,12 @@
 {
-  "userId": "bf1f2b46-2fb6-47c9-9767-6e50a530e20d",
+  "userId": "f6144738-26c4-4e93-a5cb-d63c9b8e165e",
   "results": [
     {
       "name": "SANITY: authenticated owner can still read their own report",
       "expected": true,
       "actual": true,
       "verdict": "MATCHES-EXPECTED",
-      "detail": "{\"id\":\"88903dcf-6fff-4cb9-8045-19f7712f0b7a\",\"status\":\"ready\"}"
+      "detail": "{\"id\":\"6e3ea192-9b6c-4073-a9e9-db2ffa0cff6a\",\"status\":\"ready\"}"
     },
     {
       "name": "ATTACK-1 forge report status/completeness",

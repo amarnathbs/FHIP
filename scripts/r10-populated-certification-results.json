@@ -1,11 +1,11 @@
 {
-  "userId": "2bdabc32-9b53-4eb4-bb64-c311cde210e8",
+  "userId": "559f6ad7-c23f-4aae-a6d8-a883f08c37d4",
   "results": [
     {
       "id": "FORECAST-RUN-SETUP",
       "description": "Retirement forecast run created via the real Forecasting API",
       "status": "PASS",
-      "detail": "status=200 body={\"data\":{\"run\":{\"id\":\"bdf8996b-5ecf-4390-9fc6-d1df26bd0d12\",\"user_id\":\"2bdabc32-9b53-4eb4-bb64-c311cde210e8\",\"forecast_profile_id\":\"0a9f9669-576f-46a1-8b4b-fcba398e6eaa\",\"scenario_id\":\"a1dab20a-520b-4"
+      "detail": "status=200 body={\"data\":{\"run\":{\"id\":\"cf33b48f-7e76-42fb-83c1-3c720dff637f\",\"user_id\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4\",\"forecast_profile_id\":\"4c8d5e23-5a7a-459b-8f87-2ca1fae9a43a\",\"scenario_id\":\"4a986fd9-7d91-4"
     },
     {
       "id": "CANON-1",
@@ -58,8 +58,8 @@
     {
       "id": "CHAPTER-STATUS-RETIREMENT",
       "description": "Retirement Readiness chapter reached included status",
-      "status": "FAIL",
-      "detail": "unavailable"
+      "status": "PASS",
+      "detail": "included"
     },
     {
       "id": "NO-RECALC-1 (Performance)",
@@ -83,7 +83,7 @@
       "id": "NO-RECALC-4 (Tax)",
       "description": "Report tax_and_cost disposalResults (taxableGain/classification/gainType/holdingDays) match the canonical tax API result, matched by instrument+date",
       "status": "PASS",
-      "detail": "{\"reportCount\":1,\"canonCount\":1,\"canonSample\":{\"instrumentId\":\"17f9f62f-fae7-4e42-91ac-db34854273e2\",\"instrumentName\":\"R10POP1787550570086 Tax Test Fund\",\"acquisitionDate\":\"2024-03-01\",\"disposalDate\":\"2024-09-01\",\"unitsConsumed\":10000,\"classification\":\"unresolved\",\"gainType\":\"unresolved\",\"holdingDays\":null,\"ruleVersion\":null,\"ruleVersionPlaceholder\":false,\"saleValue\":180000,\"costBasisUsed\":100000,\"taxableGain\":null,\"grandfathering\":null,\"note\":\"Scheme tax classification is unresolved (unresolved_no_data) — excluded from confident tax figures. No scheme tax classification is on record for this instrument — excluded from confident tax figures.\"}}"
+      "detail": "{\"reportCount\":1,\"canonCount\":1,\"canonSample\":{\"instrumentId\":\"47c17f5e-9155-4ad2-9d24-fcef507d8163\",\"instrumentName\":\"R10POP1787563514036 Tax Test Fund\",\"acquisitionDate\":\"2024-03-01\",\"disposalDate\":\"2024-09-01\",\"unitsConsumed\":10000,\"classification\":\"unresolved\",\"gainType\":\"unresolved\",\"holdingDays\":null,\"ruleVersion\":null,\"ruleVersionPlaceholder\":false,\"saleValue\":180000,\"costBasisUsed\":100000,\"taxableGain\":null,\"grandfathering\":null,\"note\":\"Scheme tax classification is unresolved (unresolved_no_data) — excluded from confident tax figures. No scheme tax classification is on record for this instrument — excluded from confident tax figures.\"}}"
     },
     {
       "id": "NO-RECALC-5 (Review)",
@@ -101,7 +101,7 @@
       "id": "PDF-POPULATED",
       "description": "Fully populated Premium PDF generates successfully",
       "status": "PASS",
-      "detail": "status=200 raw={\"data\":{\"id\":\"f34b5a17-567f-4e02-a2c1-931349c2ebf9\",\"report_id\":\"206a641d-d17e-494e-bbaf-b48530164205\",\"requested_by_user_id\":\"2bdabc32-9b53-4eb4-bb64-c311cde210e8\",\"export_format\":\"pdf\",\"status\":\"ready\",\"storage_path\":\"2bdabc32-9b53-4eb4-bb64-c311cde210e8/206a641d-d17e-494e-bbaf-b48530164205/f34b5a17-567f-4e02-a2c1-931349c2ebf9.pdf\",\"file_name\":\"206a641d-d17e-494e-bbaf-b48530164205.pdf\",\"file_size_bytes\":496428,\"checksum\":\"047f61b71195a90a09a71cdea6524713cca4a196c6ae82b020dcafd363f1e599\",\"rend"
+      "detail": "status=200 raw={\"data\":{\"id\":\"684e9212-53a5-4c1c-bd16-bd917a1d644f\",\"report_id\":\"f60ab75e-4423-4b45-a3ad-3d427b13107c\",\"requested_by_user_id\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4\",\"export_format\":\"pdf\",\"status\":\"ready\",\"storage_path\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4/f60ab75e-4423-4b45-a3ad-3d427b13107c/684e9212-53a5-4c1c-bd16-bd917a1d644f.pdf\",\"file_name\":\"f60ab75e-4423-4b45-a3ad-3d427b13107c.pdf\",\"file_size_bytes\":498843,\"checksum\":\"c88c164083b17edafcf9fd383d83d78cae244ab9490687286bb4b86dc6eb59ef\",\"rend"
     }
   ]
 }

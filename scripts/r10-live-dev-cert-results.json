@@ -3,7 +3,7 @@
     "id": "LIVE-R10-A1",
     "description": "Premium user report generation succeeds end-to-end",
     "status": "PASS",
-    "detail": "{\"report\":{\"id\":\"d0befe60-219c-4e61-b7e1-2d6337832674\",\"user_id\":\"efb625cc-dfb6-4e26-9942-85f439debabc\",\"household_id\":null,\"report_type_code\":\"net_worth\",\"report_period_start\":\"2026-08-01\",\"report_period_end\":\"2026-08-31\",\"report_month\":\"2026-08-01\",\"as_of_date\":\"2026-08-24\",\"title\":\"Net Worth Repo"
+    "detail": "{\"report\":{\"id\":\"8ead7b84-0183-417c-826b-32f6de17d1a5\",\"user_id\":\"b3bf6a18-577a-4786-b076-704c887bfbe7\",\"household_id\":null,\"report_type_code\":\"net_worth\",\"report_period_start\":\"2026-08-01\",\"report_period_end\":\"2026-08-31\",\"report_month\":\"2026-08-01\",\"as_of_date\":\"2026-08-24\",\"title\":\"Net Worth Repo"
   },
   {
     "id": "LIVE-R10-A2",
@@ -50,7 +50,13 @@
   {
     "id": "LIVE-R10-F1",
     "description": "Premium user real PDF generation (Playwright/Chromium against the real print route) succeeds with the 5 new II chapters present",
-    "status": "FAIL",
-    "detail": "{\"error\":\"page.goto: Timeout 30000ms exceeded.\\nCall log:\\n\\u001b[2m  - navigating to \\\"http://localhost:3219/reports/d0befe60-219c-4e61-b7e1-2d6337832674/print?token=7987c29fde8f13254ad1a8648b2e068fc8c0c0dc32e549fc543a94ecfe50988e\\\", waiting until \\\"networkidle\\\"\\u001b[22m\\n\"}"
+    "status": "PASS",
+    "detail": "{\"id\":\"9b73b6c2-eb00-41b9-9898-5b080f4a9520\",\"report_id\":\"8ead7b84-0183-417c-826b-32f6de17d1a5\",\"requested_by_user_id\":\"b3bf6a18-577a-4786-b076-704c887bfbe7\",\"export_format\":\"pdf\",\"status\":\"ready\",\"storage_path\":\"b3bf6a18-577a-4786-b076-704c887bfbe7/8ead7b84-0183-417c-826b-32f6de17d1a5/9b73b6c2-eb00"
+  },
+  {
+    "id": "LIVE-R10-F2",
+    "description": "Authenticated owner can download their real generated PDF via a signed URL",
+    "status": "PASS",
+    "detail": "status=200"
   }
 ]
