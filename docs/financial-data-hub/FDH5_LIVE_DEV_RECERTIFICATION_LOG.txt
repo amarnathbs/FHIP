@@ -1,0 +1,41 @@
+DEV project: vqycarelcoijzwlpkpcz.supabase.co
+App under test: http://localhost:31997
+
+[PASS] FDH5-SETUP — Create two REAL authenticated DEV sessions (A victim, B attacker)
+        A=822dabc6-2aec-4529-9252-3849d819e489 B=fc2a19ca-cd04-4098-a79a-67573235bd93
+[PASS] FDH5-E2E-AU-01 — Secure PDF upload into real DEV private storage (AU/CBA)
+        {"status":200,"docIdAu":"b0e3bda4-e33f-416d-9d5a-8598de1f59c5"}
+[PASS] FDH5-E2E-AU-02 — Native-text PDF processing creates canonical transactions (AU/CBA)
+        {"status":200,"body":{"data":{"document_id":"b0e3bda4-e33f-416d-9d5a-8598de1f59c5","pipeline_status":"ok","certification_status":"certified","processing_status":"approved","error_code":null,"reconciliation_status":"reconciled","transactions_created":3,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":3,"parsed_row_count":3}}}
+[PASS] FDH5-E2E-AU-03 — Reconciliation reflects exact opening/credits/debits/closing (AU/CBA)
+        {"document_id":"b0e3bda4-e33f-416d-9d5a-8598de1f59c5","pipeline_status":"ok","certification_status":"certified","processing_status":"approved","error_code":null,"reconciliation_status":"reconciled","transactions_created":3,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":3,"parsed_row_count":3}
+[PASS] FDH5-E2E-AU-04 — R8 categorisation runs successfully over the PDF-sourced transactions
+        {"transactionsConsidered":3,"transactionsClassified":2,"transactionsUnresolved":1,"transactionsSkippedUserOverride":0,"transferLinksProposed":0,"refundLinksProposed":0,"recurringSeriesDetected":0}
+[PASS] FDH5-E2E-AU-05 — Reprocessing the same PDF twice creates no duplicate canonical transactions
+        {"proc2Status":200,"before":3,"after":3}
+[PASS] FDH5-E2E-IN-01 — Secure PDF upload into real DEV private storage (IN/SBI)
+        {"status":200,"docIdIn":"5b4f868b-a911-4386-8bcf-5c98d0fae796"}
+[PASS] FDH5-E2E-IN-02 — Native-text PDF processing creates canonical transactions (IN/SBI)
+        {"document_id":"5b4f868b-a911-4386-8bcf-5c98d0fae796","pipeline_status":"ok","certification_status":"certified","processing_status":"approved","error_code":null,"reconciliation_status":"reconciled","transactions_created":2,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":2,"parsed_row_count":2}
+[PASS] FDH5-E2E-IN-03 — Reconciliation reflects exact values (IN/SBI)
+        {"document_id":"5b4f868b-a911-4386-8bcf-5c98d0fae796","pipeline_status":"ok","certification_status":"certified","processing_status":"approved","error_code":null,"reconciliation_status":"reconciled","transactions_created":2,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":2,"parsed_row_count":2}
+[PASS] FDH5-PW-01 — A password submitted to /process for a genuinely UNENCRYPTED PDF does not prevent normal processing (PDFParse ignores an inert password option)
+        {"document_id":"f7f69e95-bbf5-4eaf-a16c-674100f4d761","pipeline_status":"ok","certification_status":"certified","processing_status":"approved","error_code":null,"reconciliation_status":"reconciled","transactions_created":3,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":3,"parsed_row_count":3}
+[PASS] FDH5-PW-02 — ARTIFACT-ABSENCE SWEEP: the submitted password value appears in ZERO rows across every FDH-5-touched table (spec 23, "particular scrutiny area")
+        {"fdh_statement_uploads":1,"fdh_document_audit_events":11,"fdh_transactions":3,"fdh_reconciliation_results":1,"fdh_data_quality_results":5,"fdh_upload_sessions":1}
+[PASS] FDH5-SEC-01 — Tenant B cannot read Tenant A raw PDF, transactions, or document status
+        {"leaked":0,"directLeak":false}
+[PASS] FDH5-SEC-02 — Forged processing request (Tenant B submits Tenant A document_id) rejected
+        {"status":404}
+[PASS] FDH5-SEC-03 — Forged password submission (Tenant B submits a password for Tenant A's document) rejected — same forged-processing gate blocks it
+        {"status":404}
+[PASS] FDH5-SEC-04 — Tenant B cannot write/correct Tenant A PDF-sourced transactions; ground truth unchanged
+        {"directWriteStatus":200,"untouched":true}
+[PASS] FDH5-PURGE-01 — Raw PDF storage object purged; structured transactions SURVIVE the purge (spec 76-77, 107)
+        {"purgeResult":{"status":"purged"},"txnCount":{"before":3,"after":3}}
+[PASS] FDH5-SCALE-01 — PDF-originated transactions retrievable via the existing paginated repository path (source-format-agnostic fix)
+        {"count":2}
+[PASS] FDH5-CLEANUP — All live test data and both test users deleted
+        []
+
+=== SUMMARY === Checks: 18, FAIL: 0

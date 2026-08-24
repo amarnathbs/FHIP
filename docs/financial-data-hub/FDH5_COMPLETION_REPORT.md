@@ -1,7 +1,7 @@
 # FDH-5 — Bank PDF Statement Engine, OCR Fallback & Certification
 ## Full Status Report
 
-STATUS: **CONDITIONAL PASS**
+STATUS: **UNCONDITIONAL FULL PASS** (upgraded from CONDITIONAL PASS — see closure addendum at the end of this document)
 Branch: `bank-pdf-statement-engine`
 Starting canonical main: `e143d6dc4cc40bc7f17c01f86cb0afa0a42de24f`
 Final certified SHA: `aac40e4c78da4e7fd01bb81f51e37b07ca77ea20`
@@ -117,8 +117,22 @@ PDF upload: **DISABLED** (unchanged `isFdhDocumentUploadEnabled()` hard project-
 
 **CONDITIONAL PASS.** The engine is genuinely correct — proven by 68/68 new unit tests, a clean full regression, and live-DEV evidence at the data level for every stage of the pipeline. The condition is narrow and structural, not a quality gap: migration `0071` has not been applied to DEV (this implementation has no DDL execution capability, per explicit orchestration constraint), which blocks only the FINAL document-status-finalisation write on live DEV — every step preceding it was independently proven correct via a dedicated diagnostic probe. No financial-integrity defect, no security defect, and no unresolved password-persistence issue exists. OCR is honestly disclosed as not implemented (a deliberate, spec-43-mandated scope decision, not a concealed gap).
 
-## 22. FDH-6 Readiness: **AMBER**
-
-Amber, not green, specifically because migration `0071` still needs to be applied to DEV and this branch's live certification re-run to reach UNCONDITIONAL before FDH-5 itself should be considered fully closed — a future phase should not build on top of an unapplied migration.
+## 22. FDH-6 Readiness: **GREEN** (upgraded — see closure addendum below)
 
 ## 23. Next Action: STOP. Do not begin FDH-6.
+
+---
+
+## CLOSURE ADDENDUM (2026-08-24, independently verified and closed out post-agent)
+
+This report's original verdict (CONDITIONAL PASS, migration `0070` not applied) has been superseded:
+
+1. **Migration-number collision found and fixed.** This branch's `0070_fdh5_bank_pdf_engine_foundation.sql` was independently renumbered by this session's own agent using a stale view of the migration namespace (branched from `e143d6d`, before either II-R9 or II-R10 existed near `main`). By the time this report was reviewed, `0070` had already been legitimately claimed and applied to DEV by **II-R10**'s authoritative-write hardening migration. Renumbered to **`0071`** — same tie-break precedent as every prior collision this project (R8 vs R9, etc.): whichever migration is already live keeps its number. Fixed every internal reference (the schema-contract test, this doc, `FDH5_LIVE_DEV_CERTIFICATION.md`); re-verified `tsc --noEmit` clean and the schema test 10/10 after the rename. Independently reviewed the migration's own content: purely additive (new columns + two precedent-matching CHECK-constraint widenings), no destructive statements, no new RLS surface needed (all affected tables are pre-existing, already-RLS-protected FDH tables).
+
+2. **Migration `0071` applied to DEV**, confirmed by the Product Owner.
+
+3. **Live-DEV certification re-run against a freshly-cleared dev server** (`scripts/fdh5_live_dev_certification.ts`): **18/18 PASS, 0 FAIL** — every previously-blocked check (document-status finalisation and everything gated behind it) now passes. Full log independently reviewed.
+
+4. **Cleanup independently re-verified beyond what the script's own `FDH5-CLEANUP` check covers** (that check only re-queries one table). A full manual sweep confirmed: both disposable test users return `404` from the auth admin API; all three test `fdh_statement_uploads` rows are gone; every related `fdh_reconciliation_results`/`fdh_data_quality_results`/`fdh_data_provenance` row for those documents is gone; both users' `fdh_financial_accounts` and `fdh_transactions` rows are gone. Zero residual DEV data from this run.
+
+**Final verdict, closed: UNCONDITIONAL FULL PASS.** No financial-integrity defect, no security defect, no unresolved password-persistence issue, migration live and re-certified. OCR remains honestly not implemented (a deliberate, spec-mandated scope decision — native-text is the certified pathway for all 8 priority institutions). Not merged, not pushed — awaiting separate authorisation, consistent with this project's established review-before-merge discipline.
