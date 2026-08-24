@@ -36,3 +36,13 @@ both live scripts, plus the earlier security-focused session's own users)
 was deleted via the admin API and independently re-verified via a full
 `listUsers` scan / individual `GET /admin/users/{id}` check returning 404 —
 0 leftover in every run.
+
+## Terminal Closure Round Update
+
+Added 15 visual-certification scenarios (`r10_visual_cert_generate.mjs`)
++ 1 manual-reconciliation scenario (`r10_manual_reconciliation.mjs`) to
+the live-DEV test corpus — 16 more disposable users, each real, each
+independently verified deleted (final admin-API `listUsers` scan: 332
+total users, 0 matching the `fhip-test.invalid`/`r10-`-prefixed test
+patterns). See `R10_PDF_VISUAL_CERTIFICATION.md` and
+`R10_MANUAL_RECONCILIATION.md` for what each proved.

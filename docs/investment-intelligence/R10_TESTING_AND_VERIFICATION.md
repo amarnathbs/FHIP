@@ -89,3 +89,25 @@ formal 25-case LIVE-R10-001..025 matrix.
   on >1,000 rows of anything — Review Centre's `listReviewItems` caps at
   50 for the report chapter, and the underlying repository's own
   pagination was already certified during R9, not re-tested here).
+
+## Terminal Closure Round Update (all gaps above now closed)
+
+- 15-report visual certification: **DONE, 15/15**, with genuine
+  page-by-page PDF rendering (PyMuPDF, since `pdftoppm`/poppler-utils
+  isn't installed here) — `scripts/r10_visual_cert_generate.mjs` +
+  `scripts/_render_all_vc_pdfs.py`.
+- 12 manual reconciliations: **DONE, 12/12** —
+  `scripts/r10_manual_reconciliation.mjs` + `scripts/r10_mr_verify.mjs`,
+  full table in `R10_MANUAL_RECONCILIATION.md`.
+- >1,000-row pagination: **DONE**, `scripts/r10_nc7_pagination.mjs`
+  re-run, 1,200 real rows, unchanged PASS.
+- Three real defects found during this closure work (blank charts in
+  every generated PDF; a report section silently `included` with zero
+  data instead of a graceful unavailable state; a chart-readiness
+  timeout too tight under sustained load) — all root-caused, fixed, and
+  independently re-verified. Full detail: `R10_ACCEPTANCE_REPORT.md`.
+
+The remaining items in this file (15-independent-live-reconciliation
+count, the independent oracle script) were addressed in earlier rounds
+per `R10_ACCEPTANCE_REPORT.md`'s "Original vs Actual vs Revised Terminal
+Requirement" table and are outside this round's scope.

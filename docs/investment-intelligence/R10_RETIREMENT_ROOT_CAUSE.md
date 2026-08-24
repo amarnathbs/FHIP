@@ -103,3 +103,15 @@ other six types specifically — disclosed as an intentionally bounded scope
 (the reported defect was retirement-specific; the fix is applied
 platform-wide as the safer, more correct choice, but only retirement's own
 scenario was deliberately engineered to test the overflow path).
+
+## Terminal Closure Round Update
+
+`scripts/r10_retirement_certification.mjs` re-run on the final tree,
+after this round's three chart-rendering/presentation-layer fixes
+(unrelated to the Retirement calculator/eligibility logic this document
+covers): **8/8 PASS, unchanged.** No regression. This round's own
+visual-certification and manual-reconciliation work additionally
+re-confirmed Retirement Readiness rendering correctly in real generated
+PDFs (VC09, retirement-heavy scenario) and the retirement account balance
+reconciling exactly against the seeded canonical value (MR07, see
+`R10_MANUAL_RECONCILIATION.md`).

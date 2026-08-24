@@ -25,3 +25,13 @@ undercounting bug, both fixed and re-verified live this session. This is
 a stronger outcome than the negative controls' minimum bar (prove a test
 suite is load-bearing) — they were genuinely load-bearing, catching real
 bugs during the process of being built.
+
+## Terminal Closure Round Update
+
+NC3 (`scripts/r10_nc3_stale_forecast.mjs`) and NC7
+(`scripts/r10_nc7_pagination.mjs`) both re-run on the final tree, after
+this round's three chart-rendering/presentation-layer fixes: unchanged,
+both still PASS. 8/8 negative controls remain genuine RED→GREEN with 0
+regressions. This round found three additional real defects, but through
+direct visual PDF inspection rather than the negative-control suite —
+see `R10_ACCEPTANCE_REPORT.md` for full detail.

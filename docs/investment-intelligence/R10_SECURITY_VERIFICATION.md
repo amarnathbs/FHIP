@@ -46,3 +46,25 @@ premium flag exists anywhere in the request surface for a client to forge.
   pointing at a DIFFERENT real user's snapshot as a valid-FK variant) —
   not attempted this session.
 - A "premium user's entitlement expires mid-session" live test — not run.
+
+## Terminal Closure Round Update (supersedes gaps above where re-run)
+
+Re-run on the final tree, after this round's three chart-rendering/
+presentation-layer fixes (none of which touch security-relevant code):
+
+- RLS certification on a fresh PGlite rebuild including migration 0070:
+  **15/15 PASS** (`scripts/r10_reports_rls_certification.mjs`) — read
+  regression x5, same-user forgery denial x5 (the 5 original live-
+  reproduced attacks), cross-tenant denial x2, trusted-service-writes-
+  still-work x2, negative control x1 (old permissive policy reinstated on
+  a scratch table proves the suite isn't vacuous).
+- Pagination (NC7): re-run, 1,200 real rows, true count reported, 50-item
+  display cap correct — unchanged, PASS.
+- Historical immutability (NC3): re-run, report A byte-unchanged after
+  report B — unchanged, PASS.
+
+No new authoritative field or RLS policy was introduced this round — all
+three fixes are Playwright-renderer timing logic and a report-section
+data-presence guard, neither touching the database layer. See
+`R10_ACCEPTANCE_REPORT.md` for the authoritative, current terminal
+verdict.
