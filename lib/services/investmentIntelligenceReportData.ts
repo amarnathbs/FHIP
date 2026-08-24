@@ -27,6 +27,7 @@ import { loadTaxDataset, loadTaxProfile, toTaxProfileInput } from '@/lib/service
 import { runTaxSimulation, type TaxSimulationOutput } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
 import { listReviewItems } from '@/lib/services/investment-intelligence/reviewCentreData';
 import type { IiReviewItem } from '@/lib/services/investment-intelligence/types';
+import { createClient } from '@/lib/supabase/server';
 
 export interface ReportPerformanceData {
   results: AnalyticsResultSet;
@@ -142,7 +143,23 @@ export async function loadReviewItemsForReport(userId: string): Promise<ReportRe
   try {
     const { items } = await listReviewItems(userId, { status: 'open', limit: 50 });
     if (items.length === 0) return null;
-    return { openItems: items, totalOpenCount: items.length };
+    // II-R10 fix (risk-based closure session, NC7 pagination proof): this
+    // used to report `totalOpenCount: items.length`, which is the SIZE OF
+    // THE CAPPED DISPLAY LIST (max 50), not the true number of open review
+    // items — a household with, say, 1,200 real open items would have its
+    // report narrative say "50 open review items", silently understating
+    // the true count by over 1,150. Live-reproduced this session
+    // (scripts/r10_nc7_pagination.mjs, 1,200 real ii_review_items rows).
+    // A real exact count query (same table/filter listReviewItems() itself
+    // reads, matching the existing count=exact pattern already used
+    // elsewhere in this codebase — see benchmarkGovernance.ts,
+    // financialTwinService.ts) gives the true total independent of the
+    // display cap; the displayed item LIST itself is unchanged (still
+    // capped at 50 for readability — a report chapter listing 1,200 items
+    // would not be useful reading regardless of correctness).
+    const supabase = await createClient();
+    const { count } = await supabase.from('ii_review_items').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'open');
+    return { openItems: items, totalOpenCount: count ?? items.length };
   } catch {
     return null;
   }
