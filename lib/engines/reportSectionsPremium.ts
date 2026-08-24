@@ -391,6 +391,26 @@ function buildGoalForecastingDetail(source: ReportSourceData): BuiltSection {
 function buildScenarioForecasting(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   const fr = premium.forecastReportData;
   if (!fr) return empty('scenario_forecasting', 22, 'Scenario forecasting data is not yet available.');
+  // fr existing only means buildForecastReportData() didn't throw — each
+  // individual forecast run inside it (safeRunDetail) can still come back
+  // null or with zero results (e.g. a transient gap before this user's
+  // default scenario set has finished being provisioned), which used to
+  // still mark this section 'included' with an empty chart: a card with a
+  // title, narrative and disclaimer but no axis, no bars, no line and no
+  // numbers — found live during R10 terminal-closure visual certification
+  // (3 of 15 scenarios), where the discrepancy against genuinely-working
+  // scenarios was confirmed at the PDF's own extracted text layer (no
+  // chart axis/legend/value text at all, not merely unpainted). Same fix
+  // shape as buildRetirementReadiness()'s hasRetirement guard: don't
+  // present a data-less run as a populated section.
+  const hasScenarioData = (fr.netWorthRun?.results.length ?? 0) > 0 || fr.scenarioComparison.length > 0;
+  if (!hasScenarioData) {
+    return empty(
+      'scenario_forecasting',
+      22,
+      'No scenario projection is available yet — visit the Forecasting page to configure and run a scenario.'
+    );
+  }
 
   return {
     sectionCode: 'scenario_forecasting',
