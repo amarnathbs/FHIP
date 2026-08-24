@@ -1,7 +1,7 @@
 /**
  * FDH-5 — repeatable schema-verification test, mirroring
  * tests/unit/r7SchemaContract.test.ts / r8SchemaContract.test.ts's method:
- * parse migration 0070 from disk and assert structural facts rather than
+ * parse migration 0071 from disk and assert structural facts rather than
  * trust prose.
  */
 
@@ -16,7 +16,7 @@ import {
 } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
-const FILE = '0070_fdh5_bank_pdf_engine_foundation.sql';
+const FILE = '0071_fdh5_bank_pdf_engine_foundation.sql';
 const RAW = fs.readFileSync(path.join(MIGRATION_DIR, FILE), 'utf8');
 const SQL = RAW.split('\n')
   .map((line) => {
@@ -25,7 +25,7 @@ const SQL = RAW.split('\n')
   })
   .join('\n');
 
-describe('FDH-5 migration 0070 exists and is additive-only', () => {
+describe('FDH-5 migration 0071 exists and is additive-only', () => {
   it('the file exists', () => {
     expect(fs.existsSync(path.join(MIGRATION_DIR, FILE))).toBe(true);
   });

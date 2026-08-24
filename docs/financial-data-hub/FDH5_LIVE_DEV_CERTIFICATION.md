@@ -2,11 +2,11 @@
 
 Run against real DEV Supabase project `vqycarelcoijzwlpkpcz`, real running Next.js dev server (`npm run dev -p 31997`, `.next` cleared before first use per the known stale-Turbopack-cache gotcha — genuinely hit once this session and resolved by killing the server, clearing `.next`, and restarting, exactly as documented). Script: `scripts/fdh5_live_dev_certification.ts` (`npx tsx scripts/fdh5_live_dev_certification.ts`).
 
-## Headline finding: migration `0070` is NOT applied to DEV
+## Headline finding: migration `0071` is NOT applied to DEV
 
 This was expected and disclosed in advance (orchestration section 8: no DDL execution capability exists in this environment). Its concrete effect, precisely characterised by a dedicated diagnostic probe against a real DEV document:
 
-**Everything through transaction/reconciliation/data-quality/provenance persistence works correctly and exactly on live DEV.** Only the FINAL `fdh_statement_uploads` status-update (which sets `page_count`/`pdf_classification`/`extraction_confidence` — the three migration-0070-only columns) fails with a PostgREST schema-cache error, which the outer API call correctly surfaces as `400`/`error_code: internal_error` (the existing generic catch-all path, itself unaffected since its own update payload never references the missing columns).
+**Everything through transaction/reconciliation/data-quality/provenance persistence works correctly and exactly on live DEV.** Only the FINAL `fdh_statement_uploads` status-update (which sets `page_count`/`pdf_classification`/`extraction_confidence` — the three migration-0071-only columns) fails with a PostgREST schema-cache error, which the outer API call correctly surfaces as `400`/`error_code: internal_error` (the existing generic catch-all path, itself unaffected since its own update payload never references the missing columns).
 
 Live-verified evidence for one real CBA transaction, from a dedicated probe run and independently re-confirmed by the main certification script's R8/idempotency/purge checks:
 
@@ -26,7 +26,7 @@ This is the correct, honest basis for a **CONDITIONAL PASS**, not a FAIL: the en
 |---|---|---|
 | FDH5-SETUP | Two real authenticated DEV sessions created | PASS |
 | FDH5-E2E-AU-01 | Secure PDF upload into real DEV private storage (AU/CBA) | PASS |
-| FDH5-E2E-AU-02 | Native-text PDF processing creates canonical transactions | **FAIL** — blocked by missing migration 0070 columns (transactions DID persist correctly, per the diagnostic probe above; the wrapping API call reports 400) |
+| FDH5-E2E-AU-02 | Native-text PDF processing creates canonical transactions | **FAIL** — blocked by missing migration 0071 columns (transactions DID persist correctly, per the diagnostic probe above; the wrapping API call reports 400) |
 | FDH5-E2E-AU-03 | Reconciliation reflects exact values | **FAIL** — same cause (reconciliation row DID persist correctly, status `reconciled`, per the diagnostic probe) |
 | FDH5-E2E-AU-04 | R8 categorisation runs over PDF-sourced transactions | PASS — `transactionsConsidered: 3` (real transactions from a 3-row CBA fixture used in the main script run) |
 | FDH5-E2E-AU-05 | Reprocessing the same PDF twice creates no duplicate transactions | PASS — 3 before, 3 after |
@@ -61,4 +61,4 @@ All test users and documents independently re-verified absent via a dedicated po
 
 ## What remains to reach UNCONDITIONAL
 
-Apply migration `0070_fdh5_bank_pdf_engine_foundation.sql` to DEV, then re-run `scripts/fdh5_live_dev_certification.ts` — every one of the 5 currently-FAILing checks is expected to PASS once the three new columns exist, based on the diagnostic probe's evidence that every step preceding that final write already succeeds exactly.
+Apply migration `0071_fdh5_bank_pdf_engine_foundation.sql` to DEV, then re-run `scripts/fdh5_live_dev_certification.ts` — every one of the 5 currently-FAILing checks is expected to PASS once the three new columns exist, based on the diagnostic probe's evidence that every step preceding that final write already succeeds exactly.

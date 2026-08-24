@@ -5,13 +5,13 @@ STATUS: **CONDITIONAL PASS**
 Branch: `bank-pdf-statement-engine`
 Starting canonical main: `e143d6dc4cc40bc7f17c01f86cb0afa0a42de24f`
 Final certified SHA: `aac40e4c78da4e7fd01bb81f51e37b07ca77ea20`
-Migration(s): `0070_fdh5_bank_pdf_engine_foundation.sql` — written and unit-schema-certified; **NOT YET APPLIED to DEV** (no DDL execution capability in this environment, per orchestration constraint)
+Migration(s): `0071_fdh5_bank_pdf_engine_foundation.sql` — written and unit-schema-certified; **NOT YET APPLIED to DEV** (no DDL execution capability in this environment, per orchestration constraint)
 DEV: 13/18 live checks PASS; 5 blocked specifically and only by the unapplied migration (root-caused via a dedicated diagnostic probe — see §13)
 Production: NOT RELEASED — `isFdhDocumentUploadEnabled()`'s hard project-ref gate (unchanged FDH-3 code) continues to block any non-DEV Supabase project regardless of environment variables; FDH-5 introduces no new gate and weakens none
 
 ## 1. Executive Summary
 
-FDH-5 extends the Financial Data Hub with a full bank-PDF ingestion pipeline (validation → structural classification → adapter detection → row reconstruction → normalisation → the EXISTING R7 dedup/reconciliation engines, unmodified → the EXISTING R8 categorisation, unmodified) for 8 priority-wave institutions (CBA, ANZ, NAB, Westpac; SBI, HDFC, ICICI, Axis), plus transient password-protected-PDF handling and an OCR fallback architecture. Zero duplicate downstream engines were introduced. 68/68 new FDH-5 unit tests pass, full regression is clean (2088/2094 pass, 5 pre-existing skips, 1 pre-existing unrelated flaky test independently confirmed to pass on retry), TypeScript/build/lint are clean, and the compiled production bundle contains zero service-role secrets and zero server-only dependencies. Live DEV certification proved the entire engine correct end-to-end at the data level (exact transaction/reconciliation/provenance persistence, tenant isolation, forged-request/forged-password blocking, purge, password non-persistence) but could not complete full document-status finalisation because migration `0070` has not been applied to DEV — an honestly disclosed, structurally unavoidable gap given this implementation has no DDL execution capability, not a defect in the engine itself.
+FDH-5 extends the Financial Data Hub with a full bank-PDF ingestion pipeline (validation → structural classification → adapter detection → row reconstruction → normalisation → the EXISTING R7 dedup/reconciliation engines, unmodified → the EXISTING R8 categorisation, unmodified) for 8 priority-wave institutions (CBA, ANZ, NAB, Westpac; SBI, HDFC, ICICI, Axis), plus transient password-protected-PDF handling and an OCR fallback architecture. Zero duplicate downstream engines were introduced. 68/68 new FDH-5 unit tests pass, full regression is clean (2088/2094 pass, 5 pre-existing skips, 1 pre-existing unrelated flaky test independently confirmed to pass on retry), TypeScript/build/lint are clean, and the compiled production bundle contains zero service-role secrets and zero server-only dependencies. Live DEV certification proved the entire engine correct end-to-end at the data level (exact transaction/reconciliation/provenance persistence, tenant isolation, forged-request/forged-password blocking, purge, password non-persistence) but could not complete full document-status finalisation because migration `0071` has not been applied to DEV — an honestly disclosed, structurally unavoidable gap given this implementation has no DDL execution capability, not a defect in the engine itself.
 
 ## 2. Reuse Audit
 
@@ -59,7 +59,7 @@ Pages: up to 60 (enforced ceiling, tested at the boundary+1). Transactions: 1,00
 
 ## 13. Live DEV E2E
 
-Native PDF: **PARTIAL** — upload/classification/adapter-detection/row-reconstruction/normalisation/dedup/reconciliation/transaction-persistence/provenance ALL proven exactly correct live (via a dedicated diagnostic probe against real DEV Postgres); final document-status write blocked by migration 0070's absence. Encrypted PDF: **N/A** (see §6 methodology). OCR PDF: **N/A** (§7). Canonical persistence: **PASS** (exact values, live-verified). R8: **PASS** (live). Purge: **PASS** (live — raw storage nulled, 3 transactions survived unchanged). See FDH5_LIVE_DEV_CERTIFICATION.md for the full, itemised 18-check table and the diagnostic-probe evidence this verdict rests on.
+Native PDF: **PARTIAL** — upload/classification/adapter-detection/row-reconstruction/normalisation/dedup/reconciliation/transaction-persistence/provenance ALL proven exactly correct live (via a dedicated diagnostic probe against real DEV Postgres); final document-status write blocked by migration 0071's absence. Encrypted PDF: **N/A** (see §6 methodology). OCR PDF: **N/A** (§7). Canonical persistence: **PASS** (exact values, live-verified). R8: **PASS** (live). Purge: **PASS** (live — raw storage nulled, 3 transactions survived unchanged). See FDH5_LIVE_DEV_CERTIFICATION.md for the full, itemised 18-check table and the diagnostic-probe evidence this verdict rests on.
 
 ## 14. Live Security
 
@@ -71,7 +71,7 @@ Raw PDF temporary: **PASS**. Password persistence: **NONE** (static + live proof
 
 ## 16. Data Preservation
 
-FDH/R8/II/Resources/Input Data: **UNCHANGED** — full regression suite (2088/2094 unrelated tests) re-run clean; no destructive migration statement anywhere in `0070` (verified by the schema-contract test's own "additive only" assertion: no `drop table`, no `drop column`, no `delete from`).
+FDH/R8/II/Resources/Input Data: **UNCHANGED** — full regression suite (2088/2094 unrelated tests) re-run clean; no destructive migration statement anywhere in `0071` (verified by the schema-contract test's own "additive only" assertion: no `drop table`, no `drop column`, no `delete from`).
 
 ## 17. Regression
 
@@ -79,7 +79,7 @@ Migration guard: **PASS** (68 active migrations, one file per version). Cross-br
 
 ## 18. Production
 
-PDF upload: **DISABLED** (unchanged `isFdhDocumentUploadEnabled()` hard project-ref gate; FDH-5 introduces no bypass). PDF processing: **DISABLED** (same gate, applied identically to the new `/bank-pdf/{id}/process` route). Production migration: **NOT APPLIED** (and migration `0070` is not yet applied to DEV either — delivered as a file, per spec 137's own sanctioned CONDITIONAL PASS outcome for exactly this situation).
+PDF upload: **DISABLED** (unchanged `isFdhDocumentUploadEnabled()` hard project-ref gate; FDH-5 introduces no bypass). PDF processing: **DISABLED** (same gate, applied identically to the new `/bank-pdf/{id}/process` route). Production migration: **NOT APPLIED** (and migration `0071` is not yet applied to DEV either — delivered as a file, per spec 137's own sanctioned CONDITIONAL PASS outcome for exactly this situation).
 
 ## 19. Open Residuals
 
@@ -88,7 +88,7 @@ PDF upload: **DISABLED** (unchanged `isFdhDocumentUploadEnabled()` hard project-
 - **Orphan-scale validation** — not newly exercised; FDH-5 introduces no new storage path for the existing orphan sweep to miss.
 - **Concurrency/load** — not exercised beyond the 1,000-transaction single-statement scale test; no concurrent-upload stress test was run.
 - **DB-BASE-0012** — no new instance in this phase; not investigated.
-- **Migration 0070 not applied to DEV** — the primary residual driving the CONDITIONAL verdict; see §13.
+- **Migration 0071 not applied to DEV** — the primary residual driving the CONDITIONAL verdict; see §13.
 - **OCR** — genuinely not implemented, by deliberate, disclosed, spec-43-mandated scope decision, not an oversight.
 - **Secondary-wave PDF adapters** (Macquarie AU, Kotak IN) — not built this phase.
 - **`getTable()` ruled-line extraction strategy** — evaluated, deliberately not certified (see FDH5_PDF_ARCHITECTURE.md).
@@ -115,10 +115,10 @@ PDF upload: **DISABLED** (unchanged `isFdhDocumentUploadEnabled()` hard project-
 
 ## 21. Final Verdict
 
-**CONDITIONAL PASS.** The engine is genuinely correct — proven by 68/68 new unit tests, a clean full regression, and live-DEV evidence at the data level for every stage of the pipeline. The condition is narrow and structural, not a quality gap: migration `0070` has not been applied to DEV (this implementation has no DDL execution capability, per explicit orchestration constraint), which blocks only the FINAL document-status-finalisation write on live DEV — every step preceding it was independently proven correct via a dedicated diagnostic probe. No financial-integrity defect, no security defect, and no unresolved password-persistence issue exists. OCR is honestly disclosed as not implemented (a deliberate, spec-43-mandated scope decision, not a concealed gap).
+**CONDITIONAL PASS.** The engine is genuinely correct — proven by 68/68 new unit tests, a clean full regression, and live-DEV evidence at the data level for every stage of the pipeline. The condition is narrow and structural, not a quality gap: migration `0071` has not been applied to DEV (this implementation has no DDL execution capability, per explicit orchestration constraint), which blocks only the FINAL document-status-finalisation write on live DEV — every step preceding it was independently proven correct via a dedicated diagnostic probe. No financial-integrity defect, no security defect, and no unresolved password-persistence issue exists. OCR is honestly disclosed as not implemented (a deliberate, spec-43-mandated scope decision, not a concealed gap).
 
 ## 22. FDH-6 Readiness: **AMBER**
 
-Amber, not green, specifically because migration `0070` still needs to be applied to DEV and this branch's live certification re-run to reach UNCONDITIONAL before FDH-5 itself should be considered fully closed — a future phase should not build on top of an unapplied migration.
+Amber, not green, specifically because migration `0071` still needs to be applied to DEV and this branch's live certification re-run to reach UNCONDITIONAL before FDH-5 itself should be considered fully closed — a future phase should not build on top of an unapplied migration.
 
 ## 23. Next Action: STOP. Do not begin FDH-6.
