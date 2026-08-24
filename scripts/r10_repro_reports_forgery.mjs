@@ -1,31 +1,11 @@
-// R10 — live-DEV reproduction of a pre-existing same-user authoritative-write
-// gap on the `reports` / `report_sections` / `report_snapshots` /
-// `report_exports` family. RLS on these tables (migration 0010) has never
-// been hardened since: every policy is a single
-//   for all using (auth.uid() = user_id) with check (auth.uid() = user_id)
-// which enforces row ownership but not column/transition authority — the
-// exact defect class this project has already found and fixed repeatedly
-// (ii_review_items 0069, ii_tax_lots 0062, fdh_statement_uploads 0065).
-//
-// This script creates ONE disposable test user, has them create a genuine
-// report via a direct table insert exactly as generateReport() does (same
-// RLS-scoped path), then — authenticated as that SAME real user via a real
-// JWT (not anon, not service-role) — attempts direct REST forgery:
-//   1. PATCH reports.status: 'ready' -> 'published' WITHOUT going through
-//      publishReport()'s guarded update (also forges data_completeness_pct
-//      and financial_snapshot_id in the same request).
-//   2. PATCH report_sections.section_data_json / narrative_text on an owned
-//      section row — i.e. rewrite the displayed financial numbers/narrative
-//      directly.
-//   3. INSERT a brand new report_snapshots row with a fabricated
-//      source_version, unrelated to anything the report engine produced.
-// All three are expected to currently SUCCEED (RED / vulnerable). The
-// script also positively confirms it is really writing as the authenticated
-// user, not service-role, by using the anon key + user JWT for every
-// mutating call.
-//
-// Cleans up the disposable auth user (and its cascade-deleted rows) at the
-// end regardless of outcome.
+// R10 — live-DEV verification that migration 0070 blocks the 5 originally
+// reproduced forgery attacks. Creates one disposable test user, seeds a
+// genuine owned report the way the REAL (post-fix) app code now does — via
+// the service-role admin client, exactly like generateReport() does after
+// this session's refactor — then, authenticated AS that same real user via
+// a real JWT (anon key + password sign-in, not anon/service-role), attempts
+// the same five direct REST forgery attacks reproduced pre-fix. Cleans up
+// the disposable user afterwards regardless of outcome.
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,14 +50,8 @@ try {
 
   await admin.from('user_entitlements').update({ plan_tier: 'free' }).eq('user_id', userId);
 
-  console.log('--- signing in as that user (anon key, real session, real JWT) ---');
-  const userClient = createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { error: signInErr } = await userClient.auth.signInWithPassword({ email: testEmail, password: testPassword });
-  if (signInErr) throw new Error(`sign-in failed: ${signInErr.message}`);
-  console.log('session acquired, role should be authenticated');
-
-  console.log('--- creating one genuine report row as this user (their own legitimate RLS-scoped insert) ---');
-  const { data: report, error: reportErr } = await userClient
+  console.log('--- seeding one genuine report (service-role admin client, matching real post-fix generateReport()) ---');
+  const { data: report, error: reportErr } = await admin
     .from('reports')
     .insert({
       user_id: userId,
@@ -93,10 +67,10 @@ try {
     })
     .select('*')
     .single();
-  if (reportErr) throw new Error(`legit report insert failed unexpectedly: ${reportErr.message}`);
+  if (reportErr) throw new Error(`legit report insert (service-role) failed unexpectedly: ${reportErr.message}`);
   console.log('report id:', report.id, 'status:', report.status);
 
-  const { data: section, error: sectionErr } = await userClient
+  const { data: section, error: sectionErr } = await admin
     .from('report_sections')
     .insert({
       report_id: report.id,
@@ -110,18 +84,34 @@ try {
     })
     .select('*')
     .single();
-  if (sectionErr) throw new Error(`legit section insert failed unexpectedly: ${sectionErr.message}`);
+  if (sectionErr) throw new Error(`legit section insert (service-role) failed unexpectedly: ${sectionErr.message}`);
   console.log('section id:', section.id);
+
+  const { data: runRow } = await admin
+    .from('report_generation_runs')
+    .insert({ user_id: userId, report_id: report.id, trigger_type: 'manual', output_status: 'started' })
+    .select('id')
+    .single();
+
+  console.log('--- signing in as that user (anon key, real session, real JWT) ---');
+  const userClient = createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { error: signInErr } = await userClient.auth.signInWithPassword({ email: testEmail, password: testPassword });
+  if (signInErr) throw new Error(`sign-in failed: ${signInErr.message}`);
+  console.log('session acquired, role should be authenticated');
+
+  // Sanity: the authenticated user must still be able to READ their own genuine rows (no read regression)
+  const { data: readCheck } = await userClient.from('reports').select('id, status').eq('id', report.id).maybeSingle();
+  record('SANITY: authenticated owner can still read their own report', true, !!readCheck, JSON.stringify(readCheck));
 
   console.log('\n=== ATTACK 1: forge reports.status ready -> published, bypassing publishReport() guard, plus forge data_completeness_pct ===');
   const { data: attack1, error: attack1Err } = await userClient
     .from('reports')
-    .update({ status: 'published', published_at: new Date().toISOString(), data_completeness_pct: 100, financial_snapshot_id: '00000000-0000-0000-0000-000000000000' })
+    .update({ status: 'published', published_at: new Date().toISOString(), data_completeness_pct: 100 })
     .eq('id', report.id)
     .select('*')
     .maybeSingle();
   record(
-    'ATTACK-1 forge report status/completeness/snapshot ref',
+    'ATTACK-1 forge report status/completeness',
     'BLOCKED-BY-RLS',
     attack1Err ? 'BLOCKED-BY-RLS' : (attack1 && attack1.status === 'published' ? 'FORGERY-SUCCEEDED' : 'BLOCKED-BY-RLS'),
     attack1Err ? attack1Err.message : JSON.stringify(attack1)
@@ -181,7 +171,6 @@ try {
   );
 
   console.log('\n=== ATTACK 5: forge report_generation_runs.output_status (audit trail) ===');
-  const { data: runRow } = await admin.from('report_generation_runs').insert({ user_id: userId, trigger_type: 'manual', output_status: 'started' }).select('id').single();
   const { data: attack5, error: attack5Err } = await userClient
     .from('report_generation_runs')
     .update({ output_status: 'succeeded', failure_details: null })
@@ -195,10 +184,26 @@ try {
     attack5Err ? attack5Err.message : JSON.stringify(attack5)
   );
 
+  console.log('\n--- ground-truth re-check via service-role (did anything actually change?) ---');
+  const groundTruth = {
+    reportStatus: (await admin.from('reports').select('status, data_completeness_pct').eq('id', report.id).single()).data,
+    section: (await admin.from('report_sections').select('section_data_json, narrative_text').eq('id', section.id).single()).data,
+    snapshotCount: (await admin.from('report_snapshots').select('id', { count: 'exact', head: true }).eq('report_id', report.id)).count,
+    readyExportCount: (await admin.from('report_exports').select('id', { count: 'exact', head: true }).eq('report_id', report.id).eq('status', 'ready')).count,
+    runStatus: (await admin.from('report_generation_runs').select('output_status').eq('id', runRow.id).single()).data,
+  };
+  console.log(JSON.stringify(groundTruth, null, 2));
+  record('GROUND TRUTH: report status unchanged (still ready)', 'ready', groundTruth.reportStatus.status);
+  record('GROUND TRUTH: section narrative unchanged', 'Your net worth is a genuine, engine-computed figure.', groundTruth.section.narrative_text);
+  record('GROUND TRUTH: no extra snapshot rows inserted', 0, groundTruth.snapshotCount ?? 0);
+  record('GROUND TRUTH: no ready exports exist', 0, groundTruth.readyExportCount ?? 0);
+  record('GROUND TRUTH: generation run status unchanged (still started)', 'started', groundTruth.runStatus.output_status);
+
   console.log('\n=== summary ===');
-  const succeeded = results.filter((r) => r.actual === 'FORGERY-SUCCEEDED');
-  console.log(`${succeeded.length}/${results.length} forgery attacks succeeded (pre-fix baseline).`);
-  fs.writeFileSync(path.join(ROOT, 'scripts', 'r10-repro-reports-forgery-results.json'), JSON.stringify({ userId, results }, null, 2));
+  const succeeded = results.filter((r) => r.verdict === 'UNEXPECTED');
+  console.log(`${results.length - succeeded.length}/${results.length} checks matched expected (post-fix baseline).`);
+  fs.writeFileSync(path.join(ROOT, 'scripts', 'r10-repro-reports-forgery-results.json'), JSON.stringify({ userId, results, groundTruth }, null, 2));
+  if (succeeded.length > 0) process.exitCode = 1;
 } finally {
   if (userId) {
     console.log('\n--- cleaning up disposable test user (cascades all rows) ---');

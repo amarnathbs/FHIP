@@ -1,5 +1,14 @@
 # II-R10 — Report Source-of-Truth Map
 
+> **Continuation update**: section B below ("Required by spec, not yet
+> wired") is now WIRED as of the R10 continuation session. See
+> `lib/services/investmentIntelligenceReportData.ts`,
+> `lib/engines/reportSectionsPremium.ts`'s five new chapter builders, and
+> `R10_ACCEPTANCE_REPORT.md` for the certification evidence. Table B is kept
+> below as the as-built record of exactly which function each chapter
+> calls (still accurate — it now describes what IS wired, not what remains
+> to be wired).
+
 Per spec section 17. Two parts: (A) metrics **already** wired into the report
 today (verified against the real code path), and (B) metrics the spec
 requires that are **not yet wired** — the concrete integration points a

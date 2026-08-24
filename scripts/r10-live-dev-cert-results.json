@@ -1,0 +1,56 @@
+[
+  {
+    "id": "LIVE-R10-A1",
+    "description": "Premium user report generation succeeds end-to-end",
+    "status": "PASS",
+    "detail": "{\"report\":{\"id\":\"d0befe60-219c-4e61-b7e1-2d6337832674\",\"user_id\":\"efb625cc-dfb6-4e26-9942-85f439debabc\",\"household_id\":null,\"report_type_code\":\"net_worth\",\"report_period_start\":\"2026-08-01\",\"report_period_end\":\"2026-08-31\",\"report_month\":\"2026-08-01\",\"as_of_date\":\"2026-08-24\",\"title\":\"Net Worth Repo"
+  },
+  {
+    "id": "LIVE-R10-A2",
+    "description": "All 5 II chapters present in generated sections (even if unavailable)",
+    "status": "PASS",
+    "detail": "found: investment_performance, sip_contribution, portfolio_xray, tax_and_cost, priority_review_items"
+  },
+  {
+    "id": "LIVE-R10-A3",
+    "description": "II chapters degrade safely (unavailable, explicit reason, no fabricated data) for a user with no II analytics",
+    "status": "PASS",
+    "detail": "[{\"code\":\"investment_performance\",\"status\":\"unavailable\",\"hasData\":0},{\"code\":\"sip_contribution\",\"status\":\"unavailable\",\"hasData\":0},{\"code\":\"portfolio_xray\",\"status\":\"unavailable\",\"hasData\":0},{\"code\":\"tax_and_cost\",\"status\":\"unavailable\",\"hasData\":0},{\"code\":\"priority_review_items\",\"status\":\"unavailable\",\"hasData\":0}]"
+  },
+  {
+    "id": "LIVE-R10-B1",
+    "description": "Free user report contains NO premium-only sections, server-enforced (entitlement cannot be spoofed client-side)",
+    "status": "PASS",
+    "detail": "free report section codes: executive_summary, cash_flow, net_worth, health_score, financial_dna, resilience, goals, commitments_timeline, forecast, financial_twin, cross_border, actions, data_quality, methodology"
+  },
+  {
+    "id": "LIVE-R10-B2",
+    "description": "Free user direct PDF export attempt is denied server-side (403), matching spec sections 58/130/163",
+    "status": "PASS",
+    "detail": "{\"error\":\"Exporting reports requires a premium plan. You can still view and print this report.\"}"
+  },
+  {
+    "id": "LIVE-R10-C/E",
+    "description": "Re-run original 5 forgery attacks against a REAL report from the real end-to-end pipeline (post-implementation regression, spec section 104)",
+    "status": "PASS",
+    "detail": "{\"attack1\":{\"ok\":true,\"rows\":0},\"attack2\":{\"rows\":0},\"attack3\":{\"ok\":false,\"status\":403},\"attack4\":{\"ok\":false,\"status\":403}}"
+  },
+  {
+    "id": "LIVE-R10-C-groundtruth",
+    "description": "Ground truth: report status genuinely unchanged after attack attempts",
+    "status": "PASS",
+    "detail": "[{\"status\":\"ready\"}]"
+  },
+  {
+    "id": "LIVE-R10-D",
+    "description": "User B (free) cannot GET User A (premium) real report via the real app route",
+    "status": "PASS",
+    "detail": "status=404"
+  },
+  {
+    "id": "LIVE-R10-F1",
+    "description": "Premium user real PDF generation (Playwright/Chromium against the real print route) succeeds with the 5 new II chapters present",
+    "status": "FAIL",
+    "detail": "{\"error\":\"page.goto: Timeout 30000ms exceeded.\\nCall log:\\n\\u001b[2m  - navigating to \\\"http://localhost:3219/reports/d0befe60-219c-4e61-b7e1-2d6337832674/print?token=7987c29fde8f13254ad1a8648b2e068fc8c0c0dc32e549fc543a94ecfe50988e\\\", waiting until \\\"networkidle\\\"\\u001b[22m\\n\"}"
+  }
+]
