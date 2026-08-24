@@ -12,11 +12,11 @@ The frozen 13-value `FDH_ECONOMIC_TRANSACTION_TYPES` enum (`lib/financial-data-h
 | expense | yes — merchant/category default | unchanged |
 | transfer | only via manual user correction (no automatic write-back) | **yes** — `applyTransferClassOnConfirm()` writes it back to both sides when a matched `internal_transfer`/`credit_card_settlement` link is confirmed |
 | investment | yes — 2 global rules (EPF/NPS, India) | unchanged |
-| debt_principal | **no** — category existed, zero rules | **yes** — 7 new rules, migration `0072` |
+| debt_principal | **no** — category existed, zero rules | **yes** — 7 new rules, migration `0075` |
 | debt_interest | yes — 4 global rules | unchanged |
 | refund | yes — 6 global rules | unchanged |
-| asset_purchase | **no** — category existed, zero rules | **yes** — 5 new rules, migration `0072` |
-| asset_sale | **no** — category existed, zero rules | **yes** — 5 new rules, migration `0072` |
+| asset_purchase | **no** — category existed, zero rules | **yes** — 5 new rules, migration `0075` |
+| asset_sale | **no** — category existed, zero rules | **yes** — 5 new rules, migration `0075` |
 | tax | yes — 1 global rule (AU) | unchanged |
 | fee | yes — 8 global rules | unchanged |
 | cash_withdrawal | yes — 3 global rules | unchanged |

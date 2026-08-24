@@ -128,7 +128,7 @@ function emptyRef(overrides: Partial<ClassificationReferenceData> = {}): Classif
 }
 
 /** Builds a single narrative_pattern classify rule EXACTLY as
- * `0056_fdh2_classification_rule_seed.sql` / `0072_fdh6_economic_class_gap_
+ * `0056_fdh2_classification_rule_seed.sql` / `0075_fdh6_economic_class_gap_
  * closure_rule_seed.sql` define it — required/excluded terms transcribed
  * by hand from the SQL file, priority included, so a reviewer can diff this
  * fixture against the migration directly. */

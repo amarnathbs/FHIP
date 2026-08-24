@@ -169,7 +169,7 @@ duplicates").
   deterministic, so a reason is always reproducible from already-persisted
   signals).
 - **G2 — Unreachable economic classes (`debt_principal`, `asset_purchase`,
-  `asset_sale`)**, see section 3. Closed with migration `0072`: additive
+  `asset_sale`)**, see section 3. Closed with migration `0075`: additive
   `fdh_classification_rules` rows only, reusing FDH-2's existing
   `loan_principal`/`investment_purchase`/`investment_sale` categories —
   zero new tables, zero new columns.

@@ -1,0 +1,73 @@
+DEV project: vqycarelcoijzwlpkpcz.supabase.co
+App under test: http://localhost:36211
+
+[PASS] FDH6-SETUP-USERS — Create two real authenticated DEV sessions (A, B)
+        A=0f8b5c28-ad6f-49e5-83c4-631bdd2564a8 B=68d402ae-65ba-47f5-8344-7965f668a3ab
+[PASS] FDH6-CSV-01 — Real CSV upload through the live app (R7/FDH-4 certified CBA adapter)
+        {"status":200,"csvDocId":"52f5ffad-9e14-4c49-a714-d4827eb766d7"}
+[PASS] FDH6-CSV-02 — CSV processed into real canonical transactions
+        {"document_id":"52f5ffad-9e14-4c49-a714-d4827eb766d7","certification_status":"certified","processing_status":"approved","reconciliation_status":"reconciled","transactions_created":5,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"declared_row_count":5,"parsed_row_count":5}
+[PASS] FDH6-CSV-03 — FDH-6/R8 classification runs over the CSV-sourced transactions (full downstream chain: CSV -> canonical -> merchant/category -> economic class)
+        {"transactionsConsidered":5,"transactionsClassified":5,"transactionsUnresolved":0,"transactionsSkippedUserOverride":0,"transferLinksProposed":0,"refundLinksProposed":0,"recurringSeriesDetected":0}
+[PASS] FDH6-PDF-01 — Real PDF upload through the live app (FDH-5 certified native-text adapter)
+        {"status":200,"pdfDocId":"7f025be5-98da-45a2-abed-d7977abe583e"}
+[PASS] FDH6-PDF-02 — PDF processed into real canonical transactions
+        {"document_id":"7f025be5-98da-45a2-abed-d7977abe583e","pipeline_status":"ok","certification_status":"review_required","processing_status":"review_required","error_code":null,"reconciliation_status":"failed","transactions_created":3,"duplicates_skipped":0,"duplicate_candidates":0,"rejected_rows":0,"page_count":1,"declared_row_count":3,"parsed_row_count":3}
+[PASS] FDH6-PDF-03 — FDH-6/R8 classification runs over the PDF-sourced transactions (SAME downstream chain as CSV)
+        {"transactionsConsidered":8,"transactionsClassified":3,"transactionsUnresolved":0,"transactionsSkippedUserOverride":0,"transferLinksProposed":0,"refundLinksProposed":0,"recurringSeriesDetected":0}
+[PASS] FDH6-PDF-04 — PDF-sourced salary credit classified INCOME
+        {"id":"806cf54b-7e22-4357-9c13-5b99d7ab4b20","user_id":"0f8b5c28-ad6f-49e5-83c4-631bdd2564a8","household_id":null,"financial_account_id":"b3723823-9f73-4770-bde0-359f86555442","statement_upload_id":"7f025be5-98da-45a2-abed-d7977abe583e","transaction_date":"2026-08-01","posting_date":null,"value_date":null,"description_raw":"SALARY XYZ PTY LTD","description_clean":"SALARY XYZ PTY LTD","merchant_raw":null,"merchant_id":null,"amount_original":5200,"currency_original":"AUD","amount_reporting_currency":null,"reporting_currency":null,"fx_rate":null,"fx_rate_date":null,"fx_rate_source":null,"credit_debit":"credit","economic_transaction_type":"income","category_id":"0c046122-43e8-431d-94e2-527e734377b1","subcategory_id":"ae0e07f4-1f1d-4710-b9a0-6df28e834095","recurring_flag":false,"subscription_flag":false,"transfer_flag":false,"classification_confidence":0.6,"extraction_confidence":1,"classific
+[PASS] FDH6-PDF-05 — PDF-sourced "BROKER FUNDING" classified ASSET_PURCHASE (FDH-6 gap closure, migration 0075) — same downstream path as CSV
+        {"id":"83f3baea-34e2-4f2c-8d76-89f35f20c457","user_id":"0f8b5c28-ad6f-49e5-83c4-631bdd2564a8","household_id":null,"financial_account_id":"b3723823-9f73-4770-bde0-359f86555442","statement_upload_id":"7f025be5-98da-45a2-abed-d7977abe583e","transaction_date":"2026-08-03","posting_date":null,"value_date":null,"description_raw":"BROKER FUNDING COMMSEC","description_clean":"BROKER FUNDING COMMSEC","merchant_raw":null,"merchant_id":null,"amount_original":2000,"currency_original":"AUD","amount_reporting_currency":null,"reporting_currency":null,"fx_rate":null,"fx_rate_date":null,"fx_rate_source":null,"credit_debit":"debit","economic_transaction_type":"asset_purchase","category_id":"3718cf25-df9b-4aad-abfe-695f340e6c68","subcategory_id":"4816bc8a-cb86-4377-9c17-301f8bfa179a","recurring_flag":false,"subscription_flag":false,"transfer_flag":false,"classification_confidence":0.6,"extraction_confidenc
+[PASS] FDH6-PDF-06 — PDF-sourced ATM withdrawal classified CASH_WITHDRAWAL, not immediate expense
+        {"id":"15e65be4-d92d-459b-98e8-1e02ac698af8","user_id":"0f8b5c28-ad6f-49e5-83c4-631bdd2564a8","household_id":null,"financial_account_id":"b3723823-9f73-4770-bde0-359f86555442","statement_upload_id":"7f025be5-98da-45a2-abed-d7977abe583e","transaction_date":"2026-08-05","posting_date":null,"value_date":null,"description_raw":"ATM WITHDRAWAL CBA BRANCH","description_clean":"ATM WITHDRAWAL CBA BRANCH","merchant_raw":null,"merchant_id":null,"amount_original":200,"currency_original":"AUD","amount_reporting_currency":null,"reporting_currency":null,"fx_rate":null,"fx_rate_date":null,"fx_rate_source":null,"credit_debit":"debit","economic_transaction_type":"cash_withdrawal","category_id":"fcd2c33d-2def-47c7-99a2-91d046712836","subcategory_id":"25080be8-cccc-4336-8a33-1dfe17465dde","recurring_flag":false,"subscription_flag":false,"transfer_flag":false,"classification_confidence":0.6,"extraction_con
+[PASS] FDH6-XFER-01 — Classification proposes a transfer link for the matched pair
+        {"transactionsConsidered":10,"transactionsClassified":0,"transactionsUnresolved":2,"transactionsSkippedUserOverride":0,"transferLinksProposed":1,"refundLinksProposed":0,"recurringSeriesDetected":0}
+[PASS] FDH6-XFER-02 — A pending internal_transfer link exists for the matched pair, status=pending (never auto-confirmed)
+        {"id":"da17c68e-0279-4ae8-9523-a37be2b0938d","user_id":"0f8b5c28-ad6f-49e5-83c4-631bdd2564a8","transaction_id_from":"c33ad74c-d53c-474e-b061-3c0f665efb49","transaction_id_to":"b69fe07a-8cc8-4b2b-a91b-2c4f8d03720d","link_type":"internal_transfer","confidence":1,"status":"pending","created_by_method":"algorithm","user_confirmed":false,"created_at":"2026-08-24T08:49:21.846125+00:00","updated_at":"2026-08-24T08:49:21.846125+00:00","match_evidence":{"rule":"exact_amount_opposite_direction_different_account","amount":750,"currency":"AUD","account_to":"c1114eae-51e9-413b-a4a7-17eba2c0f191","account_from":"8a801669-fc91-4e58-ad2c-3c8900f2cde5","date_delta_days":0,"same_source_reference":false}}
+[PASS] FDH6-XFER-03 — Before confirmation, neither side is yet economic_transaction_type=transfer
+        {"before":"unknown","beforeCredit":"unknown"}
+[PASS] FDH6-XFER-04 — User confirms the transfer link via the real review API
+        {"link_id":"da17c68e-0279-4ae8-9523-a37be2b0938d","status":"confirmed","user_confirmed":true}
+[PASS] FDH6-XFER-05 — FDH-6 gap closure PROVEN LIVE: confirming the link writes economic_transaction_type=transfer back onto BOTH transactions (spec sections 20-22)
+        {"debit":"transfer","credit":"transfer"}
+[PASS] FDH6-XFER-06 — No income/expense double-counting: neither confirmed side is classified income or expense (spec sections 22, 128, 136)
+        null
+[PASS] FDH6-XFER-07 — Both transfer confirmations were recorded as auditable corrections (spec section 68)
+        {"count":6}
+[PASS] FDH6-MISSING-01 — A transfer-looking narrative with no counterpart produces a PERSISTENT OPEN link (MISSING_COUNTERPART_ACCOUNT), never a fabricated match, never forced to income/expense
+        {"id":"80dec647-34d1-4d3a-ad08-4847cb3896eb","user_id":"0f8b5c28-ad6f-49e5-83c4-631bdd2564a8","transaction_id_from":"15343bdc-5354-4f2c-a884-f07263f4b0bb","transaction_id_to":null,"link_type":"internal_transfer","confidence":0.3,"status":"pending","created_by_method":"algorithm","user_confirmed":false,"created_at":"2026-08-24T08:49:39.650755+00:00","updated_at":"2026-08-24T08:49:39.650755+00:00","match_evidence":{"rule":"structural_candidate_no_counterpart_found","candidate_type":"transfer_candidate"}}
+[PASS] FDH6-MISSING-02 — The lone transaction itself stays UNKNOWN/pending review, never guessed
+        {"type":"unknown","review":"pending"}
+[PASS] FDH6-CORRECT-01 — User correction saved via the real API
+        {"transaction_id":"15e65be4-d92d-459b-98e8-1e02ac698af8","field_name":"category_id","user_override":true}
+[PASS] FDH6-CORRECT-02 — Correction persisted (category_id changed), user_override=true, history retained
+        {"before":"fcd2c33d-2def-47c7-99a2-91d046712836","after":"5a8ba467-eaf4-4f68-82d5-07ed36931cd0","user_override":true}
+[PASS] FDH6-CORRECT-03 — The global rule this transaction originally matched is completely unchanged by the user's personal correction (spec sections 13-14)
+        {"id":"38a71d92-0c30-4166-ba2d-e4ecd238f37e","rule_key":"cash_atm_withdrawal_generic","rule_type":"narrative_pattern","country_applicability":["AU","IN"],"match_definition":{"match_kind":"narrative_pattern","required_terms_normalised":["ATM WITHDRAWAL"]},"action_definition":{"action_kind":"classify","category_id":"fcd2c33d-2def-47c7-99a2-91d046712836","subcategory_id":"25080be8-cccc-4336-8a33-1dfe17465dde","economic_transaction_type":"cash_withdrawal"},"priority":190,"status":"approved","active":true,"version":1,"created_at":"2026-08-21T23:50:52.415919+00:00","updated_at":"2026-08-21T23:50:52.415919+00:00"}
+[PASS] FDH6-SPLIT-01 — Two split allocations created via the user's own RLS-scoped session (no service-role)
+        {"statusA":201,"statusB":201}
+[PASS] FDH6-SPLIT-02 — sum(allocations) EXACTLY equals the parent transaction amount (300.00), integer minor-unit arithmetic — spec sections 65-66
+        {"sum":300,"expected":300}
+[PASS] FDH6-SEC-01 — Tenant B cannot read Tenant A's transaction via RLS-scoped REST
+        []
+[PASS] FDH6-SEC-02 — Tenant B's own classify call touches only B's own (zero) transactions, never A's
+        {"status":200,"bTxnCount":0}
+[PASS] FDH6-SEC-03 — Forged transfer-link review (Tenant B targets Tenant A's link_id) rejected
+        {"status":404}
+[PASS] FDH6-SEC-04 — Forged correction (Tenant B targets Tenant A's transaction_id) rejected
+        {"status":404}
+[PASS] FDH6-SEC-05 — Tenant B cannot read Tenant A's personal classification rules
+        []
+[PASS] FDH6-SEC-06 — Tenant B cannot read Tenant A's split allocations
+        []
+[PASS] FDH6-SEC-07 — Forged direct INSERT into fdh_transaction_links impersonating Tenant A (RLS with-check) rejected
+        {"status":400}
+[PASS] FDH6-CLEANUP-01 — All synthetic transactions cascade-deleted with the user
+        {"residual":0}
+[PASS] FDH6-CLEANUP-02 — All synthetic accounts cascade-deleted with the user
+        []
+[PASS] FDH6-CLEANUP-03 — Both synthetic auth users are genuinely gone (404 on lookup)
+        {"status":404}
+
+===== FDH-6 LIVE DEV CERTIFICATION: 34 PASS, 0 FAIL (of 34) =====
