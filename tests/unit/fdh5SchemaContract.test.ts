@@ -9,11 +9,27 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
   FDH_ALL_ERROR_CODES,
   FDH_PDF_CLASSIFICATIONS,
   FDH_PDF_EXTRACTION_METHODS,
 } from '@/lib/financial-data-hub/constants/enums';
+
+// Scoped to exactly FDH-3 + R7 + R8 + FDH-5 (composed from the individual
+// _ADDED constants), NOT the ever-growing FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES
+// — this migration's own constraint text is frozen at exactly this set and
+// must stay correct regardless of how many LATER phases (FDH-7 and beyond)
+// widen the constraint further. Mirrors the exact pattern already used by
+// tests/unit/r7SchemaContract.test.ts and tests/unit/r8SchemaContract.test.ts.
+const EVENT_TYPES_AS_OF_FDH5 = [
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
+];
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0071_fdh5_bank_pdf_engine_foundation.sql';
@@ -79,13 +95,13 @@ describe('FDH-5 new-column check constraints match their TypeScript vocabularies
     expect(values.sort()).toEqual([...FDH_ALL_ERROR_CODES].sort());
   });
 
-  it('fdh_document_audit_events.event_type widened constraint matches the FULL (FDH-3 + R7 + R8 + FDH-5) TypeScript vocabulary', () => {
+  it('fdh_document_audit_events.event_type widened constraint matches exactly the FDH-3 + R7 + R8 + FDH-5 TypeScript vocabulary (as of this migration — not later widenings)', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 1900);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    expect(values.sort()).toEqual([...EVENT_TYPES_AS_OF_FDH5].sort());
   });
 });
 
