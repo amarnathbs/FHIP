@@ -35,7 +35,6 @@ import type {
   FdhCategory,
   FdhClassificationRule,
   FdhMerchant,
-  FdhSubcategory,
 } from '@/lib/financial-data-hub/domain/types';
 import type { FdhAccountType } from '@/lib/financial-data-hub/constants/enums';
 
@@ -66,27 +65,6 @@ function category(overrides: Partial<FdhCategory> = {}): FdhCategory {
   };
 }
 
-let subcategorySeq = 0;
-function subcategory(categoryId: string, overrides: Partial<FdhSubcategory> = {}): FdhSubcategory {
-  subcategorySeq += 1;
-  return {
-    id: overrides.id ?? `subcat-${subcategorySeq}`,
-    category_id: categoryId,
-    subcategory_key: 'test_subcategory',
-    display_name: 'Test Subcategory',
-    description: null,
-    country_applicability: ['AU', 'IN'],
-    tax_reporting_flag: null,
-    fhip_mapping_key: null,
-    display_order: 1,
-    fhip_mapping_key_full: 'test_category.test_subcategory',
-    active: true,
-    version: 1,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    ...overrides,
-  } as unknown as FdhSubcategory;
-}
 
 let ruleSeq = 0;
 function globalRule(overrides: Partial<FdhClassificationRule> = {}): FdhClassificationRule {
@@ -157,7 +135,7 @@ function emptyRef(overrides: Partial<ClassificationReferenceData> = {}): Classif
 function seededRule(
   ruleKey: string,
   required: string[],
-  economicType: FdhClassificationRule['action_definition'] extends infer _T ? string : never,
+  economicType: string,
   priority: number,
   excluded: string[] = [],
   country: Array<'AU' | 'IN'> = ['AU', 'IN'],

@@ -102,16 +102,6 @@ describe('FDH-6 thresholds.ts — engines still produce IDENTICAL results after 
 
 // --- Rule-conflict detection (gap G3, spec section 57) ----------------------
 
-function category(overrides: Partial<import('@/lib/financial-data-hub/domain/types').FdhCategory> = {}) {
-  return {
-    id: 'cat-1', category_key: 'groceries', display_name: 'Groceries', description: null,
-    economic_type: 'expense' as const, country_applicability: ['AU', 'IN'] as const,
-    essential_discretionary: 'essential' as const, tax_reporting_flag: false, fhip_mapping_key: null,
-    display_order: 1, icon_key: null, active: true, version: 1,
-    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...overrides,
-  };
-}
-
 function txn(overrides: Partial<ClassifiableTransaction> = {}): ClassifiableTransaction {
   return {
     id: 't1', financial_account_id: 'acc-1', transaction_date: '2026-03-01',

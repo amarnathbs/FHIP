@@ -43,7 +43,7 @@ interface Row {
  * forgets to page past it would fail here exactly as it would live. */
 function makeFakeSupabase(rows: Row[]) {
   const PAGE_CAP = 1000; // mirrors PostgREST's real db-max-rows
-  function from(_table: string) {
+  function from() {
     let filtered = [...rows];
     let limitN: number | null = null;
     const builder = {
