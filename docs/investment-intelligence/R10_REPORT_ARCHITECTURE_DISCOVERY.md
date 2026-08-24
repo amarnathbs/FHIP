@@ -1,5 +1,15 @@
 # II-R10 — Report Architecture Discovery (P0)
 
+> **Continuation session delta discovery** (spec section 4): re-ran
+> `git fetch --all --prune` + branch/log inspection — `origin/main` is
+> still `ddfc19e723cb6bb2472565607b001d7d12096d6d` (unchanged; neither R10
+> nor the sibling FDH-5 branch has merged). Migration `0070` (below) is now
+> confirmed LIVE on DEV and independently re-verified this session — see
+> `R10_ACCEPTANCE_REPORT.md`. FDH-5 has since claimed migration `0071`
+> (`0071_fdh5_bank_pdf_engine_foundation.sql`, unrelated table namespace).
+> Nothing else in the report stack changed between sessions; this document
+> was not rewritten, only extended by the continuation's own new docs.
+
 Status: **DISCOVERY COMPLETE**. This document records what R10 found before writing any
 implementation code, per spec sections 10-13.
 
