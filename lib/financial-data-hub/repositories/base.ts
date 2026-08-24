@@ -42,6 +42,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { FdhAllUserOwnedTable, FdhMasterDataTable } from '../constants/tables';
+import { fetchAllRows, type RangeableQuery } from '../bank-csv/pagination';
 
 /**
  * A repository over one user-owned FDH table.
@@ -84,6 +85,36 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
         .order('created_at', { ascending: false })
         .limit(limit)
         .returns<TRow[]>();
+    },
+
+    /**
+     * FDH-6 (spec sections 101-103, gap discovered while building the FDH-6
+     * scale certification) — reads EVERY row a user owns, paging past
+     * PostgREST's silent `db-max-rows` cap (`fetchAllRows`,
+     * `bank-csv/pagination.ts`, unchanged, R7). `listForUser()` above is left
+     * completely untouched — this is a NEW, additive method so every one of
+     * this factory's many existing call sites across FDH-1 through R8 keeps
+     * its exact current behaviour. Callers that genuinely need "all of this
+     * user's rows" for a correctness-sensitive computation (e.g. FDH-6's
+     * transfer/duplicate candidate de-duplication, which must never miss an
+     * existing link merely because a household has more than 1,000 of them)
+     * should call this instead of guessing a large `limit`.
+     */
+    async listForUserAll(userId: string): Promise<{ data: TRow[] | null; error: { message: string } | null }> {
+      const supabase = await createClient();
+      try {
+        const data = await fetchAllRows<TRow>(() =>
+          supabase
+            .from(table)
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false }) as unknown as RangeableQuery<TRow>,
+        );
+        return { data, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+      }
     },
 
     async getForUser(userId: string, id: string) {
@@ -158,6 +189,24 @@ export function makeMasterDataRepository<TRow>(table: FdhMasterDataTable) {
         .eq('active', true)
         .limit(limit)
         .returns<TRow[]>();
+    },
+
+    /** FDH-6 — see `makeUserOwnedRepository.listForUserAll()`'s comment.
+     * Additive; `listActive()` above is unchanged. Master-data tables (e.g.
+     * `fdh_merchant_aliases`) can realistically exceed 1,000 active rows as
+     * FDH-2's governed library grows — a classification run that silently
+     * only sees the first 1,000 aliases would silently stop matching real
+     * merchants past that point. */
+    async listActiveAll(): Promise<{ data: TRow[] | null; error: { message: string } | null }> {
+      const supabase = await createClient();
+      try {
+        const data = await fetchAllRows<TRow>(() =>
+          supabase.from(table).select('*').eq('active', true).order('id', { ascending: true }) as unknown as RangeableQuery<TRow>,
+        );
+        return { data, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+      }
     },
 
     async getById(id: string) {
