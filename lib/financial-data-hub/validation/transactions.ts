@@ -240,3 +240,49 @@ export const fdhRecurringSeriesReviewSchema = z.object({
   decision: z.enum(['confirm', 'pause', 'resume', 'end']),
 });
 export type FdhRecurringSeriesReviewInput = z.infer<typeof fdhRecurringSeriesReviewSchema>;
+
+// ---------------------------------------------------------------------------
+// FDH-7 — split, approval, reopen, bulk-action inputs (spec sections 44-56,
+// 96, 108).
+// ---------------------------------------------------------------------------
+
+/** One line of a proposed split, as submitted by the client. Server derives
+ * `allocation_sequence` (1..N, in array order) and `user_id` — never
+ * trusted from the payload. */
+const fdhSplitAllocationLineSchema = z.object({
+  economic_transaction_type: z.enum(FDH_ECONOMIC_TRANSACTION_TYPES),
+  category_id: fdhUuid.nullish(),
+  subcategory_id: fdhUuid.nullish(),
+  amount: fdhMoneyMagnitude,
+  note: z.string().max(500).nullish(),
+});
+
+/**
+ * A split request (spec 44-47). `finalize: false` saves a DRAFT (may be
+ * incomplete — spec 46); `finalize: true` requires the allocations to sum
+ * EXACTLY to the parent transaction's amount (server-enforced via
+ * `domain/allocations.ts#assertAllocationsReconcile`, never trusted from the
+ * client) or the request is rejected with the exact shortfall/overage.
+ */
+export const fdhTransactionSplitRequestSchema = z.object({
+  allocations: z.array(fdhSplitAllocationLineSchema).min(1).max(50),
+  finalize: z.boolean().default(false),
+});
+export type FdhTransactionSplitRequestInput = z.infer<typeof fdhTransactionSplitRequestSchema>;
+
+/** Statement reopen (spec 63-64) — an explicit reason is required so the
+ * audit trail always explains why an approved statement was reopened. */
+export const fdhStatementReopenSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type FdhStatementReopenInput = z.infer<typeof fdhStatementReopenSchema>;
+
+/** Bulk approval (spec 49-51, 96) — a bounded batch of transaction ids. The
+ * 500 cap matches the existing PAGE_SIZE_MAX convention
+ * (app/api/financial-data-hub/bank-transactions/route.ts) so a single bulk
+ * request can never silently exceed what one page of the review queue could
+ * ever have selected. */
+export const fdhBulkTransactionApprovalSchema = z.object({
+  transaction_ids: z.array(fdhUuid).min(1).max(500),
+});
+export type FdhBulkTransactionApprovalInput = z.infer<typeof fdhBulkTransactionApprovalSchema>;
