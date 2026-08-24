@@ -55,7 +55,10 @@ export async function renderForecastReportToPdf(userId: string, scenarioId?: str
           w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
           return w.__fhipChartWaitStreak >= 15;
         },
-        { timeout: 8000, polling: 100 }
+        // 20s ceiling — see reportPdfRenderer.ts's renderReportToPdf() for
+        // why (an 8s ceiling was intermittently too tight under sustained
+        // load, observed directly during R10 terminal closure).
+        { timeout: 20000, polling: 100 }
       )
       .catch(() => {});
     const buffer = await page.pdf({

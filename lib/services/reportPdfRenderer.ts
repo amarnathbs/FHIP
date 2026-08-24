@@ -79,7 +79,17 @@ export async function renderReportToPdf(reportId: string, exportId: string): Pro
           w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
           return w.__fhipChartWaitStreak >= 15;
         },
-        { timeout: 8000, polling: 100 }
+        // 20s ceiling, not 8s: under sustained load (e.g. many reports
+        // rendered back-to-back) hydration itself can take several
+        // seconds before the 1.5s-stability window even starts counting —
+        // observed directly during the R10 terminal-closure batch-of-15
+        // visual certification run, where an 8s ceiling was intermittently
+        // too tight for the busiest two-chart page (Scenario Forecasting)
+        // under that load and produced the same blank-chart symptom this
+        // wait exists to prevent. A longer ceiling only costs time in
+        // exactly the slow case that needs it — the fast case still exits
+        // as soon as the stability streak is satisfied.
+        { timeout: 20000, polling: 100 }
       )
       .catch(() => {});
     // Real running page numbers require Playwright's own header/footer
