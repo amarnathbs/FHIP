@@ -7,7 +7,7 @@ import { round2 } from '@/lib/engines/forecast/monthlyPrimitives';
 import type { GoalCalculatorInput } from '@/lib/engines/forecast/goalCalculator';
 import type { InvestmentCalculatorInput } from '@/lib/engines/forecast/investmentCalculator';
 import type { DebtCalculatorInput } from '@/lib/engines/forecast/debtCalculator';
-import type { RetirementCalculatorInput, RetirementTargetMethod } from '@/lib/engines/forecast/retirementCalculator';
+import type { RetirementCalculatorInput, RetirementMemberLegInput, RetirementTargetMethod } from '@/lib/engines/forecast/retirementCalculator';
 import type { CrossBorderCalculatorInput } from '@/lib/engines/forecast/crossBorderCalculator';
 import type { ResilienceCalculatorInput } from '@/lib/engines/forecast/resilienceCalculator';
 import { applyStressScenario, type StressScenarioType, type StressScenarioParams } from '@/lib/engines/resilienceStress';
@@ -469,13 +469,17 @@ async function buildCalculatorInput(
   }
 
   if (forecastType === 'retirement') {
-    const [accountsResult, dobResult] = await Promise.all([
+    const [accountsResult, dobResult, retirementMembersResult] = await Promise.all([
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).single(),
+      // Retirement Member UI (spec s.29) — Self/Spouse canonical target
+      // retirement ages, used to split this forecast per member when they
+      // genuinely differ (see the split block below).
+      supabase.from('retirement_members').select('id, member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true),
     ]);
     if (accountsResult.error) throw new Error(accountsResult.error.message);
     const accounts = accountsResult.data ?? [];
@@ -532,7 +536,15 @@ async function buildCalculatorInput(
       const dob = new Date(dobRaw + 'T00:00:00Z');
       currentAge = (baselineAsOf.getUTCFullYear() - dob.getUTCFullYear()) + (baselineAsOf.getUTCMonth() - dob.getUTCMonth()) / 12;
     }
-    const retirementAge = profile.retirement_age ?? getAssumptionValue(assumptions, 'retirement_age', 65);
+    // Retirement Member UI (spec s.28-29): retirement_members is now the
+    // canonical source for Self's target retirement age. forecast_profiles.
+    // retirement_age (the old Forecasting-settings-page field) is kept only
+    // as a fallback for any pre-existing value not yet migrated to
+    // retirement_members, then the approved country default.
+    const retirementMembers = retirementMembersResult.data ?? [];
+    const selfMember = retirementMembers.find((m) => m.member_type === 'self');
+    const spouseMember = retirementMembers.find((m) => m.member_type === 'spouse');
+    const retirementAge = selfMember?.target_retirement_age ?? profile.retirement_age ?? getAssumptionValue(assumptions, 'retirement_age', 65);
 
     let monthsUntilRetirementOverride: number | null = null;
     if (profile.retirement_date) {
@@ -552,6 +564,64 @@ async function buildCalculatorInput(
         : months;
 
     const dashboard = await loadDashboard(userId, supabase);
+
+    // Retirement Member UI (spec s.29-30): split this forecast into
+    // independent Self/Spouse legs only when both members have their own
+    // confirmed, genuinely different target ages, both hold retirement
+    // accounts, and every account has a clear single-member owner (no
+    // joint/other-owned retirement account exists to misattribute). This is
+    // deliberately conservative — when ages match (or spouse data isn't
+    // clean enough to split safely), the single consolidated calculation
+    // above (unchanged since before this feature existed) is used, exactly
+    // preserving today's behaviour and current-value totals (spec s.46).
+    let members: RetirementMemberLegInput[] | undefined;
+    const nonMemberOwnedAccounts = accounts.filter((a) => a.owner !== 'self' && a.owner !== 'spouse');
+    if (
+      selfMember &&
+      spouseMember &&
+      selfMember.target_retirement_age != null &&
+      spouseMember.target_retirement_age != null &&
+      selfMember.target_retirement_age !== spouseMember.target_retirement_age &&
+      nonMemberOwnedAccounts.length === 0
+    ) {
+      const selfAccounts = accounts.filter((a) => a.owner === 'self');
+      const spouseAccounts = accounts.filter((a) => a.owner === 'spouse');
+      const sumBalance = (rows: typeof accounts) => rows.reduce((sum, a) => sum + toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code), 0);
+      const sumContribution = (rows: typeof accounts) =>
+        rows.reduce((sum, a) => {
+          const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
+          const converted = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
+          return sum + converted * factor;
+        }, 0);
+      if (selfAccounts.length > 0 && spouseAccounts.length > 0) {
+        members = [
+          {
+            memberId: selfMember.id,
+            label: 'Self',
+            currentBalance: sumBalance(selfAccounts),
+            monthlyContribution: sumContribution(selfAccounts),
+            // Spouse DOB is not captured anywhere in FHIP today (Profile is
+            // Self-only) — Self's own leg still uses Self's real current
+            // age exactly as the household-level calculation always did.
+            currentAge,
+            retirementAge: selfMember.target_retirement_age,
+          },
+          {
+            memberId: spouseMember.id,
+            label: 'Spouse/Partner',
+            currentBalance: sumBalance(spouseAccounts),
+            monthlyContribution: sumContribution(spouseAccounts),
+            // No spouse DOB exists anywhere in FHIP's data model (spec s.32
+            // "do not invent a retirement date" when DOB is missing) — the
+            // calculator already surfaces "insufficient information" for a
+            // null currentAge rather than fabricating one.
+            currentAge: null,
+            retirementAge: spouseMember.target_retirement_age,
+          },
+        ];
+      }
+    }
+
     const input: RetirementCalculatorInput = {
       baselineDate,
       months: effectiveMonths,
@@ -567,6 +637,7 @@ async function buildCalculatorInput(
       desiredAnnualIncome: retirementOptions.desiredAnnualIncome,
       currentAnnualEssentialExpenses: dashboard.essentialMonthlyExpenses * 12,
       replacementPercentage: retirementOptions.replacementPercentage,
+      members,
     };
     return { input, effectiveMonths };
   }

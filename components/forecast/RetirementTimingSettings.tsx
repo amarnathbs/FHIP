@@ -4,24 +4,25 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 
 // Forecasting P1 fix FHIP-FC-RET-001 — collects the retirement-timing
-// hierarchy's inputs: retirement_age (tier 2, already existed on
-// forecast_profiles but had no write path anywhere), retirement_date (tier
-// 1 — takes priority over the age-based calculation when a date of birth is
-// on file), and retirement_timing_override_months (a manual fallback used
-// only when there's no date of birth to derive current age from at all).
-// All three fields are always shown rather than conditionally hiding based
-// on whether a DOB is on file — simpler, and harmless to fill in a field
-// that happens not to be the active tier right now.
+// hierarchy's remaining inputs: retirement_date (tier 1 — takes priority
+// over the age-based calculation when a date of birth is on file) and
+// retirement_timing_override_months (a manual fallback used only when
+// there's no date of birth to derive current age from at all).
+//
+// Retirement Member UI (spec s.28): the target-retirement-age field that
+// used to live here (forecast_profiles.retirement_age) has been removed.
+// retirement_members is now the canonical, single source of truth for
+// target retirement age — set once per member (Self/Spouse) on the
+// Retirement page, not duplicated here. lib/services/forecastData.ts reads
+// retirement_members first, falling back to any pre-existing
+// forecast_profiles.retirement_age value already on file for continuity.
 export function RetirementTimingSettings({
-  initialRetirementAge,
   initialRetirementDate,
   initialOverrideMonths,
 }: {
-  initialRetirementAge: number | null;
   initialRetirementDate: string | null;
   initialOverrideMonths: number | null;
 }) {
-  const [retirementAge, setRetirementAge] = useState(initialRetirementAge?.toString() ?? '');
   const [retirementDate, setRetirementDate] = useState(initialRetirementDate ?? '');
   const [overrideMonths, setOverrideMonths] = useState(initialOverrideMonths?.toString() ?? '');
   const [saving, setSaving] = useState(false);
@@ -37,7 +38,6 @@ export function RetirementTimingSettings({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          retirement_age: retirementAge === '' ? null : Number(retirementAge),
           retirement_date: retirementDate === '' ? null : retirementDate,
           retirement_timing_override_months: overrideMonths === '' ? null : Number(overrideMonths),
         }),
@@ -55,24 +55,9 @@ export function RetirementTimingSettings({
   return (
     <SectionCard
       title="Retirement timing"
-      description="Used to project when retirement is reached. If a date of birth is on file, retirement date (or retirement age) is used; otherwise the manual fallback below is used."
+      description="Target retirement age is set on the Retirement page, once per person (Self/Spouse). This section only covers an optional exact retirement date, or a manual fallback if no date of birth is on file."
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div>
-          <label htmlFor="retirement_age" className="block text-sm text-gray-600">
-            Retirement age
-          </label>
-          <input
-            id="retirement_age"
-            type="number"
-            min={1}
-            max={119}
-            value={retirementAge}
-            onChange={(e) => setRetirementAge(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            placeholder="e.g. 65"
-          />
-        </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="retirement_date" className="block text-sm text-gray-600">
             Retirement date (optional, most precise)

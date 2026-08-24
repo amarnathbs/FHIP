@@ -77,6 +77,14 @@ export interface TwinSourceData {
   dna: DnaResult | null;
   goals: GoalsPagePayload;
   rawRetirement: TwinRetirementRow[];
+  // Retirement Member UI (spec s.29): the canonical Self target retirement
+  // age from retirement_members, used instead of scanning target ages off
+  // individual retirement_accounts rows (which could previously blend
+  // Self's and Spouse's ages together into one Math.max — a genuine
+  // cross-member data bug, since source.household.age below is always
+  // Self's own current age). Null when Self hasn't confirmed an age yet —
+  // callers fall back to the approved country default, same as before.
+  selfTargetRetirementAge: number | null;
   rawInsurance: TwinInsuranceRow[];
   rawInvestments: TwinInvestmentRow[];
   rawLiabilities: TwinLiabilityRow[];
@@ -90,12 +98,13 @@ export interface TwinSourceData {
 export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceData> {
   const supabase = client ?? (await createClient());
 
-  const [profileRes, householdRes, expensesRes, retirementRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes] =
+  const [profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes] =
     await Promise.all([
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
       supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true),
       supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
+      supabase.from('retirement_members').select('member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true).eq('member_type', 'self').maybeSingle(),
       supabase.from('insurance_policies').select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days').eq('user_id', userId).eq('is_active', true),
       supabase.from('investments').select('current_value, investment_type, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase.from('liabilities').select('balance, debt_type, master_item_key, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
@@ -175,6 +184,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     dna,
     goals,
     rawRetirement: (retirementRes.data ?? []) as TwinRetirementRow[],
+    selfTargetRetirementAge: (retirementMembersRes.data as { target_retirement_age: number | null } | null)?.target_retirement_age ?? null,
     rawInsurance: (insuranceRes.data ?? []) as TwinInsuranceRow[],
     rawInvestments: (investmentsRes.data ?? []) as TwinInvestmentRow[],
     rawLiabilities: (liabilitiesRes.data ?? []) as TwinLiabilityRow[],

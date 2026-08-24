@@ -257,10 +257,14 @@ function computeRetirementProjection(
   annualGrossIncome: number
 ) {
   const { age, countryOfResidence, householdTypeCode } = source.household;
-  const targetAge = Math.max(
-    countryOfResidence === 'AU' ? 67 : 60,
-    ...source.rawRetirement.map((r) => r.target_retirement_age ?? 0)
-  );
+  // Retirement Member UI (spec s.29): use the canonical Self target
+  // retirement age (retirement_members) rather than the max legacy
+  // per-account age across every retirement_accounts row — the previous
+  // Math.max(...) could blend Self's and Spouse's ages together, which was
+  // wrong since `age` above is always Self's own current age. Falls back
+  // to the approved country default (same value as before) when Self
+  // hasn't confirmed an age yet.
+  const targetAge = source.selfTargetRetirementAge ?? (countryOfResidence === 'AU' ? 67 : 60);
   if (age === null || targetAge <= age) {
     set('projected_retirement_readiness', null, 'Age or target retirement age not available.');
     set('retirement_funding_gap', null, 'Age or target retirement age not available.');
@@ -323,7 +327,8 @@ export function computeFutureSelfValues(source: TwinSourceData): FutureSelfValue
   }
 
   const { age, countryOfResidence, householdTypeCode } = source.household;
-  const targetAge = Math.max(countryOfResidence === 'AU' ? 67 : 60, ...source.rawRetirement.map((r) => r.target_retirement_age ?? 0));
+  // Same canonical Self target retirement age source as computeRetirementProjection above (spec s.29).
+  const targetAge = source.selfTargetRetirementAge ?? (countryOfResidence === 'AU' ? 67 : 60);
   let retirementBalanceAtTarget: number | null = null;
   let retirementReadinessAtTarget: number | null = null;
   if (age !== null && targetAge > age) {

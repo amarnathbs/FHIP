@@ -100,7 +100,18 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 type ZeroAnswer = 'yes' | 'no' | 'unsure' | null;
 
-export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subNav?: React.ReactNode }) {
+export function FinancialDataGrid({
+  config,
+  subNav,
+  beforeGrid,
+}: {
+  config: GridConfig;
+  subNav?: React.ReactNode;
+  // Optional content rendered between the page title/description and the
+  // grid itself — used by the Retirement page's member-level "Retirement
+  // Planning" section (spec s.6: "before retirement accounts/contributions").
+  beforeGrid?: React.ReactNode;
+}) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -415,6 +426,8 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
           <h1 className="text-2xl font-semibold text-trust">{config.title}</h1>
           <p className="mt-1 text-muted">{config.description}</p>
         </div>
+
+        {beforeGrid}
 
         {config.notApplicable && (
           <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">

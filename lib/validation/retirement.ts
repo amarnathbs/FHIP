@@ -12,6 +12,11 @@ export const retirementSchema = z.object({
   contribution_frequency: z
     .enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off'])
     .optional(),
+  // Legacy per-account field (migration 0004). The Retirement Planning UI
+  // no longer sends this — target retirement age is captured once per
+  // member (Self/Spouse) via retirement_members / /api/retirement/members
+  // instead (spec s.16-17, s.28). Kept optional here only for backward
+  // compatibility with the existing column; never populated by new writes.
   target_retirement_age: z.number().int().min(1).max(119).optional(),
   owner: z.enum(OWNER_VALUES).default('self'),
   master_item_key: z.string().optional(),

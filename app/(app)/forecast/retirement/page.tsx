@@ -29,7 +29,6 @@ export default async function ForecastRetirementPage({ searchParams }: { searchP
           <ScenarioSwitcher scenarios={scenarios} activeScenarioId={activeScenario.id} />
         </div>
         <RetirementTimingSettings
-          initialRetirementAge={profile.retirement_age ?? null}
           initialRetirementDate={profile.retirement_date ?? null}
           initialOverrideMonths={profile.retirement_timing_override_months ?? null}
         />
