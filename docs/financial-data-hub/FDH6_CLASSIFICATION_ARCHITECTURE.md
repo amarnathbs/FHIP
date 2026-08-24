@@ -8,7 +8,7 @@ Bank activity
   -> Canonical Transaction (fdh_transactions, FDH-1)
   -> R8 Merchant + Category Engine (lib/financial-data-hub/classification/economicTypeEngine.ts)
   -> FDH-6 orchestration layer:
-       - Economic-class gap closure (migration 0072: debt_principal/asset_purchase/asset_sale reachable)
+       - Economic-class gap closure (migration 0075: debt_principal/asset_purchase/asset_sale reachable)
        - Rule-conflict detection (economicTypeEngine.ts, gap G3)
        - Transfer confirmation -> economic-class write-back (classificationReviewService.ts, applyTransferClassOnConfirm)
        - Structured review-reason surfacing (reviewReasons.ts, gap G1)
@@ -27,7 +27,7 @@ There is exactly one canonical transaction model (`fdh_transactions`, FDH-1), on
 | `lib/financial-data-hub/classification/types.ts` | modified | Adds `ClassificationSource.kind === 'rule_conflict'` + `conflictingRuleIds`. |
 | `lib/financial-data-hub/classification/reviewReasons.ts` | new, pure | Derives a structured `FdhReviewReasonCode[]` from already-persisted signals — no schema change (spec section 64). |
 | `lib/financial-data-hub/services/classificationReviewService.ts` | modified | Adds `explainTransactionReviewReasons()` (wires `reviewReasons.ts` to real repositories) and `applyTransferClassOnConfirm()` (closes the FDH-2-disclosed forward reference: confirming a transfer link now writes the transfer economic class back onto both transactions, via the EXISTING `correctTransaction()` correction path — spec sections 20-22). |
-| `supabase/migrations/0072_fdh6_economic_class_gap_closure_rule_seed.sql` | new, additive data only | 14 new `fdh_classification_rules` rows closing the `debt_principal`/`asset_purchase`/`asset_sale` reachability gap (section 3 of the adoption audit). Zero new tables/columns. |
+| `supabase/migrations/0075_fdh6_economic_class_gap_closure_rule_seed.sql` | new, additive data only | 14 new `fdh_classification_rules` rows closing the `debt_principal`/`asset_purchase`/`asset_sale` reachability gap (section 3 of the adoption audit). Zero new tables/columns. |
 
 Everything else FDH-6 needed — merchant/category classification, transfer/refund/recurring matching, ingestion dedup, split allocations, classification history, user rules, global-learning governance domain contract, personal-payee PII screening — was already built by FDH-1, FDH-2, R7 or R8 and is reused unchanged.
 

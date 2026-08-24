@@ -201,7 +201,7 @@ async function main() {
   const brokerTxn = pdfTxns.find((t) => String(t.description_clean).includes('BROKER FUNDING'));
   const atmTxn = pdfTxns.find((t) => String(t.description_clean).includes('ATM WITHDRAWAL'));
   record('FDH6-PDF-04', 'PDF-sourced salary credit classified INCOME', salaryTxn?.economic_transaction_type === 'income' ? 'PASS' : 'FAIL', salaryTxn);
-  record('FDH6-PDF-05', 'PDF-sourced "BROKER FUNDING" classified ASSET_PURCHASE (FDH-6 gap closure, migration 0072) — same downstream path as CSV', brokerTxn?.economic_transaction_type === 'asset_purchase' ? 'PASS' : 'FAIL', brokerTxn);
+  record('FDH6-PDF-05', 'PDF-sourced "BROKER FUNDING" classified ASSET_PURCHASE (FDH-6 gap closure, migration 0075) — same downstream path as CSV', brokerTxn?.economic_transaction_type === 'asset_purchase' ? 'PASS' : 'FAIL', brokerTxn);
   record('FDH6-PDF-06', 'PDF-sourced ATM withdrawal classified CASH_WITHDRAWAL, not immediate expense', atmTxn?.economic_transaction_type === 'cash_withdrawal' ? 'PASS' : 'FAIL', atmTxn);
 
   // =========================================================================
@@ -264,7 +264,7 @@ async function main() {
   // certification was taken as final. The correction TARGET is the ATM
   // withdrawal transaction (already successfully classified `cash_
   // withdrawal` above) rather than the BROKER FUNDING one, decoupling this
-  // check from the separately-disclosed migration-0072-not-yet-live gap.
+  // check from the separately-disclosed migration-0075-not-yet-live gap.
   const foodCat = (await sb(`/rest/v1/fdh_categories?category_key=eq.food&select=id`)).json?.[0]?.id;
   const beforeCorrection = atmTxn ? await getTxn(atmTxn.id as string) : null;
   const correctionTargetId = atmTxn?.id as string;

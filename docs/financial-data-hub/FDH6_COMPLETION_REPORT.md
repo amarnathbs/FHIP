@@ -6,7 +6,7 @@ Branch: `txn-economic-intelligence`
 Starting canonical main: `4b93682` (re-fetched and re-verified unchanged from `origin/main` multiple times throughout this session)
 Final certified SHA: `57608eb`
 Main merge: NOT performed (out of scope per task instructions — narrow feature-branch commits only)
-Migration(s): `supabase/migrations/0072_fdh6_economic_class_gap_closure_rule_seed.sql` — delivered as a file, additive-only (14 new `fdh_classification_rules` rows, zero new tables/columns/constraints), clean-replayed 71/71 in a fresh PGlite rebuild, **NOT yet applied to real DEV** (no DDL execution access — orchestration constraint)
+Migration(s): `supabase/migrations/0075_fdh6_economic_class_gap_closure_rule_seed.sql` — delivered as a file, additive-only (14 new `fdh_classification_rules` rows, zero new tables/columns/constraints), clean-replayed 71/71 in a fresh PGlite rebuild, **NOT yet applied to real DEV** (no DDL execution access — orchestration constraint)
 DEV: `vqycarelcoijzwlpkpcz.supabase.co` — live-certified 33/34 PASS (see section 13)
 Production: untouched; no production access exists or was used
 
@@ -31,7 +31,7 @@ One chain: CSV (R7/FDH-4) or PDF (FDH-5) → canonical transaction (FDH-1) → R
 
 Independent, hand-authored certification pack (`tests/unit/fdh6IndependentCertificationPack.test.ts`, expected values derived by reading the actual migration SQL, never by running the production engine and copying its output): **98/98 PASS**. Section-by-section: AU scenarios 20/20, India scenarios 20/20, full 13-economic-class reachability matrix 14/14, transfer scenario pack 12/12, recurring scenario pack 14/14, refund pack 8/8, duplicate intelligence proof 5/5, weakened-implementation negative-control proofs 5/5. Combined with R8's own pre-existing, independently re-reproduced suite this session (69 unit cases, 41/41 independent oracle comparisons, 30/30 security checks — see section 16), and this phase's own new pure-function suite (thresholds/rule-conflict 14, review-reasons 12, pagination 13 — all passing), the full FDH-6 + reused-R8 classification certification surface totals **291 passing cases** across this session, zero failures, zero flakes.
 
-Results by class (all 13 independently confirmed reachable in the pack's dedicated matrix, section C): income, expense, investment, debt_interest, refund, tax, fee, cash_withdrawal, unknown — all pre-existing, reproduced correctly. debt_principal, asset_purchase, asset_sale — **newly reachable via migration 0072**, confirmed correct in the offline pack; confirmed NOT YET reachable on live DEV pending migration application (the disclosed CONDITIONAL gap). transfer — confirmed as a structural candidate signal offline, and confirmed as an actual committed economic class live (`FDH6-XFER-05`).
+Results by class (all 13 independently confirmed reachable in the pack's dedicated matrix, section C): income, expense, investment, debt_interest, refund, tax, fee, cash_withdrawal, unknown — all pre-existing, reproduced correctly. debt_principal, asset_purchase, asset_sale — **newly reachable via migration 0075**, confirmed correct in the offline pack; confirmed NOT YET reachable on live DEV pending migration application (the disclosed CONDITIONAL gap). transfer — confirmed as a structural candidate signal offline, and confirmed as an actual committed economic class live (`FDH6-XFER-05`).
 
 ## 5. Classification Precedence
 
@@ -110,7 +110,7 @@ Deployment: none — this phase never touched production, has no production acce
 - [x] Economic classification cleanly separated from transaction direction (CREDIT ≠ INCOME, DEBIT ≠ EXPENSE preserved and tested throughout)
 - [x] No Input Data writes
 - [x] No Investment Intelligence ownership violation (asset_purchase/asset_sale/investment remain labels only, never a holding/tax-lot write)
-- [x] All 13 approved economic classes supported (10 pre-existing + 3 newly reachable via migration 0072, offline-proven; live-proof pending migration application)
+- [x] All 13 approved economic classes supported (10 pre-existing + 3 newly reachable via migration 0075, offline-proven; live-proof pending migration application)
 - [x] UNKNOWN works safely, including the new RULE_CONFLICT outcome
 - [x] Precedence deterministic, user-rule precedence correct, proven order-independent
 - [x] History/provenance preserved (`fdh_classification_history` unmodified; corrections independently audited)

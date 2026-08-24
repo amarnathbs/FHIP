@@ -5,7 +5,7 @@
  * hand, by reading the ACTUAL seeded reference data in
  * `supabase/migrations/0053_fdh2_taxonomy_and_mcc_seed.sql`,
  * `0056_fdh2_classification_rule_seed.sql` and this FDH-6 phase's own
- * `0072_fdh6_economic_class_gap_closure_rule_seed.sql` — never by running
+ * `0075_fdh6_economic_class_gap_closure_rule_seed.sql` — never by running
  * the production engine and copying its output. Reference-data fixtures
  * below are transcribed from those migration files (narrative terms,
  * category/subcategory keys, priorities) so a reviewer can diff this file
@@ -259,7 +259,7 @@ describe('FDH-6 Independent Cert — AU economic classification (spec section 79
     expect(r.categoryId).toBe('cat-insurance');
   });
 
-  it('[FDH6-AU-09] "HOME LOAN PRINCIPAL" -> DEBT_PRINCIPAL (FDH-6 gap closure, migration 0072)', () => {
+  it('[FDH6-AU-09] "HOME LOAN PRINCIPAL" -> DEBT_PRINCIPAL (FDH-6 gap closure, migration 0075)', () => {
     const r = classifyTransaction(
       txn({ description_clean: 'HOME LOAN PRINCIPAL PAYMENT' }),
       null,
@@ -296,7 +296,7 @@ describe('FDH-6 Independent Cert — AU economic classification (spec section 79
     expect(Object.keys(r)).not.toContain('holdingId');
   });
 
-  it('[FDH6-AU-13] "BROKER FUNDING" -> ASSET_PURCHASE (FDH-6 gap closure, migration 0072) — never creates an Investment Intelligence holding', () => {
+  it('[FDH6-AU-13] "BROKER FUNDING" -> ASSET_PURCHASE (FDH-6 gap closure, migration 0075) — never creates an Investment Intelligence holding', () => {
     const investPurchase = category({ id: 'cat-invpurchase', category_key: 'investment_purchase', economic_type: 'asset_purchase' });
     const r = classifyTransaction(
       txn({ description_clean: 'BROKER FUNDING TRANSFER COMMSEC' }),
