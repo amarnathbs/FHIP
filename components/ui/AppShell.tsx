@@ -48,6 +48,11 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: 'link', label: 'Income', href: '/income' },
       { type: 'link', label: 'Expenses', href: '/expenses' },
+      // FDH-8: statement-derived transaction activity (Overview/Transactions/
+      // Spending/Income/Recurring/Accounts) — a distinct data source from the
+      // manually-entered Income/Expenses above, so it gets its own entry
+      // rather than folding into either.
+      { type: 'link', label: 'Financial Activity', href: '/financial-data-hub/activity' },
       { type: 'link', label: 'Assets', href: '/assets' },
       { type: 'link', label: 'Liabilities', href: '/liabilities' },
       // Retirement isn't its own sidebar entry — it's reached via the
