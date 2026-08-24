@@ -2,11 +2,12 @@
 --
 -- NUMBERING NOTE: canonical origin/main (6efae97, re-fetched and confirmed
 -- immediately before this file was written) ends at
--- 0075_fdh6_economic_class_gap_closure_rule_seed.sql. 0076 is the next
--- genuinely free number as of 2026-08-24. Per this project's established
--- collision precedent: if 0076 is independently claimed elsewhere before
--- this migration reaches DEV, this file renumbers to the next free slot --
--- whichever migration is already live on DEV always keeps its number.
+-- 0075_fdh6_economic_class_gap_closure_rule_seed.sql. This file originally
+-- claimed 0076, but FDH-7 (Reconciliation, Transaction Review & User
+-- Approval Workflow) independently claimed 0076 too from the same base
+-- commit and had its own certification independently re-verified first, so
+-- per this project's established collision precedent this file renumbered
+-- to 0077 on 2026-08-24, before either migration reached DEV.
 --
 -- Context: see RM-0 discovery findings (reported alongside this migration).
 -- retirement_members (migration 0072) already exists with RLS and a
@@ -108,7 +109,7 @@ begin
         distinct_ages[1],
         case when grp.countries is not null and array_length(grp.countries, 1) = 1 then grp.countries[1] else null end,
         'user_confirmed',
-        format('Backfilled by migration 0076 from %s consistent legacy retirement_accounts.target_retirement_age value(s) of %s.', distinct_count, distinct_ages[1])
+        format('Backfilled by migration 0077 from %s consistent legacy retirement_accounts.target_retirement_age value(s) of %s.', distinct_count, distinct_ages[1])
       );
     elsif distinct_count > 1 then
       -- Case D: genuine conflict. Never average/mode/min/max (spec s.24).
@@ -122,7 +123,7 @@ begin
         null,
         case when grp.countries is not null and array_length(grp.countries, 1) = 1 then grp.countries[1] else null end,
         'needs_confirmation',
-        format('Migration 0076: legacy retirement_accounts.target_retirement_age values conflicted across this member''s accounts (%s). No value was guessed -- please confirm your target retirement age.', legacy_summary)
+        format('Migration 0077: legacy retirement_accounts.target_retirement_age values conflicted across this member''s accounts (%s). No value was guessed -- please confirm your target retirement age.', legacy_summary)
       );
     else
       -- Case E: this member has retirement accounts but no legacy age was
@@ -138,7 +139,7 @@ begin
         null,
         case when grp.countries is not null and array_length(grp.countries, 1) = 1 then grp.countries[1] else null end,
         'suggested_default',
-        'Migration 0076: this member has retirement account(s) but no legacy target retirement age was ever recorded. Age left unconfirmed.'
+        'Migration 0077: this member has retirement account(s) but no legacy target retirement age was ever recorded. Age left unconfirmed.'
       );
     end if;
   end loop;

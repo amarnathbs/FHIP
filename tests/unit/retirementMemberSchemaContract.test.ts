@@ -1,6 +1,6 @@
 /**
  * Retirement Member UI (Self/Spouse Target Retirement Age) -- static
- * structural checks on migration 0076, mirroring
+ * structural checks on migration 0077, mirroring
  * airConsolidationSchemaContract.test.ts's method (parse the migration
  * from disk, assert structural facts rather than trust prose). The real
  * live-behaviour proof is scripts/rm_retirement_member_certification.mjs
@@ -14,16 +14,16 @@ import path from 'node:path';
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const read = (file: string) => fs.readFileSync(path.join(MIGRATION_DIR, file), 'utf8');
 
-const RM_FILE = '0076_retirement_member_target_age.sql';
+const RM_FILE = '0077_retirement_member_target_age.sql';
 
 describe('Retirement Member UI migration exists and is numbered after the A/I/R consolidation', () => {
-  it('0076 exists', () => {
+  it('0077 exists', () => {
     expect(fs.existsSync(path.join(MIGRATION_DIR, RM_FILE))).toBe(true);
   });
 
-  it('no other migration in the repo also claims 0076', () => {
+  it('no other migration in the repo also claims 0077', () => {
     const all = fs.readdirSync(MIGRATION_DIR).filter((f) => f.endsWith('.sql'));
-    const claimants = all.filter((f) => /^0076_/.test(f));
+    const claimants = all.filter((f) => /^0077_/.test(f));
     expect(claimants).toEqual([RM_FILE]);
   });
 
@@ -39,7 +39,7 @@ describe('Retirement Member UI migration exists and is numbered after the A/I/R 
   });
 });
 
-describe('0076 is purely additive DDL', () => {
+describe('0077 is purely additive DDL', () => {
   const sql = read(RM_FILE);
 
   it('only adds columns, never drops or renames existing ones', () => {
@@ -57,7 +57,7 @@ describe('0076 is purely additive DDL', () => {
   });
 });
 
-describe('0076 backfill never guesses a conflicting legacy age (spec s.23-24)', () => {
+describe('0077 backfill never guesses a conflicting legacy age (spec s.23-24)', () => {
   const sql = read(RM_FILE);
 
   it('contains no AVG/mode/min/max aggregate applied to target_retirement_age', () => {
@@ -86,7 +86,7 @@ describe('0076 backfill never guesses a conflicting legacy age (spec s.23-24)', 
   });
 });
 
-describe('0076 links retirement_accounts to their member without touching any value column', () => {
+describe('0077 links retirement_accounts to their member without touching any value column', () => {
   const sql = read(RM_FILE);
 
   it('the account-linkage UPDATE only sets retirement_member_id, never current_balance/contribution fields', () => {

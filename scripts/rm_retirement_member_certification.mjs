@@ -4,19 +4,19 @@
 // scripts/air_consolidation_retirement_members_rls.mjs, rooted in THIS
 // worktree rather than a hardcoded sibling path.
 //
-// 1) DB-01 Fresh rebuild -- every migration 0001..0076 applied in order on a
+// 1) DB-01 Fresh rebuild -- every migration 0001..0077 applied in order on a
 //    clean PGlite database, no errors, new columns present with correct
 //    defaults/constraints.
 // 2) DB-02 Populated-DEV-upgrade backfill replay -- applies migrations
 //    0001..0075 first, seeds synthetic retirement_accounts rows replicating
 //    every legacy backfill case the spec requires (A/B consistent, C
 //    self!=spouse, D genuine conflict, E no age, F no retirement account),
-//    THEN applies 0076, then asserts the exact deterministic outcome for
+//    THEN applies 0077, then asserts the exact deterministic outcome for
 //    each case -- never averaged/mode/min/max for Case D.
 // 3) RLS -- cross-tenant isolation re-tested after the new columns, with a
 //    negative control proving the test isn't vacuous.
 // 4) Regression -- migration 0073's contribution/current_balance pollution
-//    fix remains 0 rows / $0 after 0076 (spec s.47, non-negotiable).
+//    fix remains 0 rows / $0 after 0077 (spec s.47, non-negotiable).
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +28,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', 'supabase');
 const MIG = path.join(ROOT, 'migrations');
 const ALL_MIGRATIONS = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
-const RM_MIGRATION = ALL_MIGRATIONS.find((f) => /^0076_retirement_member_target_age\.sql$/.test(f));
+const RM_MIGRATION = ALL_MIGRATIONS.find((f) => /^0077_retirement_member_target_age\.sql$/.test(f));
 const PRE_MIGRATIONS = ALL_MIGRATIONS.filter((f) => f !== RM_MIGRATION);
 
 let pass = 0, fail = 0;
@@ -56,12 +56,12 @@ async function applyMigrations(db, files) {
 }
 
 console.log(`Found ${ALL_MIGRATIONS.length} total migrations. RM migration: ${RM_MIGRATION}`);
-if (!RM_MIGRATION) { console.error('FATAL: 0076_retirement_member_target_age.sql not found'); process.exit(9); }
+if (!RM_MIGRATION) { console.error('FATAL: 0077_retirement_member_target_age.sql not found'); process.exit(9); }
 
 // ---------------------------------------------------------------------------
-// DB-01 -- fresh rebuild, 0001..0076 in order.
+// DB-01 -- fresh rebuild, 0001..0077 in order.
 // ---------------------------------------------------------------------------
-console.log('\n=== DB-01: Fresh rebuild (0001..0076) ===');
+console.log('\n=== DB-01: Fresh rebuild (0001..0077) ===');
 {
   const db = await newDb();
   await applyMigrations(db, ALL_MIGRATIONS);
@@ -226,7 +226,7 @@ console.log('\n=== DB-02: Populated-DEV-upgrade backfill replay (all spec cases)
     where master_item_key in ('employer_contributions','salary_sacrifice','personal_concessional','non_concessional','spouse_contribution','government_co_contribution')
       and is_active = true and current_balance > 0
   `);
-  check('0073 contribution/balance fix remains 0 rows / $0 after 0076 (spec s.47)', pollution.rows[0].c === 0 && Number(pollution.rows[0].s) === 0, JSON.stringify(pollution.rows[0]));
+  check('0073 contribution/balance fix remains 0 rows / $0 after 0077 (spec s.47)', pollution.rows[0].c === 0 && Number(pollution.rows[0].s) === 0, JSON.stringify(pollution.rows[0]));
 }
 
 // ---------------------------------------------------------------------------
