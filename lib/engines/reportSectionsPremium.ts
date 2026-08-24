@@ -267,8 +267,26 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
 
 function buildRetirementReadiness(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   const run = premium.forecastReportData?.retirementRun;
-  if (!run || run.results.length === 0) {
-    return empty('retirement_readiness', 19, 'A retirement forecast has not yet been generated — visit the Retirement Forecast page to create one.');
+  // II-R10 fix (risk-based closure session): a user with NO retirement
+  // accounts at all still gets a "completed" forecast run — the calculator
+  // legitimately projects a $0 balance staying $0 forever, so
+  // `run.results.length === 0` alone never catches this case (the run has
+  // as many result rows as any other, they are just all zero). Rendering
+  // that as `included` misrepresents "we have a real retirement position to
+  // show you" when the user has none at all — exactly the "zeros that look
+  // like calculated facts" spec section 28 rules out. `source.dashboard.
+  // hasRetirement` (already computed from the same `retirement_accounts`
+  // read the forecast itself uses, `input.retirement.length > 0`) is the
+  // correct predicate: no local recalculation, just reusing an existing
+  // canonical flag.
+  if (!run || run.results.length === 0 || !source.dashboard.hasRetirement) {
+    return empty(
+      'retirement_readiness',
+      19,
+      source.dashboard.hasRetirement
+        ? 'A retirement forecast has not yet been generated — visit the Retirement Forecast page to create one.'
+        : 'No retirement accounts are currently recorded — add one on the Retirement page to include this section.'
+    );
   }
   return {
     sectionCode: 'retirement_readiness',
