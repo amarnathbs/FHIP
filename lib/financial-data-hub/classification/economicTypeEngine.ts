@@ -47,6 +47,88 @@ function categoryEconomicType(categoryId: string | null, categories: FdhCategory
   return categories.find((c) => c.id === categoryId)?.economic_type ?? null;
 }
 
+/**
+ * FDH-6 (spec section 57) — rule-conflict detection.
+ *
+ * `evaluateRules()` returns matches sorted by priority ascending (lower =
+ * higher precedence), but ties within the SAME priority were previously
+ * resolved by whatever order the caller's array happened to be in — never
+ * detected, never surfaced. This groups the TOP priority band and checks
+ * whether every rule in it actually agrees on the outcome (same category +
+ * subcategory + economic type + merchant): if they do, picking any one of
+ * them is safe (they are redundant, not contradictory) and the first is
+ * returned as `winner`; if they genuinely disagree, `conflict: true` is
+ * returned instead of an arbitrary pick.
+ */
+interface ClassifyRuleProjection {
+  id: string;
+  priority: number;
+  categoryId: string | null;
+  subcategoryId: string | null;
+  economicTransactionType: FdhEconomicTransactionType | null;
+  merchantId: string | null;
+}
+
+type ConflictCheckResult =
+  | { kind: 'winner'; ruleId: string }
+  | { kind: 'conflict'; conflictingRuleIds: string[] }
+  | { kind: 'none' };
+
+/** Projects the closed-vocabulary `classify` action shape into a plain,
+ * non-union object — sidesteps TypeScript inference edge cases around
+ * generics over a discriminated union, and keeps `pickTopTierOrConflict`
+ * itself trivially testable in isolation. */
+function toClassifyProjection(rule: {
+  id: string;
+  priority: number;
+  action_definition: {
+    action_kind: string;
+    category_id?: string;
+    subcategory_id?: string;
+    economic_transaction_type?: FdhEconomicTransactionType;
+    merchant_id?: string;
+  };
+}): ClassifyRuleProjection | null {
+  if (rule.action_definition.action_kind !== 'classify') return null;
+  return {
+    id: rule.id,
+    priority: rule.priority,
+    categoryId: rule.action_definition.category_id ?? null,
+    subcategoryId: rule.action_definition.subcategory_id ?? null,
+    economicTransactionType: rule.action_definition.economic_transaction_type ?? null,
+    merchantId: rule.action_definition.merchant_id ?? null,
+  };
+}
+
+/**
+ * FDH-6 (spec section 57) — rule-conflict detection.
+ *
+ * `evaluateRules()` returns matches sorted by priority ascending (lower =
+ * higher precedence), but ties within the SAME priority were previously
+ * resolved by whatever order the caller's array happened to be in — never
+ * detected, never surfaced. This groups the TOP priority band and checks
+ * whether every rule in it actually agrees on the outcome (same category +
+ * subcategory + economic type + merchant): if they do, picking any one of
+ * them is safe (they are redundant, not contradictory) and the first (by id)
+ * is returned as `winner`; if they genuinely disagree, `conflict: true` is
+ * returned instead of an arbitrary pick.
+ */
+function pickTopTierOrConflict(classifyMatchesSortedByPriority: ClassifyRuleProjection[]): ConflictCheckResult {
+  if (classifyMatchesSortedByPriority.length === 0) return { kind: 'none' };
+  const topPriority = classifyMatchesSortedByPriority[0].priority;
+  const topTier = classifyMatchesSortedByPriority.filter((r) => r.priority === topPriority);
+  if (topTier.length === 1) return { kind: 'winner', ruleId: topTier[0].id };
+
+  const distinctActions = new Set(
+    topTier.map((r) => JSON.stringify({ c: r.categoryId, s: r.subcategoryId, e: r.economicTransactionType, m: r.merchantId })),
+  );
+  // Multiple rules at the same priority that all propose the IDENTICAL
+  // outcome are redundant, not contradictory — picking the first is safe
+  // and deterministic (same input always yields the same first element).
+  if (distinctActions.size === 1) return { kind: 'winner', ruleId: topTier[0].id };
+  return { kind: 'conflict', conflictingRuleIds: topTier.map((r) => r.id) };
+}
+
 export function classifyTransaction(
   txn: ClassifiableTransaction,
   institutionId: string | null,
@@ -67,11 +149,39 @@ export function classifyTransaction(
     flaggedCandidate: EconomicTypeResult['flaggedCandidate'];
   }> = [];
 
-  // Tier 1: user rule.
+  // Tier 1: user rule. Spec section 57: two of the user's own ACTIVE rules
+  // tied on priority with genuinely different outcomes are never resolved
+  // by array order — the user's own contradictory instruction is the
+  // HIGHEST-precedence signal that exists, so a real conflict here always
+  // short-circuits the whole classification to unknown/RULE_CONFLICT,
+  // regardless of what a lower tier (merchant/global) might otherwise say.
   const userMatches = evaluateRules(ruleTxn, ref.userRules);
-  for (const rule of userMatches) {
-    if (rule.action_definition.action_kind !== 'classify') continue;
-    const a = rule.action_definition;
+  const userClassifyById = new Map(userMatches.map((r) => [r.id, r]));
+  const userProjections = userMatches
+    .map(toClassifyProjection)
+    .filter((p): p is ClassifyRuleProjection => p !== null);
+  const userTier = pickTopTierOrConflict(userProjections);
+  if (userTier.kind === 'conflict') {
+    return {
+      economicTransactionType: 'unknown',
+      categoryId: null,
+      subcategoryId: null,
+      merchantId: null,
+      transferFlag: false,
+      subscriptionFlag: false,
+      classificationMethod: 'unclassified',
+      confidence: 'UNRESOLVED',
+      source: { kind: 'rule_conflict', conflictingRuleIds: userTier.conflictingRuleIds },
+      explanation: `${userTier.conflictingRuleIds.length} of your own rules match this transaction at the same priority with different outcomes. Needs manual review.`,
+      flaggedCandidate: null,
+    };
+  }
+  if (userTier.kind === 'winner') {
+    const rule = userClassifyById.get(userTier.ruleId)!;
+    // Safe: pickTopTierOrConflict only ever returns a 'winner' ruleId drawn
+    // from userProjections, which toClassifyProjection() only produced for
+    // action_kind === 'classify' rows — a runtime-guaranteed narrowing.
+    const a = rule.action_definition as Extract<typeof rule.action_definition, { action_kind: 'classify' }>;
     const categoryId = a.category_id ?? null;
     const economicType = a.economic_transaction_type ?? categoryEconomicType(categoryId, ref.categories) ?? 'unknown';
     candidates.push({
@@ -89,7 +199,6 @@ export function classifyTransaction(
       explanationText: `Matched your own rule "${rule.rule_type}".`,
       flaggedCandidate: null,
     });
-    break; // highest-priority user rule only; no need to evaluate the rest
   }
 
   // Tier 3: verified merchant alias / canonical name.
@@ -122,10 +231,36 @@ export function classifyTransaction(
       if (rule.action_definition.candidate_type !== 'possible_duplicate_review' && !globalFlagged) {
         globalFlagged = rule.action_definition.candidate_type;
       }
-      continue;
     }
-    if (rule.action_definition.action_kind !== 'classify') continue;
-    const a = rule.action_definition;
+  }
+  const globalClassifyById = new Map(globalMatches.map((r) => [r.id, r]));
+  const globalProjections = globalMatches
+    .map(toClassifyProjection)
+    .filter((p): p is ClassifyRuleProjection => p !== null);
+  const globalTier = pickTopTierOrConflict(globalProjections);
+  // Spec section 57: a genuine same-priority conflict among GLOBAL rules
+  // only matters if global rules were actually going to decide the outcome
+  // — a higher tier (user rule / verified merchant) that already produced a
+  // candidate legitimately wins regardless, exactly as resolvePrecedence()
+  // would have ranked it, so the conflict is moot and silently ignored.
+  if (globalTier.kind === 'conflict' && candidates.length === 0) {
+    return {
+      economicTransactionType: 'unknown',
+      categoryId: null,
+      subcategoryId: null,
+      merchantId: null,
+      transferFlag: false,
+      subscriptionFlag: false,
+      classificationMethod: 'unclassified',
+      confidence: 'UNRESOLVED',
+      source: { kind: 'rule_conflict', conflictingRuleIds: globalTier.conflictingRuleIds },
+      explanation: `${globalTier.conflictingRuleIds.length} approved global rules match this transaction at the same priority with different outcomes. Needs manual review.`,
+      flaggedCandidate: globalFlagged,
+    };
+  }
+  if (globalTier.kind === 'winner') {
+    const rule = globalClassifyById.get(globalTier.ruleId)!;
+    const a = rule.action_definition as Extract<typeof rule.action_definition, { action_kind: 'classify' }>;
     const categoryId = a.category_id ?? null;
     const economicType = a.economic_transaction_type ?? categoryEconomicType(categoryId, ref.categories) ?? 'unknown';
     const precedenceSource = rule.match_definition.match_kind === 'narrative_pattern' ? 'narrative_pattern' : 'verified_global_rule';
@@ -144,7 +279,6 @@ export function classifyTransaction(
       explanationText: `Matched approved global rule "${rule.rule_key}".`,
       flaggedCandidate: null,
     });
-    break; // highest-priority classify match only
   }
 
   // Structural hint fallback for candidate-flagging only (never commits an
