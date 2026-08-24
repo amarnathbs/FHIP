@@ -16,6 +16,8 @@
  * window. Like transfer matching, never matches on amount alone.
  */
 
+import { REFUND_THRESHOLDS } from './thresholds';
+
 export interface RefundCandidateTxn {
   id: string;
   financialAccountId: string;
@@ -37,7 +39,7 @@ export interface ProposedRefundLink {
   evidence: Record<string, unknown>;
 }
 
-const DEFAULT_LOOKBACK_DAYS = 90;
+const DEFAULT_LOOKBACK_DAYS = REFUND_THRESHOLDS.LOOKBACK_DAYS;
 
 function dayDiff(a: string, b: string): number {
   return (Date.parse(a) - Date.parse(b)) / 86_400_000;
@@ -89,7 +91,10 @@ export function matchRefundsToOriginals(
       refundTransactionId: refund.id,
       originalTransactionId: best.txn.id,
       linkType: best.amountDelta === 0 ? 'refund_original' : 'reversal_original',
-      confidence: best.amountDelta === 0 && best.days <= 7 ? 1 : 0.6,
+      confidence:
+        best.amountDelta === 0 && best.days <= REFUND_THRESHOLDS.HIGH_CONFIDENCE_DAY_THRESHOLD
+          ? REFUND_THRESHOLDS.CONFIDENCE_SCORE.FULL_MATCH
+          : REFUND_THRESHOLDS.CONFIDENCE_SCORE.PARTIAL_OR_WIDER,
       evidence: {
         rule: 'refund_classified_opposite_direction_amount_le_original_same_account',
         date_delta_days: best.days,

@@ -15,6 +15,7 @@
  */
 
 import type { FdhCreditDebit, FdhRecurringFrequency } from '../constants/enums';
+import { RECURRING_FREQUENCY_BUCKETS, RECURRING_THRESHOLDS } from './thresholds';
 
 export interface RecurringCandidateTxn {
   id: string;
@@ -51,14 +52,9 @@ interface FrequencyBucket {
 }
 
 // Ordered narrowest-first so a 7-day cadence is never mis-bucketed as
-// "monthly" by a wider tolerance matching first.
-const FREQUENCY_BUCKETS: FrequencyBucket[] = [
-  { frequency: 'weekly', nominalDays: 7, toleranceDays: 2 },
-  { frequency: 'fortnightly', nominalDays: 14, toleranceDays: 3 },
-  { frequency: 'monthly', nominalDays: 30, toleranceDays: 5 },
-  { frequency: 'quarterly', nominalDays: 91, toleranceDays: 10 },
-  { frequency: 'annual', nominalDays: 365, toleranceDays: 15 },
-];
+// "monthly" by a wider tolerance matching first. Sourced from
+// `./thresholds.ts` (spec section 84 — centralised threshold governance).
+const FREQUENCY_BUCKETS: FrequencyBucket[] = RECURRING_FREQUENCY_BUCKETS.map((b) => ({ ...b }));
 
 function daysBetween(a: string, b: string): number {
   return (Date.parse(b) - Date.parse(a)) / 86_400_000;
@@ -123,11 +119,13 @@ export function detectRecurringSeries(candidates: RecurringCandidateTxn[]): Dete
       .toISOString()
       .slice(0, 10);
 
-    const insufficientHistory = sorted.length < 3;
+    const insufficientHistory = sorted.length < RECURRING_THRESHOLDS.MIN_OCCURRENCES_FOR_ESTABLISHED;
     // Tight amount clustering (<1% spread, or a single-cent rounding gap)
     // plus a tight date pattern earns HIGH; anything wider (but still
     // within the bucket's own tolerance) is MEDIUM.
-    const tightAmounts = amountTolerance <= Math.max(0.01, meanAmount * 0.01);
+    const tightAmounts =
+      amountTolerance
+      <= Math.max(RECURRING_THRESHOLDS.TIGHT_AMOUNT_FLOOR, meanAmount * RECURRING_THRESHOLDS.TIGHT_AMOUNT_RATIO);
     const confidence: 'HIGH' | 'MEDIUM' = !insufficientHistory && tightAmounts ? 'HIGH' : 'MEDIUM';
 
     results.push({
@@ -159,7 +157,7 @@ export function refreshSeriesStatus(
   today: string,
 ): 'active' | 'paused' {
   const overdueDays = daysBetween(nextExpectedDate, today);
-  return overdueDays > frequencyNominalDays * 1.5 ? 'paused' : 'active';
+  return overdueDays > frequencyNominalDays * RECURRING_THRESHOLDS.PAUSED_AFTER_CYCLE_MULTIPLE ? 'paused' : 'active';
 }
 
 export const FREQUENCY_NOMINAL_DAYS: Record<FdhRecurringFrequency, number> = Object.fromEntries(
