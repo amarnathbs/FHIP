@@ -102,25 +102,31 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('expense', 'miscellaneous', 'Miscellaneous', 680),
 
 -- Assets -----------------------------------------------------------------
--- A/I/R consolidation (2026-08-24): Shares, ETFs, Managed Funds, Bonds,
--- Private Equity, Cryptocurrency, Gold, Silver, Term Deposits, Commercial
--- Property, Investment Property, Business Ownership, Partnership
--- Interest, SMSF Balance, Industry Super, Retail Super and Defined
--- Benefit are deliberately NOT seeded here any more -- each is now the
--- same economic holding type as an item already seeded under 'investment'
--- or 'retirement' below, and a household must never be offered the same
--- holding type as a selectable item in two modules (spec s.3/6/15). See
--- migrations 0072-0074 for the corresponding fix applied to an already-
--- populated database, including the canonical destination for each
--- retired item (master_financial_items.superseded_by_category/item_key).
 ('asset', 'wallet_cash', 'Wallet Cash', 10),
 ('asset', 'savings_account', 'Savings Account', 20),
 ('asset', 'cheque_account', 'Cheque Account', 30),
 ('asset', 'offset_account', 'Offset Account', 40),
+('asset', 'term_deposits', 'Term Deposits', 50),
 ('asset', 'foreign_currency', 'Foreign Currency', 60),
+('asset', 'gold', 'Gold', 70),
+('asset', 'silver', 'Silver', 80),
+('asset', 'cryptocurrency', 'Cryptocurrency', 90),
+('asset', 'shares', 'Shares', 100),
+('asset', 'etfs', 'ETFs', 110),
+('asset', 'managed_funds', 'Managed Funds', 120),
+('asset', 'bonds', 'Bonds', 130),
+('asset', 'private_equity', 'Private Equity', 140),
+('asset', 'business_ownership', 'Business Ownership', 150),
+('asset', 'partnership_interest', 'Partnership Interest', 160),
+('asset', 'smsf_balance', 'SMSF Balance', 170),
+('asset', 'industry_super', 'Industry Super', 180),
+('asset', 'retail_super', 'Retail Super', 190),
+('asset', 'defined_benefit', 'Defined Benefit', 200),
+('asset', 'investment_property', 'Investment Property', 210),
 ('asset', 'principal_residence', 'Principal Residence', 220),
 ('asset', 'holiday_home', 'Holiday Home', 230),
 ('asset', 'vacant_land', 'Vacant Land', 240),
+('asset', 'commercial_property', 'Commercial Property', 250),
 ('asset', 'farm', 'Farm', 260),
 ('asset', 'motor_vehicle', 'Motor Vehicle', 270),
 ('asset', 'motorcycle', 'Motorcycle', 280),
@@ -173,7 +179,7 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('investment', 'cash_investments', 'Cash Investments', 90),
 ('investment', 'high_interest_savings', 'High Interest Savings', 100),
 ('investment', 'term_deposits', 'Term Deposits', 110),
-('investment', 'property', 'Residential Investment Property', 120),
+('investment', 'property', 'Property', 120),
 ('investment', 'commercial_property', 'Commercial Property', 130),
 ('investment', 'reits', 'REITs', 140),
 ('investment', 'private_equity', 'Private Equity', 150),
@@ -190,9 +196,7 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('investment', 'business_investment', 'Business Investment', 260),
 ('investment', 'partnership_investment', 'Partnership Investment', 270),
 ('investment', 'trust_investment', 'Trust Investment', 280),
--- SMSF Investments intentionally not seeded here -- SMSF has exactly one
--- canonical home, Retirement > SMSF (spec s.38), whether summary balance
--- or underlying holdings.
+('investment', 'smsf_investments', 'SMSF Investments', 290),
 ('investment', 'education_fund', 'Education Fund', 300),
 ('investment', 'children_investment', 'Children Investment', 310),
 ('investment', 'other_investments', 'Other Investments', 320),
@@ -202,17 +206,12 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('retirement', 'retail_super', 'Retail Super', 20),
 ('retirement', 'smsf', 'SMSF', 30),
 ('retirement', 'defined_benefit', 'Defined Benefit', 40),
--- These six are contribution FLOWS, not account balances (spec s.34-36) --
--- labelled explicitly so a user is not invited to enter a periodic
--- contribution amount into a "Current Balance" field. See migrations
--- 0073/0074 for the correction applied to rows already saved this way on
--- an already-populated database.
-('retirement', 'employer_contributions', 'Employer Contributions (contribution amount, not a balance)', 50),
-('retirement', 'salary_sacrifice', 'Salary Sacrifice (contribution amount, not a balance)', 60),
-('retirement', 'personal_concessional', 'Personal Concessional (contribution amount, not a balance)', 70),
-('retirement', 'non_concessional', 'Non-Concessional (contribution amount, not a balance)', 80),
-('retirement', 'spouse_contribution', 'Spouse Contribution (contribution amount, not a balance)', 90),
-('retirement', 'government_co_contribution', 'Government Co-Contribution (contribution amount, not a balance)', 100),
+('retirement', 'employer_contributions', 'Employer Contributions', 50),
+('retirement', 'salary_sacrifice', 'Salary Sacrifice', 60),
+('retirement', 'personal_concessional', 'Personal Concessional', 70),
+('retirement', 'non_concessional', 'Non-Concessional', 80),
+('retirement', 'spouse_contribution', 'Spouse Contribution', 90),
+('retirement', 'government_co_contribution', 'Government Co-Contribution', 100),
 ('retirement', 'transition_to_retirement', 'Transition to Retirement', 110),
 ('retirement', 'allocated_pension', 'Allocated Pension', 120),
 ('retirement', 'account_based_pension', 'Account Based Pension', 130),
