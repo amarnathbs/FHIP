@@ -4,7 +4,7 @@
 
 **Branch:** `worktree-agent-a44f9e6f3dcfdbe12` (harness-assigned worktree branch off `main`)
 **Starting canonical main:** `982a5f2ae6f8ac32eb89c081ec50ae9503331f9d` ("Merge Retirement Member UI (Self/Spouse Target Retirement Age) into main"), highest migration `0077_retirement_member_target_age.sql`. Re-confirmed unchanged via `git fetch origin main` at report time — no drift during this session.
-**Final certified SHA (this branch, not merged):** `734f12969ffe75a8e259bb55dfe8f0500d0cd92f`
+**Final certified SHA (this branch, not merged):** `e916622c9705c2b21043b866a814621296a5fc0d` (terminal commit, containing this report; `734f129` is the last functional/test commit immediately before it — all verification evidence in this report was gathered against `734f129`'s tree, which the docs-only commit on top does not change)
 **Migration(s):** **None.** FDH-8 required no schema change (spec 7 explicitly permits this). Confirmed via `npm run check:migrations` (76 active migrations, unchanged) and `npm run check:migrations:against-main` (0 collisions vs `origin/main`), both re-run immediately before this report.
 **DEV:** Not attainable this session — no DEV Supabase credentials exist in this worktree (`.env.local` absent). Substituted with PGlite (real Postgres) DB-level certification — see section 15.
 **Production:** Not touched, not pushed, not merged, per standing constraints. See section 18.
