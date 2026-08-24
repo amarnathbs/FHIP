@@ -14,11 +14,16 @@
  */
 
 import {
+  categoriesRepository,
+  duplicateCandidatesRepository,
   recurringTransactionsRepository,
+  subcategoriesRepository,
   transactionLinksRepository,
+  transactionsRepository,
   userClassificationRulesRepository,
 } from '../repositories';
 import { recordDocumentAuditEvent } from './auditLog';
+import { correctTransaction } from './bankTransactionActionsService';
 import type { FdhRecurringSeriesReviewInput, FdhTransactionLinkReviewInput } from '../validation/transactions';
 import type {
   FdhRecurringTransaction,
@@ -28,6 +33,7 @@ import type {
   FdhUserClassificationRule,
 } from '../domain/types';
 import type { FdhUserRuleType } from '../constants/enums';
+import { deriveReviewReasons, type ReviewReasonResult } from '../classification/reviewReasons';
 
 export class ClassificationReviewError extends Error {
   constructor(
@@ -36,6 +42,81 @@ export class ClassificationReviewError extends Error {
   ) {
     super(message);
     this.name = 'ClassificationReviewError';
+  }
+}
+
+/** Link types this service auto-corrects to `economic_transaction_type =
+ * 'transfer'` on confirmation — see `applyTransferClassOnConfirm()` below
+ * for why `loan_payment`/`investment_funding` are deliberately excluded. */
+const TRANSFER_ECONOMIC_CLASS_LINK_TYPES: ReadonlyArray<FdhTransactionLink['link_type']> = [
+  'internal_transfer',
+  'credit_card_settlement',
+];
+
+const TRANSFER_LINK_TYPE_CATEGORY: Record<'internal_transfer' | 'credit_card_settlement', { categoryKey: string; subcategoryKey: string }> = {
+  internal_transfer: { categoryKey: 'transfer_own_account', subcategoryKey: 'internal_transfer' },
+  credit_card_settlement: { categoryKey: 'credit_card_payment', subcategoryKey: 'credit_card_bill_payment' },
+};
+
+/**
+ * FDH-6 (spec sections 20-22, acceptance section 128 — "no income/expense
+ * double-counting semantics") — gap closure.
+ *
+ * FDH-2's own taxonomy seed (migration 0053, `transfer_own_account`
+ * category comment) explicitly left this as a forward reference: "A
+ * description-pattern MATCH here is a candidate only — actual transfer
+ * CONFIRMATION ... is a future engine (FDH-6)." Before this change,
+ * confirming a matched transfer link (`reviewTransactionLink`) only moved
+ * the LINK row to `confirmed` — the two underlying transactions themselves
+ * kept whatever `economic_transaction_type` the engine had already assigned
+ * them (almost always `unknown`, since a `flag_candidate` rule never sets
+ * one), so a confidently-matched, user-confirmed internal transfer sat in
+ * the review queue as UNKNOWN forever unless the user separately corrected
+ * BOTH transaction rows by hand. This reuses the EXISTING, already-audited
+ * `correctTransaction()` correction path (spec 47) — never a new privileged
+ * write — to apply the transfer classification to both sides the moment the
+ * user confirms the match, exactly as if they had manually corrected each
+ * one, with an honest, traceable `reason` referencing the link.
+ *
+ * DELIBERATELY NARROW SCOPE. Only `internal_transfer`/`credit_card_settlement`
+ * — the two link types with an existing, unambiguous FDH-2
+ * `economic_type = 'transfer'` category — are auto-corrected.
+ * `loan_payment` (spec section 50: principal/interest cannot be safely split
+ * without loan-schedule data this system does not have) and
+ * `investment_funding` (spec section 99: FDH-6 must not reach into
+ * Investment Intelligence's domain) are left exactly as before — the link
+ * itself still moves to `confirmed`, but the transactions are not
+ * auto-reclassified, matching the spec's own conservative default of
+ * UNKNOWN/review over an invented, unsupported certainty.
+ *
+ * NEVER OVERWRITES AN EXISTING HUMAN DECISION. A transaction the user has
+ * already corrected (`user_override = true`) — for any reason, including
+ * one unrelated to this transfer — is skipped, never silently overwritten.
+ */
+async function applyTransferClassOnConfirm(userId: string, link: FdhTransactionLink): Promise<void> {
+  if (!TRANSFER_ECONOMIC_CLASS_LINK_TYPES.includes(link.link_type)) return;
+  if (!link.transaction_id_to) return; // an open/missing-counterpart link has only one side to correct
+
+  const mapping = TRANSFER_LINK_TYPE_CATEGORY[link.link_type as 'internal_transfer' | 'credit_card_settlement'];
+  const [categoriesResult, subcategoriesResult] = await Promise.all([
+    categoriesRepository.listActive(2000),
+    subcategoriesRepository.listActive(2000),
+  ]);
+  const category = (categoriesResult.data ?? []).find((c) => c.category_key === mapping.categoryKey);
+  const subcategory = (subcategoriesResult.data ?? []).find(
+    (s) => s.subcategory_key === mapping.subcategoryKey && s.category_id === category?.id,
+  );
+  if (!category) return; // taxonomy row missing — leave the transactions untouched rather than guess
+
+  const reason = `Automatically applied following user confirmation of matched transfer link ${link.id}.`;
+  for (const transactionId of [link.transaction_id_from, link.transaction_id_to]) {
+    const { data: txn } = await transactionsRepository.getForUser(userId, transactionId);
+    if (!txn || txn.user_override) continue; // never overwrite an existing human decision
+    await correctTransaction(userId, transactionId, { field_name: 'economic_transaction_type', corrected_value: 'transfer', reason });
+    await correctTransaction(userId, transactionId, { field_name: 'category_id', corrected_value: category.id, reason });
+    if (subcategory) {
+      await correctTransaction(userId, transactionId, { field_name: 'subcategory_id', corrected_value: subcategory.id, reason });
+    }
   }
 }
 
@@ -58,6 +139,10 @@ export async function reviewTransactionLink(
     status: newStatus,
     user_confirmed: input.decision === 'confirm',
   } as never);
+
+  if (input.decision === 'confirm') {
+    await applyTransferClassOnConfirm(userId, (updated ?? link) as FdhTransactionLink);
+  }
 
   await recordDocumentAuditEvent({
     userId,
@@ -155,4 +240,63 @@ export async function createPersonalClassificationRule(
   });
 
   return created;
+}
+
+const TRANSFER_LIKE_LINK_TYPES: ReadonlyArray<FdhTransactionLink['link_type']> = [
+  'internal_transfer',
+  'credit_card_settlement',
+  'investment_funding',
+  'loan_payment',
+];
+const REFUND_LIKE_LINK_TYPES: ReadonlyArray<FdhTransactionLink['link_type']> = ['refund_original', 'reversal_original'];
+
+/**
+ * FDH-6 (spec section 64, gap G1) — explains WHY one of the caller's own
+ * transactions is (or would be) in review, using only already-persisted
+ * signals. RLS-scoped reads only (`.eq('user_id', userId)` throughout via
+ * the generic repositories) — structurally incapable of reading another
+ * tenant's transaction, links or duplicate candidates.
+ */
+export async function explainTransactionReviewReasons(
+  userId: string,
+  transactionId: string,
+): Promise<ReviewReasonResult> {
+  const { data: txn } = await transactionsRepository.getForUser(userId, transactionId);
+  if (!txn) throw new ClassificationReviewError('not_found', 'transaction not found');
+
+  const [linksResult, duplicatesResult] = await Promise.all([
+    transactionLinksRepository.listForUserAll(userId),
+    duplicateCandidatesRepository.listForUserAll(userId),
+  ]);
+  const links = (linksResult.data ?? []).filter(
+    (l) => l.transaction_id_from === transactionId || l.transaction_id_to === transactionId,
+  );
+  const duplicates = duplicatesResult.data ?? [];
+
+  const openTransferLinkExists = links.some(
+    (l) =>
+      l.transaction_id_from === transactionId
+      && l.transaction_id_to === null
+      && l.status === 'pending'
+      && TRANSFER_LIKE_LINK_TYPES.includes(l.link_type),
+  );
+  const pendingTransferLinkExists = links.some(
+    (l) => l.transaction_id_to !== null && l.status === 'pending' && TRANSFER_LIKE_LINK_TYPES.includes(l.link_type),
+  );
+  const pendingRefundLinkExists = links.some(
+    (l) => l.status === 'pending' && REFUND_LIKE_LINK_TYPES.includes(l.link_type),
+  );
+  const pendingDuplicateCandidateExists = duplicates.some(
+    (d) => d.status === 'pending' && (d.transaction_id_a === transactionId || d.transaction_id_b === transactionId),
+  );
+
+  return deriveReviewReasons({
+    reviewStatus: txn.review_status,
+    economicTransactionType: txn.economic_transaction_type,
+    classificationConfidence: txn.classification_confidence,
+    openTransferLinkExists,
+    pendingTransferLinkExists,
+    pendingDuplicateCandidateExists,
+    pendingRefundLinkExists,
+  });
 }

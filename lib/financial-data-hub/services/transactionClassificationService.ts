@@ -65,12 +65,18 @@ export interface ClassificationRunSummary {
 }
 
 async function loadReferenceData(): Promise<ClassificationReferenceData> {
+  // FDH-6 (spec sections 101-103): uses the pagination-safe *All() readers
+  // (repositories/base.ts) rather than a single capped `.listActive(N)`
+  // call — FDH-2's merchant/alias library is exactly the kind of table that
+  // can realistically exceed PostgREST's 1,000-row page cap as it grows,
+  // and a silently-truncated alias set means real merchants silently stop
+  // matching past row 1,000.
   const [categories, subcategories, merchants, merchantAliases, globalRules] = await Promise.all([
-    categoriesRepository.listActive(2000),
-    subcategoriesRepository.listActive(2000),
-    merchantsRepository.listActive(5000),
-    merchantAliasesRepository.listActive(10_000),
-    globalClassificationRulesRepository.listActive(1000),
+    categoriesRepository.listActiveAll(),
+    subcategoriesRepository.listActiveAll(),
+    merchantsRepository.listActiveAll(),
+    merchantAliasesRepository.listActiveAll(),
+    globalClassificationRulesRepository.listActiveAll(),
   ]);
   return {
     categories: categories.data ?? [],
@@ -103,8 +109,8 @@ async function loadUserTransactions(userId: string): Promise<FdhTransaction[]> {
 export async function classifyUserTransactions(userId: string): Promise<ClassificationRunSummary> {
   const [transactions, userRulesResult, accountsResult] = await Promise.all([
     loadUserTransactions(userId),
-    userClassificationRulesRepository.listForUser(userId, 1000),
-    financialAccountsRepository.listForUser(userId, 500),
+    userClassificationRulesRepository.listForUserAll(userId),
+    financialAccountsRepository.listForUserAll(userId),
   ]);
   const ref = await loadReferenceData();
   ref.userRules = (userRulesResult.data ?? []).filter((r) => r.active);
@@ -208,7 +214,11 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     descriptionClean: t.description_clean,
     sourceReference: t.source_reference,
   }));
-  const existingLinksResult = await transactionLinksRepository.listForUser(userId, 5000);
+  // FDH-6 (spec sections 101-103): a household with more than 1,000 links
+  // must never have its later links silently invisible to this dedup check
+  // — that would let a duplicate transfer/refund link be proposed on top of
+  // an existing one past row 1,000.
+  const existingLinksResult = await transactionLinksRepository.listForUserAll(userId);
   const existingLinkedIds = new Set(
     (existingLinksResult.data ?? []).flatMap((l) => [l.transaction_id_from, l.transaction_id_to].filter(Boolean) as string[]),
   );

@@ -19,6 +19,7 @@
  */
 
 import type { FdhAccountType, FdhCreditDebit, FdhTransactionLinkType } from '../constants/enums';
+import { TRANSFER_THRESHOLDS } from './thresholds';
 
 export interface TransferCandidateTxn {
   id: string;
@@ -40,7 +41,7 @@ export interface ProposedTransferLink {
   evidence: Record<string, unknown>;
 }
 
-const DEFAULT_DATE_WINDOW_DAYS = 3;
+const DEFAULT_DATE_WINDOW_DAYS = TRANSFER_THRESHOLDS.DATE_WINDOW_DAYS;
 
 function dayDiff(a: string, b: string): number {
   return Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
@@ -108,7 +109,8 @@ export function matchInternalTransfers(
       const typeA = accountTypeById.get(p.a.financialAccountId) ?? null;
       const typeB = accountTypeById.get(p.b.financialAccountId) ?? null;
       const linkType = linkTypeFor(typeA, typeB);
-      const confidenceState: 'HIGH' | 'MEDIUM' = p.sameReference || p.days <= 1 ? 'HIGH' : 'MEDIUM';
+      const confidenceState: 'HIGH' | 'MEDIUM' =
+        p.sameReference || p.days <= TRANSFER_THRESHOLDS.HIGH_CONFIDENCE_DAY_THRESHOLD ? 'HIGH' : 'MEDIUM';
 
       // From the debit side to the credit side, so the link direction
       // reads naturally ("money left A, arrived at B").
@@ -118,7 +120,10 @@ export function matchInternalTransfers(
         transactionIdFrom: fromTxn.id,
         transactionIdTo: toTxn.id,
         linkType,
-        confidence: confidenceState === 'HIGH' ? 1 : 0.6,
+        confidence:
+          confidenceState === 'HIGH'
+            ? TRANSFER_THRESHOLDS.CONFIDENCE_SCORE.HIGH
+            : TRANSFER_THRESHOLDS.CONFIDENCE_SCORE.MEDIUM,
         confidenceState,
         evidence: {
           rule: 'exact_amount_opposite_direction_different_account',
@@ -160,7 +165,7 @@ export function openCandidateLink(
   return {
     transactionId,
     linkType,
-    confidence: 0.3,
+    confidence: TRANSFER_THRESHOLDS.OPEN_CANDIDATE_CONFIDENCE,
     evidence: { rule: 'structural_candidate_no_counterpart_found', candidate_type: candidateType },
   };
 }

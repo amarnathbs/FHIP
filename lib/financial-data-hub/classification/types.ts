@@ -19,6 +19,7 @@ import type {
   FdhUserClassificationRule,
 } from '../domain/types';
 import type { FdhCreditDebit, FdhEconomicTransactionType, FdhTransactionTypeHint } from '../constants/enums';
+import { CLASSIFICATION_CONFIDENCE_SCORE } from './thresholds';
 
 /** The minimal transaction slice the engine needs. Deliberately narrow —
  * never the full row — so a caller cannot accidentally leak an unrelated
@@ -41,17 +42,28 @@ export interface ClassifiableTransaction {
  * only, using the fixed buckets in `confidenceToScore`. */
 export type ClassificationConfidenceState = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNRESOLVED';
 
-export const CONFIDENCE_SCORE: Record<ClassificationConfidenceState, number> = {
-  HIGH: 1,
-  MEDIUM: 0.6,
-  LOW: 0.3,
-  UNRESOLVED: 0,
-};
+/** Re-exported from `./thresholds.ts` (spec section 84 — centralised
+ * threshold governance) so every existing caller (`import {
+ * CONFIDENCE_SCORE } from './types'`) keeps working unchanged. */
+export const CONFIDENCE_SCORE: Record<ClassificationConfidenceState, number> = CLASSIFICATION_CONFIDENCE_SCORE;
 
 export interface ClassificationSource {
-  kind: 'user_rule' | 'verified_merchant_alias' | 'verified_global_rule' | 'narrative_pattern' | 'unresolved';
+  kind:
+    | 'user_rule'
+    | 'verified_merchant_alias'
+    | 'verified_global_rule'
+    | 'narrative_pattern'
+    | 'unresolved'
+    /** FDH-6 (spec section 57): two or more ACTIVE rules at the SAME
+     * precedence tier and the SAME priority proposed genuinely different
+     * classify outcomes for this transaction. Never resolved by array
+     * order — always routed to `unknown`/review instead. */
+    | 'rule_conflict';
   ruleId?: string;
   merchantId?: string;
+  /** Present only when `kind === 'rule_conflict'` — every rule id that
+   * tied and disagreed, for the review surface / audit trail. */
+  conflictingRuleIds?: string[];
 }
 
 /** The engine's full output for one transaction. */
