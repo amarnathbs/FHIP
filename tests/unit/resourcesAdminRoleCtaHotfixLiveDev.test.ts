@@ -413,6 +413,8 @@ describe('ensureResourceAuthorForUser idempotency (spec §33)', () => {
     const qa = await makeTestUserId('reactivate-qa');
     await ensureResourceAuthorForUser(admin, qa.userId, { fullName: null, email: qa.email });
     const { data: row } = await admin.from('resource_authors').select('id').eq('user_id', qa.userId).single();
+    expect(row).not.toBeNull();
+    if (!row) throw new Error('expected a resource_authors row to exist');
     createdAuthorIds.push(row.id);
     await admin.from('resource_authors').update({ is_active: false }).eq('id', row.id);
 
