@@ -55,6 +55,21 @@ export function validateForDraftSave(post: Pick<ValidatablePost, 'title'>): Vali
   return result(errors);
 }
 
+// Hotfix (post-closure) — spec §22: "Prefer validation: primary_cta_id !=
+// secondary_cta_id." Shared by every content-type's PATCH route (content,
+// videos, glossary, money-updates all carry the same two CTA columns on the
+// one shared resource_posts table) rather than duplicated per content type.
+// Server-side defense-in-depth alongside the editor's own inline hint —
+// never trust the client-side check alone (same rationale as every other
+// validator in this file, spec §20).
+export function validateCtaAssignment(patch: { primary_cta_id: string | null; secondary_cta_id: string | null }): ValidationResult {
+  const errors: Record<string, string> = {};
+  if (patch.primary_cta_id && patch.secondary_cta_id && patch.primary_cta_id === patch.secondary_cta_id) {
+    errors.secondary_cta_id = 'Primary and Secondary CTA cannot be the same. Choose a different Secondary CTA or leave it blank.';
+  }
+  return result(errors);
+}
+
 // Before "Submit for Editorial Review" (spec §35).
 export function validateForReview(post: ValidatablePost): ValidationResult {
   const errors: Record<string, string> = {};

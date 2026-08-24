@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageDiscovery, isResourceStaff } from '@/lib/resources/permissions';
 import { getCtaById, findDuplicateCta, countCtaUsage } from '@/lib/resources/cta/queries';
 import { updateCta } from '@/lib/resources/cta/mutations';
 import { validateCta } from '@/lib/resources/cta/validation';
+import { logResourceAudit } from '@/lib/resources/admin/auditLog';
 import type { CtaSavePatch, CtaDestinationType } from '@/lib/resources/cta/types';
 import { CTA_DESTINATION_TYPES } from '@/lib/resources/cta/types';
 
@@ -67,6 +69,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     await updateCta(supabase, id, patch);
+    const action = existing.is_active !== patch.is_active ? (patch.is_active ? 'CTA_ACTIVATED' : 'CTA_DEACTIVATED') : 'CTA_UPDATED';
+    await logResourceAudit(createAdminClient(), { entity_type: 'resource_cta', entity_id: id, action, actor_user_id: user.id, before_state: existing, after_state: patch });
     return ok({ id });
   } catch (err) {
     console.error('Resources CTA update error:', err);

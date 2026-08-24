@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
 import { getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { updateVideoDraft } from '@/lib/resources/video/mutations';
-import { validateForDraftSave } from '@/lib/resources/editor/validation';
+import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/editor/validation';
 import { validateChapters } from '@/lib/resources/video/youtube';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { VideoSideSaveInput } from '@/lib/resources/video/types';
@@ -22,7 +23,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const post = await getVideoEditorPost(supabase, id);
     if (!post) return bad('Video not found.', 404);
-    const [reference, versions] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id)]);
+    const [reference, versions] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id)]);
     return ok({ post, reference, versions });
   } catch (err) {
     console.error('Resources video editor load error:', err);
@@ -57,6 +58,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const draftCheck = validateForDraftSave({ title: patch.title ?? '' });
     if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
+
+    const ctaCheck = validateCtaAssignment({ primary_cta_id: patch.primary_cta_id ?? null, secondary_cta_id: patch.secondary_cta_id ?? null });
+    if (!ctaCheck.valid) return Response.json({ error: 'Validation failed.', fields: ctaCheck.errors }, { status: 422 });
 
     const chapterCheck = validateChapters(video.chapters ?? []);
     if (!chapterCheck.valid) return Response.json({ error: 'One or more chapters need attention.', fields: { chapters: 'Fix the highlighted chapters before saving.' }, chapterErrors: chapterCheck.errors }, { status: 422 });

@@ -396,7 +396,11 @@ export function GlossaryEditor({
             categories={reference.categories}
             tags={reference.tags}
             authors={reference.authors}
+            reviewers={reference.reviewers}
+            complianceReviewers={reference.complianceReviewers}
             ctas={reference.ctas}
+            canManageUsers={caps.canManage}
+            canManageCtas={caps.canManage}
             errors={{ ...fieldErrors, ...reviewCheck.errors }}
           />
           <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />

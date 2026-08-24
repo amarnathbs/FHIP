@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { getEditorReferenceData, getResourcePostVersions, isSlugAvailable } from '@/lib/resources/editor/queries';
 import { updateMoneyUpdateDraft } from '@/lib/resources/money-update/mutations';
 import { validateMoneyUpdateForDraftSave } from '@/lib/resources/money-update/validation';
+import { validateCtaAssignment } from '@/lib/resources/editor/validation';
 import { searchSources } from '@/lib/resources/sources/queries';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 
@@ -19,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const post = await getMoneyUpdateEditorPost(supabase, id);
     if (!post) return bad('Money Update not found.', 404);
-    const [reference, versions, sourceOptions] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), searchSources(supabase, '')]);
+    const [reference, versions, sourceOptions] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), searchSources(supabase, '')]);
     return ok({ post, reference, versions, sourceOptions });
   } catch (err) {
     console.error('Resources money update editor load error:', err);
@@ -55,6 +57,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const draftCheck = validateMoneyUpdateForDraftSave({ title: patch.title ?? '' });
     if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
+
+    const ctaCheck = validateCtaAssignment({ primary_cta_id: patch.primary_cta_id ?? null, secondary_cta_id: patch.secondary_cta_id ?? null });
+    if (!ctaCheck.valid) return Response.json({ error: 'Validation failed.', fields: ctaCheck.errors }, { status: 422 });
 
     if (patch.slug) {
       const available = await isSlugAvailable(supabase, patch.slug, id);

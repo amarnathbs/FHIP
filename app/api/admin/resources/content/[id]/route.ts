@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions, isSlugAvailable } from '@/lib/resources/editor/queries';
 import { updateResourceDraft } from '@/lib/resources/editor/mutations';
-import { validateForDraftSave } from '@/lib/resources/editor/validation';
+import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/editor/validation';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 
 // GET /api/admin/resources/content/[id] — full editor payload: the post
@@ -23,7 +24,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // same generic 404 — never confirm "this draft exists but you can't see it".
     if (!post) return bad('Resource not found.', 404);
 
-    const [reference, versions] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id)]);
+    const [reference, versions] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id)]);
     return ok({ post, reference, versions });
   } catch (err) {
     console.error('Resources editor load error:', err);
@@ -68,6 +69,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // input (e.g. an oversized title) rather than silently truncating it (spec §17).
     const draftCheck = validateForDraftSave({ title: patch.title ?? '' });
     if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
+
+    const ctaCheck = validateCtaAssignment({ primary_cta_id: patch.primary_cta_id ?? null, secondary_cta_id: patch.secondary_cta_id ?? null });
+    if (!ctaCheck.valid) return Response.json({ error: 'Validation failed.', fields: ctaCheck.errors }, { status: 422 });
 
     if (patch.slug) {
       const available = await isSlugAvailable(supabase, patch.slug, id);

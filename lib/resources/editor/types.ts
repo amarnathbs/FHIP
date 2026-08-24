@@ -27,10 +27,19 @@ export interface EditorPost extends ResourcePost {
   tags: RelatedOption[];
 }
 
+// Hotfix (post-closure, see FHIP_RESOURCES_ADMIN_ROLE_CTA_MANAGEMENT_HOTFIX_
+// REPORT.md section D/J-L): `authors`, `reviewers`, and `complianceReviewers`
+// are now three genuinely distinct, role-eligibility-filtered lists (author/
+// resource_admin; editor/resource_admin; compliance_reviewer/resource_admin
+// respectively — mirroring the transition RPC's own permission predicates),
+// not the same undifferentiated resource_authors.is_active list repeated
+// three times as before.
 export interface EditorReferenceData {
   categories: RelatedOption[];
   tags: RelatedOption[];
   authors: RelatedOption[];
+  reviewers: RelatedOption[];
+  complianceReviewers: RelatedOption[];
   ctas: RelatedOption[];
 }
 

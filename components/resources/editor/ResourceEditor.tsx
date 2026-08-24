@@ -455,9 +455,13 @@ export function ResourceEditor({
             categories={reference.categories}
             tags={reference.tags}
             authors={reference.authors}
+            reviewers={reference.reviewers}
+            complianceReviewers={reference.complianceReviewers}
             ctas={reference.ctas}
             errors={{ ...fieldErrors, ...reviewCheck.errors }}
             slugStatus={undefined}
+            canManageUsers={caps.canManage}
+            canManageCtas={caps.canManage}
           />
           <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />

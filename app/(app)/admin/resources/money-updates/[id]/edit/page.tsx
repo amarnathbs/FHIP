@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
@@ -20,7 +21,7 @@ export default async function MoneyUpdateEditPage({ params }: { params: Promise<
   if (!isResourceStaff(current)) redirect(`/admin/resources/content/${id}`);
 
   const [reference, versions, workflowHistory, sourceOptions] = await Promise.all([
-    getEditorReferenceData(supabase),
+    getEditorReferenceData(supabase, createAdminClient()),
     getResourcePostVersions(supabase, id),
     getResourceWorkflowHistory(supabase, id),
     searchSources(supabase, ''),

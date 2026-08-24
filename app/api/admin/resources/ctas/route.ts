@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageDiscovery, isResourceStaff } from '@/lib/resources/permissions';
 import { listCtas, findDuplicateCta } from '@/lib/resources/cta/queries';
 import { createCta } from '@/lib/resources/cta/mutations';
 import { validateCta } from '@/lib/resources/cta/validation';
+import { logResourceAudit } from '@/lib/resources/admin/auditLog';
 import type { CtaSavePatch, CtaDestinationType } from '@/lib/resources/cta/types';
 import { CTA_DESTINATION_TYPES } from '@/lib/resources/cta/types';
 
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
     }
 
     const result = await createCta(supabase, patch);
+    await logResourceAudit(createAdminClient(), { entity_type: 'resource_cta', entity_id: result.id, action: 'CTA_CREATED', actor_user_id: user.id, after_state: patch });
     return ok(result);
   } catch (err) {
     console.error('Resources CTA create error:', err);

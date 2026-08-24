@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
@@ -41,7 +42,7 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
     redirect(SPECIALIST_EDIT_ROUTES[post.content_type] ?? `/admin/resources/content/${id}`);
   }
 
-  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
+  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
 
   const caps: WorkflowCapabilities = {
     isCreator: post.created_by === current.userId,

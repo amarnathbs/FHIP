@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
@@ -21,7 +22,7 @@ export default async function VideoEditPage({ params }: { params: Promise<{ id: 
 
   if (!isResourceStaff(current)) redirect(`/admin/resources/content/${id}`);
 
-  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
+  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
 
   const caps: WorkflowCapabilities = {
     isCreator: post.created_by === current.userId,

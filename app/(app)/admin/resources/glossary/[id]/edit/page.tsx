@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
 import { getGlossaryEditorPost, getGlossaryTermOptions } from '@/lib/resources/glossary/queries';
@@ -19,7 +20,7 @@ export default async function GlossaryEditPage({ params }: { params: Promise<{ i
   if (!isResourceStaff(current)) redirect(`/admin/resources/content/${id}`);
 
   const [reference, versions, workflowHistory, termOptions] = await Promise.all([
-    getEditorReferenceData(supabase),
+    getEditorReferenceData(supabase, createAdminClient()),
     getResourcePostVersions(supabase, id),
     getResourceWorkflowHistory(supabase, id),
     getGlossaryTermOptions(supabase, id),

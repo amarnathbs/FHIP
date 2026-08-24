@@ -7,10 +7,33 @@
 // below the lg breakpoint via the parent grid (spec §90-92) rather than any
 // section-specific responsive code.
 
+import Link from 'next/link';
 import { SelectField, CheckboxField, TextField } from './FormField';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES } from '@/lib/resources/admin/labels';
 import type { RelatedOption } from '@/lib/resources/editor/types';
 import type { ResourceDifficulty, ResourceFreshness, ResourceVisibility, ComplianceClassification } from '@/lib/resources/types';
+
+// Hotfix (post-closure) empty-state helper (spec §15/§32): "No eligible
+// authors found. Manage Resources users and roles." — the management link is
+// only shown to a caller who can actually reach that screen (canManageUsers,
+// mirroring canManageResources()), never to an ordinary Author/Editor, since
+// the target route itself also gates on canManageResources() but a visible-
+// but-403 link is still bad UX for a role that can never use it.
+function EligibilityEmptyState({ label, canManageUsers, href = '/admin/resources/users', linkLabel = 'Manage Resources users and roles.' }: { label: string; canManageUsers: boolean; href?: string; linkLabel?: string }) {
+  return (
+    <p className="text-xs text-muted">
+      {label}
+      {canManageUsers && (
+        <>
+          {' '}
+          <Link href={href} className="font-semibold text-trust hover:underline">
+            {linkLabel}
+          </Link>
+        </>
+      )}
+    </p>
+  );
+}
 
 const DIFFICULTY_OPTIONS: { value: ResourceDifficulty; label: string }[] = [
   { value: 'beginner', label: 'Beginner' },
@@ -90,18 +113,26 @@ export function MetadataSidebar({
   categories,
   tags,
   authors,
+  reviewers,
+  complianceReviewers,
   ctas,
   errors,
   slugStatus,
+  canManageUsers = false,
+  canManageCtas = false,
 }: {
   form: MetadataFormState;
   onChange: (patch: Partial<MetadataFormState>) => void;
   categories: RelatedOption[];
   tags: RelatedOption[];
   authors: RelatedOption[];
+  reviewers: RelatedOption[];
+  complianceReviewers: RelatedOption[];
   ctas: RelatedOption[];
   errors: Record<string, string>;
   slugStatus?: React.ReactNode;
+  canManageUsers?: boolean;
+  canManageCtas?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -189,18 +220,46 @@ export function MetadataSidebar({
       </Section>
 
       <Section title="Publishing / Review">
-        <SelectField label="Author" value={form.authorId} onChange={(v) => onChange({ authorId: v })} options={authors.map((a) => ({ value: a.id, label: a.name }))} allowBlank blankLabel="Select an author…" required error={errors.author_id} />
-        <SelectField label="Reviewer" value={form.reviewerId} onChange={(v) => onChange({ reviewerId: v })} options={authors.map((a) => ({ value: a.id, label: a.name }))} allowBlank blankLabel="None" />
+        <div>
+          <SelectField label="Author" value={form.authorId} onChange={(v) => onChange({ authorId: v })} options={authors.map((a) => ({ value: a.id, label: a.name }))} allowBlank blankLabel="Select an author…" required error={errors.author_id} />
+          {authors.length === 0 && <EligibilityEmptyState label="No eligible authors available." canManageUsers={canManageUsers} />}
+        </div>
+        <div>
+          <SelectField label="Reviewer" value={form.reviewerId} onChange={(v) => onChange({ reviewerId: v })} options={reviewers.map((a) => ({ value: a.id, label: a.name }))} allowBlank blankLabel="None" />
+          {reviewers.length === 0 && <EligibilityEmptyState label="No eligible editorial reviewers available." canManageUsers={canManageUsers} />}
+        </div>
+        <div>
+          <SelectField
+            label="Compliance Reviewer"
+            value={form.complianceReviewerId}
+            onChange={(v) => onChange({ complianceReviewerId: v })}
+            options={complianceReviewers.map((a) => ({ value: a.id, label: a.name }))}
+            allowBlank
+            blankLabel="None"
+          />
+          {complianceReviewers.length === 0 && <EligibilityEmptyState label="No eligible compliance reviewers available." canManageUsers={canManageUsers} />}
+        </div>
+        <div>
+          <SelectField
+            label="Primary CTA"
+            value={form.primaryCtaId}
+            onChange={(v) => onChange({ primaryCtaId: v })}
+            options={ctas.map((c) => ({ value: c.id, label: c.name }))}
+            allowBlank
+            blankLabel="None"
+            error={form.secondaryCtaId && form.primaryCtaId && form.primaryCtaId === form.secondaryCtaId ? 'Primary and Secondary CTA cannot be the same.' : errors.primary_cta_id}
+          />
+          {ctas.length === 0 && <EligibilityEmptyState label="No active CTAs available." canManageUsers={canManageCtas} href="/admin/resources/ctas" linkLabel="Manage the CTA Library." />}
+        </div>
         <SelectField
-          label="Compliance Reviewer"
-          value={form.complianceReviewerId}
-          onChange={(v) => onChange({ complianceReviewerId: v })}
-          options={authors.map((a) => ({ value: a.id, label: a.name }))}
+          label="Secondary CTA"
+          value={form.secondaryCtaId}
+          onChange={(v) => onChange({ secondaryCtaId: v })}
+          options={ctas.map((c) => ({ value: c.id, label: c.name }))}
           allowBlank
           blankLabel="None"
+          error={form.secondaryCtaId && form.primaryCtaId && form.primaryCtaId === form.secondaryCtaId ? 'Primary and Secondary CTA cannot be the same.' : errors.secondary_cta_id}
         />
-        <SelectField label="Primary CTA" value={form.primaryCtaId} onChange={(v) => onChange({ primaryCtaId: v })} options={ctas.map((c) => ({ value: c.id, label: c.name }))} allowBlank blankLabel="None" />
-        <SelectField label="Secondary CTA" value={form.secondaryCtaId} onChange={(v) => onChange({ secondaryCtaId: v })} options={ctas.map((c) => ({ value: c.id, label: c.name }))} allowBlank blankLabel="None" />
         <p className="text-xs text-muted">Disclaimer is centrally managed and will be applied by the public Resources renderer.</p>
       </Section>
 

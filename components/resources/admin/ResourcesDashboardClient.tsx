@@ -177,6 +177,12 @@ export function ResourcesDashboardClient() {
                 { href: '/admin/resources/related', label: 'Related Content' },
                 { href: '/admin/resources/ctas', label: 'CTAs' },
                 { href: '/admin/resources/context', label: 'Context Mapping' },
+                // Hotfix (post-closure): role/CTA management admin —
+                // navigation link is UX-only, the actual security gate is
+                // canManageResources() on /admin/resources/users itself, so
+                // showing this link to a non-manager would only 404/redirect,
+                // never leak data.
+                { href: '/admin/resources/users', label: 'Users & Roles' },
               ].map((link) => (
                 <Link key={link.href} href={link.href} className="rounded-full border border-line px-3 py-1.5 text-sm text-ink hover:bg-gray-50">
                   {link.label}

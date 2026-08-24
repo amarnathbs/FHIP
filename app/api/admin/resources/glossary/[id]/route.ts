@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getGlossaryEditorPost, getGlossaryTermOptions, findExactDuplicateGlossaryTerm } from '@/lib/resources/glossary/queries';
 import { getEditorReferenceData, getResourcePostVersions, isSlugAvailable } from '@/lib/resources/editor/queries';
 import { updateGlossaryDraft } from '@/lib/resources/glossary/mutations';
 import { validateGlossaryForDraftSave } from '@/lib/resources/glossary/validation';
+import { validateCtaAssignment } from '@/lib/resources/editor/validation';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const post = await getGlossaryEditorPost(supabase, id);
     if (!post) return bad('Glossary definition not found.', 404);
-    const [reference, versions, termOptions] = await Promise.all([getEditorReferenceData(supabase), getResourcePostVersions(supabase, id), getGlossaryTermOptions(supabase, id)]);
+    const [reference, versions, termOptions] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), getGlossaryTermOptions(supabase, id)]);
     return ok({ post, reference, versions, termOptions });
   } catch (err) {
     console.error('Resources glossary editor load error:', err);
@@ -58,6 +60,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const draftCheck = validateGlossaryForDraftSave({ title: patch.title ?? '' });
     if (!draftCheck.valid) return Response.json({ error: 'Validation failed.', fields: draftCheck.errors }, { status: 422 });
+
+    const ctaCheck = validateCtaAssignment({ primary_cta_id: patch.primary_cta_id ?? null, secondary_cta_id: patch.secondary_cta_id ?? null });
+    if (!ctaCheck.valid) return Response.json({ error: 'Validation failed.', fields: ctaCheck.errors }, { status: 422 });
 
     // Exact (case-insensitive) duplicate term reject (spec §29: "Prevent
     // duplicate term ... Do not silently merge definitions"). A near-match
