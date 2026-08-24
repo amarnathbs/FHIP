@@ -208,19 +208,25 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     // engine-authoritative-insert-only — every call there is likewise preceded
     // by an RLS-scoped ownership read and explicitly re-scoped by user_id (see
     // that file's own module header and R7_SECURITY_VERIFICATION.md). R8
-    // (migration 0067) adds a FIFTH: transactionClassificationService.ts
+    // (migration 0068) adds a FIFTH: transactionClassificationService.ts
     // writes R8's newly-authoritative classification/transfer-link/recurring-
-    // series columns migration 0067's triggers block the authenticated role
-    // from writing directly — every read in that file uses the ordinary
-    // RLS-scoped client (reads need no elevated privilege), and every admin
-    // write is explicitly re-scoped by `.eq('user_id', userId)` regardless of
-    // RLS bypass, matching the same discipline. No other file may reach for it.
+    // series columns migration 0068's triggers block the authenticated role
+    // from writing directly. FDH-5 (migration 0070) adds a SIXTH:
+    // bankPdfProcessingService.ts — the exact same carve-out
+    // bankCsvProcessingService.ts already established, applied to the PDF
+    // pipeline's own writes into the SAME engine-authoritative tables (no new
+    // table, no new trigger target) — every read in that file uses the
+    // ordinary RLS-scoped client (reads need no elevated privilege), and
+    // every admin write is explicitly re-scoped by `.eq('user_id', userId)`
+    // regardless of RLS bypass, matching the same discipline. No other file
+    // may reach for it.
     const FDH3_SERVICE_ROLE_FILES = [
       path.join(FDH_LIB, 'services', 'storage.ts'),
       path.join(FDH_LIB, 'services', 'auditLog.ts'),
       path.join(FDH_LIB, 'services', 'purge.ts'),
       path.join(FDH_LIB, 'services', 'bankCsvProcessingService.ts'),
       path.join(FDH_LIB, 'services', 'transactionClassificationService.ts'),
+      path.join(FDH_LIB, 'services', 'bankPdfProcessingService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {
@@ -228,11 +234,11 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       if (!usesServiceRole) continue;
       expect(
         FDH3_SERVICE_ROLE_FILES.includes(FDH_SOURCE_FILES[i]),
-        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the five approved FDH-3/R7/R8 files`,
+        `${FDH_SOURCE_FILES[i]} reaches for a service-role client outside the six approved FDH-3/R7/R8/FDH-5 files`,
       ).toBe(true);
       usedByApprovedFile += 1;
     }
-    // Proves this check is not vacuous — the five approved files really do
+    // Proves this check is not vacuous — the six approved files really do
     // use it, so a future removal of all service-role usage would be caught
     // by the "greater than 0" below just as much as a leak would be caught
     // by the assertion above.

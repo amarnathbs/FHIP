@@ -169,6 +169,35 @@ export type FdhProcessingMethod = (typeof FDH_PROCESSING_METHODS)[number];
 export const FDH_QUALITY_STATUSES = ['not_assessed', 'pass', 'warning', 'fail'] as const;
 export type FdhQualityStatus = (typeof FDH_QUALITY_STATUSES)[number];
 
+/**
+ * FDH-5 ADDITION (spec section 15) — the PDF structural classification
+ * recorded on `fdh_statement_uploads.pdf_classification` (new, additive
+ * column; null for non-PDF documents). Determined from actual PDF structure
+ * (page count, encryption dictionary, extractable-text-per-page ratio), never
+ * from the filename.
+ */
+export const FDH_PDF_CLASSIFICATIONS = [
+  'text_native',
+  'image_only',
+  'mixed_content',
+  'encrypted',
+  'corrupt',
+  'unsupported',
+] as const;
+export type FdhPdfClassification = (typeof FDH_PDF_CLASSIFICATIONS)[number];
+
+/**
+ * FDH-5 ADDITION (spec section 55-56) — which extraction method(s) a given
+ * `fdh_parser_versions` row has actually been certified against, kept
+ * SEPARATE from `status` (development/certified/deprecated/disabled — the
+ * overall lifecycle stage) so "CBA PDF V1 — native text: CERTIFIED, scanned
+ * OCR: NOT CERTIFIED" is a real, queryable fact rather than one collapsed
+ * boolean (spec 56's explicit requirement). Stored as
+ * `fdh_parser_versions.certified_extraction_methods text[]`.
+ */
+export const FDH_PDF_EXTRACTION_METHODS = ['native_text', 'ocr'] as const;
+export type FdhPdfExtractionMethod = (typeof FDH_PDF_EXTRACTION_METHODS)[number];
+
 // --- Ingestion jobs ---------------------------------------------------------
 export const FDH_JOB_TYPES = [
   'document_validate',
@@ -195,10 +224,16 @@ export type FdhJobStatus = (typeof FDH_JOB_STATUSES)[number];
 
 // --- Errors -----------------------------------------------------------------
 /**
- * The complete, controlled processing-error taxonomy. A user or an operator
- * only ever sees one of these codes plus a sanitised message. An internal
- * stack trace, an SQL error, a file path or a library exception must never be
- * persisted or surfaced. See FDH1_STATE_MACHINES.md section 5.
+ * FROZEN — the complete FDH-1 processing-error taxonomy exactly as migrations
+ * 0045-0048 shipped it. A user or an operator only ever sees one of these
+ * codes plus a sanitised message. An internal stack trace, an SQL error, a
+ * file path or a library exception must never be persisted or surfaced. See
+ * FDH1_STATE_MACHINES.md section 5. `tests/unit/fdh1SchemaContract.test.ts`
+ * asserts this list byte-for-byte against migration 0046's own (un-widened)
+ * check constraint text — R7/FDH-4 never needed to widen it (see migration
+ * 0064's header note: "error_code... already has enough headroom for R7").
+ * FDH-5's additions live in `FDH_ERROR_CODES_FDH5_ADDED` below, following the
+ * exact widening precedent `FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED` set.
  */
 export const FDH_ERROR_CODES = [
   'unsupported_file_type',
@@ -216,7 +251,50 @@ export const FDH_ERROR_CODES = [
   'privacy_purge_failed',
   'internal_error',
 ] as const;
-export type FdhErrorCode = (typeof FDH_ERROR_CODES)[number];
+
+/**
+ * FDH-5 WIDENING (spec section 83): 5 PDF-specific error codes, additive to
+ * the FDH-1 set above. Many FDH-5 error states reuse an EXISTING code
+ * unchanged (PDF_INVALID/PDF_CORRUPT -> file_corrupt, PDF_PASSWORD_REQUIRED
+ * -> password_required, PDF_PASSWORD_INVALID -> password_invalid,
+ * PDF_TEXT_EXTRACTION_FAILED -> extraction_failed, PDF_FORMAT_UNSUPPORTED ->
+ * layout_unsupported, PDF_RECONCILIATION_FAILED -> reconciliation_failed —
+ * see FDH5_PDF_ARCHITECTURE.md's error-code mapping table for the complete
+ * correspondence) — only the codes with no existing equivalent are added
+ * here. Migration `00XX_fdh5_bank_pdf_engine_foundation.sql` (see that
+ * migration's own header for its final allocated number) widens the check
+ * constraint on `fdh_statement_uploads.error_code` to match;
+ * `tests/unit/fdh5SchemaContract.test.ts` verifies the two never drift apart.
+ */
+export const FDH_ERROR_CODES_FDH5_ADDED = [
+  // PDF_PAGE_LIMIT_EXCEEDED — distinct from file_too_large (a byte-size
+  // limit checked before any page is ever counted).
+  'page_limit_exceeded',
+  // PDF_FORMAT_AMBIGUOUS — two or more PDF adapters scored within the
+  // ambiguity threshold (spec 96); never silently resolved by weakening
+  // detection evidence.
+  'format_ambiguous',
+  // PDF_EXTRACTION_LOW_CONFIDENCE — statement-level extraction confidence
+  // (not any one transaction's) fell below the threshold required to
+  // proceed at all (spec 45, distinct from a transaction-level
+  // review_required outcome, which uses the existing review lifecycle).
+  'extraction_low_confidence',
+  // PDF_OCR_REQUIRED — native extraction was insufficient and OCR fallback
+  // was needed but is not available in this deployment (spec 8, 41-43: OCR
+  // fallback architecture is documented; no third-party OCR provider is
+  // integrated in this phase — see FDH5_OCR_ARCHITECTURE.md).
+  'ocr_required',
+  // PDF_OCR_FAILED — reserved for a future phase that actually invokes an
+  // OCR provider; no code path in this phase can currently produce it, but
+  // the vocabulary slot is allocated now so a later OCR integration is an
+  // additive change, not a further widening (spec 43's STOP condition).
+  'ocr_failed',
+] as const;
+
+/** The complete current error-code set (FDH-1 + FDH-5). Used everywhere
+ * OUTSIDE the frozen fdh1SchemaContract.test.ts assertion. */
+export const FDH_ALL_ERROR_CODES = [...FDH_ERROR_CODES, ...FDH_ERROR_CODES_FDH5_ADDED] as const;
+export type FdhErrorCode = (typeof FDH_ALL_ERROR_CODES)[number];
 
 // --- Transactions -----------------------------------------------------------
 /** Direction of movement on the account. NEVER an economic meaning. */
@@ -828,14 +906,36 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED = [
   'personal_rule_created',
 ] as const;
 
-/** The complete current audit-event-type set (FDH-3 + R7 + R8). Used
+/**
+ * FDH-5 WIDENING (spec section 85): 11 bank-PDF-engine-specific audit event
+ * types, additive to the FDH-3/R7/R8 set above. The FDH-5 migration widens
+ * the check constraint on `fdh_document_audit_events.event_type` to match;
+ * `tests/unit/fdh5SchemaContract.test.ts` verifies the two never drift apart,
+ * scoped to that migration only — mirroring the R7/R8 widening precedent.
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED = [
+  'pdf_validated',
+  'pdf_password_required',
+  'pdf_decrypted_for_processing',
+  'pdf_native_extraction_started',
+  'pdf_native_extraction_completed',
+  'pdf_ocr_started',
+  'pdf_ocr_completed',
+  'pdf_adapter_detected',
+  'pdf_processing_failed',
+  'pdf_review_required',
+  'pdf_processing_completed',
+] as const;
+
+/** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5). Used
  * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
- * by `FdhDocumentAuditEventType` itself, so every caller can use the R7/R8
- * event types without a second parallel type. */
+ * by `FdhDocumentAuditEventType` itself, so every caller can use the R7/R8/
+ * FDH-5 event types without a second parallel type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

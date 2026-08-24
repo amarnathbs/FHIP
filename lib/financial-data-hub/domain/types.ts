@@ -43,6 +43,8 @@ import type {
   FdhMerchantAliasType,
   FdhMerchantType,
   FdhParserVersionStatus,
+  FdhPdfClassification,
+  FdhPdfExtractionMethod,
   FdhProcessingMethod,
   FdhProcessingStatus,
   FdhProvenanceEntityType,
@@ -229,6 +231,9 @@ export interface FdhParserVersion {
   supported_layout_reference: string | null;
   notes: string | null;
   created_at: IsoTimestamp;
+  /** FDH-5 (migration 0070) — per-extraction-method certification (spec
+   * 55-56), always `[]` for a non-PDF (CSV) parser version. */
+  certified_extraction_methods: FdhPdfExtractionMethod[];
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +382,13 @@ export interface FdhStatementUpload extends FdhOwnership {
   duplicate_row_count: number;
   adapter_key: string | null;
   adapter_version: string | null;
+
+  // --- FDH-5 (migration 0070) --------------------------------------------
+  page_count: number | null;
+  pdf_classification: FdhPdfClassification | null;
+  /** Document-level extraction confidence (spec 44) — deliberately separate
+   * from `FdhTransaction.extraction_confidence` (per-transaction). */
+  extraction_confidence: UnitInterval | null;
 }
 
 /**

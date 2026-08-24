@@ -247,9 +247,26 @@ export async function completeUpload(
   // future FDH-4/5 parser can ask the user for the password, rather than
   // failed outright.
   if (validation.passwordRequired) {
-    assertDocumentTransition('validating', 'rejected');
-    const { data: finalDoc } = await statementUploadsRepository.update(userId, document.id, {
-      processing_status: 'rejected',
+    // FDH-5 CHANGE (spec section 22): FDH-3 intentionally stopped at
+    // detecting encryption and dead-ended a password-protected PDF at
+    // 'rejected' — the module's OWN header comment above already promised
+    // otherwise ("A password-protected PDF is a VALID upload; it is queued
+    // so a future FDH-4/5 parser can ask the user for the password, rather
+    // than failed outright") but the code had not yet been updated to match
+    // when that comment was written. FDH-5 is the phase spec section 22
+    // explicitly authorises to implement controlled password support, so
+    // this now genuinely queues the document — 'validating' -> 'queued' was
+    // already a legal FDH-1 lifecycle edge (`documentLifecycle.ts`), simply
+    // never taken on this path before. `error_code: 'password_required'`
+    // still records exactly why processing cannot proceed without a
+    // password yet; `review_status: 'pending'` still surfaces it to the
+    // user. The password itself is never asked for, received or stored
+    // here — this function only marks the document ready for a LATER,
+    // separate, transient password-bearing processing attempt
+    // (`bankPdfProcessingService.ts`).
+    assertDocumentTransition('validating', 'queued');
+    const { data: queuedDoc } = await statementUploadsRepository.update(userId, document.id, {
+      processing_status: 'queued',
       review_status: 'pending',
       error_code: 'password_required',
       validated_at: nowIso,
@@ -257,11 +274,23 @@ export async function completeUpload(
     await recordDocumentAuditEvent({
       userId,
       documentId: document.id,
-      eventType: 'document_rejected',
+      eventType: 'pdf_password_required',
       actorType: 'system',
-      metadata: { reason: 'password_required' },
     });
-    return finalDoc as FdhStatementUpload;
+    await ingestionJobsRepository.create(userId, {
+      statement_upload_id: document.id,
+      job_type: 'document_extract',
+      status: 'queued',
+      attempt: 0,
+      max_attempts: 3,
+    } as never);
+    await recordDocumentAuditEvent({
+      userId,
+      documentId: document.id,
+      eventType: 'document_queued',
+      actorType: 'system',
+    });
+    return queuedDoc as FdhStatementUpload;
   }
 
   assertDocumentTransition('validating', 'queued');

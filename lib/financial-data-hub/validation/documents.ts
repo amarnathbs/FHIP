@@ -5,8 +5,8 @@
 
 import { z } from 'zod';
 import {
+  FDH_ALL_ERROR_CODES,
   FDH_DOCUMENT_TYPES,
-  FDH_ERROR_CODES,
   FDH_JOB_STATUSES,
   FDH_JOB_TYPES,
   FDH_PROCESSING_METHODS,
@@ -77,7 +77,7 @@ export const fdhStatementUploadPatchSchema = z.object({
   processing_method: z.enum(FDH_PROCESSING_METHODS).nullish(),
   reconciliation_status: z.enum(FDH_RECONCILIATION_STATUSES).optional(),
   overall_quality_status: z.enum(FDH_QUALITY_STATUSES).optional(),
-  error_code: z.enum(FDH_ERROR_CODES).nullish(),
+  error_code: z.enum(FDH_ALL_ERROR_CODES).nullish(),
 });
 
 /**
@@ -90,7 +90,7 @@ export const fdhDocumentTransitionSchema = z
   .object({
     from: z.enum(FDH_PROCESSING_STATUSES),
     to: z.enum(FDH_PROCESSING_STATUSES),
-    error_code: z.enum(FDH_ERROR_CODES).nullish(),
+    error_code: z.enum(FDH_ALL_ERROR_CODES).nullish(),
   })
   .superRefine((v, ctx) => {
     if (!isAllowedDocumentTransition(v.from, v.to)) {
@@ -140,7 +140,7 @@ export const fdhIngestionJobSchema = z.object({
   status: z.enum(FDH_JOB_STATUSES).default('queued'),
   attempt: z.number().int().min(0).default(0),
   max_attempts: z.number().int().min(1).max(10).default(3),
-  error_code: z.enum(FDH_ERROR_CODES).nullish(),
+  error_code: z.enum(FDH_ALL_ERROR_CODES).nullish(),
   // Bounded and code-adjacent. A stack trace must never be persisted here.
   error_message_sanitised: z.string().max(500).nullish(),
   worker_reference: z.string().max(120).nullish(),
