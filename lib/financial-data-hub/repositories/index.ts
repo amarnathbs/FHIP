@@ -9,6 +9,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type {
+  FdhApprovedFinancialSummary,
   FdhCategory,
   FdhClassificationHistory,
   FdhClassificationRule,
@@ -198,6 +199,12 @@ export const transactionCorrectionsRepository = makeUserOwnedRepository<
   FdhTransactionCorrection,
   Omit<FdhTransactionCorrection, 'id' | 'user_id' | 'created_at'>
 >('fdh_transaction_corrections', { hasUpdatedAtColumn: false });
+
+// --- FDH-7 — Review, Approval & Approved Financial Summary (migration 0076) --
+export const approvedFinancialSummariesRepository = makeUserOwnedRepository<
+  FdhApprovedFinancialSummary,
+  Omit<FdhApprovedFinancialSummary, 'id' | 'user_id' | 'created_at'>
+>('fdh_approved_financial_summaries', { hasUpdatedAtColumn: false });
 
 // --- Master data (read-only) ------------------------------------------------
 export const institutionsRepository = makeMasterDataRepository<FdhFinancialInstitution>(

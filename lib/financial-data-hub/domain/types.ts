@@ -72,6 +72,7 @@ import type {
   FdhCsvAmountConvention,
   FdhCsvMappingTemplateStatus,
   FdhTransactionCorrectionField,
+  FdhTransactionApprovalStatus,
 } from '../constants/enums';
 
 /** ISO-4217. The platform currently supports AUD/INR/USD (`currencies`). */
@@ -389,6 +390,17 @@ export interface FdhStatementUpload extends FdhOwnership {
   /** Document-level extraction confidence (spec 44) — deliberately separate
    * from `FdhTransaction.extraction_confidence` (per-transaction). */
   extraction_confidence: UnitInterval | null;
+
+  // --- FDH-7 (migration 0076) ---------------------------------------------
+  /** THE authoritative signal of genuine user approval (spec 14, 55, 159).
+   * Null means not (or no longer) user-approved, regardless of
+   * `processing_status`. See migration 0076's header for why. */
+  approved_by: string | null;
+  /** Increments by 1 on every genuine approval (spec 63). 0 = never approved. */
+  approval_version: number;
+  reopened_at: IsoTimestamp | null;
+  reopened_by: string | null;
+  reopen_reason: string | null;
 }
 
 /**
@@ -518,6 +530,14 @@ export interface FdhTransaction extends FdhOwnership {
   /** Which fdh_recurring_transactions series this row belongs to, if any.
    * System-authoritative — an authenticated client may never write it. */
   recurring_transaction_id: string | null;
+
+  // --- FDH-7 (migration 0076) ---------------------------------------------
+  /** Distinct from `review_status`. A transaction can be `review_status:
+   * resolved` (nothing left to look at) yet still `approval_status:
+   * pending` (the user has not taken the deliberate approval action). */
+  approval_status: FdhTransactionApprovalStatus;
+  approved_at: IsoTimestamp | null;
+  approved_by: string | null;
 }
 
 export interface FdhTransactionAllocation {
@@ -762,5 +782,48 @@ export interface FdhTransactionCorrection {
   corrected_value: unknown;
   reason: string | null;
   corrected_at: IsoTimestamp;
+  created_at: IsoTimestamp;
+}
+
+// ---------------------------------------------------------------------------
+// FDH-7 — Reconciliation, Transaction Review & User Approval Workflow
+// (migration 0076)
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical, versioned, per-statement approved-activity record (spec 57,
+ * 63, 102-107). One row per (statement_upload_id, approval_version) — reopen
+ * marks the current row `superseded` rather than deleting it; a fresh
+ * approval inserts the next version. Every total is computed by
+ * `domain/approvedSummary.ts` using exact minor-unit arithmetic over the
+ * transactions' own persisted values — this row stores the RESULT.
+ */
+export interface FdhApprovedFinancialSummary extends FdhOwnership {
+  id: string;
+  statement_upload_id: string;
+  financial_account_id: string;
+  approval_version: number;
+  period_start: IsoDate | null;
+  period_end: IsoDate | null;
+  currency_code: CurrencyCode | null;
+  approved_transaction_count: number;
+  unresolved_transaction_count: number;
+  income_total: number;
+  expense_total: number;
+  transfer_total: number;
+  refund_total: number;
+  tax_total: number;
+  fee_total: number;
+  cash_withdrawal_total: number;
+  investment_total: number;
+  debt_principal_total: number;
+  debt_interest_total: number;
+  asset_purchase_total: number;
+  asset_sale_total: number;
+  unknown_total: number;
+  category_aggregates: Record<string, { label: string; total: number }> | null;
+  superseded: boolean;
+  approved_at: IsoTimestamp;
+  approved_by: string | null;
   created_at: IsoTimestamp;
 }

@@ -927,15 +927,38 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED = [
   'pdf_processing_completed',
 ] as const;
 
-/** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5). Used
- * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
- * by `FdhDocumentAuditEventType` itself, so every caller can use the R7/R8/
- * FDH-5 event types without a second parallel type. */
+/**
+ * FDH-7 WIDENING (spec section 74): 5 review/approval-workflow audit event
+ * types, additive to the FDH-3/R7/R8/FDH-5 set above. Migration
+ * `0076_fdh7_review_approval_workflow.sql` widens the check constraint on
+ * `fdh_document_audit_events.event_type` to match; `tests/unit/
+ * fdh7SchemaContract.test.ts` verifies the two never drift apart, scoped to
+ * that migration only — mirroring the R7/R8/FDH-5 widening precedent.
+ * TRANSFER_CONFIRMED/REJECTED, DUPLICATE_CONFIRMED/REJECTED, RECURRING_
+ * CONFIRMED and REFUND_CONFIRMED are already fully covered by the EXISTING
+ * 'transaction_link_reviewed' / 'transaction_duplicate_resolved' /
+ * 'recurring_series_reviewed' event types (each already carries a
+ * `decision`/`resolution` metadata field) — no new vocabulary for those.
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED = [
+  'transaction_split_created',
+  'transaction_approved',
+  'statement_approved',
+  'statement_reopened',
+  'bulk_review_action_completed',
+] as const;
+
+/** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
+ * FDH-7). Used everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts
+ * assertion — i.e. by `FdhDocumentAuditEventType` itself, so every caller
+ * can use the R7/R8/FDH-5/FDH-7 event types without a second parallel
+ * type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 
@@ -1044,3 +1067,22 @@ export type FdhTransactionCorrectionField = (typeof FDH_TRANSACTION_CORRECTION_F
  * USER_CONFIRMED_DISTINCT / USER_CONFIRMED_DUPLICATE via `kept_both` /
  * `merged`+`removed_a`/`removed_b` — see FDH_DUPLICATE_RESOLUTIONS above.
  * No new vocabulary needed for the candidate-pair table itself. */
+
+// =============================================================================
+// FDH-7 — Reconciliation, Transaction Review & User Approval Workflow
+// (migration 0076). See that migration's header for why `processing_status`
+// and its transition table are deliberately UNTOUCHED — FDH-7's genuine
+// user-approval concept is `approved_by`, a structurally separate signal.
+// =============================================================================
+
+/** `fdh_transactions.approval_status` (spec sections 26, 52, 55). Two states
+ * only — there is no third "rejected" state at the transaction level; a
+ * transaction the user does not want counted is corrected/split/left
+ * pending, never marked "rejected" (only a whole STATEMENT can be rejected,
+ * reusing the existing `processing_status = 'rejected'`). */
+export const FDH_TRANSACTION_APPROVAL_STATUSES = ['pending', 'approved'] as const;
+export type FdhTransactionApprovalStatus = (typeof FDH_TRANSACTION_APPROVAL_STATUSES)[number];
+
+// (FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED is declared earlier in this
+// file, alongside the other FDH_DOCUMENT_AUDIT_EVENT_TYPES_*_ADDED constants,
+// so it is available where FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES is assembled.)
