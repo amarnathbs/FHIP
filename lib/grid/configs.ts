@@ -131,6 +131,13 @@ export const retirementGridConfig: GridConfig = {
   valueField: 'current_balance',
   reviewSection: 'retirement',
   notApplicable: { profileField: 'not_applicable_retirement', label: "I don't have any retirement savings" },
+  // Retirement Member UI (spec s.16-17): target retirement age is no longer
+  // requested per account or per contribution row here — it is captured
+  // once per member (Self/Spouse) in the "Retirement Planning" section
+  // above this grid (components/retirement/RetirementPlanningSection.tsx),
+  // backed by retirement_members. The legacy retirement_accounts.
+  // target_retirement_age column is kept for backward compatibility (spec
+  // s.27) but is deliberately no longer surfaced here.
   fields: [
     { name: 'current_balance', label: 'Current Balance', type: 'number', step: '0.01', required: true },
     { name: 'employer_contribution', label: 'Employer Contribution', type: 'number', step: '0.01' },
@@ -141,7 +148,6 @@ export const retirementGridConfig: GridConfig = {
       type: 'select',
       options: FREQUENCY_OPTIONS,
     },
-    { name: 'target_retirement_age', label: 'Target Retirement Age', type: 'number' },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
