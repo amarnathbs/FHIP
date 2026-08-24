@@ -93,7 +93,7 @@ describe('0073 data reclassification never deletes a row (spec s.4.3/57)', () =>
   });
 
   it('the contribution/current_balance defect fix zeroes current_balance and preserves the amount in a contribution field', () => {
-    expect(sql).toMatch(/employer_contributions.*salary_sacrifice.*personal_concessional.*non_concessional.*spouse_contribution.*government_co_contribution/s);
+    expect(sql).toMatch(/employer_contributions[\s\S]*salary_sacrifice[\s\S]*personal_concessional[\s\S]*non_concessional[\s\S]*spouse_contribution[\s\S]*government_co_contribution/);
     expect(sql).toMatch(/current_balance = 0/);
     expect(sql).toMatch(/employer_contribution = case when is_employer_side then coalesce\(employer_contribution, 0\) \+ r\.current_balance/);
     expect(sql).toMatch(/personal_contribution = case when not is_employer_side then coalesce\(personal_contribution, 0\) \+ r\.current_balance/);
