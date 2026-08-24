@@ -168,7 +168,24 @@ export function FinancialDataGrid({ config, subNav }: { config: GridConfig; subN
         .filter((r) => !r.master_item_key)
         .map((r) => rowFromRecord(r, config, true, String(r[config.nameField] ?? '')));
 
-      setRows([...merged, ...customRows]);
+      // A/I/R consolidation safety net (spec s.4.3 "no record may disappear
+      // merely to tidy taxonomy"): a saved row can carry a master_item_key
+      // that no longer appears in the *active* master-items list — either
+      // because a catalogue item was deprecated after this row was saved
+      // (e.g. migration 0074's cross-module taxonomy cleanup), or a race
+      // between an in-flight save and a catalogue change. Without this, the
+      // row would match neither `merged` (only active master items) nor
+      // `customRows` (only master_item_key === null) and would silently
+      // vanish from the UI while still counting in every total. Rendered
+      // like a master-catalogue row (label from its own saved name field,
+      // not editable) rather than a custom row, since renaming it here
+      // would not change what it upserts against.
+      const activeKeySet = new Set(masterItems.map((m) => m.item_key));
+      const orphanedRows = savedRecords
+        .filter((r) => r.master_item_key && !activeKeySet.has(r.master_item_key))
+        .map((r) => rowFromRecord(r, config, false, String(r[config.nameField] ?? '')));
+
+      setRows([...merged, ...orphanedRows, ...customRows]);
     }
     load();
     return () => {
