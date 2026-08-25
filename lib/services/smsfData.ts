@@ -66,6 +66,26 @@ export async function switchSmsfFundToDetailed(fundId: string, supabase: Supabas
   return supabase.rpc('smsf_switch_to_detailed', { p_fund_id: fundId });
 }
 
+/**
+ * Detailed -> Summary switch-back (spec s.32-33, migration 0087). Detailed
+ * holdings are never touched by this call -- they remain in the database,
+ * simply no longer the fund's active valuation source (see the RPC's own
+ * SQL comment). Requires a new Summary value + valuation date, matching the
+ * spec's explicit "require/confirm" language.
+ */
+export async function switchSmsfFundToSummary(
+  fundId: string,
+  newBalance: number,
+  newDate: string,
+  supabase: SupabaseClient
+) {
+  return supabase.rpc('smsf_switch_to_summary', {
+    p_fund_id: fundId,
+    p_new_summary_balance: newBalance,
+    p_new_summary_balance_date: newDate,
+  });
+}
+
 export async function listSmsfHoldings(fundId: string, userId: string, supabase: SupabaseClient) {
   return supabase
     .from('smsf_holdings')
@@ -156,4 +176,23 @@ export async function linkSmsfPropertyLoan(
 
 export async function unlinkSmsfPropertyLoan(linkId: string, userId: string, supabase: SupabaseClient) {
   return supabase.from('property_liability_links').update({ is_active: false }).eq('id', linkId).eq('user_id', userId).select().single();
+}
+
+/**
+ * List this fund's active SMSF-property-loan links, joined with the
+ * canonical liability row (name/balance/currency) for display — the UI
+ * reads the liability's own balance/currency straight through here, it is
+ * never re-stored on the link itself (spec s.22-24, migration 0078).
+ */
+export async function listSmsfPropertyLoanLinks(fundId: string, userId: string, supabase: SupabaseClient) {
+  const { data: fund, error: fundErr } = await getSmsfFund(fundId, supabase);
+  if (fundErr || !fund) return { data: null, error: fundErr ?? new Error('fund not found') };
+
+  return supabase
+    .from('property_liability_links')
+    .select('id, liability_id, allocation_percent, is_active, liabilities(id, liability_name, balance, currency_code)')
+    .eq('user_id', userId)
+    .eq('linked_retirement_id', fund.retirement_account_id)
+    .eq('link_type', 'smsf_property_loan')
+    .eq('is_active', true);
 }

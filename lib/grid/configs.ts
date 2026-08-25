@@ -151,6 +151,17 @@ export const retirementGridConfig: GridConfig = {
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
+  // SMSF-UI (spec s.4-38): SMSF has its own dedicated Fund/Members/
+  // Summary-Detailed-Holdings management UI (components/retirement/smsf/
+  // SmsfSection.tsx, rendered via beforeGrid above) — it must not also
+  // appear as a plain spreadsheet row here, where this grid's generic
+  // per-field PATCH would let a user overwrite retirement_accounts.
+  // current_balance directly and desync it from smsf_funds.summary_balance
+  // / detailed_net_value (the only two paths that are supposed to ever set
+  // it). The underlying row still exists, still counts once in Net Worth
+  // and completion stats via the real SMSF UI — this only removes it from
+  // this specific editable table.
+  excludeMasterItemKeys: ['smsf'],
 };
 
 export const insuranceGridConfig: GridConfig = {

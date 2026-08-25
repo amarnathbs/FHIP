@@ -64,4 +64,15 @@ export interface GridConfig {
   // reviewSection's completion control answers "have you finished entering
   // what you do have" once the answer is Yes.
   reviewSection: FinancialSection;
+  // SMSF-UI: master_item_key values that must never appear as an editable
+  // row in this generic spreadsheet-style grid, because they have their own
+  // dedicated management UI that owns their canonical value through a
+  // narrower, integrity-gated path (e.g. 'smsf' — retirement_accounts.
+  // current_balance for an SMSF fund is only ever supposed to be written by
+  // smsf_funds' own summary-edit/detailed-recompute/mode-switch functions,
+  // never by this grid's plain per-field PATCH). Config-driven rather than a
+  // hardcoded key check inside FinancialDataGrid itself, so this stays a
+  // generic grid component and any future module can reuse the same
+  // exclusion without a special case here.
+  excludeMasterItemKeys?: string[];
 }

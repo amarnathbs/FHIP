@@ -1,9 +1,21 @@
 import { z } from 'zod';
 import { requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { linkSmsfPropertyLoan } from '@/lib/services/smsfData';
+import { linkSmsfPropertyLoan, listSmsfPropertyLoanLinks } from '@/lib/services/smsfData';
 
 const bodySchema = z.object({ liability_id: z.string().uuid() });
+
+// List this fund's active SMSF-property-loan link(s) — the UI needs this to
+// render "Associated Debt" state and the reconciliation panel's Linked SMSF
+// Liabilities total (spec s.22-24).
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { user, unauthenticated } = await requireUser();
+  if (!user) return unauthenticated!;
+  const supabase = await createClient();
+  const { data, error } = await listSmsfPropertyLoanLinks(id, user.id, supabase);
+  return error ? bad(error.message) : ok(data);
+}
 
 // SMSF-5: link a liability as this fund's property loan, reusing the
 // certified Property<->Liability architecture (migration 0078) exactly as

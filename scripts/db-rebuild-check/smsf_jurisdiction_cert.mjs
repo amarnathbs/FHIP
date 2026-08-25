@@ -364,6 +364,49 @@ await asTenant(A, async () => {
   await db.query(`delete from smsf_holdings where holding_name='SMSF Indian Shares'`); // restore for later totals
 });
 
+console.log('\n=== SMSF-UI: Detailed -> Summary switch-back (migration 0087, spec s.32-33) ===');
+await asTenant(B, async () => {
+  await expectReject('cross-tenant: B cannot switch A\'s fund back to Summary (fund not found for B)', async () => {
+    await db.query(`select smsf_switch_to_summary('${fundA.id}', 1, current_date)`);
+  });
+});
+await asTenant(A, async () => {
+  // Tested here (mode still 'detailed') so this genuinely exercises the
+  // null-value guard, not the (also-true-later) "already in summary mode"
+  // guard — order matters for this to be a meaningful negative control.
+  await expectReject('SMSF-UI NEGATIVE CONTROL: cannot switch to summary with a null value', async () => {
+    await db.query(`select smsf_switch_to_summary('${fundA.id}', null, current_date)`);
+  });
+
+  const preHoldingCount = (await db.query(`select count(*)::int c from smsf_holdings where smsf_fund_id='${fundA.id}' and is_active`)).rows[0].c;
+  await expectOk('SMSF-UI: AU resident switches fund back to Summary with a NEW value + date', async () => {
+    await db.query(`select smsf_switch_to_summary('${fundA.id}', 999000, current_date)`);
+  });
+  const fund = (await db.query(`select mode, summary_balance, summary_balance_date, detailed_net_value from smsf_funds where id='${fundA.id}'`)).rows[0];
+  check('mode flipped back to summary', fund.mode === 'summary', JSON.stringify(fund));
+  check('summary_balance is the NEW value provided (999000), not the old detailed figure', Number(fund.summary_balance) === 999000, `(${fund.summary_balance})`);
+  const ra = (await db.query(`select current_balance from retirement_accounts where id='${smsfA}'`)).rows[0];
+  check('SMSF-UI HARD GATE: retirement_accounts.current_balance syncs to the new Summary value atomically (999000)', Number(ra.current_balance) === 999000, `(${ra.current_balance})`);
+  const postHoldingCount = (await db.query(`select count(*)::int c from smsf_holdings where smsf_fund_id='${fundA.id}' and is_active`)).rows[0].c;
+  check('SMSF-UI: Detailed Holdings are preserved (not deleted) across the switch-back', postHoldingCount === preHoldingCount, `(before=${preHoldingCount}, after=${postHoldingCount})`);
+  check('detailed_net_value is retained as reference data, not wiped', Number(fund.detailed_net_value) === 400000, `(${fund.detailed_net_value})`);
+
+  await expectReject('SMSF-UI NEGATIVE CONTROL: cannot switch to summary again while already in summary mode', async () => {
+    await db.query(`select smsf_switch_to_summary('${fundA.id}', 1, current_date)`);
+  });
+
+  // Restore fundA to Detailed mode (summary_balance back to the value that
+  // reconciles with its unchanged holdings) so every downstream section
+  // below continues to exercise a Detailed-mode fund exactly as before this
+  // block was inserted.
+  await db.query(`update smsf_funds set summary_balance=400000 where id='${fundA.id}'`);
+  await expectOk('fixture restore: switch fundA back to Detailed mode for downstream sections', async () => {
+    await db.query(`select smsf_switch_to_detailed('${fundA.id}')`);
+  });
+  const restored = (await db.query(`select mode from smsf_funds where id='${fundA.id}'`)).rows[0];
+  check('fixture restore: fundA is Detailed mode again', restored.mode === 'detailed');
+});
+
 console.log('\n=== RLS: cross-tenant denial on the three new tables ===');
 await asTenant(B, async () => {
   const leakFunds = (await db.query(`select count(*)::int c from smsf_funds where user_id='${A}'`)).rows[0].c;

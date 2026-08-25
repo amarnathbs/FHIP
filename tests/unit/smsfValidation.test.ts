@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { smsfHoldingSchema, smsfHoldingUpdateSchema, smsfFundCreateSchema } from '@/lib/validation/smsf';
+import { smsfHoldingSchema, smsfHoldingUpdateSchema, smsfFundCreateSchema, smsfSwitchToSummarySchema } from '@/lib/validation/smsf';
 
 describe('smsfHoldingSchema (SMSF-4 Detailed Holdings)', () => {
   const base = {
@@ -78,5 +78,28 @@ describe('smsfFundCreateSchema', () => {
   it('rejects a negative summary_balance', () => {
     const r = smsfFundCreateSchema.safeParse({ account_name: 'x', fund_name: 'x', summary_balance: -1 });
     expect(r.success).toBe(false);
+  });
+});
+
+// SMSF-UI: Detailed -> Summary switch-back (spec s.32-33, migration 0087).
+describe('smsfSwitchToSummarySchema', () => {
+  it('accepts a non-negative value with a date', () => {
+    const r = smsfSwitchToSummarySchema.safeParse({ new_summary_balance: 999000, new_summary_balance_date: '2026-08-25' });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects a missing value (spec: "require" a new Summary value)', () => {
+    const r = smsfSwitchToSummarySchema.safeParse({ new_summary_balance_date: '2026-08-25' });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects a negative value', () => {
+    const r = smsfSwitchToSummarySchema.safeParse({ new_summary_balance: -1, new_summary_balance_date: '2026-08-25' });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects a missing/empty date (spec: "require" a new valuation date)', () => {
+    expect(smsfSwitchToSummarySchema.safeParse({ new_summary_balance: 1000 }).success).toBe(false);
+    expect(smsfSwitchToSummarySchema.safeParse({ new_summary_balance: 1000, new_summary_balance_date: '' }).success).toBe(false);
   });
 });

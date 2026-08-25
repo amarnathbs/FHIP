@@ -13,8 +13,9 @@ export type SmsfFundCreateInput = z.infer<typeof smsfFundCreateSchema>;
 
 // Summary Mode edits only (fund_name/notes/summary_balance/date). Mode
 // itself is never patched here — the only path from summary->detailed is
-// the dedicated switch-to-detailed endpoint (the hard $0-variance gate),
-// and there is deliberately no detailed->summary path in this release.
+// the dedicated switch-to-detailed endpoint (the hard $0-variance gate);
+// the only path from detailed->summary is the dedicated
+// switch-to-summary endpoint (migration 0087) below.
 export const smsfFundUpdateSchema = z.object({
   fund_name: z.string().min(1).optional(),
   summary_balance: z.number().min(0).optional(),
@@ -22,6 +23,16 @@ export const smsfFundUpdateSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 export type SmsfFundUpdateInput = z.infer<typeof smsfFundUpdateSchema>;
+
+// Detailed -> Summary switch-back (spec s.32-33, migration 0087). A new
+// Summary value AND a valuation date are both required — spec: "require/
+// confirm new Summary value + valuation date" — never optional the way
+// summary_balance_date is on initial creation.
+export const smsfSwitchToSummarySchema = z.object({
+  new_summary_balance: z.number().min(0),
+  new_summary_balance_date: z.string().min(1),
+});
+export type SmsfSwitchToSummaryInput = z.infer<typeof smsfSwitchToSummarySchema>;
 
 export const SMSF_HOLDING_CLASS_TYPES = {
   cash: ['cash', 'cash_account', 'term_deposit'],
