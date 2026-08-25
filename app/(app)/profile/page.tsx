@@ -11,7 +11,7 @@ import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 // app/(app)/profile/ directory). Backed by the EXISTING app/api/user/profile
 // GET/PUT route and profileSchema (lib/validation/profile.ts) — this page
 // adds no new profile-fields API surface beyond the one genuinely missing
-// column, Contact number (migration 0078).
+// column, Contact number (migration 0079).
 //
 // §16.1 Email changes: email is never read from or written to user_profiles
 // — it lives solely in Supabase Auth (auth.users.email) and is changed here

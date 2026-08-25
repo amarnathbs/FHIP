@@ -36,7 +36,7 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('expense', 'rent', 'Rent', 20),
 ('expense', 'body_corporate', 'Body Corporate', 30),
 ('expense', 'council_rates', 'Council Rates', 40),
-('expense', 'land_tax', 'Land Tax', 45), -- App Review spec §8: was missing (migration 0079)
+('expense', 'land_tax', 'Land Tax', 45), -- App Review spec §8: was missing (migration 0080)
 ('expense', 'water_rates', 'Water Rates', 50),
 ('expense', 'home_insurance', 'Home Insurance', 60),
 ('expense', 'contents_insurance', 'Contents Insurance', 70),
@@ -59,7 +59,7 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('expense', 'books', 'Books', 240),
 ('expense', 'uniforms', 'Uniforms', 250),
 ('expense', 'tutoring', 'Tutoring', 260),
-('expense', 'education', 'Education (Tertiary / Professional / Courses)', 265), -- App Review spec §8: was missing (migration 0079)
+('expense', 'education', 'Education (Tertiary / Professional / Courses)', 265), -- App Review spec §8: was missing (migration 0080)
 ('expense', 'health_insurance', 'Health Insurance', 270),
 ('expense', 'medical', 'Medical', 280),
 ('expense', 'dental', 'Dental', 290),

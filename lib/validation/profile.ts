@@ -12,7 +12,7 @@ export const profileSchema = z.object({
   secondary_country: z.enum(['AU', 'IN']).nullable().optional(),
   preferred_currency: z.enum(['AUD', 'INR']),
   employment_status: z.string().optional(),
-  // App Review spec §16 — Profile page "Contact number" (migration 0078).
+  // App Review spec §16 — Profile page "Contact number" (migration 0079).
   // Deliberately loose validation (no enum/regex): this app supports
   // international numbers across AU/IN households and any stricter pattern
   // risks rejecting a real, valid number.
