@@ -1,0 +1,128 @@
+# FHIP Contextual Import Architecture
+
+**Status:** product-level standard, established by FDH-9 (spec sections 1-4, 54-56).
+**Scope of implementation in FDH-9:** Income → Payslip **only**. Every other row in
+the table below is a recorded *design decision for a future phase*, not shipped UI.
+
+---
+
+## 1. The Product Owner decision
+
+FDH capabilities are surfaced **contextually inside the Input Data area**, not as
+prominent technical destinations in the main navigation.
+
+A user does not think "I will open the Financial Data Hub and run the payslip
+engine." A user thinks "I need to tell FHIP what I earn." The entry point must
+therefore live where that thought already takes them: the **Income** tab.
+
+The engines stay exactly where they are. Only the *entry point* moves into the
+financial domain.
+
+## 2. The standard
+
+| Input Data domain | Contextual import entry point | Underlying engine | Status |
+|---|---|---|---|
+| **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **IMPLEMENTED (FDH-9)** |
+| **Expenses** | "Import Bank Statement" | FDH-3 → R7/FDH-4 (CSV) / FDH-5 (PDF) → R8 → FDH-6 → FDH-7 → FDH-8 | **DESIGN RECORDED — FUTURE IMPLEMENTATION.** Engine already exists and is certified; only the contextual entry point is future work. FDH-9 does **not** rebuild, relocate or rewrite it (spec section 3). |
+| **Investments** | "Import Investment Data" / "India Investments — Import Indian Investment Statement" | Investment Intelligence (R1-R11), which already owns the canonical investment ledger and already publishes to `investments` via its own certified bridge (migration `0042`) | **DESIGN RECORDED — FUTURE IMPLEMENTATION** (spec section 4). |
+| **Liabilities** | "Import Loan / Card Statement" | future | DESIGN RECORDED — FUTURE IMPLEMENTATION |
+| **Retirement** | "Import Super / PF / NPS Statement" | future | DESIGN RECORDED — FUTURE IMPLEMENTATION |
+
+The consistent user-facing sentence across all five is:
+
+> **"Enter it manually, or let FHIP help you import it."**
+
+Manual entry is never removed, never de-emphasised into a secondary action, and
+never made conditional on an import (spec section 49).
+
+## 3. The invariant contract — Preview → Compare → Approve → Apply
+
+Every automated import in every domain, present and future, obeys the same four
+steps. This is the part of the standard that is **not** negotiable per domain:
+
+1. **Preview** — the engine shows what it read from the document.
+2. **Compare** — the proposal is shown *beside* the user's existing data.
+3. **User approval** — an explicit, per-field or per-entry choice.
+4. **Apply** — and only then does a canonical Input Data register change.
+
+Corollaries, all enforced in code by FDH-9's bridge:
+
+- Upload ≠ Input Data update.
+- Successful parse ≠ Input Data update.
+- Evidence approval ≠ Input Data update.
+- There is **no** background write, **no** upload-triggered overwrite, and **no**
+  automatic replacement of manually entered data.
+
+## 4. India investment access (spec section 4)
+
+Recorded as a binding requirement for the future Investments implementation:
+
+- An **India-resident** user is offered "India Investments — Import Indian
+  Investment Statement" **prominently by default** from within Investments.
+- A **non-India-resident** user who holds Indian investments retains the **same
+  capability**. Country of residence influences **default visibility only**; it
+  must never **prohibit** legitimate cross-border Indian-investment use.
+- The entry point **redirects into the existing Investment Intelligence module**.
+  It must **not** re-implement it. There is exactly one Indian-investment engine.
+
+FDH-9 ships **no** Investments UI. Both bullets above are `FUTURE IMPLEMENTATION`
+in the FDH-9 certification report, and are stated as such rather than claimed.
+
+## 5. Audit of existing specialist routes — nothing removed
+
+Spec section 55: *"Do not automatically remove existing specialist routes in
+FDH-9 — audit them instead."* The audit, from `components/ui/AppShell.tsx`:
+
+| Route | Nav location | Finding | FDH-9 action |
+|---|---|---|---|
+| `/financial-data-hub/activity` | "Your finances" → **"Financial Activity"** | Already surfaced under a *financial-domain* label, not a technical one. It is a legitimate cross-cutting **review/activity** destination, not an import entry point. | **KEPT UNCHANGED** |
+| `/financial-data-hub/review` | not in main nav | Reached contextually from the activity view. Consistent with the standard already. | **KEPT UNCHANGED** |
+| `/investment-intelligence` (+ `/performance`, `/sip`, `/tax`, `/xray`, `/review`) | "Plan & improve" → "Investment Intelligence (India)" | A genuine analytical *destination*, not merely an importer. Removing it would delete real user-facing capability. | **KEPT UNCHANGED** |
+
+**Recommended long-term direction** (a recommendation, not an action taken here):
+main navigation focuses on user financial domains; specialist *import* engines are
+increasingly reached contextually from the relevant domain, while specialist
+*analysis* destinations may legitimately keep top-level placement.
+
+Any removal of a top-level route is an explicit UX/navigation change requiring its
+own regression testing. **FDH-9 removes none**, and the FDH-9 regression run
+confirms the navigation is byte-for-byte unchanged.
+
+## 6. The reusable mechanism
+
+The contract in §3 is implemented **once**, generically, so that each future
+domain is an *adapter* rather than a rewrite:
+
+```
+lib/import-bridge/
+  types.ts              generic proposal / field / apply-mode vocabulary
+  proposalEngine.ts     domain-agnostic compare, diff, selected-field, duplicate logic
+  applyService.ts       domain-agnostic guarded apply: authz, staleness, idempotency, audit
+  adapters/
+    incomeAdapter.ts    <- the ONLY domain adapter FDH-9 ships
+```
+
+with `fhip_import_proposals.target_domain` a **column**, not a table name.
+
+Adding Expenses later = one adapter file + one enum value. It is explicitly
+**not** a schema redesign, and explicitly **not** a second bridge.
+
+Why this lives outside `lib/financial-data-hub/`: the bridge is a platform
+service serving five domains, not an FDH internal — and `fdh1Isolation.test.ts`
+correctly forbids any file under `lib/financial-data-hub/` from naming
+`income_sources`. See `FDH9_REUSE_AND_GAP_AUDIT.md` §4.1.
+
+## 7. Target user experience
+
+What the user should experience:
+
+> **Income → [Add manually | Import from Payslip] → FHIP reads it → shows what it
+> found → matches your bank salary → you review → compare with your current Income
+> → YOU choose apply → Income is updated.**
+
+What the user should **never** experience:
+
+> ~~Main Menu → Financial Data Hub → Payslip Engine → Payroll Processor → go find
+> some separate financial record~~
+
+The machinery stays invisible. The user stays in Income the entire time.
