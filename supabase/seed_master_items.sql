@@ -140,6 +140,11 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('liability', 'home_loan', 'Home Loan', 10),
 ('liability', 'investment_loan', 'Investment Loan', 20),
 ('liability', 'construction_loan', 'Construction Loan', 30),
+-- 'commercial_loan' / 'smsf_property_loan' added by migration 0078 (Property
+-- <-> Liability Linking, spec s.13) -- both genuinely missing, not
+-- duplicates of any item already seeded above.
+('liability', 'commercial_loan', 'Commercial Property Loan', 145),
+('liability', 'smsf_property_loan', 'SMSF Property Loan / LRBA', 205),
 ('liability', 'personal_loan', 'Personal Loan', 40),
 ('liability', 'car_loan', 'Car Loan', 50),
 ('liability', 'motorcycle_loan', 'Motorcycle Loan', 60),

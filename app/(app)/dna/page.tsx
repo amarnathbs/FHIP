@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
+import { formatMoney } from '@/lib/engines/money';
+import type { PropertyDebtPurpose } from '@/lib/engines/propertyLiabilityLinks';
 import {
   HeroCard,
   TraitBars,
@@ -14,6 +16,20 @@ import {
   MissingDataPanel,
 } from '@/components/dna/sections';
 import { DnaWhatIfSimulator } from '@/components/dna/WhatIfSimulator';
+
+// Property <-> Liability Linking (spec s.27-31, s.64): display labels for
+// the canonical, relationship-preferred debt-purpose breakdown. Purely
+// presentational -- the classification itself lives in
+// lib/engines/propertyLiabilityLinks.ts and is never re-derived here.
+const DEBT_PURPOSE_LABELS: Record<PropertyDebtPurpose, string> = {
+  owner_occupied: 'Owner-Occupied Property Debt',
+  investment_property: 'Investment Property Debt',
+  commercial_property: 'Commercial Property Debt',
+  smsf_property: 'SMSF Property Debt',
+  property_secured_other: 'Other Property-Secured Debt',
+  consumer: 'Consumer Debt',
+  unclassified: 'Unclassified Debt',
+};
 
 const HEALTH_SCORE_LINKS: Record<string, string> = {
   property_focused_investor: 'High property concentration can reduce your Net Worth & Investment Health component scores through concentration risk.',
@@ -77,6 +93,25 @@ export default async function FinancialDnaPage() {
             <DriverList drivers={payload.drivers} />
             <StrengthsRisks strengths={payload.strengths} risks={payload.risks} />
             <FocusActions actions={payload.actions} />
+
+            {payload.propertyDebtBreakdown.length > 0 && (
+              <SectionCard title="Debt Purpose — Owner-Occupied vs Investment vs Consumer">
+                <p className="text-sm text-gray-600">
+                  Classified using your Property ↔ Liability links where available, falling back to debt type
+                  otherwise. Amounts in different currencies are shown separately, never added together.
+                </p>
+                <ul className="mt-3 divide-y divide-line">
+                  {payload.propertyDebtBreakdown.map((b) => (
+                    <li key={`${b.purpose}-${b.currencyCode}`} className="flex items-center justify-between py-2 text-sm">
+                      <span className="text-ink">
+                        {DEBT_PURPOSE_LABELS[b.purpose]} <span className="text-muted">({b.liabilityCount})</span>
+                      </span>
+                      <span className="font-medium text-ink">{formatMoney(b.totalBalance, b.currencyCode as 'AUD' | 'INR')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            )}
 
             {primaryArchetype && HEALTH_SCORE_LINKS[primaryArchetype.profile_code] && (
               <SectionCard title="Link to Your Financial Health Score">

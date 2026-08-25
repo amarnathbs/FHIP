@@ -48,6 +48,7 @@ export const assetGridConfig: GridConfig = {
   nameField: 'asset_name',
   valueField: 'current_value',
   reviewSection: 'assets',
+  propertyLinkSide: 'property',
   fields: [
     { name: 'current_value', label: 'Current Market Value', type: 'number', step: '0.01', required: true },
     { name: 'purchase_price', label: 'Purchase Price', type: 'number', step: '0.01' },
@@ -65,6 +66,7 @@ export const liabilityGridConfig: GridConfig = {
   nameField: 'liability_name',
   valueField: 'balance',
   reviewSection: 'liabilities',
+  propertyLinkSide: 'liability',
   zeroConfirmation: {
     section: 'liabilities',
     question: 'Do you currently have any debts or financial liabilities?',
@@ -99,6 +101,7 @@ export const investmentGridConfig: GridConfig = {
   nameField: 'investment_name',
   valueField: 'current_value',
   reviewSection: 'investments',
+  propertyLinkSide: 'property',
   notApplicable: { profileField: 'not_applicable_investments', label: "I don't have any investments" },
   fields: [
     { name: 'institution', label: 'Institution', type: 'text' },

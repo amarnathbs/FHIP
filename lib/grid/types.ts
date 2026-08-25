@@ -64,4 +64,11 @@ export interface GridConfig {
   // reviewSection's completion control answers "have you finished entering
   // what you do have" once the answer is Yes.
   reviewSection: FinancialSection;
+  // Property <-> Liability Linking (spec s.14-18): which side of the
+  // relationship this grid represents, if either. 'property' shows a
+  // "Financing" control on Assets/Investments rows; 'liability' shows a
+  // "Related Property" control on Liabilities rows. Omitted for every
+  // other grid (income, expense, retirement, insurance) -- retirement/SMSF
+  // property linking is explicitly deferred (spec s.36, s.84).
+  propertyLinkSide?: 'property' | 'liability';
 }
