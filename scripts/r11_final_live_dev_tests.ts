@@ -564,17 +564,46 @@ async function main() {
     const amc = 'HDFC Mutual Fund';
     const { data: acc, error: accErr } = await admin.from('ii_accounts').insert({ user_id: u25.userId, account_type: 'mf_folio', institution_name: amc, country_code: 'IN', currency_code: 'INR', folio_number: folio, status: 'active', owner_member_id: u25.memberId }).select('id').single();
     if (accErr || !acc) throw new Error(`case 025 account seed insert failed: ${accErr?.message}`);
-    const { data: instr, error: instrErr } = await admin.from('ii_instruments').insert({ instrument_name: scheme, instrument_class: 'mutual_fund', country_of_domicile: 'IN', base_currency: 'INR', isin, status: 'provisional', amc_name: amc }).select('id').single();
-    if (instrErr || !instr) throw new Error(`case 025 instrument seed insert failed: ${instrErr?.message}`);
-    await admin.from('ii_instrument_identifiers').insert({ instrument_id: instr!.id as string, identifier_scheme: 'isin', identifier_value: isin, country_code: 'IN', is_active: true });
+    // Find-or-create the canonical instrument by ISIN, exactly mirroring
+    // production schemeResolution.ts's dedup behaviour — a real bug was
+    // found and fixed here this round: an earlier version of this script
+    // unconditionally INSERTed a fresh ii_instruments row every run for
+    // this fixed real-world ISIN. Because ii_instruments/
+    // ii_instrument_identifiers are GLOBAL canonical reference tables (not
+    // scoped to user_id, so a synthetic-user cleanup pass does not remove
+    // them), two earlier incomplete runs each left an orphaned duplicate
+    // instrument row for the same ISIN in DEV. On the next run,
+    // processSourceDocument's own scheme resolution matched the new CAMS
+    // evidence to the OLDEST leftover instrument row (via
+    // ii_instrument_identifiers), which was NOT the instrument row this
+    // run's noise seed data was attached to — so the >1000 cross-source
+    // candidate query was scoped to the wrong instrument_id and correctly
+    // found nothing, causing a genuine (test-methodology, not production)
+    // FAIL. Fixed by reusing any existing instrument for this ISIN.
+    const { data: existingIdentifier } = await admin.from('ii_instrument_identifiers').select('instrument_id').eq('identifier_scheme', 'isin').eq('identifier_value', isin).eq('is_active', true).order('instrument_id', { ascending: true }).limit(1).maybeSingle();
+    let instrId: string;
+    if (existingIdentifier) {
+      instrId = existingIdentifier.instrument_id as string;
+    } else {
+      const { data: instr, error: instrErr } = await admin.from('ii_instruments').insert({ instrument_name: scheme, instrument_class: 'mutual_fund', country_of_domicile: 'IN', base_currency: 'INR', isin, status: 'provisional', amc_name: amc }).select('id').single();
+      if (instrErr || !instr) throw new Error(`case 025 instrument seed insert failed: ${instrErr?.message}`);
+      instrId = instr.id as string;
+      await admin.from('ii_instrument_identifiers').insert({ instrument_id: instrId, identifier_scheme: 'isin', identifier_value: isin, country_code: 'IN', is_active: true });
+    }
+    const instr = { id: instrId };
     // A dummy "noise" source document to own the 1005 seed rows.
     const noiseDoc = await uploadPdf(u25.userId, u25.memberId, 'scale-noise.pdf', ['CAMS Consolidated Account Statement', 'Statement Period : 01-Jan-2020 To 31-Dec-2020', '', 'Folio No: NOISE', 'PAN: ZZZZZ0000Z', 'Name: NOISE', 'Holding Mode: SI', '']);
     const ROW_COUNT = 1005;
+    // Run-scoped prefix (derived from STAMP, not a fixed constant) so a
+    // rerun after a prior run's crash/incomplete cleanup never collides on
+    // the primary key — a real cross-run collision was hit and fixed this
+    // round (see acceptance report).
+    const stampHex = STAMP.toString(16).padStart(12, '0').slice(-12);
     const seedRows = [];
     for (let i = 1; i <= ROW_COUNT; i++) {
       const hex = i.toString(16).padStart(12, '0');
       seedRows.push({
-        id: `00000000-0000-0000-0000-${hex}`,
+        id: `00000000-0000-${stampHex.slice(0, 4)}-${stampHex.slice(4, 8)}-${hex}`,
         user_id: u25.userId,
         account_id: acc!.id as string,
         instrument_id: instr!.id as string,
