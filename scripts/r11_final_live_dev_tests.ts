@@ -228,7 +228,7 @@ async function main() {
     const { data: txns } = await admin.from('ii_transactions').select('id, status, source_document_id').eq('user_id', u.userId);
     const { data: snaps } = await admin.from('ii_holding_snapshots').select('id').eq('user_id', u.userId);
     // NOTE: match_basis/reconciliation_case_id columns are part of 0082's
-    // tail, confirmed NOT YET live on DEV this round (see migration 0084,
+    // tail, confirmed NOT YET live on DEV this round (see migration 0086,
     // BLOCKED pending Product Owner DDL access) — asserting on link COUNT
     // only, which is the actual "0 duplicate" invariant and does not
     // depend on those columns.
@@ -238,14 +238,14 @@ async function main() {
     // corroborating (non-originating) provenance LINK row for source 2 is
     // currently expected to be 1 (not 2): its insert references the new
     // match_basis column, which this round's live-DEV probe found is NOT
-    // yet applied (migration 0084, blocked on DDL access — see final
+    // yet applied (migration 0086, blocked on DDL access — see final
     // report). documentProcessing.ts does not check that particular
     // insert's error (matching the pre-existing R2 pattern at the
     // same-fingerprint link a few lines above it), so it fails silently
     // without affecting the transaction/holding dedup outcome itself.
     const ok = res1.ok && res2.ok && (txns?.length ?? 0) === 1 && (snaps?.length ?? 0) === 1 && (links?.length ?? 0) >= 1 && (res2.summary?.duplicateTransactionsLinked ?? 0) === 1;
     record(id, `Overlapping evidence (${order}): 0 duplicate transactions/holdings/net-worth contribution`, ok ? 'PASS' : 'FAIL',
-      `txns=${txns?.length} snaps=${snaps?.length} links=${links?.length} (expect 2 once migration 0084 applies; core dedup invariant unaffected) linksErr=${linksErr?.message} res2.dup=${res2.summary?.duplicateTransactionsLinked}`);
+      `txns=${txns?.length} snaps=${snaps?.length} links=${links?.length} (expect 2 once migration 0086 applies; core dedup invariant unaffected) linksErr=${linksErr?.message} res2.dup=${res2.summary?.duplicateTransactionsLinked}`);
     return { userId: u.userId, txnId: txns?.[0]?.id as string | undefined };
   }
   const r004 = await overlapCase('LIVE-R11-004', 'cams-first');
@@ -358,22 +358,22 @@ async function main() {
     // all) proved NEITHER of migration 0082's two CHECK constraint updates
     // are actually live on DEV (`ii_transactions.status` does not yet
     // accept 'review_required', `ii_reconciliation_cases.discrepancy_type`
-    // does not yet accept the cross_source_* family) — see migration 0084
+    // does not yet accept the cross_source_* family) — see migration 0086
     // and the final report. documentProcessing.ts's conflict-handling
     // INSERT therefore fails outright on live DEV right now (silently, by
     // the pre-existing "don't check createdTxn/txnErr" pattern) — the
     // conflicting evidence is correctly identified in-memory (classifyPairwise
     // returns 'conflict', hand-verified in R11_MANUAL_RECONCILIATION.md
-    // MR15) but its row cannot currently be PERSISTED until 0084 applies.
+    // MR15) but its row cannot currently be PERSISTED until 0086 applies.
     // This is graded BLOCKED, not FAIL: it is a disclosed migration gap,
     // not a logic defect — the identical code path replayed against a
-    // schema that DOES include 0084 (scripts/r11_rls_certification.mjs
+    // schema that DOES include 0086 (scripts/r11_rls_certification.mjs
     // Section 10, a fresh PGlite rebuild of every real migration file
-    // including 0084) proves both constraints work exactly as designed.
+    // including 0086) proves both constraints work exactly as designed.
     const migrationBlocked = (txns?.length ?? 0) === 1 && cases.length === 0;
     const ok = rA.ok && rB.ok && (txns?.length ?? 0) === 2 && reviewRequiredCount >= 1 && cases.length >= 1 && cases.every((c) => c.status === 'open');
     record('LIVE-R11-008', 'Conflict: same identity, differing amount -> REVIEW_REQUIRED, never silently pick last import', ok ? 'PASS' : migrationBlocked ? 'BLOCKED' : 'FAIL',
-      `rA.ok=${rA.ok} rA.err=${rA.error} rB.ok=${rB.ok} rB.err=${rB.error} txns=${JSON.stringify(txns)} allCases=${JSON.stringify(allCasesForUser)} — BLOCKED reason: migration 0084 (0082's constraint updates) not yet applied to DEV; logic independently proven correct via PGlite replay + hand-trace (MR15)`);
+      `rA.ok=${rA.ok} rA.err=${rA.error} rB.ok=${rB.ok} rB.err=${rB.error} txns=${JSON.stringify(txns)} allCases=${JSON.stringify(allCasesForUser)} — BLOCKED reason: migration 0086 (0082's constraint updates) not yet applied to DEV; logic independently proven correct via PGlite replay + hand-trace (MR15)`);
   }
 
   // ---------------------------------------------------------------------

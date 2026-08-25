@@ -1,6 +1,6 @@
 # R11 Security Verification
 
-Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-instantiated PGlite database with EVERY migration (`0001`-`0084`) replayed from disk (not a hand-built schema subset).
+Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-instantiated PGlite database with EVERY migration (`0001`-`0086`) replayed from disk (not a hand-built schema subset).
 
 ## Result: 32/32 PASSED, 0 FAILED
 
@@ -22,9 +22,9 @@ Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-i
 R11 RLS/SECURITY CERTIFICATION: 32 passed, 0 failed
 ```
 
-183 public tables total after migration `0084`, all RLS-enabled (0 without RLS).
+183 public tables total after migration `0086`, all RLS-enabled (0 without RLS).
 
-**R11-FINAL closure round addendum (2026-08-25)**: migration `0084` was added this round after a real INSERT-based probe against live DEV found migration `0082`'s two CHECK constraint updates were NOT actually live (a SELECT-based probe used earlier in this round had wrongly reported them present — a SELECT filter cannot test a CHECK constraint at all). `0084` is a complete, idempotent replay of every one of `0082`'s statements. This PGlite certification run (which replays every real migration file, `0084` included) is the proof that `0082`'s and `0084`'s combined effect is correct — it is NOT itself proof that DEV has been updated; DEV migration state is tracked separately in `R11_LIVE_DEV_VERIFICATION.md` and the final closure report.
+**R11-FINAL closure round addendum (2026-08-25)**: migration `0086` was added this round after a real INSERT-based probe against live DEV found migration `0082`'s two CHECK constraint updates were NOT actually live (a SELECT-based probe used earlier in this round had wrongly reported them present — a SELECT filter cannot test a CHECK constraint at all). `0086` is a complete, idempotent replay of every one of `0082`'s statements. This PGlite certification run (which replays every real migration file, `0086` included) is the proof that `0082`'s and `0086`'s combined effect is correct — it is NOT itself proof that DEV has been updated; DEV migration state is tracked separately in `R11_LIVE_DEV_VERIFICATION.md` and the final closure report.
 
 ## Actors used
 
