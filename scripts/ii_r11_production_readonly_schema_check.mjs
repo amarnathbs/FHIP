@@ -25,12 +25,11 @@
 const SUPA_URL = 'https://twwpnltizhtjxhamyoxt.supabase.co';
 const KEY = 'sb_publishable_pWgbqCKmXZBCbqOtMr23Cw_V_oM8cZy';
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };
-const NIL = '00000000-0000-0000-0000-000000000000';
 
 let pass = 0, fail = 0;
 function report(label, ok, detail) {
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? ' (' + detail + ')' : ''}`);
-  ok ? pass++ : fail++;
+  if (ok) { pass++; } else { fail++; }
 }
 function state(label, exists, detail) {
   console.log(`  ${exists ? 'PRESENT' : 'ABSENT '}  ${label}${detail ? ' (' + detail + ')' : ''}`);
