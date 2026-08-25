@@ -15,7 +15,7 @@ Spec section 95: at least 8 RED→GREEN negative controls, each genuinely sabota
 
 ## Why NC8 was run at the database level and the others at the test-suite level
 
-NC8 (cross-client) is the one control where the spec's own wording ("remove the client relationship check") maps most directly onto an actual RLS policy rather than a pure function, so it was sabotaged and reverted directly in `supabase/migrations/0079_ii_r11_professional_access.sql`, replayed fresh through PGlite via `scripts/r11_rls_certification.mjs` both times — genuinely proving the real Postgres RLS policy (not a JS approximation of it) is what blocks the attack. The other 7 controls target the pure decision/matching logic in `crossSourceIdentity.ts`/`permissions.ts`, where the fast, deterministic vitest suites are the more direct and more precisely-diagnosable target (each failure names the exact assertion that broke).
+NC8 (cross-client) is the one control where the spec's own wording ("remove the client relationship check") maps most directly onto an actual RLS policy rather than a pure function, so it was sabotaged and reverted directly in `supabase/migrations/0083_ii_r11_professional_access.sql`, replayed fresh through PGlite via `scripts/r11_rls_certification.mjs` both times — genuinely proving the real Postgres RLS policy (not a JS approximation of it) is what blocks the attack. The other 7 controls target the pure decision/matching logic in `crossSourceIdentity.ts`/`permissions.ts`, where the fast, deterministic vitest suites are the more direct and more precisely-diagnosable target (each failure names the exact assertion that broke).
 
 ## Reproducing any control
 

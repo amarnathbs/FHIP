@@ -7,7 +7,7 @@ Spec sections 108-127: 25 live-DEV scenarios (synthetic data), at least 12 indep
 `.env.local` does not exist in this worktree (`D:\FHIP\.claude\worktrees\agent-aff40e5a051339483\.env.local` — checked directly, confirmed absent before writing any code, and re-confirmed here). Without it, there is no Supabase URL/anon key/service-role key available to this environment, so:
 
 - No real Supabase Auth users can be created (the `resourcesAdminRoleCtaHotfixLiveDev.test.ts` failure observed during the full regression run — `Failed to verify OTP: Request rate limit reached` — is exactly the kind of pre-existing test that depends on live Supabase Auth and cannot run meaningfully here).
-- No real DEV Postgres instance is reachable to apply migrations `0078`/`0079` against, or to exercise the actual API routes (`app/api/professional-access/*`) end-to-end over HTTP.
+- No real DEV Postgres instance is reachable to apply migrations `0082`/`0083` against, or to exercise the actual API routes (`app/api/professional-access/*`) end-to-end over HTTP.
 - No real document upload → `documentProcessing.ts` → cross-source-resolution → canonical-transaction pipeline can be run against real parsed CAMS/KFintech statements in this environment.
 
 This is precisely the same environment boundary the standing orchestration constraints predicted, and the same boundary the immediately-prior FDH-8 task in this program hit and disclosed honestly rather than fabricating results. **0 of the requested 25 live-DEV scenarios and 0 of the requested 12 independent live reconciliations were performed.** No number is fabricated here.
@@ -19,7 +19,7 @@ This is precisely the same environment boundary the standing orchestration const
 
 ## What a future session with `.env.local` should run
 
-1. Apply migrations `0078`/`0079` to DEV.
+1. Apply migrations `0082`/`0083` to DEV.
 2. Upload a real CAMS fixture and a real KFintech fixture covering the same synthetic folio/scheme/transaction, verify `ii_transaction_source_links` links rather than duplicates, and verify `ii_reconciliation_cases` records an auto-resolved `cross_source_exact_duplicate` or `cross_source_high_confidence_duplicate` case.
 3. Repeat in the reverse import order, verify identical canonical result (import-order independence, live).
 4. Deliberately construct a conflicting pair (same reference, different amount) and verify a `review_required` transaction is created and excluded from R4/R5/R6 outputs until resolved.

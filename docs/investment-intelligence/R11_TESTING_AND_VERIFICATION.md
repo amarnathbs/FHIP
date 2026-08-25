@@ -12,11 +12,11 @@
 
 ## Migration verification
 
-- **Clean replay**: `scripts/r11_rls_certification.mjs` replays migrations `0001`-`0079` from disk against a fresh PGlite instance on every run — verified passing.
-- **Migration count**: 79 files, `0078`/`0079` are R11's.
+- **Clean replay**: `scripts/r11_rls_certification.mjs` replays migrations `0001`-`0083` from disk against a fresh PGlite instance on every run — verified passing.
+- **Migration count**: 79 files, `0082`/`0083` are R11's.
 - **Collision guard**: re-checked immediately before writing each migration AND again immediately before this report — `ls supabase/migrations | sort | tail` confirmed `0077` as the highest at both R11-P0 time and migration-writing time; re-checked again at report time and found FDH-8's sibling worktree (`agent-ac0d4506259640f73`, branch `fdh8-closure`) still based on `0077` with no migrations of its own yet — **no collision**.
-- **Real bug found and fixed during migration authoring**: `0079`'s `professional_profiles` policy originally referenced `professional_relationships` (defined later in the same file) — PGlite's replay failed with `relation "professional_relationships" does not exist`, root-caused via an isolated debug script, fixed by reordering the dependent policy to after the referenced table. See `R11_MANUAL_RECONCILIATION.md` item 7.
-- **RLS policy count**: every one of the 6 new R11 tables has RLS enabled; `183` public tables total after `0079`, `0` without RLS (verified by direct `pg_class`/`pg_namespace` query, not by counting `alter table ... enable row level security` statements in the source).
+- **Real bug found and fixed during migration authoring**: `0083`'s `professional_profiles` policy originally referenced `professional_relationships` (defined later in the same file) — PGlite's replay failed with `relation "professional_relationships" does not exist`, root-caused via an isolated debug script, fixed by reordering the dependent policy to after the referenced table. See `R11_MANUAL_RECONCILIATION.md` item 7.
+- **RLS policy count**: every one of the 6 new R11 tables has RLS enabled; `183` public tables total after `0083`, `0` without RLS (verified by direct `pg_class`/`pg_namespace` query, not by counting `alter table ... enable row level security` statements in the source).
 
 ## Test suites written and passing
 
@@ -42,7 +42,7 @@ Full `npx vitest run tests/unit --no-file-parallelism`: **2458 passed, 3 failed,
 ## Real bugs found and fixed during this session (full list)
 
 1. Two test-data bugs in `iiR11CrossSourceIdentity.test.ts` (CS-24/CS-25) — a tolerance-boundary miscalculation in the test fixtures, not production code. See `R11_MANUAL_RECONCILIATION.md` item 4.
-2. Migration `0079` policy-ordering bug (forward reference to a not-yet-created table). See item 7 above.
+2. Migration `0083` policy-ordering bug (forward reference to a not-yet-created table). See item 7 above.
 3. A test-harness role-context bug in `scripts/r11_rls_certification.mjs` (nesting `asService()` inside `asUser()` silently reverted to the superuser role) that produced a false-positive security-leak reading. See `R11_MANUAL_RECONCILIATION.md` item 9.
 4. A test-setup unique-constraint collision in the same script (Section 8 attempting a duplicate `(A, P2)` relationship). See item 8.
 5. Two `tsc` errors found and fixed post-write: a nullable-array indexing type error in `investments-summary/route.ts`, and two now-unreachable `@ts-expect-error` directives in the oracle-comparison tests (TypeScript could resolve the `.mjs` imports without them).

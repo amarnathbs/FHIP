@@ -8,7 +8,7 @@ User owns/controls access → the trusted server/processing service (`documentPr
 
 ## What R11 changes here: nothing to `ii_source_documents`/storage RLS
 
-Migration `0078`/`0079` do not touch `ii_source_documents`' existing owner-only RLS policy (`"own ii_source_documents"`, migration `0032`, untouched) or the private-bucket storage object policies (FDH-3/R2 territory). No new table in R11 grants a professional or any other non-owner principal SELECT on `ii_source_documents` or the storage bucket.
+Migration `0082`/`0083` do not touch `ii_source_documents`' existing owner-only RLS policy (`"own ii_source_documents"`, migration `0032`, untouched) or the private-bucket storage object policies (FDH-3/R2 territory). No new table in R11 grants a professional or any other non-owner principal SELECT on `ii_source_documents` or the storage bucket.
 
 ## VIEW_RAW_DOCUMENTS does not exist
 

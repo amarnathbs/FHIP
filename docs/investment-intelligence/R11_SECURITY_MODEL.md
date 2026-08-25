@@ -1,6 +1,6 @@
 # R11 Security Model
 
-Spec sections 77-92. Every new R11 table has RLS enabled before being considered complete — verified structurally by `scripts/r11_rls_certification.mjs` Section 12 (`select ... where not c.relrowsecurity` returns 0 rows across all 183 public tables in the freshly-replayed database, migrations `0001`-`0079` included).
+Spec sections 77-92. Every new R11 table has RLS enabled before being considered complete — verified structurally by `scripts/r11_rls_certification.mjs` Section 12 (`select ... where not c.relrowsecurity` returns 0 rows across all 183 public tables in the freshly-replayed database, migrations `0001`-`0083` included).
 
 ## Test actors used
 

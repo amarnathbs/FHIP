@@ -1,6 +1,6 @@
 # R11 Security Verification
 
-Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-instantiated PGlite database with EVERY migration (`0001`-`0079`) replayed from disk (not a hand-built schema subset).
+Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-instantiated PGlite database with EVERY migration (`0001`-`0083`) replayed from disk (not a hand-built schema subset).
 
 ## Result: 32/32 PASSED, 0 FAILED
 
@@ -15,14 +15,14 @@ Full raw results of `scripts/r11_rls_certification.mjs`, run against a freshly-i
 === SECTION 7: MANDATORY audit history unforgeable ===                  2/2
 === SECTION 8: professional_notes bounded write ===                     4/4
 === SECTION 9: report-access-log write is service-role only ===         1/1
-=== SECTION 10: cross-source schema (migration 0078) sanity ===         4/4
+=== SECTION 10: cross-source schema (migration 0082) sanity ===         4/4
 === SECTION 11: negative control (isolation removed MUST leak) ===      2/2
 === SECTION 12: RLS coverage (every public table) ===                   1/1
                                                                     -------
 R11 RLS/SECURITY CERTIFICATION: 32 passed, 0 failed
 ```
 
-183 public tables total after migration `0079`, all RLS-enabled (0 without RLS).
+183 public tables total after migration `0083`, all RLS-enabled (0 without RLS).
 
 ## Actors used
 

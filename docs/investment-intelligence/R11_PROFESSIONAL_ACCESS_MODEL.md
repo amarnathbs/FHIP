@@ -8,7 +8,7 @@ Platform Admin (`lib/services/adminAuth.ts::requireAdmin`) ≠ Professional (new
 
 A professional authenticates as an ordinary Supabase user. There is no service-role or platform-admin code path a professional can reach — every professional-facing read (e.g. `app/api/professional-access/proxy/investments-summary/route.ts`) uses the service-role client only AFTER an application-level `checkAccessLive()` call gates it; the professional's own session never carries elevated DB privileges.
 
-## Tables (migration `0079`)
+## Tables (migration `0083`)
 
 - `professional_profiles` — factual attributes (`display_name`, `organisation`, `professional_type`, `jurisdiction`, `registration_details`). Never platform-verified; there is no verification workflow in R11 (spec section 71 — "Provided by professional", never "platform-verified").
 - `professional_relationships` — the canonical delegated-access relationship. Lifecycle: `pending_invite → active → revoked|expired|declined`, enforced terminal-state-irreversible by a `BEFORE UPDATE` trigger that fires for every role including service role (defense in depth beyond RLS).

@@ -26,7 +26,7 @@ for (const f of fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort()) {
   await db.exec(fs.readFileSync(path.join(MIG, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
   if (f.startsWith('0001')) await db.exec(seed);
 }
-console.log('fresh rebuild complete (all migrations replayed, including 0078/0079)\n');
+console.log('fresh rebuild complete (all migrations replayed, including 0082/0083)\n');
 
 var pass = 0, fail = 0;
 const check = (label, cond, detail = '') => { if (cond) { pass++; console.log(`  PASS  ${label} ${detail}`); } else { fail++; console.log(`  FAIL  ${label} ${detail}`); } };
@@ -66,9 +66,9 @@ await asService(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// SECTION 1 — II cross-tenant regression (unaffected by migration 0078)
+// SECTION 1 — II cross-tenant regression (unaffected by migration 0082)
 // ---------------------------------------------------------------------------
-console.log('\n=== SECTION 1: II cross-tenant regression (migration 0078 must not weaken existing isolation) ===');
+console.log('\n=== SECTION 1: II cross-tenant regression (migration 0082 must not weaken existing isolation) ===');
 let accountA, accountB, instrumentId, docA, docB, txnA;
 await asService(async () => {
   const accA = await db.query(`insert into ii_accounts (user_id,country_code,currency_code,account_type,institution_name,folio_number,status) values ('${A}','IN','INR','mf_folio','AMC X','FOLIO-A', 'active') returning id`);
@@ -282,7 +282,7 @@ await asUser(P2, async () => {
   check('professional cannot directly INSERT a report-access-log row (would let them forge their own audit trail)', blocked);
 });
 
-console.log('\n=== SECTION 10: cross-source reconciliation schema (migration 0078) sanity ===');
+console.log('\n=== SECTION 10: cross-source reconciliation schema (migration 0082) sanity ===');
 await asService(async () => {
   const activePolicy = await db.query(`select policy_version from ii_source_precedence_policy where is_active=true`);
   check('exactly one active source precedence policy', activePolicy.rows.length === 1, `(saw ${activePolicy.rows.length})`);

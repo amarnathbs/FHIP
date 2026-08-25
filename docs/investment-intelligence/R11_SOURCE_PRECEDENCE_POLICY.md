@@ -1,6 +1,6 @@
 # R11 Source Precedence Policy
 
-Versioned per spec section 30. Stored in `ii_source_precedence_policy` (migration `0078`), world-readable, admin/service-write-only (identical discipline to `ii_reconciliation_config`/`ii_sources`). Exactly one row has `is_active = true` at a time, enforced by `uidx_ii_source_precedence_policy_active`.
+Versioned per spec section 30. Stored in `ii_source_precedence_policy` (migration `0082`), world-readable, admin/service-write-only (identical discipline to `ii_reconciliation_config`/`ii_sources`). Exactly one row has `is_active = true` at a time, enforced by `uidx_ii_source_precedence_policy_active`.
 
 ## Active policy: `r11-v1`
 

@@ -5,7 +5,7 @@
 // guarantee, spec section 66) and uses the service-role admin client for
 // every write, since professional_relationships/professional_permission_
 // scopes intentionally carry no authenticated-role write RLS policy
-// (migration 0079) — every mutation is authorised here, in TypeScript,
+// (migration 0083) — every mutation is authorised here, in TypeScript,
 // after verifying the caller's own session identity, never trusted from
 // client-supplied fields.
 
