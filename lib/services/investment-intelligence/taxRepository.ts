@@ -105,7 +105,9 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
       .order('id', { ascending: true })
   );
 
-  const usable = txnRows.filter((r) => r.status !== 'reversed' && r.units !== null);
+  // R11: also exclude 'review_required' (unresolved cross-source
+  // conflict/ambiguity) — same exclusion discipline as 'reversed'.
+  const usable = txnRows.filter((r) => r.status !== 'reversed' && r.status !== 'review_required' && r.units !== null);
   if (usable.length === 0) {
     return { dataset: null, warnings, empty: true };
   }

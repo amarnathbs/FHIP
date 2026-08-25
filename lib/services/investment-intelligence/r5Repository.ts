@@ -102,7 +102,9 @@ export async function loadSipDataset(
 
   // R2 remains transaction truth: reversed/corrected rows are excluded from
   // the analytical view, but nothing is rewritten.
-  const usable = txnRows.filter((r) => r.status !== 'reversed');
+  // R11: also exclude 'review_required' (unresolved cross-source
+  // conflict/ambiguity) — same exclusion discipline as 'reversed'.
+  const usable = txnRows.filter((r) => r.status !== 'reversed' && r.status !== 'review_required');
   if (usable.length === 0) {
     return { dataset: null, warnings, empty: true };
   }
