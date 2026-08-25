@@ -27,6 +27,15 @@ A professional authenticates as an ordinary Supabase user. There is no service-r
 
 ## Dashboard scope
 
-The one professional-facing read endpoint built in R11 (`GET /api/professional-access/clients`, backed by `listClientsForProfessional`) returns strictly the caller's OWN active/pending relationships — there is no parameter or code path that widens this to any other professional's clients or to an arbitrary-user search surface (spec section 62). A full professional workspace UI is out of the frozen R11 scope (see P0's "Required freeze") — this release ships the access-control data model and API surface a future UI consumes, not the UI itself.
+`GET /api/professional-access/clients` (backed by `listClientsForProfessional`) returns strictly the caller's OWN active/pending relationships — there is no parameter or code path that widens this to any other professional's clients or to an arbitrary-user search surface (spec section 62). A full professional workspace UI is out of the frozen R11 scope (see P0's "Required freeze") — this release ships the access-control data model and API surface a future UI consumes, not the UI itself.
+
+## Professional-facing read (proxy) endpoints
+
+Two representative structured read proxies exist, both following the identical pattern (`checkAccessLive()` gate → service-role read of the SAME rows the owner's own endpoint would return → no separate professional-only computation):
+
+- `GET /api/professional-access/proxy/investments-summary` — gated on `VIEW_INVESTMENTS`; returns the client's `ii_accounts`/latest `ii_holding_snapshots` positions.
+- `GET /api/professional-access/proxy/report` — gated on `VIEW_REPORTS`; **added during the R11-FINAL closure round (2026-08-25)**. This closes a real gap found this round: `checkReportAccess()` (`permissions.ts`) and `recordReportAccess()` (`access.ts`) both existed with zero callers anywhere in the app before this route — the spec's own requirement that "R11 must consume existing R10 report security, not create a professional report engine" (section 65) had no HTTP-reachable implementation at all. This route reads the exact same `reports`/`report_sections` rows `getReport()` (`lib/services/reportsData.ts`) already returns to the report's owner — it computes nothing — and calls the previously-unwired `recordReportAccess()` for audit.
+
+Raw document access (`ii_source_documents`/storage) has no professional-facing route at all, by design — see `R11_RAW_DOCUMENT_GOVERNANCE.md`.
 
 See also `R11_CONSENT_AND_REVOCATION.md`, `R11_PERMISSION_MATRIX.md`, `R11_RAW_DOCUMENT_GOVERNANCE.md`, `R11_SECURITY_MODEL.md`.

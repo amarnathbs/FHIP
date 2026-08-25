@@ -18,6 +18,7 @@ import {
   type RelationshipRecord,
   type ScopeGrantRecord,
 } from './permissions';
+import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
 
 export interface AccessContext {
   relationship: RelationshipRecord | null;
@@ -41,7 +42,15 @@ export async function fetchAccessContext(clientUserId: string, professionalUserI
 
   const { data: profRow } = await admin.from('professional_profiles').select('is_active').eq('user_id', professionalUserId).maybeSingle();
 
-  const { data: scopeRows } = await admin.from('professional_permission_scopes').select('relationship_id, scope, revoked_at').eq('relationship_id', relRow.id as string);
+  // fetchAllRows, not a bare .select() — a relationship with a long
+  // grant/revoke history (repeated scope grants and revocations over the
+  // relationship's lifetime) could in principle exceed PostgREST's silent
+  // 1000-row cap; the R6-P0 pagination class applies here exactly as it
+  // does to every other unbounded II read (spec sections 47-49 explicitly
+  // name "consent/audit history" as a surface requiring this).
+  const scopeRows = await fetchAllRows<{ relationship_id: string; scope: string; revoked_at: string | null }>(() =>
+    admin.from('professional_permission_scopes').select('relationship_id, scope, revoked_at').eq('relationship_id', relRow.id as string).order('id', { ascending: true })
+  );
 
   const relationship: RelationshipRecord = {
     id: relRow.id as string,
@@ -175,16 +184,24 @@ export interface ClientListEntry {
 /** Professional's own client list — strictly the professional's own active/pending relationships, never a directory search (spec section 62). */
 export async function listClientsForProfessional(professionalUserId: string): Promise<ClientListEntry[]> {
   const admin = createAdminClient();
-  const { data: rels } = await admin
-    .from('professional_relationships')
-    .select('id, client_user_id, status')
-    .eq('professional_user_id', professionalUserId)
-    .in('status', ['active', 'pending_invite'])
-    .order('created_at', { ascending: true });
-  const relationships = rels ?? [];
+  // fetchAllRows — a professional with more than 1000 client relationships
+  // (or a client list read that needs to see all of them, e.g. an admin
+  // support tool) must not silently see a PostgREST-truncated first 1000
+  // (spec sections 47-49: "professional client list" is explicitly named
+  // as an R11 scale-certification surface).
+  const relationships = await fetchAllRows<{ id: string; client_user_id: string; status: string }>(() =>
+    admin
+      .from('professional_relationships')
+      .select('id, client_user_id, status')
+      .eq('professional_user_id', professionalUserId)
+      .in('status', ['active', 'pending_invite'])
+      .order('id', { ascending: true })
+  );
   if (relationships.length === 0) return [];
   const ids = relationships.map((r) => r.id as string);
-  const { data: scopeRows } = await admin.from('professional_permission_scopes').select('relationship_id, scope, revoked_at').in('relationship_id', ids).is('revoked_at', null);
+  const scopeRows = await fetchAllRows<{ relationship_id: string; scope: string; revoked_at: string | null }>(() =>
+    admin.from('professional_permission_scopes').select('relationship_id, scope, revoked_at').in('relationship_id', ids).is('revoked_at', null).order('id', { ascending: true })
+  );
   return relationships.map((r) => ({
     relationshipId: r.id as string,
     clientUserId: r.client_user_id as string,

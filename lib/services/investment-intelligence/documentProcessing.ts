@@ -73,7 +73,7 @@ export interface ProcessSourceDocumentResult {
   reconciliationCaseId?: string | null; // set when the failure IS a reconciliation case (password/unsupported/corrupt)
 }
 
-async function openReconciliationCase(
+export async function openReconciliationCase(
   userId: string,
   input: {
     subjectType: 'holding_snapshot' | 'transaction' | 'account';
