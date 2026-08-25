@@ -170,7 +170,7 @@ export function ResourceUsersClient({ currentUserId }: { currentUserId: string }
       </div>
 
       <div className="rounded-card border border-line bg-white p-4">
-        <label htmlFor="resource-user-search" className="sr-only">
+        <label htmlFor="resource-user-search" className="sr-only left-0 top-0">
           Search users by name or email
         </label>
         <input
@@ -250,7 +250,7 @@ export function ResourceUsersClient({ currentUserId }: { currentUserId: string }
                         <td className="py-2.5 pr-3 text-muted">{u.lastUpdated ? formatAdminDate(u.lastUpdated) : '—'}</td>
                         <td className="py-2.5 pl-3">
                           <div className="flex items-center gap-2">
-                            <label className="sr-only" htmlFor={`assign-role-${u.id}`}>
+                            <label className="sr-only left-0 top-0" htmlFor={`assign-role-${u.id}`}>
                               Assign a Resources role to {u.email}
                             </label>
                             <select
