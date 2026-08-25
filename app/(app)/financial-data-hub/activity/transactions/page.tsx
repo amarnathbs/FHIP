@@ -13,7 +13,10 @@ import { TransactionFilters } from './TransactionFilters';
 // No FDH-7 review/correction UI exists yet under app/(app)/financial-data-hub/
 // (see page.tsx's own comment) — every "Review / Edit" link below falls back
 // to /financial-data-hub, matching Overview's fallback for consistency.
-const REVIEW_QUEUE_HREF = '/financial-data-hub';
+// FDH-8 closure (spec Phase I) — the dedicated FDH-7 review workspace.
+// Deep-links to the specific transaction so "Review / Edit" opens focused,
+// not the general queue.
+const REVIEW_QUEUE_HREF = '/financial-data-hub/review';
 
 const SORTS: readonly TransactionSort[] = ['newest', 'oldest', 'highest', 'lowest', 'merchant'];
 
@@ -161,7 +164,7 @@ export default async function FinancialActivityTransactionsPage({
                             <p>Transfer: {t.economic_transaction_type === 'transfer' ? 'Yes' : 'No'}</p>
                             <p>Duplicate status: {titleCase(t.dedup_status)}</p>
                             {needsReview && (
-                              <Link href={REVIEW_QUEUE_HREF} className="inline-block font-semibold text-trust hover:underline">
+                              <Link href={`${REVIEW_QUEUE_HREF}?transaction=${t.id}`} className="inline-block font-semibold text-trust hover:underline">
                                 Review / Edit this transaction →
                               </Link>
                             )}

@@ -13,14 +13,14 @@ import { resolveActivityParams, type RawSearchParams } from './_lib/searchParams
 
 // FDH-8 spec 14 — the Overview landing page for Financial Activity.
 //
-// No FDH-7 review/correction page exists yet anywhere under
-// app/(app)/financial-data-hub/ (only app/(app)/financial-data-hub/page.tsx,
-// the FDH-3 upload screen, exists today — confirmed by directory listing).
-// Every "Review transactions" link below therefore falls back to
-// `/financial-data-hub` rather than a dedicated review route, per this
-// phase's own instructions; replace with the real FDH-7 review route the
-// moment one ships.
-const REVIEW_QUEUE_HREF = '/financial-data-hub';
+// FDH-8 closure (spec Phase I) — every "Review transactions" link below
+// points to the dedicated FDH-7 review workspace
+// (app/(app)/financial-data-hub/review), a thin UI wrapper around FDH-7's
+// existing, unchanged approve/correct/confirm-transfer/confirm-duplicate/
+// split/approve-statement API routes. This closes the prior CONDITIONAL
+// PASS's disclosed gap (every link previously fell back to the generic
+// `/financial-data-hub` upload screen, which had no review UI at all).
+const REVIEW_QUEUE_HREF = '/financial-data-hub/review';
 
 export default async function FinancialActivityOverviewPage({
   searchParams,
@@ -240,32 +240,42 @@ export default async function FinancialActivityOverviewPage({
           <ul className="space-y-2 text-sm text-ink">
             {overview.review.needs_attention > 0 && (
               <li>
-                <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Needs attention</span>
-                {overview.review.needs_attention} transaction{overview.review.needs_attention === 1 ? '' : 's'} need your review
+                <Link href={`${REVIEW_QUEUE_HREF}?reason=needs_attention`} className="hover:underline">
+                  <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Needs attention</span>
+                  {overview.review.needs_attention} transaction{overview.review.needs_attention === 1 ? '' : 's'} need your review
+                </Link>
               </li>
             )}
             {overview.review.transfers > 0 && (
               <li>
-                <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Transfers</span>
-                {overview.review.transfers} possible transfer{overview.review.transfers === 1 ? '' : 's'} awaiting confirmation
+                <Link href={`${REVIEW_QUEUE_HREF}?reason=transfers`} className="hover:underline">
+                  <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Transfers</span>
+                  {overview.review.transfers} possible transfer{overview.review.transfers === 1 ? '' : 's'} awaiting confirmation
+                </Link>
               </li>
             )}
             {overview.review.possible_duplicates > 0 && (
               <li>
-                <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Duplicates</span>
-                {overview.review.possible_duplicates} possible duplicate{overview.review.possible_duplicates === 1 ? '' : 's'} to confirm
+                <Link href={`${REVIEW_QUEUE_HREF}?reason=duplicates`} className="hover:underline">
+                  <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Duplicates</span>
+                  {overview.review.possible_duplicates} possible duplicate{overview.review.possible_duplicates === 1 ? '' : 's'} to confirm
+                </Link>
               </li>
             )}
             {overview.review.uncategorised > 0 && (
               <li>
-                <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Uncategorised</span>
-                {overview.review.uncategorised} uncategorised transaction{overview.review.uncategorised === 1 ? '' : 's'}
+                <Link href={`${REVIEW_QUEUE_HREF}?reason=uncategorised`} className="hover:underline">
+                  <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Uncategorised</span>
+                  {overview.review.uncategorised} uncategorised transaction{overview.review.uncategorised === 1 ? '' : 's'}
+                </Link>
               </li>
             )}
             {overview.review.recurring_candidates > 0 && (
               <li>
-                <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Recurring</span>
-                {overview.review.recurring_candidates} recurring candidate{overview.review.recurring_candidates === 1 ? '' : 's'} to confirm
+                <Link href={`${REVIEW_QUEUE_HREF}?reason=recurring`} className="hover:underline">
+                  <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Recurring</span>
+                  {overview.review.recurring_candidates} recurring candidate{overview.review.recurring_candidates === 1 ? '' : 's'} to confirm
+                </Link>
               </li>
             )}
           </ul>
