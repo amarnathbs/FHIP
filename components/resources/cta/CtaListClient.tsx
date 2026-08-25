@@ -101,7 +101,7 @@ export function CtaListClient({ canManage }: { canManage: boolean }) {
                       Active
                     </th>
                     <th scope="col" className="py-2 pl-3 font-semibold">
-                      <span className="sr-only left-0 top-0">Actions</span>
+                      <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
