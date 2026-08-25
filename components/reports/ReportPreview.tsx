@@ -154,6 +154,12 @@ export function ReportPreview({
   const crossBorderFull = byCode('cross_border_full');
   const stressTesting = byCode('stress_testing');
   const personalActionPlan = byCode('personal_action_plan');
+  // II-R10 continuation — Investment Intelligence chapters.
+  const investmentPerformance = byCode('investment_performance');
+  const sipContribution = byCode('sip_contribution');
+  const portfolioXray = byCode('portfolio_xray');
+  const taxAndCost = byCode('tax_and_cost');
+  const priorityReviewItems = byCode('priority_review_items');
   const appendices = byCode('appendices');
   const isPremiumReport = Boolean(
     twelveMonthTrends || scoreDiagnosticFull || financialDnaFull || investmentAnalysis || appendices
@@ -1245,6 +1251,174 @@ export function ReportPreview({
                 <p className="mt-3 text-justify text-xs text-gray-400">{personalActionPlan.limitationText}</p>
               </SectionCard>
             </div>
+          )}
+
+          {/* II-R10 continuation — Investment Performance (II-R4) */}
+          {investmentPerformance?.sectionStatus === 'included' && (
+            <div className="report-page-break space-y-6">
+              <SectionCard title={investmentPerformance.sectionTitle} className="report-section">
+                <p className="text-justify text-sm text-gray-600">{investmentPerformance.narrativeText}</p>
+                <table className="mt-4 w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="py-1">Currency</th>
+                      <th className="py-1">XIRR</th>
+                      <th className="py-1">TWRR</th>
+                      <th className="py-1">Benchmark return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      (investmentPerformance.sectionData.results as { portfolios: { currencyCode: string; portfolioXirr: { status: string; value?: { rate: number } }; portfolioTwrr: { status: string; value?: { twrr: number } }; blendedBenchmarkReturn: { status: string; value?: { blendedReturn: number } } }[] } | undefined
+                      )?.portfolios ?? []
+                    ).map((p, i) => (
+                      <tr key={i} className="border-t align-top">
+                        <td className="py-2">{p.currencyCode}</td>
+                        <td className="py-2">{p.portfolioXirr.status === 'CALCULATED' && p.portfolioXirr.value ? `${(p.portfolioXirr.value.rate * 100).toFixed(1)}%` : 'Not available'}</td>
+                        <td className="py-2">{p.portfolioTwrr.status === 'CALCULATED' && p.portfolioTwrr.value ? `${(p.portfolioTwrr.value.twrr * 100).toFixed(1)}%` : 'Not available'}</td>
+                        <td className="py-2">{p.blendedBenchmarkReturn.status === 'CALCULATED' && p.blendedBenchmarkReturn.value ? `${(p.blendedBenchmarkReturn.value.blendedReturn * 100).toFixed(1)}%` : 'Benchmark data not available'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-3 text-justify text-xs text-gray-400">{investmentPerformance.limitationText}</p>
+              </SectionCard>
+            </div>
+          )}
+          {investmentPerformance && investmentPerformance.sectionStatus !== 'included' && (
+            <SectionCard title={investmentPerformance.sectionTitle} className="report-section">
+              <Unavailable text={investmentPerformance.limitationText} />
+            </SectionCard>
+          )}
+
+          {/* II-R10 continuation — Contribution/SIP behaviour (II-R5) */}
+          {sipContribution?.sectionStatus === 'included' && (
+            <div className="report-page-break space-y-6">
+              <SectionCard title={sipContribution.sectionTitle} className="report-section">
+                <p className="text-justify text-sm text-gray-600">{sipContribution.narrativeText}</p>
+                {((sipContribution.chartData?.observations as { classification: string; text: string }[] | undefined) ?? []).length > 0 && (
+                  <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                    {(sipContribution.chartData?.observations as { classification: string; text: string }[]).slice(0, 8).map((o, i) => (
+                      <li key={i}>{o.text}</li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-3 text-justify text-xs text-gray-400">{sipContribution.limitationText}</p>
+              </SectionCard>
+            </div>
+          )}
+          {sipContribution && sipContribution.sectionStatus !== 'included' && (
+            <SectionCard title={sipContribution.sectionTitle} className="report-section">
+              <Unavailable text={sipContribution.limitationText} />
+            </SectionCard>
+          )}
+
+          {/* II-R10 continuation — Portfolio X-Ray & Diversification (II-R5) */}
+          {portfolioXray?.sectionStatus === 'included' && (
+            <div className="report-page-break space-y-6">
+              <SectionCard title={portfolioXray.sectionTitle} className="report-section">
+                <p className="text-justify text-sm text-gray-600">{portfolioXray.narrativeText}</p>
+                {(() => {
+                  const sectorExposure = (portfolioXray.sectionData.results as { sectorExposure?: { status: string; buckets: { key: string; label: string; effectiveWeight: number }[] } } | undefined)?.sectorExposure;
+                  if (!sectorExposure || sectorExposure.status !== 'ok' || sectorExposure.buckets.length === 0) return null;
+                  return (
+                    <table className="mt-4 w-full text-sm">
+                      <thead className="text-left text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="py-1">Sector</th>
+                          <th className="py-1">Look-through weight</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...sectorExposure.buckets]
+                          .sort((a, b) => b.effectiveWeight - a.effectiveWeight)
+                          .slice(0, 10)
+                          .map((b) => (
+                            <tr key={b.key} className="border-t">
+                              <td className="py-1">{b.label}</td>
+                              <td className="py-1">{(b.effectiveWeight * 100).toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+                <p className="mt-3 text-justify text-xs text-gray-400">{portfolioXray.limitationText}</p>
+              </SectionCard>
+            </div>
+          )}
+          {portfolioXray && portfolioXray.sectionStatus !== 'included' && (
+            <SectionCard title={portfolioXray.sectionTitle} className="report-section">
+              <Unavailable text={portfolioXray.limitationText} />
+            </SectionCard>
+          )}
+
+          {/* II-R10 continuation — Tax & Cost Intelligence (II-R6) */}
+          {taxAndCost?.sectionStatus === 'included' && (
+            <div className="report-page-break space-y-6">
+              <SectionCard title={taxAndCost.sectionTitle} className="report-section">
+                <p className="text-justify text-sm text-gray-600">{taxAndCost.narrativeText}</p>
+                <table className="mt-4 w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="py-1">Instrument</th>
+                      <th className="py-1">Disposal date</th>
+                      <th className="py-1">Classification</th>
+                      <th className="py-1">Taxable gain</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      (taxAndCost.sectionData.results as { disposalResults: { instrumentName: string; disposalDate: string; classification: string; taxableGain: number }[] } | undefined
+                      )?.disposalResults ?? []
+                    )
+                      .slice(0, 20)
+                      .map((d, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="py-1">{d.instrumentName}</td>
+                          <td className="py-1">{d.disposalDate}</td>
+                          <td className="py-1 capitalize">{d.classification}</td>
+                          <td className="py-1 text-right">{fmt(d.taxableGain)}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <p className="mt-3 text-justify text-xs text-gray-400">{taxAndCost.limitationText}</p>
+              </SectionCard>
+            </div>
+          )}
+          {taxAndCost && taxAndCost.sectionStatus !== 'included' && (
+            <SectionCard title={taxAndCost.sectionTitle} className="report-section">
+              <Unavailable text={taxAndCost.limitationText} />
+            </SectionCard>
+          )}
+
+          {/* II-R10 continuation — Priority Review Items (II-R9 Review Centre) */}
+          {priorityReviewItems?.sectionStatus === 'included' && (
+            <div className="report-page-break space-y-6">
+              <SectionCard title={priorityReviewItems.sectionTitle} className="report-section">
+                <p className="text-justify text-sm text-gray-600">{priorityReviewItems.narrativeText}</p>
+                <div className="mt-4 space-y-3">
+                  {(
+                    (priorityReviewItems.sectionData.items as { title: string; description: string; severity: string; category: string }[] | undefined) ?? []
+                  ).map((item, i) => (
+                    <div key={i} className="rounded border p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-gray-900">{item.title}</p>
+                        <span className="text-xs uppercase text-gray-400">{item.severity}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-600">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-justify text-xs text-gray-400">{priorityReviewItems.limitationText}</p>
+              </SectionCard>
+            </div>
+          )}
+          {priorityReviewItems && priorityReviewItems.sectionStatus !== 'included' && (
+            <SectionCard title={priorityReviewItems.sectionTitle} className="report-section">
+              <Unavailable text={priorityReviewItems.limitationText} />
+            </SectionCard>
           )}
 
           {/* Page 20 — Appendices */}

@@ -1,0 +1,107 @@
+{
+  "userId": "559f6ad7-c23f-4aae-a6d8-a883f08c37d4",
+  "results": [
+    {
+      "id": "FORECAST-RUN-SETUP",
+      "description": "Retirement forecast run created via the real Forecasting API",
+      "status": "PASS",
+      "detail": "status=200 body={\"data\":{\"run\":{\"id\":\"cf33b48f-7e76-42fb-83c1-3c720dff637f\",\"user_id\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4\",\"forecast_profile_id\":\"4c8d5e23-5a7a-459b-8f87-2ca1fae9a43a\",\"scenario_id\":\"4a986fd9-7d91-4"
+    },
+    {
+      "id": "CANON-1",
+      "description": "GET /investment-intelligence/analytics returns real (non-empty) data",
+      "status": "PASS",
+      "detail": "{\"data\":{\"empty\":false,\"warnings\":[{\"scope\":\"data_currency\",\"detail\":\"The most recent certified valuation is dated 2025-03-28. Figures are calculated up to that date, not to today.\"}],\"results\":{\"asOfDate\":\"2025-03-28\",\"periodStart\":\"2024-01-28\",\"engineVersion\":\"performance-engine-r4-v1\",\"subVersion"
+    },
+    {
+      "id": "CANON-2",
+      "description": "GET /investment-intelligence/sip returns real (non-empty) data",
+      "status": "PASS",
+      "detail": "{\"data\":{\"empty\":false,\"warnings\":[{\"scope\":\"as_of_date\",\"detail\":\"The analysis date has been set to 2025-03-28, the most recent date for which real data exists, rather than 2026-08-24.\"}],\"asOfDate\":\"2025-03-28\",\"engineVersion\":\"sip-engine-r5-v1\",\"seriesCount\":3,\"presentableCount\":1,\"series\":[{\"ser"
+    },
+    {
+      "id": "CANON-3",
+      "description": "GET /investment-intelligence/xray returns real (available) data",
+      "status": "PASS",
+      "detail": "{\"data\":{\"empty\":false,\"available\":true,\"warnings\":[{\"scope\":\"as_of_date\",\"detail\":\"The analysis date has been set to 2025-03-28, the most recent date for which real position data exists, rather than 2026-08-24.\"}],\"asOfDate\":\"2025-03-28\",\"portfolioAsOfDate\":\"2025-03-28\",\"holdingsAsOfDate\":\"2024-12-"
+    },
+    {
+      "id": "CANON-4",
+      "description": "GET /investment-intelligence/tax/summary returns real (non-empty) data",
+      "status": "PASS",
+      "detail": "{\"data\":{\"empty\":false,\"classification\":\"SIMULATION\",\"disclaimer\":\"This is an estimate for planning purposes only, not tax advice and not a filed-return figure. Indian capital-gains tax rules are complex and change with each Finance Act. Verify every number with a Chartered Accountant or tax profess"
+    },
+    {
+      "id": "CANON-5",
+      "description": "GET /investment-intelligence/review after refresh returns items array",
+      "status": "PASS",
+      "detail": "count=1"
+    },
+    {
+      "id": "REPORT-GEN",
+      "description": "Premium report generated with populated II data",
+      "status": "PASS",
+      "detail": "status=200"
+    },
+    {
+      "id": "CHAPTER-STATUS",
+      "description": "All 5 new II chapters reached included status with real data",
+      "status": "PASS",
+      "detail": "{\"perf\":\"included\",\"sip\":\"included\",\"xray\":\"included\",\"tax\":\"included\",\"review\":\"included\"}"
+    },
+    {
+      "id": "CHAPTER-STATUS-GOALS",
+      "description": "Goal Forecast Detail chapter reached included status",
+      "status": "PASS",
+      "detail": "included"
+    },
+    {
+      "id": "CHAPTER-STATUS-RETIREMENT",
+      "description": "Retirement Readiness chapter reached included status",
+      "status": "PASS",
+      "detail": "included"
+    },
+    {
+      "id": "NO-RECALC-1 (Performance)",
+      "description": "Report investment_performance.results.portfolios deep-equals the canonical analytics API result",
+      "status": "PASS",
+      "detail": "report portfolios=1, canonical=1"
+    },
+    {
+      "id": "NO-RECALC-2 (SIP)",
+      "description": "Report sip_contribution presentable-series actualXirr deep-equals the canonical SIP API result, matched by seriesKey",
+      "status": "PASS",
+      "detail": "canonical presentable series=1, report series total=3"
+    },
+    {
+      "id": "NO-RECALC-3 (X-Ray)",
+      "description": "Report portfolio_xray.results.sectorExposure deep-equals the canonical X-Ray API result",
+      "status": "PASS",
+      "detail": "{\"reportStatus\":\"unavailable\",\"canonStatus\":\"unavailable\",\"reportBucketCount\":0,\"canonBucketCount\":0}"
+    },
+    {
+      "id": "NO-RECALC-4 (Tax)",
+      "description": "Report tax_and_cost disposalResults (taxableGain/classification/gainType/holdingDays) match the canonical tax API result, matched by instrument+date",
+      "status": "PASS",
+      "detail": "{\"reportCount\":1,\"canonCount\":1,\"canonSample\":{\"instrumentId\":\"47c17f5e-9155-4ad2-9d24-fcef507d8163\",\"instrumentName\":\"R10POP1787563514036 Tax Test Fund\",\"acquisitionDate\":\"2024-03-01\",\"disposalDate\":\"2024-09-01\",\"unitsConsumed\":10000,\"classification\":\"unresolved\",\"gainType\":\"unresolved\",\"holdingDays\":null,\"ruleVersion\":null,\"ruleVersionPlaceholder\":false,\"saleValue\":180000,\"costBasisUsed\":100000,\"taxableGain\":null,\"grandfathering\":null,\"note\":\"Scheme tax classification is unresolved (unresolved_no_data) — excluded from confident tax figures. No scheme tax classification is on record for this instrument — excluded from confident tax figures.\"}}"
+    },
+    {
+      "id": "NO-RECALC-5 (Review)",
+      "description": "Report priority_review_items titles match the canonical open review items (same set)",
+      "status": "PASS",
+      "detail": "{\"report\":[\"Tax classification data incomplete\"],\"canonical\":[\"Tax classification data incomplete\"]}"
+    },
+    {
+      "id": "NO-DOUBLE-COUNT",
+      "description": "Report net worth equals canonical Dashboard/summary net worth",
+      "status": "PASS",
+      "detail": "{\"reportNetWorth\":800000,\"canonNetWorth\":800000}"
+    },
+    {
+      "id": "PDF-POPULATED",
+      "description": "Fully populated Premium PDF generates successfully",
+      "status": "PASS",
+      "detail": "status=200 raw={\"data\":{\"id\":\"684e9212-53a5-4c1c-bd16-bd917a1d644f\",\"report_id\":\"f60ab75e-4423-4b45-a3ad-3d427b13107c\",\"requested_by_user_id\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4\",\"export_format\":\"pdf\",\"status\":\"ready\",\"storage_path\":\"559f6ad7-c23f-4aae-a6d8-a883f08c37d4/f60ab75e-4423-4b45-a3ad-3d427b13107c/684e9212-53a5-4c1c-bd16-bd917a1d644f.pdf\",\"file_name\":\"f60ab75e-4423-4b45-a3ad-3d427b13107c.pdf\",\"file_size_bytes\":498843,\"checksum\":\"c88c164083b17edafcf9fd383d83d78cae244ab9490687286bb4b86dc6eb59ef\",\"rend"
+    }
+  ]
+}

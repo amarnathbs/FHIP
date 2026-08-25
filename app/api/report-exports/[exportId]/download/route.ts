@@ -28,11 +28,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ exportI
   const { data: signed, error: signError } = await admin.storage.from('report-exports').createSignedUrl(data.storage_path, 60);
   if (signError || !signed) return bad(signError?.message ?? 'Could not generate a download link', 500);
 
-  await supabase
+  // II-R10 hardening (migration 0070): report_exports/report_access_events
+  // grant the authenticated role SELECT-own only now — both writes below
+  // must go through the admin client. Ownership of exportId was already
+  // confirmed by the .eq('requested_by_user_id', user.id) read above.
+  await admin
     .from('report_exports')
     .update({ download_count: data.download_count + 1 })
     .eq('id', exportId);
-  await supabase.from('report_access_events').insert({ report_id: data.report_id, user_id: user.id, event_type: 'downloaded' });
+  await admin.from('report_access_events').insert({ report_id: data.report_id, user_id: user.id, event_type: 'downloaded' });
 
   return Response.redirect(signed.signedUrl, 302);
 }

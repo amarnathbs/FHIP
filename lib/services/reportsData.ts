@@ -1,7 +1,23 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { resolveReportSourceData, buildEligibilityInput, isEligibleForOfficialMonthlyReport } from '@/lib/services/reportSnapshotResolver';
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
+
+// II-R10 security hardening (migration 0070_ii_r10_reports_authoritative_write_hardening.sql):
+// the `reports` table family now grants the `authenticated` role SELECT-own
+// only — every insert/update/delete on reports/report_sections/
+// report_snapshots/report_generation_runs must go through the service-role
+// admin client. Authorization for every write below still comes from the
+// caller-supplied userId, which every API route in app/api/reports/**
+// derives from requireUser()'s validated session before calling into this
+// module — never from unauthenticated input. Reads (listReports, getReport)
+// deliberately stay on the RLS-scoped per-request client for
+// defense-in-depth: a bug in the caller's own auth check would still be
+// stopped by RLS on the read path.
+function writeClient() {
+  return createAdminClient();
+}
 
 const TEMPLATE_VERSION = 'report-1.0.0';
 const DISCLAIMER_VERSION = 'disclaimer-1.0.0';
@@ -71,7 +87,16 @@ export interface GenerateReportParams {
 // source snapshots, builds sections, checks eligibility, enforces
 // idempotency for original (non-revision) reports, and writes an audit run.
 export async function generateReport(params: GenerateReportParams): Promise<GenerateReportResult> {
-  const supabase = params.client ?? (await createClient());
+  // Defaults to the service-role admin client now (II-R10 hardening) — the
+  // scheduled cron job already always passed one explicitly (see
+  // GenerateReportParams.client's original comment); manual/API-triggered
+  // generation previously fell back to the per-request session client,
+  // which is what let migration 0070's forgery gap exist in the first place
+  // once combined with a permissive RLS policy. params.userId is always
+  // caller-validated (every app/api/reports/** route derives it from
+  // requireUser() before calling in), so trusting it here — the same way
+  // the cron path always has — is safe.
+  const supabase = params.client ?? createAdminClient();
   const reportType = params.reportType ?? 'monthly_financial_health';
   const reportMonth = params.reportMonth ?? monthStart();
   const triggerType = params.triggerType ?? 'manual';
@@ -253,6 +278,25 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
             },
           ]
         : []),
+      // II-R10 continuation — provenance rows for the five Investment
+      // Intelligence chapters (spec sections 47, 66-68), one per chapter
+      // that was actually populated for this report. Each source_version is
+      // the ENGINE's own engineVersion string, never a value R10 invents.
+      ...(source.premium?.investmentPerformance
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_performance', source_version: source.premium.investmentPerformance.results.engineVersion, source_as_of_date: source.premium.investmentPerformance.results.asOfDate }]
+        : []),
+      ...(source.premium?.sip
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_sip', source_version: source.premium.sip.results.engineVersion, source_as_of_date: source.premium.sip.results.asOfDate }]
+        : []),
+      ...(source.premium?.xray
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_xray', source_version: source.premium.xray.results.engineVersion, source_as_of_date: source.premium.xray.results.asOfDate }]
+        : []),
+      ...(source.premium?.taxAndCost
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_tax', source_version: source.premium.taxAndCost.results.engineVersion, source_as_of_date: source.premium.taxAndCost.asOfDate }]
+        : []),
+      ...(source.premium?.reviewItems
+        ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_review', source_version: 'ii-r9-review-centre', source_as_of_date: source.asOfDate, snapshot_metadata_json: { openItemCount: source.premium.reviewItems.totalOpenCount } }]
+        : []),
     ]);
 
     if (revisesReportId) {
@@ -340,7 +384,7 @@ export async function getReportByRenderToken(reportId: string, token: string) {
 }
 
 export async function publishReport(userId: string, reportId: string) {
-  const supabase = await createClient();
+  const supabase = writeClient();
   const { data, error } = await supabase
     .from('reports')
     .update({ status: 'published', published_at: new Date().toISOString() })
@@ -354,7 +398,7 @@ export async function publishReport(userId: string, reportId: string) {
 }
 
 export async function archiveReport(userId: string, reportId: string) {
-  const supabase = await createClient();
+  const supabase = writeClient();
   const { data, error } = await supabase
     .from('reports')
     .update({ status: 'archived' })
@@ -367,6 +411,6 @@ export async function archiveReport(userId: string, reportId: string) {
 }
 
 export async function recordAccessEvent(userId: string, reportId: string, eventType: 'viewed' | 'printed' | 'exported' | 'downloaded') {
-  const supabase = await createClient();
+  const supabase = writeClient();
   await supabase.from('report_access_events').insert({ report_id: reportId, user_id: userId, event_type: eventType });
 }

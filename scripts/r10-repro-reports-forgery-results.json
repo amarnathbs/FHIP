@@ -1,0 +1,95 @@
+{
+  "userId": "f6144738-26c4-4e93-a5cb-d63c9b8e165e",
+  "results": [
+    {
+      "name": "SANITY: authenticated owner can still read their own report",
+      "expected": true,
+      "actual": true,
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "{\"id\":\"6e3ea192-9b6c-4073-a9e9-db2ffa0cff6a\",\"status\":\"ready\"}"
+    },
+    {
+      "name": "ATTACK-1 forge report status/completeness",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "null"
+    },
+    {
+      "name": "ATTACK-2 forge report_sections financial numbers/narrative",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "null"
+    },
+    {
+      "name": "ATTACK-3 forge report_snapshots provenance row",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "new row violates row-level security policy for table \"report_snapshots\""
+    },
+    {
+      "name": "ATTACK-4 forge report_exports ready status + arbitrary storage_path",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "new row violates row-level security policy for table \"report_exports\""
+    },
+    {
+      "name": "ATTACK-5 forge report_generation_runs audit outcome",
+      "expected": "BLOCKED-BY-RLS",
+      "actual": "BLOCKED-BY-RLS",
+      "verdict": "MATCHES-EXPECTED",
+      "detail": "null"
+    },
+    {
+      "name": "GROUND TRUTH: report status unchanged (still ready)",
+      "expected": "ready",
+      "actual": "ready",
+      "verdict": "MATCHES-EXPECTED"
+    },
+    {
+      "name": "GROUND TRUTH: section narrative unchanged",
+      "expected": "Your net worth is a genuine, engine-computed figure.",
+      "actual": "Your net worth is a genuine, engine-computed figure.",
+      "verdict": "MATCHES-EXPECTED"
+    },
+    {
+      "name": "GROUND TRUTH: no extra snapshot rows inserted",
+      "expected": 0,
+      "actual": 0,
+      "verdict": "MATCHES-EXPECTED"
+    },
+    {
+      "name": "GROUND TRUTH: no ready exports exist",
+      "expected": 0,
+      "actual": 0,
+      "verdict": "MATCHES-EXPECTED"
+    },
+    {
+      "name": "GROUND TRUTH: generation run status unchanged (still started)",
+      "expected": "started",
+      "actual": "started",
+      "verdict": "MATCHES-EXPECTED"
+    }
+  ],
+  "groundTruth": {
+    "reportStatus": {
+      "status": "ready",
+      "data_completeness_pct": 40
+    },
+    "section": {
+      "section_data_json": {
+        "currency": "AUD",
+        "netWorth": 100000
+      },
+      "narrative_text": "Your net worth is a genuine, engine-computed figure."
+    },
+    "snapshotCount": 0,
+    "readyExportCount": 0,
+    "runStatus": {
+      "output_status": "started"
+    }
+  }
+}
