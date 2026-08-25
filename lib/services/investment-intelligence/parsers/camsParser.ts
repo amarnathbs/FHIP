@@ -180,10 +180,26 @@ export const camsParser: InvestmentDocumentParser = {
         inTable = false;
         continue;
       }
+      // Live-DEV closure finding (R11-FINAL round, 2026-08-25): "AMC Name:"
+      // and "Scheme Name:" are always on SEPARATE lines in every real CAMS
+      // statement (see the format documented at the top of this file) —
+      // `amc` must be captured and applied to `lastKnownAmcName`
+      // unconditionally, on its OWN line, not gated behind the SAME
+      // iteration's `schemeName` check (which is null on the AMC-Name line
+      // itself, and `amc` is null again on the Scheme-Name line by the time
+      // that check runs) — the previous code silently left
+      // `lastKnownAmcName` at its initial `''` for every real statement,
+      // and no existing golden-fixture test caught it because none asserted
+      // on parsed `scheme.amcName`/downstream `institution_name` for a
+      // real multi-line statement. Confirmed live: this caused two
+      // independently-derived accounts for the identical (institution,
+      // folio) pair to resolve to different `ii_accounts` rows, breaking
+      // R11 cross-source matching for anything that (correctly) supplies a
+      // real institution name, e.g. a manual-source fixture.
       const amc = extractLabelledField(line, 'AMC Name');
+      if (amc) lastKnownAmcName = amc;
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
-        if (amc) lastKnownAmcName = amc;
         currentScheme = {
           rawSchemeName: schemeName,
           normalisedSchemeName: normaliseSchemeName(schemeName),
@@ -277,10 +293,26 @@ export const camsParser: InvestmentDocumentParser = {
         currentFolio = folio;
         continue;
       }
+      // Live-DEV closure finding (R11-FINAL round, 2026-08-25): "AMC Name:"
+      // and "Scheme Name:" are always on SEPARATE lines in every real CAMS
+      // statement (see the format documented at the top of this file) —
+      // `amc` must be captured and applied to `lastKnownAmcName`
+      // unconditionally, on its OWN line, not gated behind the SAME
+      // iteration's `schemeName` check (which is null on the AMC-Name line
+      // itself, and `amc` is null again on the Scheme-Name line by the time
+      // that check runs) — the previous code silently left
+      // `lastKnownAmcName` at its initial `''` for every real statement,
+      // and no existing golden-fixture test caught it because none asserted
+      // on parsed `scheme.amcName`/downstream `institution_name` for a
+      // real multi-line statement. Confirmed live: this caused two
+      // independently-derived accounts for the identical (institution,
+      // folio) pair to resolve to different `ii_accounts` rows, breaking
+      // R11 cross-source matching for anything that (correctly) supplies a
+      // real institution name, e.g. a manual-source fixture.
       const amc = extractLabelledField(line, 'AMC Name');
+      if (amc) lastKnownAmcName = amc;
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
-        if (amc) lastKnownAmcName = amc;
         currentScheme = {
           rawSchemeName: schemeName,
           normalisedSchemeName: normaliseSchemeName(schemeName),

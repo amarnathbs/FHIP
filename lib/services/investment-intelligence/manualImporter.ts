@@ -4,6 +4,10 @@ import { emitAuditEvent } from './audit';
 import { findOrCreateIiAccountServiceRole } from './accounts';
 import { resolveOrCreateInstrument } from './identifiers';
 import type { IiManualFixture } from '@/lib/validation/investment-intelligence';
+import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
+import { loadActiveReconciliationConfig } from './reconciliationConfig';
+import { openReconciliationCase } from './documentProcessing';
+import { fetchAllRows } from './pagination';
 
 // The controlled, deterministic manual/test importer (R1_IMPLEMENTATION_SPEC.md
 // section 8) — NOT the production CAS parser (explicit non-goal). Proves the
@@ -175,7 +179,129 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
   // idempotent no-op (ignoreDuplicates:true), never an overwrite of an
   // existing immutable row (ADR-003 testing implications).
   const transactionIds: string[] = [];
+  const reconciliationConfig = await loadActiveReconciliationConfig();
   for (const tx of fixture.transactions) {
+    // R11 — cross-source identity resolution (spec sections 24-41), same
+    // check documentProcessing.ts's CAMS/KFintech pipeline performs before
+    // inserting a transaction. Manual import is itself an in-scope R11
+    // source (R11_SCOPE_AND_ARCHITECTURE_RECONCILIATION.md line 32): a
+    // transaction manually imported AFTER a CAMS/KFintech statement already
+    // evidenced the same real-world transaction must be linked as
+    // corroborating evidence, never inserted as a second canonical row —
+    // otherwise cross-source dedup would only work in the CAMS/KFintech-
+    // arrives-second direction, breaking the import-order-independence
+    // invariant (spec section 74's "import order changes canonical truth").
+    // fetchAllRows, not a bare .select() — the same silent-1000-row-cap
+    // hazard pagination.ts documents applies here exactly as it does to
+    // documentProcessing.ts's loadCrossSourceCandidates: a position with
+    // more than 1000 existing transactions must not have its later rows
+    // silently invisible to this match, which would wrongly insert a
+    // duplicate canonical row instead of linking (R6-P0 pagination class).
+    const existingRows = await fetchAllRows<{
+      id: string;
+      account_id: string;
+      instrument_id: string;
+      transaction_date: string;
+      transaction_type: string;
+      gross_amount: string;
+      units: string | null;
+      source_reference: string | null;
+      source_document_id: string | null;
+      status: string;
+    }>(() =>
+      admin
+        .from('ii_transactions')
+        .select('id, account_id, instrument_id, transaction_date, transaction_type, gross_amount, units, source_reference, source_document_id, status')
+        .eq('user_id', userId)
+        .eq('account_id', accountResult.accountId)
+        .eq('instrument_id', instrumentResult.instrumentId)
+        .order('id', { ascending: true })
+    );
+    const crossSourceCandidates: CrossSourceExistingTransaction[] = existingRows
+      .filter((r) => r.source_document_id !== null && r.source_document_id !== doc.id)
+      .map((r) => ({
+        id: r.id as string,
+        sourceKey: '',
+        sourceDocumentId: r.source_document_id as string,
+        accountId: r.account_id as string,
+        instrumentId: r.instrument_id as string,
+        transactionDate: r.transaction_date as string,
+        transactionType: r.transaction_type as string,
+        grossAmount: String(r.gross_amount),
+        units: r.units === null ? null : String(r.units),
+        sourceReference: r.source_reference as string | null,
+        status: r.status as string,
+      }));
+
+    let crossSourceStatus: 'parsed' | 'review_required' = 'parsed';
+    if (crossSourceCandidates.length > 0) {
+      const match = resolveCrossSourceTransactionMatch(
+        {
+          sourceKey: 'manual',
+          sourceDocumentId: doc.id as string,
+          accountId: accountResult.accountId as string,
+          instrumentId: instrumentResult.instrumentId as string,
+          transactionDate: tx.transactionDate,
+          transactionType: tx.transactionType,
+          grossAmount: String(tx.grossAmount),
+          units: tx.units === undefined || tx.units === null ? null : String(tx.units),
+          sourceReference: tx.sourceReference ?? null,
+        },
+        crossSourceCandidates,
+        reconciliationConfig
+      );
+
+      if ((match.state === 'exact' || match.state === 'high_confidence') && match.matchedExistingId) {
+        // Same real-world transaction, corroborated by manual evidence —
+        // link, do not duplicate.
+        await admin.from('ii_transaction_source_links').upsert(
+          {
+            user_id: userId,
+            transaction_id: match.matchedExistingId,
+            source_document_id: doc.id,
+            parse_run_id: null,
+            is_originating: false,
+            match_basis: match.state === 'exact' ? 'cross_source_exact' : 'cross_source_high_confidence',
+          },
+          { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true }
+        );
+        const caseId = await openReconciliationCase(userId, {
+          subjectType: 'transaction',
+          subjectId: match.matchedExistingId,
+          discrepancyType: match.state === 'exact' ? 'cross_source_exact_duplicate' : 'cross_source_high_confidence_duplicate',
+          severity: 'info',
+          sourceDocumentId: doc.id as string,
+          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale },
+          evidence: { comparedTransactionIds: [match.matchedExistingId], engineVersion: match.engineVersion, newSourceDocumentId: doc.id },
+        });
+        if (caseId) {
+          await admin
+            .from('ii_reconciliation_cases')
+            .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by_actor_type: 'system', resolution_method: 'auto_resolved_cross_source_precedence' })
+            .eq('id', caseId);
+        }
+        transactionIds.push(match.matchedExistingId);
+        continue; // no new canonical row — the loop moves to the next fixture transaction
+      }
+
+      if (match.state === 'conflict' || match.state === 'ambiguous') {
+        // Never silently merge — insert this row too (both pieces of
+        // evidence preserved), but excluded from analytical aggregation
+        // until a human resolves the case (same contract as
+        // documentProcessing.ts).
+        await openReconciliationCase(userId, {
+          subjectType: 'transaction',
+          subjectId: accountResult.accountId as string,
+          discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
+          severity: 'high',
+          sourceDocumentId: doc.id as string,
+          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale, transactionDate: tx.transactionDate },
+          evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: doc.id },
+        });
+        crossSourceStatus = 'review_required';
+      }
+    }
+
     const txPayload = {
       user_id: userId,
       account_id: accountResult.accountId,
@@ -188,6 +314,7 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       price_per_unit: tx.pricePerUnit ?? null,
       gross_amount: tx.grossAmount,
       source_reference: tx.sourceReference ?? null,
+      status: crossSourceStatus,
     };
     // R3 closure-pass fix: uidx_ii_transactions_dedup (migration 0033) is a
     // PARTIAL unique index (`where source_document_id is not null and

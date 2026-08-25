@@ -183,10 +183,14 @@ export const kfintechParser: InvestmentDocumentParser = {
         inTable = false;
         continue;
       }
+      // Live-DEV closure finding (R11-FINAL round, 2026-08-25) — same root
+      // cause and fix as camsParser.ts's identical bug: `amc` must update
+      // `lastKnownAmcName` unconditionally on its own line, not gated
+      // behind the same iteration's `schemeName` check.
       const amc = extractLabelledField(line, 'AMC Name');
+      if (amc) lastKnownAmcName = amc;
       const schemeName = extractLabelledField(line, 'Scheme');
       if (schemeName !== null) {
-        if (amc) lastKnownAmcName = amc;
         currentScheme = {
           rawSchemeName: schemeName,
           normalisedSchemeName: normaliseSchemeName(schemeName),
@@ -280,10 +284,14 @@ export const kfintechParser: InvestmentDocumentParser = {
         currentFolio = folio;
         continue;
       }
+      // Live-DEV closure finding (R11-FINAL round, 2026-08-25) — same root
+      // cause and fix as camsParser.ts's identical bug: `amc` must update
+      // `lastKnownAmcName` unconditionally on its own line, not gated
+      // behind the same iteration's `schemeName` check.
       const amc = extractLabelledField(line, 'AMC Name');
+      if (amc) lastKnownAmcName = amc;
       const schemeName = extractLabelledField(line, 'Scheme');
       if (schemeName !== null) {
-        if (amc) lastKnownAmcName = amc;
         currentScheme = {
           rawSchemeName: schemeName,
           normalisedSchemeName: normaliseSchemeName(schemeName),
