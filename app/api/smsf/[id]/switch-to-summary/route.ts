@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { switchSmsfFundToSummary } from '@/lib/services/smsfData';
 import { smsfSwitchToSummarySchema } from '@/lib/validation/smsf';
 
-// SMSF-UI Detailed -> Summary switch-back (spec s.32-33, migration 0087).
+// SMSF-UI Detailed -> Summary switch-back (spec s.32-33, migration 0089).
 // Unlike switch-to-detailed, this is not gated behind a reconciliation
 // variance check — the user is explicitly providing a NEW Summary value
 // that supersedes the Detailed figures, not reproducing them. Detailed

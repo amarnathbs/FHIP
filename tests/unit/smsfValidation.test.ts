@@ -81,7 +81,7 @@ describe('smsfFundCreateSchema', () => {
   });
 });
 
-// SMSF-UI: Detailed -> Summary switch-back (spec s.32-33, migration 0087).
+// SMSF-UI: Detailed -> Summary switch-back (spec s.32-33, migration 0089).
 describe('smsfSwitchToSummarySchema', () => {
   it('accepts a non-negative value with a date', () => {
     const r = smsfSwitchToSummarySchema.safeParse({ new_summary_balance: 999000, new_summary_balance_date: '2026-08-25' });

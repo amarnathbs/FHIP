@@ -364,7 +364,7 @@ await asTenant(A, async () => {
   await db.query(`delete from smsf_holdings where holding_name='SMSF Indian Shares'`); // restore for later totals
 });
 
-console.log('\n=== SMSF-UI: Detailed -> Summary switch-back (migration 0087, spec s.32-33) ===');
+console.log('\n=== SMSF-UI: Detailed -> Summary switch-back (migration 0089, spec s.32-33) ===');
 await asTenant(B, async () => {
   await expectReject('cross-tenant: B cannot switch A\'s fund back to Summary (fund not found for B)', async () => {
     await db.query(`select smsf_switch_to_summary('${fundA.id}', 1, current_date)`);
@@ -452,6 +452,40 @@ console.log('\n=== Existing invariants reconfirmed (no regression) ===');
   const noRls = (await db.query(`select c.relname from pg_class c join pg_namespace nsp on nsp.oid=c.relnamespace
     where nsp.nspname='public' and c.relkind='r' and not c.relrowsecurity and c.relname like 'smsf_%'`)).rows;
   check('all smsf_* tables have RLS enabled', noRls.length === 0, JSON.stringify(noRls));
+}
+
+
+console.log('\n=== SMSF-UI: current_balance integrity guard (migration 0090) ===');
+{
+  await asTenant(A, async () => {
+    const before = Number((await db.query(`select current_balance from retirement_accounts where id='${smsfA}'`)).rows[0].current_balance);
+    await expectReject('GUARD 0090: direct UPDATE of an SMSF row current_balance is REJECTED (the raw-PATCH attack)', async () => {
+      await db.query(`update retirement_accounts set current_balance=999999 where id='${smsfA}'`);
+    });
+    const after = Number((await db.query(`select current_balance from retirement_accounts where id='${smsfA}'`)).rows[0].current_balance);
+    check('GUARD 0090: balance genuinely unchanged after the blocked attack', after === before, `(before ${before}, after ${after})`);
+    let notesOk = true, notesErr = '';
+    try { await db.query(`update retirement_accounts set notes='guard scope test' where id='${smsfA}'`); }
+    catch (e) { notesOk = false; notesErr = String(e.message).slice(0, 120); }
+    check('GUARD 0090 SCOPE: non-balance columns on the SMSF row remain editable', notesOk, notesErr);
+    const other = (await db.query(`insert into retirement_accounts(user_id,account_name,account_type,current_balance,currency_code,country_code,owner,master_item_key,is_active)
+      values('${A}','Industry Super Guard Test','super',50000,'AUD','AU','self','industry_super',true) returning id`)).rows[0].id;
+    let otherOk = true, otherErr = '';
+    try { await db.query(`update retirement_accounts set current_balance=60000 where id='${other}'`); }
+    catch (e) { otherOk = false; otherErr = String(e.message).slice(0, 120); }
+    const otherVal = Number((await db.query(`select current_balance from retirement_accounts where id='${other}'`)).rows[0].current_balance);
+    check('GUARD 0090 NEGATIVE CONTROL: a NON-SMSF retirement row is still freely editable (guard is narrow)', otherOk && otherVal === 60000, `(got ${otherVal}) ${otherErr}`);
+  });
+  // fundA is in DETAILED mode here, so a summary_balance edit correctly does NOT
+  // drive current_balance (0084's own `if new.mode = 'summary'` design). Prove the
+  // DETAILED certified writer -- smsf_recompute_fund(), whitelisted via ALTER
+  // FUNCTION ... SET -- still reaches current_balance through the guard. The Summary
+  // path was already proven earlier in this same suite.
+  const detBefore = Number((await db.query(`select current_balance from retirement_accounts where id='${smsfA}'`)).rows[0].current_balance);
+  await db.query(`insert into smsf_holdings(user_id,smsf_fund_id,holding_class,holding_type,holding_name,value,currency_code,country_code)
+    values ('${A}','${fundA.id}','cash','cash','Guard Test Cash',1000,'AUD','AU')`);
+  const detAfter = Number((await db.query(`select current_balance from retirement_accounts where id='${smsfA}'`)).rows[0].current_balance);
+  check('GUARD 0090: the CERTIFIED Detailed path (smsf_recompute_fund) still writes current_balance through the guard', detAfter === detBefore + 1000, `(before ${detBefore}, after ${detAfter})`);
 }
 
 console.log(`\nSMSF + JURISDICTION CERTIFICATION: ${pass} passed, ${fail} failed`);

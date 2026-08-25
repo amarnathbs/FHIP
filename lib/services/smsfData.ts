@@ -67,7 +67,7 @@ export async function switchSmsfFundToDetailed(fundId: string, supabase: Supabas
 }
 
 /**
- * Detailed -> Summary switch-back (spec s.32-33, migration 0087). Detailed
+ * Detailed -> Summary switch-back (spec s.32-33, migration 0089). Detailed
  * holdings are never touched by this call -- they remain in the database,
  * simply no longer the fund's active valuation source (see the RPC's own
  * SQL comment). Requires a new Summary value + valuation date, matching the

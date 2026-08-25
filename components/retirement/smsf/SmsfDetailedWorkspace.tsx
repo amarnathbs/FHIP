@@ -346,7 +346,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
         )}
       </div>
 
-      {/* Switch back to Summary (spec s.32-33, migration 0087) */}
+      {/* Switch back to Summary (spec s.32-33, migration 0089) */}
       {fund.mode === 'detailed' && (
         <div className="rounded-card border border-line bg-white p-3">
           <h4 className="text-sm font-semibold text-ink">Switch back to Summary Mode</h4>

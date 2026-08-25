@@ -8,22 +8,21 @@
 -- exactly that, and nothing else -- it does not touch 0084's schema,
 -- triggers, or the Summary->Detailed direction in any way.
 --
--- NUMBERING NOTE: re-verified immediately before writing this file, same
--- method as 0084's own numbering note. This branch's own migrations folder
--- ends at 0084 (0078 is a byte-identical copy of the unmerged
--- property-liability branch's migration, not a new claim on that number).
--- Per this task's own briefing, the live cross-branch landscape as of
--- writing is: canonical main highest = 0085 (FDH-8 split-approval fix,
--- already merged); 0079-0081 claimed by the unmerged App Review remainder
--- branch; 0082/0083/0086 claimed by the unmerged Investment Intelligence R11
--- branch; 0078 already production-live (Property<->Liability). 0087 is the
--- next slot with zero collisions against every one of those claims. Per this
--- project's established renumbering precedent, if 0087 is no longer free by
--- the time this reaches DEV/main, this file renumbers to the next genuinely
--- free slot and this comment, every certification script reference, and
--- every runtime string get updated together (full-repo grep, not a blind
--- search/replace) -- see this task's own final report for the collision
--- re-check performed immediately before concluding.
+-- NUMBERING NOTE: originally written as 0087, renumbered to 0089 to resolve a
+-- genuine collision. Investment Intelligence R11's terminal-closure round
+-- independently claimed 0087 for a live-exploitable same-user authoritative-
+-- forgery security guard (plus 0088 for a report-access-log cascade fix).
+-- Neither was applied to DEV, so this project's usual "whoever applied first
+-- keeps the number" tie-break could not resolve it. Product Owner decision:
+-- the security fix is applied first and keeps 0087/0088; this
+-- Detailed->Summary switch-back RPC renumbers forward to 0089. Every
+-- reference (route, service, validation, component, certification script,
+-- unit test) was updated together via a full-repo grep, not a blind
+-- search/replace. Live landscape at renumber time: main = 0078/0085;
+-- 0079-0081 App Review remainder (unmerged); 0082/0083/0086 II-R11
+-- (DEV-APPLIED, frozen); 0084 SMSF foundation (DEV-APPLIED, frozen);
+-- 0087/0088 II-R11 (unapplied); 0090 = SMSF current_balance integrity guard,
+-- written alongside this renumber.
 --
 -- Idempotent: create or replace throughout; no schema/table changes.
 
