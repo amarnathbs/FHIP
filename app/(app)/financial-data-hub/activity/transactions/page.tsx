@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -10,9 +11,6 @@ import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/a
 import { resolveActivityParams, rawParam, type RawSearchParams } from '../_lib/searchParams';
 import { TransactionFilters } from './TransactionFilters';
 
-// No FDH-7 review/correction UI exists yet under app/(app)/financial-data-hub/
-// (see page.tsx's own comment) — every "Review / Edit" link below falls back
-// to /financial-data-hub, matching Overview's fallback for consistency.
 // FDH-8 closure (spec Phase I) — the dedicated FDH-7 review workspace.
 // Deep-links to the specific transaction so "Review / Edit" opens focused,
 // not the general queue.
@@ -105,10 +103,18 @@ export default async function FinancialActivityTransactionsPage({
 
   return (
     <div className="space-y-6">
-      <TransactionFilters
-        accounts={activeAccounts.map((a) => ({ id: a.id, label: a.masked_identifier ? `${a.display_name} (${a.masked_identifier})` : a.display_name }))}
-        categories={categoryOptions}
-      />
+      {/* FDH-8 closure fix (2026-08-25): TransactionFilters uses
+          useSearchParams(), which Next.js requires to sit inside a
+          <Suspense> boundary for static generation to succeed — a real,
+          previously-undisclosed pre-existing gap (same class as
+          layout.tsx's, see ActivityLayoutContent.tsx's comment), not
+          introduced by this pass. */}
+      <Suspense fallback={<div className="h-24 animate-pulse rounded-card border border-line bg-gray-50" aria-hidden="true" />}>
+        <TransactionFilters
+          accounts={activeAccounts.map((a) => ({ id: a.id, label: a.masked_identifier ? `${a.display_name} (${a.masked_identifier})` : a.display_name }))}
+          categories={categoryOptions}
+        />
+      </Suspense>
 
       <SectionCard title="Transactions" description={`Showing up to ${page.pageSize} transactions, sorted by ${sort === 'merchant' ? 'merchant' : sort.replace(/^\w/, (c) => c.toUpperCase())}.`}>
         {page.transactions.length === 0 ? (
