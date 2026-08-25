@@ -28,6 +28,15 @@ async function main() {
   let deleted = 0;
   let failed = 0;
   for (const u of toDelete) {
+    // WORKAROUND for the real defect fixed (not yet DEV-applied) in
+    // migration 0088: professional_report_access_log.professional_user_id/
+    // client_user_id lack ON DELETE CASCADE on the CURRENT live schema, so
+    // deleting a user who still has report-access-log rows referencing
+    // them directly (independent of whether their relationship row has
+    // already cascaded) fails with a wrapped 500. Clear those rows first,
+    // by hand, exactly the same fix 0088 will make permanent once applied.
+    await admin.from('professional_report_access_log').delete().eq('professional_user_id', u.id);
+    await admin.from('professional_report_access_log').delete().eq('client_user_id', u.id);
     const { error } = await admin.auth.admin.deleteUser(u.id);
     if (error) {
       failed += 1;
