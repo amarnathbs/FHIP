@@ -51,6 +51,7 @@ import { fromMinorUnits, sumMoney, toMinorUnits } from '../domain/money';
 import type { FdhCategory, FdhMerchant } from '../domain/types';
 import type { FdhEconomicTransactionType, FdhTransactionApprovalStatus } from '../constants/enums';
 import { categoriesRepository, merchantsRepository } from '../repositories/index';
+import { fetchAllRows } from '../bank-csv/pagination';
 import type { DateRange } from './period';
 
 // ---------------------------------------------------------------------------
@@ -115,31 +116,53 @@ async function fetchScopedTransactions(
   approvalStatus: FdhTransactionApprovalStatus,
   filters: ActivityFilters,
 ): Promise<ScopedTransaction[]> {
-  let query = supabase
-    .from('fdh_transactions')
-    .select(TXN_COLUMNS)
-    .eq('user_id', userId)
-    .eq('approval_status', approvalStatus)
-    .gte('transaction_date', filters.period.from)
-    .lte('transaction_date', filters.period.to);
-  if (filters.accountId) query = query.eq('financial_account_id', filters.accountId);
-
-  const { data, error } = await query.returns<RawTxnRow[]>();
-  if (error) throw new Error(`financialActivityAnalytics: could not list transactions (${approvalStatus}): ${error.message}`);
-  const txns = data ?? [];
+  // PostgREST caps ANY unbounded select at this project's `db-max-rows`
+  // (1,000 — see `bank-csv/pagination.ts`'s header) and reports truncation
+  // only via a response header the Supabase JS client does not surface as
+  // an error. A household with more than 1,000 approved/pending
+  // transactions in the requested period would therefore have silently had
+  // its headline totals computed over a truncated slice. `fetchAllRows()`
+  // is the SAME established fix FDH-6 applied to this identical defect
+  // class in its own repositories (`FDH6_SCALE_CERTIFICATION.md`) — paging
+  // past the cap with deterministic, unique ordering rather than a second
+  // pagination concept.
+  const txns = await fetchAllRows<RawTxnRow>(() => {
+    let query = supabase
+      .from('fdh_transactions')
+      .select(TXN_COLUMNS)
+      .eq('user_id', userId)
+      .eq('approval_status', approvalStatus)
+      .gte('transaction_date', filters.period.from)
+      .lte('transaction_date', filters.period.to);
+    if (filters.accountId) query = query.eq('financial_account_id', filters.accountId);
+    return query.order('transaction_date', { ascending: true }).order('id', { ascending: true }).returns<RawTxnRow[]>();
+  });
   if (txns.length === 0) return [];
 
   const ids = txns.map((t) => t.id);
-  const { data: allocs, error: allocError } = await supabase
-    .from('fdh_transaction_allocations')
-    .select('transaction_id, economic_transaction_type, category_id, amount, currency_code')
-    .eq('user_id', userId)
-    .in('transaction_id', ids)
-    .returns<RawAllocationRow[]>();
-  if (allocError) throw new Error(`financialActivityAnalytics: could not list allocations: ${allocError.message}`);
+  // Allocations are fetched in bounded ID-batches (PostgREST's `.in()` list
+  // itself has no practical size issue here, but the RESPONSE is subject to
+  // the identical 1,000-row cap as above when a household has many split
+  // allocations in scope) — same `fetchAllRows()` treatment.
+  const CHUNK = 200; // ids per .in() batch — keeps URL/query size bounded
+  const allocs: RawAllocationRow[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const idBatch = ids.slice(i, i + CHUNK);
+    const batch = await fetchAllRows<RawAllocationRow>(() =>
+      supabase
+        .from('fdh_transaction_allocations')
+        .select('transaction_id, economic_transaction_type, category_id, amount, currency_code')
+        .eq('user_id', userId)
+        .in('transaction_id', idBatch)
+        .order('transaction_id', { ascending: true })
+        .order('id', { ascending: true })
+        .returns<RawAllocationRow[]>(),
+    );
+    allocs.push(...batch);
+  }
 
   const byTxn = new Map<string, RawAllocationRow[]>();
-  for (const a of allocs ?? []) byTxn.set(a.transaction_id, [...(byTxn.get(a.transaction_id) ?? []), a]);
+  for (const a of allocs) byTxn.set(a.transaction_id, [...(byTxn.get(a.transaction_id) ?? []), a]);
   return txns.map((t) => ({ ...t, allocations: byTxn.get(t.id) ?? [] }));
 }
 
@@ -152,17 +175,22 @@ async function fetchConfirmedRefundLinks(
   transactionIds: readonly string[],
 ): Promise<ApprovedSummaryRefundLink[]> {
   if (transactionIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from('fdh_transaction_links')
-    .select('transaction_id_from, transaction_id_to, link_type, status')
-    .eq('user_id', userId)
-    .eq('status', 'confirmed')
-    .in('link_type', ['refund_original', 'reversal_original'])
-    .returns<{ transaction_id_from: string; transaction_id_to: string | null }[]>();
-  if (error) throw new Error(`financialActivityAnalytics: could not list refund links: ${error.message}`);
+  // Same PostgREST `db-max-rows` truncation risk as `fetchScopedTransactions`
+  // above — a household with more than 1,000 confirmed refund/reversal
+  // links would otherwise silently miss refund netting past row 1,000.
+  const data = await fetchAllRows<{ transaction_id_from: string; transaction_id_to: string | null }>(() =>
+    supabase
+      .from('fdh_transaction_links')
+      .select('transaction_id_from, transaction_id_to, link_type, status')
+      .eq('user_id', userId)
+      .eq('status', 'confirmed')
+      .in('link_type', ['refund_original', 'reversal_original'])
+      .order('id', { ascending: true })
+      .returns<{ transaction_id_from: string; transaction_id_to: string | null }[]>(),
+  );
 
   const idSet = new Set(transactionIds);
-  return (data ?? [])
+  return data
     .filter((l) => l.transaction_id_to && (idSet.has(l.transaction_id_from) || idSet.has(l.transaction_id_to)))
     .map((l) => ({ refundTransactionId: l.transaction_id_from, originalTransactionId: l.transaction_id_to as string }));
 }
