@@ -116,7 +116,11 @@ interface PlannedTxn {
   user_id: string; financial_account_id: string; transaction_date: string; description_clean: string;
   amount_original: number; currency_original: string; credit_debit: 'credit' | 'debit';
   economic_transaction_type: string; category_id: string | null; merchant_id: string | null;
-  approval_status: 'approved' | 'pending'; approved_at?: string; approved_by?: string;
+  // Every key present on every row, even when null — PostgREST's bulk
+  // insert rejects a batch whose objects don't all share the identical key
+  // set ("All object keys must match"), so approved_at/approved_by must
+  // never be conditionally OMITTED for pending rows, only set to null.
+  approval_status: 'approved' | 'pending'; approved_at: string | null; approved_by: string | null;
 }
 
 /** Deterministically builds N transactions with a realistic mixture and
@@ -151,8 +155,9 @@ function buildDataset(n: number, userId: string, accountIds: string[], cats: { g
       description_clean: `SCALE-${n}-${i}`, amount_original: Math.round(amount * 100) / 100, currency_original: 'AUD',
       credit_debit: credit, economic_transaction_type: type, category_id: cat, merchant_id: merch,
       approval_status: approved ? 'approved' : 'pending',
+      approved_at: approved ? new Date().toISOString() : null,
+      approved_by: approved ? userId : null,
     };
-    if (approved) { row.approved_at = new Date().toISOString(); row.approved_by = userId; }
     rows.push(row);
 
     if (!approved) { expectedPendingCount += 1; continue; }
@@ -240,7 +245,7 @@ async function certifyScale(n: number, userId: string, cookie: string, accountId
   const sortHighest = await appGet(`/api/financial-data-hub/activity/transactions?sort=highest&limit=50`, cookie);
   const amounts = (sortHighest.json?.data?.transactions ?? []).map((t: { amount_original: number }) => t.amount_original);
   const isSortedDesc = amounts.every((v: number, i: number) => i === 0 || amounts[i - 1] >= v);
-  record(`FDH8-SCALE-${n}-11`, `Sort=highest is genuinely descending at scale`, isSortedDesc, { first5: amounts.slice(0, 5) });
+  record(`FDH8-SCALE-${n}-11`, `Sort=highest is genuinely descending at scale`, isSortedDesc ? 'PASS' : 'FAIL', { first5: amounts.slice(0, 5) });
 
   return { rows, expected };
 }
@@ -280,10 +285,24 @@ async function main() {
   });
   const cappedRows = (await cappedRes.json()) as { amount_original: number; economic_transaction_type: string }[];
   const cappedExpense = cappedRows.filter((r) => r.economic_transaction_type === 'expense').reduce((s, r) => s + Number(r.amount_original), 0);
-  const fullRes = await fetch(`${BASE}/rest/v1/fdh_transactions?user_id=eq.${user.id}&approval_status=eq.approved&select=amount_original,economic_transaction_type&order=transaction_date.asc,id.asc`, {
-    headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, Range: '0-49999' },
-  });
-  const fullRows = (await fullRes.json()) as { amount_original: number; economic_transaction_type: string }[];
+  // A SINGLE request, even with a huge Range header, does NOT bypass
+  // PostgREST's server-side db-max-rows cap (it caps every response
+  // regardless of what Range was requested) — a real multi-page walk is
+  // required to see the true row set, exactly what fetchAllRows() does in
+  // the app code. This mirrors that here rather than naively trusting one
+  // wide Range request (an earlier version of this script made exactly
+  // that mistake and reported a false "0 rows lost" — the capped and
+  // "full" requests were BOTH silently truncated at 1,000, giving equal,
+  // misleadingly-matching totals for the wrong reason).
+  const fullRows: { amount_original: number; economic_transaction_type: string }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const page = await fetch(`${BASE}/rest/v1/fdh_transactions?user_id=eq.${user.id}&approval_status=eq.approved&select=amount_original,economic_transaction_type&order=transaction_date.asc,id.asc`, {
+      headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, Range: `${from}-${from + 999}` },
+    });
+    const rows = (await page.json()) as { amount_original: number; economic_transaction_type: string }[];
+    fullRows.push(...rows);
+    if (rows.length < 1000) break;
+  }
   const fullExpense = fullRows.filter((r) => r.economic_transaction_type === 'expense').reduce((s, r) => s + Number(r.amount_original), 0);
   record(
     'FDH8-PAGINATION-NEGATIVE-CONTROL',
