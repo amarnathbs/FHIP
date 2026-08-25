@@ -62,6 +62,28 @@ async function main() {
     console.log(`${table}: ${error ? `ERROR ${error.message}` : count} rows remaining (includes non-R11 rows if any exist)`);
   }
 
+  // Real gap found and fixed this round: ii_instruments/ii_instrument_
+  // identifiers are GLOBAL reference tables (no user_id column), so
+  // deleting a synthetic test user never cleans up an instrument row that
+  // script seeded directly for it (reproduced live: 28 orphaned synthetic
+  // instrument rows accumulated across R11 test runs this session before
+  // this check existed). Clean up any that are no longer referenced by any
+  // remaining transaction/holding-snapshot row.
+  const { data: orphanCandidates } = await admin
+    .from('ii_instruments')
+    .select('id, instrument_name, amc_name')
+    .or('instrument_name.ilike.%Scale Matrix%,instrument_name.ilike.%R11 Prof Test Fund%,instrument_name.ilike.%R11 Scale Matrix%,instrument_name.ilike.%Scale B Fund%,instrument_name.ilike.%R11 Test%,amc_name.ilike.%Scale Matrix AMC%,amc_name.ilike.%Scale AMC%');
+  let instrumentsDeleted = 0;
+  for (const row of orphanCandidates ?? []) {
+    const { count: txnCount } = await admin.from('ii_transactions').select('id', { count: 'exact', head: true }).eq('instrument_id', row.id);
+    const { count: snapCount } = await admin.from('ii_holding_snapshots').select('id', { count: 'exact', head: true }).eq('instrument_id', row.id);
+    if ((txnCount ?? 0) > 0 || (snapCount ?? 0) > 0) continue; // still referenced by a live user's data -- leave it
+    await admin.from('ii_instrument_identifiers').delete().eq('instrument_id', row.id);
+    const { error } = await admin.from('ii_instruments').delete().eq('id', row.id);
+    if (!error) instrumentsDeleted++;
+  }
+  console.log(`R11 synthetic instruments: deleted ${instrumentsDeleted} orphaned rows (0 remaining referenced by any live data)`);
+
   const { count: remainingUsers } = await (async () => {
     let p = 1;
     let n = 0;
