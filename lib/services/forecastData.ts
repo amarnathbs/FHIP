@@ -907,6 +907,40 @@ export async function runForecast(
   try {
     const { results, explanations } = runForecastCalculation(params.forecastType, calculatorInput);
 
+    // II-R10 fix (root-caused this session): forecast_results.variance_percentage
+    // is numeric(9,4) (max magnitude 99999.9999) but every calculator computes
+    // it as (actual - target) / target * 100 guarded only against target <= 0,
+    // never against target being a small-but-positive degenerate value (e.g.
+    // a "desired retirement income" target of $1/year -- the Math.max(1, ...)
+    // floor forecastReportData.ts uses precisely for a user with no recorded
+    // essential expenses yet -- produces a required corpus of ~$25, and any
+    // real balance divided by that is a variance percentage in the millions).
+    // LIVE-REPRODUCED this session: a real retirement account with a real
+    // balance and a plan with no recorded essential-expense data produced
+    // variance_percentage=3220488.88 on period 1 alone (466 of ~480 rows
+    // affected) -- Postgres rejected the whole INSERT with "numeric field
+    // overflow", runForecast() correctly marked the run 'failed' and
+    // re-threw, but forecastReportData.ts's safeRunDetail() catches ALL
+    // errors silently by design (a category with genuinely no data must not
+    // abort the whole report) -- so the Retirement Readiness chapter simply
+    // rendered "unavailable" with no error surfaced anywhere, even though
+    // the underlying retirement data and forecast trigger were both present
+    // and correct.
+    //
+    // Fix: a variance percentage this large is not a meaningful "N% funded"
+    // figure to show a user in the first place (the corpus target itself is
+    // degenerate when this happens) -- null it out here, at the single
+    // shared persistence point for every forecast type, exactly the same
+    // "don't show a nonsensical percentage" principle reportNarrative.ts's
+    // computeMetricMovement() already applies for a near-zero comparison
+    // base. This is a safe-persistence guard, not a recalculation: the
+    // underlying opening/closing/target values are stored completely
+    // unchanged; only a percentage that cannot fit its own column (and would
+    // not be a meaningful percentage even if it could) is suppressed.
+    const VARIANCE_PERCENTAGE_MAX_MAGNITUDE = 99999.9999;
+    const safeVariancePercentage = (v: number | null | undefined): number | null =>
+      v === null || v === undefined || !Number.isFinite(v) || Math.abs(v) > VARIANCE_PERCENTAGE_MAX_MAGNITUDE ? null : v;
+
     const resultRows = results.map((r) => ({
       user_id: userId,
       forecast_run_id: run.id,
@@ -928,7 +962,7 @@ export async function runForecast(
       closing_value: r.closingValue,
       target_value: r.targetValue,
       variance_value: r.varianceValue,
-      variance_percentage: r.variancePercentage,
+      variance_percentage: safeVariancePercentage(r.variancePercentage),
       currency: r.currency,
       base_currency_value: r.baseCurrencyValue,
       metadata: r.metadata,

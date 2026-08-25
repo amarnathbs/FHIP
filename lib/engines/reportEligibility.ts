@@ -32,6 +32,16 @@ export type PremiumSectionCode =
   | 'cross_border_full'
   | 'stress_testing'
   | 'personal_action_plan'
+  // II-R10 continuation — Investment Intelligence chapters (spec sections
+  // 21-32). Each consumes a canonical II engine result only (same
+  // load*Dataset + run*Analytics/Simulation call as that module's own live
+  // page/API — see lib/services/investmentIntelligenceReportData.ts); none
+  // of these recalculates anything.
+  | 'investment_performance' // II-R4
+  | 'sip_contribution' // II-R5 SIP
+  | 'portfolio_xray' // II-R5 X-Ray
+  | 'tax_and_cost' // II-R6
+  | 'priority_review_items' // II-R9 Review Centre
   | 'appendices';
 
 export type SectionCode = FreeSectionCode | PremiumSectionCode;

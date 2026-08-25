@@ -1,0 +1,50 @@
+[
+  {
+    "id": "RET-A1",
+    "description": "Case A (valid data, previously degenerate target): report generation succeeds",
+    "status": "PASS",
+    "detail": "status=200"
+  },
+  {
+    "id": "RET-A2",
+    "description": "Case A: Retirement Readiness chapter reaches included (RED->GREEN proof: this exact scenario returned \"unavailable\" with a swallowed \"numeric field overflow\" DB error before this session's fix)",
+    "status": "PASS",
+    "detail": "status=included, limitationText=Retirement projections are estimates based on current balances, recorded contributions and disclosed assumptions. Actual outcomes depend on future contributions, investment returns, inflation and legislative change."
+  },
+  {
+    "id": "RET-A3 (no-recalculation)",
+    "description": "Report retirement_readiness.results equals the canonical forecast run detail (exact raw-value equality)",
+    "status": "PASS",
+    "detail": "report rows=466, canonical rows=466"
+  },
+  {
+    "id": "RET-A4",
+    "description": "Every period's variance_percentage is either null or within the numeric(9,4) column bound (no silent truncation, no crash)",
+    "status": "PASS",
+    "detail": "rows=466, field=variance_percentage"
+  },
+  {
+    "id": "RET-B1",
+    "description": "Case B (no retirement account at all): report generation still succeeds (no crash)",
+    "status": "PASS",
+    "detail": "status=200"
+  },
+  {
+    "id": "RET-B2",
+    "description": "Case B: chapter safely unavailable with an explicit reason, no fabricated all-zero projection (RED->GREEN: this exact scenario rendered a 466-row all-$0 trajectory as \"included\" before this session's hasRetirement fix)",
+    "status": "PASS",
+    "detail": "No retirement accounts are currently recorded — add one on the Retirement page to include this section."
+  },
+  {
+    "id": "RET-C1",
+    "description": "Case C (retirement account, no DOB): report generation still succeeds (no crash)",
+    "status": "PASS",
+    "detail": "status=200"
+  },
+  {
+    "id": "RET-C2",
+    "description": "Case C: chapter reaches a defined state (included with a currentAge-independent timing signal, or safely unavailable) — never a silent crash",
+    "status": "PASS",
+    "detail": "status=included"
+  }
+]

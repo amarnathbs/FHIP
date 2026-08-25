@@ -33,29 +33,63 @@ export async function renderReportToPdf(reportId: string, exportId: string): Pro
     if (!response || !response.ok()) {
       throw new Error(`Print route returned ${response?.status() ?? 'no response'} for ${url}`);
     }
-    // 'networkidle' only guarantees requests have settled — it says nothing
-    // about whether Recharts' ResponsiveContainer has finished its
-    // ResizeObserver-driven layout pass yet, which happens after mount, not
-    // tied to any network event. Without this wait, page.pdf() can capture
-    // charts mid-layout with a zero-width SVG, producing blank charts with
-    // axes/labels but no visible bars/lines/pie segments in the PDF. A
-    // timeout here is treated as non-fatal — proceed with whatever rendered
-    // rather than failing the whole export over one slow chart.
+    // Belt-and-braces: page.pdf() switches Chromium to print media
+    // internally at capture time regardless, but emulating it explicitly
+    // here means anything print-CSS-driven (report-print-root padding
+    // compaction etc.) has already settled before the readiness wait below
+    // runs, rather than changing out from under a capture that assumed
+    // screen-media layout.
+    await page.emulateMedia({ media: 'print' });
+    // 'networkidle' only guarantees requests have settled — it says
+    // nothing about whether React has even mounted yet, let alone whether
+    // Recharts' ResponsiveContainer has finished its ResizeObserver-driven
+    // layout pass. The naive version of this wait (`if svgs.length === 0
+    // return true`) was a false-ready trap: immediately after goto(), the
+    // charts haven't hydrated at all yet, so that selector legitimately
+    // returns zero elements — indistinguishable, to a single check, from
+    // "this page genuinely has no charts". The old code treated both as
+    // "ready" and proceeded immediately, so page.pdf() reliably captured
+    // every report mid-hydration, before a single chart had mounted —
+    // every bar, pie and line chart came out completely blank (confirmed
+    // via the PDF's own extracted vector content: zero paint operations in
+    // the chart region, not just wrong-looking ones) even though a plain
+    // DOM inspection moments later, once hydration had caught up, showed
+    // perfectly well-formed SVG geometry. Requiring the same "ready or
+    // genuinely chart-free" reading to hold for a run of consecutive polls
+    // (~1.5s of stability) distinguishes real emptiness from not-yet-
+    // mounted, without hardcoding a single fixed sleep that would be too
+    // short under load and wastefully long otherwise. A timeout here is
+    // still treated as non-fatal — proceed with whatever rendered rather
+    // than failing the whole export over one slow chart.
     await page
       .waitForFunction(
         () => {
           const svgs = document.querySelectorAll('.recharts-wrapper svg');
-          if (svgs.length === 0) return true;
           // Both dimensions, not just width — a chart can lay out with a
           // non-zero width but a still-collapsing height during the
           // ResizeObserver pass, which would otherwise pass this check
           // while still rendering as a flat/blank strip in the PDF.
-          return Array.from(svgs).every((svg) => {
-            const box = (svg as SVGSVGElement).getBBox();
-            return box.width > 0 && box.height > 0;
-          });
+          const ready =
+            svgs.length > 0 &&
+            Array.from(svgs).every((svg) => {
+              const box = (svg as SVGSVGElement).getBBox();
+              return box.width > 0 && box.height > 0;
+            });
+          const w = window as unknown as { __fhipChartWaitStreak?: number };
+          w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
+          return w.__fhipChartWaitStreak >= 15;
         },
-        { timeout: 5000 }
+        // 20s ceiling, not 8s: under sustained load (e.g. many reports
+        // rendered back-to-back) hydration itself can take several
+        // seconds before the 1.5s-stability window even starts counting —
+        // observed directly during the R10 terminal-closure batch-of-15
+        // visual certification run, where an 8s ceiling was intermittently
+        // too tight for the busiest two-chart page (Scenario Forecasting)
+        // under that load and produced the same blank-chart symptom this
+        // wait exists to prevent. A longer ceiling only costs time in
+        // exactly the slow case that needs it — the fast case still exits
+        // as soon as the stability streak is satisfied.
+        { timeout: 20000, polling: 100 }
       )
       .catch(() => {});
     // Real running page numbers require Playwright's own header/footer

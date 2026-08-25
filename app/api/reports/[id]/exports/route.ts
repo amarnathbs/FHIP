@@ -33,9 +33,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return bad('Exporting reports requires a premium plan. You can still view and print this report.', 403);
   }
 
+  // Ownership check before any write — report_exports grants SELECT-own
+  // only as of migration 0070, so the insert below must go through the
+  // admin client; this explicit check replaces what the RLS WITH CHECK used
+  // to enforce.
+  const { data: ownedReport } = await supabase.from('reports').select('id').eq('id', id).eq('user_id', user.id).maybeSingle();
+  if (!ownedReport) return bad('Report not found', 404);
+
   const isImplemented = isExportFormatImplemented(format);
 
-  const { data: exportRow, error: insertError } = await supabase
+  // Admin client for every write from here on: the render+upload step
+  // already needed it (the headless renderer authorizes itself via
+  // render_token, no user session), and migration 0070 now requires it for
+  // the initial insert too.
+  const admin = createAdminClient();
+  const { data: exportRow, error: insertError } = await admin
     .from('report_exports')
     .insert({
       report_id: id,
@@ -50,11 +62,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (insertError) return bad(insertError.message);
   if (!isImplemented) return ok(exportRow);
 
-  // Uses the admin client for the render+upload step: the headless renderer
-  // authorizes itself via render_token (no user session), and the resulting
-  // file is written under {user_id}/... regardless of which request path
-  // triggered it.
-  const admin = createAdminClient();
   try {
     const { buffer, checksum } = await renderReportToPdf(id, exportRow.id);
     const fileName = `${id}.pdf`;

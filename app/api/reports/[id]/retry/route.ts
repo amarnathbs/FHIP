@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireUser, ok, bad } from '@/lib/api';
 import { generateReport, type ReportTypeCode } from '@/lib/services/reportsData';
 
@@ -21,7 +22,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     // Superseded by a fresh attempt — archive the failed row so it doesn't
     // linger in report history alongside the newly generated report.
     if (result.report.status !== 'failed') {
-      await supabase.from('reports').update({ status: 'archived' }).eq('id', id);
+      // II-R10 hardening (migration 0070): `reports` grants the
+      // authenticated role SELECT-own only now — this status transition
+      // must go through the service-role admin client. `id` was already
+      // confirmed owned by `user.id` in the read above.
+      await createAdminClient().from('reports').update({ status: 'archived' }).eq('id', id);
     }
     return ok(result);
   } catch (e) {

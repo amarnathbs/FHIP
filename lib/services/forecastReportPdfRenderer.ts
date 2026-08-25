@@ -33,19 +33,32 @@ export async function renderForecastReportToPdf(userId: string, scenarioId?: str
     if (!response || !response.ok()) {
       throw new Error(`Print route returned ${response?.status() ?? 'no response'} for ${url}`);
     }
-    // Same chart-readiness wait as reportPdfRenderer.ts — width AND height,
-    // not just width (see that file's comment for why).
+    // Emulate print media before the chart-readiness wait below — see
+    // reportPdfRenderer.ts's renderReportToPdf() for the full explanation.
+    await page.emulateMedia({ media: 'print' });
+    // Same chart-readiness wait as reportPdfRenderer.ts — requires a run of
+    // consecutive "ready or genuinely chart-free" polls (not a same-tick
+    // `svgs.length === 0` short-circuit, which raced ahead of hydration
+    // and produced blank charts in every rendered PDF) — see that file's
+    // comment for the full root-cause explanation.
     await page
       .waitForFunction(
         () => {
           const svgs = document.querySelectorAll('.recharts-wrapper svg');
-          if (svgs.length === 0) return true;
-          return Array.from(svgs).every((svg) => {
-            const box = (svg as SVGSVGElement).getBBox();
-            return box.width > 0 && box.height > 0;
-          });
+          const ready =
+            svgs.length > 0 &&
+            Array.from(svgs).every((svg) => {
+              const box = (svg as SVGSVGElement).getBBox();
+              return box.width > 0 && box.height > 0;
+            });
+          const w = window as unknown as { __fhipChartWaitStreak?: number };
+          w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
+          return w.__fhipChartWaitStreak >= 15;
         },
-        { timeout: 5000 }
+        // 20s ceiling — see reportPdfRenderer.ts's renderReportToPdf() for
+        // why (an 8s ceiling was intermittently too tight under sustained
+        // load, observed directly during R10 terminal closure).
+        { timeout: 20000, polling: 100 }
       )
       .catch(() => {});
     const buffer = await page.pdf({
