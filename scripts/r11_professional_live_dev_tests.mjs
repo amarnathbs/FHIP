@@ -194,9 +194,9 @@ async function main() {
     const data = res.json?.data ?? res.json;
     const ownReport = await sb(`/rest/v1/reports?id=eq.${clientA.reportId}`);
     const own = ownReport.json?.[0];
-    const sameReport = data?.report?.id === clientA.reportId && data?.report?.status === own?.status && JSON.stringify(data?.report?.summary_json ?? data?.report?.report_data ?? null) !== undefined;
+    const sameReport = data?.report?.id === clientA.reportId && data?.report?.status === own?.status;
     const logRow = await sb(`/rest/v1/professional_report_access_log?relationship_id=eq.${relId}`);
-    const ok = grantRes.status === 200 && res.status === 200 && data?.report?.id === clientA.reportId && (logRow.json?.length ?? 0) >= 1;
+    const ok = grantRes.status === 200 && res.status === 200 && sameReport && (logRow.json?.length ?? 0) >= 1;
     record('LIVE-R11-P05', 'Report access: VIEW_REPORTS granted -> ALLOW, uses the SAME R10 report (no professional-specific recalculation), access logged', ok ? 'PASS' : 'FAIL', `grantStatus=${grantRes.status} reportStatus=${res.status} reportId=${data?.report?.id} expected=${clientA.reportId} accessLogRows=${logRow.json?.length}`);
   }
 

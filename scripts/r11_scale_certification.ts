@@ -49,7 +49,13 @@ function stampHexParts(runStamp: number, rowCount: number) {
   // collided on their shared id prefix across two different sizes in the
   // same run).
   const p1 = runStamp.toString(16).padStart(8, '0').slice(-4);
-  const p2 = rowCount.toString().padStart(4, '0');
+  // A UUID segment is a FIXED 4 hex chars -- padStart alone breaks once
+  // rowCount reaches 5 digits (10000), producing an invalid 5-char
+  // segment and a malformed UUID (reproduced: rerun failed on the 10000
+  // case with exactly this error). slice(-4) after padding keeps it fixed
+  // width; all six matrix sizes (999/1000/1001/2500/5001/10000) remain
+  // pairwise distinct mod 10000, so no same-run collision.
+  const p2 = rowCount.toString().padStart(4, '0').slice(-4);
   return { p1, p2 };
 }
 
@@ -166,8 +172,6 @@ async function domainB(rowCount: number) {
   const client = await makeUser(`bclient${rowCount}`);
   const profUser = await makeUser(`bprof${rowCount}`);
   await admin.from('professional_profiles').insert({ user_id: profUser.userId, display_name: `R11 Scale Prof ${rowCount}`, professional_type: 'financial_adviser', is_active: true });
-  const clientAuth = await signIn(client.email, `Aa1!${STAMP}bclient${rowCount}`);
-
   const { data: rel } = await admin.from('professional_relationships').insert({ client_user_id: client.userId, professional_user_id: profUser.userId, status: 'active', invited_by: 'client', accepted_at: new Date().toISOString() }).select('id').single();
   const relId = rel!.id as string;
 
