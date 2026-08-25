@@ -5,6 +5,8 @@ import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
 import type { GridConfig } from '@/lib/grid/types';
+import { PropertyFinancingControl } from '@/components/property-liability/PropertyFinancingControl';
+import { isPropertyEligibleForLinking, isLiabilityEligibleForLinking } from '@/lib/validation/propertyLiabilityLink';
 
 interface MasterItem {
   item_key: string;
@@ -81,6 +83,20 @@ function isIiPublished(row: Row): boolean {
 }
 function isFieldLockedForRow(row: Row, fieldName: string): boolean {
   return isIiPublished(row) && II_PUBLISHED_PROTECTED_FIELDS.has(fieldName);
+}
+
+// Property <-> Liability Linking (spec s.14-18, s.56-59): whether this
+// specific saved row should show the Financing / Related Property control
+// at all. Requires a saved row (id, not a not-yet-persisted draft) that is
+// currently included, and -- for catalogue rows -- a plausible property or
+// non-consumer liability type (spec s.13-14: offered without hard-blocking
+// legitimate exceptions; custom rows are always eligible).
+function showsPropertyLinkControl(config: GridConfig, row: Row): boolean {
+  if (!config.propertyLinkSide || !row.id || !row.included) return false;
+  if (config.propertyLinkSide === 'property') {
+    return isPropertyEligibleForLinking(config.category === 'asset' ? 'asset' : 'investment', row.master_item_key ?? null);
+  }
+  return isLiabilityEligibleForLinking(row.master_item_key ?? null);
 }
 
 function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): boolean {
@@ -546,6 +562,9 @@ export function FinancialDataGrid({
                   </th>
                 ))}
                 <th className="px-3 py-2">Currency</th>
+                {config.propertyLinkSide && (
+                  <th className="px-3 py-2">{config.propertyLinkSide === 'property' ? 'Financing' : 'Related Property'}</th>
+                )}
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -651,6 +670,19 @@ export function FinancialDataGrid({
                       <option value="INR">INR</option>
                     </select>
                   </td>
+                  {config.propertyLinkSide && (
+                    <td className="px-3 py-2">
+                      {showsPropertyLinkControl(config, row) && (
+                        <PropertyFinancingControl
+                          side={config.propertyLinkSide}
+                          propertyKind={config.propertyLinkSide === 'property' ? (config.category === 'asset' ? 'asset' : 'investment') : undefined}
+                          propertyId={config.propertyLinkSide === 'property' ? row.id! : undefined}
+                          liabilityId={config.propertyLinkSide === 'liability' ? row.id! : undefined}
+                          masterItemKey={row.master_item_key}
+                        />
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2">
                     {row.is_custom && (
                       <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">
@@ -765,6 +797,20 @@ export function FinancialDataGrid({
                       <option value="INR">INR</option>
                     </select>
                   </div>
+                  {config.propertyLinkSide && showsPropertyLinkControl(config, row) && (
+                    <div>
+                      <label className="block text-xs text-muted">
+                        {config.propertyLinkSide === 'property' ? 'Financing' : 'Related Property'}
+                      </label>
+                      <PropertyFinancingControl
+                        side={config.propertyLinkSide}
+                        propertyKind={config.propertyLinkSide === 'property' ? (config.category === 'asset' ? 'asset' : 'investment') : undefined}
+                        propertyId={config.propertyLinkSide === 'property' ? row.id! : undefined}
+                        liabilityId={config.propertyLinkSide === 'liability' ? row.id! : undefined}
+                        masterItemKey={row.master_item_key}
+                      />
+                    </div>
+                  )}
                   {row.is_custom && (
                     <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">
                       Remove item

@@ -8,6 +8,7 @@ import {
   type DnaProfileInput,
   type DnaResult,
 } from '@/lib/engines/financialDna';
+import { summarizePropertyDebtByPurpose, type PropertyDebtSummary } from '@/lib/engines/propertyLiabilityLinks';
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -31,6 +32,33 @@ export interface Archetype {
 export interface FinancialDnaPayload extends DnaResult {
   archetypes: Record<string, Archetype>;
   history: DnaHistoryPoint[];
+  // Property <-> Liability Linking (spec s.27-31, s.64): per-purpose debt
+  // breakdown using the canonical relationship as the preferred evidence
+  // source. Deliberately NOT folded into the profile-scoring pipeline above
+  // (no new scoring threshold introduced -- spec s.84 explicitly defers
+  // that) and NEVER persisted to financial_dna_profiles/scores/drivers --
+  // this is read-only, computed fresh on every load, exposing a reliable
+  // canonical classification for future DNA scoring work and for reports/
+  // dashboard consumption today.
+  propertyDebtBreakdown: PropertyDebtSummary[];
+}
+
+// Fetches this user's liabilities and active property_liability_links and
+// classifies each liability's debt purpose (spec s.27-31). Read-only.
+export async function loadPropertyDebtBreakdown(
+  userId: string,
+  client?: SupabaseServerClient
+): Promise<PropertyDebtSummary[]> {
+  const supabase = client ?? (await createClient());
+  const [liabilitiesRes, linksRes] = await Promise.all([
+    supabase.from('liabilities').select('id, debt_type, master_item_key, balance, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase
+      .from('property_liability_links')
+      .select('liability_id, link_type, is_active, allocation_percent')
+      .eq('user_id', userId)
+      .eq('is_active', true),
+  ]);
+  return summarizePropertyDebtByPurpose(liabilitiesRes.data ?? [], linksRes.data ?? []);
 }
 
 // Builds the classification input without persisting — used by the real GET
@@ -82,7 +110,7 @@ export async function loadArchetypes(client?: SupabaseServerClient): Promise<Rec
 export async function loadFinancialDna(userId: string, client?: SupabaseServerClient): Promise<FinancialDnaPayload> {
   const supabase = client ?? (await createClient());
 
-  const [input, archetypes, historyRes] = await Promise.all([
+  const [input, archetypes, historyRes, propertyDebtBreakdown] = await Promise.all([
     buildDnaInput(userId, supabase),
     loadArchetypes(supabase),
     supabase
@@ -91,6 +119,7 @@ export async function loadFinancialDna(userId: string, client?: SupabaseServerCl
       .eq('user_id', userId)
       .order('profile_month', { ascending: true })
       .limit(12),
+    loadPropertyDebtBreakdown(userId, supabase),
   ]);
 
   const result = classifyFinancialDna(input);
@@ -176,5 +205,5 @@ export async function loadFinancialDna(userId: string, client?: SupabaseServerCl
     }
   }
 
-  return { ...result, archetypes, history: (historyRes.data ?? []) as DnaHistoryPoint[] };
+  return { ...result, archetypes, history: (historyRes.data ?? []) as DnaHistoryPoint[], propertyDebtBreakdown };
 }
