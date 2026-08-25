@@ -1,6 +1,6 @@
 # FDH-8 — Production Certification
 
-**STATUS: PENDING HUMAN ACTION.** Nothing in this document was performed against the production environment — no production database or deployment access exists for this task, per the standing orchestration constraints, and no push/merge/deploy was attempted.
+**STATUS: NOT ATTEMPTED — outside environment scope, pending Product Owner authorization.** Nothing in this document was performed against the production environment — no production database or deployment access exists for this task, per the standing orchestration constraints, and no push/merge/deploy was attempted. This is unchanged from the prior session's disclosure; what HAS changed this closure pass is that FDH-8 is now genuinely DEV CERTIFIED (see `FDH8_COMPLETION_REPORT.md`, final certified SHA `b02328e50f42532b9c861ffb3d2c288ba3748861`) — production remains the one gate this environment structurally cannot reach.
 
 ## What is true today
 

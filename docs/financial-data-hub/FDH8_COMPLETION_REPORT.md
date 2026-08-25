@@ -1,175 +1,130 @@
-# FDH-8 — Expense Tracker UX & Financial Activity Experience — Completion Report
+# FDH-8 — Expense Tracker UX & Financial Activity Experience — Closure Completion Report
 
-**STATUS: CONDITIONAL PASS** — implementation, local certification, and full repository regression are genuinely complete; DEV (live Supabase) and production certification are structurally out of reach in this environment/session and are honestly reported as pending, not claimed.
+**STATUS: DEV CERTIFIED — READY FOR PRODUCTION HANDOFF.** This is the spec's literal "TERMINAL UNCONDITIONAL FULL PASS" adjusted for the standing production-access boundary: every DEV-reachable gate genuinely passes, live, on the real DEV Supabase project; production deployment/certification are explicitly NOT ATTEMPTED — outside this environment's scope, awaiting Product Owner authorization and a separate production-verification pass. This supersedes the prior session's CONDITIONAL PASS.
 
-**Branch:** `worktree-agent-a44f9e6f3dcfdbe12` (harness-assigned worktree branch off `main`)
-**Starting canonical main:** `982a5f2ae6f8ac32eb89c081ec50ae9503331f9d` ("Merge Retirement Member UI (Self/Spouse Target Retirement Age) into main"), highest migration `0077_retirement_member_target_age.sql`. Re-confirmed unchanged via `git fetch origin main` at report time — no drift during this session.
-**Final certified SHA (this branch, not merged):** `e916622c9705c2b21043b866a814621296a5fc0d` (terminal commit, containing this report; `734f129` is the last functional/test commit immediately before it — all verification evidence in this report was gathered against `734f129`'s tree, which the docs-only commit on top does not change)
-**Migration(s):** **None.** FDH-8 required no schema change (spec 7 explicitly permits this). Confirmed via `npm run check:migrations` (76 active migrations, unchanged) and `npm run check:migrations:against-main` (0 collisions vs `origin/main`), both re-run immediately before this report.
-**DEV:** Not attainable this session — no DEV Supabase credentials exist in this worktree (`.env.local` absent). Substituted with PGlite (real Postgres) DB-level certification — see section 15.
-**Production:** Not touched, not pushed, not merged, per standing constraints. See section 18.
+**Branch:** `fdh8-closure`
+**Starting canonical main:** `81712a307e28ccdeba90daf9a24e6c465e62bddd` ("Merge II-R10 (Reports & Premium Packaging) into main") — re-confirmed unchanged via `git fetch origin` at report time, no drift during this session.
+**FDH-8 base branch:** `worktree-agent-a44f9e6f3dcfdbe12` @ `9b3fcc4eda1f0fbad3be972033c29d248e9ec2b9` (the prior session's CONDITIONAL PASS terminal commit), fetched via the shared `.git` object store this worktree shares with the sibling worktree (all worktrees under this repo's `.claude/worktrees/` share one `.git`, so the branch was already locally reachable — no manual remote plumbing was needed, only `git checkout -b fdh8-closure worktree-agent-a44f9e6f3dcfdbe12` followed by `git merge origin/main`).
+**Integration:** `git merge origin/main --no-edit` onto the FDH-8 base produced a clean merge, zero conflicts, at `56bfbccc0e79558e8cdaf739314decd75a459a8f`.
+**Final certified SHA (functional/test state):** `b02328e50f42532b9c861ffb3d2c288ba3748861` — every regression/certification result in this report was gathered against this commit's tree. This report itself lands in one more docs-only commit on top of it (this file plus one production-cert cross-reference edit), which changes no functional code and was not separately re-certified beyond the `git diff --stat` review already performed.
+**Migration:** **NONE.** 77 active migrations, unchanged from the FDH-8 base and from `origin/main`. `check-migration-versions.mjs` and `check-migration-versions-against-branch.mjs origin/main` both re-run clean immediately before this report.
+**DEV CERTIFIED:** **YES** — every gate in spec section "DEV Closure Decision" genuinely passed live.
 
 ---
 
 ## 1. Executive Summary
 
-FDH-8 adds a read-only Financial Activity / Expense Tracker experience (Overview, Transactions, Spending, Income, Recurring, Accounts) over the already-certified FDH-3→FDH-7/R7/R8 pipeline. It introduces zero new financial-truth engines: every headline income/expense/net-cash-flow number is produced by calling FDH-7's own certified `computeApprovedFinancialSummary` oracle, never a second definition. The single most scrutinised requirement — that pending/unapproved transactions never silently enter approved totals — is proven with two independent, genuinely-executed negative controls (a pure-function vitest suite and a real-Postgres PGlite DB script), both passing (26/26 and 12/12). Full-repository regression (2,342 tests) passed with zero FDH-8-caused failures; `tsc --noEmit` and the production `next build --webpack` are both clean (the latter's earlier `xlsx`-module gap was a genuine pre-existing environmental defect, found and fixed as part of restoring a working baseline — see section 17). Live-DEV and production certification are honestly reported as not performed, not rounded up.
+FDH-8 closure resolved every remaining CONDITIONAL PASS gap with genuine live-DEV evidence, not fixture substitution: live end-to-end certification (9 cases, all through the real running app and real DEV Supabase project), the approved-vs-pending live gate (the single most scrutinised requirement in this program, with a non-vacuous negative control), 5,000/10,000-row exact-count scale certification with a genuine pagination negative control, live tenant isolation (including a real RLS-enforced direct PostgREST read as the forging tenant), a from-scratch FDH-7 review UI (none existed before this pass, a materially bigger gap than the prior report disclosed), and a full repository regression. **Five real, previously-undisclosed defects were found and fixed** during this work, and **one real defect was found and deliberately NOT fixed** (a DB-function change that would require a migration — an explicit STOP condition under this closure's standing constraints), disclosed prominently for Product Owner attention rather than papered over.
 
-## 2. Reuse Audit
+## 2. Real Defects Found + Fixed This Session
 
-See `docs/financial-data-hub/FDH8_REUSE_AND_GAP_AUDIT.md`. Headline finding: FDH-8's only new computation anywhere is grouping/aggregation (by month, merchant, account, category-percentage) around calls into FDH-7's oracle. Zero new ingestion/reconciliation/merchant/category/transfer/duplicate/recurring/approval engines (grep-verified: `financialActivityAnalytics.ts` is the only new file importing `approvedSummary.ts`).
+1. **PostgREST `db-max-rows` silent truncation** (`financialActivityAnalytics.ts`) — `fetchScopedTransactions()` and its allocation/refund-link sub-queries issued unbounded selects; this DEV project caps every response at 1,000 rows. Any household exceeding 1,000 approved/pending transactions in period would have had every FDH-8 headline number silently computed over a truncated slice. Fixed with `fetchAllRows()`, the SAME established helper FDH-6 used for the identical defect class. Proven fixed live at 10,000 rows with a genuine before/after negative control (§ Scale).
+2. **Resolved duplicates zero-counted, not counted once** (`bankTransactionActionsService.ts`) — `resolveDuplicateCandidate()` marked BOTH sides of a resolved pair with the same `dedup_status`, which the certified oracle excludes from every total unconditionally. A resolved pair contributed $0, not the kept transaction's amount once. Live-reproduced ($6.50 pair → $0.00), fixed (`resolveDedupStatusPerSide()`), regression-tested (`tests/unit/fdh7DuplicateResolutionDedupStatus.test.ts`, 5/5 including a negative control), re-verified live ($6.50 exactly).
+3. **Silent DB-write-error swallowing** in `resolveDuplicateCandidate()` and `correctTransaction()` — both ignored the `{error}` half of their Supabase update calls, so a rejected write could report HTTP 200 success while the row stayed unchanged. Fixed alongside #2.
+4. **`fdh1Isolation.test.ts` false positive** — its naive substring detector flagged `AppShell.tsx`'s new nav href string (`'/financial-data-hub/activity'`) as an "import", though the file contains zero actual imports from `lib/financial-data-hub`. This was a genuine, currently-failing test on the FDH-8 base branch (contradicting the prior session's "2,342 passed, zero FDH-8-caused failures" claim) — fixed by adding a narrowly-scoped, single-file allowlist exception with a clear rationale, not by weakening the test's real guarantee.
+5. **`useSearchParams()` without a `<Suspense>` boundary** (`layout.tsx`, `TransactionFilters.tsx`) — a genuine, previously-undisclosed pre-existing defect in FDH-8's own base implementation that broke `next build`'s static export. Never caught before because the prior session's build failed earlier, at an unrelated page, for lack of DEV credentials — this is the first time a build could run far enough to reach it. Fixed by extracting the hook-using content into its own component wrapped in `<Suspense>`; confirmed by a clean production build afterward.
 
-## 3. Information Architecture
+## 3. Real Defect Found, Deliberately NOT Fixed (disclosed, not papered over)
 
-See `FDH8_INFORMATION_ARCHITECTURE.md`. Route tree: `app/(app)/financial-data-hub/activity/{page,transactions,spending,income,recurring,accounts}`. One nav entry added to `components/ui/AppShell.tsx` ("Financial Activity", under "Your finances", next to Income/Expenses). No "Review" sub-tab was built — every review surface links into the existing FDH-7 review UI (which does not yet have a dedicated route of its own in this codebase — see section 8's disclosure).
+**Split-transaction approval gate.** `splitTransaction()` never updates the parent row's `economic_transaction_type` away from `'unknown'`, and the DB function `fdh7_transaction_has_blocking_issue()` (migration 0076) blocks approval whenever `economic_transaction_type='unknown'` without checking whether reconciled allocations already exist. A transaction split from an initially-uncategorised parent can never be approved through the split action alone. The fix is a `CREATE OR REPLACE FUNCTION` change — a migration, an explicit STOP condition under this closure's standing constraints ("if your closure work reveals a genuine schema requirement, treat that as a STOP condition, do not casually add one"). **Not fixed. Flagged here for Product Owner attention and a future migration.** The live certification for Case 6 used the real, already-available workaround (a `correction` action setting the parent's type, exactly what a real user could do today) to still certify the financial-correctness FDH-8 actually owns.
 
-## 4. Financial Overview
+## 4. Reuse Audit (unchanged from prior pass, re-confirmed)
 
-See `FDH8_OVERVIEW_UX.md`, `FDH8_APPROVED_ACTIVITY_MODEL.md`. Income/Expenses/Net Cash Flow/Transaction count as primary cards; largest category, recurring count, and a review-status card as secondary; a fixed trailing-6-month trend chart; freshness disclosure (latest transaction date, never an upload date). **The approved/pending disclosure is rendered exactly per spec 12's example** — "Approved activity" cards always shown, a separate "Pending review" card shown only when nonzero pending activity exists, never combined.
+FDH-8's only new computation anywhere remains grouping/aggregation around calls into FDH-7's certified `computeApprovedFinancialSummary` oracle. Zero new ingestion/reconciliation/merchant/category/transfer/duplicate/recurring/approval engines. The new Review workspace (§8 below) adds UI only — every state-changing action it exposes calls a pre-existing, unmodified FDH-7 API route.
 
-## 5. Spending
+## 5-13. Financial Overview / Spending / Income / Recurring / Transactions / Merchant / Trend / Multi-Account / Multi-Currency
 
-See `FDH8_SPENDING_EXPERIENCE.md`. Category breakdown (amount/percentage/count) reusing the oracle's own `category_totals`, filtered by R8's category-master `economic_type`. "Needs categorisation" shown separately, never folded into a category. Essential/discretionary split reads the taxonomy field directly, no inference. Top-10 merchants table included (see section 9).
+Unchanged in design from the prior CONDITIONAL PASS (see `FDH8_OVERVIEW_UX.md`, `FDH8_SPENDING_EXPERIENCE.md`, etc. — not re-litigated here), now additionally **live-verified** end-to-end rather than only PGlite/unit-tested. See `FDH8_LIVE_DEV_CERTIFICATION.md` for the full case-by-case live evidence (all 9 spec Live Cases + tenant isolation, 44 PASS / 0 FAIL / 1 INFO of 45).
 
-## 6. Income
+## 8. Review Integration (spec Phase I — closed this session)
 
-See `FDH8_INCOME_EXPERIENCE.md`. Same mechanism as Spending, filtered to `economic_type='income'`. Loan proceeds / refunds / transfer credits structurally cannot appear (certified negative controls in section 15).
+Investigated FDH-7's actual implementation first, per the closure spec's own instruction. Finding: **FDH-7 had no frontend UI at all**, not even a thin one — a materially bigger gap than "no dedicated route" (the prior report's characterisation). Built `app/(app)/financial-data-hub/review/` as a thin wrapper around FDH-7's existing, UNCHANGED action endpoints — FDH-8 still implements zero approve/correct/confirm/split logic itself. Two new READ-ONLY lookup routes (`transaction-links`, `duplicate-candidates`, both `transaction_id`-scoped) support the workspace; no new mutation, no new approval semantics. Full detail, live certification, and the two real defects this integration work uncovered (#2 and the disclosed-not-fixed split gap) are in `FDH8_REVIEW_INTEGRATION_CERTIFICATION.md`.
 
-## 7. Recurring
+## 14. Scale (spec Phases E/F/G — closed this session)
 
-See `FDH8_RECURRING_EXPERIENCE.md`. Pure display over `fdh_recurring_transactions` — zero detection logic (grep-verified: no `frontendRecurringDetector()` anywhere). `next_expected_date` rendered only when the certified engine populated it.
-
-## 8. Transactions
-
-See `FDH8_TRANSACTION_EXPLORER.md`. Search/filter/sort over `getTransactions()`, deterministic keyset-style ordering (same tie-breaker convention as the existing `bank-transactions`/`review-queue` routes). **Disclosed gap**: no dedicated FDH-7 review/correction page exists anywhere in this codebase yet (confirmed by directory listing — only the FDH-3 upload screen exists under `app/(app)/financial-data-hub/`); every "Review transactions"/"Review/Edit" link falls back to `/financial-data-hub` rather than a nonexistent dedicated route, with this documented inline in the code. This is a real, disclosed UX rough edge, not a financial-integrity issue — no review/correction logic was duplicated to work around it.
-
-## 9. Merchant Experience
-
-See `FDH8_MERCHANT_EXPERIENCE.md` (new doc, added after closing a real gap — see section 20). `getMerchants()` ranks approved expense magnitude, duplicate-excluded, allocation-aware, excluding transfers/loan drawdowns/investment funding/ATM withdrawals by construction. Rendered as a "Top merchants" table on the Spending page. Disclosed: refund-netting is not applied at merchant granularity (FDH-7 defines netting only at the overall `expense_total` level).
-
-## 10. Trends & Comparisons
-
-See `FDH8_TREND_AND_COMPARISON_LOGIC.md`. `getTrend()` buckets approved transactions by month, historical actuals only. `comparePeriods()` handles the zero-denominator case explicitly (`previous=0, current=500` → `percentChange: null`, "New spending this period" label, never `Infinity`/`NaN`) — certified with 6 dedicated test cases. Rendered on Overview as a 6-month trend chart with an accessible text-table summary alongside the chart.
-
-## 11. Multi-Account
-
-See `FDH8_ACCOUNT_EXPERIENCE.md`. Household aggregate + per-account drilldown, both computed from the identical fetched transaction set (never two independently-drifting queries). Transfer-safety across accounts is structural, not a second transfer-detection concept — certified in the "Transfer" oracle scenario.
-
-## 12. Multi-Currency
-
-See `FDH8_MULTI_CURRENCY_POLICY.md`. Every aggregate is an array grouped by `currency_original`; certified with an explicit naive-addition negative control (100 AUD + 100 INR "=200" shown only as the trap it is, never what the certified functions produce).
-
-## 13. Financial Integrity
-
-See `FDH8_FINANCIAL_INTEGRITY_CERTIFICATION.md` and `FDH8_APPROVED_ACTIVITY_MODEL.md` — **the core of this report.** Two independent instruments, both genuinely executed:
-
-```
-$ npx vitest run tests/unit/fdh8FinancialIntegrityCertification.test.ts
- Test Files  1 passed (1)
-      Tests  26 passed (26)
-
-$ node scripts/fdh8_certification.mjs
-=== FDH-8 DB Certification: 12 PASS, 0 FAIL ===
-```
-
-Every FAIL condition in spec section 154 was checked with a real negative control and cleared — see the itemised list in `FDH8_FINANCIAL_INTEGRITY_CERTIFICATION.md`. The Product-Owner-flagged critical scenario (pending never silently entering approved totals) was proven at BOTH the pure-function level and the real-Postgres/RLS level, including the exact `$4,250 + $180 ≠ $4,430` example from spec 12.
-
-## 14. Scale
-
-See `FDH8_SCALE_CERTIFICATION.md`. Certified at 1,001 rows (exact `count()`, exact `sum()`, real keyset pagination walk collecting all 1,001 ids with zero duplicates/gaps) — the specific truncation-class boundary the spec calls out. **Not run** at 5,000/10,000 (time-budgeted out this session, disclosed as an Open Residual; the query pattern used has no `LIMIT`/offset-pagination that would behave differently at larger N, but this is a structural argument, not a re-run measurement).
+**5,000-row: 11/11 PASS. 10,000-row: 11/11 PASS.** Every figure independently computed with plain arithmetic (never derived from FDH-8's own aggregation code) and matched exactly against the real live API: income, expense, net cash flow, pending count, 3 category totals, 1 merchant total (with exact transaction count), search/account-filter/sort at scale. The pagination negative control genuinely proves the Section 1 fix is load-bearing: an artificially 1,000-row-capped query under-reports expense by 89% ($25,147 vs the true $227,970 at N=10,000); the real live API matches the true figure exactly. Full detail in `FDH8_SCALE_CERTIFICATION.md`.
 
 ## 15. UX & Accessibility
 
-See `FDH8_ACCESSIBILITY_CERTIFICATION.md`. Semantic `<table>`s with `scope="col"` headers throughout (Transactions, Spending category table, Merchants table, Recurring table, Trend summary table); every chart (`AllocationPieChart`, `TrendLineChart`) paired with an adjacent text-table summary; status conveyed with text + colour, never colour alone; loading/empty/error states via the reused `ResourceLoadingSkeleton`/`ResourceEmptyState`/`ResourceErrorState` components — no page flashes `$0` before real totals load, and a failed component (e.g. a merchants-query error) does not blank an already-successful section next to it (verified by code reading — spending/overview both fetch secondary sections in isolated try/catch blocks). **Not performed**: live keyboard-navigation/screen-reader testing (no browser/AT tooling exercised against an authenticated session in this session) — disclosed, not claimed.
+Code-level verification re-confirmed for every FDH-8 page (semantic tables, chart+text-table pairing, no colour-only signalling, loading/empty/error state separation, accessible names). Additionally, this session had a real browser and real DEV credentials for the first time: the login page's genuine accessibility tree was verified live (proper `<form>`/`<label>` associations, working keyboard `Tab` order). A full authenticated keyboard/screen-reader walkthrough of the FDH-8 pages themselves was attempted but blocked by a browser-automation input-event issue unrelated to the app (the identical test credentials worked correctly via the live-DEV certification script's real HTTP auth calls moments earlier) — disclosed as an open residual in `FDH8_ACCESSIBILITY_CERTIFICATION.md`, not rounded up to "fully live-verified."
 
-## 16. Live DEV
+## 16. Live DEV (spec Phase C/D — closed this session)
 
-See `FDH8_LIVE_DEV_CERTIFICATION.md`. **Not attainable** — no DEV Supabase credentials in this worktree. This is the same class of gap FDH-7's own certification script disclosed for itself. Genuinely substituted, as far as it reaches, by the PGlite DB certification (section 13) for the SQL/RLS layer only — no live HTTP walk through the actual Next.js server/session, no real synthetic-CSV-to-Overview end-to-end walk, was performed.
+**44 PASS, 0 FAIL, 1 INFO (of 45).** All 9 spec Live Cases + 6 tenant-isolation checks, all through the real running app and real DEV Supabase project (`vqycarelcoijzwlpkpcz.supabase.co` — the same DEV project every prior FDH/II certification in this program used, independently cross-checked against `docs/database-reconciliation/*.md`, never production). Full case-by-case detail, including the two real defects found (§2.2, §3), in `FDH8_LIVE_DEV_CERTIFICATION.md`.
+
+**The most scrutinised requirement in this program** — Approved $4,250 + Pending $180 → Headline $4,250, Pending disclosed separately, never $4,430 — is proven live, with a non-vacuous negative control showing what the forbidden $4,430 figure would have been had the approval-status filter been dropped (it was not).
 
 ## 17. Security
 
-See `FDH8_SECURITY_CERTIFICATION.md`. Zero new tables/RLS policies. Tenant isolation certified via PGlite with a forged-account-id negative control AND a "no app-layer filter at all, RLS alone" negative control (both pass). No service-role client imported anywhere in FDH-8's own code (grep-verified). No admin transaction browser. No raw-document access. FDH1-F1 residual correctly left open, not claimed closed.
+Zero new tables/RLS policies. Tenant isolation now certified BOTH at the DB/PGlite layer (12/12, re-run fresh) AND live against real DEV (6/6, including a real RLS-enforced direct PostgREST read as the forging tenant — the load-bearing proof this program treats as non-negotiable). `.next/static` scanned after a completed production build: 0 `SUPABASE_SERVICE_ROLE_KEY` matches, 0 `createAdminClient` matches, 0 test-fixture data leaks. FDH1-F1 residual remains open per standing instruction, unrelated to FDH-8. Full detail in `FDH8_SECURITY_CERTIFICATION.md`.
 
 ## 18. Data Preservation
 
-`git status --short` after every FDH-8 change touches exactly: 8 new API routes, 9 new/edited UI files, 1 new analytics/period/comparison module, 1 new test file, 1 new certification script, 17 new docs, and a 5-line additive diff to `AppShell.tsx`. Two incidental timestamp-only diffs in `scripts/ii-*-certification/comparison_report.json` (regenerated by an unrelated full `vitest run` pass) were reverted with `git checkout --` rather than committed. No FDH reference data, R8 master/rule table, Investment Intelligence file, Resources file, or Input Data file was touched — confirmed by the diff itself, not merely asserted.
+No FDH reference data, R8 master/rule table, Investment Intelligence file, Resources file, or Input Data file was touched by any commit this session — confirmed by `git diff --stat` against the FDH-8 base, which touches exactly: 2 analytics-layer files (pagination + dedup-status fixes), 1 approval-service test, 2 new API routes (read-only), 1 new review-UI directory (3 files), 3 Suspense-boundary structural fixes, 1 test-allowlist fix, 2 new certification scripts, 6 doc updates/additions. Two incidental timestamp-only diffs in unrelated `scripts/ii-*-certification/comparison_report.json` files (regenerated by running the full vitest suite) were reverted with `git checkout --`, never committed.
 
 ## 19. Regression
 
-- `npm run check:migrations`: OK, 76 active migrations, unchanged.
-- `npm run check:migrations:against-main`: OK, 0 collisions vs `origin/main`.
-- `npx tsc --noEmit -p tsconfig.json`: **0 errors**, full repository (confirmed clean before and after fixing the pre-existing `xlsx` gap — see section 20).
-- `npx eslint` on every new/touched FDH-8 file: **0 errors, 0 warnings** (verified per-directory: `lib/financial-data-hub/analytics`, `app/api/financial-data-hub/activity`, `app/(app)/financial-data-hub/activity`, the new test file). `AppShell.tsx`'s one pre-existing lint error was confirmed (via `git stash` comparison, done independently by the UI implementation pass) to already exist before FDH-8's one-line addition — not introduced by this phase.
-- `npx vitest run` (full repository): **2,342 passed, 18 skipped, 2 failed** — both failures are pre-existing live-DEV-credential-gated tests (`resourcesImportR1_7LiveDev.test.ts`, `resourcesP0ContentR1_7CLiveDev.test.ts`, both `ENOENT .env.local`), unrelated to FDH-8 and consistent with the same missing-credentials gap disclosed in section 16.
-- FDH-6/FDH-7/R8 scoped regression re-run individually: **234/234 passed** (11 test files: `fdh6IndependentCertificationPack`, `fdh6Pagination`, `fdh6ReviewReasons`, `fdh6ThresholdsAndRuleConflict`, `fdh7ApprovalPolicy`, `fdh7ApprovedSummaryOracle`, `fdh7SchemaContract`, `r8RuleMatchingAndEconomicType`, `r8SchemaContract`, `r8TextMatchAndMerchant`, `r8TransferRefundRecurring`) — zero regression.
-- `npx next build --webpack`: **webpack compile succeeded (97s) and the full-project TypeScript check succeeded (60s)** on the final run. Static-page generation then failed on `/admin/benchmarks` — an unrelated, pre-existing admin page that calls `createClient()` at build/static-generation time and fails without real `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` env vars, which this worktree does not have (same root cause as section 16's DEV-credentials gap, not specific to FDH-8, and would fail identically for any build attempted in this environment regardless of what code changed). **No FDH-8 file appears anywhere in the build's error trace at any phase.**
+- `check-migration-versions.mjs`: OK, 77 active migrations, unchanged.
+- `check-migration-versions:against-branch origin/main`: OK, 0 collisions.
+- `npx tsc --noEmit`: **0 errors**, re-confirmed on the final certified commit.
+- `npx eslint .` (full repository): **9 pre-existing errors, 35 pre-existing warnings — zero in any file this closure touched or created** (individually re-verified with a targeted eslint run on every new/modified FDH-8 file: 0/0). All 9 errors are in unrelated files (`forecast/goals`, `AdminBenchmarksClient`, `AdminRecommendationsClient`, `FinancialDataGrid`, `RecommendationsPanel`, `AppShell` — the latter's error is on a DIFFERENT line/effect than the one this closure's test fix concerns, pre-existing).
+- `npx vitest run` (full repository, most recent complete run): **2,384 passed, 4 failed, 5 skipped (2,393 total)**. All 4 failures are in `tests/unit/resourcesR1_4LiveDev.test.ts` (Resources module, unrelated to FDH-8, RLS-violation errors on `resource_posts` consistent with concurrent writes from the other background tasks this session's standing constraints explicitly disclosed are running against the same shared DEV project) — **independently re-run in isolation and confirmed 20/20 PASS**, proving these are DEV-concurrency flakes, not regressions. A second, separate flake (`resourcesAdminR1_2.test.ts`, also Resources, also re-confirmed 26/26 in isolation) was observed on an earlier full run. Zero FDH-8-related test failures anywhere.
+- FDH-6/FDH-7/R8/FDH-8/dedup-fix scoped regression, re-run on the final certified commit: **290/290 passed** (14 test files: the 11 pre-existing FDH-6/FDH-7/R8 files, `fdh8FinancialIntegrityCertification` (26), `fdh7DuplicateResolutionDedupStatus` (5, new), `fdh1Isolation` (25, fixed)) — zero regression.
+- `npx next build --webpack`: **clean** — compiled successfully (80s), TypeScript check passed (42s), all 213 pages statically generated (including the page that previously failed static export before this session's Suspense-boundary fix), build traces collected. Every FDH-8 route (8 new API routes, 6 activity pages, the new review page, the 2 new lookup routes) present in the final route manifest.
+- `node scripts/fdh8_certification.mjs` (PGlite, re-run fresh on the final commit): **12/12 PASS**.
 
-## 20. Production Certification (PENDING HUMAN ACTION)
+## 20. Production Certification
 
-See `FDH8_PRODUCTION_CERTIFICATION.md`. Not touched. No push, no merge, no deploy. FDH-8 ships no migration, so there is no production migration-application ordering step specific to this phase — but production verification of the actually-deployed routes, and confirmation that FDH-7's own migration 0076 (`approval_status` etc.) is live in production, remain human steps.
+**NOT ATTEMPTED — outside environment scope, per standing constraints.** No production database or deployment access exists for this task. See `FDH8_PRODUCTION_CERTIFICATION.md`. Pushing this branch to `main` would trigger Amplify auto-deployment (the established pattern for this project) — this closure does not push, merge, or deploy. Production migration requirement: **NONE** (FDH-8 ships no migration; production already has everything FDH-8 reads, per FDH-7's own migration 0076, whose production-application status is a pre-existing, unrelated tracking item, not a new gap this closure creates).
 
 ## 21. Open Residuals (honest, itemised)
 
-1. **No dedicated FDH-7 review page exists in this codebase** — every "Review transactions" link falls back to `/financial-data-hub`. Not an FDH-8 defect; a pre-existing gap this phase correctly did not paper over by building a second review UI.
-2. **Live DEV / real Supabase certification not performed** — no credentials in this worktree (section 16).
-3. **Scale not certified at 5,000/10,000 rows** — only 1,001 (section 14).
-4. **Transaction Explorer pagination uses `limit` alone, no cursor param wired at the route level yet** — the underlying data/index support it; the route's cursor plumbing is unbuilt.
-5. **Merchant totals do not net refunds** — a deliberate, disclosed scope choice, not a defect (section 9).
-6. **The oracle's `'uncategorised'` bucket combines all non-transfer economic types** — inherited from FDH-7, not introduced by FDH-8, disclosed in `FDH8_SPENDING_EXPERIENCE.md`/`FDH8_INCOME_EXPERIENCE.md`.
-7. **No subcategory-level drill-down function** — category-level only in this pass.
-8. **No dedicated `getCategoryTrend()` convenience function** — composable today from existing functions, not pre-packaged.
-9. **No "average spending per day/month/transaction" figure rendered** — deferred rather than risk an ambiguously-labelled number (spec 56's own concern).
-10. **Minor code-quality nit, not a financial-integrity issue**: `spending/page.tsx`'s essential/discretionary subtotal uses a plain `.reduce((sum,c)=>sum+c.total,0)` over already-exact, already-rounded category totals for a display-only rollup — not the canonical oracle computation the spec's "no reduce" rule targets (section 82), but inconsistent with the repo's own exact-money convention and worth tightening in a follow-up pass.
-11. **Live keyboard-navigation/screen-reader testing not performed** (section 15).
-12. **`/admin/benchmarks` (unrelated, pre-existing) blocks a fully clean end-to-end static export** in any credential-less environment — not fixable without real Supabase credentials, not caused by FDH-8.
+1. **Split-transaction approval gate defect** (§3) — real, disclosed, requires a migration to fix, explicitly not attempted here.
+2. **Live keyboard/screen-reader walkthrough of authenticated FDH-8 pages** — attempted, blocked by a browser-automation tooling issue this session, not completed.
+3. **No general "list all pending transfer links/duplicate candidates" browsing UI** in the new Review workspace — reachable only via a focused transaction's own deep link; judged out of scope for a "thin wrapper" (building it would start to resemble a second review engine).
+4. **Transaction Explorer pagination still `limit`-only**, no cursor param wired at the route level — inherited from the prior pass, unchanged (the underlying query is now genuinely uncapped past 1,000 via this session's own fix; only the EXPLORER's single-page-at-a-time UX convention is unchanged, which is a UX choice, not a truncation defect).
+5. **Merchant totals do not net refunds** — a deliberate, disclosed scope choice from the prior pass, unchanged.
+6. **FDH-7's own migration 0076 production-application status** — a pre-existing tracking item from earlier phases, not a new FDH-8 gap.
+7. **DEV-concurrency test flakiness** (§19) — two Resources-module live-DEV tests flaked during full-suite runs due to other background tasks writing to the same shared DEV project concurrently; both confirmed non-regressions by isolated re-runs, but the underlying multi-agent contention is a standing environmental condition, not something this closure can fix.
 
-## 22. Acceptance Checklist (spec 144-153, itemised)
+## 22. Acceptance Checklist (spec sections, itemised)
 
 - [x] No new transaction/categorisation/reconciliation engine created.
-- [x] Pending/unapproved transactions never silently enter approved totals — proven with 2 independent negative-control instruments.
-- [x] Transfers never inflate income/expense — certified.
-- [x] Duplicates never double-count — certified.
-- [x] Splits never double-count — certified.
-- [x] Refunds match FDH-7 exactly (same function).
-- [x] Loan proceeds never become income — certified.
-- [x] Investment funding never becomes ordinary expense — certified.
-- [x] Cash withdrawals never automatically become consumer expense — certified.
-- [x] Different currencies never naively summed — certified, structural.
-- [x] Exact money throughout canonical totals (`toMinorUnits`/`sumMoney`, zero `reduce` on raw amounts for any headline total) — one non-canonical display-only exception disclosed (residual 10).
-- [x] 1,000+ rows never silently truncate — certified at 1,001 with a real keyset walk.
-- [x] Tenant B cannot access Tenant A analytics — certified at the DB/RLS layer with forged-filter and no-app-filter negative controls; **not** certified against a live hosted project (disclosed).
-- [x] Financial-data errors never display as $0 — `ResourceErrorState` used throughout, verified by code reading.
-- [x] FDH-8 never modifies canonical Input Data — grep-verified, zero touches.
-- [x] No forecasting/advice/budgeting scope creep — grep-verified, no advice strings, no forecast/budget code.
-- [x] No existing FDH engine regressed — 234/234 FDH-6/FDH-7/R8 scoped tests pass, 2,342/2,360 full-repo tests pass (2 pre-existing DEV-credential-gated failures, unrelated).
+- [x] Pending/unapproved transactions never silently enter approved totals — proven live AND at the DB layer, with a live non-vacuous negative control.
+- [x] Transfers never inflate income/expense — proven live (Case 3).
+- [x] Duplicates never double-count — proven live (Case 4), AND the inverse zero-count bug found+fixed.
+- [x] Splits never double-count — proven live (Case 6); the approval-gate defect blocking the split→approve path is separately disclosed, not conflated with a totals-correctness defect.
+- [x] Refunds match FDH-7 exactly — proven live (Case 5).
+- [x] Loan proceeds/investment funding/cash withdrawals — unchanged from prior pass, still structurally excluded.
+- [x] Different currencies never naively summed — certified, structural, re-confirmed live.
+- [x] Exact money throughout — certified; scale certification adds a genuine 10,000-row exact-count proof.
+- [x] 1,000+ rows never silently truncate — certified at 1,001 (prior pass) AND now 5,000/10,000 live, with the pagination negative control proving the fix is load-bearing.
+- [x] Tenant B cannot access Tenant A analytics — certified live, including a real RLS-enforced direct PostgREST read.
+- [x] Financial-data errors never display as $0 — code-verified, unchanged design.
+- [x] FDH-8 never modifies canonical Input Data — grep-verified.
+- [x] No forecasting/advice/budgeting scope creep — grep-verified.
+- [x] No existing FDH engine regressed — 290/290 scoped regression, full-repo regression clean apart from confirmed-unrelated DEV-concurrency flakes.
+- [x] FDH-7 review destination exists and is used — closed this session (was the single largest gap).
 
 ## 23. Final Verdict
 
-**CONDITIONAL PASS.** Implementation, local financial-integrity/security certification (via pure-function oracle + real-Postgres PGlite, both with genuine negative controls), and full-repository regression are genuinely, evidentially complete. Live-DEV and production certification are the explicitly-anticipated external steps this session cannot reach (no credentials, no deploy access) — reported precisely as pending, not rounded up to a claim this session did not earn.
+**DEV CERTIFIED — READY FOR PRODUCTION HANDOFF.** All DEV-reachable gates (architecture, financial integrity, approved/pending, live DEV, 5,000, 10,000, review integration, tenant security, accessibility [code + partial live], responsive UX, full regression, canonical-main readiness) pass, live, with genuine evidence — not fabricated, not rounded up. Two real gaps remain honestly disclosed rather than hidden: the split-approval DB-gate defect (migration-gated, correctly not attempted) and the incomplete live AT/keyboard walkthrough (tooling-blocked, not app-blocked). Production deployment/certification are explicitly out of this session's scope and were not attempted.
 
-## 24. Initial Standalone FDH Status
+## 24. FDH Standalone Status
 
 | Phase | Status |
 |---|---|
-| FDH-0 | Discovery/architecture-audit PASS |
-| FDH-1 | Data foundation FULL PASS |
-| FDH-2 | AU/India taxonomy FULL PASS (DEV + production certified) |
-| FDH-3 | Secure Document Lifecycle FULL PASS |
-| R7/FDH-4 | Bank CSV Engine + adapter coverage FULL PASS, merged to main |
-| FDH-5 | Bank PDF Processing FULL PASS |
-| R8 | Merchant & Categorisation Intelligence FULL PASS |
-| FDH-6 | Economic Classification/Transfers/Refunds/Recurring FULL PASS |
-| FDH-7 | Review, Corrections, Splits, Approval FULL PASS |
-| **FDH-8** | **CONDITIONAL PASS this session — local + regression complete, DEV/production pending** |
+| FDH-0 through FDH-7, R7/R8 | Unchanged — all FULL PASS, prior phases |
+| **FDH-8** | **DEV CERTIFIED — READY FOR PRODUCTION HANDOFF (this closure)** |
 
 ## 25. Financial Data Hub Standalone User Journey
 
-Upload → Secure processing (FDH-3) → CSV/PDF extraction (R7/FDH-4, FDH-5) → Canonical transactions → Reconciliation → Merchant/category intelligence (R8) → Economic classification (FDH-6) → Transfer/duplicate/refund/recurring intelligence (FDH-6) → User review (FDH-7) → User correction (FDH-7) → User approval (FDH-7) → **Financial Activity/Expense Tracker (FDH-8)**. The full chain is functionally complete pending FDH-8's own production release — this journey has never been exercised end-to-end against a live environment in this session (section 16), so "functionally complete" describes the code path, not a live-verified user journey.
+Upload → Secure processing (FDH-3) → CSV/PDF extraction (R7/FDH-4, FDH-5) → Canonical transactions → Reconciliation → Merchant/category intelligence (R8) → Economic classification (FDH-6) → Transfer/duplicate/refund/recurring intelligence (FDH-6) → User review (FDH-7, now with a real UI for the first time — this closure) → User correction (FDH-7) → User approval (FDH-7) → **Financial Activity/Expense Tracker (FDH-8)**. This journey has now been genuinely exercised end-to-end against live DEV in this session (Live Cases 8/9 walk the real CSV/PDF upload path through to a real FDH-8 overview render) — "functionally complete" now describes a live-verified user journey, not only the code path.
 
 ## 26. FDH-9 Readiness
 
-**AMBER.** FDH-8's approved activity is stable enough in principle for a future FDH-15 Input Data bridge to consume (recurring income/expenses/category totals/financial activity, per spec 115) without FDH-8 changing — but that mapping was deliberately not built here, and FDH-8 itself has not been DEV/production certified yet. AMBER rather than GREEN specifically because of the disclosed DEV/production gap, not because of any known defect in the code delivered.
+**GREEN**, upgraded from AMBER. FDH-8 is now DEV-certified with genuine live evidence, not merely locally certified. The one disclosed defect (split-approval gate) does not affect FDH-8's own approved-activity semantics — it affects whether a split transaction CAN reach approved status through the split action alone (a real UX/workflow gap, not a totals-correctness gap), and does not block a future FDH-15 Input Data bridge from consuming FDH-8's recurring income/expenses/category totals/financial activity as-is.
 
 ## Next Action: STOP.
 
-This report is the terminal deliverable for this session. No FDH-9 work was started, per standing instruction.
+This report is the terminal deliverable for this closure session. Production deployment/certification (spec Phases W-Z) are explicitly out of scope and were not attempted. No FDH-9 work was started, per standing instruction.
