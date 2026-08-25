@@ -39,9 +39,18 @@ function record(id: string, description: string, status: 'PASS' | 'FAIL', detail
   if (detail) console.log(`        ${String(detail).slice(0, 400)}`);
 }
 
-function stampHexParts(n: number) {
-  const h = n.toString(16).padStart(12, '0').slice(-12);
-  return { p1: h.slice(0, 4), p2: h.slice(4, 8) };
+function stampHexParts(runStamp: number, rowCount: number) {
+  // p1 varies by RUN (cross-run uniqueness); p2 is rowCount's own decimal
+  // digits (all valid hex characters, 0-9) so it visibly, guaranteedly
+  // differs between e.g. 999 and 1000 -- unlike hashing/adding rowCount
+  // into a shared high-order prefix (the bug this replaced: adding a small
+  // rowCount delta to STAMP only perturbs the LOW-order hex digits, never
+  // the high-order p1/p2 slice, so the 999-row and 1000-row seed rows
+  // collided on their shared id prefix across two different sizes in the
+  // same run).
+  const p1 = runStamp.toString(16).padStart(8, '0').slice(-4);
+  const p2 = rowCount.toString().padStart(4, '0');
+  return { p1, p2 };
 }
 
 async function makeUser(tag: string) {
@@ -96,7 +105,7 @@ async function domainA(rowCount: number) {
   // seed loop restarts its row index at i=1, so without this the 999-row
   // and 1000-row runs would generate byte-identical primary keys for their
   // overlapping row range and collide on ii_transactions_pkey.
-  const { p1, p2 } = stampHexParts(STAMP + rowCount);
+  const { p1, p2 } = stampHexParts(STAMP, rowCount);
   const seedRows = [];
   for (let i = 1; i <= rowCount; i++) {
     const hex = i.toString(16).padStart(12, '0');
@@ -168,7 +177,7 @@ async function domainB(rowCount: number) {
   // id order (access.ts's own .order('id', ascending)) places it past the
   // 1000-row page boundary for any rowCount > 1000.
   const scopes = ['VIEW_FINANCIAL_SUMMARY', 'VIEW_GOALS', 'VIEW_FORECASTS', 'VIEW_TAX_SUMMARY', 'VIEW_SOURCE_PROVENANCE', 'COMMENT_OR_NOTE'];
-  const { p1, p2 } = stampHexParts(STAMP + rowCount);
+  const { p1, p2 } = stampHexParts(STAMP, rowCount);
   const histRows = [];
   for (let i = 1; i < rowCount; i++) {
     const hex = i.toString(16).padStart(12, '0');
