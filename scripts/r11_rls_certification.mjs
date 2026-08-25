@@ -324,5 +324,116 @@ await asService(async () => {
   console.log(`  (${total.rows[0].c} public tables total, all RLS-enabled)`);
 });
 
+console.log('\n=== SECTION 13: MANDATORY — migration 0087 same-user authoritative-forgery guard (LIVE-R11-P11) ===');
+// Dedicated FRESH fixtures for this section (never reused from earlier
+// sections, which already mutate txnA's status to 'review_required' as
+// part of proving the CHECK constraint accepts the value) — reusing a
+// mutated row would make an "unchanged after" assertion a false negative
+// regardless of whether the fix works.
+let txnForge, forgeCaseId;
+await asService(async () => {
+  const tx = await db.query(
+    `insert into ii_transactions (user_id,account_id,instrument_id,currency_code,status,transaction_type,transaction_date,units,gross_amount,source_reference,transaction_fingerprint)
+     values ('${A}','${accountA}','${instrumentId}','INR','parsed','purchase','2026-01-01',77,7700,'REF-FORGE','fp-forge-section13') returning id`
+  );
+  txnForge = tx.rows[0].id;
+  const r = await db.query(
+    `insert into ii_reconciliation_cases (user_id, subject_type, subject_id, discrepancy_type, severity, evidence) values ('${A}','transaction','${txnForge}','cross_source_conflict','high','{}'::jsonb) returning id`
+  );
+  forgeCaseId = r.rows[0].id;
+});
+// The authoritative source of truth for every check below is the PERSISTED
+// row state re-read via the service-role client after each attempt — never
+// the client-side exception alone (a raised trigger message needn't match
+// any particular wording, and a silently-zero-row RLS-denied UPDATE throws
+// no exception at all but still correctly changes nothing).
+await asUser(A, async () => {
+  let threw = false;
+  try {
+    await db.query(`update ii_transactions set status='review_required' where id=$1`, [txnForge]);
+  } catch (e) {
+    threw = true;
+  }
+  const after = await asService(async () => (await db.query(`select status from ii_transactions where id=$1`, [txnForge])).rows[0].status);
+  check('MANDATORY: client A can no longer directly forge own ii_transactions.status via RLS-scoped UPDATE', after === 'parsed', `(threw=${threw}, status now ${after}, expected unchanged 'parsed')`);
+});
+await asUser(A, async () => {
+  let threw = false;
+  try {
+    await db.query(`update ii_reconciliation_cases set discrepancy_type='cross_source_exact_duplicate' where id=$1`, [forgeCaseId]);
+  } catch (e) {
+    threw = true;
+  }
+  const after = await asService(async () => (await db.query(`select discrepancy_type from ii_reconciliation_cases where id=$1`, [forgeCaseId])).rows[0].discrepancy_type);
+  check('MANDATORY: client A cannot directly rewrite ii_reconciliation_cases.discrepancy_type (authoritative field)', after === 'cross_source_conflict', `(threw=${threw}, discrepancy_type now ${after}, expected unchanged)`);
+});
+await asUser(A, async () => {
+  let threw = false;
+  try {
+    await db.query(
+      `update ii_reconciliation_cases set status='resolved', resolved_at=now(), resolution_method='auto_resolved_cross_source_precedence', resolved_by='${A}', resolved_by_actor_type='system' where id=$1`,
+      [forgeCaseId]
+    );
+  } catch (e) {
+    threw = true;
+  }
+  const after = await asService(async () => (await db.query(`select resolved_by_actor_type, resolution_method, status from ii_reconciliation_cases where id=$1`, [forgeCaseId])).rows[0]);
+  check(
+    'MANDATORY (this is the exact live-DEV forgery reproduced 2026-08-25): client A cannot self-assign resolved_by_actor_type=system or the R11 auto-resolution method',
+    after.resolved_by_actor_type !== 'system' && after.resolution_method !== 'auto_resolved_cross_source_precedence' && after.status !== 'resolved',
+    `(threw=${threw}, actor_type=${after.resolved_by_actor_type}, method=${after.resolution_method}, status=${after.status})`
+  );
+});
+await asUser(A, async () => {
+  // Positive control: the ONE shipped legitimate user action (real
+  // resolve/[id]/resolve/route.ts shape) must still work after the guard.
+  let threw = false;
+  try {
+    await db.query(
+      `update ii_reconciliation_cases set status='resolved', resolved_at=now(), resolution_method='user_mapped_instrument', resolved_by='${A}', resolved_by_actor_type='user' where id=$1`,
+      [forgeCaseId]
+    );
+  } catch (e) {
+    threw = true;
+  }
+  const after = await asService(async () => (await db.query(`select status, resolved_by_actor_type from ii_reconciliation_cases where id=$1`, [forgeCaseId])).rows[0]);
+  check('positive control: the real shipped user-resolves-own-case action still works after the guard', !threw && after.status === 'resolved' && after.resolved_by_actor_type === 'user', `(threw=${threw}, status=${after.status}, actor_type=${after.resolved_by_actor_type})`);
+});
+await asService(async () => {
+  // Positive control: the REAL production auto-resolution path
+  // (documentProcessing.ts, service-role) must be unaffected by the guard —
+  // uses a second fresh case since the one above is now already resolved.
+  const r = await db.query(
+    `insert into ii_reconciliation_cases (user_id, subject_type, subject_id, discrepancy_type, severity, evidence) values ('${A}','transaction','${txnForge}','cross_source_exact_duplicate','info','{}'::jsonb) returning id`
+  );
+  const svcCaseId = r.rows[0].id;
+  let threw = false;
+  try {
+    await db.query(
+      `update ii_reconciliation_cases set status='resolved', resolved_at=now(), resolution_method='auto_resolved_cross_source_precedence', resolved_by_actor_type='system' where id=$1`,
+      [svcCaseId]
+    );
+  } catch (e) {
+    threw = true;
+  }
+  const after = await db.query(`select status, resolved_by_actor_type, resolution_method from ii_reconciliation_cases where id=$1`, [svcCaseId]);
+  const row = after.rows[0];
+  check(
+    'positive control: service-role (real production auto-resolution path) still permitted to set system/auto_resolved_cross_source_precedence',
+    !threw && row.status === 'resolved' && row.resolved_by_actor_type === 'system' && row.resolution_method === 'auto_resolved_cross_source_precedence',
+    `(threw=${threw}, status=${row.status}, actor_type=${row.resolved_by_actor_type}, method=${row.resolution_method})`
+  );
+});
+await asUser(A, async () => {
+  let threw = false;
+  try {
+    await db.query(`update ii_transactions set status='review_required' where id=$1`, [txnForge]);
+  } catch (e) {
+    threw = true;
+  }
+  const after = await asService(async () => (await db.query(`select status from ii_transactions where id=$1`, [txnForge])).rows[0].status);
+  check('MANDATORY: client A has literally no UPDATE grant on ii_transactions at all (any column, any value)', after === 'parsed', `(threw=${threw}, status=${after})`);
+});
+
 console.log(`\nR11 RLS/SECURITY CERTIFICATION: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
