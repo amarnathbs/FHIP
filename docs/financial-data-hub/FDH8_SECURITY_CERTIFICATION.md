@@ -1,5 +1,7 @@
 # FDH-8 — Security Certification
 
+**Updated 2026-08-25 (closure pass)**: tenant isolation is now additionally certified LIVE against the real DEV project (real Tenant A/B sessions, real RLS enforcement, a real direct PostgREST read as the forging tenant) — see the new "Live tenant isolation" section below. The PGlite-level certification below is unchanged and still passes.
+
 ## Tenant isolation (spec 73-76, 116-118)
 
 FDH-8 adds **zero new tables and zero new RLS policies** — it reads exclusively through the existing `auth.uid() = user_id` policies on `fdh_transactions`, `fdh_transaction_allocations`, `fdh_transaction_links`, `fdh_financial_accounts`, `fdh_recurring_transactions`, `fdh_duplicate_candidates`, `fdh_statement_uploads` (all unmodified by this phase), plus public-read master data (`fdh_categories`, `fdh_subcategories`, `fdh_merchants`, which carry no user-specific data). Every FDH-8 query additionally applies an explicit `.eq('user_id', userId)` (or, for account-scoped reads, `.eq('financial_account_id', accountId)` layered on top of the user filter) — defence in depth matching every other FDH repository's convention.
@@ -32,6 +34,21 @@ FDH-8 never queries `fdh_statement_uploads.raw_document_storage_reference` or an
 ## Logging (spec 118)
 
 No `console.log`/`console.error` of a raw transaction row, merchant history, account-level total, or user financial figure exists in `financialActivityAnalytics.ts` or the `activity/*` API routes (grep-verified: the only `throw new Error(...)` calls in the file carry a static prefix + the Postgres error message, never a dollar amount or row payload).
+
+## Live tenant isolation (2026-08-25, `scripts/fdh8_live_dev_certification.ts`)
+
+Real Tenant A and Tenant B DEV sessions, real HTTP requests against the running app, plus one check made directly at the RLS layer with the real anon key + Tenant B's own real JWT (no service-role bypass):
+
+```
+PASS  Tenant B forging Tenant A's account_id in /activity/overview: 0 unauthorized aggregate contribution
+PASS  Tenant B direct GET of a Tenant A transaction id: 404 (RLS-enforced)
+PASS  Tenant B forging Tenant A's account_id in the Transaction Explorer: 0 rows
+PASS  Tenant B forging Tenant A's account_id in /activity/spending: 0 categories
+PASS  Direct PostgREST read of a Tenant A row AS Tenant B (real anon key + real user JWT): 0 rows
+PASS  CONTROL — Tenant B genuinely CAN see their own approved data ($42.00 correctly returned)
+```
+
+The 5th check is the one this program treats as the load-bearing proof: it does not go through FDH-8's own application code AT ALL — it is a raw PostgREST request carrying Tenant B's real session token, and RLS alone blocks it. The 6th (control) check proves the blocking above is not simply "everything is broken" — Tenant B's own data is genuinely reachable.
 
 ## Open residual (not closed by FDH-8, correctly not claimed as closed)
 
