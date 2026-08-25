@@ -22,8 +22,16 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isOnboardingRoute = pathname.startsWith('/onboarding');
+  // App Review spec §16 (Profile page) + §15's onboarding sign-out fix:
+  // /profile is a real authenticated app route (requires login like any
+  // other), but must stay reachable *during* incomplete onboarding too —
+  // it's the "reach account" escape hatch the onboarding top bar links to
+  // (components/ui/OnboardingTopBar.tsx), and a user should be able to fix
+  // a profile typo (or change their email) without first being forced
+  // through the rest of the wizard.
+  const isProfileRoute = pathname.startsWith('/profile');
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|income|expenses|assets|liabilities|investments|retirement|insurance|score|dna|resilience|goals|twin|reports|coach|settings|admin)/
+    /^\/(dashboard|onboarding|income|expenses|assets|liabilities|investments|retirement|insurance|score|dna|resilience|goals|twin|reports|coach|settings|admin|profile)/
   );
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a
@@ -44,7 +52,7 @@ export async function proxy(request: NextRequest) {
       .eq('user_id', user.id)
       .single();
 
-    if (!profile?.onboarding_completed && !isOnboardingRoute) {
+    if (!profile?.onboarding_completed && !isOnboardingRoute && !isProfileRoute) {
       return NextResponse.redirect(new URL('/onboarding', request.url));
     }
     if (profile?.onboarding_completed && isOnboardingRoute) {

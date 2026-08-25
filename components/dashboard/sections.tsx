@@ -3,7 +3,7 @@
 import { MetricCard } from '@/components/ui/MetricCard';
 import { SectionCard, Stat } from './SectionCard';
 import { TrendLineChart, AllocationPieChart } from './charts';
-import { formatMoney } from '@/lib/engines/money';
+import { formatMoney, formatMoneyWhole } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import { percentChange, type DashboardSummary, type AllocationBucket } from '@/lib/engines/dashboard';
 
@@ -55,6 +55,14 @@ function snapshotSeries(summary: DashboardSummary, field: 'net_worth' | 'monthly
   }));
 }
 
+// App Review spec §14 (Rounding and Display Precision): every <MetricCard>/
+// <Stat> aggregate figure below uses formatMoneyWhole (nearest whole
+// currency unit, e.g. "-$1,630" not "-$1,630.06") — display formatting
+// only, computed off the same unrounded DashboardSummary fields every other
+// engine/report/consumer reads, so no calculation changes. Itemized
+// per-record rows (Largest Expenses, Repayment Progress, Insurance list)
+// deliberately keep formatMoney (with cents) — those are the "detailed
+// tables/drill-down retain cents" half of the same rule.
 export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
   const netWorthSeries = snapshotSeries(summary, 'net_worth');
   const prevSnapshot = summary.snapshots.length > 1 ? summary.snapshots[summary.snapshots.length - 2] : null;
@@ -64,34 +72,34 @@ export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <MetricCard
         label="Net Worth"
-        value={formatMoney(summary.netWorth, summary.currency)}
+        value={formatMoneyWhole(summary.netWorth, summary.currency)}
         trend={netWorthChange !== null ? `${netWorthChange >= 0 ? '+' : ''}${(netWorthChange * 100).toFixed(1)}% vs last month` : 'Building history...'}
         status={summary.netWorth >= 0 ? 'good' : 'risk'}
       />
       <MetricCard
         label="Monthly Income"
-        value={formatMoney(summary.netMonthlyIncome, summary.currency)}
-        trend={`Gross ${formatMoney(summary.grossMonthlyIncome, summary.currency)} · Passive ${formatMoney(summary.passiveMonthlyIncome, summary.currency)}`}
+        value={formatMoneyWhole(summary.netMonthlyIncome, summary.currency)}
+        trend={`Gross ${formatMoneyWhole(summary.grossMonthlyIncome, summary.currency)} · Passive ${formatMoneyWhole(summary.passiveMonthlyIncome, summary.currency)}`}
       />
       <MetricCard
         label="Monthly Expenses"
-        value={formatMoney(summary.totalMonthlyExpenses + summary.debtMonthlyRepayments, summary.currency)}
-        trend={`Essential ${formatMoney(summary.essentialMonthlyExpenses, summary.currency)} · Debt ${formatMoney(summary.debtMonthlyRepayments, summary.currency)}`}
+        value={formatMoneyWhole(summary.totalMonthlyExpenses + summary.debtMonthlyRepayments, summary.currency)}
+        trend={`Essential ${formatMoneyWhole(summary.essentialMonthlyExpenses, summary.currency)} · Debt ${formatMoneyWhole(summary.debtMonthlyRepayments, summary.currency)}`}
       />
       <MetricCard
         label={summary.monthlySurplus >= 0 ? 'Monthly Surplus' : 'Monthly Deficit'}
-        value={formatMoney(Math.abs(summary.monthlySurplus), summary.currency)}
-        trend={`Projected annual: ${formatMoney(summary.monthlySurplus * 12, summary.currency)}`}
+        value={formatMoneyWhole(Math.abs(summary.monthlySurplus), summary.currency)}
+        trend={`Projected annual: ${formatMoneyWhole(summary.monthlySurplus * 12, summary.currency)}`}
         status={summary.monthlySurplus >= 0 ? 'good' : 'risk'}
       />
       <MetricCard
         label="Monthly Savings"
-        value={formatMoney(Math.max(summary.monthlySurplus, 0), summary.currency)}
+        value={formatMoneyWhole(Math.max(summary.monthlySurplus, 0), summary.currency)}
         trend={`Savings rate ${fmtPercent(summary.savingsRate)}`}
       />
       <MetricCard
         label="Debt Outstanding"
-        value={formatMoney(summary.totalLiabilities, summary.currency)}
+        value={formatMoneyWhole(summary.totalLiabilities, summary.currency)}
         trend={
           summary.averageInterestRate !== null
             ? `Avg rate ${summary.averageInterestRate.toFixed(2)}%`
@@ -103,13 +111,13 @@ export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
       />
       <MetricCard
         label="Investment Portfolio"
-        value={formatMoney(summary.totalInvestments, summary.currency)}
-        trend={`Unrealised gain ${formatMoney(summary.investmentUnrealisedGain, summary.currency)}`}
+        value={formatMoneyWhole(summary.totalInvestments, summary.currency)}
+        trend={`Unrealised gain ${formatMoneyWhole(summary.investmentUnrealisedGain, summary.currency)}`}
         status={summary.investmentUnrealisedGain >= 0 ? 'good' : 'risk'}
       />
       <MetricCard
         label="Retirement Balance"
-        value={formatMoney(summary.totalRetirement, summary.currency)}
+        value={formatMoneyWhole(summary.totalRetirement, summary.currency)}
         trend="Target & funding gap: create a retirement goal on the Financial Goals page"
       />
       <div className="sm:col-span-2 lg:col-span-4">
@@ -129,14 +137,14 @@ export function CashFlowSection({ summary }: { summary: DashboardSummary }) {
       description="How money moves in and out each month, and where it's going."
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Monthly Inflow" value={formatMoney(summary.netMonthlyIncome, summary.currency)} />
+        <Stat label="Monthly Inflow" value={formatMoneyWhole(summary.netMonthlyIncome, summary.currency)} />
         <Stat
           label="Monthly Outflow"
-          value={formatMoney(summary.totalMonthlyExpenses + summary.debtMonthlyRepayments, summary.currency)}
+          value={formatMoneyWhole(summary.totalMonthlyExpenses + summary.debtMonthlyRepayments, summary.currency)}
         />
         <Stat label="Cash Flow Ratio" value={summary.cashFlowRatio !== null ? `${summary.cashFlowRatio.toFixed(2)}x` : '—'} />
-        <Stat label="Operating Cash Flow" value={formatMoney(summary.operatingCashFlow, summary.currency)} />
-        <Stat label="Disposable Income" value={formatMoney(summary.disposableIncome, summary.currency)} />
+        <Stat label="Operating Cash Flow" value={formatMoneyWhole(summary.operatingCashFlow, summary.currency)} />
+        <Stat label="Disposable Income" value={formatMoneyWhole(summary.disposableIncome, summary.currency)} />
       </div>
       <div className="mt-6">
         <p className="mb-2 text-sm font-medium text-gray-700">Surplus Trend (last 12 months)</p>
@@ -171,9 +179,9 @@ export function NetWorthSection({ summary }: { summary: DashboardSummary }) {
   return (
     <SectionCard title="Net Worth Dashboard">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Stat label="Total Assets" value={formatMoney(summary.totalAssets + summary.totalInvestments + summary.totalRetirement, summary.currency)} />
-        <Stat label="Total Liabilities" value={formatMoney(summary.totalLiabilities, summary.currency)} />
-        <Stat label="Net Worth" value={formatMoney(summary.netWorth, summary.currency)} />
+        <Stat label="Total Assets" value={formatMoneyWhole(summary.totalAssets + summary.totalInvestments + summary.totalRetirement, summary.currency)} />
+        <Stat label="Total Liabilities" value={formatMoneyWhole(summary.totalLiabilities, summary.currency)} />
+        <Stat label="Net Worth" value={formatMoneyWhole(summary.netWorth, summary.currency)} />
       </div>
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div>
@@ -199,11 +207,11 @@ export function SavingsAnalyticsSection({ summary }: { summary: DashboardSummary
   return (
     <SectionCard title="Savings Analytics">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Monthly Savings" value={formatMoney(Math.max(summary.monthlySurplus, 0), summary.currency)} />
-        <Stat label="Annual Savings" value={formatMoney(Math.max(summary.monthlySurplus, 0) * 12, summary.currency)} />
+        <Stat label="Monthly Savings" value={formatMoneyWhole(Math.max(summary.monthlySurplus, 0), summary.currency)} />
+        <Stat label="Annual Savings" value={formatMoneyWhole(Math.max(summary.monthlySurplus, 0) * 12, summary.currency)} />
         <Stat label="Savings Rate" value={fmtPercent(summary.savingsRate)} />
-        <Stat label="Emergency Fund" value={formatMoney(summary.liquidAssets, summary.currency)} sub={fmtMonths(summary.emergencyFundMonths)} />
-        <Stat label="Recommended Buffer" value={formatMoney(recommendedBuffer, summary.currency)} sub="6 months of essentials" />
+        <Stat label="Emergency Fund" value={formatMoneyWhole(summary.liquidAssets, summary.currency)} sub={fmtMonths(summary.emergencyFundMonths)} />
+        <Stat label="Recommended Buffer" value={formatMoneyWhole(recommendedBuffer, summary.currency)} sub="6 months of essentials" />
         <Stat
           label="Financial Independence Progress"
           value={fiRatio ? fmtPercent(fiRatio.value) : '—'}
@@ -218,9 +226,9 @@ export function DebtAnalyticsSection({ summary }: { summary: DashboardSummary })
   return (
     <SectionCard title="Debt Analytics">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Total Debt" value={formatMoney(summary.totalLiabilities, summary.currency)} />
-        <Stat label="Good Debt" value={formatMoney(summary.goodDebt, summary.currency)} />
-        <Stat label="Bad Debt" value={formatMoney(summary.badDebt, summary.currency)} />
+        <Stat label="Total Debt" value={formatMoneyWhole(summary.totalLiabilities, summary.currency)} />
+        <Stat label="Good Debt" value={formatMoneyWhole(summary.goodDebt, summary.currency)} />
+        <Stat label="Bad Debt" value={formatMoneyWhole(summary.badDebt, summary.currency)} />
         <Stat label="Average Interest Rate" value={summary.averageInterestRate !== null ? `${summary.averageInterestRate.toFixed(2)}%` : '—'} />
         <Stat label="Debt-to-Income" value={summary.debtToIncome !== null ? `${summary.debtToIncome.toFixed(2)}x` : '—'} />
         <Stat label="Debt Service Ratio" value={fmtPercent(summary.debtServiceRatio)} />
@@ -297,10 +305,10 @@ export function InvestmentSection({ summary }: { summary: DashboardSummary }) {
   return (
     <SectionCard title="Investment Dashboard">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Portfolio Value" value={formatMoney(summary.totalInvestments, summary.currency)} />
-        <Stat label="Cost Base" value={formatMoney(summary.investmentCostBase, summary.currency)} />
-        <Stat label="Unrealised Gain" value={formatMoney(summary.investmentUnrealisedGain, summary.currency)} />
-        <Stat label="Dividend Income" value={formatMoney(summary.dividendMonthlyIncome * 12, summary.currency)} sub="per year" />
+        <Stat label="Portfolio Value" value={formatMoneyWhole(summary.totalInvestments, summary.currency)} />
+        <Stat label="Cost Base" value={formatMoneyWhole(summary.investmentCostBase, summary.currency)} />
+        <Stat label="Unrealised Gain" value={formatMoneyWhole(summary.investmentUnrealisedGain, summary.currency)} />
+        <Stat label="Dividend Income" value={formatMoneyWhole(summary.dividendMonthlyIncome * 12, summary.currency)} sub="per year" />
         <Stat label="Dividend Yield" value={fmtPercent(summary.dividendYield)} />
         <Stat label="Diversification Score" value={summary.investmentDiversificationScore !== null ? `${summary.investmentDiversificationScore}/100` : '—'} />
       </div>
@@ -324,9 +332,9 @@ export function RetirementSection({ summary }: { summary: DashboardSummary }) {
   return (
     <SectionCard title="Retirement Dashboard">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Current Balance" value={formatMoney(summary.totalRetirement, summary.currency)} />
-        <Stat label="Employer Contributions" value={formatMoney(summary.retirementEmployerMonthlyContribution * 12, summary.currency)} sub="per year" />
-        <Stat label="Personal Contributions" value={formatMoney(summary.retirementPersonalMonthlyContribution * 12, summary.currency)} sub="per year" />
+        <Stat label="Current Balance" value={formatMoneyWhole(summary.totalRetirement, summary.currency)} />
+        <Stat label="Employer Contributions" value={formatMoneyWhole(summary.retirementEmployerMonthlyContribution * 12, summary.currency)} sub="per year" />
+        <Stat label="Personal Contributions" value={formatMoneyWhole(summary.retirementPersonalMonthlyContribution * 12, summary.currency)} sub="per year" />
         <Stat label="Projected Balance" value="—" sub="Create a retirement goal for a projection" />
       </div>
       <p className="mt-4 text-xs text-gray-400">
@@ -355,7 +363,7 @@ export function InsuranceSection({ summary }: { summary: DashboardSummary }) {
         </ul>
       )}
       <div className="mt-4">
-        <Stat label="Total Annual Premium" value={formatMoney(summary.totalAnnualPremium, summary.currency)} />
+        <Stat label="Total Annual Premium" value={formatMoneyWhole(summary.totalAnnualPremium, summary.currency)} />
       </div>
       <p className="mt-4 text-xs text-gray-400">
         Gap analysis (recommended cover, under/over-insured, cover adequacy %) arrives with a future update.

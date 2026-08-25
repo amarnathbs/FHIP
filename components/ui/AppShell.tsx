@@ -84,6 +84,14 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'Reports', href: '/reports' },
     ],
   },
+  // App Review spec §16: "Account" was already named in this file's own
+  // design-pattern comment above (Overview / Your finances / Plan & improve
+  // / Forecasting / Review & share / Account) but never actually built —
+  // there was no Profile page to link to (confirmed absent) until now.
+  {
+    label: 'Account',
+    items: [{ type: 'link', label: 'Profile', href: '/profile' }],
+  },
 ];
 
 // R1.2 Admin Resources shell nav — spec §41. Shown to any user holding at

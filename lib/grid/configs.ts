@@ -1,5 +1,6 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
 import { COUNTRY_OPTIONS } from '@/lib/constants';
+import { getAssetFieldMetadata } from './assetFieldMetadata';
 import type { GridConfig } from './types';
 
 export const incomeGridConfig: GridConfig = {
@@ -55,6 +56,15 @@ export const assetGridConfig: GridConfig = {
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
+  // App Review spec §9: Purchase Price/Date are meaningless for cash-type
+  // accounts (Wallet Cash, Savings/Cheque/Offset Account, Foreign Currency)
+  // — see lib/grid/assetFieldMetadata.ts for the full per-item-type table
+  // and root-cause writeup.
+  fieldVisibleForRow: (fieldName, masterItemKey) => {
+    if (fieldName !== 'purchase_price' && fieldName !== 'purchase_date') return true;
+    const meta = getAssetFieldMetadata(masterItemKey);
+    return fieldName === 'purchase_price' ? meta.supportsPurchasePrice : meta.supportsPurchaseDate;
+  },
 };
 
 export const liabilityGridConfig: GridConfig = {

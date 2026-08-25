@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS } from '@/lib/constants';
+import { deriveCountryCurrencyPatch } from '@/lib/grid/countryCurrency';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
+import {
+  effectiveSectionStatus,
+  computeSectionCompletionPercent,
+  type ExplicitSectionConfirmation,
+} from '@/lib/engines/financialSectionStatus';
 import type { GridConfig } from '@/lib/grid/types';
 
 interface MasterItem {
@@ -27,6 +33,14 @@ interface Row extends GridRow {
   currency_code: string;
   expanded: boolean;
   source_type?: string; // R3 — 'investment_intelligence_published' | 'manual' | undefined (non-investments resources never set this)
+  // App Review spec §11: local-only (never persisted — not read by saveRow's
+  // body construction below) flag tracking whether the user has manually
+  // picked a currency for this row in this session. While false, changing
+  // Country auto-fills the intelligent default currency for that country;
+  // once true (the user touched the Currency field directly), further
+  // Country changes never overwrite their explicit choice — Case C
+  // ("India, currency manually overridden to AUD — override survives").
+  currencyTouched?: boolean;
 }
 
 let customRowCounter = 0;
@@ -48,6 +62,7 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
     owner: 'self',
     currency_code: defaultCurrency,
     expanded: false,
+    currencyTouched: false,
     ...fieldDefaults(config),
   };
 }
@@ -64,6 +79,11 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
     owner: record.owner,
     currency_code: record.currency_code,
     expanded: false,
+    // A row loaded from a saved record already has a definite currency —
+    // never silently touched on load. Only starts syncing to Country again
+    // once the user actively changes Country in this session (see
+    // handleFieldChange), which they can always immediately override.
+    currencyTouched: false,
   };
 }
 
@@ -81,6 +101,14 @@ function isIiPublished(row: Row): boolean {
 }
 function isFieldLockedForRow(row: Row, fieldName: string): boolean {
   return isIiPublished(row) && II_PUBLISHED_PROTECTED_FIELDS.has(fieldName);
+}
+
+// App Review spec §9: per-row field applicability (e.g. Purchase Date
+// hidden for a Savings Account) — see GridConfig.fieldVisibleForRow and
+// lib/grid/assetFieldMetadata.ts. Defaults to true (shown) for any grid
+// that doesn't opt in, so every other module's behaviour is unchanged.
+function isFieldApplicableForRow(row: Row, fieldName: string, config: GridConfig): boolean {
+  return config.fieldVisibleForRow ? config.fieldVisibleForRow(fieldName, row.master_item_key ?? null) : true;
 }
 
 function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): boolean {
@@ -128,6 +156,22 @@ export function FinancialDataGrid({
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
   rowsRef.current = rows;
+  // App Review spec §4.3 (Persistence defect) — see runSave below for the
+  // full root-cause writeup. saveInFlight prevents two overlapping network
+  // requests for the same row from ever racing each other out of order;
+  // saveDirty remembers that another edit landed while a request was in
+  // flight, so it's retried immediately with the latest state the moment
+  // the in-flight request resolves, instead of relying on the user
+  // coincidentally making another edit later.
+  const saveInFlight = useRef<Record<string, boolean>>({});
+  const saveDirty = useRef<Record<string, boolean>>({});
+  // Bounds automatic retries so a persistent failure (e.g. a validation
+  // error that will never succeed) can't loop forever hammering the API —
+  // reset to 0 by every genuine user edit (scheduleSave), so a fresh edit
+  // always gets fresh retry budget regardless of an earlier row's history.
+  const saveRetryCount = useRef<Record<string, number>>({});
+  const MAX_AUTO_RETRIES = 3;
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -210,19 +254,60 @@ export function FinancialDataGrid({
   }
 
   function scheduleSave(key: string) {
+    saveRetryCount.current[key] = 0; // a genuine new edit always gets a fresh retry budget
     clearTimeout(saveTimers.current[key]);
-    saveTimers.current[key] = setTimeout(() => void saveRow(key), 600);
+    saveTimers.current[key] = setTimeout(() => void runSave(key), 600);
   }
 
-  async function saveRow(key: string) {
+  // App Review spec §4.3 (Persistence defect) — root cause and fix.
+  //
+  // Old calculation → defect → corrected rule → expected new result:
+  //   Old: each debounced edit called saveRow(key) directly. Two real,
+  //   independently reproducible defects followed from that:
+  //     (1) Debounce race / out-of-order response: if a user edited a row,
+  //     the network was slow, and they edited it again before the first
+  //     request resolved, a SECOND overlapping request could fire (a fresh
+  //     600ms timer, unrelated to the first request's in-flight promise).
+  //     Nothing enforced response ORDER — if the second (newer) request's
+  //     response happened to arrive before the first (older, stale) one,
+  //     the older request still completed afterwards and upserted its
+  //     stale values last, silently reverting the newer edit in the
+  //     database. This is the exact "debounce race" / "Supabase upsert
+  //     conflict-key" failure mode the spec calls out.
+  //     (2) Silent failure with no retry: saveRow's catch block was empty
+  //     apart from a comment admitting "the next edit retries the save" —
+  //     i.e. any transient failure (network blip, momentary auth/session
+  //     hiccup) was swallowed with no error shown to the user and no
+  //     automatic retry. The edit LOOKED saved (the input kept showing the
+  //     typed value, no error indicator existed) but silently wasn't,
+  //     until the user happened to touch the row again — exactly the
+  //     reported "doesn't persist unless they untick/navigate away and
+  //     return/reselect/re-enter" symptom, self-documented by the old
+  //     comment's own admission.
+  //   Defect: no per-row in-flight tracking (so requests could overlap and
+  //   race), and no automatic retry or visible error state on failure.
+  //   Corrected rule: at most one save request in flight per row at a
+  //   time (saveInFlight); an edit that arrives while a save is already in
+  //   flight is queued (saveDirty) and re-sent — with the LATEST row state,
+  //   not the stale state from when it was queued — the instant the
+  //   in-flight request resolves, guaranteeing strict per-row request
+  //   order and that the last write always reflects the last edit. A
+  //   failed request is surfaced via saveErrors (rendered per-row below)
+  //   and automatically retried once, rather than silently discarded.
+  //   Expected new result: create -> save -> edit -> save -> refresh
+  //   browser -> still updated -> sign out -> sign in -> still updated,
+  //   with no dependency on the user coincidentally re-touching the row.
+  async function runSave(key: string) {
+    if (saveInFlight.current[key]) {
+      saveDirty.current[key] = true;
+      return;
+    }
     // Reads the current row from a ref (kept in sync below), not via a
     // setRows() functional updater — React 18 Strict Mode intentionally
     // double-invokes updater functions in dev to catch impure updaters, and
-    // the previous version fired fetchJson() from inside one, so every save
-    // POSTed twice and created a duplicate row (there's no master_item_key
-    // to upsert against for custom rows, so a second POST is a second insert,
-    // not a no-op). The actual API call now lives in a plain async function,
-    // which Strict Mode does not double-invoke.
+    // firing fetchJson() from inside one would POST twice and create a
+    // duplicate row (there's no master_item_key to upsert against for
+    // custom rows, so a second POST is a second insert, not a no-op).
     const row = rowsRef.current?.find((r) => r.key === key);
     // Recomputed from the ref (not the memoized `duplicates` from render
     // scope) so a save fired after the 600ms debounce always checks against
@@ -232,12 +317,20 @@ export function FinancialDataGrid({
     const body: Record<string, unknown> = { owner: row.owner, currency_code: row.currency_code };
     body[config.nameField] = row.item_label;
     if (row.master_item_key) body.master_item_key = row.master_item_key;
-    for (const f of config.fields) body[f.name] = row[f.name] === '' ? undefined : row[f.name];
+    // App Review spec §9: a field hidden for this row's type (e.g. Purchase
+    // Date on a Savings Account) is never submitted, even if a stale value
+    // exists locally — omitted (not null), so any pre-existing saved value
+    // is left untouched server-side rather than being force-cleared.
+    for (const f of config.fields) {
+      body[f.name] = !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' ? undefined : row[f.name];
+    }
 
     const usePatch = row.is_custom && row.id;
     const url = usePatch ? `/api/${config.resource}/${row.id}` : `/api/${config.resource}`;
     const method = usePatch ? 'PATCH' : 'POST';
 
+    saveInFlight.current[key] = true;
+    saveDirty.current[key] = false;
     try {
       const saved = await fetchJson<SavedRecord>(url, {
         method,
@@ -245,8 +338,43 @@ export function FinancialDataGrid({
         body: JSON.stringify(body),
       });
       updateRow(key, { id: saved.id });
-    } catch {
-      // best effort; the row keeps its typed values and the next edit retries the save
+      setSaveErrors((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    } catch (err) {
+      const attempt = (saveRetryCount.current[key] ?? 0) + 1;
+      saveRetryCount.current[key] = attempt;
+      const willAutoRetry = attempt <= MAX_AUTO_RETRIES;
+      setSaveErrors((prev) => ({
+        ...prev,
+        [key]: err instanceof Error
+          ? `${err.message}${willAutoRetry ? ' — retrying…' : ' — edit the field again to retry.'}`
+          : willAutoRetry
+            ? 'Could not save this change — retrying…'
+            : 'Could not save this change — edit the field again to retry.',
+      }));
+      // Auto-retry a bounded number of times (with a short backoff) so a
+      // transient failure recovers on its own without the user needing to
+      // notice and coincidentally re-edit the row. A persistent failure
+      // (e.g. a validation error that will never succeed) stops retrying
+      // automatically after MAX_AUTO_RETRIES rather than looping forever —
+      // the visible error and a genuine new edit (which resets the retry
+      // budget in scheduleSave) are the recovery path from there.
+      if (willAutoRetry) {
+        setTimeout(() => {
+          saveDirty.current[key] = true;
+          if (!saveInFlight.current[key]) void runSave(key);
+        }, 800 * attempt);
+      }
+    } finally {
+      saveInFlight.current[key] = false;
+      if (saveDirty.current[key]) {
+        saveDirty.current[key] = false;
+        void runSave(key); // a newer edit is waiting — retry immediately, in order
+      }
     }
   }
 
@@ -254,6 +382,13 @@ export function FinancialDataGrid({
     updateRow(row.key, { included });
     if (!included) {
       clearTimeout(saveTimers.current[row.key]);
+      saveDirty.current[row.key] = false; // don't let a queued retry resurrect a row the user just removed
+      setSaveErrors((prev) => {
+        if (!(row.key in prev)) return prev;
+        const next = { ...prev };
+        delete next[row.key];
+        return next;
+      });
       if (row.id) {
         await fetchJson(`/api/${config.resource}/${row.id}`, { method: 'DELETE' }).catch(() => undefined);
       }
@@ -265,8 +400,27 @@ export function FinancialDataGrid({
     }
   }
 
+  // App Review spec §11 (Currency and Country — Critical Financial Defect):
+  // real, live-verified defect was that a new row's currency_code always
+  // started at the household's own preferred_currency default (usually
+  // AUD) regardless of which Country the user picked, and nothing ever
+  // re-synced it — so an asset saved with Country=India kept currency_code
+  // 'AUD' unless the user separately remembered to also change the
+  // Currency dropdown. computeDashboard already converts correctly by
+  // currency_code (lib/engines/fx.ts), so the defect was purely here: the
+  // entry form never derived an intelligent default from Country. Fixed by
+  // auto-filling currency_code from COUNTRY_CURRENCY_DEFAULT whenever
+  // Country changes, but only while the user hasn't manually touched
+  // Currency themselves (currencyTouched) — so an explicit override always
+  // survives (Case C), and directly picking Currency marks it touched so
+  // a later Country change never silently reverts it.
   function handleFieldChange(key: string, field: string, value: unknown) {
-    updateRow(key, { [field]: value } as Partial<Row>);
+    const row = rowsRef.current?.find((r) => r.key === key);
+    const patch: Partial<Row> = {
+      [field]: value,
+      ...deriveCountryCurrencyPatch({ field, value, currencyTouched: Boolean(row?.currencyTouched) }),
+    } as Partial<Row>;
+    updateRow(key, patch);
     scheduleSave(key);
   }
 
@@ -355,6 +509,7 @@ export function FinancialDataGrid({
         owner: 'self',
         currency_code: defaultCurrency,
         expanded: true,
+        currencyTouched: false,
         ...fieldDefaults(config),
       },
     ]);
@@ -381,15 +536,36 @@ export function FinancialDataGrid({
     return sum + value;
   }, 0);
 
-  const masterItemCount = (rows ?? []).filter((r) => !r.is_custom).length;
-  const includedMasterCount = included.filter((r) => !r.is_custom).length;
-  const completion = masterItemCount > 0 ? Math.round((includedMasterCount / masterItemCount) * 100) : 0;
-
   const missingRequiredCount = included.filter((r) => {
     if (!r.owner || !r.currency_code) return true;
     if (config.frequencyField && !r[config.frequencyField]) return true;
+    for (const f of config.fields) {
+      if (!f.required || !isFieldApplicableForRow(r, f.name, config)) continue;
+      if (r[f.name] === '' || r[f.name] === undefined || r[f.name] === null) return true;
+    }
     return false;
   }).length;
+
+  // App Review spec §7 — see the "Old calculation → defect → corrected
+  // rule → expected new result" writeup on computeSectionCompletionPercent
+  // itself for the full root-cause analysis. Completion now measures data
+  // sufficiency (has the household confirmed this section, or at minimum
+  // entered something with no required fields left blank) rather than what
+  // fraction of the entire catalogue is ticked.
+  const explicitConfirmation: ExplicitSectionConfirmation | null =
+    config.notApplicable && notApplicable
+      ? 'not_applicable'
+      : zeroAnswer === 'no'
+        ? 'reviewed_zero'
+        : reviewConfirmed
+          ? 'reviewed_with_data'
+          : null;
+  const sectionStatus = effectiveSectionStatus({ hasRows: included.length > 0, explicitConfirmation });
+  const completion = computeSectionCompletionPercent({
+    status: sectionStatus,
+    includedCount: included.length,
+    missingRequiredCount,
+  });
 
   // Duplicate custom names are a hard-blocking error (isRowSaveable rejects
   // them, so nothing gets persisted while the name collides) — kept in a
@@ -588,6 +764,9 @@ export function FinancialDataGrid({
                     {warningsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
                     )}
+                    {saveErrors[row.key] && (
+                      <p className="mt-1 text-xs text-risk">⚠ {saveErrors[row.key]}</p>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <select
@@ -603,43 +782,49 @@ export function FinancialDataGrid({
                       ))}
                     </select>
                   </td>
-                  {config.fields.map((f) => (
-                    <td key={f.name} className="px-3 py-2">
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
-                        />
-                      )}
-                    </td>
-                  ))}
+                  {config.fields.map((f) =>
+                    !isFieldApplicableForRow(row, f.name, config) ? (
+                      <td key={f.name} className="px-3 py-2 text-xs text-muted" title="Not applicable for this item type">
+                        n/a
+                      </td>
+                    ) : (
+                      <td key={f.name} className="px-3 py-2">
+                        {f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
+                          />
+                        )}
+                      </td>
+                    )
+                  )}
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
@@ -703,6 +888,9 @@ export function FinancialDataGrid({
               {warningsByRow.has(row.key) && (
                 <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
               )}
+              {saveErrors[row.key] && (
+                <p className="mt-1 text-xs text-risk">⚠ {saveErrors[row.key]}</p>
+              )}
               {row.included && row.expanded && (
                 <div className="mt-3 space-y-2">
                   <div>
@@ -719,7 +907,9 @@ export function FinancialDataGrid({
                       ))}
                     </select>
                   </div>
-                  {config.fields.map((f) => (
+                  {config.fields
+                    .filter((f) => isFieldApplicableForRow(row, f.name, config))
+                    .map((f) => (
                     <div key={f.name}>
                       <label className="block text-xs text-muted">{f.label}</label>
                       {f.type === 'checkbox' ? (

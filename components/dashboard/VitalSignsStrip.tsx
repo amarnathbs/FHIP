@@ -1,5 +1,5 @@
 import { MetricCard } from '@/components/ui/MetricCard';
-import { formatMoney } from '@/lib/engines/money';
+import { formatMoneyWhole } from '@/lib/engines/money';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
 
 function ratioStatus(summary: DashboardSummary, key: string): 'good' | 'caution' | 'risk' | 'neutral' {
@@ -25,8 +25,14 @@ export function VitalSignsStrip({ summary, contextLinks }: { summary: DashboardS
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <MetricCard label="Monthly Surplus" value={formatMoney(summary.monthlySurplus, summary.currency)} status={surplusStatus} />
-      <MetricCard label="Net Worth" value={formatMoney(summary.netWorth, summary.currency)} status="neutral" contextResolved={contextLinks?.['dashboard.net_worth']} />
+      {/* App Review spec §14: KPI cards round to the nearest whole currency
+          unit (e.g. "-$1,630" not "-$1,630.06") — display formatting only,
+          computed off the same unrounded summary.monthlySurplus/netWorth
+          values used everywhere else, so nothing about the underlying
+          calculation changes. Detailed/drill-down tables elsewhere keep
+          using formatMoney (with cents). */}
+      <MetricCard label="Monthly Surplus" value={formatMoneyWhole(summary.monthlySurplus, summary.currency)} status={surplusStatus} />
+      <MetricCard label="Net Worth" value={formatMoneyWhole(summary.netWorth, summary.currency)} status="neutral" contextResolved={contextLinks?.['dashboard.net_worth']} />
       <MetricCard
         label="Emergency Fund"
         value={summary.emergencyFundMonths === null ? '—' : `${summary.emergencyFundMonths.toFixed(1)} mo`}

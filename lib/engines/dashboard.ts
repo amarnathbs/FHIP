@@ -264,6 +264,28 @@ function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): num
   return rows.reduce((sum, r) => sum + toMonthly(Number(r[amountField]), r[freqField] as Frequency), 0);
 }
 
+// ---------------------------------------------------------------------------
+// §12-13 double-counting guard (App Review spec): a debt-repayment expense
+// row and the matching Liability's monthly_repayment represent the same
+// cash outflow. See the "Old calculation → defect → corrected rule →
+// expected new result" comment at nonDebtExpenses below for the full
+// root-cause writeup; these are just the classification tables it uses.
+//
+// Liability master items grouped by debt type, so a Car Loan on file never
+// suppresses an unrelated Mortgage expense line (or vice versa) — matching
+// by debt type, not "any liability exists at all".
+const MORTGAGE_TYPE_LIABILITY_ITEMS = new Set(['home_loan', 'investment_loan', 'construction_loan']);
+const AUTO_LOAN_TYPE_LIABILITY_ITEMS = new Set(['car_loan', 'motorcycle_loan', 'boat_loan']);
+
+// Maps a debt-repayment expense master item (lib/grid/configs.ts's
+// expenseGridConfig / supabase/seed_master_items.sql 'expense' category) to
+// the liability master items whose monthly_repayment already captures the
+// same repayment.
+const DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS: Record<string, Set<string>> = {
+  mortgage: MORTGAGE_TYPE_LIABILITY_ITEMS,
+  car_loan_repayments: AUTO_LOAN_TYPE_LIABILITY_ITEMS,
+};
+
 // Standard loan amortisation: months to pay off a balance at a monthly rate
 // with a fixed monthly payment. Returns null if the payment never covers the
 // accruing interest (balance would grow forever).
@@ -447,12 +469,56 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
 
-  // 'debt_repayment'-category expense rows and the liabilities table's
-  // monthly_repayment represent the same cash outflow when a user tracks a
-  // loan repayment as an expense line — excluded here so debtMonthlyRepayments
-  // (below) is the only source of debt cash-flow, matching this field's own
-  // long-standing "excludes debt repayments, tracked separately" comment.
-  const nonDebtExpenses = input.expenses.filter((r) => r.expense_category !== 'debt_repayment');
+  // Old calculation → defect → corrected rule → expected new result
+  // (App Review spec §12-13, live-verified 2026-08-25):
+  //   Old: this filter excluded rows solely by `expense_category ===
+  //   'debt_repayment'`. expense_category is a DB column
+  //   (supabase/migrations/0003_module2.sql) the live grid UI never
+  //   actually lets the user set — lib/grid/configs.ts's expenseGridConfig
+  //   doesn't list it as an editable field, so it silently stays at
+  //   expenseSchema's Zod default of 'other' (lib/validation/expense.ts)
+  //   for every real expense row created through the app. That made the
+  //   exclusion dead code: a household tracking both a "Mortgage" expense
+  //   row (master_item_key 'mortgage') and a "Home Loan" liability with a
+  //   monthly_repayment double-counted that one real repayment in
+  //   monthlySurplus, debtServiceRatio, cashFlowRatio, disposableIncome
+  //   and operatingCashFlow — spec Case 1 ($3,000 mortgage expense +
+  //   $3,000 liability repayment produced $6,000 of outflow, not $3,000).
+  //   Defect: the check needed master_item_key — the one field the grid
+  //   does reliably collect for catalogue rows (same root cause already
+  //   fixed above in this file for asset_class/investment_type/debt_type).
+  //   Corrected rule: exclude a debt-repayment expense row only when (a)
+  //   it's recognised as debt-repayment by master_item_key first
+  //   (DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS above), expense_category
+  //   as a fallback for custom/API rows with no master item, AND (b) the
+  //   household has a Liability of the *matching debt type* (mortgage vs.
+  //   auto loan, not "any liability at all") with a nonzero
+  //   monthly_repayment on file — so a debt-repayment expense with no
+  //   corresponding Liability entry (nothing already double-counting it)
+  //   is never silently dropped from cash flow, and an unrelated liability
+  //   (e.g. a car loan) never suppresses a differently-typed expense (e.g.
+  //   mortgage) — spec Case 3.
+  //   Expected new result: Case 1 → counted once, $3,000. Case 3 (Home
+  //   loan $3,000/mo + Car loan $700/mo, both tracked as Liabilities only,
+  //   no matching Expense rows) → $3,700, unaffected. A lone "Car Loan
+  //   Repayments" expense with zero car-type Liabilities on file is no
+  //   longer silently excluded.
+  const liabilityItemsWithRepayment = new Set(
+    input.liabilities.filter((l) => (l.monthly_repayment ?? 0) > 0).map((l) => l.master_item_key ?? l.debt_type)
+  );
+  function isDoubleCountedDebtRepaymentExpense(r: ExpenseRow): boolean {
+    if (r.master_item_key) {
+      const matchingLiabilityItems = DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS[r.master_item_key];
+      if (!matchingLiabilityItems) return false; // not a debt-repayment master item at all
+      for (const item of matchingLiabilityItems) if (liabilityItemsWithRepayment.has(item)) return true;
+      return false;
+    }
+    // No master item (custom row, or set directly via the API rather than
+    // the grid) — fall back to the original category-based rule, still
+    // gated on at least one real liability repayment existing somewhere.
+    return r.expense_category === 'debt_repayment' && liabilityItemsWithRepayment.size > 0;
+  }
+  const nonDebtExpenses = input.expenses.filter((r) => !isDoubleCountedDebtRepaymentExpense(r));
   const essentialMonthlyExpenses = sumMonthly(
     nonDebtExpenses.filter((r) => r.is_essential),
     'amount',

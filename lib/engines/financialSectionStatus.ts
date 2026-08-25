@@ -110,6 +110,45 @@ export function hasProgressed(status: FinancialSectionStatus): boolean {
   return status !== 'not_started';
 }
 
+// App Review spec §7 (Input Completion Percentage — Fix).
+//
+// Old calculation → defect → corrected rule → expected new result:
+//   Old: components/grid/FinancialDataGrid.tsx computed its "Completion"
+//   footer stat as (included master-catalogue rows) / (total master-
+//   catalogue rows in that category) * 100 — e.g. Income has 26 catalogue
+//   items, so a household with 3 real, fully-filled-in income sources and
+//   nothing more to add saw "12%", read by users as "your data is 88%
+//   incomplete" even though nothing was actually missing.
+//   Defect: the metric measured catalogue *coverage* (how many of every
+//   possible item type exist), not data *sufficiency* (does this household
+//   have what it needs, has it told us it's done). No household has every
+//   catalogue item — most legitimately have a handful — so this metric
+//   could never reach 100% for a real user and actively penalised people
+//   for lacking categories that don't apply to them.
+//   Corrected rule: reuse the section's already-canonical
+//   effectiveSectionStatus (Phase 0C's user_financial_section_status
+//   confirmations + row presence) as the sole source of truth for "is this
+//   section done": 100% once the household has explicitly confirmed the
+//   section (reviewed_with_data / reviewed_zero / not_applicable — any of
+//   the three explicit resolutions), 0% with nothing entered and nothing
+//   confirmed, and a partial 50/75% band in between distinguishing
+//   "started but a required field is still missing" from "started and
+//   nothing required is missing, just not yet confirmed done" — so a
+//   household is never penalised for lacking every possible category, only
+//   for genuinely unresolved mandatory fields or not yet saying they're done.
+//   Expected new result: 3 valid income types entered, no missing fields,
+//   user clicks "I've added everything relevant to me" (reviewed_with_data)
+//   → Income shows 100%, not 12%.
+export function computeSectionCompletionPercent(input: {
+  status: FinancialSectionStatus;
+  includedCount: number; // rows currently marked included/active in the section
+  missingRequiredCount: number; // required fields left blank among those rows
+}): number {
+  if (isReviewed(input.status)) return 100; // reviewed_with_data | reviewed_zero | not_applicable
+  if (input.includedCount === 0) return 0; // not_started (or in_progress with everything since unticked)
+  return input.missingRequiredCount === 0 ? 75 : 50; // in_progress: fields OK vs. still missing something
+}
+
 export const ALL_SECTIONS: FinancialSection[] = [
   'household',
   'income',

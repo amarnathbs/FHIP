@@ -64,4 +64,13 @@ export interface GridConfig {
   // reviewSection's completion control answers "have you finished entering
   // what you do have" once the answer is Yes.
   reviewSection: FinancialSection;
+  // App Review spec §9 (Assets — Field Reassessment): optional per-row field
+  // visibility, driven by field metadata/configuration rather than a
+  // scattered field-by-field conditional. Returning false hides that field
+  // for that specific row (e.g. Purchase Date for a Savings Account) — the
+  // field is still declared in `fields` above (so it renders normally for
+  // rows where it applies), this only narrows it per row. Omitted entirely
+  // = every field always shown (existing behaviour, unchanged) for every
+  // grid that doesn't opt in.
+  fieldVisibleForRow?: (fieldName: string, masterItemKey: string | null) => boolean;
 }
