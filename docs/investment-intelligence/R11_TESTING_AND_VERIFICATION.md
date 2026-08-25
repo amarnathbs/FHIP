@@ -1,14 +1,16 @@
 # R11 Testing & Verification
 
-## Static verification
+## R11-FINAL closure round update (2026-08-25)
+
+This round works from a DEDICATED worktree (`D:\FHIP\.claude\worktrees\agent-a69bdf500e60e3b35`, its own `node_modules`, not the shared one the prior round deliberately avoided touching), so `npm install` was safe to run here without risking any other concurrent agent's in-flight work. Result: the previously-reported `xlsx` dependency gap is fully resolved in this worktree.
 
 | Check | Command | Result |
 |---|---|---|
-| TypeScript | `npx tsc --noEmit` | **Clean** across the whole project except one pre-existing, unrelated failure (`scripts/resources/lib/workbook.ts` imports `xlsx`, which is declared in `package.json` but missing from the shared `node_modules`) — confirmed present at baseline commit `36107ba` (R1.7 Resources work), long before R11, and confirmed still missing from `node_modules` independent of anything R11 touched |
-| ESLint | `npx eslint` scoped to every new/modified R11 file | **0 errors, 0 warnings** (one unused-helper warning found and fixed by deleting the dead code, not suppressing the lint) |
-| Build | `npx next build --webpack` | Webpack compilation itself succeeded ("Compiled successfully in 2.9min"); the build's separate TypeScript-check pass failed on the SAME pre-existing `xlsx` gap as above (Next's build re-runs a project-wide `tsc`-equivalent check, and `tsconfig.json`'s `include` covers `scripts/` too, unrelated to any R11 tsconfig change — R11 did not touch `tsconfig.json`) |
+| TypeScript | `npx tsc --noEmit` | **Exit code 0, 0 errors** — genuinely clean, not "clean except one pre-existing gap" as the prior round reported (that gap no longer exists in this worktree's `node_modules`) |
+| ESLint | `npx eslint .` (whole repo) | 9 pre-existing errors + ~35 pre-existing warnings, all in files never touched by R11 in any round (confirmed via `git log` per-file) — **R11 delta: 0 new errors, 0 new warnings** across every R11-touched file this round (`manualImporter.ts`, `documentProcessing.ts`, `camsParser.ts`, `kfintechParser.ts`, `access.ts`, the new `proxy/report/route.ts`, `scripts/r11_final_live_dev_tests.ts`) |
+| Build | `npx next build --webpack` | **PASS**, exit code 0, full route manifest generated including the new `/api/professional-access/proxy/report` route — re-run and reconfirmed on the fresh integration tree (merged against current `origin/main`, see closure report) |
 
-`npm install`/touching the shared `node_modules` was deliberately not attempted, since other background agents in this program share the same `D:/FHIP/node_modules` and modifying it mid-session risks their in-flight work.
+Full regression: `npx vitest run --no-file-parallelism` — **2509 passed, 5 skipped, 0 failed** (up from the prior round's 2458 passed/3 failed/37 skipped; the prior round's 3 failures were all live-DEV/env-dependent Resources-module tests that now pass cleanly in this worktree with `.env.local` present).
 
 ## Migration verification
 
