@@ -348,28 +348,24 @@ async function main() {
   });
   record('FDH8-C6-01', 'Real POST /split succeeds (Groceries $220 + Household $80 = $300)', splitReq.status === 200 ? 'PASS' : 'FAIL', splitReq.json ?? splitReq.text.slice(0, 300));
 
-  // GENUINE LIVE-DEV FINDING, DISCLOSED NOT PAPERED OVER: splitTransaction()
-  // never updates the PARENT row's economic_transaction_type, and
-  // fdh7_transaction_has_blocking_issue() (migration 0076) blocks approval
-  // whenever economic_transaction_type='unknown' WITHOUT checking whether
-  // reconciled allocations already exist — so a transaction split from an
-  // initially-uncategorised parent can never be approved through the split
-  // action alone. This is a real gap in FDH-7's DB-level approval gate, not
-  // an FDH-8 defect and not something FDH-8 may fix itself: the fix is a
-  // `CREATE OR REPLACE FUNCTION` on fdh7_transaction_has_blocking_issue,
-  // which requires a migration — an explicit STOP condition under this
-  // closure's standing constraints ("if your closure work reveals a genuine
-  // schema requirement, treat that as a STOP condition, do not casually add
-  // one"). Documented here and in FDH8_LIVE_DEV_CERTIFICATION.md for Product
-  // Owner attention. The REAL, currently-available workaround (a user
-  // correcting the parent's economic_transaction_type after splitting,
-  // exactly the same 'correction' action FDH-8's new review page exposes)
-  // is used below so Case 6's actual FINANCIAL CORRECTNESS ($300 total,
-  // $220/$80 split) can still be certified live.
-  const correctSplitType = await appPostJson(`/api/financial-data-hub/bank-transactions/${splitTxn.id}/correction`, userA.cookie, { field_name: 'economic_transaction_type', corrected_value: 'expense' });
-  record('FDH8-C6-01b DISCLOSED GAP', 'Split parent stayed economic_transaction_type=unknown after /split (real FDH-7 gate defect, NOT fixed here — see report); real POST /correction workaround succeeds', correctSplitType.status === 200 ? 'PASS' : 'FAIL', correctSplitType.json);
+  // FIXED (migration 0085, 2026-08-25): splitTransaction() deliberately never
+  // updates the PARENT row's economic_transaction_type (spec 44-48 — the
+  // parent row is never altered by a split); fdh7_transaction_has_blocking_issue()
+  // (migration 0076) used to block approval whenever economic_transaction_type
+  // ='unknown' WITHOUT checking whether reconciled allocations already
+  // existed, so a transaction split from an initially-uncategorised parent
+  // could never be approved through the split action alone. Migration 0085
+  // narrows that ONE check: 'unknown' no longer blocks approval when this
+  // transaction's allocations already reconcile exactly to the parent
+  // amount (every other blocking condition — no split, an incomplete/
+  // mis-reconciled split, open review items, pending links/duplicates — is
+  // completely unchanged). Reproduced live BEFORE the fix (real HTTP 409,
+  // "this transaction has an unresolved review issue and cannot be approved
+  // yet") and AFTER the fix (real HTTP 200, zero workaround) — see
+  // scripts/_tmp_fdh8_c6_01b_repro.ts and the FDH8-C6 closure report. The
+  // correction workaround this case used to require is no longer used here.
   const approveSplit = await approveTxn(userA.cookie, splitTxn.id as string);
-  record('FDH8-C6-02', 'Split transaction approves cleanly after the workaround (allocations reconcile to parent amount)', approveSplit.status === 200 ? 'PASS' : 'FAIL', approveSplit.json);
+  record('FDH8-C6-02', 'Split transaction approves cleanly via /approve alone — NO correction workaround (migration 0085 fix)', approveSplit.status === 200 ? 'PASS' : 'FAIL', approveSplit.json);
 
   // /spending returns { period, breakdown: CategoryBreakdownResult[] } — the
   // array is nested under `breakdown`, not returned directly.
