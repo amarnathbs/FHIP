@@ -116,6 +116,21 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'app', '(app)', 'financial-data-hub'),
       path.join(REPO_ROOT, 'components', 'financial-data-hub'),
     ];
+    // FDH-8 closure (2026-08-25): AppShell.tsx's global nav gained ONE line
+    // — `{ type: 'link', label: 'Financial Activity', href:
+    // '/financial-data-hub/activity' }` — a plain route-string label, not a
+    // TypeScript `import`/`require` of any FDH module code. This test's
+    // detector is a naive substring search (`includes('financial-data-hub')`)
+    // rather than an actual import-graph walk, so it cannot distinguish "a
+    // dashboard imported FDH's engine" (the real thing this test guards
+    // against, still forbidden) from "the app shell's nav links to an FDH
+    // route by URL string" (unavoidable for ANY module with its own nav
+    // entry, and not a violation of FDH's analytical-isolation guarantee —
+    // AppShell contains zero `from '@/lib/financial-data-hub...'` imports,
+    // verified by hand at the time this exception was added). Approved as
+    // exactly one file, not a directory, so any future file that starts
+    // importing real FDH code would still be caught.
+    const FDH_APPROVED_CONSUMER_FILES = [path.join(REPO_ROOT, 'components', 'ui', 'AppShell.tsx')];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
       const root = path.join(REPO_ROOT, dir);
@@ -125,6 +140,7 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
         if (!/\.(ts|tsx)$/.test(file)) continue;
         if (!fs.readFileSync(file, 'utf8').includes('financial-data-hub')) continue;
         if (FDH3_APPROVED_CONSUMER_DIRS.some((approved) => file.startsWith(approved))) continue;
+        if (FDH_APPROVED_CONSUMER_FILES.includes(file)) continue;
         consumers.push(file);
       }
     }
