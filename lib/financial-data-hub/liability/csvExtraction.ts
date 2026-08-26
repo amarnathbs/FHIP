@@ -42,6 +42,15 @@ export interface LiabilityCsvColumnMap {
   principalComponent?: string;
   interestComponent?: string;
   feeComponent?: string;
+  /** Institution-specific vocabulary -> the closed `LiabilityActivityType`
+   * set (spec section 28's `normalize` contract step). Matched
+   * case-insensitively against the RAW cell value BEFORE the closed-vocab
+   * check below — e.g. a real issuer's own "Interest Charged" or "Cash
+   * Advance" column value maps onto this module's canonical 'INTEREST' /
+   * 'CASH_ADVANCE'. A value present in neither this map nor the canonical
+   * vocabulary itself is still surfaced as `row_N_unrecognised_activity_type`
+   * (spec section 18: never guessed, never silently dropped). */
+  activityTypeAliases?: Record<string, LiabilityActivityType>;
 }
 
 export interface LiabilityCsvExtractionInput {
@@ -130,14 +139,20 @@ export function extractLiabilityStatementFromCsv(input: LiabilityCsvExtractionIn
   const activities: LiabilityStatementActivity[] = [];
   const warnings: string[] = [];
 
+  const aliasLookup = new Map<string, LiabilityActivityType>();
+  for (const [alias, canonical] of Object.entries(input.columnMap.activityTypeAliases ?? {})) {
+    aliasLookup.set(alias.trim().toLowerCase(), canonical);
+  }
+
   rows.forEach((row, i) => {
     const rawType = (row[typeIdx] ?? '').trim();
     if (!rawType) return; // a blank row — not evidence of anything
-    if (!isKnownActivityType(rawType)) {
+    const aliased = aliasLookup.get(rawType.toLowerCase());
+    if (!aliased && !isKnownActivityType(rawType)) {
       warnings.push(`row_${i + 1}_unrecognised_activity_type_${rawType}`);
       return;
     }
-    const activityType = rawType.toUpperCase() as LiabilityActivityType;
+    const activityType = aliased ?? (rawType.toUpperCase() as LiabilityActivityType);
 
     const dateResult = parseDateWithFormat(row[dateIdx] ?? '', dateFormat.format);
     if (!dateResult.ok || !dateResult.iso) {

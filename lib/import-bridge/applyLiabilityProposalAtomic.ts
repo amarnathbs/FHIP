@@ -72,3 +72,19 @@ export async function applyLiabilityProposalAtomic(request: ApplyLiabilityPropos
     appliedFields: result.applied_fields ?? [],
   };
 }
+
+/**
+ * FDH-10's analogue of `approvePayrollEventAtomic` — the one legitimate way
+ * to move a liability statement's `approval_status` to 'approved' (migration
+ * 0096 Part F.5's `fdh10_approve_liability_statement()`). Canonical Liability
+ * is untouched by this call (spec section 21) — it only moves the statement's
+ * own approval state.
+ */
+export async function approveLiabilityStatementAtomic(statementId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('fdh10_approve_liability_statement', { p_statement_id: statementId });
+  if (error) return { ok: false, error: error.message };
+  const result = data as { ok: boolean; error?: string };
+  if (!result.ok) return { ok: false, error: result.error ?? 'Could not approve this statement.' };
+  return { ok: true };
+}

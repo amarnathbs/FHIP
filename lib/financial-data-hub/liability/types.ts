@@ -157,6 +157,13 @@ export type LiabilityExtractionFailureKind =
   | 'layout_unsupported'
   | 'country_not_identified'
   | 'statement_type_not_identified'
+  /** No registered adapter's header signature cleared the minimum-confidence
+   * bar (spec section 28's `detectStatement` step failing outright) — never
+   * silently falls back to a guessed column mapping. */
+  | 'manual_mapping_required'
+  /** Two or more adapters scored within the confidence gap of each other
+   * (mirrors R7's own AMBIGUOUS bank-CSV outcome) — never auto-picks either. */
+  | 'ambiguous_format'
   | 'unknown_error';
 
 export interface LiabilityExtractionSuccess {
