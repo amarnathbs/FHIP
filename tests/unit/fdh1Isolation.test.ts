@@ -130,7 +130,23 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
     // verified by hand at the time this exception was added). Approved as
     // exactly one file, not a directory, so any future file that starts
     // importing real FDH code would still be caught.
-    const FDH_APPROVED_CONSUMER_FILES = [path.join(REPO_ROOT, 'components', 'ui', 'AppShell.tsx')];
+    // FDH-9 hardening pass (2026-08-26): incomeAdapter.ts and
+    // lib/import-bridge/types.ts both trip the same naive-substring
+    // limitation the FDH-8 exception above already documents. Neither
+    // file has any `from '@/lib/financial-data-hub...'` import — verified
+    // by hand at the time this exception was added, same standard as the
+    // AppShell.tsx precedent — the literal text 'financial-data-hub'
+    // appears only in prose comments explaining why they deliberately do
+    // NOT import from there (incomeAdapter.ts: "Deliberately a PLAIN SHAPE
+    // rather than an import from `lib/financial-data-hub/payslip/types`");
+    // types.ts's own header explains the same split. Approved as exactly
+    // these two files, not a directory, so a future file that starts
+    // genuinely importing FDH code would still be caught.
+    const FDH_APPROVED_CONSUMER_FILES = [
+      path.join(REPO_ROOT, 'components', 'ui', 'AppShell.tsx'),
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'adapters', 'incomeAdapter.ts'),
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'types.ts'),
+    ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
       const root = path.join(REPO_ROOT, dir);

@@ -187,7 +187,7 @@ console.log('\n=== SECTION 2: same-tenant authoritative-write forgery (the discl
          values ($1,$2,'income',$3,'add_new','[]','{}','{}',$1)`,
         [A, proposalId, incomeId],
       );
-    } catch (e) { appBlocked = true; }
+    } catch { appBlocked = true; }
     check('SAME-TENANT: forged fhip_import_applications row is BLOCKED', appBlocked);
 
     // LIVE-STYLE FORGERY ATTEMPT 3: forged payroll event financial fields.
@@ -207,7 +207,7 @@ console.log('\n=== SECTION 2: same-tenant authoritative-write forgery (the discl
     let correctionOk = true;
     try {
       await db.query(`update fdh_payroll_events set employer_name = 'Acme Corrected Pty Ltd' where id=$1`, [payrollId]);
-    } catch (e) { correctionOk = false; }
+    } catch { correctionOk = false; }
     check('legitimate direct correction (employer_name) is NOT over-hardened', correctionOk);
 
     // Legitimate direct action: staleness oracle stays IMMUTABLE (spec 65's
@@ -233,7 +233,7 @@ console.log('\n=== SECTION 2: same-tenant authoritative-write forgery (the discl
     let manualEditOk = true;
     try {
       await db.query(`update income_sources set amount = 5300 where id=$1`, [incomeId]);
-    } catch (e) { manualEditOk = false; }
+    } catch { manualEditOk = false; }
     check('manual Income edit (amount) is NOT broken by the provenance guard', manualEditOk);
     await db.query(`update income_sources set amount = 5000 where id=$1`, [incomeId]); // restore for later sections
   });
@@ -339,7 +339,7 @@ console.log('\n=== SECTION 4: mid-operation failure — genuine transaction atom
     let rpcThrew = false;
     try {
       await db.query(`select fdh9_apply_income_proposal($1,'apply_selected_fields',array['amount']) as result`, [proposalId]);
-    } catch (e) { rpcThrew = true; }
+    } catch { rpcThrew = true; }
     check('forced application-insert failure: RPC call raises (transaction aborts)', rpcThrew);
 
     const income = await db.query(`select amount from income_sources where id=$1`, [incomeId]);
@@ -452,7 +452,7 @@ console.log('\n=== SECTION 8: cross-tenant security ===');
     try {
       const r = await db.query(`update fdh_payroll_events set employer_name='forged' where id=$1 returning id`, [payrollA]);
       updateBlocked = r.rows.length === 0;
-    } catch (e) { updateBlocked = true; }
+    } catch { updateBlocked = true; }
     check('B cannot update A payroll (RLS)', updateBlocked);
 
     const applyResult = await db.query(`select fdh9_apply_income_proposal($1,'apply_selected_fields',array['amount']) as result`, [proposalA]);
@@ -495,7 +495,7 @@ console.log('\n=== SECTION 8: cross-tenant security ===');
     let linkBlocked = false;
     try {
       await db.query(`update fdh_payroll_events set bank_match_status='matched', bank_match_transaction_id=$2 where id=$1`, [payrollA, bTxn]);
-    } catch (e) { linkBlocked = true; } // blocked either by the authoritative-write trigger OR the cross-tenant FK trigger
+    } catch { linkBlocked = true; } // blocked either by the authoritative-write trigger OR the cross-tenant FK trigger
     check('cross-tenant bank link (A payroll -> B transaction) is BLOCKED', linkBlocked);
   });
 }
@@ -604,7 +604,7 @@ async function weakenedDb(patch) {
          values ($1,'income','payslip',$2,'AUD',$3,'update_existing','ready')`,
         [A, payrollA, incomeB],
       );
-    } catch (e) { blocked = true; }
+    } catch { blocked = true; }
     check('SELF-CHECK 9e: foreign Income ID as proposal target fails', blocked);
   });
 }
