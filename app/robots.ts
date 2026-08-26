@@ -18,9 +18,8 @@ import { ROBOTS_PUBLIC_PATHS } from '@/lib/seo/entity';
 // application route (dashboard, forecast, investment-intelligence, admin,
 // the financial data hub area, etc.), every /api/* route, and the
 // auth/onboarding flows. This is safer than hand-enumerating every private
-// route: a
-// newly-added private feature is blocked by default rather than depending
-// on someone remembering to add it to a disallow list.
+// route: a newly-added private feature is blocked by default rather than
+// depending on someone remembering to add it to a disallow list.
 export default function robots(): MetadataRoute.Robots {
   const baseUrl = getPublicSiteBaseUrl();
 
