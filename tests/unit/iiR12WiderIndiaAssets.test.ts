@@ -96,11 +96,11 @@ describe('R12 — publication scope (equity/etf certified, everything else still
 
 describe('R12 — reconciliation direction table (bonus/split/sale)', () => {
   it('sale reduces units like a redemption', () => {
-    expect(unitDeltaForTransaction({ canonicalType: 'sale', unitsScaled: 100n })).toBe(-100n);
-    expect(unitDeltaForTransaction({ canonicalType: 'redemption', unitsScaled: 100n })).toBe(-100n);
+    expect(unitDeltaForTransaction({ canonicalType: 'sale', unitsScaled: BigInt(100) })).toBe(BigInt(-100));
+    expect(unitDeltaForTransaction({ canonicalType: 'redemption', unitsScaled: BigInt(100) })).toBe(BigInt(-100));
   });
   it('bonus increases units like a purchase', () => {
-    expect(unitDeltaForTransaction({ canonicalType: 'bonus', unitsScaled: 50n })).toBe(50n);
+    expect(unitDeltaForTransaction({ canonicalType: 'bonus', unitsScaled: BigInt(50) })).toBe(BigInt(50));
   });
 });
 

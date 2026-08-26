@@ -119,6 +119,10 @@ export const iiManualFixtureSchema = z.object({
     units: z.number(),
     value: z.number(),
     qualityStatus: z.enum(['certified', 'warning', 'incomplete']).default('warning'),
+    // R12 addition -- price provenance (spec section 38). Optional/null for
+    // pre-R12 fixtures (unchanged behaviour); every R12 manual-entry write
+    // sets this explicitly.
+    priceSource: z.enum(['manual_entry', 'statement_price', 'admin_reference', 'certified_market_data']).optional().nullable(),
   }),
   supersedesFixtureKey: z.string().optional().nullable(),
   reconciliation: z

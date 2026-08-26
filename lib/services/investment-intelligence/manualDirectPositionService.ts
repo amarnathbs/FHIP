@@ -156,7 +156,7 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
         taxes: input.taxes ?? null,
       },
     ];
-    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning' };
+    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning', priceSource: 'manual_entry' };
   } else if (input.action === 'sale') {
     unitsAfter = current.units - input.units;
     valueAfter = unitsAfter * input.pricePerUnit;
@@ -171,7 +171,7 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
         taxes: input.taxes ?? null,
       },
     ];
-    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning' };
+    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning', priceSource: 'manual_entry' };
   } else if (input.action === 'dividend') {
     unitsAfter = current.units;
     valueAfter = current.value;
@@ -184,13 +184,13 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
         grossAmount: input.amount,
       },
     ];
-    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning' };
+    holdingSnapshot = { asOfDate: input.transactionDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning', priceSource: 'manual_entry' };
   } else {
     // reprice — no new transaction, only an updated valuation snapshot.
     unitsAfter = current.units;
     valueAfter = input.currentValue;
     transactions = [];
-    holdingSnapshot = { asOfDate: input.asOfDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning' };
+    holdingSnapshot = { asOfDate: input.asOfDate, units: unitsAfter, value: valueAfter, qualityStatus: 'warning', priceSource: 'manual_entry' };
   }
 
   const fixture: IiManualFixture = {

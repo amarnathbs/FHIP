@@ -394,6 +394,8 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
         as_of_date: fixture.holdingSnapshot.asOfDate,
         units: fixture.holdingSnapshot.units,
         value: fixture.holdingSnapshot.value,
+        // R12 addition -- price provenance. null for pre-R12 fixtures.
+        price_source: fixture.holdingSnapshot.priceSource ?? null,
       },
       { onConflict: 'account_id,instrument_id,as_of_date', ignoreDuplicates: true }
     )
