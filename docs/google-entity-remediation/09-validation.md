@@ -91,6 +91,16 @@ delivered in this branch — `node_modules` is never committed (gitignored) and 
 checkout of this branch is recommended before anyone re-runs local validation, as ordinary good
 practice — not because this branch's committed code is in question.
 
+**Update — attempted recovery, also inconclusive**: two further recovery attempts were made
+(`rm -rf node_modules` followed by `npm install`, then `npm ci` from a fully clean state) to leave
+this worktree in a healthy state as a courtesy. Both failed with `ENOTEMPTY` errors on unrelated
+`node_modules` subdirectories (`es-abstract/2024`, then `next/dist/build/webpack/loaders`) —
+different files each time, which points to a filesystem-locking quirk specific to this particular
+git worktree mount rather than anything fixable by retrying npm commands. This was not pursued
+further, as it is unrelated to the actual deliverable. If local validation of this branch is
+needed, clone/checkout the branch fresh elsewhere (or use the primary `D:/FHIP` checkout, whose
+`node_modules` was never touched by any of this) and run `npm ci` there.
+
 ## Structured data — manual validation (Phase 28; Google's Rich Results Test was NOT run)
 
 This task did not have network access to `search.google.com/test/rich-results` in a way that
