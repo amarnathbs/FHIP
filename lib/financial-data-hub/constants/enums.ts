@@ -948,10 +948,31 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED = [
   'bulk_review_action_completed',
 ] as const;
 
+/**
+ * FDH-9 WIDENING (spec sections 32, 41-42). Migration 0091 already widened
+ * `fdh_document_audit_events.event_type`'s check constraint with these six
+ * values (see that migration's own "FDH-9 additions" comment) — this
+ * TypeScript-side constant was never added to match at the time, which is
+ * exactly the class of gap `tests/unit/fdh5SchemaContract.test.ts`-style
+ * contract tests exist to catch. Found and fixed during the FDH-9 live-DEV
+ * cert + Income-tab pass (2026-08-26) as a genuine pre-existing defect: every
+ * one of these six event types would have failed `tsc --noEmit` the moment
+ * any FDH-9 route tried to actually record one (which none did until this
+ * pass, since no app/api layer existed yet — see FDH9_REUSE_AND_GAP_AUDIT.md).
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED = [
+  'payslip_extraction_completed',
+  'payslip_extraction_failed',
+  'payroll_event_approved',
+  'income_proposal_generated',
+  'income_proposal_applied',
+  'income_proposal_dismissed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7). Used everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts
+ * FDH-7 + FDH-9). Used everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts
  * assertion — i.e. by `FdhDocumentAuditEventType` itself, so every caller
- * can use the R7/R8/FDH-5/FDH-7 event types without a second parallel
+ * can use the R7/R8/FDH-5/FDH-7/FDH-9 event types without a second parallel
  * type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
@@ -959,6 +980,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

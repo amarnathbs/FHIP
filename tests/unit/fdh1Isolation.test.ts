@@ -142,10 +142,31 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
     // types.ts's own header explains the same split. Approved as exactly
     // these two files, not a directory, so a future file that starts
     // genuinely importing FDH code would still be caught.
+    //
+    // FDH-9 live-DEV-cert + Income-tab pass (2026-08-26): two more files trip
+    // the identical naive-substring limitation, for the identical reason —
+    // verified by hand, same standard as above:
+    //   - lib/import-bridge/incomeProposalService.ts has no
+    //     `from '@/lib/financial-data-hub...'` import (it duplicates the one
+    //     six-line function it would otherwise have needed from
+    //     `payslip/frequency.ts` — see its own `canonicalIncomeFrequencyFor`
+    //     comment — and leaves the one FDH document-audit-event write to its
+    //     API-route caller instead of importing `auditLog.ts` itself); the
+    //     substring appears only in prose explaining exactly that.
+    //   - components/income/PayslipImportPanel.tsx is the Income-tab payslip
+    //     UI (spec section 3: FDH-9 is not a new top-level destination, it
+    //     lives behind Income). It never imports anything from
+    //     `lib/financial-data-hub`; every reference is a `fetch()` call to a
+    //     public `/api/financial-data-hub/...` route string — the same
+    //     relationship any external HTTP client has to that API, not a
+    //     module import of FDH's internals. Approved as exactly these two
+    //     files, not a directory.
     const FDH_APPROVED_CONSUMER_FILES = [
       path.join(REPO_ROOT, 'components', 'ui', 'AppShell.tsx'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'adapters', 'incomeAdapter.ts'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'types.ts'),
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'incomeProposalService.ts'),
+      path.join(REPO_ROOT, 'components', 'income', 'PayslipImportPanel.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
