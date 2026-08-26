@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — FHIP',
+  alternates: { canonical: '/privacy' },
 };
 
 // Draft privacy policy — pending legal review. Intentionally left indexable
@@ -101,8 +102,8 @@ export default function PrivacyPolicyPage() {
         <h2 className="text-xl font-semibold">Contact</h2>
         <p>
           Questions about this policy or your data can be sent to{' '}
-          <a href="mailto:amarnath.bekal@gmail.com" className="text-trust underline">
-            amarnath.bekal@gmail.com
+          <a href="mailto:privacy@myfhip.com" className="text-trust underline">
+            privacy@myfhip.com
           </a>
           .
         </p>

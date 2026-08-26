@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Terms of Service — FHIP',
+  alternates: { canonical: '/terms' },
 };
 
 // Draft terms of service — pending legal review. Intentionally left
@@ -52,8 +53,8 @@ export default function TermsPage() {
         <h2 className="text-xl font-semibold">Contact</h2>
         <p>
           Questions about these terms can be sent to{' '}
-          <a href="mailto:amarnath.bekal@gmail.com" className="text-trust underline">
-            amarnath.bekal@gmail.com
+          <a href="mailto:compliance@myfhip.com" className="text-trust underline">
+            compliance@myfhip.com
           </a>
           .
         </p>

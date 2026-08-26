@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { getPublicResourceSitemapEntries } from '@/lib/resources/public/queries';
 import { getPublicSiteBaseUrl, buildResourceCanonicalUrl } from '@/lib/resources/public/metadata';
+import { PUBLIC_MARKETING_SITEMAP_PATHS } from '@/lib/seo/entity';
 
 // Next.js App Router sitemap convention (app/sitemap.ts) — this project has
 // no pre-existing sitemap.ts anywhere (checked during the R1.5 pre-
@@ -18,7 +19,13 @@ import { getPublicSiteBaseUrl, buildResourceCanonicalUrl } from '@/lib/resources
 // Spec §108: metadata-only query (slug + updated_at), no content_blocks.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getPublicSiteBaseUrl();
+  const marketingEntries: MetadataRoute.Sitemap = PUBLIC_MARKETING_SITEMAP_PATHS.map((entry) => ({
+    url: `${baseUrl}${entry.path}`,
+    changeFrequency: entry.changeFrequency,
+    priority: entry.priority,
+  }));
   const staticEntries: MetadataRoute.Sitemap = [
+    ...marketingEntries,
     { url: `${baseUrl}/resources`, changeFrequency: 'daily', priority: 0.8 },
     { url: `${baseUrl}/resources/videos`, changeFrequency: 'daily', priority: 0.6 },
     { url: `${baseUrl}/resources/glossary`, changeFrequency: 'weekly', priority: 0.6 },
