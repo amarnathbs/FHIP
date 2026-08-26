@@ -798,3 +798,614 @@ alter table fdh_document_audit_events
       'income_proposal_applied',
       'income_proposal_dismissed'
     ));
+
+
+-- ===========================================================================
+-- PART D — HARDENING: ATOMIC APPLY RPC & AUTHORITATIVE-STATE PROTECTION
+--
+-- FINDING (Product Owner directive, FDH-9 hardening pass). Parts A-C above
+-- (as originally drafted) gave `fhip_import_proposals` the same blanket
+-- "for all using (auth.uid()=user_id) with check (auth.uid()=user_id)" shape
+-- this project has now found and fixed as a live defect on FIVE other tables
+-- (fdh_statement_uploads.reconciliation_status / 0065, ii_review_items / 0069,
+-- R8 classification fields / 0068, ii_transactions + ii_reconciliation_cases /
+-- 0087). REPRODUCED HERE TOO, on paper, before this fix: with that policy, an
+-- authenticated user's OWN JWT can issue
+--   PATCH /rest/v1/fhip_import_proposals?id=eq.<their own proposal>
+--   { "status": "applied", "applied_at": "<now>" }
+-- and PostgREST returns HTTP 200 with the row genuinely changed to 'applied'
+-- — with NO Income mutation, NO application audit row, and NO trust that any
+-- of applyService.ts's checks (ownership, staleness, allow-list,
+-- compare-and-swap) ever ran. `fhip_import_applications`' original INSERT
+-- policy (`with check (auth.uid()=user_id and auth.uid()=applied_by)`) has
+-- the same shape of hole: a user could INSERT a fabricated audit row
+-- unilaterally, without ever touching Income.
+--
+-- This is the same defect CLASS every time: RLS proves row OWNERSHIP, never
+-- COLUMN or LIFECYCLE authority. Part D closes it for the FDH-9 bridge tables
+-- and for `fdh_payroll_events`, using the two-layer split this project has
+-- settled on (0069/0087): RLS for WHICH ROWS, a BEFORE trigger for WHICH
+-- COLUMNS AND WHICH VALUE TRANSITIONS.
+--
+-- WHY THIS ROUND NEEDS A THIRD LAYER THE 0069/0087 PRECEDENT DID NOT.
+-- 0069/0087's legitimate write path is STILL the ordinary authenticated
+-- client (acknowledgeReviewItem(), resolve/route.ts) — their triggers only
+-- narrow which same-role transitions are legal. FDH-9's legitimate write
+-- path for "apply" is different in kind: spec section 4 requires the entire
+-- multi-table mutation (Income change + application insert + proposal
+-- marked applied) to be ONE ATOMIC DATABASE OPERATION, which means it must
+-- run as a single SECURITY DEFINER function call, not a sequence of ordinary
+-- authenticated-role statements. The trigger therefore cannot simply
+-- enumerate "transitions the authenticated role may make" the way 0069/0087
+-- do, because for the 'applied' transition specifically there IS no
+-- legitimate authenticated-role write at all — only the function may ever
+-- produce it. The trigger needs to be able to tell "this statement was
+-- issued directly by PostgREST for an authenticated/anon caller" apart from
+-- "this statement was issued by fdh9_apply_income_proposal() on that
+-- caller's behalf", even though both run inside the same session/JWT.
+--
+-- MECHANISM CHOSEN: a transaction-local GUC flag
+-- (`fhip.import_bridge_internal_write`), set true by the atomic function
+-- immediately before each of its own authoritative writes, and read (never
+-- set) by every hardening trigger below. This is deliberately NOT based on
+-- `current_user`/function ownership (which role owns a function that was
+-- migrated via the Supabase CLI vs. the SQL editor vs. a hosted project can
+-- vary, and the same trigger has to be provably correct in the PGlite
+-- harness, DEV and production alike) — the GUC is `set_config(..., true)`
+-- (transaction-local), so it can never leak into a later, unrelated request
+-- even on a pooled connection, and a raw PostgREST call can never set it
+-- because PostgREST never runs arbitrary `SELECT set_config(...)` on a
+-- caller's behalf. This is the actual security boundary: forging the
+-- 'applied' transition now requires executing SQL as a role that can set
+-- session GUCs arbitrarily AND write the table directly — i.e. it requires
+-- already being inside the trusted function body.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- D.1 fhip_import_proposals — replace the blanket policy.
+-- ---------------------------------------------------------------------------
+drop policy if exists "own fhip_import_proposals" on fhip_import_proposals;
+
+create policy "read own fhip_import_proposals" on fhip_import_proposals
+  for select using (auth.uid() = user_id);
+-- A freshly generated proposal is inert (spec section 6) — creating one is
+-- not the defect this part closes, so ordinary authenticated INSERT stays,
+-- scoped to the caller's own id and to the only state a NEW proposal may
+-- ever start in.
+create policy "insert own fhip_import_proposals" on fhip_import_proposals
+  for insert with check (auth.uid() = user_id and status = 'ready');
+-- UPDATE stays row-scoped by ownership; the trigger below is what actually
+-- decides which columns/transitions are legal for the authenticated role.
+create policy "update own fhip_import_proposals" on fhip_import_proposals
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- No delete policy: a proposal is never hard-deleted by a user (it is
+-- superseded/dismissed/applied instead); it only disappears via
+-- ON DELETE CASCADE from its source payroll event.
+
+create or replace function fdh9_import_proposals_assert_authoritative_write() returns trigger as $$
+declare
+  v_internal boolean := coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true';
+begin
+  if v_internal then
+    return new;
+  end if;
+
+  -- Every column below is authoritative: it either identifies WHAT the
+  -- proposal targets (rewriting it after generation would let a stale
+  -- proposal be silently retargeted) or records an outcome only the apply
+  -- function may produce. None of them is legitimately editable by the
+  -- authenticated role, ever, at any status.
+  if new.user_id is distinct from old.user_id
+     or new.target_domain is distinct from old.target_domain
+     or new.source_kind is distinct from old.source_kind
+     or new.source_payroll_event_id is distinct from old.source_payroll_event_id
+     or new.currency_code is distinct from old.currency_code
+     or new.target_entity_id is distinct from old.target_entity_id
+     or new.target_entity_updated_at is distinct from old.target_entity_updated_at
+     or new.recommended_apply_mode is distinct from old.recommended_apply_mode
+     or new.duplicate_of_entity_id is distinct from old.duplicate_of_entity_id
+     or new.generated_at is distinct from old.generated_at
+     or new.applied_at is distinct from old.applied_at
+  then
+    raise exception 'fhip_import_proposals: this field is authoritative and may not be written directly by the authenticated role';
+  end if;
+
+  -- The ONLY two direct (non-internal) status transitions that are
+  -- legitimate: a user declining the proposal (ready -> dismissed, spec
+  -- section 59) and a fresh proposal superseding a stale one on regeneration
+  -- (ready -> superseded, supabaseStore.ts's persistProposal()). Every other
+  -- transition — including into 'applied', including a same-value no-op used
+  -- to smuggle a paired-column change through, including 'expired' (reserved,
+  -- not yet produced by any code path) — is refused. This is THE exact
+  -- disclosed defect's closure: 'applied' is categorically unreachable
+  -- through this path.
+  if new.status is distinct from old.status then
+    if not (old.status = 'ready' and new.status in ('dismissed', 'superseded')) then
+      raise exception 'fhip_import_proposals: status may only move from ready to dismissed or superseded via the authenticated role; applied is only ever set by fdh9_apply_income_proposal()';
+    end if;
+  end if;
+
+  if new.dismissed_at is distinct from old.dismissed_at and new.status <> 'dismissed' then
+    raise exception 'fhip_import_proposals: dismissed_at may only be set alongside status=dismissed';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create trigger trg_fhip_import_proposals_authoritative_write
+  before update on fhip_import_proposals
+  for each row execute function fdh9_import_proposals_assert_authoritative_write();
+
+
+-- ---------------------------------------------------------------------------
+-- D.2 fhip_import_proposal_fields — make the staleness oracle itself immutable.
+--
+-- SEPARATE FINDING, not in the original disclosure but the exact same defect
+-- class: `existing_value` is what detectStaleness()/the RPC's staleness loop
+-- compares the live row against. The original "own ... for all" policy would
+-- have let a user PATCH `existing_value` on their own proposal's field rows
+-- to match their current data, silently defeating STALE_PROPOSAL every time
+-- (this is precisely spec section 65's mandatory negative control:
+-- "Staleness — disable stale check, harness must catch overwrite"). A
+-- snapshot that can be rewritten after the fact is not a snapshot.
+-- ---------------------------------------------------------------------------
+drop policy if exists "own fhip_import_proposal_fields" on fhip_import_proposal_fields;
+
+create policy "read own fhip_import_proposal_fields" on fhip_import_proposal_fields
+  for select using (auth.uid() = user_id);
+-- Written once, atomically, alongside the parent proposal by
+-- persistProposal() — ordinary authenticated INSERT stays.
+create policy "insert own fhip_import_proposal_fields" on fhip_import_proposal_fields
+  for insert with check (auth.uid() = user_id);
+-- No update, no delete policy for the authenticated role at all: every field
+-- row is immutable once created (append-only, same discipline as
+-- fhip_import_applications / fdh_classification_history). Rows only
+-- disappear via ON DELETE CASCADE from their parent proposal.
+
+
+-- ---------------------------------------------------------------------------
+-- D.3 fhip_import_applications — close the forged-application-row gap
+-- (spec section 20).
+--
+-- The original INSERT policy let any authenticated user fabricate an
+-- application row for their own proposal_id/user_id/applied_by without ever
+-- running the apply operation. The fix requires the SAME transaction-local
+-- flag the apply function sets — a direct PostgREST INSERT, even with every
+-- column value legitimate-looking, can never set that flag, so it is refused
+-- by RLS itself (WITH CHECK), independently of the trigger layer.
+-- ---------------------------------------------------------------------------
+drop policy if exists "insert own fhip_import_applications" on fhip_import_applications;
+
+create policy "insert own fhip_import_applications" on fhip_import_applications
+  for insert with check (
+    auth.uid() = user_id
+    and auth.uid() = applied_by
+    and coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true'
+  );
+-- "read own" (select) policy from Part B is untouched. No update, no delete
+-- policy exists for the authenticated role — append-only, as designed.
+
+
+-- ---------------------------------------------------------------------------
+-- D.4 fdh_payroll_events — payroll-event authority audit (spec sections 10,
+-- 21).
+--
+-- INSERT stays ordinary-authenticated-scoped. Unlike ii_transactions (R11),
+-- this codebase's payslip extraction pipeline has no service-role ingestion
+-- path anywhere — every read/write in lib/import-bridge and
+-- lib/financial-data-hub/payslip goes through the per-request, RLS-scoped
+-- client (supabaseStore.ts's own header: "EVERY QUERY IS SCOPED
+-- .eq('user_id', userId) ON TOP OF RLS"). The legitimate write of a freshly
+-- parsed payroll event is therefore necessarily an authenticated INSERT by
+-- the user who uploaded their own payslip. This is a documented, deliberate
+-- choice (spec section 10: "do not over-harden genuine user-editable... if
+-- existing architecture requires it") — a user directly fabricating a whole
+-- fake payroll event via INSERT is a self-harm data-integrity concern (no
+-- different in kind from typing an arbitrary number into the manual Income
+-- form today), not a same-tenant authority breach, and is explicitly out of
+-- scope for this hardening pass; UPDATE forgery of an event's system-derived
+-- fields AFTER correct extraction, the defect spec 10/21 actually names, is
+-- what the trigger below closes.
+--
+-- UPDATE: only two direct (non-internal) actions exist anywhere in the
+-- current implementation — none yet, since no route/UI calls UPDATE on this
+-- table at all (see FDH9 completion report, "no app/api layer was ever
+-- built"). Pending that UI, this hardening fails CLOSED rather than open:
+-- the ONLY column an ordinary authenticated UPDATE may ever touch directly
+-- is `employer_name`/`employer_normalised` (a label correction, the one
+-- unambiguous case of "genuine user-editable correction field" named by spec
+-- section 10). Every system-derived figure — every money column, every tax/
+-- retirement/YTD column, reconciliation outcome, bank-match outcome, parser
+-- provenance, approval state, review state, supersession — is authoritative
+-- and can only ever be written by a future internal-write-flagged function
+-- (the payroll-approval RPC added below covers approval_status specifically;
+-- any later correction/review UI must add its own narrowly-scoped RPC rather
+-- than widen this trigger's authenticated-role allowance).
+-- ---------------------------------------------------------------------------
+create or replace function fdh9_payroll_events_assert_authoritative_write() returns trigger as $$
+declare
+  v_internal boolean := coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true';
+begin
+  if v_internal then
+    return new;
+  end if;
+
+  if new.user_id is distinct from old.user_id
+     or new.household_id is distinct from old.household_id
+     or new.statement_upload_id is distinct from old.statement_upload_id
+     or new.country_code is distinct from old.country_code
+     or new.currency_code is distinct from old.currency_code
+     or new.pay_period_start is distinct from old.pay_period_start
+     or new.pay_period_end is distinct from old.pay_period_end
+     or new.payment_date is distinct from old.payment_date
+     or new.pay_frequency is distinct from old.pay_frequency
+     or new.pay_frequency_source is distinct from old.pay_frequency_source
+     or new.gross_pay is distinct from old.gross_pay
+     or new.base_pay is distinct from old.base_pay
+     or new.overtime_pay is distinct from old.overtime_pay
+     or new.bonus_pay is distinct from old.bonus_pay
+     or new.commission_pay is distinct from old.commission_pay
+     or new.allowances_total is distinct from old.allowances_total
+     or new.reimbursements_total is distinct from old.reimbursements_total
+     or new.other_earnings is distinct from old.other_earnings
+     or new.tax_withheld is distinct from old.tax_withheld
+     or new.employee_deductions_total is distinct from old.employee_deductions_total
+     or new.salary_sacrifice is distinct from old.salary_sacrifice
+     or new.professional_tax is distinct from old.professional_tax
+     or new.employer_retirement_contribution is distinct from old.employer_retirement_contribution
+     or new.employee_retirement_contribution is distinct from old.employee_retirement_contribution
+     or new.employer_nps_contribution is distinct from old.employer_nps_contribution
+     or new.employee_nps_contribution is distinct from old.employee_nps_contribution
+     or new.net_pay is distinct from old.net_pay
+     or new.ytd_gross is distinct from old.ytd_gross
+     or new.ytd_tax is distinct from old.ytd_tax
+     or new.ytd_net is distinct from old.ytd_net
+     or new.ytd_employer_retirement is distinct from old.ytd_employer_retirement
+     or new.ytd_employee_retirement is distinct from old.ytd_employee_retirement
+     or new.parser_name is distinct from old.parser_name
+     or new.parser_version is distinct from old.parser_version
+     or new.extraction_confidence is distinct from old.extraction_confidence
+     or new.reconciliation_status is distinct from old.reconciliation_status
+     or new.reconciliation_variance is distinct from old.reconciliation_variance
+     or new.bank_match_status is distinct from old.bank_match_status
+     or new.bank_match_transaction_id is distinct from old.bank_match_transaction_id
+     or new.bank_match_confidence is distinct from old.bank_match_confidence
+     or new.review_status is distinct from old.review_status
+     or new.approval_status is distinct from old.approval_status
+     or new.approved_at is distinct from old.approved_at
+     or new.approved_by is distinct from old.approved_by
+     or new.superseded_by_payroll_event_id is distinct from old.superseded_by_payroll_event_id
+     or new.payslip_fingerprint is distinct from old.payslip_fingerprint
+  then
+    raise exception 'fdh_payroll_events: this field is system-authoritative and may not be written directly by the authenticated role';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create trigger trg_fdh_payroll_events_authoritative_write
+  before update on fdh_payroll_events
+  for each row execute function fdh9_payroll_events_assert_authoritative_write();
+
+
+-- ---------------------------------------------------------------------------
+-- D.5 income_sources — provenance columns are authoritative too (spec
+-- sections 41, 51), even though the rest of the row stays exactly as
+-- user-editable as it is today (spec sections 55, 61: manual Income entry
+-- must be completely unaffected).
+-- ---------------------------------------------------------------------------
+create or replace function fdh9_income_sources_assert_provenance_write() returns trigger as $$
+declare
+  v_internal boolean := coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true';
+begin
+  if v_internal then
+    return new;
+  end if;
+  if new.source_type is distinct from old.source_type
+     or new.last_import_application_id is distinct from old.last_import_application_id
+     or new.last_imported_at is distinct from old.last_imported_at
+  then
+    raise exception 'income_sources: source_type/last_import_application_id/last_imported_at are import-bridge provenance and may not be written directly by the authenticated role';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create trigger trg_income_sources_provenance_write
+  before update on income_sources
+  for each row execute function fdh9_income_sources_assert_provenance_write();
+
+
+-- ===========================================================================
+-- D.6 THE ATOMIC APPLY RPC (spec sections 3-9, 17-25, 28-41).
+--
+-- The one function in the platform permitted to move a proposal into
+-- 'applied'. Runs entirely inside the single transaction PostgREST opens for
+-- the RPC call: every statement below either all commits together or (on any
+-- unhandled error, including a deliberately forced one) all rolls back
+-- together, because this is a FUNCTION, not a PROCEDURE — it has no COMMIT of
+-- its own, so an exception at any point aborts the whole enclosing
+-- transaction and undoes every write this function made, including the
+-- proposal-claim UPDATE issued earlier in the very same call (spec section
+-- 18's mid-operation-failure requirement, satisfied by ordinary Postgres
+-- transaction semantics rather than by any try/catch in this function or in
+-- application code, per spec section 41).
+--
+-- FDH-9 currently ships Income as the only implemented target_domain (spec
+-- section 5) — the function raises PROPOSAL_NOT_ACTIONABLE for any other
+-- domain rather than attempting a generic dynamic mutation (spec section 6).
+-- A future domain adapter adds its own narrow branch here, not a generic
+-- escape hatch.
+-- ===========================================================================
+create or replace function fdh9_apply_income_proposal(
+  p_proposal_id uuid,
+  p_decision text,
+  p_selected_fields text[] default null
+) returns jsonb as $$
+declare
+  v_uid uuid;
+  v_proposal record;
+  v_income record;
+  v_allowed constant text[] := array['source_name','employer_name','income_type','amount','net_amount','frequency','currency_code','is_taxable'];
+  v_kinds constant jsonb := jsonb_build_object(
+    'source_name','text','employer_name','text','income_type','enum','amount','money',
+    'net_amount','money','frequency','enum','currency_code','enum','is_taxable','bool'
+  );
+  v_selected text[];
+  v_forbidden text[];
+  v_known text[];
+  v_field record;
+  v_live_text text;
+  v_set_parts text[] := array[]::text[];
+  v_cols text[] := array[]::text[];
+  v_vals text[] := array[]::text[];
+  v_applied_fields text[] := array[]::text[];
+  v_previous jsonb := '{}'::jsonb;
+  v_new jsonb := '{}'::jsonb;
+  v_target_id uuid;
+  v_application_id uuid;
+  v_kind text;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'fdh9_apply_income_proposal: authentication required';
+  end if;
+  if p_decision not in ('add_new','update_existing','apply_selected_fields','keep_existing') then
+    return jsonb_build_object('ok', false, 'code', 'INVALID_APPLY_MODE', 'error', 'Unrecognised decision.');
+  end if;
+
+  -- Lock the proposal row for the duration of this transaction so a
+  -- concurrent apply of the SAME proposal cannot interleave with this one
+  -- (spec section 40) — the second caller blocks here until the first
+  -- commits or aborts, then re-reads a status that is no longer 'ready'.
+  select * into v_proposal from fhip_import_proposals where id = p_proposal_id for update;
+  if not found or v_proposal.user_id <> v_uid then
+    -- Same response for "does not exist" and "belongs to someone else" — a
+    -- cross-tenant probe (spec section 24) learns nothing from the answer.
+    return jsonb_build_object('ok', false, 'code', 'PROPOSAL_NOT_FOUND', 'error', 'That import proposal could not be found.');
+  end if;
+  if v_proposal.target_domain <> 'income' then
+    return jsonb_build_object('ok', false, 'code', 'PROPOSAL_NOT_ACTIONABLE', 'error', 'That proposal is for a part of your data this function does not yet handle.');
+  end if;
+
+  -- --- KEEP EXISTING: no write to Income of any kind (spec section 59) -----
+  if p_decision = 'keep_existing' then
+    if v_proposal.status <> 'ready' then
+      return jsonb_build_object('ok', false, 'code', 'PROPOSAL_NOT_ACTIONABLE', 'error', 'That proposal is no longer open.');
+    end if;
+    perform set_config('fhip.import_bridge_internal_write', 'true', true);
+    update fhip_import_proposals set status = 'dismissed', dismissed_at = now() where id = p_proposal_id;
+    perform set_config('fhip.import_bridge_internal_write', 'false', true);
+    return jsonb_build_object('ok', true, 'outcome', 'kept_existing');
+  end if;
+
+  if v_proposal.status <> 'ready' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', case when v_proposal.status = 'applied' then 'ALREADY_APPLIED' else 'PROPOSAL_NOT_ACTIONABLE' end,
+      'error', case when v_proposal.status = 'applied'
+        then 'This proposal has already been applied to your income.'
+        else 'That proposal is no longer open.' end
+    );
+  end if;
+  if p_decision <> 'add_new' and v_proposal.target_entity_id is null then
+    return jsonb_build_object('ok', false, 'code', 'INVALID_APPLY_MODE', 'error', 'There is no existing entry to update.');
+  end if;
+
+  -- --- Resolve the requested field set --------------------------------------
+  if p_decision = 'update_existing' and (p_selected_fields is null or array_length(p_selected_fields, 1) is null) then
+    select array_agg(field_name) into v_selected from fhip_import_proposal_fields where proposal_id = p_proposal_id;
+  else
+    v_selected := coalesce(p_selected_fields, array[]::text[]);
+  end if;
+  if v_selected is null then v_selected := array[]::text[]; end if;
+
+  -- Allow-list (spec section 6): checked BEFORE anything else touches the
+  -- field name, so a forged proposal_fields row naming an unlisted column
+  -- can never reach the dynamic SET/INSERT below.
+  select array_agg(f) into v_forbidden from unnest(v_selected) f where not (f = any(v_allowed));
+  if v_forbidden is not null and array_length(v_forbidden, 1) > 0 then
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN_FIELD', 'error', 'One or more selected fields cannot be changed by an import.', 'fields', to_jsonb(v_forbidden));
+  end if;
+
+  select array_agg(field_name) into v_known from fhip_import_proposal_fields where proposal_id = p_proposal_id;
+  if v_known is null then v_known := array[]::text[]; end if;
+  select array_agg(f) into v_forbidden from unnest(v_selected) f where not (f = any(v_known));
+  if v_forbidden is not null and array_length(v_forbidden, 1) > 0 then
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN_FIELD', 'error', 'One or more selected fields are not part of this proposal.', 'fields', to_jsonb(v_forbidden));
+  end if;
+  if array_length(v_selected, 1) is null or array_length(v_selected, 1) = 0 then
+    return jsonb_build_object('ok', false, 'code', 'NO_FIELDS_SELECTED', 'error', 'Choose at least one detail to apply.');
+  end if;
+
+  if p_decision = 'add_new' then
+    if not ('source_name' = any(v_selected)) or not ('amount' = any(v_selected)) or not ('frequency' = any(v_selected)) then
+      return jsonb_build_object('ok', false, 'code', 'DOMAIN_VALIDATION_FAILED', 'error', 'A new income entry needs a name, a gross amount and a frequency.');
+    end if;
+  end if;
+
+  -- --- Target ownership + staleness (spec sections 7, 24, 39) ---------------
+  if p_decision <> 'add_new' then
+    select * into v_income from income_sources where id = v_proposal.target_entity_id and user_id = v_uid for update;
+    if not found then
+      -- Covers BOTH "row genuinely gone" and "target_entity_id points at
+      -- another tenant's row" — the same-tenant trigger on
+      -- fhip_import_proposals (Part B) already stops that at proposal-write
+      -- time, but this re-check makes the apply path itself independently
+      -- safe even if that trigger were ever bypassed (spec section 24).
+      return jsonb_build_object('ok', false, 'code', 'TARGET_NOT_FOUND', 'error', 'The income entry this proposal refers to could not be found.');
+    end if;
+
+    for v_field in
+      select pf.field_name, pf.value_kind, pf.existing_value
+      from fhip_import_proposal_fields pf
+      where pf.proposal_id = p_proposal_id and pf.field_name = any(v_selected)
+    loop
+      v_live_text := case v_field.field_name
+        when 'source_name'    then v_income.source_name
+        when 'employer_name'  then v_income.employer_name
+        when 'income_type'    then v_income.income_type
+        when 'frequency'      then v_income.frequency
+        when 'currency_code'  then v_income.currency_code
+        when 'amount'         then case when v_income.amount is null then null else round(v_income.amount, 2)::text end
+        when 'net_amount'     then case when v_income.net_amount is null then null else round(v_income.net_amount, 2)::text end
+        when 'is_taxable'     then case when v_income.is_taxable is null then null when v_income.is_taxable then 'true' else 'false' end
+        else null
+      end;
+      if v_field.value_kind in ('text', 'enum') then
+        v_live_text := nullif(trim(both from coalesce(v_live_text, '')), '');
+      end if;
+      if v_live_text is distinct from v_field.existing_value then
+        return jsonb_build_object(
+          'ok', false, 'code', 'STALE_PROPOSAL',
+          'error', 'Your income details changed after this proposal was prepared, so it was not applied.',
+          'field', v_field.field_name, 'existing', v_field.existing_value, 'current', v_live_text
+        );
+      end if;
+      v_previous := v_previous || jsonb_build_object(v_field.field_name, v_field.existing_value);
+    end loop;
+  end if;
+
+  -- --- Build the typed patch (spec section 6: explicit allow-listed columns
+  -- only; no arbitrary dynamic column/SQL from proposal data) --------------
+  for v_field in
+    select pf.field_name, pf.value_kind, pf.proposed_value
+    from fhip_import_proposal_fields pf
+    where pf.proposal_id = p_proposal_id and pf.field_name = any(v_selected)
+  loop
+    v_kind := v_kinds ->> v_field.field_name;
+    if v_field.proposed_value is null then
+      v_set_parts := array_append(v_set_parts, format('%I = NULL', v_field.field_name));
+      v_cols := array_append(v_cols, v_field.field_name);
+      v_vals := array_append(v_vals, 'NULL');
+    elsif v_kind = 'money' then
+      v_set_parts := array_append(v_set_parts, format('%I = %L::numeric', v_field.field_name, v_field.proposed_value));
+      v_cols := array_append(v_cols, v_field.field_name);
+      v_vals := array_append(v_vals, format('%L::numeric', v_field.proposed_value));
+    elsif v_kind = 'bool' then
+      v_set_parts := array_append(v_set_parts, format('%I = %L::boolean', v_field.field_name, (v_field.proposed_value = 'true')));
+      v_cols := array_append(v_cols, v_field.field_name);
+      v_vals := array_append(v_vals, format('%L::boolean', (v_field.proposed_value = 'true')));
+    else
+      v_set_parts := array_append(v_set_parts, format('%I = %L', v_field.field_name, v_field.proposed_value));
+      v_cols := array_append(v_cols, v_field.field_name);
+      v_vals := array_append(v_vals, format('%L', v_field.proposed_value));
+    end if;
+    v_new := v_new || jsonb_build_object(v_field.field_name, v_field.proposed_value);
+    v_applied_fields := array_append(v_applied_fields, v_field.field_name);
+    if p_decision = 'add_new' then
+      v_previous := v_previous || jsonb_build_object(v_field.field_name, null);
+    end if;
+  end loop;
+
+  -- --- Atomic claim (spec sections 3, 8, 40): compare-and-swap. A second,
+  -- concurrent caller that reaches this line finds status <> 'ready' (either
+  -- because it was blocked by the row lock above until this transaction
+  -- committed, or because it lost the race) and is refused as ALREADY_APPLIED
+  -- rather than double-applying. -------------------------------------------
+  perform set_config('fhip.import_bridge_internal_write', 'true', true);
+  update fhip_import_proposals set status = 'applied', applied_at = now()
+    where id = p_proposal_id and status = 'ready';
+  if not found then
+    perform set_config('fhip.import_bridge_internal_write', 'false', true);
+    return jsonb_build_object('ok', false, 'code', 'ALREADY_APPLIED', 'error', 'This proposal has already been applied to your income.');
+  end if;
+
+  -- --- The canonical Income mutation ----------------------------------------
+  if p_decision = 'add_new' then
+    v_cols := array_prepend('last_imported_at', array_prepend('source_type', array_prepend('is_active', array_prepend('owner', array_prepend('user_id', v_cols)))));
+    v_vals := array_prepend('now()', array_prepend(format('%L', 'payslip_import'), array_prepend('true', array_prepend(format('%L', 'self'), array_prepend(format('%L::uuid', v_uid), v_vals)))));
+    execute format('insert into income_sources (%s) values (%s) returning id', array_to_string(v_cols, ', '), array_to_string(v_vals, ', ')) into v_target_id;
+  else
+    v_target_id := v_proposal.target_entity_id;
+    execute format('update income_sources set %s, updated_at = now() where id = %L::uuid and user_id = %L::uuid', array_to_string(v_set_parts, ', '), v_target_id, v_uid);
+  end if;
+
+  -- --- The append-only application audit row (spec sections 3, 20, 32) -----
+  insert into fhip_import_applications (
+    user_id, proposal_id, target_domain, target_entity_id, apply_mode,
+    applied_fields, previous_values, new_values, source_payroll_event_id, applied_by
+  ) values (
+    v_uid, p_proposal_id, 'income', v_target_id, p_decision,
+    to_jsonb(v_applied_fields), v_previous, v_new, v_proposal.source_payroll_event_id, v_uid
+  ) returning id into v_application_id;
+
+  -- --- Provenance stamp (spec sections 41, 51) ------------------------------
+  update income_sources
+    set source_type = 'payslip_import', last_import_application_id = v_application_id, last_imported_at = now()
+    where id = v_target_id and user_id = v_uid;
+
+  perform set_config('fhip.import_bridge_internal_write', 'false', true);
+
+  return jsonb_build_object(
+    'ok', true, 'outcome', 'applied', 'apply_mode', p_decision,
+    'target_entity_id', v_target_id, 'application_id', v_application_id,
+    'applied_fields', to_jsonb(v_applied_fields)
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke all on function fdh9_apply_income_proposal(uuid, text, text[]) from public;
+grant execute on function fdh9_apply_income_proposal(uuid, text, text[]) to authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- D.7 fdh9_approve_payroll_event — the one legitimate way approval_status
+-- (and every other field D.4 locks) ever moves (spec sections 10, 42).
+-- Deliberately tiny: verifies auth, locks the row, verifies ownership,
+-- enforces the one valid transition, and is idempotent on a row already
+-- approved by the SAME user (re-clicking Approve is not an error).
+-- ---------------------------------------------------------------------------
+create or replace function fdh9_approve_payroll_event(p_payroll_event_id uuid) returns jsonb as $$
+declare
+  v_uid uuid;
+  v_event record;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'fdh9_approve_payroll_event: authentication required';
+  end if;
+
+  select * into v_event from fdh_payroll_events where id = p_payroll_event_id for update;
+  if not found or v_event.user_id <> v_uid then
+    return jsonb_build_object('ok', false, 'code', 'PROPOSAL_NOT_FOUND', 'error', 'That payroll event could not be found.');
+  end if;
+
+  if v_event.approval_status = 'approved' then
+    return jsonb_build_object('ok', true, 'outcome', 'already_approved', 'approved_at', v_event.approved_at);
+  end if;
+
+  perform set_config('fhip.import_bridge_internal_write', 'true', true);
+  update fdh_payroll_events
+    set approval_status = 'approved', approved_at = now(), approved_by = v_uid
+    where id = p_payroll_event_id;
+  perform set_config('fhip.import_bridge_internal_write', 'false', true);
+
+  return jsonb_build_object('ok', true, 'outcome', 'approved');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke all on function fdh9_approve_payroll_event(uuid) from public;
+grant execute on function fdh9_approve_payroll_event(uuid) to authenticated, service_role;

@@ -105,7 +105,16 @@ export const MAX_PAYMENT_DATE_DRIFT_DAYS = 3;
  * cannot do. This is the mechanical expression of spec section 22.
  */
 const AMOUNT_WEIGHT = 0.35;
-const MATCH_THRESHOLD = 0.6;
+// FDH-9 hardening finding (2026-08-26, tests/unit/fdh9DoubleCountCertification.test.ts):
+// at the previous value (0.6), amount agreement (0.35) plus date_exact alone
+// (0.25) summed to EXACTLY the threshold — meaning a same-day, same-amount
+// credit with NO employer or payroll-narrative corroboration at all (spec
+// section 33's own example: "same amount + wrong employer") still cleared
+// it and auto-matched. Raised so date proximity alone, on top of amount, is
+// no longer sufficient; a genuine match now needs amount plus at least one
+// of: employer/narrative agreement, a known salary account, or a known
+// employer — date proximity alone corroborates timing, not identity.
+const MATCH_THRESHOLD = 0.65;
 
 const SIGNAL_WEIGHTS = {
   date_exact: 0.25,
