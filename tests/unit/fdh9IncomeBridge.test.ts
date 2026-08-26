@@ -58,7 +58,7 @@ describe('FDH-9 income bridge — add new (spec section 35)', () => {
   it('no existing match: creates exactly one new Income record with provenance', async () => {
     const store = new ImportBridgeMemoryStore();
     store.addProposal(proposal({
-      id: 'p-new', targetEntityId: null, recommendedApplyMode: undefined as never,
+      id: 'p-new', targetEntityId: null,
       fields: [
         field('source_name', 'Salary — Beta', null),
         field('income_type', 'salary', null),
