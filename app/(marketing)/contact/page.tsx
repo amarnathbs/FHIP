@@ -4,6 +4,7 @@ import { ContactForm } from '@/components/marketing/ContactForm';
 
 export const metadata: Metadata = {
   title: 'Contact — FHIP',
+  alternates: { canonical: '/contact' },
 };
 
 // Public "Contact" page linked from the landing page footer

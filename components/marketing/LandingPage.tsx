@@ -688,8 +688,8 @@ export default function PreviewLandingPage() {
           <div>
             <h4>Company</h4>
             <ul>
-              <li><a href="#">About</a></li>
-              <li><a href="#security">Security</a></li>
+              <li><Link href="/about">About</Link></li>
+              <li><Link href="/security">Security &amp; Trust</Link></li>
               <li><Link href="/resources">Resources</Link></li>
               <li><Link href="/contact">Contact</Link></li>
             </ul>

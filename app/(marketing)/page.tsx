@@ -31,14 +31,22 @@ const newsreaderItalic = Newsreader({
 // original longer value proposition is preserved in `description` and in
 // the landing page's own hero copy — only the title/share-card headline
 // shortened, per the approved branding update.
+// Phase 9/17: canonical stays the real, semantically-correct served URL
+// (the application root) — it is not forced to point at the myfhip.com
+// marketing domain, per spec §9's explicit rule against claiming an
+// unrelated canonical URL merely to consolidate SEO. openGraph.url added
+// for the same reason share-card scrapers can resolve an absolute URL now
+// that the root layout sets metadataBase (see app/layout.tsx).
 export const metadata: Metadata = {
   title: 'FHIP | Financial Health',
   description:
     'See income, expenses, assets, debts, investments, insurance and goals in one clear financial health view. Start free and upgrade for deeper forecasts, scenarios and reports.',
+  alternates: { canonical: '/' },
   openGraph: {
     title: 'FHIP | Financial Health',
     description: 'A clear view of today’s financial position, priority actions and possible future paths.',
     siteName: 'FHIP',
+    url: '/',
   },
   twitter: {
     card: 'summary_large_image',
