@@ -161,11 +161,10 @@ create trigger trg_fdh_liability_activities_owner
 -- F.1 fdh_liability_statements — every system-derived column (parser
 -- provenance, reconciliation outcome, approval state) is authoritative.
 -- `review_status`/`approval_status`/`approved_at`/`approved_by` move only via
--- a future approval RPC (mirroring fdh9_approve_payroll_event) — none exists
--- yet in this cut, so this trigger fails CLOSED: no direct authenticated
--- transition into 'approved' is legal at all today, matching FDH-9's own D.4
--- disclosed-gap precedent for `fdh_payroll_events` before its approval RPC
--- was added.
+-- `fdh10_approve_liability_statement()` (Part F.5 below, mirroring
+-- fdh9_approve_payroll_event exactly) — this trigger fails CLOSED for the
+-- authenticated role either way; only that one SECURITY DEFINER RPC (running
+-- under the internal-write GUC) may ever move these columns.
 create or replace function fdh10_liability_statements_assert_authoritative_write() returns trigger as $$
 declare
   v_internal boolean := coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true';
@@ -269,6 +268,50 @@ $$ language plpgsql security definer set search_path = public;
 create trigger trg_liabilities_provenance_write
   before update on liabilities
   for each row execute function fdh10_liabilities_assert_provenance_write();
+
+-- F.5 fdh10_approve_liability_statement — the one legitimate way
+-- `fdh_liability_statements.approval_status` (and the other fields F.1 locks)
+-- ever moves (spec sections 22, 41: "Approve evidence" is an explicit step in
+-- the credit-card/loan review journey, distinct from Apply). Mirrors
+-- `fdh9_approve_payroll_event()` (migration 0091 D.7) exactly: verifies auth,
+-- locks the row, verifies ownership, enforces the one valid transition, and
+-- is idempotent on a statement already approved. THIS CLOSES A REAL GAP F.1's
+-- own original comment disclosed ("no direct authenticated transition into
+-- 'approved' is legal at all today") — without this function the review
+-- journey's Approve step had no legal path to move the column the
+-- authoritative-write trigger above protects; caught during this round's own
+-- Phase A/B independent verification, fixed here rather than merely noted.
+create or replace function fdh10_approve_liability_statement(p_statement_id uuid) returns jsonb as $$
+declare
+  v_uid uuid;
+  v_statement record;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'fdh10_approve_liability_statement: authentication required';
+  end if;
+
+  select * into v_statement from fdh_liability_statements where id = p_statement_id for update;
+  if not found or v_statement.user_id <> v_uid then
+    return jsonb_build_object('ok', false, 'code', 'PROPOSAL_NOT_FOUND', 'error', 'That statement could not be found.');
+  end if;
+
+  if v_statement.approval_status = 'approved' then
+    return jsonb_build_object('ok', true, 'outcome', 'already_approved', 'approved_at', v_statement.approved_at);
+  end if;
+
+  perform set_config('fhip.import_bridge_internal_write', 'true', true);
+  update fdh_liability_statements
+    set approval_status = 'approved', approved_at = now(), approved_by = v_uid
+    where id = p_statement_id;
+  perform set_config('fhip.import_bridge_internal_write', 'false', true);
+
+  return jsonb_build_object('ok', true, 'outcome', 'approved');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke all on function fdh10_approve_liability_statement(uuid) from public;
+grant execute on function fdh10_approve_liability_statement(uuid) to authenticated, service_role;
 
 
 -- ---------------------------------------------------------------------------
