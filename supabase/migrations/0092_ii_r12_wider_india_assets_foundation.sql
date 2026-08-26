@@ -48,14 +48,50 @@
 
 -- ---------------------------------------------------------------------------
 -- 1. ii_holding_snapshots RLS hardening.
+--
+-- RECONCILIATION NOTE (added during II-R12 terminal certification,
+-- 2026-08-26): this section's fix was later extracted verbatim and shipped
+-- standalone, ahead of the rest of R12, as migration 0094 (see 0094's own
+-- header for the full rationale) -- 0094 is the CANONICAL, already-live
+-- (DEV + production) version of this security fix. 0094's header claimed
+-- re-applying this pair later via 0092 would be "safe and produce a
+-- byte-identical end state, not a conflict" -- a fresh full-stack PGlite
+-- replay done as part of this certification round proved that claim WRONG
+-- as originally written: because migration numbers apply in order (0092
+-- before 0094), a from-scratch replay hits 0092 FIRST, which creates
+-- "read own ii_holding_snapshots" -- then 0094 runs and tries to
+-- `drop policy if exists "own ii_holding_snapshots"` (already renamed away,
+-- so a no-op) followed by `create policy "read own ii_holding_snapshots"`,
+-- which now ALREADY EXISTS -> 42710 "policy already exists", replay fails.
+-- The identical failure mode would hit any environment where 0094 has
+-- already run standalone (i.e. DEV and production, right now) if 0092 were
+-- ever applied there afterward, in the OTHER order: 0094's drop of the OLD
+-- name is a no-op (already gone) and 0092's create of the SAME name it
+-- already holds would 42710 again.
+--
+-- An idempotent drop-and-recreate here (as originally attempted) does NOT
+-- actually solve it either: making 0092's own copy tolerant of running
+-- twice does not stop migration 0094 (frozen, never edited, and applied at
+-- position 0094 -- strictly AFTER 0092 in every numeric replay ordering)
+-- from unconditionally trying to `create policy "read own
+-- ii_holding_snapshots"` right after 0092 already created the exact same
+-- name -- Postgres has no `create policy if not exists`, so that create
+-- always raises 42710 the moment BOTH migrations exist in the same replay,
+-- regardless of which one is made defensive.
+--
+-- Correct fix, since 0094 cannot be touched: 0092 must not create this
+-- policy AT ALL any more. 0094 is the sole, permanent, canonical owner of
+-- ii_holding_snapshots' RLS policy from here on -- it already runs at
+-- position 0094 in every replay (fresh or incremental) and already IS live
+-- in both DEV and production. This section is now a documentation-only
+-- no-op: it changes no deployed state (independently confirmed by live
+-- read-only REST checks against both DEV and production finding section
+-- 3's price_source column absent from both, proving this file -- as a
+-- whole -- has never actually been applied anywhere), and a full-stack
+-- PGlite replay including both 0092 and 0094 was re-run after this edit to
+-- confirm 0 failures.
 -- ---------------------------------------------------------------------------
-drop policy if exists "own ii_holding_snapshots" on ii_holding_snapshots;
-create policy "read own ii_holding_snapshots" on ii_holding_snapshots
-  for select using (auth.uid() = user_id);
--- No insert/update/delete policy for authenticated at all -- every write is
--- exclusively via the service-role admin client, verified above; RLS
--- refuses any authenticated write outright, matching ii_transactions'
--- identical post-0087 write model.
+-- (intentionally no DDL in this section -- see note above; 0094 owns it)
 
 -- ---------------------------------------------------------------------------
 -- 2. ii_transactions.transaction_type: add 'sale'. Based on the CURRENT
