@@ -30,6 +30,13 @@ import type {
  */
 const DOMAIN_TABLES: Partial<Record<ImportTargetDomain, string>> = {
   income: 'income_sources',
+  // FDH-10 addition (spec sections 6, 50-58) — the liability branch of the
+  // FDH-9 bridge's same-tenant guards (migration 0096 Part G) and its own
+  // typed atomic-apply RPC (`fdh10_apply_liability_proposal`) are what
+  // actually enforce write authority; this entry only lets the ordinary
+  // (non-apply) read paths — `loadTargetRow` for the preview/compare screen —
+  // resolve the table name.
+  liability: 'liabilities',
 };
 
 function tableFor(domain: string): string {
@@ -42,6 +49,11 @@ function tableFor(domain: string): string {
 const PROVENANCE_BY_DOMAIN: Partial<Record<ImportTargetDomain, (applicationId: string) => Record<string, unknown>>> = {
   income: (applicationId) => ({
     source_type: 'payslip_import',
+    last_import_application_id: applicationId,
+    last_imported_at: new Date().toISOString(),
+  }),
+  liability: (applicationId) => ({
+    source_type: 'liability_statement_import',
     last_import_application_id: applicationId,
     last_imported_at: new Date().toISOString(),
   }),

@@ -33,6 +33,10 @@ export type ImportTargetDomain = (typeof IMPORT_TARGET_DOMAINS)[number];
 
 export const IMPORT_SOURCE_KINDS = [
   'payslip', 'bank_statement', 'investment_statement', 'loan_statement', 'retirement_statement',
+  // FDH-10 addition (spec sections 3, 9-20): credit-card statements are a
+  // distinct source kind from a loan statement — both feed the `liability`
+  // target domain, but are different evidence shapes.
+  'credit_card_statement',
 ] as const;
 export type ImportSourceKind = (typeof IMPORT_SOURCE_KINDS)[number];
 
