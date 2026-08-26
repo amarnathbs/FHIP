@@ -513,6 +513,28 @@ create trigger trg_liabilities_provenance_write
 
 
 -- ---------------------------------------------------------------------------
+-- PART F.4 — the new column the Part G guards below need to exist first.
+-- Ordering note: this must precede Part G because
+-- `fdh9_assert_proposal_owner()`'s replaced body (Part G) references
+-- `source_liability_statement_id` directly — a `create or replace function`
+-- is validated at CREATE time against the columns that exist then, so the
+-- column must land before the function that names it. Genuinely caught by
+-- this migration's own PGlite clean-rebuild replay (spec section 139)
+-- during certification: the first draft had this the other way around and
+-- failed with "column ... does not exist" — fixed here, not asserted.
+-- ---------------------------------------------------------------------------
+alter table fhip_import_proposals
+  add column if not exists source_liability_statement_id uuid references fdh_liability_statements(id) on delete cascade;
+alter table fhip_import_applications
+  add column if not exists source_liability_statement_id uuid references fdh_liability_statements(id) on delete set null;
+
+create index if not exists idx_fhip_import_proposals_source_liability_statement
+  on fhip_import_proposals(source_liability_statement_id);
+create index if not exists idx_fhip_import_applications_liability_statement
+  on fhip_import_applications(source_liability_statement_id);
+
+
+-- ---------------------------------------------------------------------------
 -- PART G — extend the FDH-9 bridge's same-tenant proposal/application guards
 -- with the 'liability' branch (spec sections 6, 50-58, 91). REPLACES the
 -- function bodies from migration 0091 in place (`create or replace`) —
@@ -642,20 +664,10 @@ create trigger trg_fhip_import_applications_owner
 
 
 -- ---------------------------------------------------------------------------
--- PART H — new columns needed for the liability branch above, plus widening
--- the authoritative-write immutable-field list from migration 0091 Part D.1
--- to cover them (same "create or replace" widening technique).
+-- PART H — widen the authoritative-write immutable-field list from migration
+-- 0091 Part D.1 to cover the new column (same "create or replace" widening
+-- technique). The column itself was added in Part F.4 above.
 -- ---------------------------------------------------------------------------
-alter table fhip_import_proposals
-  add column if not exists source_liability_statement_id uuid references fdh_liability_statements(id) on delete cascade;
-alter table fhip_import_applications
-  add column if not exists source_liability_statement_id uuid references fdh_liability_statements(id) on delete set null;
-
-create index if not exists idx_fhip_import_proposals_source_liability_statement
-  on fhip_import_proposals(source_liability_statement_id);
-create index if not exists idx_fhip_import_applications_liability_statement
-  on fhip_import_applications(source_liability_statement_id);
-
 create or replace function fdh9_import_proposals_assert_authoritative_write() returns trigger as $$
 declare
   v_internal boolean := coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true';
