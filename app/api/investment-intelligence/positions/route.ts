@@ -34,18 +34,49 @@ export async function GET() {
     created_at: string;
     price_source: string | null;
   }
+  const BASE_COLUMNS = 'id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at';
+  // Production compatibility (II-R12 gate): 0092 (which adds this column) is
+  // deployed to DEV/staging ahead of being applied to production on its own
+  // schedule (see standing R12 production-authorisation rule). Selecting
+  // price_source unconditionally would 42703 this endpoint for EVERY
+  // Investment Intelligence user — including pre-existing mutual-fund-only
+  // households who have nothing to do with R12 — the moment this route's
+  // code reaches an environment whose database doesn't have the column yet.
+  // Detect that exact condition and degrade to the pre-R12 shape (price_source
+  // always null, matching every existing row's true provenance) rather than
+  // erroring the whole positions list. Any OTHER error still propagates
+  // unchanged — this narrowly targets schema-absence, not general failures.
+  const isMissingPriceSourceColumn = (e: unknown): boolean => {
+    const msg = e instanceof Error ? e.message : String(e);
+    return /column .*price_source.* does not exist/i.test(msg);
+  };
   let data: SnapshotRow[];
   try {
     data = await fetchAllRows<SnapshotRow>(() =>
       supabase
         .from('ii_holding_snapshots')
-        .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at, price_source')
+        .select(`${BASE_COLUMNS}, price_source`)
         .eq('user_id', user.id)
         .order('as_of_date', { ascending: false })
         .order('id', { ascending: true })
     );
   } catch (e) {
-    return bad(e instanceof Error ? e.message : String(e));
+    if (!isMissingPriceSourceColumn(e)) {
+      return bad(e instanceof Error ? e.message : String(e));
+    }
+    try {
+      const fallbackRows = await fetchAllRows<Omit<SnapshotRow, 'price_source'>>(() =>
+        supabase
+          .from('ii_holding_snapshots')
+          .select(BASE_COLUMNS)
+          .eq('user_id', user.id)
+          .order('as_of_date', { ascending: false })
+          .order('id', { ascending: true })
+      );
+      data = fallbackRows.map((row) => ({ ...row, price_source: null }));
+    } catch (e2) {
+      return bad(e2 instanceof Error ? e2.message : String(e2));
+    }
   }
 
   // Collapse to latest-per-(account_id, instrument_id) in application code
