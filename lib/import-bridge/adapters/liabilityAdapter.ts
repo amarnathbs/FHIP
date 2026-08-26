@@ -56,8 +56,74 @@ import type {
   RecommendedApplyMode,
 } from '../types';
 import { serialiseValue, deserialiseValue } from '../proposalEngine';
-import { matchLiabilityFacility, type ExistingLiabilityCandidate } from '@/lib/financial-data-hub/liability/facilityMatching';
-import { FACILITY_TO_DEBT_TYPE, type LiabilityFacilityType } from '@/lib/financial-data-hub/liability/types';
+
+/**
+ * ISOLATION (spec section 7's own precedent, `tests/unit/fdh1Isolation.test.ts`).
+ * This adapter deliberately does NOT import the Hub's own liability-facility
+ * matching module — exactly like `incomeAdapter.ts` keeps its own
+ * self-contained `findDuplicateIncome` rather than reusing an internal
+ * employer-matching helper from that same Hub. The Hub's own liability
+ * module (`facilityMatching.ts` and its neighbouring `types.ts`)
+ * implements the SAME matching rules for the Hub's own internal
+ * statement-processing pipeline; the small, plain duplication below is the
+ * bridge's independent, isolation-safe copy of that logic, not a second
+ * definition of a different rule. Both are exercised by their own dedicated
+ * test files (`fdh10BankMatching.test.ts` for the Hub engine,
+ * `fdh10LiabilityBridge.test.ts` for this adapter).
+ */
+
+export const LIABILITY_FACILITY_TYPES = [
+  'credit_card', 'personal_loan', 'home_loan', 'investment_property_loan',
+  'vehicle_loan', 'other_term_loan', 'line_of_credit', 'overdraft',
+] as const;
+export type LiabilityFacilityType = (typeof LIABILITY_FACILITY_TYPES)[number];
+
+/** Facility type -> canonical `liabilities.debt_type` (mirrors the Hub's own
+ * liability-types module's `FACILITY_TO_DEBT_TYPE`). */
+export const FACILITY_TO_DEBT_TYPE: Record<LiabilityFacilityType, string> = {
+  credit_card: 'credit_card',
+  personal_loan: 'personal_loan',
+  home_loan: 'mortgage',
+  investment_property_loan: 'investment_property_loan',
+  vehicle_loan: 'auto_loan',
+  other_term_loan: 'other_term_loan',
+  line_of_credit: 'line_of_credit',
+  overdraft: 'overdraft',
+};
+
+function foldName(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const folded = s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return folded || null;
+}
+
+export type FacilityMatchOutcome = 'single_match' | 'no_match' | 'ambiguous';
+
+/** Same rules as the Hub's own `facilityMatching.ts`'s `matchLiabilityFacility`
+ * — never balance alone (spec section 51); masked
+ * identifier first, then institution+type+currency; more than one candidate
+ * is ambiguous, never auto-picked. */
+function matchExistingLiability(
+  query: { facilityDebtType: string; currencyCode: string; institutionName: string | null; maskedIdentifier: string | null },
+  existing: readonly ExistingLiabilityRow[],
+): { liabilityId: string | null; outcome: FacilityMatchOutcome } {
+  const sameTypeCurrency = existing.filter((l) => l.debt_type === query.facilityDebtType && l.currency_code === query.currencyCode);
+
+  if (query.maskedIdentifier) {
+    const byMasked = sameTypeCurrency.filter((l) => l.masked_identifier === query.maskedIdentifier);
+    if (byMasked.length === 1) return { liabilityId: byMasked[0].id, outcome: 'single_match' };
+    if (byMasked.length > 1) return { liabilityId: null, outcome: 'ambiguous' };
+  }
+
+  const institution = foldName(query.institutionName);
+  if (institution) {
+    const byInstitution = sameTypeCurrency.filter((l) => foldName(l.lender) === institution || foldName(l.liability_name)?.includes(institution));
+    if (byInstitution.length === 1) return { liabilityId: byInstitution[0].id, outcome: 'single_match' };
+    if (byInstitution.length > 1) return { liabilityId: null, outcome: 'ambiguous' };
+  }
+
+  return { liabilityId: null, outcome: 'no_match' };
+}
 
 /** The subset of a canonical `liabilities` row this adapter reads. */
 export interface ExistingLiabilityRow {
@@ -78,9 +144,9 @@ export interface ExistingLiabilityRow {
 }
 
 /** Statement evidence this adapter consumes — a plain shape, not an import of
- * `lib/financial-data-hub/liability/types` extraction types, for the exact
- * reason `IncomeEvidence` is its own plain shape (keeps the bridge usable by
- * future adapters without coupling it to any one FDH-internal module). */
+ * the Hub's own liability-extraction types, for the exact reason
+ * `IncomeEvidence` is its own plain shape (keeps the bridge usable by future
+ * adapters without coupling it to any one Hub-internal module). */
 export interface LiabilityEvidence {
   statementId: string;
   facilityType: LiabilityFacilityType;
@@ -134,21 +200,12 @@ const FIELD_KINDS: Record<string, ImportValueKind> = {
 export function findDuplicateLiability(
   evidence: LiabilityEvidence,
   existing: readonly ExistingLiabilityRow[],
-): { liabilityId: string | null; outcome: 'single_match' | 'no_match' | 'ambiguous' } {
+): { liabilityId: string | null; outcome: FacilityMatchOutcome } {
   const debtType = FACILITY_TO_DEBT_TYPE[evidence.facilityType];
-  const candidates: ExistingLiabilityCandidate[] = existing.map((row) => ({
-    liabilityId: row.id,
-    debtType: row.debt_type,
-    currencyCode: row.currency_code,
-    maskedIdentifier: row.masked_identifier,
-    lender: row.lender,
-    liabilityName: row.liability_name,
-  }));
-  const result = matchLiabilityFacility(
+  return matchExistingLiability(
     { facilityDebtType: debtType, currencyCode: evidence.currencyCode, institutionName: evidence.institutionName ?? null, maskedIdentifier: evidence.maskedIdentifier ?? null },
-    candidates,
+    existing,
   );
-  return { liabilityId: result.matchedLiabilityId, outcome: result.outcome };
 }
 
 function field(
