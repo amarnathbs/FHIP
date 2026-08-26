@@ -57,7 +57,15 @@ export interface SchemeClassificationInput {
   maxDisclosureAgeDays?: number;
 }
 
-export type SchemeClassificationBasis = 'computed_from_holdings' | 'known_debt_specified_category' | 'unresolved_no_data' | 'unresolved_stale_data';
+export type SchemeClassificationBasis =
+  | 'computed_from_holdings'
+  | 'known_debt_specified_category'
+  | 'unresolved_no_data'
+  | 'unresolved_stale_data'
+  // R12 addition — a direct listed security (equity or equity-oriented ETF)
+  // classified by statute, not by look-through allocation. See
+  // classifyDirectListedSecurity() below and migration 0092.
+  | 'direct_listed_security_rule';
 
 export interface SchemeClassificationResult {
   instrumentKey: string;
@@ -144,5 +152,74 @@ export function classifyScheme(input: SchemeClassificationInput): SchemeClassifi
     basis: 'computed_from_holdings',
     disclosureDate,
     note: `Domestic equity allocation ${domesticEquityPct}% vs ${domesticEquityThresholdPct}% threshold, as disclosed ${disclosureDate}.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// R12 — direct listed security classification (equity / equity-oriented
+// ETF). Deliberately NOT a look-through allocation test: a direct listed
+// equity share IS the underlying security (spec section 48 — "do not
+// attempt fund-style look-through"), and Section 111A/112A of the Income
+// Tax Act taxes "an equity share in a company" and "a unit of an equity
+// oriented fund" (which includes an equity ETF, per SEBI/CBDT's own
+// definition of equity-oriented fund extending to exchange-traded funds
+// substantially invested in domestic equity) identically — same 12-month
+// STCG/LTCG holding-period threshold, same rate structure, same Section
+// 55(2)(ac) 31-Jan-2018 FMV grandfathering scope. Grandfathering has never
+// been mutual-fund-specific; the statute's own language covers "a capital
+// asset being an equity share... or a unit... in respect of which
+// securities transaction tax has been paid" without distinguishing a
+// directly-held share from a fund unit.
+//
+// This function is intentionally NOT called classifyScheme() and does not
+// touch classifyScheme() at all — it is a separate, much simpler rule for
+// a genuinely different input shape (a single security with no underlying
+// holdings to disclose, vs. a pooled vehicle's allocation). Both write into
+// the SAME ii_scheme_tax_classification cache table and are read by the
+// SAME unmodified computeDisposalTax() (capitalGainsEngine.ts) — R12 does
+// not create a second tax calculator (spec section 53).
+//
+// R12's frozen scope (R12_ASSET_CLASS_SCOPE_MATRIX.md) restricts this to
+// instrument_class 'equity' (always equity_oriented by statute) and 'etf'
+// (equity_oriented ONLY when the ETF is itself equity-oriented — R12 does
+// NOT attempt to infer this from instrument_class alone, per spec section
+// 57's explicit warning; the caller must supply isEquityOriented, sourced
+// from the user's own declaration at manual-entry time, which the R12
+// manual-entry route restricts to equity-oriented ETFs only).
+// ---------------------------------------------------------------------------
+export type DirectSecurityInstrumentClass = 'equity' | 'etf';
+
+export interface ClassifyDirectListedSecurityInput {
+  instrumentKey: string;
+  instrumentClass: DirectSecurityInstrumentClass;
+  /** For 'etf' only — must be explicitly declared true by the entry path;
+   * never inferred. Ignored (treated as true) for 'equity'. */
+  isEquityOriented?: boolean;
+}
+
+export function classifyDirectListedSecurity(input: ClassifyDirectListedSecurityInput): SchemeClassificationResult {
+  const { instrumentKey, instrumentClass, isEquityOriented } = input;
+
+  if (instrumentClass === 'etf' && isEquityOriented !== true) {
+    return {
+      instrumentKey,
+      classification: 'unresolved',
+      domesticEquityPct: null,
+      basis: 'unresolved_no_data',
+      disclosureDate: null,
+      note: 'ETF was not declared equity-oriented at entry — R12 does not infer tax classification from instrument_class="etf" alone (non-equity ETFs have distinct tax treatment). Excluded from confident tax figures.',
+    };
+  }
+
+  return {
+    instrumentKey,
+    classification: 'equity_oriented',
+    domesticEquityPct: 100,
+    basis: 'direct_listed_security_rule',
+    disclosureDate: null,
+    note:
+      instrumentClass === 'equity'
+        ? 'Direct listed Indian equity share — equity_oriented by statute (Section 111A/112A), not an allocation test. No look-through disclosure applies (the security is its own underlying).'
+        : 'Equity-oriented ETF, declared at entry — equity_oriented by statute (Section 111A/112A extends to equity-oriented exchange-traded funds), not an allocation test.',
   };
 }

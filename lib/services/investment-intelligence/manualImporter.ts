@@ -315,6 +315,9 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       gross_amount: tx.grossAmount,
       source_reference: tx.sourceReference ?? null,
       status: crossSourceStatus,
+      // R12 addition -- explicit-only, never inferred (spec section 33).
+      fees: tx.fees ?? null,
+      taxes: tx.taxes ?? null,
     };
     // R3 closure-pass fix: uidx_ii_transactions_dedup (migration 0033) is a
     // PARTIAL unique index (`where source_document_id is not null and

@@ -41,8 +41,17 @@ export { computePublicationTarget } from './publishing';
 // blocked from actually publishing in R3, per the spec's explicit
 // instruction not to "expand into stocks/bonds/NPS/etc unless R2 already
 // certifies them (it doesn't)".
+//
+// R12 EXTENSION (R12_ASSET_CLASS_SCOPE_MATRIX.md): 'equity' and 'etf' join
+// the certified allowlist — but ONLY these two, exactly R12's frozen
+// scope. 'bond', 'fixed_deposit', 'gold', 'crypto', 'cash', 'other' remain
+// NOT_YET_CERTIFIED; publishing one of those still returns
+// ASSET_CLASS_NOT_YET_CERTIFIED, unchanged from R3/R11 behaviour. This is
+// the exact extension the original R3 code comment anticipated (see
+// INSTRUMENT_CLASS_TO_MASTER_ITEM_KEY below).
+const R12_CERTIFIED_ASSET_CLASSES: ReadonlySet<IiInstrumentClass> = new Set(['mutual_fund', 'equity', 'etf']);
 export function isProductionCertifiedAssetClass(instrumentClass: IiInstrumentClass): boolean {
-  return instrumentClass === 'mutual_fund';
+  return R12_CERTIFIED_ASSET_CLASSES.has(instrumentClass);
 }
 
 // ---------------------------------------------------------------------------
@@ -54,13 +63,27 @@ export function isProductionCertifiedAssetClass(instrumentClass: IiInstrumentCla
 // ---------------------------------------------------------------------------
 const INSTRUMENT_CLASS_TO_MASTER_ITEM_KEY: Partial<Record<IiInstrumentClass, string>> = {
   mutual_fund: 'managed_funds',
-  // Future releases (not R3 production): equity -> 'australian_shares' |
-  // 'international_shares' (country-dependent, needs its own resolution
-  // rule), etf -> 'etfs', bond -> 'bonds', fixed_deposit -> handled via the
-  // 'assets' target instead (term_deposits), gold -> 'gold'.
+  // R12: etf -> 'etfs' is country-independent (the master catalogue has a
+  // single 'etfs' key, not split by country — migration 0074's catalogue
+  // array confirms this). equity is handled separately below because it
+  // IS country-dependent. bond/fixed_deposit/gold remain unmapped —
+  // deferred (fixed_deposit routes to the 'assets' target instead, before
+  // this function is ever consulted; see computePublicationTarget).
+  etf: 'etfs',
 };
 
-export function mapInstrumentClassToMasterItemKey(instrumentClass: IiInstrumentClass): string | null {
+// R12: equity -> 'australian_shares' | 'international_shares', exactly the
+// rule migration 0073 (AIR consolidation) already ran in production against
+// real existing `investments` rows (`country_code = 'IN'` ->
+// 'international_shares', else -> 'australian_shares'). Reused verbatim,
+// not reinvented — this is a country-dependent resolution the original R3
+// code comment explicitly flagged as needing "its own resolution rule".
+function resolveEquityMasterItemKey(countryCode: string | null | undefined): string {
+  return countryCode === 'IN' ? 'international_shares' : 'australian_shares';
+}
+
+export function mapInstrumentClassToMasterItemKey(instrumentClass: IiInstrumentClass, countryCode?: string | null): string | null {
+  if (instrumentClass === 'equity') return resolveEquityMasterItemKey(countryCode);
   return INSTRUMENT_CLASS_TO_MASTER_ITEM_KEY[instrumentClass] ?? null;
 }
 

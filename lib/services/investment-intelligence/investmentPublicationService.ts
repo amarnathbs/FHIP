@@ -306,7 +306,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   });
 
   const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
-  const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass);
+  const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   const targetRegister = computePublicationTarget(instrumentClass, account.account_type);
 
   const hasOpenLots = (openLots?.length ?? 0) > 0;
@@ -474,7 +474,7 @@ export async function publishPosition(userId: string, positionId: string, option
 
   // Duplicate review gate (spec section 11 — controlled flow, never silent).
   const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
-  const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass);
+  const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   let duplicateCandidates: IiDuplicateCandidate[] = [];
   if (!options.linkToExistingInvestmentId && resolvedOwner) {
     const { data: manualRows } = await supabase
