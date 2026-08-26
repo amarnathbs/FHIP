@@ -42,6 +42,35 @@ export interface MemoryIncomeRow extends Record<string, unknown> {
   updated_at?: string | null;
 }
 
+/**
+ * FDH-10 addition — the liability-side row shape, following the exact same
+ * "models the database's own guarantees" discipline as `MemoryIncomeRow`
+ * above (see file header). Added additively; every FDH-9 income test in this
+ * file's existing behaviour is untouched.
+ */
+export interface MemoryLiabilityRow extends Record<string, unknown> {
+  id: string;
+  user_id: string;
+  liability_name: string;
+  debt_type: string;
+  balance: number;
+  interest_rate: number | null;
+  monthly_repayment: number;
+  currency_code: string;
+  country_code: string | null;
+  lender: string | null;
+  credit_limit: number | null;
+  masked_identifier: string | null;
+  minimum_payment: number | null;
+  due_date: string | null;
+  owner: string;
+  is_active: boolean;
+  source_type: string;
+  last_import_application_id?: string | null;
+  last_imported_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface RecordedApplication {
   id: string;
   userId: string;
@@ -67,6 +96,7 @@ export interface RegisterWrite {
 export class ImportBridgeMemoryStore implements ImportBridgeStore {
   readonly proposals = new Map<string, StoredProposal>();
   readonly incomeRows = new Map<string, MemoryIncomeRow>();
+  readonly liabilityRows = new Map<string, MemoryLiabilityRow>();
   readonly applications: RecordedApplication[] = [];
   /** THE AUDIT THE NEGATIVE CONTROLS ASSERT ON. */
   readonly registerWrites: RegisterWrite[] = [];
@@ -88,9 +118,19 @@ export class ImportBridgeMemoryStore implements ImportBridgeStore {
     return this.incomeRows.get(row.id)!;
   }
 
+  addLiability(row: MemoryLiabilityRow): MemoryLiabilityRow {
+    this.liabilityRows.set(row.id, { ...row });
+    return this.liabilityRows.get(row.id)!;
+  }
+
   /** Snapshot of a row, for before/after comparison in a negative control. */
   snapshot(id: string): MemoryIncomeRow | undefined {
     const row = this.incomeRows.get(id);
+    return row ? { ...row } : undefined;
+  }
+
+  snapshotLiability(id: string): MemoryLiabilityRow | undefined {
+    const row = this.liabilityRows.get(id);
     return row ? { ...row } : undefined;
   }
 
@@ -105,6 +145,11 @@ export class ImportBridgeMemoryStore implements ImportBridgeStore {
   }
 
   async loadTargetRow(userId: string, domain: string, entityId: string): Promise<Record<string, unknown> | null> {
+    if (domain === 'liability') {
+      const liabilityRow = this.liabilityRows.get(entityId);
+      if (!liabilityRow || liabilityRow.user_id !== userId) return null;
+      return { ...liabilityRow };
+    }
     if (domain !== 'income') return null;
     const row = this.incomeRows.get(entityId);
     if (!row || row.user_id !== userId) return null;
@@ -132,6 +177,32 @@ export class ImportBridgeMemoryStore implements ImportBridgeStore {
   }
 
   async createEntity(userId: string, domain: string, row: Record<string, unknown>): Promise<string> {
+    if (domain === 'liability') {
+      const id = this.nextId('liability');
+      const created: MemoryLiabilityRow = {
+        id,
+        user_id: userId,
+        liability_name: String(row.liability_name ?? ''),
+        debt_type: String(row.debt_type ?? 'other'),
+        balance: Number(row.balance ?? 0),
+        interest_rate: row.interest_rate === undefined || row.interest_rate === null ? null : Number(row.interest_rate),
+        monthly_repayment: Number(row.monthly_repayment ?? 0),
+        currency_code: String(row.currency_code ?? 'AUD'),
+        country_code: (row.country_code as string | null) ?? null,
+        lender: (row.lender as string | null) ?? null,
+        credit_limit: row.credit_limit === undefined || row.credit_limit === null ? null : Number(row.credit_limit),
+        masked_identifier: (row.masked_identifier as string | null) ?? null,
+        minimum_payment: row.minimum_payment === undefined || row.minimum_payment === null ? null : Number(row.minimum_payment),
+        due_date: (row.due_date as string | null) ?? null,
+        owner: String(row.owner ?? 'self'),
+        is_active: row.is_active !== false,
+        source_type: String(row.source_type ?? 'manual'),
+        updated_at: new Date().toISOString(),
+      };
+      this.liabilityRows.set(id, created);
+      this.registerWrites.push({ kind: 'insert', userId, domain, entityId: id, payload: { ...row } });
+      return id;
+    }
     if (domain !== 'income') throw new Error(`no register for ${domain}`);
     const id = this.nextId('income');
     const created: MemoryIncomeRow = {
@@ -158,6 +229,13 @@ export class ImportBridgeMemoryStore implements ImportBridgeStore {
   }
 
   async updateEntity(userId: string, domain: string, entityId: string, patch: Record<string, unknown>): Promise<void> {
+    if (domain === 'liability') {
+      const liabilityRow = this.liabilityRows.get(entityId);
+      if (!liabilityRow || liabilityRow.user_id !== userId) throw new Error('cross-tenant or missing target');
+      Object.assign(liabilityRow, patch, { updated_at: new Date().toISOString() });
+      this.registerWrites.push({ kind: 'update', userId, domain, entityId, payload: { ...patch } });
+      return;
+    }
     if (domain !== 'income') throw new Error(`no register for ${domain}`);
     const row = this.incomeRows.get(entityId);
     // Same-tenant enforcement, mirroring migration 0091's triggers.
@@ -188,6 +266,15 @@ export class ImportBridgeMemoryStore implements ImportBridgeStore {
   }
 
   async stampProvenance(userId: string, domain: string, entityId: string, applicationId: string): Promise<void> {
+    if (domain === 'liability') {
+      const liabilityRow = this.liabilityRows.get(entityId);
+      if (!liabilityRow || liabilityRow.user_id !== userId) return;
+      liabilityRow.source_type = 'liability_statement_import';
+      liabilityRow.last_import_application_id = applicationId;
+      liabilityRow.last_imported_at = new Date().toISOString();
+      this.registerWrites.push({ kind: 'provenance', userId, domain, entityId, payload: { applicationId } });
+      return;
+    }
     const row = this.incomeRows.get(entityId);
     if (!row || row.user_id !== userId) return;
     row.source_type = 'payslip_import';
