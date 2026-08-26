@@ -85,3 +85,15 @@ code entirely) — the same threat model the disclosed defect was found under.
 A transaction-local Postgres GUC (`set_config('fhip.import_bridge_internal_write', 'true', true)` — the third argument makes it local to the current transaction, so it can never leak into a later, unrelated request even on a pooled connection). `fdh9_apply_income_proposal()` and `fdh9_approve_payroll_event()` are the only two places in the codebase that ever set it, immediately before each of their own authoritative writes. Every hardening trigger in this document reads it (never sets it) via `coalesce(current_setting('fhip.import_bridge_internal_write', true), 'false') = 'true'`.
 
 This was chosen over a `current_user`/function-ownership check (the mechanism `SECURITY DEFINER` would otherwise make available for free) because which role owns a function migrated via the Supabase CLI vs. the SQL editor vs. a hosted project can vary across the PGlite harness, DEV and production — the GUC is provably correct in all three without any assumption about deployment role names. Forging an authoritative transition now requires executing SQL as a role that can both set arbitrary session GUCs **and** write the table directly — i.e. requires already being inside the trusted function body. A raw PostgREST request can never set this GUC.
+
+---
+
+## 8. Addendum — the UI/API layer (Income-tab pass, 2026-08-26)
+
+Row 1's note above ("no route/UI in this codebase calls UPDATE on this table yet") predates this pass; the missing app/api layer is now built (`docs/financial-data-hub/FDH9_INCOME_TAB_UX.md`). The authority model in this document is **unchanged by that work** and every claim above still holds exactly as written:
+
+- `lib/financial-data-hub/services/payslipProcessingService.ts` only ever **INSERTs** `fdh_payroll_events` / `fdh_payroll_components` (once, from parser output) — it never issues an UPDATE against either table. The one correction affordance the UI offers ("Review / Correct") is read-only plus a delete-and-re-upload path through the existing FDH-3 document lifecycle, precisely **because** this trigger has no authenticated-role UPDATE allowance for any system-derived field beyond `employer_name`, and widening it was out of scope for this pass (spec section 7: "do not modify the security architecture without cause").
+- The new `POST /api/financial-data-hub/payslip/{id}/approve` route calls `fdh9_approve_payroll_event()` exclusively (via `approvePayrollEventAtomic()`), never a direct PATCH.
+- The new `POST /api/financial-data-hub/income-proposals/{id}/apply` route calls `fdh9_apply_income_proposal()` exclusively (via `applyIncomeProposalAtomic()`), never a direct PATCH — re-verified live in `scripts/fdh9_certification.mjs` (76/76, unchanged by this pass) and exercised end-to-end through the new route in `tests/unit/fdh9IncomeTabUx.test.ts`.
+
+No row in the table above changed. No new authoritative-write trigger was added or modified.

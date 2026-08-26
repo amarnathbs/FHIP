@@ -1,22 +1,43 @@
 # FHIP Contextual Import Architecture
 
 **Status:** product-level standard, established by FDH-9 (spec sections 1-4, 54-56).
-**Scope of implementation in FDH-9:** Income → Payslip **engine and database
-bridge only**. **CORRECTION (2026-08-26 hardening pass):** an earlier version of
-this document stated the Income row was "IMPLEMENTED (FDH-9)" without
-qualification. That overstated it. Verified directly against the source tree
-during the hardening pass (`app/(app)/income/page.tsx` is unchanged — eight
-lines, renders only `<FinancialDataGrid config={incomeGridConfig} />` — and a
-repo-wide search of `app/` for `payslip`/`import-bridge`/`proposal` finds zero
-routes): **no "Import from Payslip" button, upload screen, extraction preview,
-compare view, or Apply action exists anywhere in the UI, and no
-`app/api/**` route calls `lib/import-bridge/` or
-`lib/financial-data-hub/payslip/` at all.** What FDH-9 actually shipped is the
-full engine (parser → payroll evidence → proposal → atomic apply RPC) and its
-database schema, certified in isolation (PGlite + live DEV) — the contextual
-entry point this document specifies is written up as a design target but was
-**never built**. Every other row in the table below is, as originally stated,
-a recorded *design decision for a future phase*, not shipped UI.
+**Scope of implementation in FDH-9:** Income → Payslip engine, database
+bridge, **and UI entry point** — all three now implemented.
+
+**UPDATE (2026-08-26, live-DEV-cert + Income-tab pass):** the gap the
+2026-08-26 hardening pass correctly and honestly disclosed below (no route,
+no UI, engine unreachable from the running app) is now closed. `app/(app)/
+income/page.tsx` renders an "Import from Payslip" CTA above the unchanged
+manual Income grid; `components/income/PayslipImportPanel.tsx` implements
+the full Upload → Process → Review → Approve → Propose → Compare → Apply
+journey; 6 new routes under `app/api/financial-data-hub/{payslip,income-
+proposals}/` connect it to the engine. See `FDH9_INCOME_TAB_UX.md` for the
+complete state-by-state account and `FDH9_COMPLETION_REPORT.md` for the
+consolidated status. **What remains true from the prior correction**: this
+journey has been exercised against PGlite and against the route/service
+logic directly (`tests/unit/fdh9IncomeTabUx.test.ts`), but **not** against a
+live Supabase project or the actual running browser — migration `0091` has
+never been applied to any live database (`FDH9_LIVE_DEV_CERTIFICATION.md`).
+The original hardening-pass correction text is preserved below for the
+historical record of what was and wasn't true as of that pass.
+
+**Original correction (2026-08-26 hardening pass), preserved for the record:**
+an earlier version of this document stated the Income row was "IMPLEMENTED
+(FDH-9)" without qualification. That overstated it. Verified directly against
+the source tree during the hardening pass (`app/(app)/income/page.tsx` was
+unchanged — eight lines, rendered only `<FinancialDataGrid config=
+{incomeGridConfig} />` — and a repo-wide search of `app/` for `payslip`/
+`import-bridge`/`proposal` found zero routes): no "Import from Payslip"
+button, upload screen, extraction preview, compare view, or Apply action
+existed anywhere in the UI, and no `app/api/**` route called `lib/import-
+bridge/` or `lib/financial-data-hub/payslip/` at all. What FDH-9 had shipped
+at that point was the full engine (parser → payroll evidence → proposal →
+atomic apply RPC) and its database schema, certified in isolation (PGlite) —
+the contextual entry point this document specifies was written up as a
+design target but had not yet been built. That gap is what this pass closed
+for the Income row specifically; every OTHER row in the table below remains,
+as originally stated, a recorded *design decision for a future phase*, not
+shipped UI.
 
 ---
 
@@ -36,7 +57,7 @@ financial domain.
 
 | Input Data domain | Contextual import entry point | Underlying engine | Status |
 |---|---|---|---|
-| **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **ENGINE + DATABASE BRIDGE IMPLEMENTED AND CERTIFIED; UI ENTRY POINT NOT BUILT.** No route in `app/` calls this engine yet. |
+| **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **ENGINE + DATABASE BRIDGE + UI ENTRY POINT ALL IMPLEMENTED.** `app/(app)/income/page.tsx` + `components/income/PayslipImportPanel.tsx` + 6 routes under `app/api/financial-data-hub/{payslip,income-proposals}/`. PGlite-certified (76/76) and route/auth-tested; **not yet exercised against a live Supabase project** (`FDH9_LIVE_DEV_CERTIFICATION.md`). |
 | **Expenses** | "Import Bank Statement" | FDH-3 → R7/FDH-4 (CSV) / FDH-5 (PDF) → R8 → FDH-6 → FDH-7 → FDH-8 | **DESIGN RECORDED — FUTURE IMPLEMENTATION.** Engine already exists and is certified; only the contextual entry point is future work. FDH-9 does **not** rebuild, relocate or rewrite it (spec section 3). |
 | **Investments** | "Import Investment Data" / "India Investments — Import Indian Investment Statement" | Investment Intelligence (R1-R11), which already owns the canonical investment ledger and already publishes to `investments` via its own certified bridge (migration `0042`) | **DESIGN RECORDED — FUTURE IMPLEMENTATION** (spec section 4). |
 | **Liabilities** | "Import Loan / Card Statement" | future | DESIGN RECORDED — FUTURE IMPLEMENTATION |
@@ -128,9 +149,9 @@ correctly forbids any file under `lib/financial-data-hub/` from naming
 
 ## 7. Target user experience
 
-**This section is aspirational — see the correction in the header. None of
-the flow below is reachable in the running app yet; only the engine and
-atomic database bridge behind it exist today.**
+**This section is now IMPLEMENTED for the Income row** (see the 2026-08-26
+update in the header) — reachable in the running app via Income → Import
+from Payslip, PGlite- and route-level certified, not yet live-DEV-certified.
 
 What the user should experience:
 
