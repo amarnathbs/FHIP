@@ -248,7 +248,7 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
     expect(/input_population|input_proposal|fdh_input_/.test(FDH_MIGRATION_SQL)).toBe(false);
   });
 
-  it('uses the service-role client ONLY in the five FDH-3/R7/R8 files documented to need it', () => {
+  it('uses the service-role client ONLY in the seven FDH-3/R7/R8/FDH-5/FDH-9 files documented to need it', () => {
     // FDH-1/FDH-2 used no service-role client anywhere (private storage and
     // cross-user purge sweeps did not exist yet). FDH-3 introduces three
     // legitimate uses — see repositories/base.ts's module comment — and
@@ -280,6 +280,18 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       path.join(FDH_LIB, 'services', 'bankCsvProcessingService.ts'),
       path.join(FDH_LIB, 'services', 'transactionClassificationService.ts'),
       path.join(FDH_LIB, 'services', 'bankPdfProcessingService.ts'),
+      // FDH-9 (migration 0091) adds a SEVENTH: payslipProcessingService.ts —
+      // the exact same carve-out bankPdfProcessingService.ts already
+      // established, applied to the payslip pipeline's own document-lifecycle
+      // writes on `fdh_statement_uploads` (no new table, no new trigger
+      // target). Every read uses the ordinary RLS-scoped client (including
+      // the payroll-evidence insert itself — `fdh_payroll_events`/
+      // `fdh_payroll_components` carry ordinary "own row" RLS policies, spec
+      // section 10's documented deliberate choice, so no elevated client is
+      // needed or used for those two tables); every admin write is explicitly
+      // re-scoped by `.eq('user_id', userId)` regardless of RLS bypass,
+      // matching the same discipline.
+      path.join(FDH_LIB, 'services', 'payslipProcessingService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

@@ -7,7 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_TRANSACTION_APPROVAL_STATUSES } from '@/lib/financial-data-hub/constants/enums';
+import {
+  FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
+  FDH_TRANSACTION_APPROVAL_STATUSES,
+} from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0076_fdh7_review_approval_workflow.sql';
@@ -88,13 +92,29 @@ describe('FDH-7 new-column check constraints match their TypeScript vocabularies
     expect(values.sort()).toEqual([...FDH_TRANSACTION_APPROVAL_STATUSES].sort());
   });
 
-  it('fdh_document_audit_events.event_type widened constraint matches the FULL (FDH-3 + R7 + R8 + FDH-5 + FDH-7) TypeScript vocabulary', () => {
+  it('fdh_document_audit_events.event_type widened constraint, AS OF MIGRATION 0076, matches the (FDH-3 + R7 + R8 + FDH-5 + FDH-7) subset of the TypeScript vocabulary', () => {
+    // NOTE (FDH-9, 2026-08-26): this constraint has been redefined by a
+    // "drop constraint + add constraint (full cumulative list)" pattern by
+    // every phase that widens it (0058 -> 0064 -> 0068 -> 0071 -> 0076 ->
+    // 0091), so 0076's OWN literal text is necessarily a snapshot of the
+    // vocabulary as it stood at FDH-7, not "the FULL" vocabulary once a later
+    // phase (FDH-9) widens it again — the live DB constraint text has moved
+    // on to 0091's version, which is what
+    // `tests/unit/fdh9SchemaContract.test.ts` (added in the same pass that
+    // found this) checks against `FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES`
+    // instead. This assertion is retargeted at the FDH-3+R7+R8+FDH-5+FDH-7
+    // subset specifically, so it keeps proving 0076 itself was written
+    // correctly, without falsely asserting it is still the constraint's
+    // final word.
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 2200);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    const vocabularyAsOfFdh7 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
+      (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED as readonly string[]).includes(t),
+    );
+    expect(values.sort()).toEqual([...vocabularyAsOfFdh7].sort());
   });
 });
 
