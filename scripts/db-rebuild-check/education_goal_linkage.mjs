@@ -1,10 +1,10 @@
-// Education Fund / Children Investment -> Goal Linkage (migration 0092)
+// Education Fund / Children Investment -> Goal Linkage (migration 0093)
 // certification harness. Mirrors pl_property_liability.mjs's structure:
 //   DB1 - built 0001..0091 (pre-migration), seeded with realistic legacy
 //         Education Fund / Children Investment rows + goal candidates
 //         across deterministic-backfill / ambiguous / no-goal / already-
-//         linked cases, THEN 0092 is applied.
-//   DB2 - full fresh chain 0001..0092, empty of user data -- used for RLS/
+//         linked cases, THEN 0093 is applied.
+//   DB2 - full fresh chain 0001..0093, empty of user data -- used for RLS/
 //         forgery negative controls, the catalogue-retirement check, and
 //         the spec s.77-85 financial-integrity scenario tests.
 import { PGlite } from '@electric-sql/pglite';
@@ -116,8 +116,8 @@ await db1.query(`insert into goal_funding_sources (goal_id, user_id, source_type
 const preTotals = await totals(db1);
 console.log('pre-migration totals:', JSON.stringify(preTotals));
 
-await db1.exec(fs.readFileSync(path.join(MIG, '0092_education_children_investment_goal_linkage.sql'), 'utf8'));
-console.log('0092 applied\n');
+await db1.exec(fs.readFileSync(path.join(MIG, '0093_education_children_investment_goal_linkage.sql'), 'utf8'));
+console.log('0093 applied\n');
 
 const postTotals = await totals(db1);
 console.log('post-migration totals:', JSON.stringify(postTotals));
@@ -139,9 +139,9 @@ check('investments row count unchanged by backfill', preTotals.investmentsCount 
 check('user_goals.current_amount ledger untouched by backfill (funding sources are informational/cap-check only)', preTotals.goalsCurrentAmountTotal === postTotals.goalsCurrentAmountTotal, `(${preTotals.goalsCurrentAmountTotal} -> ${postTotals.goalsCurrentAmountTotal})`);
 
 // Idempotency.
-await db1.exec(fs.readFileSync(path.join(MIG, '0092_education_children_investment_goal_linkage.sql'), 'utf8'));
+await db1.exec(fs.readFileSync(path.join(MIG, '0093_education_children_investment_goal_linkage.sql'), 'utf8'));
 const links1b = (await db1.query(`select count(*)::int c from goal_funding_sources`)).rows[0].c;
-check('re-running 0092 is idempotent (no duplicate links)', links1b === links1.length, `(${links1.length} -> ${links1b})`);
+check('re-running 0093 is idempotent (no duplicate links)', links1b === links1.length, `(${links1.length} -> ${links1b})`);
 
 // Catalogue retirement check on DB1 too (applies globally, not per-user).
 const catalogueRows = (await db1.query(`select item_key, is_active from master_financial_items where category='investment' and item_key in ('education_fund','children_investment')`)).rows;
@@ -149,12 +149,12 @@ check('education_fund retired (is_active=false) for new selection', catalogueRow
 check('children_investment retired (is_active=false) for new selection', catalogueRows.find(r => r.item_key === 'children_investment')?.is_active === false);
 
 // ---------------------------------------------------------------------------
-// PART 2 -- fresh chain through 0092: RLS forgery + financial-integrity tests
+// PART 2 -- fresh chain through 0093: RLS forgery + financial-integrity tests
 // ---------------------------------------------------------------------------
-console.log('\n\n=== PART 2: Fresh chain through 0092 -- RLS, forgery, spec s.77-85 scenarios ===\n');
+console.log('\n\n=== PART 2: Fresh chain through 0093 -- RLS, forgery, spec s.77-85 scenarios ===\n');
 const db2 = await PGlite.create();
-await buildTo(db2, '0092');
-console.log('built through 0092\n');
+await buildTo(db2, '0093');
+console.log('built through 0093\n');
 
 const A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';

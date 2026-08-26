@@ -1,9 +1,9 @@
 -- =============================================================================
--- Production verification script for 0092 (Education Fund / Children
+-- Production verification script for 0093 (Education Fund / Children
 -- Investment -> Goal Linkage).
 --
 -- HOW TO USE: run this in the production Supabase SQL Editor AFTER applying
--- 01_0092_education_children_investment_goal_linkage.sql. Paste the full
+-- 01_0093_education_children_investment_goal_linkage.sql. Paste the full
 -- output back for the record.
 --
 -- PART A -- pure read-only schema/catalogue checks. Safe, no side effects.
@@ -64,17 +64,17 @@ join investments i on i.id = gfs.linked_investment_id
 where i.master_item_key in ('education_fund', 'children_investment');
 -- INFORMATIONAL: report this number back. It is the count of legacy
 -- Education Fund / Children Investment investments now linked to a goal
--- (via either the 0092 backfill or the new UI, going forward).
+-- (via either the 0093 backfill or the new UI, going forward).
 
 -- A5. Mandatory financial-integrity sanity check — the migration must never
 -- have changed any Investments total (linking is planning-layer only).
 -- Compare this figure to whatever total Investments reporting shows
--- elsewhere for the same population; it should be identical to before 0092
+-- elsewhere for the same population; it should be identical to before 0093
 -- was applied (the migration touches zero rows in the investments table).
 select coalesce(sum(current_value), 0) as total_active_investments_value
 from investments
 where is_active = true;
--- INFORMATIONAL: record this figure immediately after applying 0092 and
+-- INFORMATIONAL: record this figure immediately after applying 0093 and
 -- compare against the equivalent figure captured immediately before, from
 -- your own pre-migration baseline query. EXPECT: identical.
 

@@ -2,10 +2,10 @@
 // Reproduces the REAL, currently-live goal_funding_sources ownership gap
 // (spec s.60, s.86) against the actual DEV Supabase project using two
 // throwaway authenticated users and direct PostgREST calls — no app code
-// involved, isolating the database/RLS layer exactly like migration 0092's
+// involved, isolating the database/RLS layer exactly like migration 0093's
 // gfs_enforce_ownership trigger + WITH CHECK rewrite target.
 //
-// This is intentionally run BEFORE migration 0092 is applied to DEV (this
+// This is intentionally run BEFORE migration 0093 is applied to DEV (this
 // sandbox has no DDL-execution capability — see scripts/fdh1_live_dev_
 // verification.mjs's header note, same limitation) — it exists to prove
 // the gap is real on live infrastructure, not just a PGlite theoretical
@@ -108,20 +108,20 @@ async function main() {
 
     const preMigrationVulnerable = forgeAttempt.status === 201;
     if (preMigrationVulnerable) {
-      console.log('\n  *** CONFIRMED LIVE: current DEV schema (pre-0092) allows this forged cross-tenant reference. ***');
-      console.log('  *** Migration 0092 (gfs_enforce_ownership trigger + WITH CHECK rewrite) is the fix — already ***');
+      console.log('\n  *** CONFIRMED LIVE: current DEV schema (pre-0093) allows this forged cross-tenant reference. ***');
+      console.log('  *** Migration 0093 (gfs_enforce_ownership trigger + WITH CHECK rewrite) is the fix — already ***');
       console.log('  *** proven to reject the byte-identical scenario under PGlite (education_goal_linkage.mjs).  ***');
-      check('Live DEV reproduction: forged cross-tenant link currently SUCCEEDS (confirms the real gap migration 0092 fixes)', true);
+      check('Live DEV reproduction: forged cross-tenant link currently SUCCEEDS (confirms the real gap migration 0093 fixes)', true);
       // Clean up the forged row itself via service role (do not leave attack evidence behind in DEV).
       if (forgeAttempt.json?.[0]?.id) {
         await restFetch(`/rest/v1/goal_funding_sources?id=eq.${forgeAttempt.json[0].id}`, { method: 'DELETE', apikey: SERVICE, token: SERVICE });
       }
     } else {
-      // If DEV has ALREADY had 0092 (or an equivalent fix) applied by the time this runs, the forged
+      // If DEV has ALREADY had 0093 (or an equivalent fix) applied by the time this runs, the forged
       // insert should be rejected — treat that as the GOOD outcome and verify it's a real ownership
       // rejection, not an unrelated error.
       const rejectedForRightReason = forgeAttempt.status === 401 || forgeAttempt.status === 403 || /owned by user|42501|row-level|policy/i.test(JSON.stringify(forgeAttempt.json));
-      check('Live DEV: forged cross-tenant link is REJECTED (0092 already applied) — verify rejection is ownership-based', rejectedForRightReason, `(status ${forgeAttempt.status})`);
+      check('Live DEV: forged cross-tenant link is REJECTED (0093 already applied) — verify rejection is ownership-based', rejectedForRightReason, `(status ${forgeAttempt.status})`);
     }
 
     // Negative control proving this test is not vacuous: Tenant A CAN legitimately

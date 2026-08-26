@@ -10,7 +10,7 @@
 -- discovery -- read-only, claims no migration numbers; feature/investment-
 -- intelligence-r12-wider-india-assets -- active but had claimed nothing
 -- beyond 0090 as of this writing) were also re-scanned immediately before
--- this file was finalised. 0092 is therefore the next genuinely free
+-- this file was finalised. 0093 is therefore the next genuinely free
 -- number; per this project's established collision precedent, this file
 -- renumbers to the next free slot if a collision is discovered before
 -- reaching DEV, and whichever migration is already live on DEV always
