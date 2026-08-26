@@ -212,9 +212,9 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
       countryOfDomicile: 'IN',
       baseCurrency: 'INR',
       identifiers: [
-        { scheme: 'isin', value: input.isin, countryCode: 'IN' },
+        { scheme: 'isin' as const, value: input.isin, countryCode: 'IN' as const },
         ...(input.exchange && input.exchangeSymbol
-          ? [{ scheme: (input.exchange === 'NSE' ? 'nse_symbol' : 'bse_code') as 'nse_symbol' | 'bse_code', value: input.exchangeSymbol, countryCode: 'IN' }]
+          ? [{ scheme: (input.exchange === 'NSE' ? 'nse_symbol' : 'bse_code') as 'nse_symbol' | 'bse_code', value: input.exchangeSymbol, countryCode: 'IN' as const }]
           : []),
       ],
     },

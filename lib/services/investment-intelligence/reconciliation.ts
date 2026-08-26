@@ -42,6 +42,16 @@ const DIRECTION_TABLE: Record<IiTransactionType, UnitDirection> = {
   adjustment: 'passthrough',
   reversal: 'passthrough', // MUST be pre-signed by the parser (a reversal of an inflow prints as a negative-units line, matching real RTA convention)
   unclassified: 'passthrough',
+  // R6-P1 additions (migration 0059) — bonus units are a unit-count inflow
+  // with no cash consideration; a scheme-level unit split changes the unit
+  // count but is economically neutral (handled as pre-signed passthrough,
+  // matching 'transfer'/'merger' convention — no reconciliation engine
+  // change was in R6-P1's remit either).
+  bonus: 'inflow',
+  split: 'passthrough',
+  // R12 addition — equity/ETF market disposal reduces units, same
+  // direction as a mutual-fund redemption.
+  sale: 'outflow',
 };
 
 export interface ReconciliationTransactionInput {
