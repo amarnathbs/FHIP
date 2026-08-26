@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireUser, ok, bad } from '@/lib/api';
 import { goalFundingSourceSchema } from '@/lib/validation/goalFundingSource';
-import { checkFundingAllocation, resolveAllocatedAmount } from '@/lib/services/goalFundingAllocation';
+import { checkFundingAllocation, resolveAllocatedAmount, assertOwnsFundingTarget } from '@/lib/services/goalFundingAllocation';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; sourceId: string }> }) {
   const { sourceId } = await params;
@@ -10,12 +10,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const parsed = goalFundingSourceSchema.partial().safeParse(await req.json());
   if (!parsed.success) return bad(parsed.error.message, 422);
 
+  // Education/Children Investment -> Goal Linkage, spec s.60-61: re-pointing
+  // a funding source at a different linked_asset_id/linked_investment_id/
+  // linked_retirement_id must be ownership-checked the same as creating one
+  // — this PATCH previously had no such check at all.
+  if (parsed.data.linked_asset_id !== undefined || parsed.data.linked_investment_id !== undefined || parsed.data.linked_retirement_id !== undefined) {
+    const targetOwnershipError = await assertOwnsFundingTarget(user.id, {
+      linkedAssetId: parsed.data.linked_asset_id,
+      linkedInvestmentId: parsed.data.linked_investment_id,
+      linkedRetirementId: parsed.data.linked_retirement_id,
+    });
+    if (targetOwnershipError) return bad(targetOwnershipError, 404);
+  }
+
   if (parsed.data.allocation_percentage !== undefined) {
     const check = await checkFundingAllocation(
       user.id,
       {
         linkedAssetId: parsed.data.linked_asset_id,
         linkedInvestmentId: parsed.data.linked_investment_id,
+        linkedRetirementId: parsed.data.linked_retirement_id,
         allocationPercentage: parsed.data.allocation_percentage,
       },
       sourceId
@@ -29,6 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       sourceType: parsed.data.source_type ?? 'manual',
       linkedAssetId: parsed.data.linked_asset_id,
       linkedInvestmentId: parsed.data.linked_investment_id,
+      linkedRetirementId: parsed.data.linked_retirement_id,
       allocationPercentage: parsed.data.allocation_percentage,
       allocatedAmount: parsed.data.allocated_amount ?? 0,
     });
