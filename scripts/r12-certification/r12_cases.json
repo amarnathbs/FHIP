@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-08-26",
+  "totalCases": 41,
+  "cases": [
+    { "id": "ID-001", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INE002A01018","countryCode":"IN"},{"scheme":"nse_symbol","value":"RELIANCE","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INE002A01018","countryCode":"IN"},{"scheme":"bse_code","value":"500325","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-002", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INE467B01029","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INE009A01021","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-003", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"nse_symbol","value":"TCS","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"bse_code","value":"532540","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-004", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INE040A01034","countryCode":"IN"},{"scheme":"nse_symbol","value":"HDFCBANK","countryCode":"IN"},{"scheme":"bse_code","value":"500180","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-005", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"},{"scheme":"nse_symbol","value":"NIFTYBEES","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"},{"scheme":"bse_code","value":"590103","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-006", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"nse_symbol","value":"INFY","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"nse_symbol","value":"INFY","countryCode":"AU"}] }
+    ]},
+    { "id": "ID-007", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INE062A01020","countryCode":"IN"},{"scheme":"nse_symbol","value":"SBIN","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"nse_symbol","value":"SBIN","countryCode":"IN"}] }
+    ]},
+    { "id": "ID-008", "family": "instrument_identity", "instruments": [
+      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"},{"scheme":"nse_symbol","value":"BHARTIARTL","countryCode":"IN"}] },
+      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"},{"scheme":"bse_code","value":"532454","countryCode":"IN"}] }
+    ]},
+
+    { "id": "HLD-001", "family": "holdings", "transactions": [{"type":"purchase","units":100}], "frozenPricePerUnit": 2500 },
+    { "id": "HLD-002", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"purchase","units":50}], "frozenPricePerUnit": 2600 },
+    { "id": "HLD-003", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"sale","units":40}], "frozenPricePerUnit": 2700 },
+    { "id": "HLD-004", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"sale","units":100}], "frozenPricePerUnit": 2700 },
+    { "id": "HLD-005", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"dividend","amount":500}], "frozenPricePerUnit": 2500 },
+    { "id": "HLD-006", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"bonus","units":100}], "frozenPricePerUnit": 1300 },
+    { "id": "HLD-007", "family": "holdings", "transactions": [{"type":"purchase","units":33.333333}], "frozenPricePerUnit": 150.5 },
+    { "id": "HLD-008", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"purchase","units":50},{"type":"sale","units":75},{"type":"purchase","units":25}], "frozenPricePerUnit": 3000 },
+    { "id": "HLD-009", "family": "holdings", "transactions": [{"type":"purchase","units":10},{"type":"sale","units":3},{"type":"sale","units":3},{"type":"sale","units":4}], "frozenPricePerUnit": 500 },
+    { "id": "HLD-010", "family": "holdings", "transactions": [{"type":"purchase","units":500},{"type":"bonus","units":500},{"type":"sale","units":600}], "frozenPricePerUnit": 45 },
+
+    { "id": "TAX-001", "family": "tax", "acquisitionDate": "2024-01-15", "disposalDate": "2025-01-16", "unitsConsumed": 10, "costPerUnit": 200, "saleValuePerUnit": 500 },
+    { "id": "TAX-002", "family": "tax", "acquisitionDate": "2024-01-15", "disposalDate": "2025-01-15", "unitsConsumed": 10, "costPerUnit": 200, "saleValuePerUnit": 500 },
+    { "id": "TAX-003", "family": "tax", "acquisitionDate": "2024-06-01", "disposalDate": "2024-12-01", "unitsConsumed": 5, "costPerUnit": 1000, "saleValuePerUnit": 900 },
+    { "id": "TAX-004", "family": "tax", "acquisitionDate": "2020-03-01", "disposalDate": "2025-08-26", "unitsConsumed": 20, "costPerUnit": 150, "saleValuePerUnit": 800 },
+    { "id": "TAX-005", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 50, "saleValuePerUnit": 400, "fmv31Jan2018PerUnit": 180 },
+    { "id": "TAX-006", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 200, "saleValuePerUnit": 400, "fmv31Jan2018PerUnit": 100 },
+    { "id": "TAX-007", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 50, "saleValuePerUnit": 90, "fmv31Jan2018PerUnit": 180 },
+    { "id": "TAX-008", "family": "tax", "acquisitionDate": "2023-02-28", "disposalDate": "2024-02-29", "unitsConsumed": 15, "costPerUnit": 300, "saleValuePerUnit": 350 },
+    { "id": "TAX-009", "family": "tax", "acquisitionDate": "2023-02-28", "disposalDate": "2024-03-01", "unitsConsumed": 15, "costPerUnit": 300, "saleValuePerUnit": 350 },
+    { "id": "TAX-010", "family": "tax", "acquisitionDate": "2025-01-01", "disposalDate": "2025-01-02", "unitsConsumed": 1, "costPerUnit": 5000, "saleValuePerUnit": 5500 },
+    { "id": "TAX-011", "family": "tax", "acquisitionDate": "2022-12-31", "disposalDate": "2023-12-31", "unitsConsumed": 8, "costPerUnit": 750, "saleValuePerUnit": 1000 },
+    { "id": "TAX-012", "family": "tax", "acquisitionDate": "2022-12-31", "disposalDate": "2024-01-01", "unitsConsumed": 8, "costPerUnit": 750, "saleValuePerUnit": 1000 },
+    { "id": "TAX-013", "family": "tax", "acquisitionDate": "2019-07-04", "disposalDate": "2026-08-26", "unitsConsumed": 250, "costPerUnit": 40, "saleValuePerUnit": 210 },
+    { "id": "TAX-014", "family": "tax", "acquisitionDate": "2016-05-10", "disposalDate": "2026-08-26", "unitsConsumed": 60, "costPerUnit": 90, "saleValuePerUnit": 620, "fmv31Jan2018PerUnit": 300 },
+    { "id": "TAX-015", "family": "tax", "acquisitionDate": "2023-11-11", "disposalDate": "2024-11-11", "unitsConsumed": 12, "costPerUnit": 1200, "saleValuePerUnit": 1150 },
+    { "id": "TAX-016", "family": "tax", "acquisitionDate": "2015-01-01", "disposalDate": "2026-08-26", "unitsConsumed": 10, "costPerUnit": 500, "saleValuePerUnit": 90, "fmv31Jan2018PerUnit": 180 },
+
+    { "id": "PUB-001", "family": "publishing", "instrumentClass": "equity", "countryCode": "IN" },
+    { "id": "PUB-002", "family": "publishing", "instrumentClass": "etf", "countryCode": "IN" },
+    { "id": "PUB-003", "family": "publishing", "instrumentClass": "equity", "countryCode": "AU" },
+    { "id": "PUB-004", "family": "publishing", "instrumentClass": "bond", "countryCode": "IN" },
+
+    { "id": "XRAY-001", "family": "xray_attribution", "positions": [
+      { "value": 60000, "holdsSecurityWeightPct": 50 },
+      { "value": 40000, "holdsSecurityWeightPct": 100 }
+    ]},
+    { "id": "XRAY-002", "family": "xray_attribution", "positions": [
+      { "value": 25000, "holdsSecurityWeightPct": 100 }
+    ]},
+    { "id": "XRAY-003", "family": "xray_attribution", "positions": [
+      { "value": 100000, "holdsSecurityWeightPct": 20 },
+      { "value": 50000, "holdsSecurityWeightPct": 20 },
+      { "value": 30000, "holdsSecurityWeightPct": 100 }
+    ]}
+  ]
+}
