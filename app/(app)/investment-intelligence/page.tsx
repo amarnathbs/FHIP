@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceClient } from '@/components/investment-intelligence/InvestmentIntelligenceClient';
+import { ManualDirectPositionForm } from '@/components/investment-intelligence/ManualDirectPositionForm';
 
 // R2 — minimal UI to prove the R2 workflow (spec section 31). NOT an R4+
 // analytics dashboard: no performance/XIRR/benchmark content anywhere on
@@ -23,6 +24,7 @@ export default async function InvestmentIntelligencePage() {
         </p>
       </div>
       <InvestmentIntelligenceClient />
+      <ManualDirectPositionForm />
     </div>
   );
 }

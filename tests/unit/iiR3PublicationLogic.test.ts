@@ -24,11 +24,11 @@ import {
 // deterministic unit tests independent of the sandbox's DB-migration
 // constraint (see R3_TESTING_AND_VERIFICATION.md).
 
-describe('R3 production scope gate', () => {
-  it('only mutual_fund is production-certified in R3 (R2 only certifies Indian MFs)', () => {
+describe('R3 production scope gate (R12 extends this — see the dedicated R12 describe block below)', () => {
+  it('mutual_fund, equity and etf are production-certified as of R12; every other class remains not-yet-certified', () => {
     expect(isProductionCertifiedAssetClass('mutual_fund')).toBe(true);
-    expect(isProductionCertifiedAssetClass('equity')).toBe(false);
-    expect(isProductionCertifiedAssetClass('etf')).toBe(false);
+    expect(isProductionCertifiedAssetClass('equity')).toBe(true);
+    expect(isProductionCertifiedAssetClass('etf')).toBe(true);
     expect(isProductionCertifiedAssetClass('bond')).toBe(false);
     expect(isProductionCertifiedAssetClass('fixed_deposit')).toBe(false);
     expect(isProductionCertifiedAssetClass('gold')).toBe(false);
@@ -42,16 +42,43 @@ describe('ITEM mapping (mutual_fund -> managed_funds)', () => {
   it('maps mutual_fund to the managed_funds master item key', () => {
     expect(mapInstrumentClassToMasterItemKey('mutual_fund')).toBe('managed_funds');
   });
-  it('returns null for every non-yet-supported instrument class (generic router, no hardcoded MF-only architecture)', () => {
-    expect(mapInstrumentClassToMasterItemKey('equity')).toBeNull();
-    expect(mapInstrumentClassToMasterItemKey('etf')).toBeNull();
+  it('returns null for every instrument class still deferred beyond R12 (bonds/gold/etc.)', () => {
     expect(mapInstrumentClassToMasterItemKey('bond')).toBeNull();
+    expect(mapInstrumentClassToMasterItemKey('gold')).toBeNull();
+    expect(mapInstrumentClassToMasterItemKey('crypto')).toBeNull();
   });
   it('maps mutual_fund to the singular Zod-validated investment_type enum value', () => {
     expect(mapInstrumentClassToInvestmentType('mutual_fund')).toBe('managed_fund');
   });
   it('falls back to other for unmapped classes rather than guessing', () => {
     expect(mapInstrumentClassToInvestmentType('gold')).toBe('other');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R12 — direct listed equity + equity-oriented ETF publication mapping.
+// ---------------------------------------------------------------------------
+describe('R12 — equity/etf publication scope gate', () => {
+  it('equity and etf are now production-certified', () => {
+    expect(isProductionCertifiedAssetClass('equity')).toBe(true);
+    expect(isProductionCertifiedAssetClass('etf')).toBe(true);
+  });
+
+  it('equity maps country-dependently, reusing migration 0073s already-shipped rule exactly (IN -> international_shares, else -> australian_shares)', () => {
+    expect(mapInstrumentClassToMasterItemKey('equity', 'IN')).toBe('international_shares');
+    expect(mapInstrumentClassToMasterItemKey('equity', 'AU')).toBe('australian_shares');
+    expect(mapInstrumentClassToMasterItemKey('equity', null)).toBe('australian_shares');
+    expect(mapInstrumentClassToMasterItemKey('equity', undefined)).toBe('australian_shares');
+  });
+
+  it('etf maps to the single country-independent etfs master item key', () => {
+    expect(mapInstrumentClassToMasterItemKey('etf', 'IN')).toBe('etfs');
+    expect(mapInstrumentClassToMasterItemKey('etf', 'AU')).toBe('etfs');
+  });
+
+  it('equity and etf map to their existing singular investment_type enum values (unchanged from pre-R12)', () => {
+    expect(mapInstrumentClassToInvestmentType('equity')).toBe('shares');
+    expect(mapInstrumentClassToInvestmentType('etf')).toBe('etf');
   });
 });
 
@@ -176,10 +203,15 @@ describe('Publication eligibility gate (spec section 10)', () => {
     expect(evaluateEligibility({ ...baseEligible, currencyCode: null }).blockingReasons.map((r) => r.code)).toContain('CURRENCY_UNKNOWN');
   });
 
-  it('is NOT_ELIGIBLE for an instrument class R2 does not yet certify (uncertified/blocking asset types never reach production)', () => {
-    const result = evaluateEligibility({ ...baseEligible, instrumentClass: 'equity' });
+  it('is NOT_ELIGIBLE for an instrument class not yet certified (uncertified/blocking asset types never reach production) — R12 update: equity/etf are now certified, so this uses "bond", still deferred per R12_ASSET_CLASS_SCOPE_MATRIX.md', () => {
+    const result = evaluateEligibility({ ...baseEligible, instrumentClass: 'bond' });
     expect(result.status).toBe('NOT_ELIGIBLE');
     expect(result.blockingReasons.map((r) => r.code)).toContain('ASSET_CLASS_NOT_YET_CERTIFIED');
+  });
+
+  it('R12: is ELIGIBLE for equity and etf, the classes R12 newly certifies (subject to every other gate)', () => {
+    expect(evaluateEligibility({ ...baseEligible, instrumentClass: 'equity' }).status).toBe('ELIGIBLE');
+    expect(evaluateEligibility({ ...baseEligible, instrumentClass: 'etf' }).status).toBe('ELIGIBLE');
   });
 
   it('accumulates every applicable blocking reason simultaneously, not just the first', () => {

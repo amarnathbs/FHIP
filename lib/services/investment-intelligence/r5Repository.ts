@@ -347,22 +347,33 @@ export async function loadXrayDataset(
     .in('id', instrumentIds);
   const instrumentMeta = new Map((instrumentRows ?? []).map((r) => [r.id as string, r]));
 
+  // R12: 'equity' joins the eligible set (spec section 48 — direct equity
+  // must contribute to concentration/sector/market-cap without fund-style
+  // look-through; it is added as a position here, and
+  // synthesizeDirectSecuritySnapshots() below gives it a self-referencing
+  // 100%-weight "disclosure" so the UNMODIFIED look-through engine treats
+  // it exactly like a fully-disclosed single-holding fund). 'mutual_fund'
+  // and 'etf' are unchanged from pre-R12 behaviour.
+  const directSecurityInstrumentIds = new Set<string>();
   const positions: PortfolioFundPosition[] = [...latestByInstrument.values()]
-    // X-Ray look-through applies to pooled vehicles only.
     .filter((r) => {
       const cls = instrumentMeta.get(r.instrument_id)?.instrument_class;
-      return cls === 'mutual_fund' || cls === 'etf';
+      return cls === 'mutual_fund' || cls === 'etf' || cls === 'equity';
     })
-    .map((r) => ({
-      fundInstrumentId: r.instrument_id,
-      fundName: instrumentMeta.get(r.instrument_id)?.instrument_name ?? r.instrument_id,
-      // Value stays in the investment's OWN local currency and is never
-      // FX-converted here (spec section 101, R0_CROSS_BORDER_CONTRACT).
-      value: Number(r.value),
-      currencyCode: r.currency_code,
-      amcId: null,
-      amcName: null,
-    }));
+    .map((r) => {
+      const cls = instrumentMeta.get(r.instrument_id)?.instrument_class;
+      if (cls === 'equity') directSecurityInstrumentIds.add(r.instrument_id);
+      return {
+        fundInstrumentId: r.instrument_id,
+        fundName: instrumentMeta.get(r.instrument_id)?.instrument_name ?? r.instrument_id,
+        // Value stays in the investment's OWN local currency and is never
+        // FX-converted here (spec section 101, R0_CROSS_BORDER_CONTRACT).
+        value: Number(r.value),
+        currencyCode: r.currency_code,
+        amcId: null,
+        amcName: null,
+      };
+    });
 
   if (positions.length === 0) {
     return { dataset: null, warnings, empty: true };
@@ -385,6 +396,10 @@ export async function loadXrayDataset(
     warnings
   );
 
+  if (directSecurityInstrumentIds.size > 0) {
+    await addDirectSecuritySelfSnapshots(supabase, snapshotsByFund, directSecurityInstrumentIds, instrumentMeta, asOfDate, classificationVersion);
+  }
+
   return {
     dataset: {
       userId,
@@ -400,6 +415,95 @@ export async function loadXrayDataset(
     warnings,
     empty: false,
   };
+}
+
+/**
+ * R12 — synthesize a self-referencing single-holding "fund disclosure" for
+ * each direct-security position (equity), so the UNCHANGED
+ * calculatePortfolioLookThrough() engine treats it as a fully-disclosed
+ * fund whose only holding is itself (spec section 48: "direct equity is
+ * already itself the underlying security... do not attempt fund-style
+ * look-through"). This is purely additive to snapshotsByFund — it never
+ * touches a real ii_fund_holdings_snapshots/ii_fund_holdings_lines row, and
+ * it does not run for any instrument that already had a real disclosure
+ * (mutual funds / ETFs with genuine look-through data are untouched).
+ *
+ * Real sector/industry/market-cap classification is used WHEN it exists
+ * (ii_security_classifications — the same admin-curated reference table
+ * R5 already reads for fund look-through lines); when it does not, the
+ * fields are left null, which the engine already surfaces honestly as
+ * classificationIncomplete rather than a fabricated guess.
+ */
+async function addDirectSecuritySelfSnapshots(
+  supabase: SupabaseClient,
+  snapshotsByFund: Map<string, FundHoldingsSnapshot[]>,
+  directSecurityInstrumentIds: Set<string>,
+  instrumentMeta: Map<string, { instrument_name?: string; instrument_class?: string }>,
+  asOfDate: string,
+  classificationVersion: string | null
+): Promise<void> {
+  const ids = [...directSecurityInstrumentIds];
+  // R6-P0 pagination discipline (this table is effective-dated and can carry
+  // many historical rows per instrument — a bare unbounded select risks the
+  // same silent-1000-row truncation class this repository already guards
+  // against everywhere else): fetchAllRows, ordered with `id` as a
+  // tie-breaker so no page boundary can drop or duplicate a version.
+  const classRows = await fetchAllRows<{
+    id: string;
+    instrument_id: string;
+    sector_code: string | null;
+    industry_code: string | null;
+    market_cap_class: string | null;
+    effective_from: string;
+  }>(() =>
+    supabase
+      .from('ii_security_classifications')
+      .select('id, instrument_id, sector_code, sector_label, industry_code, industry_label, market_cap_class, effective_from')
+      .in('instrument_id', ids)
+      .lte('effective_from', asOfDate)
+      .order('effective_from', { ascending: false })
+      .order('id', { ascending: true })
+  );
+  const classByInstrument = new Map<string, { sector_code: string | null; industry_code: string | null; market_cap_class: string | null }>();
+  for (const row of classRows ?? []) {
+    if (!classByInstrument.has(row.instrument_id as string)) {
+      classByInstrument.set(row.instrument_id as string, {
+        sector_code: (row.sector_code as string | null) ?? null,
+        industry_code: (row.industry_code as string | null) ?? null,
+        market_cap_class: (row.market_cap_class as string | null) ?? null,
+      });
+    }
+  }
+
+  for (const instrumentId of ids) {
+    if (snapshotsByFund.has(instrumentId)) continue; // a real disclosure already exists — never overridden
+    const meta = instrumentMeta.get(instrumentId);
+    const cls = classByInstrument.get(instrumentId);
+    const selfHolding: SnapshotHolding = {
+      canonicalId: instrumentId,
+      displayName: meta?.instrument_name ?? instrumentId,
+      weightPct: 100,
+      assetKind: 'security',
+      sectorCode: cls?.sector_code ?? null,
+      industryCode: cls?.industry_code ?? null,
+      marketCapClass: cls?.market_cap_class ?? null,
+      creditRatingBand: null,
+      maturityDate: null,
+      modifiedDuration: null,
+      issuerId: null,
+    };
+    snapshotsByFund.set(instrumentId, [
+      {
+        snapshotId: `direct-security-self:${instrumentId}:${asOfDate}`,
+        fundInstrumentId: instrumentId,
+        holdingsAsOfDate: asOfDate,
+        sourceKey: 'direct_security_self_disclosure',
+        sourceDataVersion: null,
+        classificationVersion,
+        holdings: [selfHolding],
+      },
+    ]);
+  }
 }
 
 /**

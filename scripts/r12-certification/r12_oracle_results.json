@@ -1,0 +1,327 @@
+{
+  "generatedBy": "r12_independent_multiasset_oracle.py",
+  "totalCases": 41,
+  "results": [
+    {
+      "id": "ID-001",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-002",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-003",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-004",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-005",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-006",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-007",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-008",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "HLD-001",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 250000.0
+    },
+    {
+      "id": "HLD-002",
+      "family": "holdings",
+      "unitsAfter": 150.0,
+      "valueAfter": 390000.0
+    },
+    {
+      "id": "HLD-003",
+      "family": "holdings",
+      "unitsAfter": 60.0,
+      "valueAfter": 162000.0
+    },
+    {
+      "id": "HLD-004",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-005",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 250000.0
+    },
+    {
+      "id": "HLD-006",
+      "family": "holdings",
+      "unitsAfter": 200.0,
+      "valueAfter": 260000.0
+    },
+    {
+      "id": "HLD-007",
+      "family": "holdings",
+      "unitsAfter": 33.333333,
+      "valueAfter": 5016.67
+    },
+    {
+      "id": "HLD-008",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 300000.0
+    },
+    {
+      "id": "HLD-009",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-010",
+      "family": "holdings",
+      "unitsAfter": 400.0,
+      "valueAfter": 18000.0
+    },
+    {
+      "id": "TAX-001",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 5000,
+      "costBasisUsed": 2000,
+      "grandfatheringApplied": false,
+      "taxableGain": 3000
+    },
+    {
+      "id": "TAX-002",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 5000,
+      "costBasisUsed": 2000,
+      "grandfatheringApplied": false,
+      "taxableGain": 3000
+    },
+    {
+      "id": "TAX-003",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 183,
+      "isLongTerm": false,
+      "saleValue": 4500,
+      "costBasisUsed": 5000,
+      "grandfatheringApplied": false,
+      "taxableGain": -500
+    },
+    {
+      "id": "TAX-004",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2004,
+      "isLongTerm": true,
+      "saleValue": 16000,
+      "costBasisUsed": 3000,
+      "grandfatheringApplied": false,
+      "taxableGain": 13000
+    },
+    {
+      "id": "TAX-005",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3122,
+      "isLongTerm": true,
+      "saleValue": 40000,
+      "costBasisUsed": 18000,
+      "grandfatheringApplied": true,
+      "taxableGain": 22000
+    },
+    {
+      "id": "TAX-006",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3122,
+      "isLongTerm": true,
+      "saleValue": 40000,
+      "costBasisUsed": 20000,
+      "grandfatheringApplied": false,
+      "taxableGain": 20000
+    },
+    {
+      "id": "TAX-007",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3122,
+      "isLongTerm": true,
+      "saleValue": 9000,
+      "costBasisUsed": 9000,
+      "grandfatheringApplied": true,
+      "taxableGain": 0
+    },
+    {
+      "id": "TAX-008",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 5250,
+      "costBasisUsed": 4500,
+      "grandfatheringApplied": false,
+      "taxableGain": 750
+    },
+    {
+      "id": "TAX-009",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 5250,
+      "costBasisUsed": 4500,
+      "grandfatheringApplied": false,
+      "taxableGain": 750
+    },
+    {
+      "id": "TAX-010",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 1,
+      "isLongTerm": false,
+      "saleValue": 5500,
+      "costBasisUsed": 5000,
+      "grandfatheringApplied": false,
+      "taxableGain": 500
+    },
+    {
+      "id": "TAX-011",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 8000,
+      "costBasisUsed": 6000,
+      "grandfatheringApplied": false,
+      "taxableGain": 2000
+    },
+    {
+      "id": "TAX-012",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 8000,
+      "costBasisUsed": 6000,
+      "grandfatheringApplied": false,
+      "taxableGain": 2000
+    },
+    {
+      "id": "TAX-013",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2610,
+      "isLongTerm": true,
+      "saleValue": 52500,
+      "costBasisUsed": 10000,
+      "grandfatheringApplied": false,
+      "taxableGain": 42500
+    },
+    {
+      "id": "TAX-014",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3760,
+      "isLongTerm": true,
+      "saleValue": 37200,
+      "costBasisUsed": 18000,
+      "grandfatheringApplied": true,
+      "taxableGain": 19200
+    },
+    {
+      "id": "TAX-015",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 13800,
+      "costBasisUsed": 14400,
+      "grandfatheringApplied": false,
+      "taxableGain": -600
+    },
+    {
+      "id": "TAX-016",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 4255,
+      "isLongTerm": true,
+      "saleValue": 900,
+      "costBasisUsed": 5000,
+      "grandfatheringApplied": false,
+      "taxableGain": -4100
+    },
+    {
+      "id": "PUB-001",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "international_shares"
+    },
+    {
+      "id": "PUB-002",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-003",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-004",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": null
+    },
+    {
+      "id": "XRAY-001",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000,
+      "effectiveSecurityWeight": 0.7,
+      "effectiveSecurityValue": 70000.0
+    },
+    {
+      "id": "XRAY-002",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 25000.0
+    },
+    {
+      "id": "XRAY-003",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 180000,
+      "effectiveSecurityWeight": 0.333333,
+      "effectiveSecurityValue": 60000.0
+    }
+  ]
+}

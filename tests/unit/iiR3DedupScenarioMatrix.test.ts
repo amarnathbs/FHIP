@@ -26,11 +26,19 @@ describe('DD-001/DD-002: manual share entered in Assets vs Investments (structur
   });
 });
 
-describe('DD-003: same share later imported from a broker (structural — broker import out of R2/R3 scope)', () => {
-  it('equity instrument class is NOT production-certified in R3 (no broker parser exists yet)', () => {
-    expect(isProductionCertifiedAssetClass('equity')).toBe(false);
+describe('DD-003: same share later imported from a broker (structural in R3 — broker STATEMENT PARSING remains out of scope even after R12)', () => {
+  // R12 update (R12_ASSET_CLASS_SCOPE_MATRIX.md): 'equity' the INSTRUMENT
+  // CLASS is now production-certified for MANUAL entry
+  // (positions/manual/route.ts) — R2/R3's original blanket "no broker
+  // parser exists yet" reasoning no longer applies to the class itself.
+  // What remains genuinely deferred, unchanged by R12, is broker/NSDL/CDSL
+  // STATEMENT PARSING (spec section 19 — R12 does not pull those adapters
+  // forward). This scenario is retitled, not deleted, to keep asserting
+  // that distinction rather than silently losing DD-003's coverage.
+  it('equity instrument class IS production-certified as of R12 (manual entry only — no broker/NSDL/CDSL parser exists)', () => {
+    expect(isProductionCertifiedAssetClass('equity')).toBe(true);
   });
-  it('routing itself is correct and ready for a future broker-import release', () => {
+  it('routing is correct for both the pre-R12 structural case and the R12 manual-entry case alike', () => {
     expect(computePublicationTarget('equity', 'demat')).toBe('investments');
   });
 });

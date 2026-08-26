@@ -75,12 +75,22 @@ export const iiFixtureTransactionSchema = z.object({
     'fee',
     'tax',
     'adjustment',
+    // R12 addition -- equity/ETF market disposal, distinct from a
+    // mutual-fund 'redemption' (unit redemption from a scheme). See
+    // migration 0092 and R12_TRANSACTION_SEMANTICS.md.
+    'sale',
   ]),
   transactionDate: z.string(),
   units: z.number().optional().nullable(),
   pricePerUnit: z.number().optional().nullable(),
   grossAmount: z.number(),
   sourceReference: z.string().optional().nullable(),
+  // R12 addition -- explicit-only cost preservation (spec section 33);
+  // ii_transactions.fees/taxes columns already existed since migration
+  // 0040 but were never populated by this importer. Optional, defaults to
+  // null (no behaviour change for existing fixtures that omit them).
+  fees: z.number().optional().nullable(),
+  taxes: z.number().optional().nullable(),
 });
 
 export const iiManualFixtureSchema = z.object({
@@ -109,6 +119,10 @@ export const iiManualFixtureSchema = z.object({
     units: z.number(),
     value: z.number(),
     qualityStatus: z.enum(['certified', 'warning', 'incomplete']).default('warning'),
+    // R12 addition -- price provenance (spec section 38). Optional/null for
+    // pre-R12 fixtures (unchanged behaviour); every R12 manual-entry write
+    // sets this explicitly.
+    priceSource: z.enum(['manual_entry', 'statement_price', 'admin_reference', 'certified_market_data']).optional().nullable(),
   }),
   supersedesFixtureKey: z.string().optional().nullable(),
   reconciliation: z
@@ -121,3 +135,62 @@ export const iiManualFixtureSchema = z.object({
 });
 
 export type IiManualFixture = z.infer<typeof iiManualFixtureSchema>;
+
+// ---------------------------------------------------------------------------
+// R12 — the first real, user-facing manual-entry request shape for
+// Investment Intelligence (R12_WIDER_INDIA_ASSETS_ARCHITECTURE_DISCOVERY.md
+// section 2.6 found there was previously NO live manual-entry API route for
+// any asset class, including the already-certified mutual fund).
+// Deliberately narrow to R12's frozen scope (direct listed Indian equity +
+// equity-oriented ETF) -- NOT a generic ii_transactions CRUD surface (spec
+// section 30's "R1 does not expose unrestricted generic CRUD" principle
+// extends unchanged to R12).
+// ---------------------------------------------------------------------------
+const baseManualDirectPositionFields = {
+  instrumentClass: z.enum(['equity', 'etf']),
+  // Only relevant for 'etf' -- ignored (treated as true) for 'equity'.
+  // Never inferred; ETF tax classification depends on this explicit
+  // declaration (spec section 57).
+  isEquityOriented: z.boolean().optional(),
+  instrumentName: z.string().min(1),
+  isin: z.string().min(1),
+  exchange: z.enum(['NSE', 'BSE']).optional().nullable(),
+  exchangeSymbol: z.string().min(1).optional().nullable(),
+  accountInstitutionName: z.string().min(1), // the demat/broker account name
+  accountNumberMasked: z.string().optional().nullable(),
+};
+
+export const iiManualDirectPositionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('buy'),
+    ...baseManualDirectPositionFields,
+    transactionDate: z.string().min(1),
+    units: z.number().positive(),
+    pricePerUnit: z.number().positive(),
+    fees: z.number().min(0).optional().nullable(),
+    taxes: z.number().min(0).optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('sale'),
+    ...baseManualDirectPositionFields,
+    transactionDate: z.string().min(1),
+    units: z.number().positive(),
+    pricePerUnit: z.number().positive(),
+    fees: z.number().min(0).optional().nullable(),
+    taxes: z.number().min(0).optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('dividend'),
+    ...baseManualDirectPositionFields,
+    transactionDate: z.string().min(1),
+    amount: z.number().positive(),
+  }),
+  z.object({
+    action: z.literal('reprice'),
+    ...baseManualDirectPositionFields,
+    asOfDate: z.string().min(1),
+    currentValue: z.number().min(0),
+  }),
+]);
+
+export type IiManualDirectPositionInput = z.infer<typeof iiManualDirectPositionSchema>;

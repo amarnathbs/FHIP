@@ -48,7 +48,12 @@ export type IiTransactionType =
   | 'transfer_out'
   | 'reversal'
   | 'segregation'
-  | 'unclassified';
+  | 'unclassified'
+  | 'bonus'
+  | 'split'
+  // R12 addition -- equity/ETF market disposal, distinct from a
+  // mutual-fund 'redemption' (unit redemption from a scheme). Migration 0092.
+  | 'sale';
 export type IiTransactionStatus = 'parsed' | 'reconciled' | 'corrected' | 'reversed';
 
 // --- R2 additions (spec sections 8-34) ---

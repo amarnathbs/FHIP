@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireUser, ok, bad } from '@/lib/api';
 import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
+import { resolvePriceFreshness } from '@/lib/engines/investment-intelligence/valuation/priceFreshness';
 
 // Lists canonical positions for the user — the latest certified/observed
 // ii_holding_snapshots row per (account_id, instrument_id), per
@@ -31,13 +32,14 @@ export async function GET() {
     currency_code: string;
     quality_status: string;
     created_at: string;
+    price_source: string | null;
   }
   let data: SnapshotRow[];
   try {
     data = await fetchAllRows<SnapshotRow>(() =>
       supabase
         .from('ii_holding_snapshots')
-        .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at')
+        .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at, price_source')
         .eq('user_id', user.id)
         .order('as_of_date', { ascending: false })
         .order('id', { ascending: true })
@@ -54,5 +56,17 @@ export async function GET() {
     const key = `${row.account_id}:${row.instrument_id}`;
     if (!latestByPosition.has(key)) latestByPosition.set(key, row);
   }
-  return ok([...latestByPosition.values()]);
+
+  // R12 (spec sections 38-39): a manually-entered listed-security valuation
+  // is never presented as today's price once it is stale. Only computed for
+  // manual_entry-sourced rows — CAS-statement-derived mutual fund rows are
+  // untouched (their NAV freshness is a different, T+1-disclosure concept
+  // this module does not govern; leaving priceFreshness null for them is a
+  // deliberate no-behaviour-change decision, not an oversight).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const positions = [...latestByPosition.values()].map((row) => ({
+    ...row,
+    priceFreshness: row.price_source === 'manual_entry' ? resolvePriceFreshness(row.as_of_date, todayIso) : null,
+  }));
+  return ok(positions);
 }
