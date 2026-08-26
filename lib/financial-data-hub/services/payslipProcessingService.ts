@@ -97,7 +97,7 @@ async function adminUpdateStatementUpload(
 /** Maps the PDF byte-extraction failure kind onto the ALREADY-existing
  * `error_code` vocabulary (spec section 83 discipline: no new code invented
  * where an existing one fits). */
-function errorCodeForPdfExtractionFailure(kind: string): FdhErrorCode {
+export function errorCodeForPdfExtractionFailure(kind: string): FdhErrorCode {
   switch (kind) {
     case 'password_required':
       return 'password_required';
@@ -117,7 +117,7 @@ function errorCodeForPdfExtractionFailure(kind: string): FdhErrorCode {
 }
 
 /** Maps a payslip-layout parse failure onto the existing vocabulary. */
-function errorCodeForPayslipParseFailure(kind: PayslipExtractionFailureKind): FdhErrorCode {
+export function errorCodeForPayslipParseFailure(kind: PayslipExtractionFailureKind): FdhErrorCode {
   switch (kind) {
     case 'not_a_payslip':
       return 'document_type_not_identified';
