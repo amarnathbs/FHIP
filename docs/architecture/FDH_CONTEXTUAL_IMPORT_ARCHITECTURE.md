@@ -1,8 +1,22 @@
 # FHIP Contextual Import Architecture
 
 **Status:** product-level standard, established by FDH-9 (spec sections 1-4, 54-56).
-**Scope of implementation in FDH-9:** Income → Payslip **only**. Every other row in
-the table below is a recorded *design decision for a future phase*, not shipped UI.
+**Scope of implementation in FDH-9:** Income → Payslip **engine and database
+bridge only**. **CORRECTION (2026-08-26 hardening pass):** an earlier version of
+this document stated the Income row was "IMPLEMENTED (FDH-9)" without
+qualification. That overstated it. Verified directly against the source tree
+during the hardening pass (`app/(app)/income/page.tsx` is unchanged — eight
+lines, renders only `<FinancialDataGrid config={incomeGridConfig} />` — and a
+repo-wide search of `app/` for `payslip`/`import-bridge`/`proposal` finds zero
+routes): **no "Import from Payslip" button, upload screen, extraction preview,
+compare view, or Apply action exists anywhere in the UI, and no
+`app/api/**` route calls `lib/import-bridge/` or
+`lib/financial-data-hub/payslip/` at all.** What FDH-9 actually shipped is the
+full engine (parser → payroll evidence → proposal → atomic apply RPC) and its
+database schema, certified in isolation (PGlite + live DEV) — the contextual
+entry point this document specifies is written up as a design target but was
+**never built**. Every other row in the table below is, as originally stated,
+a recorded *design decision for a future phase*, not shipped UI.
 
 ---
 
@@ -22,7 +36,7 @@ financial domain.
 
 | Input Data domain | Contextual import entry point | Underlying engine | Status |
 |---|---|---|---|
-| **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **IMPLEMENTED (FDH-9)** |
+| **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **ENGINE + DATABASE BRIDGE IMPLEMENTED AND CERTIFIED; UI ENTRY POINT NOT BUILT.** No route in `app/` calls this engine yet. |
 | **Expenses** | "Import Bank Statement" | FDH-3 → R7/FDH-4 (CSV) / FDH-5 (PDF) → R8 → FDH-6 → FDH-7 → FDH-8 | **DESIGN RECORDED — FUTURE IMPLEMENTATION.** Engine already exists and is certified; only the contextual entry point is future work. FDH-9 does **not** rebuild, relocate or rewrite it (spec section 3). |
 | **Investments** | "Import Investment Data" / "India Investments — Import Indian Investment Statement" | Investment Intelligence (R1-R11), which already owns the canonical investment ledger and already publishes to `investments` via its own certified bridge (migration `0042`) | **DESIGN RECORDED — FUTURE IMPLEMENTATION** (spec section 4). |
 | **Liabilities** | "Import Loan / Card Statement" | future | DESIGN RECORDED — FUTURE IMPLEMENTATION |
@@ -113,6 +127,10 @@ correctly forbids any file under `lib/financial-data-hub/` from naming
 `income_sources`. See `FDH9_REUSE_AND_GAP_AUDIT.md` §4.1.
 
 ## 7. Target user experience
+
+**This section is aspirational — see the correction in the header. None of
+the flow below is reachable in the running app yet; only the engine and
+atomic database bridge behind it exist today.**
 
 What the user should experience:
 
