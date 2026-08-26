@@ -7,6 +7,7 @@ import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engin
 import type { GridConfig } from '@/lib/grid/types';
 import { PropertyFinancingControl } from '@/components/property-liability/PropertyFinancingControl';
 import { isPropertyEligibleForLinking, isLiabilityEligibleForLinking } from '@/lib/validation/propertyLiabilityLink';
+import { GoalLinkControl } from '@/components/investments/GoalLinkControl';
 
 interface MasterItem {
   item_key: string;
@@ -580,6 +581,7 @@ export function FinancialDataGrid({
                 {config.propertyLinkSide && (
                   <th className="px-3 py-2">{config.propertyLinkSide === 'property' ? 'Financing' : 'Related Property'}</th>
                 )}
+                {config.goalLinkable && <th className="px-3 py-2">Goals</th>}
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -697,6 +699,9 @@ export function FinancialDataGrid({
                         />
                       )}
                     </td>
+                  )}
+                  {config.goalLinkable && (
+                    <td className="px-3 py-2">{row.id && row.included && <GoalLinkControl investmentId={row.id} />}</td>
                   )}
                   <td className="px-3 py-2">
                     {row.is_custom && (
@@ -824,6 +829,12 @@ export function FinancialDataGrid({
                         liabilityId={config.propertyLinkSide === 'liability' ? row.id! : undefined}
                         masterItemKey={row.master_item_key}
                       />
+                    </div>
+                  )}
+                  {config.goalLinkable && row.id && (
+                    <div>
+                      <label className="block text-xs text-muted">Goals</label>
+                      <GoalLinkControl investmentId={row.id} />
                     </div>
                   )}
                   {row.is_custom && (

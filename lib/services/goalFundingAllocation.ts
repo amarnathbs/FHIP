@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 export interface FundingSourceCandidate {
   linkedAssetId?: string | null;
   linkedInvestmentId?: string | null;
+  linkedRetirementId?: string | null;
   allocationPercentage?: number | null;
 }
 
@@ -38,7 +39,7 @@ export async function checkFundingAllocation(
   candidate: FundingSourceCandidate,
   excludeSourceId?: string
 ): Promise<AllocationCheckResult> {
-  const linkedId = candidate.linkedAssetId ?? candidate.linkedInvestmentId ?? null;
+  const linkedId = candidate.linkedAssetId ?? candidate.linkedInvestmentId ?? candidate.linkedRetirementId ?? null;
   const pct = candidate.allocationPercentage ?? null;
   if (!linkedId || pct === null) {
     // Manual/expected/unlinked sources and fixed-amount allocations (no
@@ -47,7 +48,7 @@ export async function checkFundingAllocation(
   }
 
   const supabase = await createClient();
-  const column = candidate.linkedAssetId ? 'linked_asset_id' : 'linked_investment_id';
+  const column = candidate.linkedAssetId ? 'linked_asset_id' : candidate.linkedInvestmentId ? 'linked_investment_id' : 'linked_retirement_id';
   let query = supabase
     .from('goal_funding_sources')
     .select('id, allocation_percentage')
@@ -119,11 +120,23 @@ export function computeAllocatedMonthlyContribution(
 }
 
 // Resolves the live allocated_amount for a percentage-based funding source
-// against its linked asset/investment's current value, so allocations stay
-// correct as the underlying balance changes rather than going stale.
+// against its linked asset/investment/retirement account's current value, so
+// allocations stay correct as the underlying balance changes rather than
+// going stale (spec section 33 — market movement must flow through without
+// a separate manual update). Retirement support added alongside the
+// Education/Children Investment -> Goal Linkage release; previously only
+// asset/investment were handled, leaving a percentage-based retirement
+// funding source permanently frozen at its creation-time snapshot.
 export async function resolveAllocatedAmount(
   userId: string,
-  source: { sourceType: string; linkedAssetId?: string | null; linkedInvestmentId?: string | null; allocationPercentage?: number | null; allocatedAmount: number }
+  source: {
+    sourceType: string;
+    linkedAssetId?: string | null;
+    linkedInvestmentId?: string | null;
+    linkedRetirementId?: string | null;
+    allocationPercentage?: number | null;
+    allocatedAmount: number;
+  }
 ): Promise<number> {
   if (source.allocationPercentage === null || source.allocationPercentage === undefined) {
     return source.allocatedAmount;
@@ -147,5 +160,96 @@ export async function resolveAllocatedAmount(
       .maybeSingle();
     return ((data?.current_value as number) ?? 0) * (source.allocationPercentage / 100);
   }
+  if (source.linkedRetirementId) {
+    const { data } = await supabase
+      .from('retirement_accounts')
+      .select('current_balance')
+      .eq('id', source.linkedRetirementId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    return ((data?.current_balance as number) ?? 0) * (source.allocationPercentage / 100);
+  }
   return source.allocatedAmount;
+}
+
+// ---------------------------------------------------------------------------
+// Ownership assertions (Education/Children Investment -> Goal Linkage,
+// spec s.60-61) — defense-in-depth at the application layer, matching the
+// database-layer trigger added by migration 0092 (gfs_enforce_ownership).
+// Neither layer alone is trusted: the trigger protects every write path
+// including the service-role client (which bypasses RLS entirely); these
+// helpers let API routes reject a forged cross-tenant reference early with
+// a clean 404 instead of surfacing a raw Postgres 42501 error to the client.
+// ---------------------------------------------------------------------------
+export async function assertOwnsGoal(userId: string, goalId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('user_goals').select('id').eq('id', goalId).eq('user_id', userId).maybeSingle();
+  if (error) return error.message;
+  if (!data) return 'Goal not found or not owned by the current user';
+  return null;
+}
+
+export async function assertOwnsFundingTarget(
+  userId: string,
+  target: { linkedAssetId?: string | null; linkedInvestmentId?: string | null; linkedRetirementId?: string | null }
+): Promise<string | null> {
+  const supabase = await createClient();
+  if (target.linkedAssetId) {
+    const { data } = await supabase.from('assets').select('id').eq('id', target.linkedAssetId).eq('user_id', userId).maybeSingle();
+    if (!data) return 'Linked asset not found or not owned by the current user';
+  }
+  if (target.linkedInvestmentId) {
+    const { data } = await supabase.from('investments').select('id').eq('id', target.linkedInvestmentId).eq('user_id', userId).maybeSingle();
+    if (!data) return 'Linked investment not found or not owned by the current user';
+  }
+  if (target.linkedRetirementId) {
+    const { data } = await supabase.from('retirement_accounts').select('id').eq('id', target.linkedRetirementId).eq('user_id', userId).maybeSingle();
+    if (!data) return 'Linked retirement account not found or not owned by the current user';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Live linked-funding aggregation (spec s.26, s.32-33, s.37, s.44, s.51,
+// s.77-85) — the amount an active investment/asset/retirement-linked
+// funding source currently contributes toward its goal, recomputed from
+// live current values rather than the stale creation-time snapshot stored
+// in goal_funding_sources.allocated_amount. This is purely a READ-time
+// projection: it never writes back to goal_funding_sources or to
+// user_goals.current_amount (the manual/confirmed-contribution ledger,
+// kept in sync transactionally by the contributions API — see
+// goalsData.ts's own comment on loadFundingSourcesByGoal). Adding this on
+// top of that ledger is therefore additive and backward-compatible: a goal
+// funded purely by manual contributions is completely unaffected; a goal
+// with an investment/asset/retirement-linked funding source now also gets
+// credit for that link without requiring the user to separately log a
+// contribution event for the same money (spec s.33's explicit requirement).
+export interface LiveLinkedFundingSource {
+  sourceType: string;
+  linkedAssetId: string | null;
+  linkedInvestmentId: string | null;
+  linkedRetirementId: string | null;
+  allocationPercentage: number | null;
+  allocatedAmount: number;
+}
+export function computeLiveLinkedFundingValue(
+  fundingSources: LiveLinkedFundingSource[],
+  currentValueById: Map<string, number>
+): number {
+  let total = 0;
+  for (const source of fundingSources) {
+    if (!['investment', 'asset', 'retirement'].includes(source.sourceType)) continue; // manual/cash/expected carry no live-value signal
+    const linkedId = source.linkedInvestmentId ?? source.linkedAssetId ?? source.linkedRetirementId ?? null;
+    if (!linkedId) continue;
+    if (source.allocationPercentage !== null && source.allocationPercentage !== undefined) {
+      // Percentage-based: recompute live against the linked record's current value (spec s.33).
+      const currentValue = currentValueById.get(linkedId) ?? 0;
+      total += currentValue * (source.allocationPercentage / 100);
+    } else {
+      // Fixed-amount: a committed dollar figure independent of the linked balance's
+      // later movement (spec s.44's fixed-allocation semantics) — use the stored value.
+      total += source.allocatedAmount;
+    }
+  }
+  return total;
 }

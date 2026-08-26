@@ -102,6 +102,7 @@ export const investmentGridConfig: GridConfig = {
   valueField: 'current_value',
   reviewSection: 'investments',
   propertyLinkSide: 'property',
+  goalLinkable: true,
   notApplicable: { profileField: 'not_applicable_investments', label: "I don't have any investments" },
   fields: [
     { name: 'institution', label: 'Institution', type: 'text' },

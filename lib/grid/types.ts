@@ -82,4 +82,13 @@ export interface GridConfig {
   // generic grid component and any future module can reuse the same
   // exclusion without a special case here.
   excludeMasterItemKeys?: string[];
+  // Education/Children Investment -> Goal Linkage (spec s.24/26-28/57):
+  // shows a compact "Goals" control (GoalLinkControl) on each saved row,
+  // letting the user link this holding to an existing Goal without leaving
+  // the grid. Investments-only for this release — the underlying
+  // goal_funding_sources relationship also supports assets/retirement
+  // accounts (linked_asset_id/linked_retirement_id), but only Investments
+  // gets a UI entry point here; Goals' own FundingSourceList remains the
+  // entry point for asset-linked funding sources.
+  goalLinkable?: boolean;
 }
