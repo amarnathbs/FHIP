@@ -3,18 +3,48 @@
 -- conservative deterministic backfill. No existing column is dropped,
 -- renamed or narrowed; no existing row's current_value/balance is touched.
 --
--- NUMBERING NOTE: canonical origin/main (e285374) ends at
--- 0090_smsf_current_balance_integrity_guard.sql. `feature/fdh9-payslip-
--- income-intelligence` has independently claimed 0091 on its own unmerged
--- branch. Two other background workstreams (g0-jurisdiction-applicability-
--- discovery -- read-only, claims no migration numbers; feature/investment-
--- intelligence-r12-wider-india-assets -- active but had claimed nothing
--- beyond 0090 as of this writing) were also re-scanned immediately before
--- this file was finalised. 0093 is therefore the next genuinely free
--- number; per this project's established collision precedent, this file
--- renumbers to the next free slot if a collision is discovered before
--- reaching DEV, and whichever migration is already live on DEV always
--- keeps its number.
+-- NUMBERING NOTE (re-confirmed 2026-08-26 at final-DEV-application time):
+-- canonical origin/main is now at ae3d6807 and has advanced past this
+-- branch's original a7a86d2 integration point. Its migration ledger is
+-- 0090, 0092 (feature/investment-intelligence-r12-wider-india-assets --
+-- `0092_ii_r12_wider_india_assets_foundation.sql`, a genuine collision this
+-- file's number originally shared before being renumbered 0092 -> 0093),
+-- 0094, 0095. 0091 remains claimed only by the still-unmerged
+-- `fdh9-payslip-income-intelligence` branch. `node scripts/check-migration-
+-- versions-against-branch.mjs --against=origin/main` was re-run immediately
+-- before this note was written and reports zero cross-branch collisions
+-- for this branch's 0093 against origin/main's current ledger -- 0093 is
+-- therefore still the correct, genuinely free number; no further renumber
+-- is required. Per this project's binding numbering rule (docs/
+-- architecture/ADR_MIGRATION_LINEAGE_RECONCILIATION.md): "never renumber a
+-- migration that has already been applied to a shared environment", and
+-- per that same ADR's finding that this project applies every migration by
+-- hand-pasting SQL into the Supabase dashboard (no CLI project link, no
+-- `supabase_migrations.schema_migrations` ledger is ever populated),
+-- there is no technical ordering enforcement at all -- applying this
+-- 0093-numbered file to an environment where higher-numbered 0094/0095
+-- already ran is exactly as safe as applying it in strict numeric order,
+-- provided (confirmed true here) every statement in it remains idempotent.
+--
+-- RELATIONSHIP TO 0095: this file's original section 2 (the
+-- `gfs_enforce_ownership` trigger + `goal_funding_sources` RLS hardening)
+-- was subsequently extracted verbatim into its own standalone migration,
+-- `0095_goal_funding_sources_authoritative_forgery_hotfix.sql`, so that the
+-- security fix could ship to production ahead of this feature's own
+-- timeline (see 0095's header for the full rationale). 0095 is already
+-- merged to `main` and live in production and DEV as of this writing --
+-- confirmed live via `scripts/egl_live_dev_security_probe.mjs`, which now
+-- observes the forged cross-tenant probe rejected with 0095's exact
+-- `gfs_enforce_ownership` error text. This file's own copy of that same
+-- section is INTENTIONALLY left in place rather than deleted: 0095's own
+-- header explicitly anticipates and blesses this exact re-run ("Applying
+-- 0093 in full at a later date... will re-run this same trigger-function/
+-- trigger/policy definition... all safe to re-run"), every statement in it
+-- is `create or replace` / `drop ... if exists` + `create`, and rewriting
+-- this file to instead assert 0095 already ran would require restructuring
+-- this feature's already-certified (32/32) PGlite harness for zero
+-- additional safety -- 0095 is never weakened, narrowed, or diverged from
+-- by keeping it. No second, different security mechanism is introduced.
 --
 -- Context: see GL-0 discovery findings (reported alongside this migration).
 -- The core discovery is that the canonical Goal<->Investment funding
@@ -86,6 +116,13 @@ where category = 'investment' and item_key in ('education_fund', 'children_inves
 --    already only ever submits a goal_id/linked_*_id it has separately
 --    verified belongs to the same user_id, so this trigger never rejects
 --    real traffic -- only forged cross-tenant references.
+--
+--    NOTE: this section was later extracted verbatim into its own
+--    standalone migration, 0095_goal_funding_sources_authoritative_
+--    forgery_hotfix.sql, which shipped to DEV/production ahead of this
+--    feature. Re-running it here is a deliberate, declared-safe no-op on
+--    any environment where 0095 already ran (see the numbering note above)
+--    -- it never introduces a second/different enforcement mechanism.
 -- ---------------------------------------------------------------------------
 create or replace function gfs_enforce_ownership() returns trigger as $$
 begin
