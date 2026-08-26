@@ -104,5 +104,21 @@ try {
 } catch (e) { duplicateBlocked = /unique|duplicate/i.test(e.message); }
 check('NC1 RED->GREEN: a second instrument CANNOT claim the same ISIN (global unique index blocks the deliberate duplicate)', duplicateBlocked);
 
+console.log('\n=== NC2: HOLDING DOUBLE COUNT — the pre-existing R3 guard extends to R12 classes with zero new code ===');
+// ii_fhip_publications' uidx_ii_fhip_publications_one_active_position
+// (migration 0042) is instrument-class-agnostic already — R12 adds
+// 'equity'/'etf' to isProductionCertifiedAssetClass but touches NO
+// publication-table code. Prove the SAME guard blocks a double-active
+// publish for a newly-certified equity position, exactly as it already did
+// for mutual funds.
+const pub1 = await db.query(`insert into ii_fhip_publications (user_id, canonical_position_id, account_id, instrument_id, publication_target, status, published_row_id) values ('${A}','${snapId}','${accId}','${instrId}','investments','published','${accId}') returning id`);
+const snap2Id = (await db.query(`insert into ii_holding_snapshots (user_id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, price_source) values ('${A}','${accId}','${instrId}','2026-08-16',10,52000,'INR','warning','manual_entry') returning id`)).rows[0].id;
+let dupPublishBlocked = false;
+try {
+  await db.exec(`insert into ii_fhip_publications (user_id, canonical_position_id, account_id, instrument_id, publication_target, status, published_row_id) values ('${A}','${snap2Id}','${accId}','${instrId}','investments','published','${accId}')`);
+} catch (e) { dupPublishBlocked = /unique|duplicate/i.test(e.message); }
+check('NC2: a second active publication for the SAME equity position is blocked (uidx_ii_fhip_publications_one_active_position, unchanged pre-existing R3 guard)', dupPublishBlocked);
+await db.query(`delete from ii_fhip_publications where id='${pub1.rows[0].id}'`);
+
 console.log(`\n=== SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);
