@@ -257,7 +257,12 @@ export async function loadAnalyticsDataset(
     const inst = instrumentById.get(instrumentId);
     if (!inst) continue;
 
-    const txs = (txRows ?? []).filter((t) => t.instrument_id === instrumentId && t.status !== 'reversed');
+    // R11: 'review_required' (an unresolved cross-source conflict/ambiguity
+    // — see crossSourceIdentity.ts) is excluded from analytics the same way
+    // 'reversed' already is — the evidence is preserved on the row, just
+    // not counted until a human resolves the linked reconciliation case
+    // (spec sections 36-37: no economic duplication, no evidence loss).
+    const txs = (txRows ?? []).filter((t) => t.instrument_id === instrumentId && t.status !== 'reversed' && t.status !== 'review_required');
     const snaps = (snapRows ?? []).filter((s) => s.instrument_id === instrumentId);
 
     const cashFlows: CashFlow[] = [];

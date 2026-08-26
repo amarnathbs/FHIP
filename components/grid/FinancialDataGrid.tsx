@@ -148,7 +148,7 @@ export function FinancialDataGrid({
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [masterItems, savedRecords, profile, sectionStatusRows] = await Promise.all([
+      const [rawMasterItems, rawSavedRecords, profile, sectionStatusRows] = await Promise.all([
         fetchJson<MasterItem[]>(`/api/master-items?category=${config.category}`),
         fetchJson<SavedRecord[]>(`/api/${config.resource}`),
         fetchJson<{
@@ -164,6 +164,21 @@ export function FinancialDataGrid({
       if (cancelled) return;
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
+
+      // SMSF-UI: strip out any master_item_key this grid must never edit
+      // directly (see GridConfig.excludeMasterItemKeys comment) from both
+      // the catalogue list and the saved records BEFORE any of the
+      // completion/zero-confirmation/merge logic below runs, so an excluded
+      // item is fully invisible to this grid rather than merely
+      // uneditable — it still exists and still counts financially, just
+      // through its own dedicated UI, not here.
+      const excludedKeys = new Set(config.excludeMasterItemKeys ?? []);
+      const masterItems = excludedKeys.size
+        ? rawMasterItems.filter((m) => !excludedKeys.has(m.item_key))
+        : rawMasterItems;
+      const savedRecords = excludedKeys.size
+        ? rawSavedRecords.filter((r) => !r.master_item_key || !excludedKeys.has(r.master_item_key))
+        : rawSavedRecords;
       if (config.notApplicable) setNotApplicable(Boolean(profile?.[config.notApplicable.profileField]));
       if (config.zeroConfirmation) {
         const confirmed = sectionStatusRows.find((r) => r.section === config.zeroConfirmation!.section);

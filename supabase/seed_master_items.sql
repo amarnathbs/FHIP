@@ -255,3 +255,24 @@ insert into master_financial_items (category, item_key, item_label, sort_order) 
 ('insurance', 'other_insurance', 'Other Insurance', 260)
 
 on conflict (category, item_key) do nothing;
+
+-- AU-only jurisdiction restriction for SMSF (GEO-2, migration
+-- 0084_geo_jurisdiction_smsf.sql: "SMSF Summary/Detailed Holdings is
+-- Australia-only"). Mirrors the equivalent backfill UPDATE in that
+-- migration, guarded to be a no-op if the country_applicability column
+-- doesn't exist yet on whatever database this file is applied to -- this
+-- statement is only meaningful once migration 0084 has run, but this file
+-- may run before or after it depending on environment history, so both
+-- orderings independently converge on the same result.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'master_financial_items' and column_name = 'country_applicability'
+  ) then
+    update master_financial_items
+    set country_applicability = array['AU']::char(2)[]
+    where category = 'retirement' and item_key = 'smsf'
+      and (country_applicability is null or country_applicability <> array['AU']::char(2)[]);
+  end if;
+end $$;

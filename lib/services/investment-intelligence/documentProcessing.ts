@@ -46,6 +46,7 @@ import { normaliseSchemeName } from './parsers/textUtils';
 import { randomUUID } from 'crypto';
 import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
+import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -72,7 +73,7 @@ export interface ProcessSourceDocumentResult {
   reconciliationCaseId?: string | null; // set when the failure IS a reconciliation case (password/unsupported/corrupt)
 }
 
-async function openReconciliationCase(
+export async function openReconciliationCase(
   userId: string,
   input: {
     subjectType: 'holding_snapshot' | 'transaction' | 'account';
@@ -436,6 +437,52 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // --- 5. Transaction normalisation + fingerprint dedup -------------------
   let duplicateTransactionsLinked = 0;
   const config = await loadActiveReconciliationConfig();
+  // R11 — cross-source candidate cache, one lookup per (account, instrument)
+  // position rather than per transaction (a statement commonly has many
+  // transactions against the same few positions). Populated lazily.
+  const crossSourcePositionCache = new Map<string, CrossSourceExistingTransaction[]>();
+  async function loadCrossSourceCandidates(accountId: string, instrumentId: string): Promise<CrossSourceExistingTransaction[]> {
+    const key = `${accountId}:${instrumentId}`;
+    const cached = crossSourcePositionCache.get(key);
+    if (cached) return cached;
+    const rows = await fetchAllRows<{
+      id: string;
+      account_id: string;
+      instrument_id: string;
+      transaction_date: string;
+      transaction_type: string;
+      gross_amount: string;
+      units: string | null;
+      source_reference: string | null;
+      source_document_id: string | null;
+      status: string;
+    }>(() =>
+      admin
+        .from('ii_transactions')
+        .select('id, account_id, instrument_id, transaction_date, transaction_type, gross_amount, units, source_reference, source_document_id, status')
+        .eq('user_id', userId)
+        .eq('account_id', accountId)
+        .eq('instrument_id', instrumentId)
+        .order('id', { ascending: true })
+    );
+    const mapped: CrossSourceExistingTransaction[] = rows
+      .filter((r) => r.source_document_id !== null)
+      .map((r) => ({
+        id: r.id,
+        sourceKey: '', // not needed for comparison — sourceDocumentId is the discriminator used by resolveCrossSourceTransactionMatch
+        sourceDocumentId: r.source_document_id as string,
+        accountId: r.account_id,
+        instrumentId: r.instrument_id,
+        transactionDate: r.transaction_date,
+        transactionType: r.transaction_type,
+        grossAmount: String(r.gross_amount),
+        units: r.units === null ? null : String(r.units),
+        sourceReference: r.source_reference,
+        status: r.status,
+      }));
+    crossSourcePositionCache.set(key, mapped);
+    return mapped;
+  }
 
   for (const t of parsed.transactions) {
     const folioKey = t.folioNumber ?? '__no_folio__';
@@ -465,6 +512,87 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       continue;
     }
 
+    // R11 — cross-source identity resolution (spec sections 24-41). Only
+    // reached once the SAME-source fingerprint check above has already
+    // ruled out a re-import of this exact document's own prior evidence.
+    // This checks whether a DIFFERENT source already evidences the same
+    // real-world transaction (fingerprint.ts's sourceKey-scoped fingerprint
+    // can never catch this by construction — see
+    // R11_SCOPE_AND_ARCHITECTURE_RECONCILIATION.md section 1).
+    const crossSourceCandidates = await loadCrossSourceCandidates(accountId, instrumentId);
+    let crossSourceReviewRequired = false;
+    if (crossSourceCandidates.length > 0) {
+      const match = resolveCrossSourceTransactionMatch(
+        {
+          sourceKey: parsed.metadata.sourceKey,
+          sourceDocumentId,
+          accountId,
+          instrumentId,
+          transactionDate: t.transactionDateIso,
+          transactionType: t.canonicalType,
+          grossAmount: scaledToDecimalString(t.amountScaled, 2),
+          units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+          sourceReference: t.sourceReference,
+        },
+        crossSourceCandidates,
+        config
+      );
+
+      if ((match.state === 'exact' || match.state === 'high_confidence') && match.matchedExistingId) {
+        // Same real-world transaction, corroborated by a second source —
+        // link, do not duplicate (spec section 5's core invariant).
+        await admin.from('ii_transaction_source_links').upsert(
+          {
+            user_id: userId,
+            transaction_id: match.matchedExistingId,
+            source_document_id: sourceDocumentId,
+            parse_run_id: parseRunId,
+            is_originating: false,
+            match_basis: match.state === 'exact' ? 'cross_source_exact' : 'cross_source_high_confidence',
+          },
+          { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true }
+        );
+        const caseId = await openReconciliationCase(userId, {
+          subjectType: 'transaction',
+          subjectId: match.matchedExistingId,
+          discrepancyType: match.state === 'exact' ? 'cross_source_exact_duplicate' : 'cross_source_high_confidence_duplicate',
+          severity: 'info',
+          sourceDocumentId,
+          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale },
+          evidence: { comparedTransactionIds: [match.matchedExistingId], engineVersion: match.engineVersion, newSourceDocumentId: sourceDocumentId },
+        });
+        if (caseId) {
+          await admin
+            .from('ii_reconciliation_cases')
+            .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by_actor_type: 'system', resolution_method: 'auto_resolved_cross_source_precedence' })
+            .eq('id', caseId);
+          reconciliationCasesOpened++;
+        }
+        duplicateTransactionsLinked++;
+        continue;
+      }
+
+      if (match.state === 'conflict' || match.state === 'ambiguous') {
+        // Never silently merge (spec section 29). Both pieces of evidence
+        // are preserved — this row IS inserted below (falls through), but
+        // with status='review_required' so R4/R5/R6 exclude it from
+        // analytical aggregation until a human resolves the case (spec
+        // sections 36, 37 — "no economic duplication" while still "never
+        // discard evidence").
+        const caseId = await openReconciliationCase(userId, {
+          subjectType: 'transaction',
+          subjectId: accountId, // the new row doesn't exist yet at case-creation time; account_id is a stable, always-available anchor. The evidence payload below carries the precise comparison.
+          discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
+          severity: 'high',
+          sourceDocumentId,
+          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale, transactionDate: t.transactionDateIso },
+          evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: sourceDocumentId },
+        });
+        if (caseId) reconciliationCasesOpened++;
+        crossSourceReviewRequired = true;
+      }
+    }
+
     if (t.canonicalType === 'unclassified') {
       const material = t.amountScaled !== ZERO;
       const caseId = await openReconciliationCase(userId, {
@@ -486,6 +614,14 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         instrument_id: instrumentId,
         source_document_id: sourceDocumentId,
         currency_code: currencyCode,
+        // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
+        // inserted (never discarded — spec section 29) but excluded from
+        // R4/R5/R6 analytical aggregation via 'review_required' until a
+        // human resolves the linked ii_reconciliation_cases row, using the
+        // exact same exclusion mechanism R4/R5/R6 already apply to
+        // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
+        // taxRepository.ts's "usable" filters).
+        status: crossSourceReviewRequired ? 'review_required' : 'parsed',
         transaction_type: t.canonicalType,
         transaction_date: t.transactionDateIso,
         units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
@@ -503,6 +639,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       .single();
     if (createdTxn && !txnErr) {
       await admin.from('ii_transaction_source_links').insert({ user_id: userId, transaction_id: createdTxn.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+      crossSourcePositionCache.delete(`${accountId}:${instrumentId}`); // invalidate — a later transaction in this SAME import against this SAME position must see this row as a candidate too
     }
   }
 
