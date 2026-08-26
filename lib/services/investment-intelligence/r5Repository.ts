@@ -443,12 +443,27 @@ async function addDirectSecuritySelfSnapshots(
   classificationVersion: string | null
 ): Promise<void> {
   const ids = [...directSecurityInstrumentIds];
-  const { data: classRows } = await supabase
-    .from('ii_security_classifications')
-    .select('instrument_id, sector_code, sector_label, industry_code, industry_label, market_cap_class, effective_from')
-    .in('instrument_id', ids)
-    .lte('effective_from', asOfDate)
-    .order('effective_from', { ascending: false });
+  // R6-P0 pagination discipline (this table is effective-dated and can carry
+  // many historical rows per instrument — a bare unbounded select risks the
+  // same silent-1000-row truncation class this repository already guards
+  // against everywhere else): fetchAllRows, ordered with `id` as a
+  // tie-breaker so no page boundary can drop or duplicate a version.
+  const classRows = await fetchAllRows<{
+    id: string;
+    instrument_id: string;
+    sector_code: string | null;
+    industry_code: string | null;
+    market_cap_class: string | null;
+    effective_from: string;
+  }>(() =>
+    supabase
+      .from('ii_security_classifications')
+      .select('id, instrument_id, sector_code, sector_label, industry_code, industry_label, market_cap_class, effective_from')
+      .in('instrument_id', ids)
+      .lte('effective_from', asOfDate)
+      .order('effective_from', { ascending: false })
+      .order('id', { ascending: true })
+  );
   const classByInstrument = new Map<string, { sector_code: string | null; industry_code: string | null; market_cap_class: string | null }>();
   for (const row of classRows ?? []) {
     if (!classByInstrument.has(row.instrument_id as string)) {
