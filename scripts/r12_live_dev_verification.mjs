@@ -5,22 +5,40 @@
 // no exec_sql/execute_sql/run_sql/admin_exec RPC exists, and PostgREST does
 // not expose a DDL path). Migration 0092 has NOT been applied to DEV.
 //
+// UPDATE 2026-08-27 (terminal certification continuation): a fresh re-run
+// of LIVE-R12-02 found the same-user holding forgery is now BLOCKED on
+// DEV (the PATCH returns HTTP 200 -- PostgREST's normal "matched but
+// nothing writable" response under the current SELECT-only owner policy
+// -- but the ground-truth persisted value is independently confirmed
+// UNCHANGED, not merely inferred from the HTTP status). This is migration
+// 0094's fix (extracted from this file's own original 0092 draft and
+// shipped standalone, see 0092's own file header) -- 0094 has evidently
+// already been applied to DEV independently of 0092/R12 (most likely as
+// part of the standalone production hotfix rollout this repo's history
+// shows for 0094). The comments and labels below were written when 0094
+// was not yet live on DEV; they are corrected in-place rather than
+// silently rewritten, per this project's honesty standard.
+//
 // Scope of what CAN be verified live, honestly, without 0092:
 //   LIVE-R12-01  Existing mutual-fund regression (unchanged pre-R12 schema/RLS)
-//   LIVE-R12-02  SAME-USER HOLDING FORGERY on ii_holding_snapshots — RED
-//                reproduction of the real, live, pre-existing vulnerability
-//                this round's architecture discovery found (not hypothetical)
+//   LIVE-R12-02  SAME-USER HOLDING FORGERY on ii_holding_snapshots — as of
+//                2026-08-27, CONFIRMED BLOCKED live on DEV (0094 already
+//                applied there, independently of 0092/R12)
 //   LIVE-R12-03  Cross-user holding access — already blocked pre-0092 (the
 //                ownership USING clause was always correct; only the
-//                COLUMN-level same-user forgery was the gap)
+//                COLUMN-level same-user forgery was the gap, and that gap
+//                is now also closed per LIVE-R12-02 above)
 //   LIVE-R12-04  Same ISIN, two exchange identifiers -> one canonical
 //                instrument (structurally available since migration 0031,
 //                does not need 0092)
+//   LIVE-R12-05  >1000-row real REST pagination proof against a genuine
+//                DEV table (spec section 25's ">1000-economic-result-proof"
+//                inventory item) -- does not need 0092 either
 //
 // What CANNOT be verified live this round (needs 0092 applied to DEV first):
 //   the 'sale' transaction_type, the price_source column, the
 //   ii_scheme_tax_classification 'direct_listed_security_rule' basis, and
-//   therefore the POST-FIX GREEN state of LIVE-R12-02. See
+//   the actual manual-entry equity/ETF creation API path. See
 //   R12_LIVE_DEV_VERIFICATION.md for the full accounting against the
 //   spec's 25-scenario target.
 import fs from 'fs';
@@ -89,7 +107,17 @@ async function makeUser(tag) {
 
 async function main() {
   console.log(`host ${new URL(BASE).host}\n`);
+  // HARDENING (2026-08-27, found during this continuation's own DEV
+  // cleanup re-verification): an earlier run of this exact script threw
+  // partway through (an invalid identifier_scheme value on the first
+  // attempt at the LIVE-R12-05 seed) and, because cleanup previously lived
+  // at the tail of a single linear function body, the thrown error skipped
+  // cleanup entirely -- leaving real synthetic users/instruments/accounts
+  // on DEV until independently found and manually removed. Wrapped in
+  // try/finally so cleanup always runs, success or failure.
+  let snapId;
 
+  try {
   // --- LIVE-R12-01: existing mutual-fund regression -----------------------
   const userA = await makeUser('mf-regression-a');
   const acc = await sb('/rest/v1/ii_accounts', { method: 'POST', prefer: 'return=representation', body: { user_id: userA.id, account_type: 'mf_folio', institution_name: 'HDFC Mutual Fund', country_code: 'IN', currency_code: 'INR', folio_number: `R12-MF-${stamp}`, status: 'active' } });
@@ -99,20 +127,24 @@ async function main() {
   const instrId = instr.json?.[0]?.id;
   cleanup.instrumentIds.push(instrId);
   const snap = await sb('/rest/v1/ii_holding_snapshots', { method: 'POST', prefer: 'return=representation', body: { user_id: userA.id, account_id: accId, instrument_id: instrId, as_of_date: '2026-06-30', units: 100, value: 15000, currency_code: 'INR', quality_status: 'certified' } });
-  const snapId = snap.json?.[0]?.id;
+  snapId = snap.json?.[0]?.id;
   const readOwn = await asUserRest(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}&select=id,units,value`, { accessToken: userA.accessToken });
   record('LIVE-R12-01', 'existing mutual-fund holding still readable by its owner (unchanged pre-R12 behaviour)', readOwn.ok && readOwn.json?.length === 1 ? 'PASS' : 'FAIL', JSON.stringify(readOwn.json));
 
-  // --- LIVE-R12-02: SAME-USER HOLDING FORGERY (RED — real, live, pre-existing) ---
+  // --- LIVE-R12-02: SAME-USER HOLDING FORGERY -- 0094's fix, confirmed live on DEV 2026-08-27 ---
   const forgeAttempt = await asUserRest(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}`, { accessToken: userA.accessToken, method: 'PATCH', body: { value: 999999999, units: 1 } });
   const verifyForged = await sb(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}&select=value,units`);
   const forged = verifyForged.json?.[0]?.value === 999999999;
   record(
     'LIVE-R12-02',
-    'SAME-USER HOLDING FORGERY on ii_holding_snapshots — pre-existing gap, RED expected on CURRENT unmigrated DEV schema (fix is migration 0092, not yet applied to DEV)',
-    forged ? 'RED-CONFIRMED (real, live, matches the code-inspection finding — fixed in migration 0092, pending DEV application)' : 'UNEXPECTED-GREEN (investigate — was 0092 already applied?)',
+    "SAME-USER HOLDING FORGERY on ii_holding_snapshots -- 0094's fix (HTTP 200 is PostgREST's normal 'matched, nothing writable' response; ground truth independently verified unchanged, not inferred from status alone)",
+    forged ? 'RED (real, live -- 0094 protection is NOT active on this DEV project right now, investigate immediately)' : 'GREEN-CONFIRMED (real, live, 2026-08-27 -- 0094 already applied to DEV, forgery blocked, ground truth unchanged)',
     `PATCH http ${forgeAttempt.status}; row now reads value=${verifyForged.json?.[0]?.value}, units=${verifyForged.json?.[0]?.units}`
   );
+  // Trusted positive control (spec Stage A step 7's second half): the
+  // SAME field a same-user forgery cannot touch must still be writable by
+  // the trusted/service-role path -- see LIVE-R12-02-restore immediately
+  // below, which performs exactly that write and verifies it lands.
   // Restore ground truth immediately (service-role), regardless of outcome.
   await sb(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}`, { method: 'PATCH', body: { value: 15000, units: 100 } });
   const restored = await sb(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}&select=value,units`);
@@ -147,18 +179,80 @@ async function main() {
     `identifiers all point at ${eqInstrId}: ${allSameInstrument}; duplicate ISIN insert http ${dupIsinAttempt.status}`
   );
 
-  // --- Cleanup: synthetic R12 certification data only ----------------------
-  for (const id of cleanup.instrumentIds) await sb(`/rest/v1/ii_instrument_identifiers?instrument_id=eq.${id}`, { method: 'DELETE' });
-  if (snapId) await sb(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}`, { method: 'DELETE' });
-  for (const id of cleanup.instrumentIds) await sb(`/rest/v1/ii_instruments?id=eq.${id}`, { method: 'DELETE' });
-  for (const id of cleanup.accountIds) await sb(`/rest/v1/ii_accounts?id=eq.${id}`, { method: 'DELETE' });
-  for (const id of cleanup.userIds) await sb(`/auth/v1/admin/users/${id}`, { method: 'DELETE' });
+  // --- LIVE-R12-05: >1000-row real REST pagination proof (spec section 25's
+  // ">1000-economic-result-proof" inventory item) -- against a genuine DEV
+  // table, no 0092 schema needed. Seeds 1005 real ii_instrument_identifiers
+  // rows for one synthetic instrument (a real, if artificial, "many rows for
+  // one economic entity" shape) with a distinguishing identifier value on
+  // the LAST row (row 1005, past PostgREST's 1000-row page cap), then proves
+  // a naive single-page real REST call misses it while full pagination
+  // (the same fetchAllRows contract certified in
+  // tests/unit/iiR12PaginationScaleCertification.test.ts) finds it.
+  const scaleInstr = await sb('/rest/v1/ii_instruments', { method: 'POST', prefer: 'return=representation', body: { instrument_name: 'R12 Scale Test Instrument', instrument_class: 'equity', country_of_domicile: 'IN', base_currency: 'INR', status: 'provisional' } });
+  const scaleInstrId = scaleInstr.json?.[0]?.id;
+  cleanup.instrumentIds.push(scaleInstrId);
+  const SCALE_N = 1005;
+  const BATCH = 200;
+  const scaleRows = [];
+  for (let i = 0; i < SCALE_N; i++) {
+    scaleRows.push({
+      instrument_id: scaleInstrId,
+      identifier_scheme: 'internal_provisional',
+      identifier_value: i === SCALE_N - 1 ? `PAST-PAGE-1-MARKER-${stamp}` : `noise-${stamp}-${i}`,
+      country_code: 'IN',
+    });
+  }
+  for (let i = 0; i < scaleRows.length; i += BATCH) {
+    const chunk = scaleRows.slice(i, i + BATCH);
+    const ins = await sb('/rest/v1/ii_instrument_identifiers', { method: 'POST', prefer: 'return=minimal', body: chunk });
+    if (ins.status >= 400) throw new Error(`LIVE-R12-05 seed failed at batch ${i}: ${ins.status} ${ins.text}`);
+  }
+  // Naive single-page read (real REST, real PostgREST default cap).
+  const naivePage = await sb(`/rest/v1/ii_instrument_identifiers?instrument_id=eq.${scaleInstrId}&select=identifier_value&order=identifier_value.asc`);
+  const naiveFound = (naivePage.json ?? []).some((r) => r.identifier_value === `PAST-PAGE-1-MARKER-${stamp}`);
+  const naiveCount = (naivePage.json ?? []).length;
+  // Full pagination via real Range-header-driven REST calls (same technique fetchAllRows uses).
+  let fullRows = [];
+  for (let from = 0; ; from += 1000) {
+    const rangedPage = await sb(`/rest/v1/ii_instrument_identifiers?instrument_id=eq.${scaleInstrId}&select=identifier_value&order=identifier_value.asc&limit=1000&offset=${from}`);
+    if (!rangedPage.json || rangedPage.json.length === 0) break;
+    fullRows = fullRows.concat(rangedPage.json);
+    if (rangedPage.json.length < 1000) break;
+  }
+  const fullFound = fullRows.some((r) => r.identifier_value === `PAST-PAGE-1-MARKER-${stamp}`);
+  record(
+    'LIVE-R12-05',
+    `>1000-row real REST pagination: seeded ${SCALE_N} real ii_instrument_identifiers rows for one instrument, distinguishing marker at row ${SCALE_N} (past the 1000-row page)`,
+    (naiveCount <= 1000 && !naiveFound && fullRows.length === SCALE_N && fullFound) ? 'PASS (RED->GREEN both proven live)' : 'FAIL',
+    `naive single-page: ${naiveCount} rows, marker found=${naiveFound} (expected false); full pagination: ${fullRows.length} rows, marker found=${fullFound} (expected true)`
+  );
 
-  console.log('\n=== SUMMARY ===');
-  for (const r of results) console.log(`${r.status.padEnd(40)} ${r.id} ${r.description}`);
-  const genuineFailures = results.filter((r) => r.status === 'FAIL');
-  console.log(`\n${results.length} checks run, ${genuineFailures.length} genuine failures, cleanup issued for ${cleanup.userIds.length} synthetic users / ${cleanup.instrumentIds.length} instruments / ${cleanup.accountIds.length} accounts.`);
-  process.exit(genuineFailures.length > 0 ? 1 : 0);
+  } finally {
+    // --- Cleanup: synthetic R12 certification data only, ALWAYS attempted,
+    // success or failure above (see the hardening note at the top of main()).
+    // Retries the holding-snapshot delete FIRST (it FK-blocks instrument
+    // deletion) then instruments/accounts/users, and never lets one failed
+    // delete abort the rest -- every step is individually wrapped.
+    async function safeDelete(path) {
+      try {
+        const r = await sb(path, { method: 'DELETE' });
+        if (r.status >= 400) console.error(`  cleanup WARNING: DELETE ${path} -> ${r.status} ${r.text.slice(0, 200)}`);
+      } catch (e) {
+        console.error(`  cleanup WARNING: DELETE ${path} threw: ${e.message}`);
+      }
+    }
+    if (snapId) await safeDelete(`/rest/v1/ii_holding_snapshots?id=eq.${snapId}`);
+    for (const id of cleanup.instrumentIds) await safeDelete(`/rest/v1/ii_instrument_identifiers?instrument_id=eq.${id}`);
+    for (const id of cleanup.instrumentIds) await safeDelete(`/rest/v1/ii_instruments?id=eq.${id}`);
+    for (const id of cleanup.accountIds) await safeDelete(`/rest/v1/ii_accounts?id=eq.${id}`);
+    for (const id of cleanup.userIds) await safeDelete(`/auth/v1/admin/users/${id}`);
+
+    console.log('\n=== SUMMARY ===');
+    for (const r of results) console.log(`${r.status.padEnd(40)} ${r.id} ${r.description}`);
+    const genuineFailures = results.filter((r) => r.status === 'FAIL');
+    console.log(`\n${results.length} checks run, ${genuineFailures.length} genuine failures, cleanup issued for ${cleanup.userIds.length} synthetic users / ${cleanup.instrumentIds.length} instruments / ${cleanup.accountIds.length} accounts.`);
+    if (genuineFailures.length > 0) process.exitCode = 1;
+  }
 }
 
 main().catch((e) => {
