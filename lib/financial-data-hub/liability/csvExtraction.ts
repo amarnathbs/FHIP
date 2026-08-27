@@ -42,6 +42,11 @@ export interface LiabilityCsvColumnMap {
   principalComponent?: string;
   interestComponent?: string;
   feeComponent?: string;
+  /** India GST column (spec section 30, evidence-only — see
+   * `LiabilityStatementActivity.gstAmountRaw`'s own header). Carried through
+   * verbatim, never parsed as an amount and never included in any
+   * activity-type total. */
+  gstAmount?: string;
   /** Institution-specific vocabulary -> the closed `LiabilityActivityType`
    * set (spec section 28's `normalize` contract step). Matched
    * case-insensitively against the RAW cell value BEFORE the closed-vocab
@@ -125,6 +130,7 @@ export function extractLiabilityStatementFromCsv(input: LiabilityCsvExtractionIn
   const principalIdx = input.columnMap.principalComponent ? colIndex(input.columnMap.principalComponent) : -1;
   const interestIdx = input.columnMap.interestComponent ? colIndex(input.columnMap.interestComponent) : -1;
   const feeIdx = input.columnMap.feeComponent ? colIndex(input.columnMap.feeComponent) : -1;
+  const gstIdx = input.columnMap.gstAmount ? colIndex(input.columnMap.gstAmount) : -1;
 
   if (dateIdx === -1 || descIdx === -1 || amountIdx === -1 || typeIdx === -1) {
     return { ok: false, kind: 'layout_unsupported', error: 'One or more mapped columns were not found in the CSV header.' };
@@ -185,6 +191,14 @@ export function extractLiabilityStatementFromCsv(input: LiabilityCsvExtractionIn
     if (feeIdx >= 0 && row[feeIdx]) {
       const r = parseAmountField(row[feeIdx]);
       if (r.ok && r.magnitude !== null) activity.feeComponent = r.magnitude;
+    }
+    // Evidence only — deliberately NOT run through parseAmountField and
+    // deliberately NOT added to any total anywhere in this module (spec
+    // section 30). A malformed GST cell is still preserved verbatim rather
+    // than dropped, because "we could not parse this" is itself information
+    // worth keeping for a value nothing downstream ever computes with.
+    if (gstIdx >= 0 && row[gstIdx]) {
+      activity.gstAmountRaw = row[gstIdx];
     }
     activities.push(activity);
   });

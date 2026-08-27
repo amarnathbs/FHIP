@@ -95,6 +95,13 @@ export interface LiabilityStatementActivity {
   amount: number;
   descriptionRaw?: string;
   merchantRaw?: string;
+  /** India GST, carried verbatim as EVIDENCE ONLY (spec section 30: "GST may
+   * be preserved as evidence, no GST tax engine") — never summed into any
+   * expense/interest/fee total, never fed to a tax computation. Raw string,
+   * not parsed to a number: this module makes no claim about what a
+   * malformed or non-numeric GST cell means, it only preserves what the
+   * statement said. */
+  gstAmountRaw?: string;
   /** Statement-supplied components of a PAYMENT line, where disclosed (spec
    * sections 14, 34) — e.g. an EMI statement's principal/interest/fee split.
    * Statement-provided values take precedence over any derived split. */

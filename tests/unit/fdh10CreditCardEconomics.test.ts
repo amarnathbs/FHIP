@@ -138,3 +138,39 @@ describe('FDH-10 — duplicate statement / multiple purchases (spec sections 33,
     expect(totalExpenseFromPlan(plan, 'AUD')).toBe(100); // two genuine $50 purchases, not one
   });
 });
+
+describe('FDH-10 — PARTIAL repayment (Part 4 financial-integration check): $3,000 purchases / $1,500 repayment', () => {
+  it('expense stays driven by purchases ($3,000), the partial repayment contributes $0 additional expense', () => {
+    const activities: CardStatementActivityInput[] = [
+      { activityId: 'p1', activityType: 'PURCHASE', amount: 1200 },
+      { activityId: 'p2', activityType: 'PURCHASE', amount: 1800 },
+      { activityId: 'pay1', activityType: 'PAYMENT', amount: 1500, matchedBankTransactionId: 'bank-txn-partial' },
+    ];
+    const plan = planCardStatementLedgerWrites(activities);
+
+    const paymentWrite = plan.find((w) => w.activityId === 'pay1')!;
+    expect(paymentWrite.kind).toBe('link_existing_bank_transaction');
+    expect(paymentWrite.economicType).toBe('transfer');
+
+    const totalExpense = totalExpenseFromPlan(plan, 'AUD');
+    expect(totalExpense).toBe(3000); // driven entirely by the two purchases
+
+    const assertion = assertNoDoubleCount(3000, totalExpense, 'AUD');
+    expect(assertion.ok).toBe(true);
+  });
+
+  it('the liability-reducing amount for the partial repayment is exactly $1,500 — never the full $3,000 balance, and the remaining balance is not silently written off', () => {
+    const activities: CardStatementActivityInput[] = [
+      { activityId: 'p1', activityType: 'PURCHASE', amount: 3000 },
+      { activityId: 'pay1', activityType: 'PAYMENT', amount: 1500, matchedBankTransactionId: 'bank-txn-partial' },
+    ];
+    const plan = planCardStatementLedgerWrites(activities);
+    const paymentWrite = plan.find((w) => w.activityId === 'pay1')!;
+    // The payment activity's own amount IS the $1,500 liability-reducing
+    // figure (spec section 43: one repayment event, its own disclosed
+    // amount) — this module never inflates it to the full outstanding
+    // balance, and never plans a second write that would double-reduce it.
+    expect(paymentWrite.amount).toBe(1500);
+    expect(plan.filter((w) => w.activityId === 'pay1')).toHaveLength(1);
+  });
+});

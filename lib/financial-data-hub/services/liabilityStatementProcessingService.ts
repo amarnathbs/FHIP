@@ -29,6 +29,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '../bank-csv/pagination';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
@@ -395,11 +396,20 @@ export async function getLiabilityStatementForReview(userId: string, statementId
     .eq('user_id', userId)
     .maybeSingle();
   if (error || !statement) return null;
-  const { data: activities } = await supabase
-    .from('fdh_liability_statement_activities')
-    .select('*')
-    .eq('statement_id', statementId)
-    .eq('user_id', userId)
-    .order('activity_date', { ascending: true });
-  return { statement, activities: activities ?? [] };
+  // FDH-8's own historical defect class (spec section 121-124, silent
+  // PostgREST 1,000-row truncation): a statement with more than
+  // POSTGREST_PAGE_SIZE activities must never have its later rows silently
+  // dropped from the review screen. `fetchAllRows` pages past that cap with
+  // a deterministic, unique ordering (activity_date, id — activity_date
+  // alone is not unique across same-day activities).
+  const activities = await fetchAllRows<Record<string, unknown>>(() =>
+    supabase
+      .from('fdh_liability_statement_activities')
+      .select('*')
+      .eq('statement_id', statementId)
+      .eq('user_id', userId)
+      .order('activity_date', { ascending: true })
+      .order('id', { ascending: true }),
+  );
+  return { statement, activities };
 }

@@ -3,12 +3,12 @@
  *
  * One representative India credit-card transaction export pattern (Txn
  * Date / Narration / Amount (INR) / Txn Type — with an optional GST column,
- * common on Indian card statements). GST is preserved as EVIDENCE ONLY
- * (`gstAmountRaw` surfaced in extraction warnings/metadata, never summed
- * into any FHIP tax figure — spec section 30: "GST may be preserved as
- * evidence, no GST tax engine"). NOT a certification of any one named
- * issuer's current real export format — see this directory's `types.ts`
- * header.
+ * common on Indian card statements). GST is preserved as EVIDENCE ONLY —
+ * carried verbatim on the activity as `gstAmountRaw`, never parsed as an
+ * amount and never summed into any FHIP tax or expense figure (spec section
+ * 30: "GST may be preserved as evidence, no GST tax engine"). NOT a
+ * certification of any one named issuer's current real export format — see
+ * this directory's `types.ts` header.
  *
  * "Minimum amount due" and "total amount due" are the same USER-DECLARED
  * upload metadata as `minimumPayment`/`closingBalance` (see
@@ -38,6 +38,7 @@ export const IN_CREDIT_CARD_GENERIC_V1: LiabilityCsvAdapter = {
     description: 'Narration',
     amount: 'Amount (INR)',
     activityType: 'Txn Type',
+    gstAmount: 'GST',
     activityTypeAliases: {
       'finance charge': 'INTEREST' as LiabilityActivityType,
       'cash withdrawal': 'CASH_ADVANCE' as LiabilityActivityType,
