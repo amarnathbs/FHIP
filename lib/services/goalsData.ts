@@ -182,11 +182,21 @@ async function buildExtrasForGoal(
   const logicKey = goalRow.forecast_logic_key as string;
   if (logicKey === 'debt_payoff' && goalRow.linked_liability_id) {
     const supabase = client ?? (await createClient());
+    // is_active=true filter: same fix/class as loadLinkedContributionSources()
+    // below and resolveAllocatedAmount() in goalFundingAllocation.ts — every
+    // other reader of liabilities in the codebase (dashboardData.ts,
+    // twinData.ts, forecastData.ts) already filters is_active; without it
+    // here, a debt_payoff goal linked to a liability that's since been
+    // archived (e.g. paid off/closed) would keep having its stale balance/
+    // rate/repayment credited into the forecast forever. Falls back to the
+    // goal's own generic current/target amount (extras.linkedLiability ??
+    // null in goalForecast.ts) once the liability is archived.
     const { data } = await supabase
       .from('liabilities')
       .select('balance, interest_rate, monthly_repayment')
       .eq('id', goalRow.linked_liability_id as string)
       .eq('user_id', userId)
+      .eq('is_active', true)
       .maybeSingle();
     if (data) {
       extras.linkedLiability = {
@@ -239,11 +249,22 @@ function toGoalRecord(row: Record<string, unknown>, allocatedMonthlyContribution
 // Batch-fetches the assets/investments/retirement accounts referenced by
 // any funding source across every goal being loaded, keyed by id — avoids
 // one query per goal for what's usually a handful of distinct linked
-// records. Also returns currentValueById (Education/Children Investment ->
-// Goal Linkage, spec s.33) — the live current_value/current_balance for
-// every distinct linked record, keyed by its own id (UUIDs from three
-// different tables never collide), used to recompute a percentage-based
-// funding source's live contribution rather than trusting the stale
+// records. Filtered by is_active=true (fix: archived-investment stale-
+// funding bug) to match the established pattern in dashboardData.ts/
+// twinData.ts/forecastData.ts — a funding source whose linked record has
+// since been archived must drop out of both the live linked-funding value
+// (computeLiveLinkedFundingValue) and the allocated monthly contribution
+// (computeAllocatedMonthlyContribution) rather than keep crediting a value
+// the underlying holding no longer has. The goal_funding_sources row
+// itself is intentionally left is_active=true (untouched) so it resumes
+// contributing automatically if the record is un-archived — see
+// resolveAllocatedAmount's matching fix in goalFundingAllocation.ts and
+// this file's own header comment on archive semantics. Also returns
+// currentValueById (Education/Children Investment -> Goal Linkage, spec
+// s.33) — the live current_value/current_balance for every distinct linked
+// record, keyed by its own id (UUIDs from three different tables never
+// collide), used to recompute a percentage-based funding source's live
+// contribution rather than trusting the stale
 // creation-time snapshot in goal_funding_sources.allocated_amount.
 async function loadLinkedContributionSources(
   userId: string,
@@ -268,11 +289,16 @@ async function loadLinkedContributionSources(
   const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
   const currentValueById = new Map<string, number>();
   if (assetIds.size > 0) {
-    const { data } = await client.from('assets').select('id, current_value').eq('user_id', userId).in('id', Array.from(assetIds));
+    const { data } = await client.from('assets').select('id, current_value').eq('user_id', userId).eq('is_active', true).in('id', Array.from(assetIds));
     for (const row of data ?? []) currentValueById.set(row.id as string, Number(row.current_value ?? 0));
   }
   if (investmentIds.size > 0) {
-    const { data } = await client.from('investments').select('id, annual_contribution, current_value').eq('user_id', userId).in('id', Array.from(investmentIds));
+    const { data } = await client
+      .from('investments')
+      .select('id, annual_contribution, current_value')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .in('id', Array.from(investmentIds));
     for (const row of data ?? []) {
       investmentsById.set(row.id as string, { annualContribution: (row.annual_contribution as number) ?? null });
       currentValueById.set(row.id as string, Number(row.current_value ?? 0));
@@ -283,6 +309,7 @@ async function loadLinkedContributionSources(
       .from('retirement_accounts')
       .select('id, employer_contribution, personal_contribution, contribution_frequency, current_balance')
       .eq('user_id', userId)
+      .eq('is_active', true)
       .in('id', Array.from(retirementIds));
     for (const row of data ?? []) {
       retirementAccountsById.set(row.id as string, {

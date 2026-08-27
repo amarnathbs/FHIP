@@ -714,8 +714,18 @@ async function buildCalculatorInput(
     }
     const investmentsById = new Map<string, AllocatedContributionInvestment>();
     const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
+    // is_active=true filter: same fix/class as goalsData.ts's
+    // loadLinkedContributionSources() — without it, a funding source whose
+    // linked investment/retirement account has since been archived keeps
+    // contributing its stale annual/employer/personal contribution to this
+    // forecast's monthlyContribution forever.
     if (investmentIds.size > 0) {
-      const { data } = await supabase.from('investments').select('id, annual_contribution').eq('user_id', userId).in('id', Array.from(investmentIds));
+      const { data } = await supabase
+        .from('investments')
+        .select('id, annual_contribution')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .in('id', Array.from(investmentIds));
       for (const row of data ?? []) investmentsById.set(row.id, { annualContribution: row.annual_contribution ?? null });
     }
     if (retirementIds.size > 0) {
@@ -723,6 +733,7 @@ async function buildCalculatorInput(
         .from('retirement_accounts')
         .select('id, employer_contribution, personal_contribution, contribution_frequency')
         .eq('user_id', userId)
+        .eq('is_active', true)
         .in('id', Array.from(retirementIds));
       for (const row of data ?? [])
         retirementAccountsById.set(row.id, {

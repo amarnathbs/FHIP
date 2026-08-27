@@ -127,6 +127,15 @@ export function computeAllocatedMonthlyContribution(
 // Education/Children Investment -> Goal Linkage release; previously only
 // asset/investment were handled, leaving a percentage-based retirement
 // funding source permanently frozen at its creation-time snapshot.
+//
+// Filtered by is_active=true (fix: archived-investment stale-funding bug,
+// same class as loadLinkedContributionSources() in goalsData.ts) — an
+// archived linked record resolves to a $0 snapshot rather than its last
+// known value, so a POST (new link) or PATCH (allocation % change) against
+// an already-archived holding can't write a stale non-zero amount into
+// goal_funding_sources.allocated_amount. Un-archiving the holding and then
+// triggering any PATCH that recomputes this (or simply relying on the
+// live read-side computeLiveLinkedFundingValue()) resumes real numbers.
 export async function resolveAllocatedAmount(
   userId: string,
   source: {
@@ -148,6 +157,7 @@ export async function resolveAllocatedAmount(
       .select('current_value')
       .eq('id', source.linkedAssetId)
       .eq('user_id', userId)
+      .eq('is_active', true)
       .maybeSingle();
     return ((data?.current_value as number) ?? 0) * (source.allocationPercentage / 100);
   }
@@ -157,6 +167,7 @@ export async function resolveAllocatedAmount(
       .select('current_value')
       .eq('id', source.linkedInvestmentId)
       .eq('user_id', userId)
+      .eq('is_active', true)
       .maybeSingle();
     return ((data?.current_value as number) ?? 0) * (source.allocationPercentage / 100);
   }
@@ -166,6 +177,7 @@ export async function resolveAllocatedAmount(
       .select('current_balance')
       .eq('id', source.linkedRetirementId)
       .eq('user_id', userId)
+      .eq('is_active', true)
       .maybeSingle();
     return ((data?.current_balance as number) ?? 0) * (source.allocationPercentage / 100);
   }
