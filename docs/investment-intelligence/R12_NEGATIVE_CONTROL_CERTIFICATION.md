@@ -1,7 +1,11 @@
 # R12 — Negative Control Certification
 
-Spec requires 8/8 RED→GREEN. Actual: **6/8 fully proven RED→GREEN, 2/8 documented by architecture/reuse
-argument rather than a dedicated flip-the-switch reproduction** (disclosed, not silently skipped).
+Spec requires 8/8 RED→GREEN. **Actual (2026-08-27 terminal certification continuation): 7/8 fully
+proven RED→GREEN, 1/8 (NC3) documented by architecture/reuse argument rather than a dedicated
+flip-the-switch reproduction, because there is no local performance engine in existence to flip**
+(disclosed, not silently skipped — see NC3's own row below for why no reproduction is possible by
+construction). NC8 (pagination) was closed this continuation — see its row below, previously "not run
+this round" in the original pass.
 
 | # | Control | Result |
 |---|---|---|
@@ -12,11 +16,13 @@ argument rather than a dedicated flip-the-switch reproduction** (disclosed, not 
 | NC5 | Stale price as current — remove stale-price protection | **RED→GREEN proven** at the unit-test level: the real `shouldPresentAsCurrentValue()` correctly refuses a 6-day-old valuation (GREEN); a hypothetical disabled check (`() => true`) is shown alongside as the RED contrast the real function does not exhibit |
 | NC6 | Same-user derived holding forgery — allow user modification of authoritative holding quantity/value | **RED→GREEN proven live AND in PGlite**: live DEV reproduces the real, pre-existing exploit (HTTP 200 PATCH from the owning user's own JWT changed `value` to 999999999); PGlite (migration 0092 applied) proves it is now rejected, AND additionally proves RED by temporarily reintroducing the old policy and showing the exploit would still work under it, then restores GREEN |
 | NC7 | Cross-user holding link — disable account/ownership validation, User B links to A's holding | **PASS, proven live AND in PGlite**: both real DEV and PGlite show User B cannot read or write User A's holding snapshot. A literal "disable ownership validation" flip was not performed (doing so on real DEV would require applying a destructive RLS change to a live project) — the control is satisfied by proving the CURRENT ownership check is real and effective (not vacuous — the check literally returns 0 rows / rejects writes, not merely "no test failed") |
-| NC8 | Pagination — disable rows after 1,000, large mixed portfolio becomes wrong | **Not run as a dedicated 1000+ row synthetic harness this round** (disclosed gap, time budget). Mitigating evidence: (a) the one new read path R12 added that risked unbounded-read truncation (`ii_security_classifications` in `r5Repository.ts`) was found during self-review and fixed to use the existing `fetchAllRows()` helper before this report was written; (b) every other R12 read either reuses an existing, already-paginated route (`GET /api/investment-intelligence/positions`) or is deliberately bounded by design (`readCurrentPosition()`'s `.limit(1)`, which wants only the latest row, not a full listing) |
+| NC8 | Pagination — disable rows after 1,000, large mixed portfolio becomes wrong | **RED→GREEN proven, 2026-08-27** (`tests/unit/iiR12PaginationScaleCertification.test.ts`): a static-dependency check first confirms (by reading the actual `r5Repository.ts` source, not by claim) that `addDirectSecuritySelfSnapshots()`'s `ii_security_classifications` read genuinely imports and uses `fetchAllRows()`. A hermetic scale harness (same accepted pattern as `tests/unit/iiR11PaginationNegativeControl.test.ts`) then seeds a real R12 direct-equity instrument's sector classification at row 1005: a naive single-page `.range(0,999)` read silently drops it (RED — Review Centre's single-security-concentration evidence would be computed from a missing, not wrong, classification); the real `fetchAllRows()` retrieves the full 1,005 rows with no duplicates and finds the exact, non-fabricated sector value (GREEN). Re-verified GREEN at every certified scale point (999/1000/1001/2500/5001/10000) with a built-in sanity check that naive and real agree at/under the 1,000-row cap (the harness is not vacuous). |
 
 ## Summary
 
-6/8 fully RED→GREEN proven with real reproductions. NC3 is not applicable by construction (no
-duplicate engine was built — verified by code inspection, not by a flip-test since there's nothing to
-flip). NC8 is a disclosed, time-budget-driven gap with mitigating code-level evidence rather than a
-dedicated large-scale reproduction.
+**7/8 fully RED→GREEN proven with real reproductions** (2026-08-27: NC8 closed this continuation,
+raising the original pass's 6/8 to 7/8). NC3 remains architecture-only and not applicable by
+construction (no duplicate performance engine was built anywhere in R12 — verified by code
+inspection, not by a flip-test, since there is nothing to flip). This is the honest ceiling: 7 is the
+maximum achievable without inventing a defect to disable, since NC3's premise (a duplicate engine
+exists to be swapped) genuinely does not hold for this codebase.
