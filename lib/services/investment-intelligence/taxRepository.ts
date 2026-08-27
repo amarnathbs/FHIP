@@ -54,7 +54,17 @@ const ACQUISITION_TYPE_MAP: Record<string, AcquisitionKind> = {
   bonus: 'bonus',
   split: 'split_in',
 };
-const DISPOSAL_TYPES = new Set(['redemption', 'switch_out']);
+// R12 added 'sale' (direct-equity/ETF market disposal) to ii_transactions'
+// transaction_type vocabulary (migration 0092) — it is economically a
+// disposal exactly like a mutual-fund 'redemption'/'switch_out' for FIFO/
+// capital-gains purposes, and must be included here or R6's tax engine
+// silently reports "no disposals found" for every real R12 equity/ETF sale
+// (found during R12's own live-DEV certification, 2026-08-27). Exit-load
+// application below is unaffected: it is keyed off ii_exit_load_schedules
+// rows, which are only ever populated for mutual-fund schemes, so a direct-
+// equity instrument naturally resolves to zero applicable exit-load
+// schedules without any special-casing here.
+const DISPOSAL_TYPES = new Set(['redemption', 'switch_out', 'sale']);
 
 export interface TaxDataset {
   userId: string;
