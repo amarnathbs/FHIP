@@ -3,7 +3,11 @@ import { requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { investmentSchema } from '@/lib/validation/investment';
 
-const registry = makeRegistry('investments');
+// investments.uidx_investments_user_master_manual (migration 0042) is a
+// PARTIAL unique index (where source_type = 'manual'), not a plain
+// unique(user_id, master_item_key) constraint — see registry.ts's
+// manualScopedUpsert doc comment.
+const registry = makeRegistry('investments', { manualScopedUpsert: true });
 
 // Education/Children Investment -> Goal Linkage, spec s.12-13/23/65: these
 // catalogue items describe a savings PURPOSE, not a financial instrument
