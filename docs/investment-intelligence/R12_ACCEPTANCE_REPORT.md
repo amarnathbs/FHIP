@@ -1,6 +1,40 @@
 # II-R12 — Wider India Assets — Acceptance Report
 
-## 2026-08-27 terminal certification continuation — summary of what changed
+## 2026-08-28 terminal certification dispatch — what this pass did
+
+This dispatch started a FRESH worktree off `origin/main` (per hard-rule instruction) and discovered
+that the 2026-08-27 continuation below had been done in local, **unpushed** worktrees
+(`ii-r12-0092-activation-cont`, `ii-r12-live-dev-cert`) that were never committed to this branch or
+pushed to origin. That work was genuine (independently spot-checked: re-ran the full `iiR12IndependentOracle.test.ts`
+suite fresh — 339/339 pass, 1,212 atomic comparisons; re-read `r12_cases.json` — 336 unique case IDs,
+no duplicates; re-verified the 20 manual-reconciliation worked examples by hand-checking several
+independently), so it was merged onto this branch (`7330e87`) rather than redone from scratch.
+
+**A real, more current fact this dispatch found**: `origin/main` had moved to `ba23cd6` (from `53f8192`)
+between dispatch start and this check — a **different, parallel task in the same session** landed
+`fix(ii-r6): recognize 'sale' as a disposal type in taxRepository.ts` directly to canonical `main`.
+This branch was fast-forwarded onto that new `origin/main` tip BEFORE merging in the unpushed R12
+continuation work, and the merge was verified conflict-free and non-duplicating (`taxRepository.ts`'s
+`DISPOSAL_TYPES` set, containing `'sale'`, was untouched by the merge — confirmed by direct `grep` after
+merge). See the final chat response for the full ground-truth SHA/verification chain.
+
+This dispatch also found and fixed 2 real, previously-undetected bugs in
+`docs/dev-apply/ii-r12-0092-activation/02_dev_verification.sql` by **actually executing it** against a
+fresh full-chain PGlite (real Postgres) rebuild for the first time — it had apparently never been run
+end-to-end before handoff. See that file's own revision note for the exact bugs (a non-existent
+`effective_from` column reference, and an invalid `quality_status` literal) and the `pg_policies.polname`
+vs `.policyname` column-name bug found the same way. Also rewrote its Part B from `raise notice` (invisible
+in the Supabase Studio SQL Editor, which has no Notices panel) to the project's established
+`returns table(step text, outcome text, detail text)` pattern.
+
+Everything else below (the 2026-08-27 continuation's own numbers) was independently re-verified fresh
+in this dispatch on the merged tree: migration replay 92/92 (0 failures), RLS 25/25, `tsc --noEmit`
+clean (0 errors), full R12 test suite 366/366 passing (359 + 7, across two isolated runs after an
+unrelated worker-pool timeout on the first combined run), full regression suite 3281/3283 passing (2
+failures both pre-existing/unrelated to R12 — see final response), targeted ESLint on this dispatch's
+own delta files 0 errors/warnings, production build clean.
+
+## 2026-08-27 terminal certification continuation — summary of what changed (prior session, inherited)
 
 This session's mandate: activate DEV migration 0092 and push terminal certification further. Result:
 **0092 activation is genuinely BLOCKED** (no DDL execution capability in this environment — no
