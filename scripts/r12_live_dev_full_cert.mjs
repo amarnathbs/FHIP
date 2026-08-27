@@ -424,7 +424,7 @@ async function main() {
     const crossWriteVerify = await sb(`/rest/v1/ii_holding_snapshots?id=eq.${snapEquityId}&select=value`);
     const crossAppRead = await app('/api/investment-intelligence/positions', { cookie: userB.cookie });
     const userBSeesUserAPosition = crossAppRead.json?.data?.some((p) => p.id === snapEquityId);
-    record('R12-26', 'Cross-user holding attack: User B cannot read/write User A equity holding via REST or via the app API', (crossRead.json?.length ?? 0) === 0 && crossWriteVerify.json?.[0]?.value === verifyForged.json?.[0]?.value && !userBSeesUserAPosition ? 'PASS' : 'FAIL', `restRead=${crossRead.json?.length} restWriteVerify=${crossWriteVerify.json?.[0]?.value} appSeesIt=${userBSeesUserAPosition}`);
+    record('R12-26', 'Cross-user holding attack: User B cannot read/write User A equity holding via REST or via the app API', (crossRead.json?.length ?? 0) === 0 && crossWriteVerify.json?.[0]?.value === verifyForged.json?.[0]?.value && !userBSeesUserAPosition ? 'PASS' : 'FAIL', `restRead=${crossRead.json?.length} crossWritePatchHttp=${crossWrite.status} restWriteVerify=${crossWriteVerify.json?.[0]?.value} appSeesIt=${userBSeesUserAPosition}`);
 
     // 27. R11 professional bounded access
     const prof1 = await makeUser('prof-authorised');
