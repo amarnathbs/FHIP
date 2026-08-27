@@ -19,9 +19,31 @@ re-derives, from the underlying rule/law rather than by porting the TypeScript:
 
 ## Atomic comparisons
 
-**137 atomic comparisons** across 41 cases (8×1 identity + 10×2 holdings + 16×6 tax + 4×1 publishing +
-3×3 xray = 137), executed in `tests/unit/iiR12IndependentOracle.test.ts` against the real production
-engines. **0 unexplained mismatches** after the fixes below.
+**Original pass: 137 atomic comparisons across 41 cases** (8×1 identity + 10×2 holdings + 16×6 tax +
+4×1 publishing + 3×3 xray = 137).
+
+**2026-08-27 terminal certification continuation: expanded to 336 cases / 1,212 atomic comparisons**
+(33×1 identity + 110×2 holdings + 140×6 tax + 20×1 publishing + 33×3 xray = 33+220+840+20+99 = 1,212),
+via `scripts/r12-certification/generate_expanded_cases.py` — systematic boundary/permutation sweeps
+per family (12-month anniversary sweep at 12 calendar anchors × 7 day-offsets; grandfathering
+three-way-formula sweep across all 6 relative orderings of cost/FMV/sale-price × 4 magnitude variants
+plus 3 tie cases; post-cutoff-acquisition-with-FMV-supplied date-gating proof; STCG/LTCG loss
+preservation at both holding-period classes; 3 large-magnitude 5-6-figure disposals; a 25,000-unit
+disposal as a page-boundary-flavored deterministic analogue of the live pagination negative control;
+instrument-identity sharing patterns across 2-4-instrument groups including a second global scheme
+(SEDOL) and country-scoped collision avoidance; 16 country/instrument-class publishing combinations;
+10 X-Ray weight-split templates × 3 value scales including non-round percentages), not cosmetic
+duplicates — every new case changes at least one boundary condition or numeric relationship that
+produces a materially different expected result. Executed in `tests/unit/iiR12IndependentOracle.test.ts`
+against the real production engines: **339/339 tests pass (336 cases + 3 meta-tests), 1,212 atomic
+comparisons, 0 unexplained mismatches.**
+
+One correction made during the expansion (not a production defect): the initial boundary sweep used
+acquisition dates as far back as 2019, producing disposal dates before 2023-04-01 — outside the real
+`computeDisposalTax()`'s covered tax-rule-version range (`ruleVersions.ts` starts at 2023-04-01,
+correctly raising `NoApplicableRuleVersionError` for anything earlier, which is itself correct,
+defensive engine behaviour, not a bug). The sweep's acquisition anchors were moved to 2022-2024 so
+every generated disposal date falls inside the engine's real covered range, then re-verified clean.
 
 ## Bugs the oracle-construction process itself found (in the oracle, not production code)
 
