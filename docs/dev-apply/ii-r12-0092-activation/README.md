@@ -1,5 +1,20 @@
 # DEV apply package: II-R12 Wider India Assets (migration 0092)
 
+## 2026-08-28 re-verification note
+
+Re-checked fresh in a new dispatch, from a brand-new worktree off `origin/main` (which had moved to
+`ba23cd6` by this point -- an unrelated parallel task's own `taxRepository.ts` fix, not touching
+anything in this package). This dispatch has **no `.env.local` of its own** (confirmed: only
+`.env.example` exists in the fresh worktree) and so could not re-run the live read-only REST checks
+below itself -- they are preserved as the prior session's genuine, dated evidence, not re-verified live
+by this dispatch. What WAS independently re-verified fresh this dispatch: a full migration-chain PGlite
+replay (92/92, 0 failures) including `0092` immediately before `0094` with zero errors, and
+`02_dev_verification.sql` was rewritten (2 real bugs fixed: a wrong column name in two of the Part B
+probes, and `pg_policies.polname` -> `.policyname`) and then actually EXECUTED against that fresh
+rebuild for the first time -- see that file's own revision note. `0092` is still confirmed unapplied to
+any hosted environment (no contrary evidence found; see the collision-guard and ground-truth sections of
+the final response for this dispatch).
+
 Prepared by an agent with **no DDL-execution capability against the hosted Supabase DEV project** (no
 CLI project link, no reachable SQL-execution RPC, no connection string anywhere in this repo /
 `.env.local` — confirmed again today: `SUPABASE_SERVICE_ROLE_KEY`/`NEXT_PUBLIC_SUPABASE_URL` exist for
