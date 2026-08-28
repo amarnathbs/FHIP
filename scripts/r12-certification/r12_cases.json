@@ -1,85 +1,4677 @@
 {
-  "generatedAt": "2026-08-26",
-  "totalCases": 41,
+  "generatedAt": "2026-08-27",
+  "totalCases": 336,
   "cases": [
-    { "id": "ID-001", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INE002A01018","countryCode":"IN"},{"scheme":"nse_symbol","value":"RELIANCE","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INE002A01018","countryCode":"IN"},{"scheme":"bse_code","value":"500325","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-002", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INE467B01029","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INE009A01021","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-003", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"nse_symbol","value":"TCS","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"bse_code","value":"532540","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-004", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INE040A01034","countryCode":"IN"},{"scheme":"nse_symbol","value":"HDFCBANK","countryCode":"IN"},{"scheme":"bse_code","value":"500180","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-005", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"},{"scheme":"nse_symbol","value":"NIFTYBEES","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"},{"scheme":"bse_code","value":"590103","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INF204KB14I2","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-006", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"nse_symbol","value":"INFY","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"nse_symbol","value":"INFY","countryCode":"AU"}] }
-    ]},
-    { "id": "ID-007", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INE062A01020","countryCode":"IN"},{"scheme":"nse_symbol","value":"SBIN","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"nse_symbol","value":"SBIN","countryCode":"IN"}] }
-    ]},
-    { "id": "ID-008", "family": "instrument_identity", "instruments": [
-      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"},{"scheme":"nse_symbol","value":"BHARTIARTL","countryCode":"IN"}] },
-      { "identifiers": [{"scheme":"isin","value":"INE397D01024","countryCode":"IN"},{"scheme":"bse_code","value":"532454","countryCode":"IN"}] }
-    ]},
-
-    { "id": "HLD-001", "family": "holdings", "transactions": [{"type":"purchase","units":100}], "frozenPricePerUnit": 2500 },
-    { "id": "HLD-002", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"purchase","units":50}], "frozenPricePerUnit": 2600 },
-    { "id": "HLD-003", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"sale","units":40}], "frozenPricePerUnit": 2700 },
-    { "id": "HLD-004", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"sale","units":100}], "frozenPricePerUnit": 2700 },
-    { "id": "HLD-005", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"dividend","amount":500}], "frozenPricePerUnit": 2500 },
-    { "id": "HLD-006", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"bonus","units":100}], "frozenPricePerUnit": 1300 },
-    { "id": "HLD-007", "family": "holdings", "transactions": [{"type":"purchase","units":33.333333}], "frozenPricePerUnit": 150.5 },
-    { "id": "HLD-008", "family": "holdings", "transactions": [{"type":"purchase","units":100},{"type":"purchase","units":50},{"type":"sale","units":75},{"type":"purchase","units":25}], "frozenPricePerUnit": 3000 },
-    { "id": "HLD-009", "family": "holdings", "transactions": [{"type":"purchase","units":10},{"type":"sale","units":3},{"type":"sale","units":3},{"type":"sale","units":4}], "frozenPricePerUnit": 500 },
-    { "id": "HLD-010", "family": "holdings", "transactions": [{"type":"purchase","units":500},{"type":"bonus","units":500},{"type":"sale","units":600}], "frozenPricePerUnit": 45 },
-
-    { "id": "TAX-001", "family": "tax", "acquisitionDate": "2024-01-15", "disposalDate": "2025-01-16", "unitsConsumed": 10, "costPerUnit": 200, "saleValuePerUnit": 500 },
-    { "id": "TAX-002", "family": "tax", "acquisitionDate": "2024-01-15", "disposalDate": "2025-01-15", "unitsConsumed": 10, "costPerUnit": 200, "saleValuePerUnit": 500 },
-    { "id": "TAX-003", "family": "tax", "acquisitionDate": "2024-06-01", "disposalDate": "2024-12-01", "unitsConsumed": 5, "costPerUnit": 1000, "saleValuePerUnit": 900 },
-    { "id": "TAX-004", "family": "tax", "acquisitionDate": "2020-03-01", "disposalDate": "2025-08-26", "unitsConsumed": 20, "costPerUnit": 150, "saleValuePerUnit": 800 },
-    { "id": "TAX-005", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 50, "saleValuePerUnit": 400, "fmv31Jan2018PerUnit": 180 },
-    { "id": "TAX-006", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 200, "saleValuePerUnit": 400, "fmv31Jan2018PerUnit": 100 },
-    { "id": "TAX-007", "family": "tax", "acquisitionDate": "2017-06-15", "disposalDate": "2026-01-01", "unitsConsumed": 100, "costPerUnit": 50, "saleValuePerUnit": 90, "fmv31Jan2018PerUnit": 180 },
-    { "id": "TAX-008", "family": "tax", "acquisitionDate": "2023-02-28", "disposalDate": "2024-02-29", "unitsConsumed": 15, "costPerUnit": 300, "saleValuePerUnit": 350 },
-    { "id": "TAX-009", "family": "tax", "acquisitionDate": "2023-02-28", "disposalDate": "2024-03-01", "unitsConsumed": 15, "costPerUnit": 300, "saleValuePerUnit": 350 },
-    { "id": "TAX-010", "family": "tax", "acquisitionDate": "2025-01-01", "disposalDate": "2025-01-02", "unitsConsumed": 1, "costPerUnit": 5000, "saleValuePerUnit": 5500 },
-    { "id": "TAX-011", "family": "tax", "acquisitionDate": "2022-12-31", "disposalDate": "2023-12-31", "unitsConsumed": 8, "costPerUnit": 750, "saleValuePerUnit": 1000 },
-    { "id": "TAX-012", "family": "tax", "acquisitionDate": "2022-12-31", "disposalDate": "2024-01-01", "unitsConsumed": 8, "costPerUnit": 750, "saleValuePerUnit": 1000 },
-    { "id": "TAX-013", "family": "tax", "acquisitionDate": "2019-07-04", "disposalDate": "2026-08-26", "unitsConsumed": 250, "costPerUnit": 40, "saleValuePerUnit": 210 },
-    { "id": "TAX-014", "family": "tax", "acquisitionDate": "2016-05-10", "disposalDate": "2026-08-26", "unitsConsumed": 60, "costPerUnit": 90, "saleValuePerUnit": 620, "fmv31Jan2018PerUnit": 300 },
-    { "id": "TAX-015", "family": "tax", "acquisitionDate": "2023-11-11", "disposalDate": "2024-11-11", "unitsConsumed": 12, "costPerUnit": 1200, "saleValuePerUnit": 1150 },
-    { "id": "TAX-016", "family": "tax", "acquisitionDate": "2015-01-01", "disposalDate": "2026-08-26", "unitsConsumed": 10, "costPerUnit": 500, "saleValuePerUnit": 90, "fmv31Jan2018PerUnit": 180 },
-
-    { "id": "PUB-001", "family": "publishing", "instrumentClass": "equity", "countryCode": "IN" },
-    { "id": "PUB-002", "family": "publishing", "instrumentClass": "etf", "countryCode": "IN" },
-    { "id": "PUB-003", "family": "publishing", "instrumentClass": "equity", "countryCode": "AU" },
-    { "id": "PUB-004", "family": "publishing", "instrumentClass": "bond", "countryCode": "IN" },
-
-    { "id": "XRAY-001", "family": "xray_attribution", "positions": [
-      { "value": 60000, "holdsSecurityWeightPct": 50 },
-      { "value": 40000, "holdsSecurityWeightPct": 100 }
-    ]},
-    { "id": "XRAY-002", "family": "xray_attribution", "positions": [
-      { "value": 25000, "holdsSecurityWeightPct": 100 }
-    ]},
-    { "id": "XRAY-003", "family": "xray_attribution", "positions": [
-      { "value": 100000, "holdsSecurityWeightPct": 20 },
-      { "value": 50000, "holdsSecurityWeightPct": 20 },
-      { "value": 30000, "holdsSecurityWeightPct": 100 }
-    ]}
-  ]
+    {
+      "id": "ID-001",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE002A01018",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "RELIANCE",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE002A01018",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "500325",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-002",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE467B01029",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE009A01021",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-003",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "TCS",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "bse_code",
+              "value": "532540",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-004",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE040A01034",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "HDFCBANK",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "500180",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-005",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INF204KB14I2",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "NIFTYBEES",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INF204KB14I2",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "590103",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INF204KB14I2",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-006",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "INFY",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "INFY",
+              "countryCode": "AU"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-007",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE062A01020",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "SBIN",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "SBIN",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-008",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE397D01024",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE397D01024",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BHARTIARTL",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE397D01024",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532454",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "HLD-001",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        }
+      ],
+      "frozenPricePerUnit": 2500
+    },
+    {
+      "id": "HLD-002",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "purchase",
+          "units": 50
+        }
+      ],
+      "frozenPricePerUnit": 2600
+    },
+    {
+      "id": "HLD-003",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "sale",
+          "units": 40
+        }
+      ],
+      "frozenPricePerUnit": 2700
+    },
+    {
+      "id": "HLD-004",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "sale",
+          "units": 100
+        }
+      ],
+      "frozenPricePerUnit": 2700
+    },
+    {
+      "id": "HLD-005",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "dividend",
+          "amount": 500
+        }
+      ],
+      "frozenPricePerUnit": 2500
+    },
+    {
+      "id": "HLD-006",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "bonus",
+          "units": 100
+        }
+      ],
+      "frozenPricePerUnit": 1300
+    },
+    {
+      "id": "HLD-007",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 33.333333
+        }
+      ],
+      "frozenPricePerUnit": 150.5
+    },
+    {
+      "id": "HLD-008",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100
+        },
+        {
+          "type": "purchase",
+          "units": 50
+        },
+        {
+          "type": "sale",
+          "units": 75
+        },
+        {
+          "type": "purchase",
+          "units": 25
+        }
+      ],
+      "frozenPricePerUnit": 3000
+    },
+    {
+      "id": "HLD-009",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10
+        },
+        {
+          "type": "sale",
+          "units": 3
+        },
+        {
+          "type": "sale",
+          "units": 3
+        },
+        {
+          "type": "sale",
+          "units": 4
+        }
+      ],
+      "frozenPricePerUnit": 500
+    },
+    {
+      "id": "HLD-010",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 500
+        },
+        {
+          "type": "bonus",
+          "units": 500
+        },
+        {
+          "type": "sale",
+          "units": 600
+        }
+      ],
+      "frozenPricePerUnit": 45
+    },
+    {
+      "id": "TAX-001",
+      "family": "tax",
+      "acquisitionDate": "2024-01-15",
+      "disposalDate": "2025-01-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 200,
+      "saleValuePerUnit": 500
+    },
+    {
+      "id": "TAX-002",
+      "family": "tax",
+      "acquisitionDate": "2024-01-15",
+      "disposalDate": "2025-01-15",
+      "unitsConsumed": 10,
+      "costPerUnit": 200,
+      "saleValuePerUnit": 500
+    },
+    {
+      "id": "TAX-003",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2024-12-01",
+      "unitsConsumed": 5,
+      "costPerUnit": 1000,
+      "saleValuePerUnit": 900
+    },
+    {
+      "id": "TAX-004",
+      "family": "tax",
+      "acquisitionDate": "2020-03-01",
+      "disposalDate": "2025-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 150,
+      "saleValuePerUnit": 800
+    },
+    {
+      "id": "TAX-005",
+      "family": "tax",
+      "acquisitionDate": "2017-06-15",
+      "disposalDate": "2026-01-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 50,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 180
+    },
+    {
+      "id": "TAX-006",
+      "family": "tax",
+      "acquisitionDate": "2017-06-15",
+      "disposalDate": "2026-01-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 200,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 100
+    },
+    {
+      "id": "TAX-007",
+      "family": "tax",
+      "acquisitionDate": "2017-06-15",
+      "disposalDate": "2026-01-01",
+      "unitsConsumed": 100,
+      "costPerUnit": 50,
+      "saleValuePerUnit": 90,
+      "fmv31Jan2018PerUnit": 180
+    },
+    {
+      "id": "TAX-008",
+      "family": "tax",
+      "acquisitionDate": "2023-02-28",
+      "disposalDate": "2024-02-29",
+      "unitsConsumed": 15,
+      "costPerUnit": 300,
+      "saleValuePerUnit": 350
+    },
+    {
+      "id": "TAX-009",
+      "family": "tax",
+      "acquisitionDate": "2023-02-28",
+      "disposalDate": "2024-03-01",
+      "unitsConsumed": 15,
+      "costPerUnit": 300,
+      "saleValuePerUnit": 350
+    },
+    {
+      "id": "TAX-010",
+      "family": "tax",
+      "acquisitionDate": "2025-01-01",
+      "disposalDate": "2025-01-02",
+      "unitsConsumed": 1,
+      "costPerUnit": 5000,
+      "saleValuePerUnit": 5500
+    },
+    {
+      "id": "TAX-011",
+      "family": "tax",
+      "acquisitionDate": "2022-12-31",
+      "disposalDate": "2023-12-31",
+      "unitsConsumed": 8,
+      "costPerUnit": 750,
+      "saleValuePerUnit": 1000
+    },
+    {
+      "id": "TAX-012",
+      "family": "tax",
+      "acquisitionDate": "2022-12-31",
+      "disposalDate": "2024-01-01",
+      "unitsConsumed": 8,
+      "costPerUnit": 750,
+      "saleValuePerUnit": 1000
+    },
+    {
+      "id": "TAX-013",
+      "family": "tax",
+      "acquisitionDate": "2019-07-04",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 250,
+      "costPerUnit": 40,
+      "saleValuePerUnit": 210
+    },
+    {
+      "id": "TAX-014",
+      "family": "tax",
+      "acquisitionDate": "2016-05-10",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 60,
+      "costPerUnit": 90,
+      "saleValuePerUnit": 620,
+      "fmv31Jan2018PerUnit": 300
+    },
+    {
+      "id": "TAX-015",
+      "family": "tax",
+      "acquisitionDate": "2023-11-11",
+      "disposalDate": "2024-11-11",
+      "unitsConsumed": 12,
+      "costPerUnit": 1200,
+      "saleValuePerUnit": 1150
+    },
+    {
+      "id": "TAX-016",
+      "family": "tax",
+      "acquisitionDate": "2015-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 10,
+      "costPerUnit": 500,
+      "saleValuePerUnit": 90,
+      "fmv31Jan2018PerUnit": 180
+    },
+    {
+      "id": "PUB-001",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "IN"
+    },
+    {
+      "id": "PUB-002",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "IN"
+    },
+    {
+      "id": "PUB-003",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "AU"
+    },
+    {
+      "id": "PUB-004",
+      "family": "publishing",
+      "instrumentClass": "bond",
+      "countryCode": "IN"
+    },
+    {
+      "id": "XRAY-001",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 60000,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 40000,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-002",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 25000,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-003",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 100000,
+          "holdsSecurityWeightPct": 20
+        },
+        {
+          "value": 50000,
+          "holdsSecurityWeightPct": 20
+        },
+        {
+          "value": 30000,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "ID-009",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE001A01036",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "MARUTI",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532500",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-010",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE021A01026",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-011",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE030A01027",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "HINDUNILVR",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-012",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE154A01025",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "500875",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-013",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE296A01024",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BAJFINANCE",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-014",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE733E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "NTPC",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE733E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532555",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-015",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE752E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "POWERGRID",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE752E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532898",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-016",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE917I01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BAJAJ-AUTO",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE917I01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532977",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-017",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE075A01022",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "WIPRO",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE075A01022",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "507685",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-018",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE522F01014",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "COALINDIA",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE522F01014",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "533278",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-019",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE001A01036",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "MARUTI",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE021A01026",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "ASIANPAINT",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-020",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE030A01027",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "HINDUNILVR",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE154A01025",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "ITC",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-021",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE296A01024",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BAJFINANCE",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE733E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "NTPC",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-022",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE752E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "POWERGRID",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE917I01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BAJAJ-AUTO",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-023",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "MARUTI",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "MARUTI",
+              "countryCode": "US"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-024",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "ASIANPAINT",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "ASIANPAINT",
+              "countryCode": "US"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-025",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "HINDUNILVR",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "HINDUNILVR",
+              "countryCode": "US"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-026",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "ITC",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "nse_symbol",
+              "value": "ITC",
+              "countryCode": "US"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-027",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE213A01029",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE213A01029",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "ONGC",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE213A01029",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "500312",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE030A01027",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-028",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE238A01034",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE238A01034",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "AXISBANK",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE238A01034",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532215",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE154A01025",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-029",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE028A01039",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE028A01039",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BANKBARODA",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE028A01039",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532134",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE296A01024",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-030",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "sedol",
+              "value": "B0A01029",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "sedol",
+              "value": "B0A01029",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "500312",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-031",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "sedol",
+              "value": "B0A01034",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "sedol",
+              "value": "B0A01034",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "bse_code",
+              "value": "532215",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-032",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE001A01036",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "MARUTI",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE021A01026",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "ASIANPAINT",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE030A01027",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "HINDUNILVR",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ID-033",
+      "family": "instrument_identity",
+      "instruments": [
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE154A01025",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "ITC",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE296A01024",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "BAJFINANCE",
+              "countryCode": "IN"
+            }
+          ]
+        },
+        {
+          "identifiers": [
+            {
+              "scheme": "isin",
+              "value": "INE733E01010",
+              "countryCode": "IN"
+            },
+            {
+              "scheme": "nse_symbol",
+              "value": "NTPC",
+              "countryCode": "IN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "HLD-011",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 200.0
+        }
+      ],
+      "frozenPricePerUnit": 1450.25
+    },
+    {
+      "id": "HLD-012",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 500.0
+        }
+      ],
+      "frozenPricePerUnit": 1493.7575
+    },
+    {
+      "id": "HLD-013",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 80.0
+        }
+      ],
+      "frozenPricePerUnit": 1537.265
+    },
+    {
+      "id": "HLD-014",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2000.0
+        }
+      ],
+      "frozenPricePerUnit": 1580.7725
+    },
+    {
+      "id": "HLD-015",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 20.0
+        }
+      ],
+      "frozenPricePerUnit": 1624.28
+    },
+    {
+      "id": "HLD-016",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 75.0
+        },
+        {
+          "type": "purchase",
+          "units": 25.0
+        }
+      ],
+      "frozenPricePerUnit": 980.5
+    },
+    {
+      "id": "HLD-017",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 187.5
+        },
+        {
+          "type": "purchase",
+          "units": 62.5
+        }
+      ],
+      "frozenPricePerUnit": 1009.915
+    },
+    {
+      "id": "HLD-018",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 30.0
+        },
+        {
+          "type": "purchase",
+          "units": 10.0
+        }
+      ],
+      "frozenPricePerUnit": 1039.33
+    },
+    {
+      "id": "HLD-019",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 750.0
+        },
+        {
+          "type": "purchase",
+          "units": 250.0
+        }
+      ],
+      "frozenPricePerUnit": 1068.745
+    },
+    {
+      "id": "HLD-020",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 7.5
+        },
+        {
+          "type": "purchase",
+          "units": 2.5
+        }
+      ],
+      "frozenPricePerUnit": 1098.16
+    },
+    {
+      "id": "HLD-021",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 300.0
+        },
+        {
+          "type": "sale",
+          "units": 300.0
+        }
+      ],
+      "frozenPricePerUnit": 210.0
+    },
+    {
+      "id": "HLD-022",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 750.0
+        },
+        {
+          "type": "sale",
+          "units": 750.0
+        }
+      ],
+      "frozenPricePerUnit": 216.3
+    },
+    {
+      "id": "HLD-023",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 120.0
+        },
+        {
+          "type": "sale",
+          "units": 120.0
+        }
+      ],
+      "frozenPricePerUnit": 222.6
+    },
+    {
+      "id": "HLD-024",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 3000.0
+        },
+        {
+          "type": "sale",
+          "units": 3000.0
+        }
+      ],
+      "frozenPricePerUnit": 228.9
+    },
+    {
+      "id": "HLD-025",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 30.0
+        },
+        {
+          "type": "sale",
+          "units": 30.0
+        }
+      ],
+      "frozenPricePerUnit": 235.2
+    },
+    {
+      "id": "HLD-026",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 40.0
+        },
+        {
+          "type": "sale",
+          "units": 10.0
+        },
+        {
+          "type": "sale",
+          "units": 10.0
+        }
+      ],
+      "frozenPricePerUnit": 5600.0
+    },
+    {
+      "id": "HLD-027",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100.0
+        },
+        {
+          "type": "sale",
+          "units": 25.0
+        },
+        {
+          "type": "sale",
+          "units": 25.0
+        }
+      ],
+      "frozenPricePerUnit": 5768.0
+    },
+    {
+      "id": "HLD-028",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 16.0
+        },
+        {
+          "type": "sale",
+          "units": 4.0
+        },
+        {
+          "type": "sale",
+          "units": 4.0
+        }
+      ],
+      "frozenPricePerUnit": 5936.0
+    },
+    {
+      "id": "HLD-029",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 400.0
+        },
+        {
+          "type": "sale",
+          "units": 100.0
+        },
+        {
+          "type": "sale",
+          "units": 100.0
+        }
+      ],
+      "frozenPricePerUnit": 6104.0
+    },
+    {
+      "id": "HLD-030",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 4.0
+        },
+        {
+          "type": "sale",
+          "units": 1.0
+        },
+        {
+          "type": "sale",
+          "units": 1.0
+        }
+      ],
+      "frozenPricePerUnit": 6272.0
+    },
+    {
+      "id": "HLD-031",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1000.0
+        }
+      ],
+      "frozenPricePerUnit": 25.5
+    },
+    {
+      "id": "HLD-032",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2500.0
+        }
+      ],
+      "frozenPricePerUnit": 26.265
+    },
+    {
+      "id": "HLD-033",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 400.0
+        }
+      ],
+      "frozenPricePerUnit": 27.03
+    },
+    {
+      "id": "HLD-034",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10000.0
+        }
+      ],
+      "frozenPricePerUnit": 27.795
+    },
+    {
+      "id": "HLD-035",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100.0
+        }
+      ],
+      "frozenPricePerUnit": 28.56
+    },
+    {
+      "id": "HLD-036",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 12.5
+        },
+        {
+          "type": "purchase",
+          "units": 7.5
+        }
+      ],
+      "frozenPricePerUnit": 3300.0
+    },
+    {
+      "id": "HLD-037",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 31.25
+        },
+        {
+          "type": "purchase",
+          "units": 18.75
+        }
+      ],
+      "frozenPricePerUnit": 3399.0
+    },
+    {
+      "id": "HLD-038",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 5.0
+        },
+        {
+          "type": "purchase",
+          "units": 3.0
+        }
+      ],
+      "frozenPricePerUnit": 3498.0
+    },
+    {
+      "id": "HLD-039",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 125.0
+        },
+        {
+          "type": "purchase",
+          "units": 75.0
+        }
+      ],
+      "frozenPricePerUnit": 3597.0
+    },
+    {
+      "id": "HLD-040",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1.25
+        },
+        {
+          "type": "purchase",
+          "units": 0.75
+        }
+      ],
+      "frozenPricePerUnit": 3696.0
+    },
+    {
+      "id": "HLD-041",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 60.0
+        },
+        {
+          "type": "bonus",
+          "units": 60.0
+        },
+        {
+          "type": "sale",
+          "units": 50.0
+        }
+      ],
+      "frozenPricePerUnit": 720.0
+    },
+    {
+      "id": "HLD-042",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 150.0
+        },
+        {
+          "type": "bonus",
+          "units": 150.0
+        },
+        {
+          "type": "sale",
+          "units": 125.0
+        }
+      ],
+      "frozenPricePerUnit": 741.6
+    },
+    {
+      "id": "HLD-043",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 24.0
+        },
+        {
+          "type": "bonus",
+          "units": 24.0
+        },
+        {
+          "type": "sale",
+          "units": 20.0
+        }
+      ],
+      "frozenPricePerUnit": 763.2
+    },
+    {
+      "id": "HLD-044",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 600.0
+        },
+        {
+          "type": "bonus",
+          "units": 600.0
+        },
+        {
+          "type": "sale",
+          "units": 500.0
+        }
+      ],
+      "frozenPricePerUnit": 784.8
+    },
+    {
+      "id": "HLD-045",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 6.0
+        },
+        {
+          "type": "bonus",
+          "units": 6.0
+        },
+        {
+          "type": "sale",
+          "units": 5.0
+        }
+      ],
+      "frozenPricePerUnit": 806.4
+    },
+    {
+      "id": "HLD-046",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100.0
+        },
+        {
+          "type": "dividend",
+          "amount": 250
+        },
+        {
+          "type": "sale",
+          "units": 100.0
+        }
+      ],
+      "frozenPricePerUnit": 1800.0
+    },
+    {
+      "id": "HLD-047",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 250.0
+        },
+        {
+          "type": "dividend",
+          "amount": 250
+        },
+        {
+          "type": "sale",
+          "units": 250.0
+        }
+      ],
+      "frozenPricePerUnit": 1854.0
+    },
+    {
+      "id": "HLD-048",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 40.0
+        },
+        {
+          "type": "dividend",
+          "amount": 250
+        },
+        {
+          "type": "sale",
+          "units": 40.0
+        }
+      ],
+      "frozenPricePerUnit": 1908.0
+    },
+    {
+      "id": "HLD-049",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1000.0
+        },
+        {
+          "type": "dividend",
+          "amount": 250
+        },
+        {
+          "type": "sale",
+          "units": 1000.0
+        }
+      ],
+      "frozenPricePerUnit": 1962.0
+    },
+    {
+      "id": "HLD-050",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10.0
+        },
+        {
+          "type": "dividend",
+          "amount": 250
+        },
+        {
+          "type": "sale",
+          "units": 10.0
+        }
+      ],
+      "frozenPricePerUnit": 2016.0
+    },
+    {
+      "id": "HLD-051",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 5.0
+        },
+        {
+          "type": "sale",
+          "units": 5.0
+        },
+        {
+          "type": "purchase",
+          "units": 5.0
+        }
+      ],
+      "frozenPricePerUnit": 4100.0
+    },
+    {
+      "id": "HLD-052",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 12.5
+        },
+        {
+          "type": "sale",
+          "units": 12.5
+        },
+        {
+          "type": "purchase",
+          "units": 12.5
+        }
+      ],
+      "frozenPricePerUnit": 4223.0
+    },
+    {
+      "id": "HLD-053",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2.0
+        },
+        {
+          "type": "sale",
+          "units": 2.0
+        },
+        {
+          "type": "purchase",
+          "units": 2.0
+        }
+      ],
+      "frozenPricePerUnit": 4346.0
+    },
+    {
+      "id": "HLD-054",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "sale",
+          "units": 50.0
+        },
+        {
+          "type": "purchase",
+          "units": 50.0
+        }
+      ],
+      "frozenPricePerUnit": 4469.0
+    },
+    {
+      "id": "HLD-055",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.5
+        },
+        {
+          "type": "sale",
+          "units": 0.5
+        },
+        {
+          "type": "purchase",
+          "units": 0.5
+        }
+      ],
+      "frozenPricePerUnit": 4592.0
+    },
+    {
+      "id": "HLD-056",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1.0
+        }
+      ],
+      "frozenPricePerUnit": 65000.0
+    },
+    {
+      "id": "HLD-057",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2.5
+        }
+      ],
+      "frozenPricePerUnit": 66950.0
+    },
+    {
+      "id": "HLD-058",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.4
+        }
+      ],
+      "frozenPricePerUnit": 68900.0
+    },
+    {
+      "id": "HLD-059",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10.0
+        }
+      ],
+      "frozenPricePerUnit": 70850.0
+    },
+    {
+      "id": "HLD-060",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.1
+        }
+      ],
+      "frozenPricePerUnit": 72800.0
+    },
+    {
+      "id": "HLD-061",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2500.0
+        }
+      ],
+      "frozenPricePerUnit": 8.75
+    },
+    {
+      "id": "HLD-062",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 6250.0
+        }
+      ],
+      "frozenPricePerUnit": 9.0125
+    },
+    {
+      "id": "HLD-063",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1000.0
+        }
+      ],
+      "frozenPricePerUnit": 9.275
+    },
+    {
+      "id": "HLD-064",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 25000.0
+        }
+      ],
+      "frozenPricePerUnit": 9.5375
+    },
+    {
+      "id": "HLD-065",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 250.0
+        }
+      ],
+      "frozenPricePerUnit": 9.8
+    },
+    {
+      "id": "HLD-066",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100.0
+        },
+        {
+          "type": "purchase",
+          "units": 100.0
+        },
+        {
+          "type": "purchase",
+          "units": 100.0
+        },
+        {
+          "type": "sale",
+          "units": 150.0
+        }
+      ],
+      "frozenPricePerUnit": 640.0
+    },
+    {
+      "id": "HLD-067",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 250.0
+        },
+        {
+          "type": "purchase",
+          "units": 250.0
+        },
+        {
+          "type": "purchase",
+          "units": 250.0
+        },
+        {
+          "type": "sale",
+          "units": 375.0
+        }
+      ],
+      "frozenPricePerUnit": 659.2
+    },
+    {
+      "id": "HLD-068",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 40.0
+        },
+        {
+          "type": "purchase",
+          "units": 40.0
+        },
+        {
+          "type": "purchase",
+          "units": 40.0
+        },
+        {
+          "type": "sale",
+          "units": 60.0
+        }
+      ],
+      "frozenPricePerUnit": 678.4
+    },
+    {
+      "id": "HLD-069",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1000.0
+        },
+        {
+          "type": "purchase",
+          "units": 1000.0
+        },
+        {
+          "type": "purchase",
+          "units": 1000.0
+        },
+        {
+          "type": "sale",
+          "units": 1500.0
+        }
+      ],
+      "frozenPricePerUnit": 697.6
+    },
+    {
+      "id": "HLD-070",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10.0
+        },
+        {
+          "type": "purchase",
+          "units": 10.0
+        },
+        {
+          "type": "purchase",
+          "units": 10.0
+        },
+        {
+          "type": "sale",
+          "units": 15.0
+        }
+      ],
+      "frozenPricePerUnit": 716.8
+    },
+    {
+      "id": "HLD-071",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "bonus",
+          "units": 25.0
+        }
+      ],
+      "frozenPricePerUnit": 900.0
+    },
+    {
+      "id": "HLD-072",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 125.0
+        },
+        {
+          "type": "bonus",
+          "units": 62.5
+        }
+      ],
+      "frozenPricePerUnit": 927.0
+    },
+    {
+      "id": "HLD-073",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 20.0
+        },
+        {
+          "type": "bonus",
+          "units": 10.0
+        }
+      ],
+      "frozenPricePerUnit": 954.0
+    },
+    {
+      "id": "HLD-074",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 500.0
+        },
+        {
+          "type": "bonus",
+          "units": 250.0
+        }
+      ],
+      "frozenPricePerUnit": 981.0
+    },
+    {
+      "id": "HLD-075",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 5.0
+        },
+        {
+          "type": "bonus",
+          "units": 2.5
+        }
+      ],
+      "frozenPricePerUnit": 1008.0
+    },
+    {
+      "id": "HLD-076",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 200.0
+        },
+        {
+          "type": "sale",
+          "units": 199.0
+        }
+      ],
+      "frozenPricePerUnit": 1500.0
+    },
+    {
+      "id": "HLD-077",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 500.0
+        },
+        {
+          "type": "sale",
+          "units": 497.5
+        }
+      ],
+      "frozenPricePerUnit": 1545.0
+    },
+    {
+      "id": "HLD-078",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 80.0
+        },
+        {
+          "type": "sale",
+          "units": 79.6
+        }
+      ],
+      "frozenPricePerUnit": 1590.0
+    },
+    {
+      "id": "HLD-079",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2000.0
+        },
+        {
+          "type": "sale",
+          "units": 1990.0
+        }
+      ],
+      "frozenPricePerUnit": 1635.0
+    },
+    {
+      "id": "HLD-080",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 20.0
+        },
+        {
+          "type": "sale",
+          "units": 19.9
+        }
+      ],
+      "frozenPricePerUnit": 1680.0
+    },
+    {
+      "id": "HLD-081",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1000.0
+        }
+      ],
+      "frozenPricePerUnit": 2000.0
+    },
+    {
+      "id": "HLD-082",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2500.0
+        }
+      ],
+      "frozenPricePerUnit": 2060.0
+    },
+    {
+      "id": "HLD-083",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 400.0
+        }
+      ],
+      "frozenPricePerUnit": 2120.0
+    },
+    {
+      "id": "HLD-084",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 10000.0
+        }
+      ],
+      "frozenPricePerUnit": 2180.0
+    },
+    {
+      "id": "HLD-085",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 100.0
+        }
+      ],
+      "frozenPricePerUnit": 2240.0
+    },
+    {
+      "id": "HLD-086",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 33.0
+        },
+        {
+          "type": "sale",
+          "units": 33.0
+        }
+      ],
+      "frozenPricePerUnit": 999.99
+    },
+    {
+      "id": "HLD-087",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 82.5
+        },
+        {
+          "type": "sale",
+          "units": 82.5
+        }
+      ],
+      "frozenPricePerUnit": 1029.9897
+    },
+    {
+      "id": "HLD-088",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 13.2
+        },
+        {
+          "type": "sale",
+          "units": 13.2
+        }
+      ],
+      "frozenPricePerUnit": 1059.9894
+    },
+    {
+      "id": "HLD-089",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 330.0
+        },
+        {
+          "type": "sale",
+          "units": 330.0
+        }
+      ],
+      "frozenPricePerUnit": 1089.9891
+    },
+    {
+      "id": "HLD-090",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 3.3
+        },
+        {
+          "type": "sale",
+          "units": 3.3
+        }
+      ],
+      "frozenPricePerUnit": 1119.9888
+    },
+    {
+      "id": "HLD-091",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 15.0
+        },
+        {
+          "type": "dividend",
+          "amount": 100
+        }
+      ],
+      "frozenPricePerUnit": 4500.0
+    },
+    {
+      "id": "HLD-092",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 37.5
+        },
+        {
+          "type": "dividend",
+          "amount": 100
+        }
+      ],
+      "frozenPricePerUnit": 4635.0
+    },
+    {
+      "id": "HLD-093",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 6.0
+        },
+        {
+          "type": "dividend",
+          "amount": 100
+        }
+      ],
+      "frozenPricePerUnit": 4770.0
+    },
+    {
+      "id": "HLD-094",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 150.0
+        },
+        {
+          "type": "dividend",
+          "amount": 100
+        }
+      ],
+      "frozenPricePerUnit": 4905.0
+    },
+    {
+      "id": "HLD-095",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1.5
+        },
+        {
+          "type": "dividend",
+          "amount": 100
+        }
+      ],
+      "frozenPricePerUnit": 5040.0
+    },
+    {
+      "id": "HLD-096",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 500.0
+        },
+        {
+          "type": "purchase",
+          "units": 500.0
+        },
+        {
+          "type": "sale",
+          "units": 1000.0
+        }
+      ],
+      "frozenPricePerUnit": 32.0
+    },
+    {
+      "id": "HLD-097",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1250.0
+        },
+        {
+          "type": "purchase",
+          "units": 1250.0
+        },
+        {
+          "type": "sale",
+          "units": 2500.0
+        }
+      ],
+      "frozenPricePerUnit": 32.96
+    },
+    {
+      "id": "HLD-098",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 200.0
+        },
+        {
+          "type": "purchase",
+          "units": 200.0
+        },
+        {
+          "type": "sale",
+          "units": 400.0
+        }
+      ],
+      "frozenPricePerUnit": 33.92
+    },
+    {
+      "id": "HLD-099",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 5000.0
+        },
+        {
+          "type": "purchase",
+          "units": 5000.0
+        },
+        {
+          "type": "sale",
+          "units": 10000.0
+        }
+      ],
+      "frozenPricePerUnit": 34.88
+    },
+    {
+      "id": "HLD-100",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "sale",
+          "units": 100.0
+        }
+      ],
+      "frozenPricePerUnit": 35.84
+    },
+    {
+      "id": "HLD-101",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.5
+        }
+      ],
+      "frozenPricePerUnit": 2600000.0
+    },
+    {
+      "id": "HLD-102",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 1.25
+        }
+      ],
+      "frozenPricePerUnit": 2678000.0
+    },
+    {
+      "id": "HLD-103",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.2
+        }
+      ],
+      "frozenPricePerUnit": 2756000.0
+    },
+    {
+      "id": "HLD-104",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 5.0
+        }
+      ],
+      "frozenPricePerUnit": 2834000.0
+    },
+    {
+      "id": "HLD-105",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 0.05
+        }
+      ],
+      "frozenPricePerUnit": 2912000.0
+    },
+    {
+      "id": "HLD-106",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 20.0
+        },
+        {
+          "type": "sale",
+          "units": 5.0
+        },
+        {
+          "type": "purchase",
+          "units": 5.0
+        },
+        {
+          "type": "sale",
+          "units": 5.0
+        }
+      ],
+      "frozenPricePerUnit": 1200.0
+    },
+    {
+      "id": "HLD-107",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "sale",
+          "units": 12.5
+        },
+        {
+          "type": "purchase",
+          "units": 12.5
+        },
+        {
+          "type": "sale",
+          "units": 12.5
+        }
+      ],
+      "frozenPricePerUnit": 1236.0
+    },
+    {
+      "id": "HLD-108",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 8.0
+        },
+        {
+          "type": "sale",
+          "units": 2.0
+        },
+        {
+          "type": "purchase",
+          "units": 2.0
+        },
+        {
+          "type": "sale",
+          "units": 2.0
+        }
+      ],
+      "frozenPricePerUnit": 1272.0
+    },
+    {
+      "id": "HLD-109",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 200.0
+        },
+        {
+          "type": "sale",
+          "units": 50.0
+        },
+        {
+          "type": "purchase",
+          "units": 50.0
+        },
+        {
+          "type": "sale",
+          "units": 50.0
+        }
+      ],
+      "frozenPricePerUnit": 1308.0
+    },
+    {
+      "id": "HLD-110",
+      "family": "holdings",
+      "transactions": [
+        {
+          "type": "purchase",
+          "units": 2.0
+        },
+        {
+          "type": "sale",
+          "units": 0.5
+        },
+        {
+          "type": "purchase",
+          "units": 0.5
+        },
+        {
+          "type": "sale",
+          "units": 0.5
+        }
+      ],
+      "frozenPricePerUnit": 1344.0
+    },
+    {
+      "id": "TAX-017",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-05-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-018",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-06-05",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-019",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-06-14",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-020",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-06-15",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-021",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-06-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-022",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-06-25",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-023",
+      "family": "tax",
+      "acquisitionDate": "2022-06-15",
+      "disposalDate": "2023-07-15",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-024",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-08-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-025",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-08-21",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-026",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-08-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-027",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-08-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-028",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-09-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-029",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-09-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-030",
+      "family": "tax",
+      "acquisitionDate": "2022-08-31",
+      "disposalDate": "2023-09-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-031",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-10-02",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-032",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-10-22",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-033",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-10-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-034",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-11-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-035",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-11-02",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-036",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-11-11",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-037",
+      "family": "tax",
+      "acquisitionDate": "2022-11-01",
+      "disposalDate": "2023-12-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-038",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-01-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-039",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-01-21",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-040",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-01-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-041",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-01-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-042",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-02-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-043",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-02-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-044",
+      "family": "tax",
+      "acquisitionDate": "2023-01-31",
+      "disposalDate": "2024-03-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-045",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-02-14",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-046",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-03-05",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-047",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-03-14",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-048",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-03-15",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-049",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-03-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-050",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-03-25",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-051",
+      "family": "tax",
+      "acquisitionDate": "2023-03-15",
+      "disposalDate": "2024-04-14",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-052",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-05-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-053",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-06-20",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-054",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-06-29",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-055",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-06-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-056",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-07-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-057",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-07-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-058",
+      "family": "tax",
+      "acquisitionDate": "2023-06-30",
+      "disposalDate": "2024-07-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-059",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-08-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-060",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-08-21",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-061",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-08-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-062",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-08-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-063",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-09-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-064",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-09-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-065",
+      "family": "tax",
+      "acquisitionDate": "2023-08-31",
+      "disposalDate": "2024-09-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-066",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-10-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-067",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-11-20",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-068",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-11-29",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-069",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-11-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-070",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-12-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-071",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-12-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-072",
+      "family": "tax",
+      "acquisitionDate": "2023-11-30",
+      "disposalDate": "2024-12-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-073",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-01-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-074",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-01-21",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-075",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-01-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-076",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-01-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-077",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-02-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-078",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-02-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-079",
+      "family": "tax",
+      "acquisitionDate": "2024-01-31",
+      "disposalDate": "2025-03-02",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-080",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-01-29",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-081",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-02-18",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-082",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-02-27",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-083",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-02-28",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-084",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-03-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-085",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-03-10",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-086",
+      "family": "tax",
+      "acquisitionDate": "2024-02-29",
+      "disposalDate": "2025-03-30",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-087",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-04-17",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-088",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-05-07",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-089",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-05-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-090",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-05-17",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-091",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-05-18",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-092",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-05-27",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-093",
+      "family": "tax",
+      "acquisitionDate": "2024-05-17",
+      "disposalDate": "2025-06-16",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-094",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-05-02",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-095",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-05-22",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-096",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-05-31",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-097",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-098",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-06-02",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-099",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-06-11",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-100",
+      "family": "tax",
+      "acquisitionDate": "2024-06-01",
+      "disposalDate": "2025-07-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 250,
+      "saleValuePerUnit": 310
+    },
+    {
+      "id": "TAX-101",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 100.0,
+      "saleValuePerUnit": 200.0,
+      "fmv31Jan2018PerUnit": 150.0
+    },
+    {
+      "id": "TAX-102",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 3750.0,
+      "saleValuePerUnit": 7500.0,
+      "fmv31Jan2018PerUnit": 5625.0
+    },
+    {
+      "id": "TAX-103",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 420.0,
+      "saleValuePerUnit": 840.0,
+      "fmv31Jan2018PerUnit": 630.0
+    },
+    {
+      "id": "TAX-104",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 60.0,
+      "saleValuePerUnit": 120.0,
+      "fmv31Jan2018PerUnit": 90.0
+    },
+    {
+      "id": "TAX-105",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 100.0,
+      "saleValuePerUnit": 200.0,
+      "fmv31Jan2018PerUnit": 250.0
+    },
+    {
+      "id": "TAX-106",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 3750.0,
+      "saleValuePerUnit": 7500.0,
+      "fmv31Jan2018PerUnit": 9375.0
+    },
+    {
+      "id": "TAX-107",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 420.0,
+      "saleValuePerUnit": 840.0,
+      "fmv31Jan2018PerUnit": 1050.0
+    },
+    {
+      "id": "TAX-108",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 60.0,
+      "saleValuePerUnit": 120.0,
+      "fmv31Jan2018PerUnit": 150.0
+    },
+    {
+      "id": "TAX-109",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 80.0,
+      "saleValuePerUnit": 200.0,
+      "fmv31Jan2018PerUnit": 100.0
+    },
+    {
+      "id": "TAX-110",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 3000.0,
+      "saleValuePerUnit": 7500.0,
+      "fmv31Jan2018PerUnit": 3750.0
+    },
+    {
+      "id": "TAX-111",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 336.0,
+      "saleValuePerUnit": 840.0,
+      "fmv31Jan2018PerUnit": 420.0
+    },
+    {
+      "id": "TAX-112",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 48.0,
+      "saleValuePerUnit": 120.0,
+      "fmv31Jan2018PerUnit": 60.0
+    },
+    {
+      "id": "TAX-113",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 80.0,
+      "saleValuePerUnit": 100.0,
+      "fmv31Jan2018PerUnit": 150.0
+    },
+    {
+      "id": "TAX-114",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 3000.0,
+      "saleValuePerUnit": 3750.0,
+      "fmv31Jan2018PerUnit": 5625.0
+    },
+    {
+      "id": "TAX-115",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 336.0,
+      "saleValuePerUnit": 420.0,
+      "fmv31Jan2018PerUnit": 630.0
+    },
+    {
+      "id": "TAX-116",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 48.0,
+      "saleValuePerUnit": 60.0,
+      "fmv31Jan2018PerUnit": 90.0
+    },
+    {
+      "id": "TAX-117",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 250.0,
+      "saleValuePerUnit": 150.0,
+      "fmv31Jan2018PerUnit": 100.0
+    },
+    {
+      "id": "TAX-118",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 9375.0,
+      "saleValuePerUnit": 5625.0,
+      "fmv31Jan2018PerUnit": 3750.0
+    },
+    {
+      "id": "TAX-119",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 1050.0,
+      "saleValuePerUnit": 630.0,
+      "fmv31Jan2018PerUnit": 420.0
+    },
+    {
+      "id": "TAX-120",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 150.0,
+      "saleValuePerUnit": 90.0,
+      "fmv31Jan2018PerUnit": 60.0
+    },
+    {
+      "id": "TAX-121",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 250.0,
+      "saleValuePerUnit": 100.0,
+      "fmv31Jan2018PerUnit": 150.0
+    },
+    {
+      "id": "TAX-122",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 9375.0,
+      "saleValuePerUnit": 3750.0,
+      "fmv31Jan2018PerUnit": 5625.0
+    },
+    {
+      "id": "TAX-123",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 1050.0,
+      "saleValuePerUnit": 420.0,
+      "fmv31Jan2018PerUnit": 630.0
+    },
+    {
+      "id": "TAX-124",
+      "family": "tax",
+      "acquisitionDate": "2016-04-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 20,
+      "costPerUnit": 150.0,
+      "saleValuePerUnit": 60.0,
+      "fmv31Jan2018PerUnit": 90.0
+    },
+    {
+      "id": "TAX-125",
+      "family": "tax",
+      "acquisitionDate": "2017-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 30,
+      "costPerUnit": 100,
+      "saleValuePerUnit": 200,
+      "fmv31Jan2018PerUnit": 100
+    },
+    {
+      "id": "TAX-126",
+      "family": "tax",
+      "acquisitionDate": "2017-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 30,
+      "costPerUnit": 100,
+      "saleValuePerUnit": 200,
+      "fmv31Jan2018PerUnit": 200
+    },
+    {
+      "id": "TAX-127",
+      "family": "tax",
+      "acquisitionDate": "2017-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 30,
+      "costPerUnit": 150,
+      "saleValuePerUnit": 150,
+      "fmv31Jan2018PerUnit": 300
+    },
+    {
+      "id": "TAX-128",
+      "family": "tax",
+      "acquisitionDate": "2018-02-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 25,
+      "costPerUnit": 60,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 500
+    },
+    {
+      "id": "TAX-129",
+      "family": "tax",
+      "acquisitionDate": "2018-02-02",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 25,
+      "costPerUnit": 60,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 500
+    },
+    {
+      "id": "TAX-130",
+      "family": "tax",
+      "acquisitionDate": "2019-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 25,
+      "costPerUnit": 60,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 500
+    },
+    {
+      "id": "TAX-131",
+      "family": "tax",
+      "acquisitionDate": "2020-12-31",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 25,
+      "costPerUnit": 60,
+      "saleValuePerUnit": 400,
+      "fmv31Jan2018PerUnit": 500
+    },
+    {
+      "id": "TAX-132",
+      "family": "tax",
+      "acquisitionDate": "2025-06-01",
+      "disposalDate": "2025-09-01",
+      "unitsConsumed": 50,
+      "costPerUnit": 300,
+      "saleValuePerUnit": 200
+    },
+    {
+      "id": "TAX-133",
+      "family": "tax",
+      "acquisitionDate": "2020-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 50,
+      "costPerUnit": 300,
+      "saleValuePerUnit": 200
+    },
+    {
+      "id": "TAX-134",
+      "family": "tax",
+      "acquisitionDate": "2025-01-01",
+      "disposalDate": "2025-02-01",
+      "unitsConsumed": 10,
+      "costPerUnit": 1000,
+      "saleValuePerUnit": 1
+    },
+    {
+      "id": "TAX-135",
+      "family": "tax",
+      "acquisitionDate": "2015-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 10,
+      "costPerUnit": 5000,
+      "saleValuePerUnit": 4999
+    },
+    {
+      "id": "TAX-136",
+      "family": "tax",
+      "acquisitionDate": "2019-01-01",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 10000,
+      "costPerUnit": 45.5,
+      "saleValuePerUnit": 620.75
+    },
+    {
+      "id": "TAX-137",
+      "family": "tax",
+      "acquisitionDate": "2021-05-05",
+      "disposalDate": "2026-08-26",
+      "unitsConsumed": 5000,
+      "costPerUnit": 210.0,
+      "saleValuePerUnit": 890.0
+    },
+    {
+      "id": "TAX-138",
+      "family": "tax",
+      "acquisitionDate": "2023-03-03",
+      "disposalDate": "2024-03-04",
+      "unitsConsumed": 25000,
+      "costPerUnit": 12.0,
+      "saleValuePerUnit": 15.5
+    },
+    {
+      "id": "TAX-139",
+      "family": "tax",
+      "acquisitionDate": "2026-01-15",
+      "disposalDate": "2026-01-15",
+      "unitsConsumed": 5,
+      "costPerUnit": 400,
+      "saleValuePerUnit": 410
+    },
+    {
+      "id": "TAX-140",
+      "family": "tax",
+      "acquisitionDate": "2025-06-01",
+      "disposalDate": "2025-06-01",
+      "unitsConsumed": 5,
+      "costPerUnit": 400,
+      "saleValuePerUnit": 410
+    },
+    {
+      "id": "PUB-005",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "IN"
+    },
+    {
+      "id": "PUB-006",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "AU"
+    },
+    {
+      "id": "PUB-007",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "US"
+    },
+    {
+      "id": "PUB-008",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "GB"
+    },
+    {
+      "id": "PUB-009",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "SG"
+    },
+    {
+      "id": "PUB-010",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "CA"
+    },
+    {
+      "id": "PUB-011",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "IN"
+    },
+    {
+      "id": "PUB-012",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "AU"
+    },
+    {
+      "id": "PUB-013",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "US"
+    },
+    {
+      "id": "PUB-014",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "GB"
+    },
+    {
+      "id": "PUB-015",
+      "family": "publishing",
+      "instrumentClass": "bond",
+      "countryCode": "IN"
+    },
+    {
+      "id": "PUB-016",
+      "family": "publishing",
+      "instrumentClass": "bond",
+      "countryCode": "AU"
+    },
+    {
+      "id": "PUB-017",
+      "family": "publishing",
+      "instrumentClass": "bond",
+      "countryCode": "US"
+    },
+    {
+      "id": "PUB-018",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "SG"
+    },
+    {
+      "id": "PUB-019",
+      "family": "publishing",
+      "instrumentClass": "equity",
+      "countryCode": "NZ"
+    },
+    {
+      "id": "PUB-020",
+      "family": "publishing",
+      "instrumentClass": "etf",
+      "countryCode": "CA"
+    },
+    {
+      "id": "XRAY-004",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 50000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-005",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 75000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-006",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 12500.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-007",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 80000.0,
+          "holdsSecurityWeightPct": 30
+        },
+        {
+          "value": 20000.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-008",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 120000.0,
+          "holdsSecurityWeightPct": 30
+        },
+        {
+          "value": 30000.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-009",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 20000.0,
+          "holdsSecurityWeightPct": 30
+        },
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-010",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 10000.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 90000.0,
+          "holdsSecurityWeightPct": 10
+        }
+      ]
+    },
+    {
+      "id": "XRAY-011",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 15000.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 135000.0,
+          "holdsSecurityWeightPct": 10
+        }
+      ]
+    },
+    {
+      "id": "XRAY-012",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 2500.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 22500.0,
+          "holdsSecurityWeightPct": 10
+        }
+      ]
+    },
+    {
+      "id": "XRAY-013",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 40000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 40000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 20000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-014",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 60000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 60000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 30000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-015",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 10000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 10000.0,
+          "holdsSecurityWeightPct": 25
+        },
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-016",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 15000.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-017",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 22500.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-018",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 3750.0,
+          "holdsSecurityWeightPct": 0
+        }
+      ]
+    },
+    {
+      "id": "XRAY-019",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 60000.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 40000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-020",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 90000.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 60000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-021",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 15000.0,
+          "holdsSecurityWeightPct": 100
+        },
+        {
+          "value": 10000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-022",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 200000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 200000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 200000.0,
+          "holdsSecurityWeightPct": 5
+        }
+      ]
+    },
+    {
+      "id": "XRAY-023",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 300000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 300000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 300000.0,
+          "holdsSecurityWeightPct": 5
+        }
+      ]
+    },
+    {
+      "id": "XRAY-024",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 50000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 50000.0,
+          "holdsSecurityWeightPct": 5
+        },
+        {
+          "value": 50000.0,
+          "holdsSecurityWeightPct": 5
+        }
+      ]
+    },
+    {
+      "id": "XRAY-025",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 33333.0,
+          "holdsSecurityWeightPct": 33
+        },
+        {
+          "value": 66667.0,
+          "holdsSecurityWeightPct": 66
+        }
+      ]
+    },
+    {
+      "id": "XRAY-026",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 49999.5,
+          "holdsSecurityWeightPct": 33
+        },
+        {
+          "value": 100000.5,
+          "holdsSecurityWeightPct": 66
+        }
+      ]
+    },
+    {
+      "id": "XRAY-027",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 8333.25,
+          "holdsSecurityWeightPct": 33
+        },
+        {
+          "value": 16666.75,
+          "holdsSecurityWeightPct": 66
+        }
+      ]
+    },
+    {
+      "id": "XRAY-028",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 100000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-029",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 150000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-030",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 25000.0,
+          "holdsSecurityWeightPct": 100
+        }
+      ]
+    },
+    {
+      "id": "XRAY-031",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 5000.0,
+          "holdsSecurityWeightPct": 50
+        }
+      ]
+    },
+    {
+      "id": "XRAY-032",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 7500.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 7500.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 7500.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 7500.0,
+          "holdsSecurityWeightPct": 50
+        }
+      ]
+    },
+    {
+      "id": "XRAY-033",
+      "family": "xray_attribution",
+      "positions": [
+        {
+          "value": 1250.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 1250.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 1250.0,
+          "holdsSecurityWeightPct": 50
+        },
+        {
+          "value": 1250.0,
+          "holdsSecurityWeightPct": 50
+        }
+      ]
+    }
+  ],
+  "note": "Expanded during II-R12 terminal certification continuation (2026-08-27) from the original 41 hand-authored cases to 336 via scripts/r12-certification/generate_expanded_cases.py -- systematic boundary/permutation sweeps per family, not cosmetic duplicates."
 }

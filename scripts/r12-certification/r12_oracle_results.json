@@ -1,6 +1,6 @@
 {
   "generatedBy": "r12_independent_multiasset_oracle.py",
-  "totalCases": 41,
+  "totalCases": 336,
   "results": [
     {
       "id": "ID-001",
@@ -322,6 +322,2401 @@
       "totalPortfolioValue": 180000,
       "effectiveSecurityWeight": 0.333333,
       "effectiveSecurityValue": 60000.0
+    },
+    {
+      "id": "ID-009",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-010",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-011",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-012",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-013",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-014",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-015",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-016",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-017",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-018",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-019",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-020",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-021",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-022",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-023",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-024",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-025",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-026",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-027",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-028",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-029",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 2
+    },
+    {
+      "id": "ID-030",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-031",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 1
+    },
+    {
+      "id": "ID-032",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 3
+    },
+    {
+      "id": "ID-033",
+      "family": "instrument_identity",
+      "distinctInstrumentCount": 3
+    },
+    {
+      "id": "HLD-011",
+      "family": "holdings",
+      "unitsAfter": 200.0,
+      "valueAfter": 290050.0
+    },
+    {
+      "id": "HLD-012",
+      "family": "holdings",
+      "unitsAfter": 500.0,
+      "valueAfter": 746878.75
+    },
+    {
+      "id": "HLD-013",
+      "family": "holdings",
+      "unitsAfter": 80.0,
+      "valueAfter": 122981.2
+    },
+    {
+      "id": "HLD-014",
+      "family": "holdings",
+      "unitsAfter": 2000.0,
+      "valueAfter": 3161545.0
+    },
+    {
+      "id": "HLD-015",
+      "family": "holdings",
+      "unitsAfter": 20.0,
+      "valueAfter": 32485.6
+    },
+    {
+      "id": "HLD-016",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 98050.0
+    },
+    {
+      "id": "HLD-017",
+      "family": "holdings",
+      "unitsAfter": 250.0,
+      "valueAfter": 252478.75
+    },
+    {
+      "id": "HLD-018",
+      "family": "holdings",
+      "unitsAfter": 40.0,
+      "valueAfter": 41573.2
+    },
+    {
+      "id": "HLD-019",
+      "family": "holdings",
+      "unitsAfter": 1000.0,
+      "valueAfter": 1068745.0
+    },
+    {
+      "id": "HLD-020",
+      "family": "holdings",
+      "unitsAfter": 10.0,
+      "valueAfter": 10981.6
+    },
+    {
+      "id": "HLD-021",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-022",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-023",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-024",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-025",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-026",
+      "family": "holdings",
+      "unitsAfter": 20.0,
+      "valueAfter": 112000.0
+    },
+    {
+      "id": "HLD-027",
+      "family": "holdings",
+      "unitsAfter": 50.0,
+      "valueAfter": 288400.0
+    },
+    {
+      "id": "HLD-028",
+      "family": "holdings",
+      "unitsAfter": 8.0,
+      "valueAfter": 47488.0
+    },
+    {
+      "id": "HLD-029",
+      "family": "holdings",
+      "unitsAfter": 200.0,
+      "valueAfter": 1220800.0
+    },
+    {
+      "id": "HLD-030",
+      "family": "holdings",
+      "unitsAfter": 2.0,
+      "valueAfter": 12544.0
+    },
+    {
+      "id": "HLD-031",
+      "family": "holdings",
+      "unitsAfter": 1000.0,
+      "valueAfter": 25500.0
+    },
+    {
+      "id": "HLD-032",
+      "family": "holdings",
+      "unitsAfter": 2500.0,
+      "valueAfter": 65662.5
+    },
+    {
+      "id": "HLD-033",
+      "family": "holdings",
+      "unitsAfter": 400.0,
+      "valueAfter": 10812.0
+    },
+    {
+      "id": "HLD-034",
+      "family": "holdings",
+      "unitsAfter": 10000.0,
+      "valueAfter": 277950.0
+    },
+    {
+      "id": "HLD-035",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 2856.0
+    },
+    {
+      "id": "HLD-036",
+      "family": "holdings",
+      "unitsAfter": 20.0,
+      "valueAfter": 66000.0
+    },
+    {
+      "id": "HLD-037",
+      "family": "holdings",
+      "unitsAfter": 50.0,
+      "valueAfter": 169950.0
+    },
+    {
+      "id": "HLD-038",
+      "family": "holdings",
+      "unitsAfter": 8.0,
+      "valueAfter": 27984.0
+    },
+    {
+      "id": "HLD-039",
+      "family": "holdings",
+      "unitsAfter": 200.0,
+      "valueAfter": 719400.0
+    },
+    {
+      "id": "HLD-040",
+      "family": "holdings",
+      "unitsAfter": 2.0,
+      "valueAfter": 7392.0
+    },
+    {
+      "id": "HLD-041",
+      "family": "holdings",
+      "unitsAfter": 70.0,
+      "valueAfter": 50400.0
+    },
+    {
+      "id": "HLD-042",
+      "family": "holdings",
+      "unitsAfter": 175.0,
+      "valueAfter": 129780.0
+    },
+    {
+      "id": "HLD-043",
+      "family": "holdings",
+      "unitsAfter": 28.0,
+      "valueAfter": 21369.6
+    },
+    {
+      "id": "HLD-044",
+      "family": "holdings",
+      "unitsAfter": 700.0,
+      "valueAfter": 549360.0
+    },
+    {
+      "id": "HLD-045",
+      "family": "holdings",
+      "unitsAfter": 7.0,
+      "valueAfter": 5644.8
+    },
+    {
+      "id": "HLD-046",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-047",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-048",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-049",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-050",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-051",
+      "family": "holdings",
+      "unitsAfter": 5.0,
+      "valueAfter": 20500.0
+    },
+    {
+      "id": "HLD-052",
+      "family": "holdings",
+      "unitsAfter": 12.5,
+      "valueAfter": 52787.5
+    },
+    {
+      "id": "HLD-053",
+      "family": "holdings",
+      "unitsAfter": 2.0,
+      "valueAfter": 8692.0
+    },
+    {
+      "id": "HLD-054",
+      "family": "holdings",
+      "unitsAfter": 50.0,
+      "valueAfter": 223450.0
+    },
+    {
+      "id": "HLD-055",
+      "family": "holdings",
+      "unitsAfter": 0.5,
+      "valueAfter": 2296.0
+    },
+    {
+      "id": "HLD-056",
+      "family": "holdings",
+      "unitsAfter": 1.0,
+      "valueAfter": 65000.0
+    },
+    {
+      "id": "HLD-057",
+      "family": "holdings",
+      "unitsAfter": 2.5,
+      "valueAfter": 167375.0
+    },
+    {
+      "id": "HLD-058",
+      "family": "holdings",
+      "unitsAfter": 0.4,
+      "valueAfter": 27560.0
+    },
+    {
+      "id": "HLD-059",
+      "family": "holdings",
+      "unitsAfter": 10.0,
+      "valueAfter": 708500.0
+    },
+    {
+      "id": "HLD-060",
+      "family": "holdings",
+      "unitsAfter": 0.1,
+      "valueAfter": 7280.0
+    },
+    {
+      "id": "HLD-061",
+      "family": "holdings",
+      "unitsAfter": 2500.0,
+      "valueAfter": 21875.0
+    },
+    {
+      "id": "HLD-062",
+      "family": "holdings",
+      "unitsAfter": 6250.0,
+      "valueAfter": 56328.12
+    },
+    {
+      "id": "HLD-063",
+      "family": "holdings",
+      "unitsAfter": 1000.0,
+      "valueAfter": 9275.0
+    },
+    {
+      "id": "HLD-064",
+      "family": "holdings",
+      "unitsAfter": 25000.0,
+      "valueAfter": 238437.5
+    },
+    {
+      "id": "HLD-065",
+      "family": "holdings",
+      "unitsAfter": 250.0,
+      "valueAfter": 2450.0
+    },
+    {
+      "id": "HLD-066",
+      "family": "holdings",
+      "unitsAfter": 150.0,
+      "valueAfter": 96000.0
+    },
+    {
+      "id": "HLD-067",
+      "family": "holdings",
+      "unitsAfter": 375.0,
+      "valueAfter": 247200.0
+    },
+    {
+      "id": "HLD-068",
+      "family": "holdings",
+      "unitsAfter": 60.0,
+      "valueAfter": 40704.0
+    },
+    {
+      "id": "HLD-069",
+      "family": "holdings",
+      "unitsAfter": 1500.0,
+      "valueAfter": 1046400.0
+    },
+    {
+      "id": "HLD-070",
+      "family": "holdings",
+      "unitsAfter": 15.0,
+      "valueAfter": 10752.0
+    },
+    {
+      "id": "HLD-071",
+      "family": "holdings",
+      "unitsAfter": 75.0,
+      "valueAfter": 67500.0
+    },
+    {
+      "id": "HLD-072",
+      "family": "holdings",
+      "unitsAfter": 187.5,
+      "valueAfter": 173812.5
+    },
+    {
+      "id": "HLD-073",
+      "family": "holdings",
+      "unitsAfter": 30.0,
+      "valueAfter": 28620.0
+    },
+    {
+      "id": "HLD-074",
+      "family": "holdings",
+      "unitsAfter": 750.0,
+      "valueAfter": 735750.0
+    },
+    {
+      "id": "HLD-075",
+      "family": "holdings",
+      "unitsAfter": 7.5,
+      "valueAfter": 7560.0
+    },
+    {
+      "id": "HLD-076",
+      "family": "holdings",
+      "unitsAfter": 1.0,
+      "valueAfter": 1500.0
+    },
+    {
+      "id": "HLD-077",
+      "family": "holdings",
+      "unitsAfter": 2.5,
+      "valueAfter": 3862.5
+    },
+    {
+      "id": "HLD-078",
+      "family": "holdings",
+      "unitsAfter": 0.4,
+      "valueAfter": 636.0
+    },
+    {
+      "id": "HLD-079",
+      "family": "holdings",
+      "unitsAfter": 10.0,
+      "valueAfter": 16350.0
+    },
+    {
+      "id": "HLD-080",
+      "family": "holdings",
+      "unitsAfter": 0.1,
+      "valueAfter": 168.0
+    },
+    {
+      "id": "HLD-081",
+      "family": "holdings",
+      "unitsAfter": 1000.0,
+      "valueAfter": 2000000.0
+    },
+    {
+      "id": "HLD-082",
+      "family": "holdings",
+      "unitsAfter": 2500.0,
+      "valueAfter": 5150000.0
+    },
+    {
+      "id": "HLD-083",
+      "family": "holdings",
+      "unitsAfter": 400.0,
+      "valueAfter": 848000.0
+    },
+    {
+      "id": "HLD-084",
+      "family": "holdings",
+      "unitsAfter": 10000.0,
+      "valueAfter": 21800000.0
+    },
+    {
+      "id": "HLD-085",
+      "family": "holdings",
+      "unitsAfter": 100.0,
+      "valueAfter": 224000.0
+    },
+    {
+      "id": "HLD-086",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-087",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-088",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-089",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-090",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-091",
+      "family": "holdings",
+      "unitsAfter": 15.0,
+      "valueAfter": 67500.0
+    },
+    {
+      "id": "HLD-092",
+      "family": "holdings",
+      "unitsAfter": 37.5,
+      "valueAfter": 173812.5
+    },
+    {
+      "id": "HLD-093",
+      "family": "holdings",
+      "unitsAfter": 6.0,
+      "valueAfter": 28620.0
+    },
+    {
+      "id": "HLD-094",
+      "family": "holdings",
+      "unitsAfter": 150.0,
+      "valueAfter": 735750.0
+    },
+    {
+      "id": "HLD-095",
+      "family": "holdings",
+      "unitsAfter": 1.5,
+      "valueAfter": 7560.0
+    },
+    {
+      "id": "HLD-096",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-097",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-098",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-099",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-100",
+      "family": "holdings",
+      "unitsAfter": 0.0,
+      "valueAfter": 0.0
+    },
+    {
+      "id": "HLD-101",
+      "family": "holdings",
+      "unitsAfter": 0.5,
+      "valueAfter": 1300000.0
+    },
+    {
+      "id": "HLD-102",
+      "family": "holdings",
+      "unitsAfter": 1.25,
+      "valueAfter": 3347500.0
+    },
+    {
+      "id": "HLD-103",
+      "family": "holdings",
+      "unitsAfter": 0.2,
+      "valueAfter": 551200.0
+    },
+    {
+      "id": "HLD-104",
+      "family": "holdings",
+      "unitsAfter": 5.0,
+      "valueAfter": 14170000.0
+    },
+    {
+      "id": "HLD-105",
+      "family": "holdings",
+      "unitsAfter": 0.05,
+      "valueAfter": 145600.0
+    },
+    {
+      "id": "HLD-106",
+      "family": "holdings",
+      "unitsAfter": 15.0,
+      "valueAfter": 18000.0
+    },
+    {
+      "id": "HLD-107",
+      "family": "holdings",
+      "unitsAfter": 37.5,
+      "valueAfter": 46350.0
+    },
+    {
+      "id": "HLD-108",
+      "family": "holdings",
+      "unitsAfter": 6.0,
+      "valueAfter": 7632.0
+    },
+    {
+      "id": "HLD-109",
+      "family": "holdings",
+      "unitsAfter": 150.0,
+      "valueAfter": 196200.0
+    },
+    {
+      "id": "HLD-110",
+      "family": "holdings",
+      "unitsAfter": 1.5,
+      "valueAfter": 2016.0
+    },
+    {
+      "id": "TAX-017",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-018",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-019",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-020",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-021",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-022",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-023",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-024",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-025",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-026",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-027",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-028",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-029",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-030",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-031",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-032",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-033",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-034",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-035",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-036",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-037",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-038",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-039",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-040",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-041",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-042",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-043",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-044",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-045",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 336,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-046",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 356,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-047",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-048",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-049",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-050",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 376,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-051",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 396,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-052",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 336,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-053",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 356,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-054",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-055",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-056",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-057",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 376,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-058",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 396,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-059",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 336,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-060",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 356,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-061",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-062",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-063",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-064",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 376,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-065",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 396,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-066",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 336,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-067",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 356,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-068",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-069",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-070",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-071",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 376,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-072",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 396,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-073",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 336,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-074",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 356,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-075",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-076",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 366,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-077",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-078",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 376,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-079",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 396,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-080",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-081",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-082",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-083",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-084",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-085",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-086",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-087",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-088",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-089",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-090",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-091",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-092",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-093",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-094",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 335,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-095",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 355,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-096",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 364,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-097",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 365,
+      "isLongTerm": false,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-098",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 366,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-099",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 375,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-100",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 395,
+      "isLongTerm": true,
+      "saleValue": 3100,
+      "costBasisUsed": 2500,
+      "grandfatheringApplied": false,
+      "taxableGain": 600
+    },
+    {
+      "id": "TAX-101",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 4000.0,
+      "costBasisUsed": 3000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 1000.0
+    },
+    {
+      "id": "TAX-102",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 150000.0,
+      "costBasisUsed": 112500.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 37500.0
+    },
+    {
+      "id": "TAX-103",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 16800.0,
+      "costBasisUsed": 12600.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 4200.0
+    },
+    {
+      "id": "TAX-104",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 2400.0,
+      "costBasisUsed": 1800.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 600.0
+    },
+    {
+      "id": "TAX-105",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 4000.0,
+      "costBasisUsed": 4000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-106",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 150000.0,
+      "costBasisUsed": 150000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-107",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 16800.0,
+      "costBasisUsed": 16800.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-108",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 2400.0,
+      "costBasisUsed": 2400.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-109",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 4000.0,
+      "costBasisUsed": 2000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 2000.0
+    },
+    {
+      "id": "TAX-110",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 150000.0,
+      "costBasisUsed": 75000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 75000.0
+    },
+    {
+      "id": "TAX-111",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 16800.0,
+      "costBasisUsed": 8400.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 8400.0
+    },
+    {
+      "id": "TAX-112",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 2400.0,
+      "costBasisUsed": 1200.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 1200.0
+    },
+    {
+      "id": "TAX-113",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 2000.0,
+      "costBasisUsed": 2000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-114",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 75000.0,
+      "costBasisUsed": 75000.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-115",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 8400.0,
+      "costBasisUsed": 8400.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-116",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 1200.0,
+      "costBasisUsed": 1200.0,
+      "grandfatheringApplied": true,
+      "taxableGain": 0.0
+    },
+    {
+      "id": "TAX-117",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 3000.0,
+      "costBasisUsed": 5000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -2000.0
+    },
+    {
+      "id": "TAX-118",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 112500.0,
+      "costBasisUsed": 187500.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -75000.0
+    },
+    {
+      "id": "TAX-119",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 12600.0,
+      "costBasisUsed": 21000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -8400.0
+    },
+    {
+      "id": "TAX-120",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 1800.0,
+      "costBasisUsed": 3000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -1200.0
+    },
+    {
+      "id": "TAX-121",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 2000.0,
+      "costBasisUsed": 5000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -3000.0
+    },
+    {
+      "id": "TAX-122",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 75000.0,
+      "costBasisUsed": 187500.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -112500.0
+    },
+    {
+      "id": "TAX-123",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 8400.0,
+      "costBasisUsed": 21000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -12600.0
+    },
+    {
+      "id": "TAX-124",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3799,
+      "isLongTerm": true,
+      "saleValue": 1200.0,
+      "costBasisUsed": 3000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": -1800.0
+    },
+    {
+      "id": "TAX-125",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3524,
+      "isLongTerm": true,
+      "saleValue": 6000,
+      "costBasisUsed": 3000,
+      "grandfatheringApplied": false,
+      "taxableGain": 3000
+    },
+    {
+      "id": "TAX-126",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3524,
+      "isLongTerm": true,
+      "saleValue": 6000,
+      "costBasisUsed": 6000,
+      "grandfatheringApplied": true,
+      "taxableGain": 0
+    },
+    {
+      "id": "TAX-127",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3524,
+      "isLongTerm": true,
+      "saleValue": 4500,
+      "costBasisUsed": 4500,
+      "grandfatheringApplied": false,
+      "taxableGain": 0
+    },
+    {
+      "id": "TAX-128",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3128,
+      "isLongTerm": true,
+      "saleValue": 10000,
+      "costBasisUsed": 1500,
+      "grandfatheringApplied": false,
+      "taxableGain": 8500
+    },
+    {
+      "id": "TAX-129",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 3127,
+      "isLongTerm": true,
+      "saleValue": 10000,
+      "costBasisUsed": 1500,
+      "grandfatheringApplied": false,
+      "taxableGain": 8500
+    },
+    {
+      "id": "TAX-130",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2794,
+      "isLongTerm": true,
+      "saleValue": 10000,
+      "costBasisUsed": 1500,
+      "grandfatheringApplied": false,
+      "taxableGain": 8500
+    },
+    {
+      "id": "TAX-131",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2064,
+      "isLongTerm": true,
+      "saleValue": 10000,
+      "costBasisUsed": 1500,
+      "grandfatheringApplied": false,
+      "taxableGain": 8500
+    },
+    {
+      "id": "TAX-132",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 92,
+      "isLongTerm": false,
+      "saleValue": 10000,
+      "costBasisUsed": 15000,
+      "grandfatheringApplied": false,
+      "taxableGain": -5000
+    },
+    {
+      "id": "TAX-133",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2429,
+      "isLongTerm": true,
+      "saleValue": 10000,
+      "costBasisUsed": 15000,
+      "grandfatheringApplied": false,
+      "taxableGain": -5000
+    },
+    {
+      "id": "TAX-134",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 31,
+      "isLongTerm": false,
+      "saleValue": 10,
+      "costBasisUsed": 10000,
+      "grandfatheringApplied": false,
+      "taxableGain": -9990
+    },
+    {
+      "id": "TAX-135",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 4255,
+      "isLongTerm": true,
+      "saleValue": 49990,
+      "costBasisUsed": 50000,
+      "grandfatheringApplied": false,
+      "taxableGain": -10
+    },
+    {
+      "id": "TAX-136",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 2794,
+      "isLongTerm": true,
+      "saleValue": 6207500.0,
+      "costBasisUsed": 455000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": 5752500.0
+    },
+    {
+      "id": "TAX-137",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 1939,
+      "isLongTerm": true,
+      "saleValue": 4450000.0,
+      "costBasisUsed": 1050000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": 3400000.0
+    },
+    {
+      "id": "TAX-138",
+      "family": "tax",
+      "gainType": "ltcg",
+      "holdingDays": 367,
+      "isLongTerm": true,
+      "saleValue": 387500.0,
+      "costBasisUsed": 300000.0,
+      "grandfatheringApplied": false,
+      "taxableGain": 87500.0
+    },
+    {
+      "id": "TAX-139",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 0,
+      "isLongTerm": false,
+      "saleValue": 2050,
+      "costBasisUsed": 2000,
+      "grandfatheringApplied": false,
+      "taxableGain": 50
+    },
+    {
+      "id": "TAX-140",
+      "family": "tax",
+      "gainType": "stcg",
+      "holdingDays": 0,
+      "isLongTerm": false,
+      "saleValue": 2050,
+      "costBasisUsed": 2000,
+      "grandfatheringApplied": false,
+      "taxableGain": 50
+    },
+    {
+      "id": "PUB-005",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "international_shares"
+    },
+    {
+      "id": "PUB-006",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-007",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-008",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-009",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-010",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-011",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-012",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-013",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-014",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-015",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": null
+    },
+    {
+      "id": "PUB-016",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": null
+    },
+    {
+      "id": "PUB-017",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": null
+    },
+    {
+      "id": "PUB-018",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "PUB-019",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "australian_shares"
+    },
+    {
+      "id": "PUB-020",
+      "family": "publishing",
+      "netWorthContributionCount": 1,
+      "masterItemKey": "etfs"
+    },
+    {
+      "id": "XRAY-004",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 50000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 50000.0
+    },
+    {
+      "id": "XRAY-005",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 75000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 75000.0
+    },
+    {
+      "id": "XRAY-006",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 12500.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 12500.0
+    },
+    {
+      "id": "XRAY-007",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 0.24,
+      "effectiveSecurityValue": 24000.0
+    },
+    {
+      "id": "XRAY-008",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 0.24,
+      "effectiveSecurityValue": 36000.0
+    },
+    {
+      "id": "XRAY-009",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 0.24,
+      "effectiveSecurityValue": 6000.0
+    },
+    {
+      "id": "XRAY-010",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 0.19,
+      "effectiveSecurityValue": 19000.0
+    },
+    {
+      "id": "XRAY-011",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 0.19,
+      "effectiveSecurityValue": 28500.0
+    },
+    {
+      "id": "XRAY-012",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 0.19,
+      "effectiveSecurityValue": 4750.0
+    },
+    {
+      "id": "XRAY-013",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 0.4,
+      "effectiveSecurityValue": 40000.0
+    },
+    {
+      "id": "XRAY-014",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 0.4,
+      "effectiveSecurityValue": 60000.0
+    },
+    {
+      "id": "XRAY-015",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 0.4,
+      "effectiveSecurityValue": 10000.0
+    },
+    {
+      "id": "XRAY-016",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 15000.0,
+      "effectiveSecurityWeight": 0.0,
+      "effectiveSecurityValue": 0.0
+    },
+    {
+      "id": "XRAY-017",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 22500.0,
+      "effectiveSecurityWeight": 0.0,
+      "effectiveSecurityValue": 0.0
+    },
+    {
+      "id": "XRAY-018",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 3750.0,
+      "effectiveSecurityWeight": 0.0,
+      "effectiveSecurityValue": 0.0
+    },
+    {
+      "id": "XRAY-019",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 100000.0
+    },
+    {
+      "id": "XRAY-020",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 150000.0
+    },
+    {
+      "id": "XRAY-021",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 25000.0
+    },
+    {
+      "id": "XRAY-022",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 600000.0,
+      "effectiveSecurityWeight": 0.05,
+      "effectiveSecurityValue": 30000.0
+    },
+    {
+      "id": "XRAY-023",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 900000.0,
+      "effectiveSecurityWeight": 0.05,
+      "effectiveSecurityValue": 45000.0
+    },
+    {
+      "id": "XRAY-024",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 0.05,
+      "effectiveSecurityValue": 7500.0
+    },
+    {
+      "id": "XRAY-025",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 0.550001,
+      "effectiveSecurityValue": 55000.11
+    },
+    {
+      "id": "XRAY-026",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 0.550001,
+      "effectiveSecurityValue": 82500.17
+    },
+    {
+      "id": "XRAY-027",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 0.550001,
+      "effectiveSecurityValue": 13750.03
+    },
+    {
+      "id": "XRAY-028",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 100000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 100000.0
+    },
+    {
+      "id": "XRAY-029",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 150000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 150000.0
+    },
+    {
+      "id": "XRAY-030",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 25000.0,
+      "effectiveSecurityWeight": 1.0,
+      "effectiveSecurityValue": 25000.0
+    },
+    {
+      "id": "XRAY-031",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 20000.0,
+      "effectiveSecurityWeight": 0.5,
+      "effectiveSecurityValue": 10000.0
+    },
+    {
+      "id": "XRAY-032",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 30000.0,
+      "effectiveSecurityWeight": 0.5,
+      "effectiveSecurityValue": 15000.0
+    },
+    {
+      "id": "XRAY-033",
+      "family": "xray_attribution",
+      "totalPortfolioValue": 5000.0,
+      "effectiveSecurityWeight": 0.5,
+      "effectiveSecurityValue": 2500.0
     }
   ]
 }
