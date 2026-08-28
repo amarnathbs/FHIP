@@ -37,7 +37,7 @@ import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
 import { reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
 import { matchBankPayment, type BankTransactionCandidate } from '../liability/bankMatching';
-import type { LiabilityStatementActivity, LiabilityStatementCountry, LiabilityStatementType } from '../liability/types';
+import type { LiabilityFacilityType, LiabilityStatementActivity, LiabilityStatementCountry, LiabilityStatementType } from '../liability/types';
 import type { FdhStatementUpload } from '../domain/types';
 
 export class LiabilityStatementProcessingError extends Error {
@@ -218,7 +218,7 @@ export async function uploadAndProcessLiabilityStatement(
     return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind };
   }
 
-  const statementId = await persistLiabilityStatementEvidence(userId, document, extraction.extraction.activities, metadata, extraction.extraction.warnings, extraction.extraction.parserName, extraction.extraction.parserVersion, extraction.extraction.extractionConfidence);
+  const statementId = await persistLiabilityStatementEvidence(userId, document, extraction.extraction.activities, metadata, extraction.extraction.warnings, extraction.extraction.parserName, extraction.extraction.parserVersion, extraction.extraction.extractionConfidence, extraction.extraction.facilityType);
 
   return { document, statementId, pipelineStatus: 'ok' };
 }
@@ -232,6 +232,27 @@ async function persistLiabilityStatementEvidence(
   parserName: string,
   parserVersion: string,
   extractionConfidence: number,
+  // FIX (live-DEV final certification round): this must be the REAL facility
+  // type the matched adapter declared (e.g. AU_LOAN_GENERIC_V1's
+  // 'home_loan'), not re-derived from statementType here. Genuinely
+  // reproduced live: uploading an AU home-loan CSV against an EXISTING
+  // mortgage liability (same lender, same masked_identifier, same currency)
+  // persisted facility_type='personal_loan' regardless, which
+  // liabilityAdapter.ts's FACILITY_TO_DEBT_TYPE lookup then maps to
+  // debt_type='personal_loan' — so facilityMatching.ts could never find the
+  // existing 'mortgage'-typed liability no matter how well institution/
+  // masked_identifier/currency lined up, and the proposal always recommended
+  // add_new. Left uncorrected this would silently create a DUPLICATE mortgage
+  // (and leave the property_liability_links row pointed at the stale
+  // facility) for every home_loan/investment_property_loan/vehicle_loan/
+  // other_term_loan/line_of_credit/overdraft statement — every one of them,
+  // since none of those six facility types could ever round-trip through the
+  // hardcoded 'personal_loan' fallback. facilityMatching.ts and
+  // liabilityAdapter.ts themselves were already correct; the extraction
+  // pipeline (statementIntake.ts/csvExtraction.ts) already computed the right
+  // value in `extraction.extraction.facilityType` — it just was never wired
+  // through to the INSERT below.
+  facilityType: LiabilityFacilityType,
 ): Promise<string> {
   const supabase = await createClient();
   const isCreditCard = metadata.statementType === 'credit_card';
@@ -275,7 +296,7 @@ async function persistLiabilityStatementEvidence(
     user_id: userId,
     statement_upload_id: document.id,
     statement_type: metadata.statementType,
-    facility_type: isCreditCard ? 'credit_card' : 'personal_loan',
+    facility_type: facilityType,
     country_code: metadata.countryCode,
     currency_code: metadata.currencyCode,
     institution_name: metadata.institutionName ?? null,
