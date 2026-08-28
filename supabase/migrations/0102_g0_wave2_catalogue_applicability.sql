@@ -90,33 +90,48 @@ alter table master_financial_items
 -- (03-catalogue-matrix.md S"Class: HOME_OR_CROSS_BORDER_COUNTRY -- 12 items")
 -- ===========================================================================
 
+-- SEED-STATE DETECTION: catalogue_total alone is NOT a reliable signal for
+-- "has supabase/seed_master_items.sql been applied?" -- migration 0078
+-- directly INSERTs 2 rows of its own (commercial_loan, smsf_property_loan)
+-- regardless of whether the separate seed file has ever run, so a
+-- schema-only replay (scripts/db-rebuild-check/replay.mjs, which
+-- deliberately never runs that seed file -- confirmed by inspection, it is
+-- a one-time catalogue-population step, not part of the migration-replay
+-- contract) has catalogue_total > 0 without the other ~214 seed-only rows
+-- existing. Detect the real seed state directly: 'age_pension' is a
+-- seed-only row with no equivalent direct-migration insert anywhere in the
+-- repo (confirmed by grep), so its presence/absence reliably distinguishes
+-- the two valid states the header above documents.
 do $$
-declare affected int; catalogue_total int;
+declare v_seed_applied boolean;
 begin
-  select count(*) into catalogue_total from master_financial_items;
-  update master_financial_items
-  set applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY',
-      country_applicability = array['AU']::char(2)[]
-  where (category, item_key) in (
-    ('income', 'age_pension'),
-    ('income', 'family_tax_benefit'),
-    ('liability', 'smsf_property_loan'),
-    ('liability', 'hecs_help'),
-    ('liability', 'ato_payment_plan'),
-    ('retirement', 'industry_super'),
-    ('retirement', 'retail_super'),
-    ('retirement', 'government_co_contribution'),
-    ('retirement', 'transition_to_retirement'),
-    ('retirement', 'allocated_pension'),
-    ('retirement', 'account_based_pension')
-  );
-  get diagnostics affected = row_count;
-  if catalogue_total > 0 and affected <> 11 then
-    raise exception 'G0-JA-1 Wave 2: expected exactly 11 rows matched for the AU-structure HOME_OR_CROSS_BORDER_COUNTRY backfill (catalogue already has % rows), got %. Catalogue drift since 03-catalogue-matrix.md reconciliation -- STOP, do not proceed.', catalogue_total, affected;
-  end if;
-  if catalogue_total = 0 and affected <> 0 then
-    raise exception 'G0-JA-1 Wave 2: unexpected % row(s) matched against an empty catalogue -- impossible state, aborting.', affected;
-  end if;
+  select exists(select 1 from master_financial_items where category = 'income' and item_key = 'age_pension') into v_seed_applied;
+
+  declare
+    affected int;
+    expected int := case when v_seed_applied then 11 else 1 end; -- 1 = smsf_property_loan only (from migration 0078), pre-seed
+  begin
+    update master_financial_items
+    set applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY',
+        country_applicability = array['AU']::char(2)[]
+    where (category, item_key) in (
+      ('income', 'age_pension'),
+      ('income', 'family_tax_benefit'),
+      ('liability', 'smsf_property_loan'),
+      ('liability', 'hecs_help'),
+      ('liability', 'ato_payment_plan'),
+      ('retirement', 'industry_super'),
+      ('retirement', 'retail_super'),
+      ('retirement', 'government_co_contribution'),
+      ('retirement', 'transition_to_retirement'),
+      ('retirement', 'allocated_pension'),
+      ('retirement', 'account_based_pension')
+    );
+    get diagnostics affected = row_count;
+    if affected <> expected then
+      raise exception 'G0-JA-1 Wave 2: expected % row(s) matched for the AU-structure HOME_OR_CROSS_BORDER_COUNTRY backfill (seed_master_items.sql applied: %), got %. Catalogue drift since 03-catalogue-matrix.md reconciliation -- STOP, do not proceed.', expected, v_seed_applied, affected;
+    end if;
+  end;
 end $$;
 
 -- ===========================================================================
@@ -134,18 +149,19 @@ end $$;
 -- ===========================================================================
 
 do $$
-declare affected int; catalogue_total int;
+declare
+  v_seed_applied boolean;
+  affected int;
+  expected int;
 begin
-  select count(*) into catalogue_total from master_financial_items;
+  select exists(select 1 from master_financial_items where category = 'income' and item_key = 'age_pension') into v_seed_applied;
+  expected := case when v_seed_applied then 1 else 0 end; -- australian_shares only exists via the seed file, no direct-migration insert
   update master_financial_items
   set applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY'
   where (category, item_key) = ('investment', 'australian_shares');
   get diagnostics affected = row_count;
-  if catalogue_total > 0 and affected <> 1 then
-    raise exception 'G0-JA-1 Wave 2: expected exactly 1 row matched for australian_shares classification, got %. Catalogue drift -- STOP, do not proceed.', affected;
-  end if;
-  if catalogue_total = 0 and affected <> 0 then
-    raise exception 'G0-JA-1 Wave 2: unexpected % row(s) matched against an empty catalogue -- impossible state, aborting.', affected;
+  if affected <> expected then
+    raise exception 'G0-JA-1 Wave 2: expected % row(s) matched for australian_shares classification (seed_master_items.sql applied: %), got %. Catalogue drift -- STOP, do not proceed.', expected, v_seed_applied, affected;
   end if;
 end $$;
 
@@ -160,9 +176,13 @@ end $$;
 -- ===========================================================================
 
 do $$
-declare affected int; catalogue_total int;
+declare
+  v_seed_applied boolean;
+  affected int;
+  expected int;
 begin
-  select count(*) into catalogue_total from master_financial_items;
+  select exists(select 1 from master_financial_items where category = 'income' and item_key = 'age_pension') into v_seed_applied;
+  expected := case when v_seed_applied then 8 else 0 end; -- none of these 8 have a direct-migration insert anywhere
   update master_financial_items
   set applicability_class = 'GLOBAL_WITH_JURISDICTION_VARIANT'
   where (category, item_key) in (
@@ -176,11 +196,8 @@ begin
     ('retirement', 'spouse_contribution')
   );
   get diagnostics affected = row_count;
-  if catalogue_total > 0 and affected <> 8 then
-    raise exception 'G0-JA-1 Wave 2: expected exactly 8 rows matched for GLOBAL_WITH_JURISDICTION_VARIANT backfill (catalogue already has % rows), got %. Catalogue drift since 03-catalogue-matrix.md reconciliation -- STOP, do not proceed.', catalogue_total, affected;
-  end if;
-  if catalogue_total = 0 and affected <> 0 then
-    raise exception 'G0-JA-1 Wave 2: unexpected % row(s) matched against an empty catalogue -- impossible state, aborting.', affected;
+  if affected <> expected then
+    raise exception 'G0-JA-1 Wave 2: expected % row(s) matched for GLOBAL_WITH_JURISDICTION_VARIANT backfill (seed_master_items.sql applied: %), got %. Catalogue drift since 03-catalogue-matrix.md reconciliation -- STOP, do not proceed.', expected, v_seed_applied, affected;
   end if;
 end $$;
 
@@ -190,19 +207,22 @@ end $$;
 
 do $$
 declare
-  catalogue_total int;
+  v_seed_applied boolean;
   total_classified int;
+  expected_classified int;
   unexpected_restricted int;
   restricted_home_or_cross_border int;
+  expected_restricted int;
   australian_shares_still_global int;
 begin
-  select count(*) into catalogue_total from master_financial_items;
+  select exists(select 1 from master_financial_items where category = 'income' and item_key = 'age_pension') into v_seed_applied;
+  -- Pre-seed: only smsf_property_loan (Part 2) is classified = 1 total.
+  -- Post-seed: all 20 approved items are classified.
+  expected_classified := case when v_seed_applied then 20 else 1 end;
+
   select count(*) into total_classified from master_financial_items where applicability_class is not null;
-  if catalogue_total > 0 and total_classified <> 20 then
-    raise exception 'G0-JA-1 Wave 2: expected exactly 20 rows carrying a non-null applicability_class after this migration (catalogue has % total rows), got %.', catalogue_total, total_classified;
-  end if;
-  if catalogue_total = 0 and total_classified <> 0 then
-    raise exception 'G0-JA-1 Wave 2: unexpected % classified row(s) against an empty catalogue -- impossible state, aborting.', total_classified;
+  if total_classified <> expected_classified then
+    raise exception 'G0-JA-1 Wave 2: expected % row(s) carrying a non-null applicability_class after this migration (seed_master_items.sql applied: %), got %.', expected_classified, v_seed_applied, total_classified;
   end if;
 
   -- Confirm this migration did not accidentally restrict any row outside
@@ -218,22 +238,28 @@ begin
     raise exception 'G0-JA-1 Wave 2: % row(s) outside the approved 11 ended up with a non-null country_applicability -- aborting.', unexpected_restricted;
   end if;
 
-  -- Exactly 11 HOME_OR_CROSS_BORDER_COUNTRY rows are actually restricted to
-  -- ['AU'] -- australian_shares (the 12th) must NOT be among them.
+  -- Exactly the expected count of HOME_OR_CROSS_BORDER_COUNTRY rows are
+  -- actually restricted to ['AU'] -- australian_shares (the 12th) must
+  -- NOT be among them, pre- or post-seed.
+  expected_restricted := case when v_seed_applied then 11 else 1 end;
   select count(*) into restricted_home_or_cross_border
   from master_financial_items
   where applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY'
     and country_applicability = array['AU']::char(2)[];
-  if catalogue_total > 0 and restricted_home_or_cross_border <> 11 then
-    raise exception 'G0-JA-1 Wave 2: expected exactly 11 HOME_OR_CROSS_BORDER_COUNTRY rows restricted to AU, got %.', restricted_home_or_cross_border;
+  if restricted_home_or_cross_border <> expected_restricted then
+    raise exception 'G0-JA-1 Wave 2: expected % HOME_OR_CROSS_BORDER_COUNTRY row(s) restricted to AU (seed_master_items.sql applied: %), got %.', expected_restricted, v_seed_applied, restricted_home_or_cross_border;
   end if;
 
-  select count(*) into australian_shares_still_global
-  from master_financial_items
-  where category = 'investment' and item_key = 'australian_shares'
-    and applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY'
-    and country_applicability is null;
-  if catalogue_total > 0 and australian_shares_still_global <> 1 then
-    raise exception 'G0-JA-1 Wave 2: australian_shares must be classified HOME_OR_CROSS_BORDER_COUNTRY with country_applicability still NULL (globally creatable) -- found % matching rows.', australian_shares_still_global;
+  -- australian_shares itself only exists once the seed has run -- this
+  -- check is only meaningful (and only asserted) in the post-seed state.
+  if v_seed_applied then
+    select count(*) into australian_shares_still_global
+    from master_financial_items
+    where category = 'investment' and item_key = 'australian_shares'
+      and applicability_class = 'HOME_OR_CROSS_BORDER_COUNTRY'
+      and country_applicability is null;
+    if australian_shares_still_global <> 1 then
+      raise exception 'G0-JA-1 Wave 2: australian_shares must be classified HOME_OR_CROSS_BORDER_COUNTRY with country_applicability still NULL (globally creatable) -- found % matching rows.', australian_shares_still_global;
+    end if;
   end if;
 end $$;
