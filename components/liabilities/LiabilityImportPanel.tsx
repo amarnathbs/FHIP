@@ -77,14 +77,24 @@ interface StatementActivity {
   bank_match_status: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted' | 'bank_evidence_not_available';
 }
 
+// NOTE: kept in snake_case to match the raw API/DB column names, exactly
+// like LiabilityStatement/StatementActivity above -- this component talks
+// to the FDH route handlers over plain fetch() with no camelCase mapping
+// layer, and `liabilityProposalService.ts` selects these columns verbatim
+// (field_name, proposed_value, existing_value, value_kind, is_recommended,
+// requires_confirmation, reason_code). A prior camelCase version of this
+// interface silently desynced from the real response shape: every field
+// read as `undefined` (blank Field/Current/Proposed cells, "Apply undefined"
+// checkbox labels, and no field ever auto-selected as recommended) despite
+// the API returning fully populated rows.
 interface ProposedField {
-  fieldName: string;
-  valueKind: string;
-  proposedValue: string | null;
-  existingValue: string | null;
-  isRecommended: boolean;
-  requiresConfirmation: boolean;
-  reasonCode: string;
+  field_name: string;
+  value_kind: string;
+  proposed_value: string | null;
+  existing_value: string | null;
+  is_recommended: boolean;
+  requires_confirmation: boolean;
+  reason_code: string;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -264,7 +274,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       const pfields = (json.data.fields as ProposedField[]) ?? [];
       setFields(pfields);
       const defaultSel = new Set(
-        pfields.filter((f) => f.isRecommended && !f.requiresConfirmation && f.proposedValue !== f.existingValue).map((f) => f.fieldName),
+        pfields
+          .filter((f) => f.is_recommended && !f.requires_confirmation && f.proposed_value !== f.existing_value)
+          .map((f) => f.field_name),
       );
       setSelected(defaultSel);
       setDecision(json.data.proposal?.target_entity_id ? 'update_existing' : 'add_new');
@@ -287,7 +299,21 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           decision,
-          selectedFields: decision === 'apply_selected_fields' ? Array.from(selected) : undefined,
+          // The atomic RPC (fdh10_apply_liability_proposal, migration 0096)
+          // only auto-selects "all known proposal fields" when the decision
+          // is 'update_existing' and no selectedFields are sent. For
+          // 'add_new' it has no such fallback -- an omitted/empty selection
+          // always fails NO_FIELDS_SELECTED, and 'add_new' additionally
+          // requires liability_name/debt_type/balance/currency_code among
+          // whatever is selected (DOMAIN_VALIDATION_FAILED otherwise). Live
+          // reproduction: every "Add as a new liability" apply from this
+          // panel failed with NO_FIELDS_SELECTED because selectedFields was
+          // only ever sent for the 'apply_selected_fields' decision.
+          // 'keep_existing' never reaches the field-selection logic at all
+          // (it dismisses the proposal and returns early), so it's the only
+          // other decision safe to omit this for.
+          selectedFields:
+            decision === 'add_new' || decision === 'apply_selected_fields' ? Array.from(selected) : undefined,
         }),
       });
       const { ok, status, json } = await readJson(res);
@@ -576,16 +602,16 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
               </thead>
               <tbody>
                 {fields.map((f) => {
-                  const changed = f.proposedValue !== f.existingValue;
+                  const changed = f.proposed_value !== f.existing_value;
                   return (
-                    <tr key={f.fieldName} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{FIELD_LABELS[f.fieldName] ?? f.fieldName}</th>
-                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>
+                    <tr key={f.field_name} className="border-b border-gray-100">
+                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{FIELD_LABELS[f.field_name] ?? f.field_name}</th>
+                      <td className="py-2 pr-2">{displayValue(f.existing_value, f.value_kind)}</td>
+                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposed_value, f.value_kind)}</td>
                       <td className="py-2">
                         <label className="inline-flex items-center gap-2">
-                          <input type="checkbox" checked={selected.has(f.fieldName)} onChange={() => toggleField(f.fieldName)} aria-label={`Apply ${FIELD_LABELS[f.fieldName] ?? f.fieldName}`} />
-                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                          <input type="checkbox" checked={selected.has(f.field_name)} onChange={() => toggleField(f.field_name)} aria-label={`Apply ${FIELD_LABELS[f.field_name] ?? f.field_name}`} />
+                          {f.requires_confirmation && <span className="text-xs text-amber-800">please confirm</span>}
                         </label>
                       </td>
                     </tr>

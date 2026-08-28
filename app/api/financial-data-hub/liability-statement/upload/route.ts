@@ -79,8 +79,24 @@ export async function POST(req: Request) {
       },
       bytes,
     );
+    // On a duplicate-whole-document upload, `result.document` is a NEW
+    // document row that intentionally has no `fdh_liability_statements` row
+    // of its own (uploadAndProcessLiabilityStatement never re-persists
+    // evidence for a duplicate) -- only the ORIGINAL document
+    // (`duplicate_of_document_id`) does. The client's review step fetches
+    // GET .../liability-statement/{document_id}, which resolves via that
+    // document's own statement_upload_id link, so returning the new
+    // document's id here left every duplicate re-upload live-404ing on
+    // review with "No statement evidence has been extracted from this
+    // document yet." even though `duplicate: true` and a real `statement_id`
+    // were both present. Point document_id at the original document instead
+    // so the existing evidence the response promises is actually what loads.
+    const reviewDocumentId =
+      result.pipelineStatus === 'duplicate_statement' && result.document.duplicate_of_document_id
+        ? result.document.duplicate_of_document_id
+        : result.document.id;
     return ok({
-      document_id: result.document.id,
+      document_id: reviewDocumentId,
       processing_status: result.document.processing_status,
       pipeline_status: result.pipelineStatus,
       statement_id: result.statementId,

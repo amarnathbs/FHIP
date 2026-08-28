@@ -262,8 +262,26 @@ async function persistLiabilityStatementEvidence(
 
   const purchasesTotal = has('PURCHASE') ? sumOf('PURCHASE') : null;
   const cashAdvancesTotal = has('CASH_ADVANCE') ? sumOf('CASH_ADVANCE') : null;
-  const interestTotal = has('INTEREST') ? sumOf('INTEREST') : null;
-  const feesTotal = has('FEE') ? sumOf('FEE') : null;
+  // Interest/fees reach an activity two different ways depending on
+  // statement shape, and a loan statement's total was silently dropping
+  // one of them: a credit card statement carries interest/fees as their
+  // OWN whole activities (activityType INTEREST/FEE, no component split),
+  // while a loan statement's repayment decomposition (auLoan.ts) embeds
+  // interestComponent/feeComponent inside a single PAYMENT activity and
+  // never emits a standalone INTEREST/FEE activityType at all. Summing
+  // only `sumOf('INTEREST'|'FEE')` -- keyed on activityType -- left every
+  // loan statement's interest_total/fees_total stuck at null even when
+  // real, statement-evidenced interest/fee amounts were extracted and
+  // visible per-activity, live-reproduced via a real $2,000 = $1,550
+  // principal + $430 interest + $20 fee repayment. Summing both the
+  // whole-activity and the component paths together is safe for either
+  // shape: credit-card INTEREST/FEE activities never populate these
+  // component fields, and loan PAYMENT activities never carry an
+  // INTEREST/FEE activityType, so there is no double-count either way.
+  const interestTotal =
+    (has('INTEREST') ? sumOf('INTEREST') ?? 0 : 0) + activities.reduce((s, a) => s + (a.interestComponent ?? 0), 0) || null;
+  const feesTotal =
+    (has('FEE') ? sumOf('FEE') ?? 0 : 0) + activities.reduce((s, a) => s + (a.feeComponent ?? 0), 0) || null;
   const paymentsTotal = has('PAYMENT') ? sumOf('PAYMENT') : null;
   const refundsTotal = has('REFUND') ? sumOf('REFUND') : null;
   const drawdownsTotal = has('LOAN_ADVANCE') ? sumOf('LOAN_ADVANCE') : null;
