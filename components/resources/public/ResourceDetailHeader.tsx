@@ -8,6 +8,7 @@
 // only the content-type label (a reader-relevant fact) and dates/author.
 
 import { ResourceTypeLabel, JurisdictionLabel } from './ResourceTypeLabel';
+import { ShareButton } from './ShareButton';
 import { formatPublicDate } from '@/lib/resources/public/metadata';
 import type { ResourceContentType, ResourceJurisdiction, ResourceDifficulty } from '@/lib/resources/types';
 import { JURISDICTION_LABELS } from '@/lib/resources/admin/labels';
@@ -29,6 +30,7 @@ export function ResourceDetailHeader({
   publishedAt,
   updatedAt,
   authorName,
+  shareUrl,
 }: {
   contentType: ResourceContentType;
   title: string;
@@ -38,6 +40,11 @@ export function ResourceDetailHeader({
   publishedAt: string | null;
   updatedAt: string;
   authorName: string | null;
+  // The public canonical URL for this post (buildResourceCanonicalUrl(slug)
+  // from the page component) — optional so this header still renders for
+  // any caller that hasn't computed one, but every real detail page passes
+  // it, since sharing a page without a working canonical URL isn't useful.
+  shareUrl?: string;
 }) {
   const publishedLabel = formatPublicDate(publishedAt);
   const updatedLabel = formatPublicDate(updatedAt);
@@ -47,10 +54,13 @@ export function ResourceDetailHeader({
 
   return (
     <header className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <ResourceTypeLabel contentType={contentType} />
-        <JurisdictionLabel jurisdiction={jurisdiction} className="text-xs text-muted" />
-        {difficulty && <span className="text-xs text-muted">{DIFFICULTY_LABELS[difficulty as ResourceDifficulty] ?? difficulty}</span>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ResourceTypeLabel contentType={contentType} />
+          <JurisdictionLabel jurisdiction={jurisdiction} className="text-xs text-muted" />
+          {difficulty && <span className="text-xs text-muted">{DIFFICULTY_LABELS[difficulty as ResourceDifficulty] ?? difficulty}</span>}
+        </div>
+        {shareUrl && <ShareButton url={shareUrl} title={title} />}
       </div>
       <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{title}</h1>
       {excerpt && <p className="text-lg leading-relaxed text-muted">{excerpt}</p>}

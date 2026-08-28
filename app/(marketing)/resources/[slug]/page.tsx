@@ -136,6 +136,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
             publishedAt={post.published_at}
             updatedAt={post.updated_at}
             authorName={post.author?.display_name ?? null}
+            shareUrl={canonicalUrl}
           />
 
           {/* Mobile/tablet "On this page" disclosure (spec §31) only — the
