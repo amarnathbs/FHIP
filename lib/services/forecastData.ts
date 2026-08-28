@@ -11,6 +11,7 @@ import type { RetirementCalculatorInput, RetirementMemberLegInput, RetirementTar
 import type { CrossBorderCalculatorInput } from '@/lib/engines/forecast/crossBorderCalculator';
 import type { ResilienceCalculatorInput } from '@/lib/engines/forecast/resilienceCalculator';
 import { applyStressScenario, type StressScenarioType, type StressScenarioParams } from '@/lib/engines/resilienceStress';
+import { isKnownCountry } from '@/lib/services/jurisdiction';
 import { computeAccessibleLiquidResources, type CommitmentRow } from '@/lib/engines/resilience';
 import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast/types';
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
@@ -374,7 +375,14 @@ async function buildCalculatorInput(
     ]);
     const commitments = (commitmentsRes.data ?? []) as CommitmentRow[];
     const scenario = resilienceOptions.stressScenario;
-    const shockResult = scenario ? applyStressScenario(dashboard, scenario, commitments, resilienceOptions.stressParams) : null;
+    // G0-JA-1 Wave 1 (JA-D2): thread the forecast profile's own already-
+    // resolved country_code through — never re-derived from currency (the
+    // defect this replaces). country_code is copied from
+    // user_profiles.country_of_residence once at forecast-profile creation
+    // (getOrCreateForecastProfile above, already `?? null`, fail-closed) —
+    // this reuses that existing value rather than issuing a new query.
+    const homeCountry = isKnownCountry(profile.country_code) ? profile.country_code : null;
+    const shockResult = scenario ? applyStressScenario(dashboard, scenario, commitments, resilienceOptions.stressParams, homeCountry) : null;
     const shocked = shockResult?.shockedDashboard ?? dashboard;
     const openingLiquidAssets = shockResult
       ? shockResult.after.accessibleLiquidResources

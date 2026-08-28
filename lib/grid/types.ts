@@ -91,4 +91,14 @@ export interface GridConfig {
   // gets a UI entry point here; Goals' own FundingSourceList remains the
   // entry point for asset-linked funding sources.
   goalLinkable?: boolean;
+  // App Review tier-2 Fix 4: optional per-row field visibility, driven by
+  // field metadata/configuration rather than a scattered field-by-field
+  // conditional. Returning false hides that field for that specific row
+  // (e.g. Purchase Date for a Savings Account) — the field is still
+  // declared in `fields` above (so it renders normally for rows where it
+  // applies), this only narrows it per row. Omitted entirely = every field
+  // always shown (existing behaviour, unchanged) for every grid that
+  // doesn't opt in. See lib/grid/assetFieldMetadata.ts for the Assets
+  // implementation.
+  fieldVisibleForRow?: (fieldName: string, masterItemKey: string | null) => boolean;
 }

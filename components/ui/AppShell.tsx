@@ -89,6 +89,14 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'Reports', href: '/reports' },
     ],
   },
+  // App Review tier-2 Fix 1: Profile page (app/(app)/profile/page.tsx) had
+  // no discoverable nav entry — this is the "Account" group referenced in
+  // the design-system nav comment above (Overview / Your finances / Plan &
+  // improve / Forecasting / Review & share / Account).
+  {
+    label: 'Account',
+    items: [{ type: 'link', label: 'Profile', href: '/profile' }],
+  },
 ];
 
 // R1.2 Admin Resources shell nav — spec §41. Shown to any user holding at

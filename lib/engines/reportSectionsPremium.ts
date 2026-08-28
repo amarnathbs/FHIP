@@ -10,6 +10,7 @@ import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -504,9 +505,21 @@ function buildCrossBorderFull(source: ReportSourceData): BuiltSection {
 // A scenario that doesn't apply to this household's recorded data should say
 // so plainly rather than showing "Indefinite survival", which reads as a
 // reassuring result rather than "this shock has nothing to act on here".
-function applicabilityNote(scenario: StressScenarioType, d: ReportSourceData['dashboard']): string | null {
+//
+// G0-JA-1 Wave 1 follow-up: homeCountry is threaded in by the caller
+// (buildStressTesting's own already-resolved country_of_residence, the same
+// value passed into applyStressScenario) rather than re-derived from
+// currency here. This was the same currency-derived-country shape as the
+// JA-D2 defect fixed in lib/engines/resilienceStress.ts — a household can
+// legitimately report in AUD while resident in India, or vice versa. When
+// homeCountry is null (unresolved/unrecognised), the currency-shock note
+// mirrors applyCurrencyShock's own behaviour of skipping the home/foreign
+// split rather than guessing: no shock is applied, so "Not applicable" is
+// the correct note rather than fabricating a foreign-holdings total against
+// a guessed home country.
+function applicabilityNote(scenario: StressScenarioType, d: ReportSourceData['dashboard'], homeCountry: CountryCode | null): string | null {
   if (scenario === 'currency_shock') {
-    const homeCountry = d.currency === 'AUD' ? 'AU' : 'IN';
+    if (!homeCountry) return 'Not applicable — no overseas investment holdings are currently recorded.';
     const foreignInvestments = d.investmentByCountry.filter((c) => c.countryCode !== homeCountry).reduce((s, c) => s + c.value, 0);
     if (foreignInvestments <= 0) return 'Not applicable — no overseas investment holdings are currently recorded.';
   }
@@ -516,12 +529,23 @@ function applicabilityNote(scenario: StressScenarioType, d: ReportSourceData['da
   return null;
 }
 
-function buildStressTesting(source: ReportSourceData): BuiltSection {
+// Exported (rather than kept module-private like its sibling build*
+// functions) so tests can drive it directly against real DashboardSummary
+// fixtures — the same rationale tests/unit/resilienceStressHomeCountry.test.ts
+// used for applyStressScenario itself: exercising the real production call
+// path (this function -> applicabilityNote) rather than a hand-rolled stub.
+export function buildStressTesting(source: ReportSourceData): BuiltSection {
   const d = source.dashboard;
   if (!d.hasIncome || !d.hasExpenses) {
     return empty('stress_testing', 25, 'Add income and expenses to include stress-test scenarios.');
   }
-  const results: StressScenarioResult[] = STRESS_SCENARIOS.map((scenario) => applyStressScenario(d, scenario, source.commitments));
+  // G0-JA-1 Wave 1 (JA-D2): thread the report subject's own already-resolved
+  // country_of_residence through — never re-derive it from currency (the
+  // defect this replaces). An unresolved/unrecognised country is passed
+  // through as null, which applyStressScenario/applyCurrencyShock already
+  // handles by skipping the home/foreign split rather than guessing.
+  const homeCountry = isKnownCountry(source.profile.countryOfResidence) ? source.profile.countryOfResidence : null;
+  const results: StressScenarioResult[] = STRESS_SCENARIOS.map((scenario) => applyStressScenario(d, scenario, source.commitments, {}, homeCountry));
 
   return {
     sectionCode: 'stress_testing',
@@ -543,7 +567,7 @@ function buildStressTesting(source: ReportSourceData): BuiltSection {
         // since a market decline and rate rise don't move monthlyShortfall
         // (a cash-flow figure) but do move net worth.
         netWorthImpact: r.after.netWorth - r.before.netWorth,
-        applicabilityNote: applicabilityNote(r.scenario, d),
+        applicabilityNote: applicabilityNote(r.scenario, d, homeCountry),
       })),
     },
     narrativeText:

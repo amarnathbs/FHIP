@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { investmentSchema } from '@/lib/validation/investment';
+import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
 
 const registry = makeRegistry('investments');
 
@@ -22,14 +23,24 @@ export async function GET() {
   return error ? bad(error.message) : ok(data);
 }
 
+// G0-JA-1 Wave 2: app-layer gate for investment catalogue items. Today the
+// only investment item with a class in migration 0102 is
+// 'australian_shares' (HOME_OR_CROSS_BORDER_COUNTRY, PO-2 clause (c)) —
+// but per its explicit approved disposition (03-catalogue-matrix.md) it
+// keeps country_applicability=NULL (globally creatable, including by a
+// non-AU-home user recording a cross-border holding), so this gate call is
+// wired for consistency/future-proofing and currently always resolves
+// allowed:true for this category — it is not a no-op change in shape, only
+// in today's outcome.
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = investmentSchema.safeParse(await req.json());
   if (!parsed.success) return bad(parsed.error.message, 422);
 
+  const supabase = await createClient();
+
   if (parsed.data.master_item_key && RETIRED_PURPOSE_ONLY_ITEM_KEYS.has(parsed.data.master_item_key)) {
-    const supabase = await createClient();
     const { data: existing } = await supabase
       .from('investments')
       .select('id')
@@ -43,6 +54,14 @@ export async function POST(req: Request) {
       );
     }
   }
+
+  const gate = await assertItemCreationAllowedForUser({
+    userId: user.id,
+    supabase,
+    category: 'investment',
+    itemKey: parsed.data.master_item_key,
+  });
+  if (!gate.allowed) return bad(gate.reason, 403);
 
   const { data, error } = await registry.save(user.id, parsed.data);
   return error ? bad(error.message) : ok(data);
