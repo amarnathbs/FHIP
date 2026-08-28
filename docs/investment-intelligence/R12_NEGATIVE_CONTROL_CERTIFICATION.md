@@ -1,17 +1,17 @@
 # R12 — Negative Control Certification
 
-Spec requires 8/8 RED→GREEN. **Actual (2026-08-27 terminal certification continuation): 7/8 fully
-proven RED→GREEN, 1/8 (NC3) documented by architecture/reuse argument rather than a dedicated
-flip-the-switch reproduction, because there is no local performance engine in existence to flip**
-(disclosed, not silently skipped — see NC3's own row below for why no reproduction is possible by
-construction). NC8 (pagination) was closed this continuation — see its row below, previously "not run
-this round" in the original pass.
+Spec requires 8/8 RED→GREEN. **UPDATE (2026-08-28 terminal certification): now 8/8 fully proven
+RED→GREEN.** The prior round's NC3 ("duplicate local performance engine, architecture-only, no
+reproduction possible by construction since no local engine exists") was replaced per explicit
+Product Owner direction with a genuine R12 negative control that CAN be flip-tested: **incorrect
+exchange-only identity resolution**. See the updated NC3 row below for the real RED→GREEN evidence.
+NC8 (pagination) was closed in the 2026-08-27 continuation — see its row below.
 
 | # | Control | Result |
 |---|---|---|
 | NC1 | Same ISIN, two exchanges — deliberately create two canonical instruments | **RED→GREEN proven twice**: live DEV (`scripts/r12_live_dev_verification.mjs` LIVE-R12-04 — a genuine duplicate-ISIN insert attempt rejected HTTP 409 by the real hosted database) and PGlite (`scripts/r12_post_migration_pglite_verification.mjs` NC1 — same reproduction against a fresh rebuild) |
 | NC2 | Holding double count — add the same position through both household asset and II path | **PASS via reuse argument, not a fresh flip-test**: R12 does not create a new insertion path into `investments`/`assets` outside the existing R3 publication bridge; `uidx_ii_fhip_publications_one_active_position` (migration 0042, pre-existing) is proven to still block a double-active publish for a newly-certified EQUITY position specifically (`scripts/r12_post_migration_pglite_verification.mjs` NC2 — a genuine duplicate-publish insert attempt for the same equity position rejected by the unchanged unique index) |
-| NC3 | Local performance — replace R4 return with a locally calculated R12 value | **Architecture-only, no dedicated flip-test**: R12 introduces zero XIRR/TWRR computation anywhere (verified: grep of every file R12 touches or added for `xirr`/`return`/`irr` calculation logic finds none — `manualDirectPositionService.ts`, `priceFreshness.ts`, `schemeClassification.ts` additions contain no performance math). There is no local performance code to disable and re-enable; the negative control's premise (a duplicate engine exists to be swapped) does not apply because none was built |
+| NC3 | **REPLACED 2026-08-28**: incorrect exchange-only identity resolution — deliberately make an NSE symbol and a BSE symbol sharing the same ISIN resolve to TWO separate economic instruments instead of one | **RED→GREEN genuinely proven, real source flip-test**: `tests/unit/iiR12NegativeControlIdentityResolution.test.ts` exercises the real, unmodified `resolveInstrumentIdFromIdentifiers()` (`lib/services/investment-intelligence/identifiers.ts`) — the exact function `resolveOrCreateInstrument()` calls to decide whether an incoming (ISIN, exchange-symbol) pair belongs to an existing canonical instrument. GREEN (baseline, real function): 3/3 tests pass — an NSE buy for an ISIN already registered under a BSE code resolves to the SAME instrument id, and a simulated BSE→NSE→BSE buy sequence mints exactly 1 economic instrument. **BREAK**: one line temporarily added (`if (candidate.scheme === 'isin') continue;` inside the resolution loop — the literal "exchange-only identity resolution" defect: ISIN candidates are skipped, so only exchange-specific symbols can match). **RED, reproduced 2026-08-28**: re-running the identical suite against the broken function fails 2/3 tests — `expected null to be 'canonical-instrument-aaa'` (the NSE-vs-BSE-registered-instrument lookup returns no match) and `expected 'minted-1' to be 'minted-2'` (the 3-way buy sequence mints 2 separate instrument ids for one underlying security — the exact economic double-count this control targets). **RESTORE**: the one-line break was removed, suite re-run 3/3 GREEN, and `git diff` / `git diff origin/main` on `identifiers.ts` both produce zero output, independently confirming byte-for-byte restoration with no residual change committed. |
 | NC4 | Wrong tax class — assign equity classification to a different ETF/debt type | **RED→GREEN proven** at the unit-test level (`tests/unit/iiR12WiderIndiaAssets.test.ts`): the same disposal fed through `computeDisposalTax()` with the CORRECT classification (`equity_oriented`) vs. a deliberately WRONG one (`debt_specified`) produces materially different results (different `classification`, different `note`) — proving the engine's output is genuinely classification-driven and R12's own classifier is where correctness must be earned |
 | NC5 | Stale price as current — remove stale-price protection | **RED→GREEN proven** at the unit-test level: the real `shouldPresentAsCurrentValue()` correctly refuses a 6-day-old valuation (GREEN); a hypothetical disabled check (`() => true`) is shown alongside as the RED contrast the real function does not exhibit |
 | NC6 | Same-user derived holding forgery — allow user modification of authoritative holding quantity/value | **RED→GREEN proven live AND in PGlite**: live DEV reproduces the real, pre-existing exploit (HTTP 200 PATCH from the owning user's own JWT changed `value` to 999999999); PGlite (migration 0092 applied) proves it is now rejected, AND additionally proves RED by temporarily reintroducing the old policy and showing the exploit would still work under it, then restores GREEN |
@@ -20,9 +20,7 @@ this round" in the original pass.
 
 ## Summary
 
-**7/8 fully RED→GREEN proven with real reproductions** (2026-08-27: NC8 closed this continuation,
-raising the original pass's 6/8 to 7/8). NC3 remains architecture-only and not applicable by
-construction (no duplicate performance engine was built anywhere in R12 — verified by code
-inspection, not by a flip-test, since there is nothing to flip). This is the honest ceiling: 7 is the
-maximum achievable without inventing a defect to disable, since NC3's premise (a duplicate engine
-exists to be swapped) genuinely does not hold for this codebase.
+**8/8 fully RED→GREEN proven with real reproductions (2026-08-28 terminal certification).** NC8 was
+closed 2026-08-27; NC3 was replaced 2026-08-28 with the exchange-only identity resolution control
+described above, closing the last remaining gap. No control in this table is architecture-only or
+disclosed-as-not-applicable any more.

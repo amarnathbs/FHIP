@@ -1,5 +1,36 @@
 # R12 — Live DEV Verification
 
+## 2026-08-28 FINAL LIVE-DEV CERTIFICATION — spec's 25-scenario target now closed
+
+Migration `0092` is now live on hosted DEV (Product Owner-applied; independently re-confirmed this
+round via fresh REST probes and checksum match against `origin/main`). With real DEV credentials and a
+real running `next dev` instance available for the first time, every scenario the sections below
+marked "not run live" / "blocked until 0092" was executed against real hosted DEV:
+
+- `scripts/r12_live_dev_verification.mjs`: re-run clean, 7/7 PASS (baseline regression + 0094 + NC1 +
+  pagination unchanged from the 2026-08-27 continuation below).
+- `scripts/r12_terminal_0092_rest_verification.mjs` (new this round — reconstructs
+  `02_dev_verification.sql` as REST calls, since this environment still has no DB connection string):
+  11/11 PASS — schema/constraint checks (LIVE 02's DB-layer half) all confirmed live.
+- `scripts/r12_live_dev_full_cert.mjs` (audited then executed against real hosted DEV + real running
+  app): **34/34 scenario checks PASS, 13/13 reconciliations MATCH.** This closes LIVE 02 (equity
+  create via the real manual-entry API), LIVE 04-05 (buy/sell/dividend-equivalent), LIVE 06-07 (ETF),
+  LIVE 13-14 (mixed portfolio / net worth), LIVE 15-17 (R4/R5/R6 live), LIVE 21 (Premium report), and
+  LIVE 25 (missing/stale valuation) — see the full scenario table in this round's chat report for the
+  complete R12-01 through R12-28 + RECON-1 through RECON-12 breakdown.
+- **Updated LIVE 01-25 accounting: 20/25 fully live-proven** (bonds/REIT/InvIT LIVE 08-12 remain N/A —
+  deferred scope, not a gap; Goals/Forecasting/Review LIVE 18-20 are now ALSO live-proven this round
+  via R12-20/21/23 even though the spec originally marked them "N/A this cycle — no new code", because
+  the full-cert script exercises them end-to-end with a real R12 equity/ETF position feeding them).
+- **Independent live reconciliation (spec section 122): 12/12 PASS** (13 including the restated
+  R12-19-RECON) — see `scripts/r12_live_dev_full_cert.mjs`'s RECON-1 through RECON-12, each
+  independently hand-derived (not by calling R12's own service functions) and compared against real
+  persisted DEV rows. This closes the "not separately performed" gap noted at the foot of this
+  document below.
+
+The remaining sections of this document (2026-08-27 and earlier) are preserved as dated history and
+are still accurate for what they each covered at the time.
+
 ## 2026-08-27 terminal certification continuation update
 
 Two genuine, material updates from a fresh re-run of `scripts/r12_live_dev_verification.mjs` against
