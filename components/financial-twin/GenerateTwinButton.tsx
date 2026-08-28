@@ -15,6 +15,12 @@ export function GenerateTwinButton({ label = 'Generate Financial Twin' }: { labe
       const res = await fetch('/api/financial-twin/generate', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not generate Financial Twin');
+      // G0-JA-1 Wave 1 (JA-D1): the API's distinguishable unavailable-state
+      // contract — never render this as a generic failure, and never fall
+      // through to router.refresh() as if a comparison were generated.
+      if (json.data?.status === 'country_unresolved') {
+        throw new Error(json.data.message ?? 'Country confirmation required before this comparison can be generated.');
+      }
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');

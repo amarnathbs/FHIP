@@ -67,9 +67,24 @@ const EVIDENCE_AUTHORITY_SCORE: Record<EvidenceLevel, number> = {
   platform_derived: 50,
 };
 
-export async function generateFinancialTwin(userId: string, client?: SupabaseServerClient): Promise<GenerateTwinResult> {
+// G0-JA-1 Wave 1 (JA-D1): the distinguishable "comparison unavailable"
+// contract for a caller whose home country cannot be resolved — surfaced
+// through this exact same shape from both the API route and, in future, any
+// other caller (spec's "API behaviour" requirement: not just suppressed in
+// one UI component). Never an AU-cohort result, never a fabricated zero.
+export type GenerateTwinOutcome = { status: 'ok'; result: GenerateTwinResult } | { status: 'country_unresolved' };
+
+export async function generateFinancialTwin(userId: string, client?: SupabaseServerClient): Promise<GenerateTwinOutcome> {
   const supabase = client ?? (await createClient());
-  const source = await loadTwinSourceData(userId, supabase);
+  const sourceOutcome = await loadTwinSourceData(userId, supabase);
+  if (sourceOutcome.status === 'country_unresolved') {
+    // Fail closed before any cohort match, metric computation, or DB write —
+    // no financial_twin_runs/metric_results/insights row is ever created for
+    // an unresolved-country attempt, so there is nothing here for the
+    // historical-output protection rule to have to guard retroactively.
+    return { status: 'country_unresolved' };
+  }
+  const source = sourceOutcome.data;
   const cohortMatch = await matchCohort(source.household, supabase);
   const metricValues = computeTwinMetricValues(source);
   const futureSelf = computeFutureSelfValues(source);
@@ -226,20 +241,23 @@ export async function generateFinancialTwin(userId: string, client?: SupabaseSer
   }
 
   return {
-    runId: run.id,
-    cohortTier: cohortMatch.tier,
-    cohortTierLabel: cohortMatch.tierLabel,
-    cohortDescription: cohortMatch.cohort?.cohort_description ?? null,
-    matchExplanation: cohortMatch.matchExplanation,
-    overallConfidence,
-    metricsCompared: outcomes.filter((o) => o.userValue !== null).length,
-    aheadCount,
-    alignedCount,
-    behindCount,
-    notComparableCount,
-    dataCompletenessPct,
-    metrics: outcomes,
-    isFirstTwin,
+    status: 'ok',
+    result: {
+      runId: run.id,
+      cohortTier: cohortMatch.tier,
+      cohortTierLabel: cohortMatch.tierLabel,
+      cohortDescription: cohortMatch.cohort?.cohort_description ?? null,
+      matchExplanation: cohortMatch.matchExplanation,
+      overallConfidence,
+      metricsCompared: outcomes.filter((o) => o.userValue !== null).length,
+      aheadCount,
+      alignedCount,
+      behindCount,
+      notComparableCount,
+      dataCompletenessPct,
+      metrics: outcomes,
+      isFirstTwin,
+    },
   };
 }
 

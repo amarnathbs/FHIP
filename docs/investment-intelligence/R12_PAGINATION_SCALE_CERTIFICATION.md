@@ -10,21 +10,26 @@
 | `manualDirectPositionService.ts` → `readCurrentPosition()` | Yes, new in R12 | Deliberately bounded (`.limit(1)`, wants only the latest snapshot — not a listing, so pagination does not apply) |
 | `manualImporter.ts` cross-source dedup read | No (reused unchanged) | Already uses `fetchAllRows()` |
 
-## Page boundaries (spec section 86)
+## Page boundaries (spec section 86) — CLOSED 2026-08-27
 
-**Not tested this round** at 999/1000/1001/2500/5001/10000 specifically for an R12 equity/ETF scenario
-— this is a disclosed gap. The one genuinely new unbounded-read risk R12 introduced was found and
-fixed (above); no dedicated large-scale synthetic portfolio was constructed to prove the fix
-numerically the way `def0b05`'s scale/pagination matrix did for R11.
+Now tested at 999/1000/1001/2500/5001/10000 for the exact R12 read path
+(`ii_security_classifications` via `r5Repository.ts`'s `addDirectSecuritySelfSnapshots()`), via
+`tests/unit/iiR12PaginationScaleCertification.test.ts` — see `R12_NEGATIVE_CONTROL_CERTIFICATION.md`
+NC8 for the full RED→GREEN account. A static-dependency check (reading the real source file, not
+asserting from memory) confirms the fix disclosed below is genuinely still in place, not merely
+described.
 
 ## Page-boundary economic case (spec section 87) / large mixed portfolio (spec section 88)
 
-Not run. See `R12_NEGATIVE_CONTROL_CERTIFICATION.md` NC8 for the honest accounting of this gap and the
-mitigating evidence available.
+Closed via the same test: a real sector classification for an R12 direct-equity instrument, seeded at
+row 1005 of a 1,005-row table, is the concrete economic result a naive single-page read would drop
+(RED) and the real `fetchAllRows()` helper recovers (GREEN) — this is the R12-specific instance of
+"at least one economic result depends on a row beyond 1,000" the spec requires, not a generic,
+unrelated pagination proof.
 
 ## Verdict
 
-**PARTIAL.** The one real, newly-introduced pagination risk was found and fixed through careful
-self-review (not through a large-scale test), and every other R12 read path reuses pre-existing,
-already-certified pagination infrastructure unchanged. A dedicated 1000+ row synthetic scale test for
-R12 specifically remains outstanding.
+**PASS (previously PARTIAL, closed 2026-08-27).** The one real, newly-introduced pagination risk was
+found and fixed through careful self-review during the original pass, and this continuation added the
+dedicated RED→GREEN large-scale proof (999 through 10,000) that was previously outstanding. Every
+other R12 read path reuses pre-existing, already-certified pagination infrastructure unchanged.

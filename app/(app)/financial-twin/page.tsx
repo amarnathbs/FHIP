@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { listTwinRuns, getTwinRunDetail } from '@/lib/services/financialTwinService';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 import { GenerateTwinButton } from '@/components/financial-twin/GenerateTwinButton';
 import { TwinDetailView } from '@/components/financial-twin/TwinDetailView';
 
@@ -15,6 +16,13 @@ export default async function FinancialTwinPage() {
 
   const { data: profile } = await supabase.from('user_profiles').select('preferred_currency').eq('user_id', user.id).single();
   const currency = (profile?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
+  // G0-JA-1 Wave 1 (JA-D1): render the explicit "confirm your country"
+  // prompt in place of the cohort chart/empty-state, rather than letting a
+  // Generate attempt silently produce (or previously, silently assume) an
+  // AU comparison. Historical runs generated before this fix (if any) are
+  // untouched below — this only affects the empty-state prompt when there is
+  // no `latest` run to show yet.
+  const homeCountry = await getUserHomeCountry(user.id, supabase);
 
   const runs = await listTwinRuns(user.id);
   const latest = runs.length > 0 ? await getTwinRunDetail(user.id, runs[0].id) : null;
@@ -34,6 +42,13 @@ export default async function FinancialTwinPage() {
 
         {latest ? (
           <TwinDetailView twin={latest} currency={currency} />
+        ) : !homeCountry ? (
+          <div className="rounded-card border border-dashed bg-gray-50 p-8 text-center">
+            <p className="text-gray-700">
+              Country confirmation required. We can&apos;t generate this comparison until your household&apos;s country is confirmed —
+              please complete your profile, then try again.
+            </p>
+          </div>
         ) : (
           <div className="rounded-card border border-dashed bg-gray-50 p-8 text-center">
             <p className="text-gray-700">
