@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeDashboard, type DashboardInput } from '@/lib/engines/dashboard';
+import { expenseGridConfig } from '@/lib/grid/configs';
+import { expenseSchema } from '@/lib/validation/expense';
 
 const EMPTY: DashboardInput = {
   income: [],
@@ -149,5 +151,137 @@ describe('computeDashboard master_item_key-based classification (grid never sets
       'AUD'
     );
     expect(d.creditUtilization).toBeCloseTo(0.2, 6);
+  });
+});
+
+// App Review spec §12-13: Monthly Surplus double-counting audit.
+describe('computeDashboard debt-repayment double-counting guard (App Review spec §12-13)', () => {
+  // Negative control proving the root cause is real, not assumed: the live
+  // grid UI never lets a user set expense_category, so it always saves as
+  // the Zod default 'other'. If this ever stops being true (the field gets
+  // added to the grid, or the default changes), this test fails loudly and
+  // the double-counting fix above needs re-review.
+  it('confirms the root cause: expenseGridConfig has no editable expense_category field, and the schema defaults it to "other"', () => {
+    expect(expenseGridConfig.fields.some((f) => f.name === 'expense_category')).toBe(false);
+    const parsed = expenseSchema.parse({
+      expense_name: 'Mortgage',
+      amount: 3000,
+      frequency: 'monthly',
+      currency_code: 'AUD',
+    });
+    expect(parsed.expense_category).toBe('other');
+  });
+
+  it('Case 1: Mortgage expense $3,000/mo + matching Home Loan liability repayment $3,000/mo -> cash-flow impact $3,000, not $6,000', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Mortgage', amount: 3000, frequency: 'monthly', is_essential: true, master_item_key: 'mortgage' },
+        ],
+        liabilities: [
+          { balance: 500000, interest_rate: 6, monthly_repayment: 3000, debt_type: 'other', master_item_key: 'home_loan' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses + d.debtMonthlyRepayments).toBe(3000);
+    expect(d.monthlySurplus).toBe(10000 - 3000);
+  });
+
+  it('Case 2: Home Insurance expense $200/mo + Insurance premium $200/mo -> cash-flow impact $200, not $400 (insurance premiums never subtracted from surplus independently)', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Home Insurance', amount: 200, frequency: 'monthly', is_essential: true, master_item_key: 'home_insurance' },
+        ],
+        insurance: [
+          {
+            policy_name: 'Home Insurance',
+            cover_amount: 500000,
+            premium: 200,
+            premium_frequency: 'monthly',
+            cover_type: 'home',
+            renewal_date: null,
+          },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(200);
+    expect(d.monthlySurplus).toBe(10000 - 200);
+    // totalAnnualPremium is a separate, parallel metric (insurance adequacy)
+    // — it must never be additionally subtracted from monthlySurplus.
+    expect(d.totalAnnualPremium).toBe(2400);
+  });
+
+  it('Case 3: distinct Home loan $3,000/mo + Car loan $700/mo liabilities must not be incorrectly deduplicated against each other', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        liabilities: [
+          { balance: 500000, interest_rate: 6, monthly_repayment: 3000, debt_type: 'other', master_item_key: 'home_loan' },
+          { balance: 20000, interest_rate: 8, monthly_repayment: 700, debt_type: 'other', master_item_key: 'car_loan' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.debtMonthlyRepayments).toBe(3700);
+  });
+
+  it('does not silently drop a debt-repayment-category expense that has no matching liability on file (avoids the inverse under-count bug)', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Car Loan Repayments', amount: 500, frequency: 'monthly', is_essential: true, master_item_key: 'car_loan_repayments' },
+        ],
+        // No liabilities at all — nothing else already captures this outflow.
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(500);
+  });
+
+  it('an unrelated liability (car loan) does not suppress a differently-typed expense (mortgage) -- the negative control the PO decision requires', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'Mortgage', amount: 3000, frequency: 'monthly', is_essential: true, master_item_key: 'mortgage' },
+        ],
+        liabilities: [
+          { balance: 20000, interest_rate: 8, monthly_repayment: 700, debt_type: 'other', master_item_key: 'car_loan' },
+        ],
+      },
+      'AUD'
+    );
+    // Mortgage expense ($3,000) is NOT excluded (no home-loan-type liability
+    // on file), and the car loan repayment ($700) is separately counted.
+    expect(d.totalMonthlyExpenses + d.debtMonthlyRepayments).toBe(3700);
+  });
+
+  it('legacy custom row with explicit expense_category "debt_repayment" and no master_item_key is still excluded when a liability repayment exists', () => {
+    const d = computeDashboard(
+      {
+        ...EMPTY,
+        income: [{ amount: 10000, net_amount: 10000, frequency: 'monthly', master_item_key: null }],
+        expenses: [
+          { expense_name: 'My custom loan repayment', amount: 400, frequency: 'monthly', is_essential: true, expense_category: 'debt_repayment' },
+        ],
+        liabilities: [
+          { balance: 5000, interest_rate: 10, monthly_repayment: 400, debt_type: 'personal_loan' },
+        ],
+      },
+      'AUD'
+    );
+    expect(d.totalMonthlyExpenses).toBe(0);
+    expect(d.debtMonthlyRepayments).toBe(400);
   });
 });
