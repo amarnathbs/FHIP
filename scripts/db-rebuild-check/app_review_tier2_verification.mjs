@@ -140,10 +140,15 @@ check('GREEN: 0101 is idempotent (re-run does not duplicate rows)', afterRerunEx
 
 // Functional: PUT-style update of user_profiles.phone actually persists
 // (proves the column is a real, writable text column, not just declared).
+// NOTE: 0002_module1.sql's handle_new_user() trigger auto-creates a
+// user_profiles row the moment auth.users gets a new row -- a bare INSERT
+// here collides with that trigger's own row (user_profiles_pkey). Use
+// UPDATE against the trigger-created row instead, matching how the real
+// app's PUT /api/user/profile route actually persists a phone number.
 const insUser = await dbGreen.query(`insert into auth.users (id, email) values (gen_random_uuid(), 'tier2-verify@example.com') returning id`);
 const uid = insUser.rows[0].id;
 await dbGreen.query(
-  `insert into user_profiles (user_id, full_name, country_of_residence, preferred_currency, phone) values ($1, 'Tier2 Test', 'AU', 'AUD', '+61 400 000 000')`,
+  `update user_profiles set full_name = 'Tier2 Test', country_of_residence = 'AU', preferred_currency = 'AUD', phone = '+61 400 000 000' where user_id = $1`,
   [uid]
 );
 const phoneRow = await dbGreen.query(`select phone from user_profiles where user_id=$1`, [uid]);
