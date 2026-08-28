@@ -20,7 +20,12 @@ export type CountryCode = 'AU' | 'IN';
 
 const KNOWN_COUNTRIES: readonly CountryCode[] = ['AU', 'IN'];
 
-function isKnownCountry(value: unknown): value is CountryCode {
+// Exported (G0-JA-1 Wave 1, JA-D1/JA-D2) so every module resolving a home
+// country from a raw/untrusted value (a DB column, a forged request body)
+// applies the exact same fail-closed vocabulary check as this file's own
+// getUserHomeCountry() — never a second, silently-drifting definition of
+// "known country" duplicated elsewhere.
+export function isKnownCountry(value: unknown): value is CountryCode {
   return typeof value === 'string' && (KNOWN_COUNTRIES as readonly string[]).includes(value);
 }
 

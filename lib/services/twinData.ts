@@ -10,6 +10,7 @@ import { computeGoalsPagePayload, type GoalsPagePayload } from './goalsData';
 import type { DnaResult } from '@/lib/engines/financialDna';
 import { ageFromDateOfBirth, ageToAgeBand, normalizeEmploymentType, normalizeHouseholdType, deriveLifeStage, annualGrossIncomeToIncomeBand } from '@/lib/engines/twin/taxonomy';
 import type { AgeBand, EmploymentType, HouseholdTypeCode, IncomeBand, LifeStage } from '@/lib/engines/twin/taxonomy';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 
 export interface TwinRetirementRow {
   current_balance: number;
@@ -95,11 +96,26 @@ export interface TwinSourceData {
   hasMinimumData: boolean;
 }
 
-export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceData> {
+// G0-JA-1 Wave 1 (JA-D1): a distinguishable, fail-closed contract for the
+// case where the caller's home country cannot be resolved — never a
+// silently-assumed AU (or IN) cohort, and never a fabricated zero. No
+// certified, separately-tested global (country-agnostic) cohort exists in
+// this codebase today (04-calculation-dependency-matrix.md §Defect
+// Remediation Specifications, JA-D1 "Global-cohort conditions"), so the only
+// honest response is "comparison unavailable" — not a computed benchmark.
+export type TwinSourceDataOutcome = { status: 'ok'; data: TwinSourceData } | { status: 'country_unresolved' };
+
+export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceDataOutcome> {
   const supabase = client ?? (await createClient());
 
-  const [profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes] =
+  const [homeCountry, profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes] =
     await Promise.all([
+      // Canonical resolver (lib/services/jurisdiction.ts) — the single
+      // source of truth every other correctly-behaving module uses. Fails
+      // closed to null; never re-derived inline from profile?.country_of_residence
+      // with a `?? 'AU'`-shaped fallback operator (the JA-D1 defect this
+      // replaces).
+      getUserHomeCountry(userId, supabase),
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
       supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true),
@@ -112,6 +128,15 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
     ]);
 
+  // Fail closed BEFORE running the expensive downstream engines (dashboard,
+  // health score, resilience, DNA, goals) — an unresolved country can never
+  // reach annualGrossIncomeToIncomeBand() (which requires a real 'AU'|'IN'),
+  // so there is nothing valid to compute a Twin comparison from. This is the
+  // single early-exit point; nothing past it ever runs with a null country.
+  if (!homeCountry) {
+    return { status: 'country_unresolved' };
+  }
+
   const [dashboard, healthScore, resilience, dna, goalsResult] = await Promise.all([
     loadDashboardForTwin(userId, supabase),
     loadHealthScore(userId, supabase),
@@ -123,7 +148,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
 
   const profile = profileRes.data;
   const household = householdRes.data;
-  const countryOfResidence = (profile?.country_of_residence as 'AU' | 'IN') ?? 'AU';
+  const countryOfResidence = homeCountry;
   const secondaryCountry = (profile?.secondary_country as 'AU' | 'IN' | null) ?? null;
   const age = profile?.date_of_birth ? ageFromDateOfBirth(profile.date_of_birth) : null;
   const ageBand = age !== null ? ageToAgeBand(age) : null;
@@ -160,39 +185,42 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     (dashboard.hasAssets || dashboard.hasLiabilities);
 
   return {
-    userId,
-    household: {
-      countryOfResidence,
-      secondaryCountry,
-      preferredCurrency: (profile?.preferred_currency as 'AUD' | 'INR') ?? 'AUD',
-      age,
-      ageBand,
-      dependantsCount,
-      employmentType,
-      householdTypeCode,
-      housingTenure: household?.housing_tenure ?? null,
-      residenceType: household?.residence_type ?? null,
-      lifeStage,
-      incomeBand,
-      isCrossBorder,
-      dnaProfileCode: dna?.primaryProfileCode ?? null,
+    status: 'ok',
+    data: {
+      userId,
+      household: {
+        countryOfResidence,
+        secondaryCountry,
+        preferredCurrency: (profile?.preferred_currency as 'AUD' | 'INR') ?? 'AUD',
+        age,
+        ageBand,
+        dependantsCount,
+        employmentType,
+        householdTypeCode,
+        housingTenure: household?.housing_tenure ?? null,
+        residenceType: household?.residence_type ?? null,
+        lifeStage,
+        incomeBand,
+        isCrossBorder,
+        dnaProfileCode: dna?.primaryProfileCode ?? null,
+      },
+      dashboard,
+      insuranceAdequacy,
+      healthScore,
+      resilience,
+      dna,
+      goals,
+      rawRetirement: (retirementRes.data ?? []) as TwinRetirementRow[],
+      selfTargetRetirementAge: (retirementMembersRes.data as { target_retirement_age: number | null } | null)?.target_retirement_age ?? null,
+      rawInsurance: (insuranceRes.data ?? []) as TwinInsuranceRow[],
+      rawInvestments: (investmentsRes.data ?? []) as TwinInvestmentRow[],
+      rawLiabilities: (liabilitiesRes.data ?? []) as TwinLiabilityRow[],
+      rawAssets: (assetsRes.data ?? []) as TwinAssetRow[],
+      expenseHousingMonthly,
+      remittanceMonthly,
+      snapshots12m,
+      hasMinimumData,
     },
-    dashboard,
-    insuranceAdequacy,
-    healthScore,
-    resilience,
-    dna,
-    goals,
-    rawRetirement: (retirementRes.data ?? []) as TwinRetirementRow[],
-    selfTargetRetirementAge: (retirementMembersRes.data as { target_retirement_age: number | null } | null)?.target_retirement_age ?? null,
-    rawInsurance: (insuranceRes.data ?? []) as TwinInsuranceRow[],
-    rawInvestments: (investmentsRes.data ?? []) as TwinInvestmentRow[],
-    rawLiabilities: (liabilitiesRes.data ?? []) as TwinLiabilityRow[],
-    rawAssets: (assetsRes.data ?? []) as TwinAssetRow[],
-    expenseHousingMonthly,
-    remittanceMonthly,
-    snapshots12m,
-    hasMinimumData,
   };
 }
 

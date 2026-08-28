@@ -1,6 +1,7 @@
 import type { DashboardSummary } from './dashboard';
 import { recomputeDerived } from './whatIf';
 import { computeAccessibleLiquidResources, type CommitmentRow } from './resilience';
+import type { CountryCode } from '@/lib/services/jurisdiction';
 
 export type StressScenarioType =
   | 'income_stops'
@@ -80,8 +81,23 @@ function applyInvestmentMarketDecline(d: DashboardSummary, pct: number): void {
   d.investmentUnrealisedGain -= investmentLoss + retirementLoss;
 }
 
-function applyCurrencyShock(d: DashboardSummary, pct: number): void {
-  const homeCountry = d.currency === 'AUD' ? 'AU' : 'IN';
+// G0-JA-1 Wave 1 (JA-D2): homeCountry must be the caller's own already-
+// resolved country_of_residence (threaded in by the caller via
+// getUserHomeCountry()/forecast_profiles.country_code — see the two call
+// sites, app/api/resilience/scenario/route.ts and
+// lib/services/forecastData.ts), never re-derived from currency. A
+// household's preferred/reporting currency is an independent, currency-only
+// concept (01-canonical-architecture.md §7/§8) — a household can legitimately
+// hold AUD while resident in India, or vice versa, which is exactly the
+// scenario the old `currency === 'AUD' ? 'AU' : 'IN'` line silently
+// mishandled (inverting or over-broadening which holdings counted as
+// "foreign"). When the country is unresolved, this does not guess AU or IN —
+// it skips the home/foreign split entirely for this scenario (no holding can
+// be honestly labelled "foreign" relative to an unknown home), so no
+// currency-shock loss is applied rather than fabricating one against a
+// guessed home country.
+function applyCurrencyShock(d: DashboardSummary, pct: number, homeCountry: CountryCode | null): void {
+  if (!homeCountry) return;
   const foreignValue = d.investmentByCountry
     .filter((c) => c.countryCode !== homeCountry)
     .reduce((sum, c) => sum + c.value, 0);
@@ -102,11 +118,19 @@ export interface StressScenarioResult {
 
 // A simulated result only — never persisted. Clones the dashboard (same
 // pattern as whatIf.ts) so the real DashboardSummary is left untouched.
+//
+// homeCountry (JA-D2): the caller's own already-resolved country_of_residence,
+// used only by the 'currency_shock' scenario's foreign-holdings filter.
+// Optional/nullable and defaulted to null so every other scenario (which
+// never depended on home country) is completely unaffected by this
+// parameter's addition — see applyCurrencyShock's own doc comment for the
+// unresolved-country handling.
 export function applyStressScenario(
   base: DashboardSummary,
   scenario: StressScenarioType,
   commitments: CommitmentRow[],
-  params: StressScenarioParams = {}
+  params: StressScenarioParams = {},
+  homeCountry: CountryCode | null = null
 ): StressScenarioResult {
   const p = { ...DEFAULTS, ...params };
   const before = computeAccessibleLiquidResources(base, commitments);
@@ -136,7 +160,7 @@ export function applyStressScenario(
       applyInvestmentMarketDecline(d, p.marketDeclinePct);
       break;
     case 'currency_shock':
-      applyCurrencyShock(d, p.currencyShockPct);
+      applyCurrencyShock(d, p.currencyShockPct, homeCountry);
       break;
     case 'combined_severe':
       applyIncomeStops(d);

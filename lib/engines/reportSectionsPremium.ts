@@ -10,6 +10,7 @@ import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { isKnownCountry } from '@/lib/services/jurisdiction';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -504,6 +505,16 @@ function buildCrossBorderFull(source: ReportSourceData): BuiltSection {
 // A scenario that doesn't apply to this household's recorded data should say
 // so plainly rather than showing "Indefinite survival", which reads as a
 // reassuring result rather than "this shock has nothing to act on here".
+//
+// KNOWN ISSUE (found in passing during G0-JA-1 Wave 1, NOT fixed here — out
+// of the two-defect JA-D1/JA-D2 scope this wave was bounded to): this
+// function's own `d.currency === 'AUD' ? 'AU' : 'IN'` line below is the same
+// currency-derived-country shape as the JA-D2 defect just fixed in
+// lib/engines/resilienceStress.ts, but it is a separate, independent piece
+// of logic local to this file (only affects the "Not applicable — no
+// overseas holdings" note text, not the shock figures themselves, which now
+// correctly use buildStressTesting's own resolved homeCountry below). Flagged
+// for a follow-up fix, not addressed in this wave.
 function applicabilityNote(scenario: StressScenarioType, d: ReportSourceData['dashboard']): string | null {
   if (scenario === 'currency_shock') {
     const homeCountry = d.currency === 'AUD' ? 'AU' : 'IN';
@@ -521,7 +532,13 @@ function buildStressTesting(source: ReportSourceData): BuiltSection {
   if (!d.hasIncome || !d.hasExpenses) {
     return empty('stress_testing', 25, 'Add income and expenses to include stress-test scenarios.');
   }
-  const results: StressScenarioResult[] = STRESS_SCENARIOS.map((scenario) => applyStressScenario(d, scenario, source.commitments));
+  // G0-JA-1 Wave 1 (JA-D2): thread the report subject's own already-resolved
+  // country_of_residence through — never re-derive it from currency (the
+  // defect this replaces). An unresolved/unrecognised country is passed
+  // through as null, which applyStressScenario/applyCurrencyShock already
+  // handles by skipping the home/foreign split rather than guessing.
+  const homeCountry = isKnownCountry(source.profile.countryOfResidence) ? source.profile.countryOfResidence : null;
+  const results: StressScenarioResult[] = STRESS_SCENARIOS.map((scenario) => applyStressScenario(d, scenario, source.commitments, {}, homeCountry));
 
   return {
     sectionCode: 'stress_testing',
