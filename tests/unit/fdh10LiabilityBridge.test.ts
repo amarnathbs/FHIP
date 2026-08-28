@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyImportProposal, type StoredProposal } from '@/lib/import-bridge/applyService';
-import { liabilityAdapter, newLiabilityRowDefaults } from '@/lib/import-bridge/adapters/liabilityAdapter';
+import { liabilityAdapter, newLiabilityRowDefaults, findDuplicateLiability, type ExistingLiabilityRow, type LiabilityEvidence } from '@/lib/import-bridge/adapters/liabilityAdapter';
 import { ImportBridgeMemoryStore, type MemoryLiabilityRow } from '../support/importBridgeMemoryStore';
 import type { ProposedField } from '@/lib/import-bridge/types';
 
@@ -244,6 +244,51 @@ describe('FDH-10 liability bridge — update existing (spec section 58)', () => 
     expect(loaded).not.toBeNull();
     expect(store.liabilityRows.get('liability-1')).toEqual(original);
     expect(store.registerWrites).toHaveLength(0);
+  });
+});
+
+describe('FDH-10 liability bridge — findDuplicateLiability (this is the function buildProposal()/generateLiabilityProposal() actually calls -- spec sections 50-52, 59-60)', () => {
+  function existingRow(overrides: Partial<ExistingLiabilityRow> = {}): ExistingLiabilityRow {
+    return {
+      id: 'liability-mortgage', liability_name: 'Test Bank Home Loan', debt_type: 'mortgage', balance: 420000,
+      interest_rate: null, monthly_repayment: 0, currency_code: 'AUD', country_code: 'AU',
+      lender: 'Test Bank', credit_limit: null, masked_identifier: 'XX724A', minimum_payment: null, due_date: null,
+      ...overrides,
+    };
+  }
+  function evidence(overrides: Partial<LiabilityEvidence> = {}): LiabilityEvidence {
+    return {
+      statementId: 'stmt-1', facilityType: 'home_loan', institutionName: 'Test Bank', maskedIdentifier: 'XX4001',
+      currencyCode: 'AUD', reviewReasons: [], ...overrides,
+    };
+  }
+
+  it('FIX (live-DEV final certification round): a statement whose masked identifier matches NOTHING must never fall back to an existing liability that ALREADY has its own (different) masked identifier on file', () => {
+    // Genuinely reproduced live: this is the SAME class of bug as
+    // facilityMatching.ts's matchLiabilityFacility (see that file's fix
+    // note), but in a SEPARATE in-line duplicate of the same algorithm --
+    // `matchExistingLiability()` in this file -- which is the one actually
+    // consulted by buildProposal(). Fixing only facilityMatching.ts's copy
+    // (which has no real caller) did NOT close the live gap; this copy
+    // needed the identical fix. Before it: an AU generic loan statement that
+    // is really about an unrelated personal loan, sharing only the SAME
+    // lender name as an existing, already-identified mortgage, silently
+    // matched that mortgage and its balance was overwritten.
+    const result = findDuplicateLiability(evidence(), [existingRow()]);
+    expect(result.outcome).toBe('no_match');
+    expect(result.liabilityId).toBeNull();
+  });
+
+  it('FIX negative control: the institution fallback still works for a genuinely legacy liability with NO masked identifier on file (the fallback\'s own original purpose)', () => {
+    const result = findDuplicateLiability(evidence(), [existingRow({ masked_identifier: null })]);
+    expect(result.outcome).toBe('single_match');
+    expect(result.liabilityId).toBe('liability-mortgage');
+  });
+
+  it('a masked-identifier match still resolves directly (Tier 1, unaffected by the fix)', () => {
+    const result = findDuplicateLiability(evidence({ maskedIdentifier: 'XX724A' }), [existingRow()]);
+    expect(result.outcome).toBe('single_match');
+    expect(result.liabilityId).toBe('liability-mortgage');
   });
 });
 

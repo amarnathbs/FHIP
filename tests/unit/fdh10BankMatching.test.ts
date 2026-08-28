@@ -101,4 +101,35 @@ describe('FDH-10 — liability facility matching: never balance alone (spec sect
     const result = matchLiabilityFacility({ facilityDebtType: 'personal_loan', currencyCode: 'AUD', institutionName: 'Big Bank', maskedIdentifier: '****1234' }, existing);
     expect(result.outcome).toBe('no_match');
   });
+
+  it('FIX (live-DEV final certification round): a statement whose masked identifier matches NOTHING must never fall back to an existing liability that ALREADY has its own (different) masked identifier on file -- only to a liability with no masked identifier recorded at all', () => {
+    // Genuinely reproduced live: a generic loan CSV adapter always declares one
+    // fixed debt type (e.g. every au_loan_generic_v1 statement maps to
+    // 'mortgage'), so a statement that is really about an unrelated personal
+    // loan can land in the same debt-type bucket as a real, already-identified
+    // mortgage from the same lender. Before this fix, the institution-only
+    // fallback matched that unrelated mortgage anyway (by lender name alone)
+    // and its balance was silently overwritten by the unrelated statement.
+    const alreadyIdentifiedMortgage: ExistingLiabilityCandidate[] = [
+      { liabilityId: 'mortgage-1', debtType: 'mortgage', currencyCode: 'AUD', maskedIdentifier: 'XX724A', lender: 'Test Bank', liabilityName: 'Test Bank Home Loan' },
+    ];
+    const result = matchLiabilityFacility(
+      { facilityDebtType: 'mortgage', currencyCode: 'AUD', institutionName: 'Test Bank', maskedIdentifier: 'XX4001' },
+      alreadyIdentifiedMortgage,
+    );
+    expect(result.outcome).toBe('no_match');
+    expect(result.matchedLiabilityId).toBeNull();
+  });
+
+  it('FIX negative control: the institution fallback still works for a genuinely legacy liability with NO masked identifier on file (the fallback\'s own original purpose)', () => {
+    const legacyLiabilityNoMaskedId: ExistingLiabilityCandidate[] = [
+      { liabilityId: 'legacy-1', debtType: 'mortgage', currencyCode: 'AUD', maskedIdentifier: null, lender: 'Test Bank', liabilityName: 'Test Bank Home Loan (pre-FDH-10)' },
+    ];
+    const result = matchLiabilityFacility(
+      { facilityDebtType: 'mortgage', currencyCode: 'AUD', institutionName: 'Test Bank', maskedIdentifier: 'XX4001' },
+      legacyLiabilityNoMaskedId,
+    );
+    expect(result.outcome).toBe('single_match');
+    expect(result.matchedLiabilityId).toBe('legacy-1');
+  });
 });

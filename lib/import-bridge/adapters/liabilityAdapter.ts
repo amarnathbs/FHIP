@@ -109,15 +109,35 @@ function matchExistingLiability(
 ): { liabilityId: string | null; outcome: FacilityMatchOutcome } {
   const sameTypeCurrency = existing.filter((l) => l.debt_type === query.facilityDebtType && l.currency_code === query.currencyCode);
 
+  // FIX (live-DEV final certification round): genuinely reproduced live
+  // against real hosted Postgres, via THIS function specifically — this
+  // in-line duplicate of facilityMatching.ts's matchLiabilityFacility is the
+  // one actually consulted by buildProposal()/generateLiabilityProposal(),
+  // so facilityMatching.ts's own fix (see that file's matching comment) did
+  // NOT, by itself, close the live gap; both copies needed the identical
+  // correction. A generic loan CSV adapter (e.g. au_loan_generic_v1) always
+  // declares ONE fixed debt type regardless of the statement's real facility
+  // sub-type, so when its masked_identifier matches nothing in that
+  // (mis-derived) bucket, the institution-only fallback below must only ever
+  // consider a liability that ITSELF has no masked_identifier on file (the
+  // documented reason the fallback exists at all — "may predate FDH-10") —
+  // never a liability that already has a DIFFERENT masked identifier
+  // recorded, which is proof on its own that it is a distinct physical
+  // facility. Before this fix, an unrelated already-identified liability
+  // sharing only the lender name was silently matched and its balance
+  // overwritten by a completely unrelated statement.
+  let institutionFallbackPool = sameTypeCurrency;
+
   if (query.maskedIdentifier) {
     const byMasked = sameTypeCurrency.filter((l) => l.masked_identifier === query.maskedIdentifier);
     if (byMasked.length === 1) return { liabilityId: byMasked[0].id, outcome: 'single_match' };
     if (byMasked.length > 1) return { liabilityId: null, outcome: 'ambiguous' };
+    institutionFallbackPool = sameTypeCurrency.filter((l) => l.masked_identifier == null);
   }
 
   const institution = foldName(query.institutionName);
   if (institution) {
-    const byInstitution = sameTypeCurrency.filter((l) => foldName(l.lender) === institution || foldName(l.liability_name)?.includes(institution));
+    const byInstitution = institutionFallbackPool.filter((l) => foldName(l.lender) === institution || foldName(l.liability_name)?.includes(institution));
     if (byInstitution.length === 1) return { liabilityId: byInstitution[0].id, outcome: 'single_match' };
     if (byInstitution.length > 1) return { liabilityId: null, outcome: 'ambiguous' };
   }

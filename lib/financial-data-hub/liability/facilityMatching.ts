@@ -70,6 +70,26 @@ export function matchLiabilityFacility(
     (l) => l.debtType === query.facilityDebtType && l.currencyCode === query.currencyCode,
   );
 
+  // FIX (live-DEV final certification round): genuinely reproduced live
+  // against real hosted Postgres. A generic loan CSV adapter (e.g.
+  // au_loan_generic_v1) always declares ONE fixed facilityType/debtType
+  // ('home_loan' -> 'mortgage') regardless of what the statement is actually
+  // for — there is no per-statement signal distinguishing a mortgage from a
+  // personal/vehicle/investment-property loan in a generic transaction-history
+  // CSV. When the statement also carries a masked_identifier that matches
+  // NOTHING in the (mis-derived) debt-type bucket, the institution-only
+  // fallback below used to search every same-bucket liability regardless of
+  // whether IT ALSO already has its own (different) masked_identifier on
+  // file — so an unrelated, already-identified mortgage sharing the same
+  // lender name silently absorbed a statement that was never about it,
+  // overwriting its balance. The fallback's own comment already says why it
+  // exists: "the existing Liability may predate FDH-10 and simply have no
+  // masked_identifier recorded yet" — so it must only ever consider
+  // candidates matching that description (maskedIdentifier is null), never a
+  // liability that already has a DIFFERENT masked identifier recorded, which
+  // is itself proof it is a distinct physical facility.
+  let institutionFallbackPool = sameTypeCurrency;
+
   if (query.maskedIdentifier) {
     const byMasked = sameTypeCurrency.filter((l) => l.maskedIdentifier === query.maskedIdentifier);
     if (byMasked.length === 1) {
@@ -81,12 +101,15 @@ export function matchLiabilityFacility(
     // A masked identifier was supplied but matched nothing — fall through to
     // institution-based matching rather than immediately declaring no_match,
     // since the existing Liability may predate FDH-10 and simply have no
-    // masked_identifier recorded yet.
+    // masked_identifier recorded yet. Restrict the fallback pool accordingly
+    // (see fix note above): a liability that already has its OWN, different
+    // masked identifier is never a candidate here.
+    institutionFallbackPool = sameTypeCurrency.filter((l) => l.maskedIdentifier == null);
   }
 
   const institution = foldName(query.institutionName);
   if (institution) {
-    const byInstitution = sameTypeCurrency.filter((l) => foldName(l.lender) === institution || foldName(l.liabilityName)?.includes(institution));
+    const byInstitution = institutionFallbackPool.filter((l) => foldName(l.lender) === institution || foldName(l.liabilityName)?.includes(institution));
     if (byInstitution.length === 1) {
       return { outcome: 'single_match', matchedLiabilityId: byInstitution[0].liabilityId, candidateIds: [byInstitution[0].liabilityId] };
     }
