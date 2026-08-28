@@ -104,6 +104,14 @@ function isFieldLockedForRow(row: Row, fieldName: string): boolean {
   return isIiPublished(row) && II_PUBLISHED_PROTECTED_FIELDS.has(fieldName);
 }
 
+// App Review tier-2 Fix 4: per-row field applicability (e.g. Purchase Date
+// hidden for a Savings Account) — see GridConfig.fieldVisibleForRow and
+// lib/grid/assetFieldMetadata.ts. Defaults to true (shown) for any grid
+// that doesn't opt in, so every other module's behaviour is unchanged.
+function isFieldApplicableForRow(row: Row, fieldName: string, config: GridConfig): boolean {
+  return config.fieldVisibleForRow ? config.fieldVisibleForRow(fieldName, row.master_item_key ?? null) : true;
+}
+
 // Property <-> Liability Linking (spec s.14-18, s.56-59): whether this
 // specific saved row should show the Financing / Related Property control
 // at all. Requires a saved row (id, not a not-yet-persisted draft) that is
@@ -351,7 +359,13 @@ export function FinancialDataGrid({
     if (row.currency_override) body.currency_override = true;
     body[config.nameField] = row.item_label;
     if (row.master_item_key) body.master_item_key = row.master_item_key;
-    for (const f of config.fields) body[f.name] = row[f.name] === '' ? undefined : row[f.name];
+    // App Review tier-2 Fix 4: a field hidden for this row's type (e.g.
+    // Purchase Date on a Savings Account) is never submitted, even if a
+    // stale value exists locally — omitted (not null), so any pre-existing
+    // saved value is left untouched server-side rather than force-cleared.
+    for (const f of config.fields) {
+      body[f.name] = !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' ? undefined : row[f.name];
+    }
 
     const usePatch = row.is_custom && row.id;
     const url = usePatch ? `/api/${config.resource}/${row.id}` : `/api/${config.resource}`;
@@ -816,43 +830,49 @@ export function FinancialDataGrid({
                       ))}
                     </select>
                   </td>
-                  {config.fields.map((f) => (
-                    <td key={f.name} className="px-3 py-2">
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
-                        />
-                      )}
-                    </td>
-                  ))}
+                  {config.fields.map((f) =>
+                    !isFieldApplicableForRow(row, f.name, config) ? (
+                      <td key={f.name} className="px-3 py-2 text-xs text-muted" title="Not applicable for this item type">
+                        n/a
+                      </td>
+                    ) : (
+                      <td key={f.name} className="px-3 py-2">
+                        {f.type === 'checkbox' ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[f.name] ?? false)}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                          />
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
+                            className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                          >
+                            <option value="">-</option>
+                            {f.options?.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={f.type}
+                            step={f.step}
+                            value={String(row[f.name] ?? '')}
+                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
+                            onChange={(e) =>
+                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                            }
+                            className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
+                          />
+                        )}
+                      </td>
+                    )
+                  )}
                   <td className="px-3 py-2">
                     <select
                       value={row.currency_code}
@@ -971,7 +991,9 @@ export function FinancialDataGrid({
                       ))}
                     </select>
                   </div>
-                  {config.fields.map((f) => (
+                  {config.fields
+                    .filter((f) => isFieldApplicableForRow(row, f.name, config))
+                    .map((f) => (
                     <div key={f.name}>
                       <label className="block text-xs text-muted">{f.label}</label>
                       {f.type === 'checkbox' ? (
