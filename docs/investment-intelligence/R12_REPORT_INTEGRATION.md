@@ -16,8 +16,13 @@ R12 introduces no report-local computation.
 
 ## Report empty state (spec section 69)
 
-Not independently re-verified this cycle for an equity-containing report (not included in the 41-case
-certification or live-DEV script — disclosed gap). The pre-existing R10 "Not available"/"Insufficient
-data" convention is architecturally inherited (R10 was not modified), but a live end-to-end premium
-report generation with a real R12 equity position was not run as part of this round's live-DEV
-verification (`R12_LIVE_DEV_VERIFICATION.md` — LIVE-21 equivalent not completed).
+**UPDATE 2026-08-28 (terminal certification):** the live end-to-end gap noted below is now closed.
+`scripts/r12_live_dev_full_cert.mjs` R12-24, executed against real hosted DEV this round, generated a
+real Premium report (`POST /api/reports/generate`) for a user holding a real R12 equity + ETF + MF
+mixed portfolio and confirmed `investment_performance` section status = `included` (not a
+"Not available"/empty placeholder) — i.e. the populated-report path is proven live, not just
+architecturally inherited. The specific "genuinely empty portfolio -> correct empty-state copy, not a
+fabricated zero" case was still not separately exercised this round (would need a report generated for
+a user with zero II positions) — that narrower placeholder-copy scenario remains a disclosed,
+non-blocking gap, distinct from the now-closed "does a populated R12 report actually render" gap this
+paragraph used to describe.
