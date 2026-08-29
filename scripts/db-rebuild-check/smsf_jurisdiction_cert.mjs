@@ -36,9 +36,20 @@ const B = '22222222-2222-2222-2222-222222222222'; // IN resident
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test');`);
 // migration 0002 auto-creates a user_profiles row via an auth.users trigger,
 // so set the fields we need with UPDATE rather than INSERT.
+//
+// Mandatory Country Confirmation (migrations 0104/0105) closure fix
+// (MCC-5): this fixture predates that feature and originally only set
+// country_of_residence — every retirement_accounts/investments INSERT
+// below now goes through the new enforce_country_confirmed() trigger,
+// which requires onboarding_completed=true AND country_confirmed_at to be
+// set before treating a country value as real confirmation (a bare
+// country_of_residence, however it got there, is never itself proof of
+// confirmation — that is the whole point of the new feature). Both tenants
+// here represent fully-onboarded, already-established users, so stamping
+// them as confirmed is the correct fixture update, not a workaround.
 await db.exec(`
-  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD' where user_id='${A}';
-  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR' where user_id='${B}';
+  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${A}';
+  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${B}';
 `);
 
 async function asTenant(uid, fn) {

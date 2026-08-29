@@ -3,11 +3,11 @@
 // pattern (scripts/db-rebuild-check/{shim.sql,smsf_jurisdiction_cert.mjs}).
 //
 // Proves, against a REAL Postgres engine (PGlite/WASM), not a mock:
-//   1. The full migration chain (0001-0104) replays cleanly from empty.
+//   1. The full migration chain (0001-0105) replays cleanly from empty.
 //   2. handle_new_user still creates a profile with country fields null —
-//      migration 0104 does not break signup.
+//      migration 0104/0105 does not break signup.
 //   3. An unconfirmed user's direct INSERT into every one of the 8
-//      backstopped financial tables is rejected.
+//      originally-named financial tables is rejected.
 //   4. Confirming a supported country makes those same inserts succeed.
 //   5. A recognised-but-unsupported country (is_supported=false) does NOT
 //      count as confirmed, even with country_confirmed_at set.
@@ -15,6 +15,23 @@
 //   7. Existing rows created before confirmation are preserved byte-for-byte
 //      (spec 1.3/6.2) — never deleted, hidden or rewritten by a later
 //      confirmation.
+//   8. (round 2 / 0105) The onboarding-exemption bugfix: a user who has NOT
+//      completed onboarding can still insert into a backstopped table (the
+//      wizard's own optional "first goal" step), and the SAME insert is
+//      correctly rejected once onboarding_completed flips true without the
+//      user ever confirming a country.
+//   9. (round 2 / 0105) A representative sample of the 69 newly-backstopped
+//      GENERIC tables (fdh_financial_accounts, financial_health_scores)
+//      reject/accept identically to the original 8.
+//  10. (round 2 / 0105) The two BESPOKE triggers — professional_notes
+//      (owner column author_user_id) and financial_twin_insights (owner
+//      resolved via a join to financial_twin_runs) — reject/accept based on
+//      the correct underlying user's confirmation state, not the row's own
+//      (nonexistent) user_id.
+//  11. (round 2 / 0105) The 2 principal EXCLUDED tables behave as intended:
+//      user_profiles' own bootstrap insert is never blocked (already proven
+//      by check #2), and consents accepts a direct insert from a completely
+//      unconfirmed user (spec 1.2's consent/privacy/terms carve-out).
 process.on('uncaughtException', (e) => { console.error('UNCAUGHT: ' + e.stack); process.exit(9); });
 process.on('unhandledRejection', (e) => { console.error('REJECTED: ' + (e?.stack || e)); process.exit(9); });
 
@@ -111,12 +128,25 @@ await db.exec(`insert into auth.users(id,email) values ('${U1}','u1@t.test'),('$
   const { rows } = await db.query(
     `select country_of_residence, country_confirmed_at, country_source from user_profiles where user_id in ('${U1}','${U2}','${U3}')`
   );
+  // NOTE: this check runs BEFORE the onboarding_completed backfill just
+  // below — country fields must be null regardless of onboarding state.
   check('handle_new_user still creates a profile row for every new auth.users insert (0104 does not break signup)', rows.length === 3);
   check(
     'every freshly created profile has country_of_residence/country_confirmed_at/country_source all null (no silent default)',
     rows.every((r) => r.country_of_residence === null && r.country_confirmed_at === null && r.country_source === null)
   );
 }
+
+// Round 2's onboarding-exemption bugfix (0105) means the trigger now also
+// checks onboarding_completed — every existing "unconfirmed" fixture below
+// (U1 pre-confirmation, U2, U3) represents a POST-onboarding, country-
+// unconfirmed real-world user (the actual scenario the backstop exists
+// for), not a still-onboarding one (which is separately, deliberately
+// exempt — see U4 below). Marking onboarding_completed=true here, with
+// country still completely unset, is what makes every "is rejected" check
+// below a genuine test of the confirmation gate rather than an accidental
+// pass/fail driven by onboarding status.
+await db.exec(`update user_profiles set onboarding_completed = true where user_id in ('${U1}','${U2}','${U3}')`);
 
 console.log('\n=== is_country_confirmed() + trigger reject unconfirmed users on every backstopped table ===');
 {
@@ -201,6 +231,133 @@ console.log('\n=== Existing-data preservation across confirmation (spec 1.3/6.2)
     Object.keys(insertAttempts).map(async (t) => (await db.query(`select count(*)::int c from ${t} where user_id='${U1}'`)).rows[0].c)
   );
   check('every one of the 8 tables still shows exactly 1 row for U1 after the country change (nothing deleted)', allEightStillCount.every((c) => c === 1), `(${JSON.stringify(allEightStillCount)})`);
+}
+
+console.log('\n=== (round 2) Onboarding-exemption bugfix ===');
+const U4 = '44444444-4444-4444-4444-444444444444';
+await db.exec(`insert into auth.users(id,email) values ('${U4}','u4@t.test');`);
+{
+  const { rows } = await db.query(`select onboarding_completed from user_profiles where user_id='${U4}'`);
+  check('U4 starts with onboarding_completed = false (real signup default)', rows[0].onboarding_completed === false);
+}
+await asTenant(U4, async () => {
+  await expectOk(
+    "onboarding wizard's own optional first-goal INSERT succeeds for a not-yet-onboarded, country-unconfirmed user (the exact bug 0105 fixes)",
+    () => db.query(`insert into user_goals (user_id, goal_name, goal_type, target_amount, currency_code) values ('${U4}','Emergency fund','starter_emergency_fund',1000,'AUD')`)
+  );
+});
+await db.exec(`update user_profiles set onboarding_completed = true where user_id='${U4}'`);
+await asTenant(U4, async () => {
+  await expectReject(
+    'the SAME insert is correctly rejected once onboarding_completed flips true, with country still unconfirmed',
+    () => db.query(`insert into user_goals (user_id, goal_name, goal_type, target_amount, currency_code) values ('${U4}','Second goal','starter_emergency_fund',500,'AUD')`)
+  );
+});
+
+// U1 was deliberately un-confirmed again by the existing-data-preservation
+// section above (its country was changed to 'IN' with confirmation reset,
+// to prove records survive that change) — re-confirm it here so the round-2
+// checks below start from a known CONFIRMED state, independent of that
+// earlier section's own end state.
+await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${U1}'`);
+
+console.log('\n=== (round 2) Representative sample of the 69 newly-backstopped GENERIC tables ===');
+await asTenant(U2, async () => {
+  await expectReject('unconfirmed user direct INSERT into fdh_financial_accounts is rejected', () =>
+    db.query(
+      `insert into fdh_financial_accounts (user_id, account_type, country_code, currency_code, display_name) values ('${U2}','savings','AU','AUD','Everyday')`
+    )
+  );
+  await expectReject('unconfirmed user direct INSERT into financial_health_scores is rejected', () =>
+    db.query(
+      `insert into financial_health_scores (user_id, score_month, overall_score, rounded_score, status_band, data_confidence, model_version) values ('${U2}','2026-08-01',72.5,73,'good',80,'v1')`
+    )
+  );
+});
+await asTenant(U1, async () => {
+  await expectOk('confirmed user direct INSERT into fdh_financial_accounts now succeeds', () =>
+    db.query(
+      `insert into fdh_financial_accounts (user_id, account_type, country_code, currency_code, display_name) values ('${U1}','savings','AU','AUD','Everyday')`
+    )
+  );
+  await expectOk('confirmed user direct INSERT into financial_health_scores now succeeds', () =>
+    db.query(
+      `insert into financial_health_scores (user_id, score_month, overall_score, rounded_score, status_band, data_confidence, model_version) values ('${U1}','2026-08-01',72.5,73,'good',80,'v1')`
+    )
+  );
+});
+
+console.log('\n=== (round 2) BESPOKE trigger: professional_notes (owner column author_user_id) ===');
+const CLIENT = '55555555-5555-5555-5555-555555555555';
+const PRO = '66666666-6666-6666-6666-666666666666';
+await db.exec(`insert into auth.users(id,email) values ('${CLIENT}','client@t.test'),('${PRO}','pro@t.test');`);
+await db.exec(`update user_profiles set onboarding_completed = true where user_id = '${PRO}'`); // see U1/U2/U3 note above
+let relId;
+await asService(async () => {
+  const r = await db.query(
+    `insert into professional_relationships (client_user_id, professional_user_id, status, invited_by) values ('${CLIENT}','${PRO}','active','client') returning id`
+  );
+  relId = r.rows[0].id;
+  await db.query(`insert into professional_permission_scopes (relationship_id, scope, granted_by) values ('${relId}','COMMENT_OR_NOTE','client')`);
+});
+await asTenant(PRO, async () => {
+  await expectReject('a country-unconfirmed professional cannot insert a professional_notes row (bespoke author_user_id trigger)', () =>
+    db.query(
+      `insert into professional_notes (relationship_id, author_user_id, subject_type, note_text) values ('${relId}','${PRO}','general','Reviewed the portfolio.')`
+    )
+  );
+});
+await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${PRO}'`);
+await asTenant(PRO, async () => {
+  await expectOk('the same professional, once THEY confirm their own country, can insert the note', () =>
+    db.query(
+      `insert into professional_notes (relationship_id, author_user_id, subject_type, note_text) values ('${relId}','${PRO}','general','Reviewed the portfolio.')`
+    )
+  );
+});
+
+console.log('\n=== (round 2) BESPOKE trigger: financial_twin_insights (owner resolved via join to financial_twin_runs) ===');
+let twinRunId;
+await asService(async () => {
+  const r = await db.query(`insert into financial_twin_runs (user_id) values ('${U2}') returning id`);
+  twinRunId = r.rows[0].id;
+});
+await asTenant(U2, async () => {
+  await expectReject('unconfirmed run-owner cannot insert a financial_twin_insights row against their own existing run (bespoke join-based trigger)', () =>
+    db.query(
+      `insert into financial_twin_insights (financial_twin_run_id, insight_type, title, explanation) values ('${twinRunId}','gap','Title','Explanation text.')`
+    )
+  );
+});
+let twinRunIdU1;
+await asService(async () => {
+  const r = await db.query(`insert into financial_twin_runs (user_id) values ('${U1}') returning id`);
+  twinRunIdU1 = r.rows[0].id;
+});
+await asTenant(U1, async () => {
+  await expectOk('a confirmed run-owner can insert a financial_twin_insights row against their own run', () =>
+    db.query(
+      `insert into financial_twin_insights (financial_twin_run_id, insight_type, title, explanation) values ('${twinRunIdU1}','gap','Title','Explanation text.')`
+    )
+  );
+});
+
+console.log('\n=== (round 2) EXCLUDED tables behave as intended ===');
+await asTenant(U2, async () => {
+  await expectOk('a completely unconfirmed user can still write to consents directly (spec 1.2 consent/privacy/terms carve-out)', () =>
+    db.query(`insert into consents (user_id, consent_type, consent_version) values ('${U2}','terms','v1')`)
+  );
+});
+
+console.log('\n=== (round 2) Full-table inventory closure — zero unexplained gaps ===');
+{
+  const { rows: triggerCount } = await db.query(`
+    select count(*)::int c from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and not t.tgisinternal and t.tgname = 'trg_enforce_country_confirmed'
+  `);
+  check('exactly 80 tables now carry the trg_enforce_country_confirmed backstop (8 original + 69 generic + 1 bespoke owner-column + 2 bespoke join)', triggerCount[0].c === 80, `(actual: ${triggerCount[0].c})`);
 }
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed (${pass + fail} checks) ===`);
