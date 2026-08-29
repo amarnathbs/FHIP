@@ -28,7 +28,13 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const requireUserMock = vi.fn();
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
-  return { ...actual, requireUser: () => requireUserMock() };
+  // Mandatory Country Confirmation (2026-08-29) switched this route (and
+  // ~187 others) onto `requireCountryConfirmedUser` via a
+  // `requireCountryConfirmedUser as requireUser` import alias, so the
+  // module-level mock must cover both export names — the route's local
+  // binding is still called `requireUser`, but vi.mock() replaces exports
+  // by their real name, not the importer's alias.
+  return { ...actual, requireUser: () => requireUserMock(), requireCountryConfirmedUser: () => requireUserMock() };
 });
 
 import {

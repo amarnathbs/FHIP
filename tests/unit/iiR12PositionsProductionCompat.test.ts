@@ -37,6 +37,37 @@ function rangeableQuery(pages: Array<{ data: unknown[] | null; error: { message:
   };
 }
 
+// Mandatory Country Confirmation (2026-08-29) added a country-confirmation
+// pre-check to requireCountryConfirmedUser (aliased as requireUser in this
+// route, per lib/api.ts) — every route.ts wired onto it now issues one extra
+// `.from('user_profiles').select(...).eq(...).maybeSingle()` call before its
+// own logic. This route's certification predates that change and mocked
+// mockFrom to expect exactly one table name; a CONFIRMED, supported-country
+// profile response for 'user_profiles' keeps this test's original intent
+// (production-shape compatibility for ii_holding_snapshots) unaffected.
+function withCountryConfirmed(handleOtherTable: (table: string) => unknown) {
+  return (table: string) => {
+    if (table === 'user_profiles') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                country_of_residence: 'AU',
+                country_confirmed_at: '2026-08-29T00:00:00Z',
+                country_source: 'USER_CONFIRMED',
+                onboarding_completed: true,
+              },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    return handleOtherTable(table);
+  };
+}
+
 describe('II-R12 production compatibility: GET positions vs missing price_source column', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,7 +87,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
       created_at: '2026-08-01T00:00:00Z',
     };
     let selectCallCount = 0;
-    mockFrom.mockImplementation((table: string) => {
+    mockFrom.mockImplementation(withCountryConfirmed((table: string) => {
       expect(table).toBe('ii_holding_snapshots');
       return {
         select: vi.fn((cols: string) => {
@@ -81,7 +112,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
           };
         }),
       };
-    });
+    }));
 
     const res = await GET();
     expect(res.status).toBe(200);
@@ -106,7 +137,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
       created_at: '2026-08-01T00:00:00Z',
       price_source: 'manual_entry',
     };
-    mockFrom.mockImplementation(() => ({
+    mockFrom.mockImplementation(withCountryConfirmed(() => ({
       select: vi.fn(() => ({
         eq: () => ({
           order: () => ({
@@ -114,7 +145,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
           }),
         }),
       })),
-    }));
+    })));
 
     const res = await GET();
     expect(res.status).toBe(200);
@@ -124,7 +155,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
   });
 
   it('still propagates a genuine, unrelated database error as 400 (never silently swallowed)', async () => {
-    mockFrom.mockImplementation(() => ({
+    mockFrom.mockImplementation(withCountryConfirmed(() => ({
       select: vi.fn(() => ({
         eq: () => ({
           order: () => ({
@@ -132,7 +163,7 @@ describe('II-R12 production compatibility: GET positions vs missing price_source
           }),
         }),
       })),
-    }));
+    })));
 
     const res = await GET();
     expect(res.status).toBe(400);
