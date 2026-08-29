@@ -36,6 +36,24 @@ interface Recommendation {
   include_in_monthly_report: boolean;
   conditions: { id: string; condition_group: number; field_name: string; operator: string; comparison_value: string | null }[];
 }
+interface ConditionsImportRowError {
+  row: number;
+  recommendation_code: string | null;
+  field: string | null;
+  code: string;
+  message: string;
+}
+interface ConditionsImportOutcome {
+  importType: string;
+  status: 'success' | 'validation_failed';
+  rowsReceived: number;
+  rowsValidated: number;
+  recommendationsAffected: number;
+  conditionsInserted: number;
+  conditionsReplaced: number;
+  codes?: string[];
+  errors?: ConditionsImportRowError[];
+}
 interface GapRun {
   id: string;
   user_id: string;
@@ -100,6 +118,8 @@ export function AdminRecommendationsClient() {
   const [search, setSearch] = useState('');
   const [uploadType, setUploadType] = useState('master');
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [conditionsOutcome, setConditionsOutcome] = useState<ConditionsImportOutcome | null>(null);
 
   async function loadAll() {
     setLoading(true);
@@ -243,9 +263,11 @@ export function AdminRecommendationsClient() {
     }
   }
 
-  async function handleUpload(file: File | null) {
-    if (!file) return;
-    setUploadStatus('Uploading...');
+  async function handleUpload(file: File | null, inputEl: HTMLInputElement | null) {
+    if (!file || uploading) return;
+    setUploading(true);
+    setConditionsOutcome(null);
+    setUploadStatus(`Validating "${file.name}"…`);
     try {
       const csvText = await file.text();
       const res = await fetch('/api/admin/recommendations/upload', {
@@ -254,11 +276,25 @@ export function AdminRecommendationsClient() {
         body: JSON.stringify({ fileType: uploadType, csvText }),
       });
       const json = await res.json();
+      if (uploadType === 'conditions' && json.data && (json.data.status === 'success' || json.data.status === 'validation_failed')) {
+        const outcome = json.data as ConditionsImportOutcome;
+        setConditionsOutcome(outcome);
+        if (outcome.status === 'validation_failed') {
+          setUploadStatus(`Import failed validation — no existing conditions were changed. ${outcome.errors?.length ?? 0} row error(s) found out of ${outcome.rowsReceived} row(s).`);
+        } else {
+          setUploadStatus(`Success: ${outcome.recommendationsAffected} recommendation(s) updated, ${outcome.conditionsInserted} condition(s) inserted (${outcome.conditionsReplaced} replaced). All other recommendations were left unchanged.`);
+          await loadAll();
+        }
+        return;
+      }
       if (!res.ok) throw new Error(json.error ?? 'Upload failed');
       setUploadStatus(`Success: ${JSON.stringify(json.data)}`);
       await loadAll();
     } catch (e) {
-      setUploadStatus(`Error: ${e instanceof Error ? e.message : 'Upload failed'}`);
+      setUploadStatus(`Error: ${e instanceof Error ? e.message : 'Upload failed'}. No changes were made.`);
+    } finally {
+      setUploading(false);
+      if (inputEl) inputEl.value = '';
     }
   }
 
@@ -274,16 +310,63 @@ export function AdminRecommendationsClient() {
           updated in place; new codes are added; codes not in the file are left untouched. No deployment required.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <select className="rounded border px-2 py-1.5 text-sm" value={uploadType} onChange={(e) => setUploadType(e.target.value)}>
+          <select
+            className="rounded border px-2 py-1.5 text-sm disabled:opacity-50"
+            value={uploadType}
+            disabled={uploading}
+            onChange={(e) => {
+              setUploadType(e.target.value);
+              setUploadStatus(null);
+              setConditionsOutcome(null);
+            }}
+          >
             {UPLOAD_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
           </select>
-          <input type="file" accept=".csv" onChange={(e) => handleUpload(e.target.files?.[0] ?? null)} className="text-sm" />
+          <input
+            type="file"
+            accept=".csv"
+            disabled={uploading}
+            aria-disabled={uploading}
+            onChange={(e) => handleUpload(e.target.files?.[0] ?? null, e.target)}
+            className="text-sm disabled:opacity-50"
+          />
+          {uploading && (
+            <span className="text-xs font-semibold text-trust" role="status">
+              Working…
+            </span>
+          )}
         </div>
-        {uploadStatus && <p className="mt-2 text-xs text-gray-600">{uploadStatus}</p>}
+        {/* Accessible status region — success/failure/validating text is
+            announced to screen readers as it changes, matching how the rest
+            of this page's async work (loadAll) is otherwise silent. */}
+        <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-600">
+          {uploadStatus}
+        </p>
+        {conditionsOutcome?.status === 'validation_failed' && conditionsOutcome.errors && conditionsOutcome.errors.length > 0 && (
+          <div className="mt-2 max-h-64 overflow-y-auto rounded border border-risk/30 bg-risk/5 p-3">
+            <p className="text-xs font-semibold text-risk">
+              No existing conditions were changed. Fix the following row(s) and re-upload:
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-gray-700">
+              {conditionsOutcome.errors.map((err, i) => (
+                <li key={i}>
+                  <span className="font-semibold">Row {err.row}</span>
+                  {err.recommendation_code && <> · {err.recommendation_code}</>}
+                  {err.field && <> · {err.field}</>} · <span className="text-gray-500">{err.code}</span> — {err.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {conditionsOutcome?.status === 'success' && (
+          <p className="mt-2 text-xs text-progress">
+            {conditionsOutcome.recommendationsAffected} of {conditionsOutcome.rowsReceived} row(s) validated and applied. Recommendation codes not in this file were not touched.
+          </p>
+        )}
       </section>
 
       <section className="rounded-card border bg-white p-6">
