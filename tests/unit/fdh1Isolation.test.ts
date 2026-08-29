@@ -167,6 +167,15 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'types.ts'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'incomeProposalService.ts'),
       path.join(REPO_ROOT, 'components', 'income', 'PayslipImportPanel.tsx'),
+      // FDH-10 (2026-08-27): components/liabilities/LiabilityImportPanel.tsx
+      // trips the identical naive-substring limitation, for the identical
+      // reason as PayslipImportPanel.tsx above — verified by hand, same
+      // standard: it is the Liabilities-tab statement-import UI (spec
+      // section 2: FDH-10 is not a new top-level destination, it lives
+      // behind Liabilities). It never imports anything from
+      // `lib/financial-data-hub`; every reference is a `fetch()` call to a
+      // public `/api/financial-data-hub/...` route string.
+      path.join(REPO_ROOT, 'components', 'liabilities', 'LiabilityImportPanel.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

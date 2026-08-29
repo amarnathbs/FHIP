@@ -969,11 +969,27 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED = [
   'income_proposal_dismissed',
 ] as const;
 
+/** FDH-10 additions (migration 0096 Part A), mirroring the exact
+ * TS-side-enum-must-match-the-DB-check-constraint discipline
+ * `FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED`'s own header documents finding
+ * as a real gap on the FDH-9 pass — added here proactively, caught by this
+ * round's own `tsc --noEmit` the moment the FDH-10 processing service tried
+ * to record one, before any route existed to call it live. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED = [
+  'liability_statement_extraction_completed',
+  'liability_statement_extraction_failed',
+  'liability_statement_approved',
+  'liability_bank_match_completed',
+  'liability_proposal_generated',
+  'liability_proposal_applied',
+  'liability_proposal_dismissed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7 + FDH-9). Used everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts
- * assertion — i.e. by `FdhDocumentAuditEventType` itself, so every caller
- * can use the R7/R8/FDH-5/FDH-7/FDH-9 event types without a second parallel
- * type. */
+ * FDH-7 + FDH-9 + FDH-10). Used everywhere OUTSIDE the frozen
+ * fdh3SchemaContract.test.ts assertion — i.e. by `FdhDocumentAuditEventType`
+ * itself, so every caller can use the R7/R8/FDH-5/FDH-7/FDH-9/FDH-10 event
+ * types without a second parallel type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
@@ -981,6 +997,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 
