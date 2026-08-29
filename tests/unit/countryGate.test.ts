@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCountryValue,
   assertCountryConfirmedForUser,
+  countryConfirmationBlockResponse,
   isBlockingState,
   SUPPORTED_COUNTRY_CODES,
   COUNTRY_GATE_ERROR_CODE,
@@ -166,5 +167,35 @@ describe('assertCountryConfirmedForUser', () => {
       'u1'
     );
     expect(gate.state).toBe('COUNTRY_MISSING');
+  });
+});
+
+describe('countryConfirmationBlockResponse — round-3 closure (Gap 1, API-layer mirror of the DB-trigger fix)', () => {
+  const notOnboarded = fakeClient({ country_of_residence: null, country_confirmed_at: null, country_source: null, onboarding_completed: false });
+
+  it('blocks a not-yet-onboarded caller by DEFAULT (no options) — this is the fix: round 2 exempted every one of the ~241 routes using this helper whenever onboarding_completed was false', async () => {
+    const res = await countryConfirmationBlockResponse(notOnboarded, 'u1');
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(403);
+    const body = await res!.json();
+    expect(body.error).toBe('COUNTRY_CONFIRMATION_REQUIRED');
+  });
+
+  it('only exempts a not-yet-onboarded caller when { allowDuringOnboarding: true } is explicitly passed — the ONE real caller of this is app/api/household/route.ts', async () => {
+    const res = await countryConfirmationBlockResponse(notOnboarded, 'u1', { allowDuringOnboarding: true });
+    expect(res).toBeNull();
+  });
+
+  it('a fully-onboarded, unconfirmed caller is blocked regardless of the option (the flag only ever matters pre-onboarding)', async () => {
+    const onboardedUnconfirmed = fakeClient({ country_of_residence: 'AU', country_confirmed_at: null, country_source: null, onboarding_completed: true });
+    const res = await countryConfirmationBlockResponse(onboardedUnconfirmed, 'u1', { allowDuringOnboarding: true });
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(403);
+  });
+
+  it('a genuinely CONFIRMED caller is never blocked, with or without the option', async () => {
+    const confirmed = fakeClient({ country_of_residence: 'AU', country_confirmed_at: '2026-08-29T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true });
+    expect(await countryConfirmationBlockResponse(confirmed, 'u1')).toBeNull();
+    expect(await countryConfirmationBlockResponse(confirmed, 'u1', { allowDuringOnboarding: true })).toBeNull();
   });
 });

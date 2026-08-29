@@ -6,12 +6,16 @@ import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 // Mandatory Country Confirmation, round-2 closure (MCC-7): this route used
 // its own inline auth check (not lib/api.ts's requireUser()/
 // requireCountryConfirmedUser()), so it was not covered by the 187-route
-// import-alias switch. countryConfirmationBlockResponse() already carries
-// the same onboarding-not-yet-completed exemption requireCountryConfirmedUser
-// does, so the onboarding wizard's own PUT /api/household call (made before
-// onboarding_completed is set) is unaffected — only a POST-onboarding,
-// country-unconfirmed caller is now blocked here, matching every other
-// module.
+// import-alias switch.
+//
+// Round-3 closure (Gap 1): this is now the ONLY caller in the entire
+// gated API surface that passes `{ allowDuringOnboarding: true }` — every
+// other route (including goals/route.ts, which used to rely on the same
+// exemption before the onboarding wizard's optional first-goal write moved
+// out of onboarding entirely) requires a genuinely confirmed country
+// regardless of onboarding_completed. This is deliberately narrow: only
+// GET/PUT on this one route get the flag, matching the DB trigger's own
+// households-only exemption exactly.
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -19,7 +23,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
 
-  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id, { allowDuringOnboarding: true });
   if (countryBlock) return countryBlock;
 
   const { data, error } = await supabase.from('households').select('*').eq('user_id', user.id).maybeSingle();
@@ -33,7 +37,7 @@ export async function PUT(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
 
-  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id, { allowDuringOnboarding: true });
   if (countryBlock) return countryBlock;
 
   const parsed = householdSchema.partial().safeParse(await req.json());

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SelectWithOther, type SelectOption } from '@/components/ui/SelectWithOther';
+import { PENDING_GOAL_STORAGE_KEY } from '@/lib/constants';
 
 const STEPS = ['Profile', 'Household', 'Countries & Currency', 'Goals', 'Review'] as const;
 
@@ -158,18 +159,35 @@ export function OnboardingWizard() {
       });
       if (!householdRes.ok) throw new Error((await householdRes.json()).error ?? 'Could not save household');
 
+      // Mandatory Country Confirmation, round-3 closure (Gap 1): this optional
+      // first goal is deliberately NOT posted to /api/goals here. Doing so
+      // required the database trigger backstop to carry a blanket
+      // onboarding_completed=false exemption covering ALL 80+ financial
+      // tables (not just user_goals) — a real, exploitable bypass a
+      // defective or malicious client could use to write into ANY
+      // backstopped table while onboarding_completed stayed false. Instead,
+      // the goal is stashed client-side and created by
+      // ConfirmCountryForm.tsx immediately AFTER the user genuinely
+      // confirms their country — the exact point country confirmation
+      // becomes real for this user, with no DB-level exemption required at
+      // all. See PENDING_GOAL_STORAGE_KEY in that file.
       if (form.goal_name) {
-        const goalRes = await fetch('/api/goals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            goal_name: form.goal_name,
-            goal_type: form.goal_type,
-            target_amount: form.target_amount,
-            currency_code: form.preferred_currency,
-          }),
-        });
-        if (!goalRes.ok) throw new Error((await goalRes.json()).error ?? 'Could not save goal');
+        try {
+          sessionStorage.setItem(
+            PENDING_GOAL_STORAGE_KEY,
+            JSON.stringify({
+              goal_name: form.goal_name,
+              goal_type: form.goal_type,
+              target_amount: form.target_amount,
+              currency_code: form.preferred_currency,
+            })
+          );
+        } catch {
+          // sessionStorage can throw in a locked-down browser context
+          // (private mode, disabled storage) — the goal is simply not
+          // pre-filled after confirmation in that case; never blocks
+          // onboarding itself over a convenience feature.
+        }
       }
 
       const completeRes = await fetch('/api/onboarding/complete', { method: 'POST' });
@@ -370,7 +388,8 @@ export function OnboardingWizard() {
             <p>Household: {form.household_type || 'not set'}, {form.dependants_count} dependants</p>
             {form.goal_name && (
               <p>
-                Goal: {form.goal_name} ({form.preferred_currency} {form.target_amount})
+                Goal: {form.goal_name} ({form.preferred_currency} {form.target_amount}) — created once you confirm
+                your country of residence, right after this.
               </p>
             )}
           </div>

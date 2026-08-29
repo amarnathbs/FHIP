@@ -28,15 +28,21 @@ export async function requireUser() {
 // function returns the identical `{ user, unauthenticated }` shape), so no
 // route handler body had to change to gain country enforcement.
 //
-// Bootstrap exemption: while the caller's profile has NOT yet completed
-// onboarding, this behaves exactly like requireUser() (auth-only). The
-// onboarding wizard itself calls a handful of these same routes
-// (`/api/household`, `/api/goals`) to save its own form data before country
-// confirmation exists as a concept for that user — blocking those calls
-// would break signup outright (hard-stop condition, spec section 10:
-// "Enforcement would block profile creation"). Once onboarding_completed is
-// true, every route that used to accept `requireUser` now requires a
-// CONFIRMED, supported country — matching spec section 1.2's access list.
+// Round-3 closure (Gap 1): NO onboarding exemption is applied here at all —
+// deliberately. Round 2 gave every one of the ~241 routes using this
+// function the same blanket "skip the check while onboarding_completed is
+// false" exemption the database trigger had, which was the identical class
+// of bypass the Product Owner flagged: a defective or malicious client
+// could call ANY of those routes directly while onboarding_completed
+// stayed false. The onboarding wizard no longer calls any of these routes
+// during onboarding at all — its optional first-goal write (the one thing
+// that used to need this) now happens strictly AFTER country confirmation
+// (see app/(onboarding)/confirm-country/ConfirmCountryForm.tsx), and its
+// household write goes through app/api/household/route.ts, which is the
+// ONLY caller of countryConfirmationBlockResponse() that opts into the
+// (now off-by-default) onboarding exemption via
+// `{ allowDuringOnboarding: true }`. Every other route gated by this
+// function requires a genuinely confirmed country, full stop.
 export async function requireCountryConfirmedUser() {
   const supabase = await createClient();
   const {
@@ -44,12 +50,11 @@ export async function requireCountryConfirmedUser() {
   } = await supabase.auth.getUser();
   if (!user) return { user: null, unauthenticated: bad('unauthenticated', 401) };
 
-  // Round 2 closure (independent re-verification pass): delegates to the
-  // ONE shared classify-and-respond helper (lib/services/countryGate.ts's
-  // countryConfirmationBlockResponse) also used by requireAdmin() and the
-  // 39 Resources admin routes (MCC-2) and app/api/household/route.ts
-  // (MCC-7), so all four call sites share identical onboarding-exemption
-  // and state-to-response logic instead of four near-duplicates.
+  // Delegates to the ONE shared classify-and-respond helper
+  // (lib/services/countryGate.ts's countryConfirmationBlockResponse) also
+  // used by requireAdmin(), the 39 Resources admin routes (MCC-2) and
+  // app/api/household/route.ts (MCC-7), so every call site shares
+  // identical state-to-response logic instead of near-duplicates.
   const block = await countryConfirmationBlockResponse(supabase, user.id);
   if (block) return { user: null, unauthenticated: block };
   return { user, unauthenticated: null };

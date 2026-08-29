@@ -173,22 +173,29 @@ function countryGateErrorResponse(state: Exclude<CountryGateState, 'CONFIRMED'>)
   return Response.json({ error: COUNTRY_GATE_ERROR_CODE[state] }, { status: COUNTRY_GATE_HTTP_STATUS[state] });
 }
 
-// Returns null when the request should proceed (confirmed, OR the caller
-// has not finished onboarding yet — see the bootstrap-exemption note on
-// `requireCountryConfirmedUser` in lib/api.ts, which applies identically
-// here: an admin/Resources-staff account is still a `user_profiles` row
-// created by the same signup trigger as any other account, so the same
-// "don't block onboarding's own bootstrap calls" reasoning applies even
-// though no admin route is actually called during onboarding today — this
-// keeps the ONE rule in ONE place rather than a second, admin-specific
-// carve-out). Returns the stable-coded Response to return immediately
-// otherwise.
+// Mandatory Country Confirmation, round-3 closure (Gap 1) — this API-layer
+// guard used to carry the IDENTICAL unscoped defect the database trigger
+// had: `if (!gate.onboardingCompleted) return null;` exempted EVERY route
+// that called this helper (all 241 of them) whenever onboarding_completed
+// was false, not just the one legitimate case. Fixed the same way as the DB
+// trigger: the exemption is now OFF by default, and must be explicitly
+// opted into by the one caller that genuinely needs it —
+// app/api/household/route.ts, via `{ allowDuringOnboarding: true }`. Since
+// this round also moved the onboarding wizard's optional first-goal write
+// out of onboarding entirely (see ConfirmCountryForm.tsx), household is now
+// the ONLY route in the entire 241-route gated surface that needs this flag
+// at all — every other caller (including goals/route.ts, which used to be
+// exempted here too) now requires a genuinely confirmed country regardless
+// of onboarding_completed.
 export async function countryConfirmationBlockResponse(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  options: { allowDuringOnboarding?: boolean } = {}
 ): Promise<Response | null> {
   const gate = await assertCountryConfirmedForUser(supabase, userId);
-  if (!gate.onboardingCompleted && gate.state !== 'DB_ERROR' && gate.state !== 'PROFILE_INCOMPLETE') return null;
+  if (options.allowDuringOnboarding && !gate.onboardingCompleted && gate.state !== 'DB_ERROR' && gate.state !== 'PROFILE_INCOMPLETE') {
+    return null;
+  }
   if (gate.state === 'CONFIRMED') return null;
   return countryGateErrorResponse(gate.state);
 }

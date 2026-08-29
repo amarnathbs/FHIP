@@ -4,8 +4,43 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { SectionCard } from '@/components/dashboard/SectionCard';
-import { COUNTRY_OPTIONS } from '@/lib/constants';
+import { COUNTRY_OPTIONS, PENDING_GOAL_STORAGE_KEY } from '@/lib/constants';
 import type { CountryGateState } from '@/lib/services/countryGate';
+
+// Mandatory Country Confirmation, round-3 closure (Gap 1) — creates the
+// onboarding wizard's optional "first goal" here, immediately AFTER
+// confirmation succeeds, instead of during onboarding itself. By this
+// point the caller is genuinely CONFIRMED (this request just made them so),
+// so POST /api/goals goes through the exact same guard every other goal
+// creation does — no DB-trigger or API-layer onboarding exemption is
+// involved at all. A failure here never blocks the redirect to /dashboard;
+// losing an optional draft goal is a much smaller problem than trapping a
+// user who has successfully confirmed their country.
+async function createPendingGoalIfAny(): Promise<void> {
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(PENDING_GOAL_STORAGE_KEY);
+  } catch {
+    return;
+  }
+  if (!raw) return;
+  try {
+    const pending = JSON.parse(raw);
+    await fetch('/api/goals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pending),
+    });
+  } catch {
+    // Best-effort only — see function comment.
+  } finally {
+    try {
+      sessionStorage.removeItem(PENDING_GOAL_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 const STATE_COPY: Partial<Record<CountryGateState, { heading: string; body: string }>> = {
   COUNTRY_UNSUPPORTED: {
@@ -67,6 +102,7 @@ export function ConfirmCountryForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ country_of_residence: country }),
       });
+      await createPendingGoalIfAny();
       setDone(true);
       router.push('/dashboard');
       router.refresh();
