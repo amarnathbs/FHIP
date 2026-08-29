@@ -176,6 +176,16 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // `lib/financial-data-hub`; every reference is a `fetch()` call to a
       // public `/api/financial-data-hub/...` route string.
       path.join(REPO_ROOT, 'components', 'liabilities', 'LiabilityImportPanel.tsx'),
+      // FDH-11 (2026-08-29): components/investments/AuInvestmentStatementImportPanel.tsx
+      // trips the identical naive-substring limitation, for the identical
+      // reason as PayslipImportPanel.tsx/LiabilityImportPanel.tsx above —
+      // verified by hand, same standard: it is the Investments-tab
+      // statement-import UI (spec section 76: FDH-11 is not a new
+      // top-level destination, it lives behind Investments). It never
+      // imports anything from `lib/financial-data-hub`; every reference is
+      // a `fetch()` call to a public `/api/financial-data-hub/...` route
+      // string.
+      path.join(REPO_ROOT, 'components', 'investments', 'AuInvestmentStatementImportPanel.tsx'),
       // FDH-11 (2026-08-29): unlike the FDH-9/FDH-10 exceptions above, these
       // four ARE real, intentional imports of FDH module code — not a
       // naive-substring false positive. `lib/investment-import-bridge/` is

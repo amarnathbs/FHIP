@@ -147,6 +147,13 @@ describe('FDH-11 bridge (lib/investment-import-bridge/) is the sole consumer of 
         // bridge, exactly like FDH-9/FDH-10's own routes do) — not a
         // violation, this is the intended composition point.
         if (file.includes(path.join('app', 'api', 'financial-data-hub'))) continue;
+        // The Investments-tab import panel sends the table NAME as a plain
+        // string value in a JSON request body to the API route above (e.g.
+        // `{ table: 'fdh_investment_statement_positions' }`) — this is a
+        // request parameter, not a direct table query; the same relationship
+        // LiabilityImportPanel.tsx/PayslipImportPanel.tsx already have to
+        // their own domain's table names.
+        if (file === path.join(REPO_ROOT, 'components', 'investments', 'AuInvestmentStatementImportPanel.tsx')) continue;
         const src = fs.readFileSync(file, 'utf8');
         if (/fdh_investment_statement/.test(src)) offenders.push(file);
       }

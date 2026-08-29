@@ -70,11 +70,16 @@ const NAV_GROUPS: NavGroup[] = [
       { type: 'link', label: 'DNA', href: '/dna' },
       { type: 'link', label: 'Resilience', href: '/resilience' },
       { type: 'link', label: 'Twin / Benchmark', href: '/financial-twin' },
-      // Investment Intelligence (India) R2: statement upload / Portfolio
-      // Truth review only — this area does NOT feed Investments/Assets/
-      // Dashboard yet (no FHIP publishing in R2, spec section 32). Kept
-      // as its own nav entry, not merged into "Investment & Retirement"
-      // above, so that separation is visible to the user too.
+      // Investment Intelligence (India) — statement upload / Portfolio
+      // Truth review. CORRECTION (FDH-11, 2026-08-29): the comment
+      // previously here claiming "does NOT feed Investments/Assets/
+      // Dashboard yet" was stale — R3's publishing bridge
+      // (investmentPublicationService.ts) has published positions into
+      // `investments`/net worth since R3, well before this pass. Kept as
+      // its own nav entry (unchanged India behaviour, spec section 83) —
+      // it is ALSO now reachable from the Investments tab itself via the
+      // "India Investments" button (FDH-11 spec section 76), so a user
+      // can reach it either way.
       { type: 'link', label: 'Investment Intelligence (India)', href: '/investment-intelligence' },
     ],
   },
