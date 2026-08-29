@@ -7,7 +7,7 @@ STATUS: CONDITIONAL PASS
 ## 1. Repository
 Starting main: e05855fb71ace392db8d7dd4bd96563ec99098a3
 Final branch: feature/fdh11-au-investment-statement-intelligence
-Final certified SHA: bf534dc56899db6d03e7bb664f1b6d2989310185 (worktree D:/fhip-fdh11; not pushed, not merged)
+Final certified SHA: c200506da71c5536b8478731b718763fe8d4fc51 (worktree D:/fhip-fdh11; not pushed, not merged). Note: this file's own SHA reference is inherently one commit behind the actual final HEAD once this correction itself is committed (a content-addressed self-reference cannot be perfectly current) — the chat-relayed completion report in the dispatching session is the authoritative record of the true final SHA.
 Migration: 0106_fdh11_au_investment_statement_intelligence.sql
 Migration guards: PASS
 
