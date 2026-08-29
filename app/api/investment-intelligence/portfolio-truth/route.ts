@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // R2 — "retrieve certified holdings/transactions for R2 view" (spec
 // section 51): lists every ii_portfolio_truth_status row (one per

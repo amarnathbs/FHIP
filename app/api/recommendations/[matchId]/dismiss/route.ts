@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { dismissRecommendationMatch } from '@/lib/services/recommendationsData';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ matchId: string }> }) {

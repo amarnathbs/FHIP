@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { goalFundingSourceSchema } from '@/lib/validation/goalFundingSource';
 import { checkFundingAllocation, resolveAllocatedAmount, assertOwnsGoal, assertOwnsFundingTarget } from '@/lib/services/goalFundingAllocation';
 

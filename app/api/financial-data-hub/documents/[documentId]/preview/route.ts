@@ -1,4 +1,4 @@
-import { requireUser, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad } from '@/lib/api';
 import { FdhUploadLifecycleError, requestDocumentPreview } from '@/lib/financial-data-hub/services/uploadLifecycle';
 
 // GET — requestDocumentPreview() (spec section 25/58). Redirects (302) to a

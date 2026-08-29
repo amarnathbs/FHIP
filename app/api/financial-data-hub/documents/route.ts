@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { listDocuments } from '@/lib/financial-data-hub/services/uploadLifecycle';
 
 // GET /api/financial-data-hub/documents — spec section 27/74. Lists the

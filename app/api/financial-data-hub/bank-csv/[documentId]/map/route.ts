@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { confirmBankCsvMapping, BankCsvProcessingError } from '@/lib/financial-data-hub/services/bankCsvProcessingService';
 import { bankCsvMappingConfirmSchema } from '@/lib/financial-data-hub/validation/bankCsv';
 

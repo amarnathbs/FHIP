@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { listReadyIncomeProposals } from '@/lib/import-bridge/incomeProposalService';
 
 // GET /api/financial-data-hub/income-proposals — every 'ready' Income

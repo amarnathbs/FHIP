@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { insuranceSchema } from '@/lib/validation/insurance';
 

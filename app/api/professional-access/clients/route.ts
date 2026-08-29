@@ -2,7 +2,7 @@
 // pending relationships (spec section 62: "must not search arbitrary FHIP
 // users"). listClientsForProfessional() filters by professional_user_id =
 // the caller's own id; there is no parameter that could widen this.
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { listClientsForProfessional } from '@/lib/services/professional-access/access';
 
 export async function GET() {

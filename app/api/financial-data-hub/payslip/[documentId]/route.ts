@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getPayrollEventForReview, getPayrollEventIdForDocument } from '@/lib/financial-data-hub/services/payslipProcessingService';
 
 // GET /api/financial-data-hub/payslip/{documentId} — the review read-model

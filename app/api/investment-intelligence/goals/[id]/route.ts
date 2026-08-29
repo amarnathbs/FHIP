@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 
 // R9 spec section 74/53: GET /investment-intelligence/goals/:id — single

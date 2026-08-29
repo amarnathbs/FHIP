@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { classifyUserTransactions } from '@/lib/financial-data-hub/services/transactionClassificationService';
 
 // POST /api/financial-data-hub/bank-transactions/classify — R8 spec section

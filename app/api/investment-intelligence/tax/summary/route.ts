@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadTaxDataset, persistTaxLots, persistTaxLotConsumptions, persistCapitalGainsComputations, loadTaxProfile, toTaxProfileInput } from '@/lib/services/investment-intelligence/taxRepository';
 import { runTaxSimulation } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
 import type { TaxpayerType } from '@/lib/engines/investment-intelligence/tax/taxProfile';

@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { approveStatement, ApprovalError } from '@/lib/financial-data-hub/services/approvalService';
 
 // POST /api/financial-data-hub/documents/{documentId}/approve — FDH-7 spec

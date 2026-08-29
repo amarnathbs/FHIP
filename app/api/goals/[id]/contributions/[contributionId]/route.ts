@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // Reversal, not deletion: contribution history is never overwritten. A
 // reversal is a new opposite-signed row referencing the original, and the

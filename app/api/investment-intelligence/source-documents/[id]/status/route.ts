@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // R2 — "retrieve processing status" (spec section 51). RLS-respecting
 // client only (no service-role on this user-facing read path).

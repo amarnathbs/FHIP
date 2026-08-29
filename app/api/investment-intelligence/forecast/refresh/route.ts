@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { runReviewCentreRefresh } from '@/lib/services/investment-intelligence/reviewCentreData';
 
 // R9 spec section 74: POST /investment-intelligence/forecast/refresh.

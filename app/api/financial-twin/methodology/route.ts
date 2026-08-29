@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();

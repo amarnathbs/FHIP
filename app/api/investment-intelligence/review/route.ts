@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { listReviewItems } from '@/lib/services/investment-intelligence/reviewCentreData';
 
 // R9 spec section 74/78: GET /investment-intelligence/review — paginated,

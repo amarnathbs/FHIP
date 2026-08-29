@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { canExportReports } from '@/lib/services/entitlements';
 import { isExportFormatImplemented, requiresPremiumEntitlement, type ExportFormat } from '@/lib/engines/reportExport';
 import { renderReportToPdf } from '@/lib/services/reportPdfRenderer';

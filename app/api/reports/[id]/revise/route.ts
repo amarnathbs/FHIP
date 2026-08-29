@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { generateReport, type ReportTypeCode } from '@/lib/services/reportsData';
 
 // Corrections create a new report version rather than overwriting the

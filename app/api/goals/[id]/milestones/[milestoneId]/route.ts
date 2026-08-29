@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { goalMilestoneSchema } from '@/lib/validation/goalMilestone';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; milestoneId: string }> }) {

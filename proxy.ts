@@ -22,8 +22,18 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isOnboardingRoute = pathname.startsWith('/onboarding');
+  // Mandatory Country Confirmation (2026-08-29) — 'confirm-country' added so
+  // this existing mechanism covers the new compulsory screen: an
+  // unauthenticated visitor is redirected to /login same as any other app
+  // route, and a not-yet-onboarded user is redirected to /onboarding first
+  // (country reconfirmation is a post-onboarding concept — see
+  // app/(app)/layout.tsx's own gate). This list was found during this task
+  // to already be missing several existing route prefixes (financial-data-
+  // hub, investment-intelligence, forecast, profile) — a pre-existing,
+  // unrelated defect left undisturbed here; only the new prefix this task
+  // introduces is added. See the closure report's verification section.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|income|expenses|assets|liabilities|investments|retirement|insurance|score|dna|resilience|goals|twin|reports|coach|settings|admin)/
+    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|retirement|insurance|score|dna|resilience|goals|twin|reports|coach|settings|admin)/
   );
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a

@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 
 // Investment Intelligence R6-FINAL — cost/TER intelligence surface
 // (spec Section 18).

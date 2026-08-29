@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { iiGoalAllocationSchema } from '@/lib/validation/investment-intelligence';
 import { createOrUpdateGoalAllocation } from '@/lib/services/investment-intelligence/goalAllocations';
 

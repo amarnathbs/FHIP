@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { buildHealthScoreInput } from '@/lib/services/healthScoreData';
 import { computeHealthScore } from '@/lib/engines/healthScore';
 import { applyScenario, type ScenarioType } from '@/lib/engines/whatIf';

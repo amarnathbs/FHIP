@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser } from '@/lib/api';
 import { renderForecastReportToPdf } from '@/lib/services/forecastReportPdfRenderer';
 
 // Streams the rendered PDF straight back — unlike the Free/Premium report's

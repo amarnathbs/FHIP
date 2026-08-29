@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { buildDnaInput } from '@/lib/services/financialDnaData';
 import { classifyFinancialDna } from '@/lib/engines/financialDna';
 import { applyScenario, type ScenarioType } from '@/lib/engines/whatIf';

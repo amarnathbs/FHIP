@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getPayrollEventIdForDocument } from '@/lib/financial-data-hub/services/payslipProcessingService';
 import { approvePayrollEventAtomic } from '@/lib/import-bridge/applyIncomeProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';

@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { getTwinRunDetail } from '@/lib/services/financialTwinService';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

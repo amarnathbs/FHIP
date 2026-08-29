@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // Achievement is always a user-confirmed action — a goal is never
 // auto-marked achieved just because a linked balance temporarily exceeds

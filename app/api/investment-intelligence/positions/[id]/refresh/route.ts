@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { refreshPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // R3 spec sections 33-35. [id] is the NEW ii_holding_snapshots.id (the

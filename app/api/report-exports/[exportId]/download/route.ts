@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireUser, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad } from '@/lib/api';
 
 // Returns a short-lived signed Storage URL for a ready PDF export and
 // records the download. Redirects (302) rather than returning JSON so a

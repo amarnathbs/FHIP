@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { publishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // R3 — the real, production-connected publish confirmation (replaces R1's

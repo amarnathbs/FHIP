@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { runForecast } from '@/lib/services/forecastData';
 import { forecastRunRequestSchema } from '@/lib/validation/forecast';
 import type { StressScenarioParams } from '@/lib/engines/resilienceStress';

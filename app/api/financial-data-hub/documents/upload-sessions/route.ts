@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import { createUploadSession, FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
 import { fdhCreateUploadSessionSchema } from '@/lib/financial-data-hub/validation/uploadSession';

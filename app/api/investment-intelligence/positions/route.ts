@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
 import { resolvePriceFreshness } from '@/lib/engines/investment-intelligence/valuation/priceFreshness';
 

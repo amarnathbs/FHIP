@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getTransactions, type TransactionSort } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
 import { parseActivityParams } from '@/lib/financial-data-hub/analytics/requestParams';
 import type { FdhEconomicTransactionType, FdhTransactionApprovalStatus } from '@/lib/financial-data-hub/constants/enums';

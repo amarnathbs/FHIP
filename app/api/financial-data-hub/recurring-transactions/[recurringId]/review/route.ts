@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { reviewRecurringSeries, ClassificationReviewError } from '@/lib/financial-data-hub/services/classificationReviewService';
 import { fdhRecurringSeriesReviewSchema } from '@/lib/financial-data-hub/validation/transactions';
 

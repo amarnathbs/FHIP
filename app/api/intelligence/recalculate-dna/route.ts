@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
 
 // Recalculation is deterministic and idempotent: the same underlying data

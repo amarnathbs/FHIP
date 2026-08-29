@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { buildPreview } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // R3 spec section 12/61 — publication preview. Read-only: computes

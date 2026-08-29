@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadXrayDataset, persistR5Results } from '@/lib/services/investment-intelligence/r5Repository';
 import { runXrayAnalytics, summariseXrayDataQuality } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { XRAY_ENGINE_VERSION } from '@/lib/engines/investment-intelligence/r5Versioning';

@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { archiveIiAccount } from '@/lib/services/investment-intelligence/accounts';
 
 // Archive-only (soft delete), matching registry.ts's archive() convention.

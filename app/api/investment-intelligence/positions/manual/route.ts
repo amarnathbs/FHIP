@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { iiManualDirectPositionSchema } from '@/lib/validation/investment-intelligence';
 import { submitManualDirectPosition } from '@/lib/services/investment-intelligence/manualDirectPositionService';
 

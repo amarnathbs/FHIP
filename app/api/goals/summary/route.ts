@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 
 // Education/Children Investment -> Goal Linkage, spec s.24/57/59: a

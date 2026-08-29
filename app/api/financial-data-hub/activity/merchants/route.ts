@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getMerchants } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
 import { parseActivityParams } from '@/lib/financial-data-hub/analytics/requestParams';
 

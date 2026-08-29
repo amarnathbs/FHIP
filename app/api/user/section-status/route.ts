@@ -4,7 +4,7 @@
 // section's confirmation. Auth-scoped via the request-bound Supabase client
 // (RLS enforces the "own rows only" boundary — no service-role client here).
 import { createClient } from '@/lib/supabase/server';
-import { ok, bad, requireUser } from '@/lib/api';
+import { ok, bad, requireCountryConfirmedUser as requireUser } from '@/lib/api';
 import { setSectionConfirmation } from '@/lib/services/financialSectionStatusData';
 import { ALL_SECTIONS, type FinancialSection, type ExplicitSectionConfirmation } from '@/lib/engines/financialSectionStatus';
 

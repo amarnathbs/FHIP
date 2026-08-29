@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // Unlink (spec s.28: soft-deactivate, never delete the Investment or the
 // Goal; $0 Net Worth movement). Matches the existing Goals-side DELETE

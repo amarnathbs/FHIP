@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { statementUploadsRepository } from '@/lib/financial-data-hub/repositories';
 import { deriveUploadSubstate, deriveDocumentStatusLabel } from '@/lib/financial-data-hub/domain/uploadSubstate';
 
