@@ -4,6 +4,7 @@ import { getAuInvestmentStatementIdForDocument } from '@/lib/financial-data-hub/
 import { applyAuStatementActivity } from '@/lib/investment-import-bridge/applyAuStatementActivity';
 import { applyAuStatementPosition } from '@/lib/investment-import-bridge/applyAuStatementPosition';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { fetchAllRows } from '@/lib/financial-data-hub/bank-csv/pagination';
 
 // POST /api/financial-data-hub/investment-statement/{documentId}/apply
 // spec sections 63-65, 108, 121-124. The ONLY route that can change
@@ -21,18 +22,26 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   const statementId = await getAuInvestmentStatementIdForDocument(user.id, documentId);
   if (!statementId) return bad('No statement evidence has been extracted from this document yet.', 404);
 
+  // PAGINATION (spec section 93): a statement with more than 1000 pending
+  // rows would otherwise be silently truncated by PostgREST's row cap,
+  // applying only the first 1000 and reporting success — `fetchAllRows`
+  // pages past it with a deterministic `id` ordering.
   const supabase = await createClient();
-  const [{ data: activities }, { data: positions }] = await Promise.all([
-    supabase.from('fdh_investment_statement_activities').select('id').eq('statement_id', statementId).eq('user_id', user.id).eq('apply_status', 'pending'),
-    supabase.from('fdh_investment_statement_positions').select('id').eq('statement_id', statementId).eq('user_id', user.id).eq('apply_status', 'pending'),
+  const [activities, positions] = await Promise.all([
+    fetchAllRows(() =>
+      supabase.from('fdh_investment_statement_activities').select('id').eq('statement_id', statementId).eq('user_id', user.id).eq('apply_status', 'pending').order('id', { ascending: true }),
+    ),
+    fetchAllRows(() =>
+      supabase.from('fdh_investment_statement_positions').select('id').eq('statement_id', statementId).eq('user_id', user.id).eq('apply_status', 'pending').order('id', { ascending: true }),
+    ),
   ]);
 
   const activityResults = [];
-  for (const a of activities ?? []) {
+  for (const a of activities) {
     activityResults.push({ id: a.id, result: await applyAuStatementActivity({ userId: user.id, activityId: a.id as string }) });
   }
   const positionResults = [];
-  for (const p of positions ?? []) {
+  for (const p of positions) {
     positionResults.push({ id: p.id, result: await applyAuStatementPosition({ userId: user.id, positionId: p.id as string }) });
   }
 

@@ -38,6 +38,7 @@ import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv } from '../inve
 import { matchBankBrokerEvent, type BankTransactionCandidate } from '../investment/bankMatching';
 import type { AuStatementTransactionEvidence, AuStatementPositionEvidence, AuInvestmentStatementType } from '../investment/types';
 import type { FdhStatementUpload } from '../domain/types';
+import { fetchAllRows } from '../bank-csv/pagination';
 
 export class AuInvestmentStatementProcessingError extends Error {
   constructor(readonly code: 'not_found' | 'invalid_state' | 'internal_error', message: string) {
@@ -229,22 +230,37 @@ export async function uploadAndProcessAuInvestmentStatement(
  */
 export async function matchAuStatementActivitiesToBank(userId: string, statementId: string): Promise<{ matched: number; noMatch: number; multipleCandidates: number; noBankEvidence: number; error: string | null }> {
   const admin = createAdminClient();
-  const { data: activities, error: actErr } = await admin
-    .from('fdh_investment_statement_activities')
-    .select('id, activity_type, amount, trade_date, currency_code')
-    .eq('user_id', userId)
-    .eq('statement_id', statementId)
-    .in('activity_type', ['DIVIDEND', 'DISTRIBUTION', 'TRANSFER_IN', 'TRANSFER_OUT', 'CASH_DEPOSIT', 'CASH_WITHDRAWAL']);
-  if (actErr) return { matched: 0, noMatch: 0, multipleCandidates: 0, noBankEvidence: 0, error: actErr.message };
+  // PAGINATION (spec section 93): both reads use fetchAllRows — a
+  // statement with >1000 eligible activities, or a household with >1000
+  // bank transactions, would otherwise be silently truncated by
+  // PostgREST's row cap, producing a wrong (incomplete) match outcome
+  // rather than an error.
+  let activities;
+  try {
+    activities = await fetchAllRows(() =>
+      admin
+        .from('fdh_investment_statement_activities')
+        .select('id, activity_type, amount, trade_date, currency_code')
+        .eq('user_id', userId)
+        .eq('statement_id', statementId)
+        .in('activity_type', ['DIVIDEND', 'DISTRIBUTION', 'TRANSFER_IN', 'TRANSFER_OUT', 'CASH_DEPOSIT', 'CASH_WITHDRAWAL'])
+        .order('id', { ascending: true }),
+    );
+  } catch (e) {
+    return { matched: 0, noMatch: 0, multipleCandidates: 0, noBankEvidence: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 
-  const { data: bankTxns } = await admin
-    .from('fdh_transactions')
-    .select('id, amount_original, transaction_date, description_clean, financial_account_id')
-    .eq('user_id', userId);
+  const bankTxns = await fetchAllRows(() =>
+    admin
+      .from('fdh_transactions')
+      .select('id, amount_original, transaction_date, description_clean, financial_account_id')
+      .eq('user_id', userId)
+      .order('id', { ascending: true }),
+  );
 
   let matched = 0, noMatch = 0, multipleCandidates = 0, noBankEvidence = 0;
 
-  for (const activity of activities ?? []) {
+  for (const activity of activities) {
     const candidates: BankTransactionCandidate[] = (bankTxns ?? []).map((b) => ({
       transactionId: b.id as string,
       amount: Number(b.amount_original),

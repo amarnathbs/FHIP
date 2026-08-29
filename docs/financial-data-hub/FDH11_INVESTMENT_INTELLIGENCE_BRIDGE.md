@@ -1,0 +1,29 @@
+# FDH-11 — Investment Intelligence Bridge (spec sections 63-65)
+
+## The decision (spec section 65)
+
+**Audited**: whether to reuse the FDH-9/FDH-10 generic bridge (`fhip_import_proposals`/`fhip_import_proposal_fields`/`fhip_import_applications`).
+
+**Finding**: `fhip_import_proposals.target_domain` already includes `'investment'` and `source_kind` already includes `'investment_statement'` (both reserved since migration `0091`), but `lib/import-bridge/supabaseStore.ts`'s `DOMAIN_TABLES` has never implemented an `investment` entry — calling `tableFor('investment')` throws. The schema slot exists; nothing was ever built behind it.
+
+**Decision: do NOT implement it.** The generic bridge is a single-row field-patch model — one proposal patches one row of one target table (`income_sources` or `liabilities`). Canonical Investment Intelligence truth is ledger-shaped: applying one statement means inserting zero-or-more *new* `ii_transactions` rows (never rewriting an existing one) plus, optionally, one `ii_holding_snapshots` upsert. Forcing that into a single-row field patch would mean doing exactly what spec sections 59-62 forbid — writing `holding.quantity = statement.quantity` as a patched field — or inventing a dynamic multi-row proposal shape that distorts the bridge's own design (spec section 65's explicit "do not distort the investment ledger merely to achieve cross-domain symmetry").
+
+**Also audited**: II's own existing pathways.
+- R2's `documentProcessing.ts` auto-writes canonical rows at parse time, with no explicit human Apply gate (appropriate for an official CAS; not appropriate for a user-uploaded AU broker CSV, given spec sections 63-64's explicit no-silent-apply mandate).
+- R9's Review Centre (`ii_review_items`) observes *already-canonical* data after the fact — it is not a pre-write gate at all.
+
+**Conclusion**: FDH-11 builds a new, narrow, typed bridge — `lib/investment-import-bridge/` — that is explicitly NOT a generalisation of either existing pathway, and does not touch `fhip_import_proposals` at all. This is exactly the fallback spec section 65 anticipates ("If not appropriate: reuse II's existing transaction review/apply architecture... Do not distort the investment ledger").
+
+## No RPC (a genuine departure from the FDH-9/FDH-10 precedent, justified)
+
+FDH-9/FDH-10's atomic-apply functions ARE Postgres RPCs (`fdh9_apply_income_proposal`, `fdh10_apply_liability_proposal`), needed because their authoritative-write-guard triggers gate on a transaction-local GUC (`fhip.import_bridge_internal_write`) that only a `SECURITY DEFINER` function running inside one transaction can set before performing the protected write. Investment Intelligence's own architecture-exception documentation (`investmentPublicationService.ts`'s header) states this codebase has never used a Postgres RPC/multi-statement transaction anywhere in the II domain — "verified: zero `.rpc(` call sites anywhere in lib/app before this file." FDH-11 follows *that* established precedent instead: migration `0106`'s authoritative-write-guard triggers use the same technique R7/R8/FDH-5/R9/R11 already use elsewhere in this codebase — `auth.role() <> 'authenticated'` — which Postgres evaluates per-request without any GUC or RPC wrapper, since the service-role client's requests genuinely run as the `service_role` Postgres role. This means the bridge is plain TypeScript issuing ordinary `.update()`/`.insert()` calls through the service-role client — no RPC, no dynamic SQL, no arbitrary table/column names from client data (every table/column name in the bridge is a source-code literal).
+
+## Atomicity without an RPC (spec sections 122-123)
+
+1. **Compare-and-swap claim**: `UPDATE fdh_investment_statement_activities SET apply_status='applying' WHERE id=$1 AND apply_status='pending'` — a single Postgres statement, atomic by construction. Zero rows affected means another request already claimed (or completed) the row; the caller re-reads and returns `ALREADY_APPLYING`/`ALREADY_APPLIED` without ever reaching the insert.
+2. **Fingerprint dedup backstop**: even in the (structurally excluded, but defensively handled) case where two DIFFERENT evidence rows fingerprint to the SAME real-world transaction and both pass the claim step, `ii_transactions`' pre-existing `uidx_ii_transactions_fingerprint` unique index (migration `0040`) rejects the second insert with Postgres error `23505`; `applyAuStatementActivity.ts` catches exactly that code and re-reads the winning row rather than surfacing an unhandled error. Both mechanisms are independently proven live against real Postgres in `scripts/fdh11_certification.mjs` (checks 3 and 6).
+3. **Stale/conflict (123)**: if a caller's evidence row's `apply_status` no longer matches `pending` by the time the compare-and-swap runs (e.g. it was already applied by a concurrent request, or a human dismissed/reset it), the swap itself reports the mismatch — there is no separate "stale proposal" concept to synchronise, because unlike FDH-9/10 there is no separate proposal-vs-target snapshot to go stale; the evidence row *is* the single source of intent.
+
+## What the bridge is allowed to do that the Hub cannot
+
+`lib/investment-import-bridge/` imports `lib/services/investment-intelligence/identifiers.ts` (`resolveOrCreateInstrument`, `resolveInstrumentIdFromIdentifiers`), `fingerprint.ts` (`computeTransactionFingerprint`), and `decimal.ts` (`parseExactDecimal`, `scaledToDecimalString`) directly — reusing II's own governance/dedup/exact-arithmetic primitives rather than reimplementing them, because this module sits *outside* `lib/financial-data-hub/` and is therefore not subject to the Hub's "never import II" restriction (mechanically distinguished by `tests/unit/fdh1Isolation.test.ts`'s approved-consumer list, which explicitly documents these four bridge files as legitimate, intentional Investment Intelligence consumers).
