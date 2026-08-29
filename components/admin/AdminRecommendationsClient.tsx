@@ -32,9 +32,20 @@ interface Recommendation {
   priority_score: number;
   is_premium: boolean;
   is_active: boolean;
+  // A0.2 Wave 1B: must be true for this recommendation to legitimately be
+  // active with zero conditions (see migration 0109's named invariant — a
+  // recommendation with zero conditions otherwise matches every user
+  // unconditionally). Defaults false for every pre-existing row.
+  matches_unconditionally: boolean;
   include_in_forecasting: boolean;
   include_in_monthly_report: boolean;
   conditions: { id: string; condition_group: number; field_name: string; operator: string; comparison_value: string | null }[];
+}
+interface EditRowError {
+  index: number;
+  field: string | null;
+  code: string;
+  message: string;
 }
 interface ConditionsImportRowError {
   row: number;
@@ -101,6 +112,7 @@ const emptyForm = () => ({
   priority_score: 0,
   is_premium: false,
   is_active: true,
+  matches_unconditionally: false,
   include_in_forecasting: true,
   include_in_monthly_report: false,
   conditions: [{ condition_group: 1, field_name: 'forecast_category', operator: 'equals', comparison_value: '' }] as Condition[],
@@ -120,6 +132,10 @@ export function AdminRecommendationsClient() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [conditionsOutcome, setConditionsOutcome] = useState<ConditionsImportOutcome | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saveErrors, setSaveErrors] = useState<EditRowError[] | null>(null);
+  const [confirmClearConditions, setConfirmClearConditions] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -177,6 +193,7 @@ export function AdminRecommendationsClient() {
       priority_score: rec.priority_score,
       is_premium: rec.is_premium,
       is_active: rec.is_active,
+      matches_unconditionally: rec.matches_unconditionally,
       include_in_forecasting: rec.include_in_forecasting,
       include_in_monthly_report: rec.include_in_monthly_report,
       conditions: rec.conditions.map((c) => ({
@@ -186,11 +203,17 @@ export function AdminRecommendationsClient() {
         comparison_value: c.comparison_value ?? '',
       })),
     });
+    setConfirmClearConditions(false);
+    setSaveErrors(null);
+    setSaveStatus(null);
   }
 
   function resetForm() {
     setEditingId(null);
     setForm(emptyForm());
+    setConfirmClearConditions(false);
+    setSaveErrors(null);
+    setSaveStatus(null);
   }
 
   function updateCondition(i: number, patch: Partial<Condition>) {
@@ -204,10 +227,24 @@ export function AdminRecommendationsClient() {
   }
 
   async function submitForm() {
+    if (saving) return;
     setError(null);
+    setSaveErrors(null);
     const conditions = form.conditions
       .filter((c) => c.field_name.trim() !== '')
       .map((c) => ({ condition_group: c.condition_group, field_name: c.field_name.trim(), operator: c.operator, comparison_value: c.comparison_value.trim() === '' ? null : c.comparison_value.trim() }));
+
+    // A0.2 Wave 1B: a recommendation is never left with zero conditions as
+    // a side effect of the form simply having none filled in — saving with
+    // zero requires the admin to explicitly confirm that below. Checked
+    // client-side first for a fast, specific message; the server (migration
+    // 0109's RPC) enforces this authoritatively regardless.
+    if (conditions.length === 0 && !confirmClearConditions) {
+      setSaveErrors([{ index: 0, field: null, code: 'CONFIRM_REQUIRED', message: 'This form has zero conditions. Check "Save with zero conditions, deliberately" below to confirm, or add at least one condition.' }]);
+      setSaveStatus('Not saved — zero conditions needs explicit confirmation.');
+      return;
+    }
+
     const isPillar = form.trigger_type === 'score_pillar';
     const payload = {
       recommendation_code: form.recommendation_code,
@@ -231,20 +268,35 @@ export function AdminRecommendationsClient() {
       priority_score: Number(form.priority_score) || 0,
       is_premium: form.is_premium,
       is_active: form.is_active,
+      matches_unconditionally: form.matches_unconditionally,
       include_in_forecasting: form.include_in_forecasting,
       include_in_monthly_report: form.include_in_monthly_report,
       conditions,
+      clearConditions: conditions.length === 0 && confirmClearConditions,
     };
+    setSaving(true);
+    setSaveStatus(editingId ? 'Saving changes…' : 'Creating…');
     try {
       const res = editingId
         ? await fetch(`/api/admin/recommendations/${editingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         : await fetch('/api/admin/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not save recommendation');
+      if (!res.ok) {
+        if (json.data?.status === 'validation_failed' && Array.isArray(json.data.errors)) {
+          setSaveErrors(json.data.errors);
+          setSaveStatus('Not saved — see the errors below. Nothing was changed.');
+          return;
+        }
+        setSaveStatus(`Not saved: ${json.error ?? 'Could not save recommendation'}. Nothing was changed.`);
+        return;
+      }
+      setSaveStatus(editingId ? 'Saved.' : 'Created.');
       resetForm();
       await loadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setSaveStatus(`Not saved: ${e instanceof Error ? e.message : 'Something went wrong'}. Nothing was changed.`);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -468,6 +520,10 @@ export function AdminRecommendationsClient() {
             <input type="checkbox" checked={form.include_in_monthly_report} onChange={(e) => setForm((f) => ({ ...f, include_in_monthly_report: e.target.checked }))} />
             Show in Monthly Report
           </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2" title="Must be checked for this recommendation to be saved as active with zero conditions. Otherwise it is refused — a recommendation with zero conditions matches every user unconditionally.">
+            <input type="checkbox" checked={form.matches_unconditionally} onChange={(e) => setForm((f) => ({ ...f, matches_unconditionally: e.target.checked }))} />
+            Matches unconditionally (always fires — required to save active with zero conditions)
+          </label>
         </div>
         <textarea
           className="mt-3 w-full rounded border px-2 py-1.5 text-sm"
@@ -523,17 +579,42 @@ export function AdminRecommendationsClient() {
               </button>
             </div>
           ))}
-          <button onClick={addCondition} className="text-xs font-semibold text-trust">
+          <button onClick={addCondition} disabled={saving} className="text-xs font-semibold text-trust disabled:opacity-50">
             + Add condition
           </button>
+          {form.conditions.filter((c) => c.field_name.trim() !== '').length === 0 && (
+            <label className="flex items-center gap-2 rounded border border-risk/30 bg-risk/5 p-2 text-xs text-gray-700">
+              <input type="checkbox" checked={confirmClearConditions} onChange={(e) => setConfirmClearConditions(e.target.checked)} />
+              Save with zero conditions, deliberately (this recommendation will match every user unless &quot;matches unconditionally&quot; above is also checked and it is inactive)
+            </label>
+          )}
         </div>
 
+        {saveErrors && saveErrors.length > 0 && (
+          <div className="mt-3 max-h-48 overflow-y-auto rounded border border-risk/30 bg-risk/5 p-3">
+            <p className="text-xs font-semibold text-risk">Nothing was changed. Fix the following and try again:</p>
+            <ul className="mt-2 space-y-1 text-xs text-gray-700">
+              {saveErrors.map((err, i) => (
+                <li key={i}>
+                  {err.index > 0 && <span className="font-semibold">Condition {err.index}</span>}
+                  {err.field && <> · {err.field}</>} <span className="text-gray-500">{err.code}</span> — {err.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {/* Accessible status region — mirrors the upload section's aria-live
+            pattern, so save/create outcomes are announced too. */}
+        <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-600">
+          {saveStatus}
+        </p>
+
         <div className="mt-4 flex gap-2">
-          <button onClick={submitForm} className="rounded bg-trust px-4 py-2 text-sm text-white">
-            {editingId ? 'Save changes' : 'Create recommendation'}
+          <button onClick={submitForm} disabled={saving} aria-disabled={saving} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? 'Saving…' : editingId ? 'Save changes' : 'Create recommendation'}
           </button>
           {editingId && (
-            <button onClick={resetForm} className="rounded border px-4 py-2 text-sm text-gray-600">
+            <button onClick={resetForm} disabled={saving} className="rounded border px-4 py-2 text-sm text-gray-600 disabled:opacity-50">
               Cancel
             </button>
           )}
@@ -575,6 +656,12 @@ export function AdminRecommendationsClient() {
                       {rec.is_active ? 'active' : 'inactive'}
                     </span>
                     {rec.is_premium && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Premium</span>}
+                    {rec.matches_unconditionally && <span className="ml-2 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Unconditional — always fires</span>}
+                    {rec.is_active && !rec.matches_unconditionally && rec.conditions.length === 0 && (
+                      <span className="ml-2 rounded-full bg-risk/10 px-2 py-0.5 text-xs font-semibold text-risk" title="Active with zero conditions and not marked unconditional — this currently matches every user. Edit and either add a condition or check &quot;matches unconditionally&quot;.">
+                        Warning: active, 0 conditions
+                      </span>
+                    )}
                     <p className="mt-1 font-semibold text-gray-900">{rec.action_title_template}</p>
                     <p className="text-xs text-gray-400">
                       {rec.recommendation_code} · {rec.trigger_type === 'score_pillar' ? rec.score_band : rec.forecast_status} · priority {rec.priority_score} ·{' '}

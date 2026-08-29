@@ -1,5 +1,6 @@
 import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
+import { validateEditConditions } from '@/lib/services/recommendationEditValidation';
 
 export async function GET() {
   const { forbidden } = await requireAdmin();
@@ -44,30 +45,37 @@ export async function POST(req: Request) {
   } else {
     return bad('trigger_type must be forecast_variance or score_pillar', 422);
   }
+  // A0.2 Wave 1B: create + its conditions are now one atomic database
+  // transaction (migration 0109's admin_upsert_recommendation_atomic),
+  // never two independent requests — see that migration's header for why
+  // the original INSERT-master-then-INSERT-conditions pattern was unsafe
+  // (identical defect class to Wave 1's D-01).
   const client = adminClient();
-  const { conditions, ...masterFields } = body;
-  const { data: master, error: masterError } = await client
-    .from('action_recommendation_master')
-    .insert({ ...masterFields, is_active: masterFields.is_active ?? false })
-    .select('*')
-    .single();
-  if (masterError) return bad(masterError.message);
+  const { conditions, clearConditions, ...masterFields } = body;
 
-  if (Array.isArray(conditions) && conditions.length > 0) {
-    const { error: conditionsError } = await client.from('action_recommendation_conditions').insert(
-      conditions.map(
-        (c: { condition_group?: number; field_name: string; operator?: string; comparison_value?: string | null; evaluation_order?: number }) => ({
-          recommendation_code: master.recommendation_code,
-          condition_group: c.condition_group ?? 1,
-          field_name: c.field_name,
-          operator: c.operator ?? 'equals',
-          comparison_value: c.comparison_value ?? null,
-          evaluation_order: c.evaluation_order ?? 1,
-        })
-      )
-    );
-    if (conditionsError) return bad(conditionsError.message);
+  const validated = validateEditConditions(conditions, { clearConditions: Boolean(clearConditions) });
+  if (!validated.ok) {
+    return Response.json({ error: 'Validation failed — nothing was created.', data: { status: 'validation_failed', errors: validated.errors } }, { status: 422 });
   }
 
+  const { data: rpcData, error: rpcError } = await client.rpc('admin_upsert_recommendation_atomic', {
+    p_id: null,
+    p_master: masterFields,
+    p_conditions: validated.conditions ?? null,
+    p_clear_conditions: Boolean(clearConditions),
+  });
+  if (rpcError) {
+    console.error('admin_upsert_recommendation_atomic (create) RPC failed:', rpcError);
+    // A duplicate recommendation_code or the active+zero-conditions
+    // invariant are the two realistic causes an Admin can self-correct —
+    // surface those distinctly; everything else stays generic (no raw DB
+    // internals to the client).
+    if (rpcError.code === '23505') return bad(`recommendation_code "${masterFields.recommendation_code}" already exists.`, 409);
+    if (rpcError.code === '23514') return bad('This would leave an active recommendation with zero conditions, which matches every user unconditionally. Set "matches unconditionally" explicitly, add a condition, or leave it inactive.', 422);
+    return bad('The recommendation could not be created due to a database error. Nothing was created.', 500);
+  }
+
+  const { data: master, error: fetchError } = await client.from('action_recommendation_master').select('*').eq('id', (rpcData as { id: string }).id).single();
+  if (fetchError) return bad('Created, but could not re-read the record.', 500);
   return ok(master);
 }

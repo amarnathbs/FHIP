@@ -68,10 +68,20 @@ async function buildDb() {
 }
 
 async function seedMaster(db, code) {
+  // is_active=false: this script certifies conditions-CRUD atomicity only,
+  // not the active+zero-conditions invariant (that's Wave 1B's own
+  // migration 0109, certified separately in
+  // scripts/admin_a02_wave1b_certification.mjs). An inactive fixture is
+  // exempt from migration 0109's deferred triggers, so seeding a master row
+  // and its conditions as two separate statements here (as this script did
+  // before Wave 1B existed) still works — an active fixture would correctly
+  // be rejected by the new trigger the instant it committed with 0
+  // conditions, which is itself proof the new invariant works, not a bug in
+  // this script. See Wave 1B's certification for that exact scenario.
   await db.query(
     `insert into action_recommendation_master
-       (recommendation_code, forecast_category, sub_category, scenario_name, forecast_status, severity, action_type, action_title_template, action_content_template)
-     values ($1, 'debt', 'overall_variance', 'test scenario', 'on_track', 'medium', 'reduce_debt', 'Test title', 'Test content')
+       (recommendation_code, forecast_category, sub_category, scenario_name, forecast_status, severity, action_type, action_title_template, action_content_template, is_active)
+     values ($1, 'debt', 'overall_variance', 'test scenario', 'on_track', 'medium', 'reduce_debt', 'Test title', 'Test content', false)
      on conflict (recommendation_code) do nothing`,
     [code]
   );
