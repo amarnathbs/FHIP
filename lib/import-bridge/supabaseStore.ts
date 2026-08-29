@@ -30,6 +30,13 @@ import type {
  */
 const DOMAIN_TABLES: Partial<Record<ImportTargetDomain, string>> = {
   income: 'income_sources',
+  // FDH-10 addition (spec sections 6, 50-58) — the liability branch of the
+  // FDH-9 bridge's same-tenant guards (migration 0096 Part G) and its own
+  // typed atomic-apply RPC (`fdh10_apply_liability_proposal`) are what
+  // actually enforce write authority; this entry only lets the ordinary
+  // (non-apply) read paths — `loadTargetRow` for the preview/compare screen —
+  // resolve the table name.
+  liability: 'liabilities',
 };
 
 function tableFor(domain: string): string {
@@ -42,6 +49,11 @@ function tableFor(domain: string): string {
 const PROVENANCE_BY_DOMAIN: Partial<Record<ImportTargetDomain, (applicationId: string) => Record<string, unknown>>> = {
   income: (applicationId) => ({
     source_type: 'payslip_import',
+    last_import_application_id: applicationId,
+    last_imported_at: new Date().toISOString(),
+  }),
+  liability: (applicationId) => ({
+    source_type: 'liability_statement_import',
     last_import_application_id: applicationId,
     last_imported_at: new Date().toISOString(),
   }),
@@ -225,6 +237,76 @@ export async function persistProposal(
       target_domain: draft.targetDomain,
       source_kind: draft.sourceKind,
       source_payroll_event_id: sourcePayrollEventId,
+      currency_code: draft.currencyCode,
+      target_entity_id: draft.targetEntityId,
+      target_entity_updated_at: draft.targetEntityUpdatedAt,
+      recommended_apply_mode: draft.recommendedApplyMode,
+      duplicate_of_entity_id: draft.duplicateOfEntityId,
+      status: 'ready',
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'could not create the proposal');
+
+  const proposalId = data.id as string;
+  if (draft.fields.length > 0) {
+    const { error: fieldError } = await supabase.from('fhip_import_proposal_fields').insert(
+      draft.fields.map((f) => ({
+        user_id: userId,
+        proposal_id: proposalId,
+        field_name: f.fieldName,
+        value_kind: f.valueKind,
+        proposed_value: f.proposedValue,
+        existing_value: f.existingValue,
+        is_recommended: f.isRecommended,
+        requires_confirmation: f.requiresConfirmation,
+        confidence: f.confidence ?? null,
+        reason_code: f.reasonCode,
+      })),
+    );
+    if (fieldError) throw new Error(fieldError.message);
+  }
+
+  return proposalId;
+}
+
+/**
+ * FDH-10 sibling of `persistProposal` for the LIABILITY domain (spec sections
+ * 19-20, 41, 53-58). A small, deliberate duplication rather than widening
+ * `persistProposal` with a union "source ref" parameter — the two functions
+ * write to different provenance columns (`source_payroll_event_id` vs
+ * `source_liability_statement_id`) on the SAME `fhip_import_proposals` table,
+ * and `fdh10_apply_liability_proposal()` (migration 0096 Part I) reads
+ * `v_proposal.source_liability_statement_id` directly when writing
+ * `fhip_import_applications`, so this column must be populated at generation
+ * time for correct provenance — never left null for a liability proposal.
+ *
+ * SUPERSESSION mirrors `persistProposal`: any earlier 'ready' proposal for the
+ * same liability statement is marked superseded first, so regenerating a
+ * comparison can never leave two live, independently-applicable proposals for
+ * one statement (spec section 34's discipline, same as income).
+ */
+export async function persistLiabilityProposal(
+  userId: string,
+  draft: ImportProposalDraft,
+  sourceLiabilityStatementId: string,
+): Promise<string> {
+  const supabase = await createClient();
+
+  await supabase
+    .from('fhip_import_proposals')
+    .update({ status: 'superseded' })
+    .eq('user_id', userId)
+    .eq('source_liability_statement_id', sourceLiabilityStatementId)
+    .eq('status', 'ready');
+
+  const { data, error } = await supabase
+    .from('fhip_import_proposals')
+    .insert({
+      user_id: userId,
+      target_domain: draft.targetDomain,
+      source_kind: draft.sourceKind,
+      source_liability_statement_id: sourceLiabilityStatementId,
       currency_code: draft.currencyCode,
       target_entity_id: draft.targetEntityId,
       target_entity_updated_at: draft.targetEntityUpdatedAt,
