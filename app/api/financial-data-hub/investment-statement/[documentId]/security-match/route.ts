@@ -28,9 +28,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const body = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) return bad(body.error.issues[0]?.message ?? 'Invalid request', 422);
 
+  // `exchange` exists only on fdh_investment_statement_positions (migration
+  // 0106) — fdh_investment_statement_activities has no such column.
+  // Selecting it unconditionally on both tables silently failed the query
+  // (PostgREST rejects an unknown column) and this route mistook that
+  // failure for "row not found" 404 — reproduced live, fixed here by
+  // selecting per-table.
   const supabase = await createClient();
-  const { data: row } = await supabase.from(body.data.table).select('isin, ticker_raw, exchange, security_name_raw').eq('id', body.data.row_id).eq('statement_id', statementId).eq('user_id', user.id).maybeSingle();
-  if (!row) return bad('Evidence row not found on this statement.', 404);
+  const isPositionsTable = body.data.table === 'fdh_investment_statement_positions';
+  const { data: rowData, error: rowErr } = isPositionsTable
+    ? await supabase.from(body.data.table).select('isin, ticker_raw, exchange, security_name_raw').eq('id', body.data.row_id).eq('statement_id', statementId).eq('user_id', user.id).maybeSingle()
+    : await supabase.from(body.data.table).select('isin, ticker_raw, security_name_raw').eq('id', body.data.row_id).eq('statement_id', statementId).eq('user_id', user.id).maybeSingle();
+  if (rowErr) return bad(rowErr.message, 500);
+  if (!rowData) return bad('Evidence row not found on this statement.', 404);
+  const row = rowData as { isin: string | null; ticker_raw: string | null; security_name_raw: string; exchange?: string | null };
 
   if (body.data.confirm_new_security) {
     const created = await createProvisionalAuSecurity({

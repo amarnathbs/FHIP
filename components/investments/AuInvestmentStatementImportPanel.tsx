@@ -232,8 +232,13 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
       {phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
-            Upload a CSV export from your Australian broker (transaction history or portfolio holdings) and FHIP will extract
-            the details for you to review before anything is added to your Investments.
+            Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before
+            anything is added to your Investments.
+          </p>
+          <p className="text-xs text-muted">
+            FHIP currently reads two generic Australian CSV layouts (a transaction-history export and a portfolio/holdings
+            export with standard column headers). Broker-specific exports or PDF statements outside these layouts are not
+            yet supported — you can still add the investment manually below instead.
           </p>
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm">
