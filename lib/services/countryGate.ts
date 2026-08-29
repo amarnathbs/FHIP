@@ -134,6 +134,34 @@ export function isBlockingState(state: CountryGateState): boolean {
   return state !== 'CONFIRMED';
 }
 
+// MCC-12 fix (round-4 closure, 2026-08-29 live-DEV certification). Extracted
+// as its own pure, directly unit-testable function rather than left inline in
+// app/(app)/layout.tsx, because the bug it fixes was exactly that inline
+// condition failing open.
+//
+// The original layout condition was:
+//   if (gate.state !== 'CONFIRMED' && gate.onboardingCompleted) redirect(...)
+// Both DB_ERROR and PROFILE_INCOMPLETE construct their result from the same
+// `empty` shape above, which hardcodes `onboardingCompleted: false`. That
+// made the condition evaluate to `false` for those two states no matter what
+// — a transient database/read error, or a structurally-rare missing profile
+// row, silently fell through to <AppShell>{children}</AppShell> (real
+// financial data) instead of being blocked. This was found live on DEV when
+// the migration lagged the code (see closure report Issue Register, MCC-12):
+// the classifier's own DB_ERROR path was reachable simply by the profile
+// query failing, with no attacker action required.
+//
+// Neither DB_ERROR nor PROFILE_INCOMPLETE can be positively classified as
+// CONFIRMED, so both must fail CLOSED regardless of the onboarding flag —
+// unlike a legitimate mid-onboarding user (who proxy.ts already confines to
+// /onboarding, so this only matters as defense in depth), an operational
+// failure to read the profile is never evidence that showing the onboarding
+// wizard instead of the country gate is safe.
+export function shouldRedirectToConfirmCountry(gate: CountryGateResult): boolean {
+  if (gate.state === 'DB_ERROR' || gate.state === 'PROFILE_INCOMPLETE') return true;
+  return gate.state !== 'CONFIRMED' && gate.onboardingCompleted;
+}
+
 // Stable, UI-handleable error codes (spec 5.5) — kept separate from the
 // internal CountryGateState names so route responses never leak internal
 // state names by accident if this module's states are ever renamed.

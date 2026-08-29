@@ -4,9 +4,11 @@ import {
   assertCountryConfirmedForUser,
   countryConfirmationBlockResponse,
   isBlockingState,
+  shouldRedirectToConfirmCountry,
   SUPPORTED_COUNTRY_CODES,
   COUNTRY_GATE_ERROR_CODE,
   COUNTRY_GATE_HTTP_STATUS,
+  type CountryGateResult,
 } from '@/lib/services/countryGate';
 
 type Row = Record<string, unknown> | null;
@@ -197,5 +199,58 @@ describe('countryConfirmationBlockResponse — round-3 closure (Gap 1, API-layer
     const confirmed = fakeClient({ country_of_residence: 'AU', country_confirmed_at: '2026-08-29T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true });
     expect(await countryConfirmationBlockResponse(confirmed, 'u1')).toBeNull();
     expect(await countryConfirmationBlockResponse(confirmed, 'u1', { allowDuringOnboarding: true })).toBeNull();
+  });
+});
+
+describe('shouldRedirectToConfirmCountry — MCC-12 fix (found + fixed 2026-08-29 live-DEV certification)', () => {
+  // Helper builds a full CountryGateResult without needing a fake Supabase
+  // client, since this function only ever branches on the already-resolved
+  // gate object app/(app)/layout.tsx receives from assertCountryConfirmedForUser.
+  function result(state: CountryGateResult['state'], onboardingCompleted: boolean): CountryGateResult {
+    return {
+      state,
+      countryOfResidence: null,
+      countryConfirmedAt: null,
+      countrySource: null,
+      onboardingCompleted,
+    };
+  }
+
+  it('MCC-12 regression: DB_ERROR redirects (fails CLOSED) even though onboardingCompleted is always false for this state', () => {
+    // Before the fix, app/(app)/layout.tsx's inline condition was
+    // `gate.state !== 'CONFIRMED' && gate.onboardingCompleted` — since
+    // assertCountryConfirmedForUser's DB_ERROR branch always returns
+    // onboardingCompleted: false, that condition evaluated to `false` here,
+    // so a database read failure fell through to rendering real financial
+    // data instead of being blocked. This is the exact live-DEV-observed bug.
+    expect(shouldRedirectToConfirmCountry(result('DB_ERROR', false))).toBe(true);
+  });
+
+  it('MCC-12 regression: PROFILE_INCOMPLETE redirects (fails CLOSED) for the same reason — it also always carries onboardingCompleted: false', () => {
+    expect(shouldRedirectToConfirmCountry(result('PROFILE_INCOMPLETE', false))).toBe(true);
+  });
+
+  it('a genuinely mid-onboarding user (any non-CONFIRMED state, onboarding not yet complete) is NOT redirected by this layout — proxy.ts confines them to /onboarding instead, and this must not fight that', () => {
+    expect(shouldRedirectToConfirmCountry(result('COUNTRY_MISSING', false))).toBe(false);
+    expect(shouldRedirectToConfirmCountry(result('COUNTRY_UNCONFIRMED', false))).toBe(false);
+  });
+
+  it('every non-CONFIRMED state redirects once onboarding is complete', () => {
+    const onboardedBlockingStates: CountryGateResult['state'][] = [
+      'COUNTRY_MISSING',
+      'COUNTRY_UNCONFIRMED',
+      'COUNTRY_UNSUPPORTED',
+      'COUNTRY_INVALID',
+      'DB_ERROR',
+      'PROFILE_INCOMPLETE',
+    ];
+    for (const state of onboardedBlockingStates) {
+      expect(shouldRedirectToConfirmCountry(result(state, true))).toBe(true);
+    }
+  });
+
+  it('CONFIRMED never redirects, regardless of the onboarding flag', () => {
+    expect(shouldRedirectToConfirmCountry(result('CONFIRMED', true))).toBe(false);
+    expect(shouldRedirectToConfirmCountry(result('CONFIRMED', false))).toBe(false);
   });
 });

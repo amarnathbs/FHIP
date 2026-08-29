@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/ui/AppShell';
 import { createClient } from '@/lib/supabase/server';
-import { assertCountryConfirmedForUser } from '@/lib/services/countryGate';
+import { assertCountryConfirmedForUser, shouldRedirectToConfirmCountry } from '@/lib/services/countryGate';
 
 // AppShell lives here (not wrapped individually in each page.tsx) so the
 // sidebar survives client-side navigation instead of unmounting and
@@ -49,7 +49,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // proxy.ts won't let an unonboarded user reach in the first place. This
   // check stays as defense in depth (spec 5.4: "a stale client state cannot
   // bypass it") without needing to know proxy.ts's onboarding flag itself.
-  if (gate.state !== 'CONFIRMED' && gate.onboardingCompleted) {
+  //
+  // MCC-12 fix: the redirect decision is delegated to
+  // shouldRedirectToConfirmCountry() rather than inlined here, specifically
+  // because the inlined `gate.state !== 'CONFIRMED' && gate.onboardingCompleted`
+  // form of this check is what silently failed OPEN for DB_ERROR and
+  // PROFILE_INCOMPLETE (see that function's own comment and the closure
+  // report's Issue Register).
+  if (shouldRedirectToConfirmCountry(gate)) {
     redirect('/confirm-country');
   }
 
