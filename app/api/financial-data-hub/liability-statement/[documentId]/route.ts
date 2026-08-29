@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getLiabilityStatementIdForDocument, getLiabilityStatementForReview } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 
 // GET /api/financial-data-hub/liability-statement/{documentId} — the review

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { applyLiabilityProposalAtomic } from '@/lib/import-bridge/applyLiabilityProposalAtomic';
 import { USER_APPLY_DECISIONS } from '@/lib/import-bridge/types';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
