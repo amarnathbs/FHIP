@@ -3,7 +3,7 @@
 // this feature has ever considered (the 8 originally-named + 91 reviewed in
 // round 2 + any new table added by a merged branch since), reports exactly
 // which operations `authenticated`/`public` have ANY policy-granted access
-// to, so the trigger extension in migration 0107 is based on real discovery,
+// to, so the trigger extension in migration 0108 is based on real discovery,
 // not assumption.
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';

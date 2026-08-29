@@ -23,7 +23,7 @@ console.log('fresh rebuild complete\n');
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test');`);
-// Mandatory Country Confirmation (migrations 0104/0105/0107) — this script's
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — this script's
 // own "REAL populated tenant data" seed below inserts into ii_accounts and
 // user_financial_section_status, both now backstopped by
 // enforce_country_confirmed(); a bare country_of_residence is never itself

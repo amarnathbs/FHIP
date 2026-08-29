@@ -61,10 +61,17 @@
 -- professional_profiles -- created by service-role processes, then
 -- resolved/edited directly by their owning user).
 --
--- Numbered 0107, not 0106 -- 0106 is claimed (unmerged) by
+-- Numbered 0108, not 0106 or 0107. 0106 is claimed (unmerged) by
 -- feature/fdh11-au-investment-statement-intelligence, discovered during
 -- this round's origin/main reconciliation; reusing it would create a
--- future collision.
+-- future collision. This file was originally authored and committed as
+-- 0107, but that number collided with a DIFFERENT unmerged branch
+-- (fix/admin-a02-wave1-recommendation-import-integrity's
+-- 0107_admin_recommendations_conditions_import_integrity.sql) which is
+-- already pushed/shared on origin -- per this project's standing rule to
+-- never renumber an already-shared migration when avoidable, THIS
+-- still-local-only file was renumbered to 0108 instead, and the other
+-- branch's 0107 file was left untouched.
 
 -- 1. Rewritten shared trigger function -- TG_OP-aware (INSERT/UPDATE/DELETE),
 --    narrow households-only onboarding exemption -----------------------------
@@ -107,7 +114,7 @@ end;
 $$;
 
 comment on function public.enforce_country_confirmed() is
-  'Database-level backstop for direct-Supabase-client writes (INSERT/UPDATE/DELETE, whichever an authenticated RLS policy actually grants per table) that bypass the application API/route guard. The ONLY onboarding-time exemption is households INSERT/UPDATE (round-3 fix, migration 0107) -- every other table requires a genuinely confirmed country regardless of onboarding_completed.';
+  'Database-level backstop for direct-Supabase-client writes (INSERT/UPDATE/DELETE, whichever an authenticated RLS policy actually grants per table) that bypass the application API/route guard. The ONLY onboarding-time exemption is households INSERT/UPDATE (round-3 fix, migration 0108) -- every other table requires a genuinely confirmed country regardless of onboarding_completed.';
 
 -- 2. Rewritten BESPOKE join trigger (financial_twin_insights /
 --    financial_twin_metric_results) -- now TG_OP-aware too ------------------

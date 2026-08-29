@@ -4,6 +4,8 @@
 **Repository:** `D:\FHIP` (all work in the SAME worktree/branch across all 3 rounds: `D:\fhip-country-confirm`, `feature/mandatory-country-confirmation-beta-cleanup`)
 **Type:** Two-gate Product-Owner-authorised task. Supersedes the round-2 report. Round 3 addresses 3 Product Owner-identified gaps plus a mandatory reconciliation onto current `origin/main`.
 
+**Post-closure correction (same day):** this round's new migration was originally authored and committed as `0107_mandatory_country_confirmation_crud_and_onboarding_fix.sql`. The coordinating session flagged that `0107` collided with a *different* unmerged branch, `fix/admin-a02-wave1-recommendation-import-integrity`, whose own `0107_admin_recommendations_conditions_import_integrity.sql` is already pushed/shared on `origin`. Per this project's standing rule to never renumber an already-shared migration when avoidable, this branch's still-local-only file was renumbered to **`0108`** instead — the other branch's `0107` file was not touched, read, or modified in any way. Every internal comment/reference to the old number (in the migration file itself, 3 `scripts/db-rebuild-check/*.mjs` files, `scripts/mcc_crud_policy_inventory.mjs`, and this report) was updated to `0108`, and the full PGlite certification was re-run and re-confirmed passing under the new number before recommitting. See the updated section P for the exact resulting commit SHA.
+
 ---
 
 ## A. Executive outcome
@@ -36,8 +38,8 @@ No push, no merge (of this branch upstream), no migration applied to DEV or prod
 | `origin/main` at round-2 close | `0d9294b` |
 | `origin/main` now (re-fetched fresh) | `e05855fb71ace392db8d7dd4bd96563ec99098a3` — FDH-10 Credit Cards & Loans Intelligence merged since |
 | Reconciliation | `git merge origin/main` — clean, **zero file-level conflicts** (confirmed via a pre-merge diff: zero overlap between FDH-10's 69 changed files and this branch's own changes) |
-| Migration-collision re-check | `origin/main`'s migration head is still `0102` (FDH-10 filled the previously-empty `0096` gap, added no new head number). Scanned every local/remote branch again: `fix/g0-wave2-closure-hotfix` still claims `0103` (unmerged, unauthorised, untouched); a **new** branch, `feature/fdh11-au-investment-statement-intelligence` (unmerged, based on current `origin/main`), now claims `0106` — does not collide with this branch's `0104`/`0105`/`0107` |
-| New migration this round | `0107_mandatory_country_confirmation_crud_and_onboarding_fix.sql` |
+| Migration-collision re-check | `origin/main`'s migration head is still `0102` (FDH-10 filled the previously-empty `0096` gap, added no new head number). Scanned every local/remote branch again: `fix/g0-wave2-closure-hotfix` still claims `0103` (unmerged, unauthorised, untouched); a **new** branch, `feature/fdh11-au-investment-statement-intelligence` (unmerged, based on current `origin/main`), now claims `0106` — does not collide with this branch's `0104`/`0105`/`0108` |
+| New migration this round | `0108_mandatory_country_confirmation_crud_and_onboarding_fix.sql` |
 | Local commits this round | `4deddec` (merge), `d77b8c3`, `ae2b6cc`, `a24ce6c`, plus this report's commit |
 | Total local commits (all 3 rounds) | 17 |
 | Final HEAD | see section P |
@@ -70,7 +72,7 @@ Unchanged from round 2 (see that report) — every claim re-verified passing thi
 - A failed goal-creation attempt never blocks the redirect to `/dashboard` — losing an optional draft goal is a smaller problem than trapping a successfully-confirmed user.
 
 **Both layers narrowed, not removed:**
-- Database: `enforce_country_confirmed()` (migration `0107`) exempts **only** `households` INSERT/UPDATE. `household_members` (a different table, never legitimately written during onboarding) gets no exemption. DELETE on `households` is never exempted (no legitimate onboarding-time case).
+- Database: `enforce_country_confirmed()` (migration `0108`) exempts **only** `households` INSERT/UPDATE. `household_members` (a different table, never legitimately written during onboarding) gets no exemption. DELETE on `households` is never exempted (no legitimate onboarding-time case).
 - API: `countryConfirmationBlockResponse()` defaults to no exemption; only `app/api/household/route.ts` opts in.
 
 **Live-Postgres proof (not inference), via `scripts/mcc_pglite_certification.mjs`:**
@@ -94,7 +96,7 @@ Unit-level proof of the API-layer fix (`tests/unit/countryGate.test.ts`, 4 new c
 
 **Real discovery, not assumption:** `scripts/mcc_crud_policy_inventory.mjs` queries `pg_policies` for every one of 194 public tables and records exactly which of SELECT/INSERT/UPDATE/DELETE an `authenticated`/`public` policy grants. 104 tables have some write policy (up from round 2's 91, because 3 UPDATE-only tables were invisible to an INSERT-only scan). `scripts/mcc_classify_tables_v3.mjs` re-classifies all 104: 82 GENERIC, 1 BESPOKE (owner column), 2 BESPOKE (join), 19 EXCLUDED (same 19, same stated reasons as round 2).
 
-**Migration `0107`** rewrites the trigger functions to be `TG_OP`-aware (resolving `old`/`new` correctly for DELETE) and re-applies every trigger with **exactly** the operations discovered — never a redundant trigger for an operation RLS already blocks unaided.
+**Migration `0108`** rewrites the trigger functions to be `TG_OP`-aware (resolving `old`/`new` correctly for DELETE) and re-applies every trigger with **exactly** the operations discovered — never a redundant trigger for an operation RLS already blocks unaided.
 
 **Real UPDATE/DELETE rejection + preservation proof**, via `mcc_pglite_certification.mjs`:
 1. Seeded a real pre-existing `assets` row for an unconfirmed user (via service-role, simulating data that predates this feature).
@@ -165,7 +167,7 @@ Re-ran the read-only production audit at the start and end of this round: **iden
 
 - **Source files changed this round:** 8 (`OnboardingWizard.tsx`, `ConfirmCountryForm.tsx`, `lib/constants.ts`, `lib/api.ts`, `lib/services/countryGate.ts`, `app/api/household/route.ts`, 5 FDH-10 routes — counted as one line here, itemised in section E) [cumulative: 247]
 - **Test files changed:** 1 modified (`countryGate.test.ts`, +4 cases), 0 new this round [cumulative: 5]
-- **Migration files created:** 1 (`0107`); `0104`/`0105` untouched [cumulative: 3]
+- **Migration files created:** 1 (`0108`); `0104`/`0105` untouched [cumulative: 3]
 - **Documentation/tooling files:** 4 new scripts (`mcc_crud_policy_inventory.mjs`, `mcc_classify_tables_v3.mjs`, 2 JSON evidence artifacts), 3 pre-existing scripts fixed, this report
 - **Country values changed in DEV:** 0 · **in production:** 0
 - **DEV writes:** **1 unauthorised write occurred and was self-corrected** — a test auth user was created via the admin API during the Gap 3 attempt (section H), exceeding "read-only DEV queries" authorisation, and was deleted within the same working session upon recognising the error. No application data (profile fields beyond the auto-created default, financial rows, etc.) was ever attached to it. This is disclosed here in full rather than omitted.
@@ -203,7 +205,7 @@ Re-ran the read-only production audit at the start and end of this round: **iden
 - **Base SHA:** `0d9294b498f183353f2b586dc30e1e02f6ebac42` (original) · **Reconciled onto:** `e05855fb71ace392db8d7dd4bd96563ec99098a3`
 - **Round 3 commits:** `4deddec` (merge origin/main) → `d77b8c3` (reconcile + gate FDH-10 routes) → `ae2b6cc` (Gap 1 fix) → `a24ce6c` (Gap 2 fix) → this report's commit
 - **Final HEAD:** `16e2c3e` at time of writing (re-verify with `git rev-parse HEAD` — amending this same commit, as happened in prior rounds, changes its hash)
-- **Migrations:** `0104`, `0105`, `0107` (`0106` deliberately skipped — claimed by an unmerged sibling branch)
+- **Migrations:** `0104`, `0105`, `0108` (`0106` deliberately skipped — claimed by an unmerged sibling branch)
 - **Exact verification commands:** `npx tsc --noEmit` · `npx eslint .` · `npx vitest run` · `node scripts/mcc_pglite_certification.mjs` · `node scripts/mcc_crud_policy_inventory.mjs` · `node scripts/mcc_classify_tables_v3.mjs` · `node scripts/db-rebuild-check/{replay,rls,smsf_jurisdiction_cert,education_goal_linkage,pl_property_liability,wave2_catalogue_applicability_cert,app_review_tier2_verification}.mjs` · `npm run build`
 - **Exact next Product Owner decision required:** (1) authorise a genuine live-DEV browser verification session (a different environment/tooling path than the one this session had available — e.g. a human-run manual QA pass, or a different agent session with working preview-server access to this specific worktree) to close Gap 3 and permit a FULL PASS claim; (2) separately, approve or reject the 2-account deletion manifest (unchanged, ready).
 
@@ -214,13 +216,13 @@ Re-ran the read-only production audit at the start and end of this round: **iden
 - **Gate A verdict:** `MANDATORY COUNTRY CONFIRMATION CONDITIONAL PASS — BOUNDED REMEDIATION REMAINS`
 - **Gate B verdict:** `BETA CLEANUP INVENTORY READY — EXACT DELETION MANIFEST AWAITS PRODUCT OWNER APPROVAL`
 - **origin/main (reconciled onto):** `e05855f` · **Original branch base:** `0d9294b` · **Local commits:** 17 (13 round 1-2 + 4 round 3, incl. this report)
-- **Migration-collision status:** clean; `0106` (unmerged sibling branch) and `0103` (unmerged, unauthorised hotfix) both non-colliding with `0104`/`0105`/`0107`
+- **Migration-collision status:** clean; `0106` (unmerged sibling branch) and `0103` (unmerged, unauthorised hotfix) both non-colliding with `0104`/`0105`/`0108`
 - **Supported countries:** 2 (AU, IN)
 - **Production:** 5 auth users, 5 profiles, 3 missing country, 2 unconfirmed non-null, 0 unsupported/invalid, 0 orphans — unchanged, re-verified twice this round
 - **Proposed deletion candidates:** 2 · **Preserve-and-confirm:** 2 · **Manual-review:** 1 · **Total dependent rows for deletion:** 0
 - **Users deleted (production): 0 · Financial rows deleted: 0 · Production/DEV migration writes: 0**
 - **DEV non-migration write:** 1 test user created and self-corrected (deleted) this round — disclosed in full, section N
-- **Source files changed (cumulative):** 247 · **Test files:** 5 · **Migrations:** 3 created (0104, 0105, 0107), 0 modified after creation
+- **Source files changed (cumulative):** 247 · **Test files:** 5 · **Migrations:** 3 created (0104, 0105, 0108), 0 modified after creation
 - **TypeScript/ESLint:** clean · **DB-backstopped tables:** 85 (was 8 → 80 → 85) · **Justified exclusions:** 19
 - **PGlite cert:** 58/58 (was 26 → 39 → 58) · **Migration replay:** 102/102 · **6 other DB certs:** all clean (3 required a fixture fix, all re-verified)
 - **Full unit suite:** 3681/3689 passed, 5 skipped, 3 failed (pre-existing, unrelated, live-DEV-dependent — reconfirmed across all 3 rounds)

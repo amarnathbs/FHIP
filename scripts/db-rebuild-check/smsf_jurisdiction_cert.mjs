@@ -205,7 +205,7 @@ await asTenant(A, async () => {
 // yet -- proving that backfill logic is correct and idempotent.
 const C = '33333333-3333-3333-3333-333333333333';
 await db.exec(`insert into auth.users(id,email) values ('${C}','c@t.test');`);
-// Mandatory Country Confirmation (migrations 0104/0105/0107) — same fix as
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — same fix as
 // tenants A/B above: a bare country_of_residence is never itself proof of
 // confirmation under the new trigger (now UPDATE/INSERT-aware, round 3).
 await db.exec(`update user_profiles set country_of_residence='AU', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${C}';`);

@@ -75,7 +75,7 @@ const A = '11111111-1111-1111-1111-111111111111'; // AU resident
 const B = '22222222-2222-2222-2222-222222222222'; // IN resident
 const N = '33333333-3333-3333-3333-333333333333'; // null/unresolved country resident
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test'),('${N}','n@t.test');`);
-// Mandatory Country Confirmation (migrations 0104/0105/0107) — A and B are
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — A and B are
 // meant to represent genuinely established, usable test tenants, so they
 // also get country_confirmed_at/country_source/onboarding_completed
 // (a bare country_of_residence is never itself proof of confirmation under
