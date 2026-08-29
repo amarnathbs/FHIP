@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { findSimilarGlossaryTerms } from '@/lib/resources/glossary/queries';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/glossary/similar?term=...&excludeId=... — spec
 // §29 check-as-you-type "a similar term already exists" warning.
@@ -10,6 +11,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { searchParams } = new URL(request.url);
   const term = (searchParams.get('term') ?? '').slice(0, 200);

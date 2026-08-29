@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles } from '@/lib/resources/permissions';
 import { getResourceActiveAuthors } from '@/lib/resources/editor/queries';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/authors — active authors for the editor's
 // Author/Reviewer/Compliance Reviewer pickers (spec §57/§58). Read-only:
@@ -12,6 +13,9 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!current.isSuperAdmin && current.roles.length === 0) return bad("You don't have permission to access Resources administration.", 403);

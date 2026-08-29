@@ -9,6 +9,7 @@ import { validateMoneyUpdateForDraftSave } from '@/lib/resources/money-update/va
 import { validateCtaAssignment } from '@/lib/resources/editor/validation';
 import { searchSources } from '@/lib/resources/sources/queries';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -16,6 +17,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {
@@ -35,6 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to edit Resources content.", 403);

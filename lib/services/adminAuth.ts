@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad } from '@/lib/api';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 import type { User } from '@supabase/supabase-js';
 
 // Admin routes use the service-role client for writes (bypassing RLS on the
@@ -8,6 +9,17 @@ import type { User } from '@supabase/supabase-js';
 // admin_users itself is RLS-scoped so a user can only ever read their OWN
 // flag, never grant it to themselves (spec section 20/26: no benchmark
 // governance action without a real, auditable admin).
+//
+// Mandatory Country Confirmation, round-2 closure (MCC-2): every one of the
+// ~14 Benchmarks/Recommendations admin routes calls this single function, so
+// adding the country-confirmation check HERE — rather than at each of those
+// call sites — closes the gap for all of them at once, the same "one
+// canonical guard" pattern already used for requireUser(). An admin whose
+// own country is unconfirmed is blocked from admin API routes exactly like
+// every other authenticated user is blocked from financial API routes; no
+// exemption is given for Admin status itself (spec 1.2: admin is denied
+// "unless the repository proves that a separately controlled administrator
+// path is required for remediation" — it does not, see the closure report).
 export async function requireAdmin(): Promise<{ user: User | null; forbidden: Response | null }> {
   const supabase = await createClient();
   const {
@@ -17,6 +29,10 @@ export async function requireAdmin(): Promise<{ user: User | null; forbidden: Re
 
   const { data: adminRow } = await supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
   if (!adminRow) return { user: null, forbidden: bad('Admin access required', 403) };
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return { user: null, forbidden: countryBlock };
+
   return { user, forbidden: null };
 }
 

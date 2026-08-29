@@ -7,6 +7,7 @@ import { createResourceVersion, deriveSeoFallback } from '@/lib/resources/editor
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 const VALID_TARGETS: ResourceStatus[] = ['idea', 'draft', 'editorial_review', 'compliance_review', 'approved', 'scheduled', 'published', 'review_due', 'archived'];
 
@@ -65,6 +66,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {

@@ -3,6 +3,7 @@ import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageDiscovery, isResourceStaff } from '@/lib/resources/permissions';
 import { listContextMappings, createContextMapping } from '@/lib/resources/context/queries';
 import { isRegisteredContextKey, FHIP_CONTEXTS } from '@/lib/resources/context/registry';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/context?contextKey=... — spec §57/§78. Omit
 // contextKey to list every mapping (small dataset, fine to return in full).
@@ -12,6 +13,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to access Resources administration.", 403);
@@ -35,6 +39,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageDiscovery(current)) return bad("You don't have permission to manage Context Mapping.", 403);

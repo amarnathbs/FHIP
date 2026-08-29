@@ -3,6 +3,7 @@ import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageFaqs } from '@/lib/resources/permissions';
 import { getFaqLinkedPosts } from '@/lib/resources/faq/queries';
 import { linkFaqToPost, unlinkFaqFromPost } from '@/lib/resources/faq/mutations';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/faqs/[id]/links — linked-post list (spec §36-37).
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +12,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {
@@ -29,6 +33,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageFaqs(current)) return bad("You don't have permission to link FAQs.", 403);
@@ -54,6 +61,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageFaqs(current)) return bad("You don't have permission to unlink FAQs.", 403);

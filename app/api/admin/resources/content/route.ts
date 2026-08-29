@@ -5,6 +5,7 @@ import { parseContentListFilters, QUEUE_STATUS_GROUPS, type QueuePreset } from '
 import { getResourceContentList } from '@/lib/resources/admin/queries';
 import { createResourceDraft } from '@/lib/resources/editor/mutations';
 import { isEditableContentType } from '@/lib/resources/editor/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 const QUEUE_PRESETS = new Set(['drafts', 'review', 'scheduled', 'published', 'review-due', 'archived']);
 
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!current.isSuperAdmin && current.roles.length === 0) return bad("You don't have permission to access Resources administration.", 403);
@@ -58,6 +62,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Spec §11: create-draft is Super Admin / Resource Administrator / Author

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageResources } from '@/lib/resources/permissions';
 import { listResourceUsers } from '@/lib/resources/admin/userRoles';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/users — Users & Roles admin list (spec §6).
 // Resource Admin / Super Admin only: this reads across every FHIP user via
@@ -15,6 +16,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageResources(current)) return bad("You don't have permission to manage Resources users and roles.", 403);

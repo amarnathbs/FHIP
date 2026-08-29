@@ -8,6 +8,7 @@ import { validateForPublish } from '@/lib/resources/editor/validation';
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // Glossary workflow — spec §93: "Verify a Glossary definition can move
 // Draft -> Editorial Review -> Approved -> Published through the same post
@@ -53,6 +54,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {

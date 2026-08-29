@@ -4,6 +4,7 @@ import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permis
 import { searchSources } from '@/lib/resources/sources/queries';
 import { createSource } from '@/lib/resources/sources/mutations';
 import type { CreateSourceInput } from '@/lib/resources/sources/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/sources?q=... — minimal source picker (spec §50).
 export async function GET(request: Request) {
@@ -12,6 +13,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') ?? '').slice(0, 200);
@@ -33,6 +37,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to add a source.", 403);

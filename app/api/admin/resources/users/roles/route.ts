@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageResources } from '@/lib/resources/permissions';
 import { assignResourceRole, removeResourceRole, RESOURCE_ROLES } from '@/lib/resources/admin/userRoles';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 import type { ResourceRole } from '@/lib/resources/types';
 
 // Assign/remove Resources roles (spec §9/§10/§27). Resource Admin / Super
@@ -22,6 +23,9 @@ async function authorize(): Promise<{ ok: true; userId: string } | { ok: false; 
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, res: bad('unauthenticated', 401) };
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return { ok: false, res: countryBlock };
 
   const current = await getCurrentResourceRoles();
   if (!canManageResources(current)) return { ok: false, res: bad("You don't have permission to manage Resources users and roles.", 403) };

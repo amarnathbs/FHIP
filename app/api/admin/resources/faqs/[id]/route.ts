@@ -6,6 +6,7 @@ import { updateFaq, deleteFaqIfUnlinked } from '@/lib/resources/faq/mutations';
 import { validateFaq } from '@/lib/resources/faq/validation';
 import { getResourceCategoriesForFilter } from '@/lib/resources/admin/queries';
 import type { FaqSavePatch } from '@/lib/resources/faq/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -13,6 +14,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {
@@ -33,6 +37,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageFaqs(current)) return bad("You don't have permission to edit FAQs.", 403);
@@ -74,6 +81,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageFaqs(current)) return bad("You don't have permission to delete FAQs.", 403);

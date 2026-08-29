@@ -4,6 +4,7 @@ import { getCurrentResourceRoles, canCreateSpecialistContent } from '@/lib/resou
 import { getMoneyUpdateList, type MoneyUpdateListFilters } from '@/lib/resources/money-update/queries';
 import { createMoneyUpdateDraft } from '@/lib/resources/money-update/mutations';
 import type { MoneyUpdateContentType } from '@/lib/resources/money-update/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 const CONTENT_TYPES: MoneyUpdateContentType[] = ['money_update', 'money_update_template'];
 
@@ -15,6 +16,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!current.isSuperAdmin && current.roles.length === 0) return bad("You don't have permission to access Resources administration.", 403);
@@ -46,6 +50,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canCreateSpecialistContent(current)) return bad("You don't have permission to create a Money Update.", 403);

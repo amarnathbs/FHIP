@@ -9,6 +9,7 @@ import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/edi
 import { validateChapters } from '@/lib/resources/video/youtube';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { VideoSideSaveInput } from '@/lib/resources/video/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/videos/[id] — full editor payload, same shape
 // convention as R1.3's content/[id] GET (spec §17).
@@ -18,6 +19,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {
@@ -38,6 +42,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to edit Resources content.", 403);

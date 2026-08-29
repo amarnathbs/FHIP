@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { isSlugAvailable, isContentIdAvailable } from '@/lib/resources/editor/queries';
 import { isValidSlugFormat } from '@/lib/resources/editor/slug';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/content/[id]/slug-check?slug=...&contentId=...
 //
@@ -16,6 +17,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   const { searchParams } = new URL(request.url);
@@ -40,6 +44,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {

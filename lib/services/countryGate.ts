@@ -154,3 +154,41 @@ export const COUNTRY_GATE_HTTP_STATUS: Record<Exclude<CountryGateState, 'CONFIRM
   COUNTRY_INVALID: 422,
   DB_ERROR: 500,
 };
+
+// Round 2 closure (MCC-2/MCC-7): the ONE shared helper every server-side
+// entry point uses to turn a classification into "should this request be
+// blocked, and with what response" — added so `lib/api.ts`'s
+// `requireCountryConfirmedUser()`, `lib/services/adminAuth.ts`'s
+// `requireAdmin()`, the 39 Resources admin routes (which have no shared
+// auth wrapper at all — each does its own inline `getUser()` check, per
+// docs/admin/FHIP_Admin_Module_Discovery_Report_2026-08-29.md's own finding)
+// and `app/api/household/route.ts` all resolve "blocked or not" identically,
+// rather than five slightly-different reimplementations of the same
+// onboarding-exemption + state-to-response mapping. Deliberately does NOT
+// import `bad()` from `lib/api.ts` (which itself imports from this module)
+// to avoid a circular import — the one-line JSON error shape is duplicated
+// here instead of shared, which is a smaller risk than a circular module
+// dependency between the two files every other guard relies on.
+function countryGateErrorResponse(state: Exclude<CountryGateState, 'CONFIRMED'>): Response {
+  return Response.json({ error: COUNTRY_GATE_ERROR_CODE[state] }, { status: COUNTRY_GATE_HTTP_STATUS[state] });
+}
+
+// Returns null when the request should proceed (confirmed, OR the caller
+// has not finished onboarding yet — see the bootstrap-exemption note on
+// `requireCountryConfirmedUser` in lib/api.ts, which applies identically
+// here: an admin/Resources-staff account is still a `user_profiles` row
+// created by the same signup trigger as any other account, so the same
+// "don't block onboarding's own bootstrap calls" reasoning applies even
+// though no admin route is actually called during onboarding today — this
+// keeps the ONE rule in ONE place rather than a second, admin-specific
+// carve-out). Returns the stable-coded Response to return immediately
+// otherwise.
+export async function countryConfirmationBlockResponse(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<Response | null> {
+  const gate = await assertCountryConfirmedForUser(supabase, userId);
+  if (!gate.onboardingCompleted && gate.state !== 'DB_ERROR' && gate.state !== 'PROFILE_INCOMPLETE') return null;
+  if (gate.state === 'CONFIRMED') return null;
+  return countryGateErrorResponse(gate.state);
+}

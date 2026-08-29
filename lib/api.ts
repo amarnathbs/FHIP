@@ -1,9 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import {
-  assertCountryConfirmedForUser,
-  COUNTRY_GATE_ERROR_CODE,
-  COUNTRY_GATE_HTTP_STATUS,
-} from '@/lib/services/countryGate';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 export const ok = (data: unknown) => Response.json({ data });
 export const bad = (msg: string, code = 400) => Response.json({ error: msg }, { status: code });
@@ -48,14 +44,13 @@ export async function requireCountryConfirmedUser() {
   } = await supabase.auth.getUser();
   if (!user) return { user: null, unauthenticated: bad('unauthenticated', 401) };
 
-  const gate = await assertCountryConfirmedForUser(supabase, user.id);
-
-  if (!gate.onboardingCompleted && gate.state !== 'DB_ERROR' && gate.state !== 'PROFILE_INCOMPLETE') {
-    return { user, unauthenticated: null };
-  }
-  if (gate.state === 'CONFIRMED') return { user, unauthenticated: null };
-
-  const code = COUNTRY_GATE_ERROR_CODE[gate.state];
-  const status = COUNTRY_GATE_HTTP_STATUS[gate.state];
-  return { user: null, unauthenticated: bad(code, status) };
+  // Round 2 closure (independent re-verification pass): delegates to the
+  // ONE shared classify-and-respond helper (lib/services/countryGate.ts's
+  // countryConfirmationBlockResponse) also used by requireAdmin() and the
+  // 39 Resources admin routes (MCC-2) and app/api/household/route.ts
+  // (MCC-7), so all four call sites share identical onboarding-exemption
+  // and state-to-response logic instead of four near-duplicates.
+  const block = await countryConfirmationBlockResponse(supabase, user.id);
+  if (block) return { user: null, unauthenticated: block };
+  return { user, unauthenticated: null };
 }
