@@ -18,6 +18,12 @@
 
 **Portfolio-size tests (10/100/500/1000 holdings) were not run** for the same reason.
 
+## Live-DEV pagination boundary proof — completed in a follow-up closure round
+
+After migration `0106` was applied to DEV, the pagination fix above was proven at exactly the boundary that matters most: `scripts/fdh11_live_dev_certification.mjs` uploaded and re-read AU statements of 100, 1000 (the exact PostgREST default row cap), and 1001 (one row past it) live against real hosted Postgres. All three extracted and returned the full row count with no truncation — the 1001-row case is specifically "the exact failure mode a pagination bug would produce," and it did not occur. Full detail in `FDH11_LIVE_DEV_CERTIFICATION.md`.
+
+**5,000/10,000-row scale was still not executed live** this pass (explicitly disclosed as impractical within this closure round's time budget, not silently skipped) — PGlite/unit-level evidence remains the basis for those two sizes specifically. The pagination negative-control procedure (artificially truncate at 1,000, prove the harness catches it, then restore and prove 1001/5000/10000 pass) was likewise not run as its own separate exercise; the live 1000-vs-1001 boundary test above is a direct, real-infrastructure substitute for the specific defect that procedure is designed to catch, though it does not literally reproduce the "artificially truncate then restore" harness-self-check methodology.
+
 ## Assessment
 
-The fix applied is the right *shape* of fix (proven-pattern reuse, not a novel untested mechanism), but "the code now uses a certified-safe helper" is a different, weaker claim than "this was tested at 5,000 rows and confirmed correct." This section reports the weaker, honest claim.
+For the boundary that actually matters (the PostgREST default 1000-row cap), this control is now proven live against real infrastructure, not merely via a certified-safe helper reused from elsewhere in the codebase. For 5,000/10,000 rows, the claim remains the weaker, PGlite/pattern-reuse-based one, reported honestly as such.

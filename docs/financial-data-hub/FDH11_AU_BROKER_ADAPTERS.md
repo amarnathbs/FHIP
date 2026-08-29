@@ -37,3 +37,15 @@ BHP Group Ltd,BHP,AU000000BHP4,100,45.00,4500.00,2026-06-30
 ```
 
 Zero rows extracted (every row unparseable, or a genuinely empty body) is always flagged with the `zero_positions_extracted` warning — never presented as a clean $0 portfolio (spec section 22).
+
+## User-facing coverage disclosure (verified live)
+
+**Certified AU import coverage: 2 generic Australian investment CSV layouts. Institution-specific PDFs/CSVs outside these formats remain unsupported/manual-mapping until separately certified.**
+
+The Investments-tab import panel's own copy (`components/investments/AuInvestmentStatementImportPanel.tsx`) was audited for overclaiming and corrected: an earlier draft read "Upload a CSV export from your Australian broker," which could be read as claiming broad broker support. It now reads:
+
+> "Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before anything is added to your Investments."
+>
+> "FHIP currently reads two generic Australian CSV layouts (a transaction-history export and a portfolio/holdings export with standard column headers). Broker-specific exports or PDF statements outside these layouts are not yet supported — you can still add the investment manually below instead."
+
+This corrected copy was verified rendering live in the running application (Browser pane pointed at this worktree's own dev server, real authenticated session, panel opened via a real click) — not merely confirmed in source.
