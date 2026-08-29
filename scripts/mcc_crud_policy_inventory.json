@@ -1,0 +1,1554 @@
+[
+  {
+    "table": "action_recommendation_conditions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "action_recommendation_master",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "admin_users",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "assets",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "audit_events",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_cohorts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_datasets",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_metric_definitions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_target_ranges",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_update_runs",
+    "rls": true,
+    "SELECT": false,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "benchmark_values",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "consents",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "contact_submissions",
+    "rls": true,
+    "SELECT": false,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "countries",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "currencies",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "expense_items",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_approved_financial_summaries",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_categories",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_classification_history",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_classification_rules",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_csv_mapping_templates",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_data_provenance",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_data_quality_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_document_audit_events",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_duplicate_candidates",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_economic_transaction_types",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_evidence_links",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_financial_accounts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_financial_institutions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_global_learning_candidates",
+    "rls": true,
+    "SELECT": false,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_ingestion_jobs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_institution_aliases",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_institution_capabilities",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_liability_statement_activities",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_liability_statements",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_mcc_category_map",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_mcc_master",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_merchant_aliases",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_merchants",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_parser_registry",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_parser_versions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_payment_rail_master",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_payroll_components",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_payroll_events",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_reconciliation_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_recurring_transactions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_review_items",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_source_registry",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_source_types",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_statement_uploads",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_subcategories",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fdh_transaction_allocations",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_transaction_corrections",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_transaction_links",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_transactions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_upload_sessions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fdh_user_classification_rules",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "fhip_import_applications",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fhip_import_proposal_fields",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "fhip_import_proposals",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "financial_dna_actions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_dna_archetypes",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "financial_dna_config",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "financial_dna_drivers",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_dna_profile_scores",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_dna_profiles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_health_component_scores",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_health_recommendations",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_health_scores",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_records_audit",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "financial_snapshots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_twin_insights",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_twin_metric_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "financial_twin_runs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_assumptions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_explanations",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_global_assumptions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "forecast_profiles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_report_render_tokens",
+    "rls": true,
+    "SELECT": false,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "forecast_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_runs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "forecast_scenarios",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "future_financial_commitments",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_contributions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_forecasts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_funding_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_milestones",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_planning_config",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "goal_snapshots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "goal_types",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "health_check_ins",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "health_score_config",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "household_members",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "households",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_accounts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_analytics_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_analytics_results_r1_legacy",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_audit_events",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_benchmark_series",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_benchmarks",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_capital_gains_computations",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_document_parse_runs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_exit_load_schedules",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_fhip_publications",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_fund_holdings",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_fund_holdings_lines",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_fund_holdings_snapshots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_goal_allocations",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_holding_snapshots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_insights",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_instrument_benchmarks",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_instrument_identifiers",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_instruments",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_portfolio_truth_status",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_prices_nav",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_r5_analytics_results",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_reconciliation_cases",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "ii_reconciliation_config",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_review_items",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "ii_review_rule_registry",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_risk_free_rates",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_scheme_alias_map",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_scheme_tax_classification",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_security_aliases",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_security_classifications",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_sip_series",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_source_documents",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_source_precedence_policy",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_tax_lot_consumptions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_tax_lots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_tax_profiles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_tax_rule_versions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "ii_transaction_source_links",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "ii_transactions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "income_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "insurance_policies",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "investments",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "liabilities",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "master_financial_items",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "platform_cohort_aggregates",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "professional_consent_audit",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "professional_notes",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "professional_permission_scopes",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "professional_profiles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": true,
+    "DELETE": false
+  },
+  {
+    "table": "professional_relationships",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "professional_report_access_log",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "property_liability_links",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "recommendation_calculation_methods",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "recommendation_template_placeholders",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_access_events",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_content_library",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_exports",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_generation_runs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_sections",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "report_snapshots",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "reports",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "resilience_actions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resilience_component_scores",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resilience_config",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "resilience_risks",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resilience_scores",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_audit_log",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "resource_authors",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_categories",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_context_links",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_ctas",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_faqs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_media",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_post_categories",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_post_faqs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_post_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_post_tags",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_post_versions",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "resource_posts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_related_content",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_settings",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_sources",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_tags",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_user_roles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "resource_videos",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "resource_workflow_history",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "retirement_accounts",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "retirement_members",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "smsf_fund_members",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "smsf_funds",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "smsf_holdings",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "user_entitlements",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": false,
+    "UPDATE": false,
+    "DELETE": false
+  },
+  {
+    "table": "user_financial_section_status",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "user_goals",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "user_profiles",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "user_recommendation_matches",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  },
+  {
+    "table": "user_recommendation_runs",
+    "rls": true,
+    "SELECT": true,
+    "INSERT": true,
+    "UPDATE": true,
+    "DELETE": true
+  }
+]

@@ -233,7 +233,7 @@ console.log('\n=== Existing-data preservation across confirmation (spec 1.3/6.2)
   check('every one of the 8 tables still shows exactly 1 row for U1 after the country change (nothing deleted)', allEightStillCount.every((c) => c === 1), `(${JSON.stringify(allEightStillCount)})`);
 }
 
-console.log('\n=== (round 2) Onboarding-exemption bugfix ===');
+console.log('\n=== (round 3) Gap 1 CLOSED — the onboarding exemption is narrowed to households INSERT/UPDATE only ===');
 const U4 = '44444444-4444-4444-4444-444444444444';
 await db.exec(`insert into auth.users(id,email) values ('${U4}','u4@t.test');`);
 {
@@ -241,16 +241,47 @@ await db.exec(`insert into auth.users(id,email) values ('${U4}','u4@t.test');`);
   check('U4 starts with onboarding_completed = false (real signup default)', rows[0].onboarding_completed === false);
 }
 await asTenant(U4, async () => {
-  await expectOk(
-    "onboarding wizard's own optional first-goal INSERT succeeds for a not-yet-onboarded, country-unconfirmed user (the exact bug 0105 fixes)",
-    () => db.query(`insert into user_goals (user_id, goal_name, goal_type, target_amount, currency_code) values ('${U4}','Emergency fund','starter_emergency_fund',1000,'AUD')`)
+  // THE EXACT ROUND-2 DEFECT, reproduced and now proven fixed: a
+  // not-yet-onboarded user's direct INSERT into a financial table (assets —
+  // nothing to do with the household step) must be REJECTED. Round 2's
+  // trigger wrongly allowed this for ANY of the 80 tables whenever
+  // onboarding_completed was false.
+  await expectReject(
+    'Gap 1 FIX PROOF: a not-yet-onboarded user cannot INSERT into assets (round-2 defect: this used to wrongly succeed for every one of the 80 tables)',
+    () => db.query(`insert into assets (user_id, asset_name, asset_class, current_value, currency_code) values ('${U4}','Fraudulent asset','cash',999999,'AUD')`)
+  );
+  // The ONE legitimate exemption: households INSERT, before onboarding
+  // completes — this is what the onboarding wizard's PUT /api/household
+  // call actually needs, and the only thing narrowed exemption still allows.
+  await expectOk('households INSERT still succeeds for the same not-yet-onboarded user (the one narrow, table-scoped exemption)', () =>
+    db.query(`insert into households (user_id, household_type, dependants_count) values ('${U4}','single',0)`)
+  );
+  await expectOk('households UPDATE also still succeeds pre-onboarding (the wizard\'s PUT is an upsert)', () =>
+    db.query(`update households set dependants_count = 1 where user_id = '${U4}'`)
+  );
+  // DELETE on households is explicitly NOT part of the narrow exemption —
+  // only INSERT and UPDATE are (the wizard never deletes a household during
+  // onboarding, so there is no legitimate case to exempt).
+  await expectReject('households DELETE is NOT exempted even pre-onboarding — the exemption is scoped to INSERT/UPDATE only, never DELETE', () =>
+    db.query(`delete from households where user_id = '${U4}'`)
+  );
+  // And household_members — a DIFFERENT table, never written during
+  // onboarding — gets NO exemption of any kind, proving the fix is scoped
+  // to the households TABLE specifically, not a blanket "household-ish"
+  // carve-out.
+  await expectReject('household_members gets NO onboarding exemption at all (different table, never legitimately written during onboarding)', () =>
+    db.query(`insert into household_members (user_id, household_id, full_name, relationship) values ('${U4}', (select id from households where user_id='${U4}'), 'Spouse Name', 'spouse')`)
   );
 });
 await db.exec(`update user_profiles set onboarding_completed = true where user_id='${U4}'`);
 await asTenant(U4, async () => {
   await expectReject(
-    'the SAME insert is correctly rejected once onboarding_completed flips true, with country still unconfirmed',
-    () => db.query(`insert into user_goals (user_id, goal_name, goal_type, target_amount, currency_code) values ('${U4}','Second goal','starter_emergency_fund',500,'AUD')`)
+    'households INSERT is correctly rejected once onboarding_completed flips true, with country still unconfirmed (exemption turns off)',
+    () => db.query(`insert into households (user_id, household_type, dependants_count) values ('${U4}','single',0) on conflict do nothing`)
+  );
+  await expectReject(
+    'the optional first-goal write itself (moved out of onboarding entirely, round-3 fix) is rejected here too — it is never inserted during onboarding any more',
+    () => db.query(`insert into user_goals (user_id, goal_name, goal_type, target_amount, currency_code) values ('${U4}','Emergency fund','starter_emergency_fund',1000,'AUD')`)
   );
 });
 
@@ -349,7 +380,106 @@ await asTenant(U2, async () => {
   );
 });
 
-console.log('\n=== (round 2) Full-table inventory closure — zero unexplained gaps ===');
+console.log('\n=== (round 3) Gap 2 CLOSED — real UPDATE/DELETE rejection tests, not inference from INSERT ===');
+{
+  // Seed a real pre-existing row for U2 via service-role (simulating data
+  // that existed before this feature, or was legitimately created while
+  // U2 was briefly confirmed) — then prove an unconfirmed U2 cannot UPDATE
+  // or DELETE it directly, and that it survives both blocked attempts
+  // completely unchanged.
+  let assetId;
+  await asService(async () => {
+    const r = await db.query(
+      `insert into assets (user_id, asset_name, asset_class, current_value, currency_code) values ('${U2}','Pre-existing savings','cash',5000,'AUD') returning id`
+    );
+    assetId = r.rows[0].id;
+  });
+  await asTenant(U2, async () => {
+    await expectReject('Gap 2: unconfirmed user direct UPDATE of their OWN existing assets row is rejected', () =>
+      db.query(`update assets set current_value = 1 where id = '${assetId}'`)
+    );
+    await expectReject('Gap 2: unconfirmed user direct DELETE of their OWN existing assets row is rejected', () =>
+      db.query(`delete from assets where id = '${assetId}'`)
+    );
+  });
+  const stillThere = await asService(() => db.query(`select current_value, asset_name from assets where id = '${assetId}'`));
+  check(
+    'the row survives both blocked UPDATE and DELETE attempts completely unchanged (existing-data preservation, not just inferred)',
+    stillThere.rows.length === 1 && Number(stillThere.rows[0].current_value) === 5000 && stillThere.rows[0].asset_name === 'Pre-existing savings'
+  );
+
+  console.log('\n=== (round 3) SELECT justification — live-tested, not asserted ===');
+  await asTenant(U2, async () => {
+    const own = await expectOk('an unconfirmed user CAN still SELECT their own pre-existing row directly (deliberate: spec 5.6 permits continued read-only access to already-existing preserved records)', () =>
+      db.query(`select id from assets where id = '${assetId}'`)
+    );
+    check('...and the row is actually returned, not silently filtered to empty', own.rows.length === 1);
+  });
+  await asTenant(U1, async () => {
+    const crossTenant = await expectOk('cross-tenant SELECT query itself does not error (RLS filters silently, as always)', () =>
+      db.query(`select id from assets where id = '${assetId}'`)
+    );
+    check('a DIFFERENT (confirmed) tenant reading U2\'s row id gets ZERO rows — pre-existing owner-only RLS is completely unaffected by this feature', crossTenant.rows.length === 0);
+  });
+
+  // Once confirmed, U2's own UPDATE/DELETE work normally again — the gate
+  // never permanently damages a user's ability to manage their own data,
+  // it only requires confirmation first.
+  await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${U2}'`);
+  await asTenant(U2, async () => {
+    await expectOk('once U2 confirms, the SAME UPDATE now succeeds', () => db.query(`update assets set current_value = 5500 where id = '${assetId}'`));
+    await expectOk('and the SAME DELETE now succeeds too', () => db.query(`delete from assets where id = '${assetId}'`));
+  });
+}
+
+console.log('\n=== (round 3) New tables discovered this round: FDH-10 merge (INSERT+UPDATE) ===');
+await asTenant(U4, async () => {
+  await expectReject('unconfirmed user cannot INSERT into fdh_liability_statements (new from the FDH-10 merge)', () =>
+    db.query(`insert into fdh_liability_statements (user_id, statement_type, facility_type, currency_code) values ('${U4}','credit_card','credit_card','AUD')`)
+  );
+});
+await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${U4}'`);
+let liabilityStatementId;
+await asTenant(U4, async () => {
+  liabilityStatementId = await expectOk('confirmed user CAN insert into fdh_liability_statements', async () => {
+    const r = await db.query(
+      `insert into fdh_liability_statements (user_id, statement_type, facility_type, currency_code) values ('${U4}','credit_card','credit_card','AUD') returning id`
+    );
+    return r.rows[0].id;
+  });
+});
+// Reset U4 to unconfirmed for the UPDATE-rejection check below.
+await db.exec(`update user_profiles set country_confirmed_at=null, country_source=null where user_id='${U4}'`);
+await asTenant(U4, async () => {
+  await expectReject('the same now-unconfirmed-again user cannot UPDATE their own fdh_liability_statements row', () =>
+    db.query(`update fdh_liability_statements set institution_name = 'Forged Bank' where id = '${liabilityStatementId}'`)
+  );
+});
+
+console.log('\n=== (round 3) New tables discovered this round: UPDATE-only policies (no INSERT for authenticated) ===');
+{
+  let ircId;
+  await asService(async () => {
+    const r = await db.query(
+      `insert into ii_reconciliation_cases (user_id, subject_type, subject_id, status, discrepancy_type) values ('${U1}','account','${crypto.randomUUID()}','open','other') returning id`
+    );
+    ircId = r.rows[0].id;
+  });
+  // U1 was left CONFIRMED by the earlier section — un-confirm specifically
+  // for this check, then restore, so both directions are proven for real.
+  await db.exec(`update user_profiles set country_confirmed_at=null, country_source=null where user_id='${U1}'`);
+  await asTenant(U1, async () => {
+    await expectReject('unconfirmed owner cannot UPDATE their own ii_reconciliation_cases row (UPDATE-only authenticated policy, no INSERT — created by service-role, resolved by the owner)', () =>
+      db.query(`update ii_reconciliation_cases set status = 'resolved' where id = '${ircId}'`)
+    );
+  });
+  await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${U1}'`);
+  await asTenant(U1, async () => {
+    await expectOk('once confirmed, the owner CAN update it', () => db.query(`update ii_reconciliation_cases set status = 'resolved' where id = '${ircId}'`));
+  });
+}
+
+console.log('\n=== (round 2/3) Full-table inventory closure — zero unexplained gaps ===');
 {
   const { rows: triggerCount } = await db.query(`
     select count(*)::int c from pg_trigger t
@@ -357,7 +487,7 @@ console.log('\n=== (round 2) Full-table inventory closure — zero unexplained g
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and not t.tgisinternal and t.tgname = 'trg_enforce_country_confirmed'
   `);
-  check('exactly 80 tables now carry the trg_enforce_country_confirmed backstop (8 original + 69 generic + 1 bespoke owner-column + 2 bespoke join)', triggerCount[0].c === 80, `(actual: ${triggerCount[0].c})`);
+  check('exactly 85 tables now carry the trg_enforce_country_confirmed backstop (82 generic + 1 bespoke owner-column + 2 bespoke join)', triggerCount[0].c === 85, `(actual: ${triggerCount[0].c})`);
 }
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed (${pass + fail} checks) ===`);
