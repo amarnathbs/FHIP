@@ -176,6 +176,37 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // `lib/financial-data-hub`; every reference is a `fetch()` call to a
       // public `/api/financial-data-hub/...` route string.
       path.join(REPO_ROOT, 'components', 'liabilities', 'LiabilityImportPanel.tsx'),
+      // FDH-11 (2026-08-29): components/investments/AuInvestmentStatementImportPanel.tsx
+      // trips the identical naive-substring limitation, for the identical
+      // reason as PayslipImportPanel.tsx/LiabilityImportPanel.tsx above —
+      // verified by hand, same standard: it is the Investments-tab
+      // statement-import UI (spec section 76: FDH-11 is not a new
+      // top-level destination, it lives behind Investments). It never
+      // imports anything from `lib/financial-data-hub`; every reference is
+      // a `fetch()` call to a public `/api/financial-data-hub/...` route
+      // string.
+      path.join(REPO_ROOT, 'components', 'investments', 'AuInvestmentStatementImportPanel.tsx'),
+      // FDH-11 (2026-08-29): unlike the FDH-9/FDH-10 exceptions above, these
+      // four ARE real, intentional imports of FDH module code — not a
+      // naive-substring false positive. `lib/investment-import-bridge/` is
+      // the deliberate one-way FDH-evidence -> canonical-Investment-
+      // Intelligence adapter FDH1_INVESTMENT_BOUNDARY.md section 6 sketched
+      // and left for FDH-11 to build (see
+      // docs/financial-data-hub/FDH11_INVESTMENT_INTELLIGENCE_BRIDGE.md).
+      // It lives OUTSIDE `lib/financial-data-hub/` for the exact reason
+      // `lib/import-bridge/` does (this same test's own module-header
+      // rationale): it must be able to import Investment Intelligence code,
+      // which nothing inside the Hub itself may ever do (see the
+      // 'FDH-1 investment boundary' describe block below and
+      // `tests/unit/fdh11Isolation.test.ts`). Importing FDH's own PURE
+      // matching/evidence types from here is the intended, narrow shape of
+      // that bridge — approved as exactly these four files, not a
+      // directory, so a future file that starts importing FDH code from
+      // anywhere else would still be caught.
+      path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'types.ts'),
+      path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'auAccountResolution.ts'),
+      path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'auSecurityResolution.ts'),
+      path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'applyAuStatementActivity.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
@@ -301,6 +332,15 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // re-scoped by `.eq('user_id', userId)` regardless of RLS bypass,
       // matching the same discipline.
       path.join(FDH_LIB, 'services', 'payslipProcessingService.ts'),
+      // FDH-11 (migration 0106) adds an EIGHTH: investmentStatementProcessingService.ts —
+      // the exact same carve-out established for every prior *ProcessingService.ts
+      // file, applied to `fdh_investment_statements`/`_positions`/`_activities`
+      // (no ii_ table, no new trigger target outside FDH-11's own three
+      // evidence tables). Every read uses the ordinary RLS-scoped ownership
+      // pattern (re-checked via `.eq('user_id', userId)` regardless of
+      // bypass); the module never imports Investment Intelligence code
+      // (separately enforced by `tests/unit/fdh11Isolation.test.ts`).
+      path.join(FDH_LIB, 'services', 'investmentStatementProcessingService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

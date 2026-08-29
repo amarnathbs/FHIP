@@ -17,7 +17,10 @@ export type IiInstrumentClass =
 
 export type IiInstrumentStatus = 'provisional' | 'verified' | 'deprecated' | 'merged';
 
-export type IiIdentifierScheme = 'isin' | 'amfi_scheme_code' | 'nse_symbol' | 'bse_code' | 'sedol' | 'internal_provisional';
+// FDH-11 addition: 'asx_ticker' (spec sections 39-40), country-scoped
+// exactly like nse_symbol/bse_code — see migration 0106 Part G for the
+// matching DB-level CHECK constraint and partial unique index widening.
+export type IiIdentifierScheme = 'isin' | 'amfi_scheme_code' | 'nse_symbol' | 'bse_code' | 'sedol' | 'internal_provisional' | 'asx_ticker';
 
 export type IiAccountType = 'demat' | 'mf_folio' | 'broker' | 'retirement' | 'bank_linked' | 'other';
 export type IiAccountStatus = 'active' | 'closed' | 'archived';

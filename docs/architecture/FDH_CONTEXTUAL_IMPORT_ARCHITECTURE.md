@@ -4,6 +4,22 @@
 **Scope of implementation in FDH-9:** Income → Payslip engine, database
 bridge, **and UI entry point** — all three now implemented.
 
+**UPDATE (2026-08-29, FDH-11):** the Investments row (§2 below) moves from
+"DESIGN RECORDED — FUTURE IMPLEMENTATION" to implemented, for its Australia
+half. FDH-11 built the AU statement engine, a new dedicated bridge
+(`lib/investment-import-bridge/` — NOT the generic `lib/import-bridge/`
+used by Income/Liabilities, because canonical Investment Intelligence is
+ledger-shaped rather than single-row-shaped; see
+`FDH11_INVESTMENT_INTELLIGENCE_BRIDGE.md` for the full ADR), and the
+Investments-tab UI entry point. The India half of the row was never FDH-11's
+to build — it reuses the existing, already-implemented `/investment-
+intelligence` module unchanged, now also reachable from the Investments tab
+via a second "India Investments" entry point. Same honest caveat pattern as
+every prior row in this table: PGlite-certified, **not yet applied to a live
+Supabase project** (`FDH11_LIVE_DEV_CERTIFICATION.md`), and only one
+generic (not per-broker) AU CSV layout is certified
+(`FDH11_AU_BROKER_ADAPTERS.md`).
+
 **UPDATE (2026-08-26, live-DEV-cert + Income-tab pass):** the gap the
 2026-08-26 hardening pass correctly and honestly disclosed below (no route,
 no UI, engine unreachable from the running app) is now closed. `app/(app)/
@@ -59,7 +75,7 @@ financial domain.
 |---|---|---|---|
 | **Income** | "Import from Payslip" | FDH-3 lifecycle → FDH-9 payslip extraction → payroll evidence → import proposal | **ENGINE + DATABASE BRIDGE + UI ENTRY POINT ALL IMPLEMENTED.** `app/(app)/income/page.tsx` + `components/income/PayslipImportPanel.tsx` + 6 routes under `app/api/financial-data-hub/{payslip,income-proposals}/`. PGlite-certified (76/76) and route/auth-tested; **not yet exercised against a live Supabase project** (`FDH9_LIVE_DEV_CERTIFICATION.md`). |
 | **Expenses** | "Import Bank Statement" | FDH-3 → R7/FDH-4 (CSV) / FDH-5 (PDF) → R8 → FDH-6 → FDH-7 → FDH-8 | **DESIGN RECORDED — FUTURE IMPLEMENTATION.** Engine already exists and is certified; only the contextual entry point is future work. FDH-9 does **not** rebuild, relocate or rewrite it (spec section 3). |
-| **Investments** | "Import Investment Data" / "India Investments — Import Indian Investment Statement" | Investment Intelligence (R1-R11), which already owns the canonical investment ledger and already publishes to `investments` via its own certified bridge (migration `0042`) | **DESIGN RECORDED — FUTURE IMPLEMENTATION** (spec section 4). |
+| **Investments** | "Import Australian Investment Statement" (FDH-11) / "India Investments" (existing Investment Intelligence, reused) | FDH-11: FDH-3 lifecycle → AU CSV detection/extraction → account/security/bank matching → `lib/investment-import-bridge/` → canonical `ii_accounts`/`ii_instruments`/`ii_transactions`/`ii_holding_snapshots` (unchanged tables, R1-R12) → existing R3 publish bridge into `investments`. India: unchanged, existing `/investment-intelligence` module, reused as-is. | **ENGINE + DATABASE EVIDENCE MODEL + BRIDGE + UI ENTRY POINT ALL IMPLEMENTED (FDH-11).** `app/(app)/investments/page.tsx` + `components/investments/AuInvestmentStatementImportPanel.tsx` + 8 routes under `app/api/financial-data-hub/investment-statement/`. Migration `0106` PGlite-certified (20/20 real-Postgres checks, incl. cross-tenant + same-tenant-authority + a harness self-check); **not applied to live DEV from this sandbox** — no DDL execution mechanism was available (`FDH11_LIVE_DEV_CERTIFICATION.md`), the same structural limitation independently documented for an earlier phase's own live-DEV script. Only ONE certified generic AU CSV layout pair exists (no named-broker adapters — `FDH11_AU_BROKER_ADAPTERS.md`). India's own module is unchanged and reused, not rebuilt (`FDH11_INDIA_INTEGRATION.md`). |
 | **Liabilities** | "Import Credit Card / Loan Statement" | FDH-3 → generic CSV extraction → economic classification/decomposition/matching (FDH-10) → FDH-9 bridge extension | **ENGINE + DATABASE BRIDGE IMPLEMENTED AND CERTIFIED; UI ENTRY POINT NOT YET BUILT.** `lib/financial-data-hub/liability/*`, `lib/import-bridge/adapters/liabilityAdapter.ts`, migration `0096`'s `fdh10_apply_liability_proposal()` RPC — 52 unit tests + 18 real-Postgres (PGlite) security checks pass; FDH-9's own 330-test suite re-confirmed unchanged. No `app/(app)/liabilities` UI or `app/api` route surface exists yet (see `FDH10_LIABILITIES_TAB_UX.md`), and no per-institution PDF/CSV adapters were built (only one generic column-mapped CSV extractor) — do not treat this row as user-facing-complete. Not yet exercised against a live Supabase project (`FDH10_LIVE_DEV_CERTIFICATION.md`).
 | **Retirement** | "Import Super / PF / NPS Statement" | future | DESIGN RECORDED — FUTURE IMPLEMENTATION |
 

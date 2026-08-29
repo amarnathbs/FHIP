@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED } from '@/lib/financial-data-hub/constants/enums';
 
 // FDH-10 (migration 0096) has since widened this SAME constraint further —
 // 0091 is no longer "the constraint's latest word" (see
@@ -24,7 +24,9 @@ import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH1
 // exactly: this test still proves 0091 matches everything known UP TO AND
 // INCLUDING FDH-9, filtering out only what a LATER migration added.
 const VOCABULARY_AS_OF_FDH9 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED as readonly string[]).includes(t),
+  (t) =>
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED as readonly string[]).includes(t) &&
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t),
 );
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');

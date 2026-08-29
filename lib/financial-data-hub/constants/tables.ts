@@ -116,15 +116,33 @@ export const R7_USER_OWNED_TABLES_ADDED = [
  */
 export const FDH7_USER_OWNED_TABLES_ADDED = ['fdh_approved_financial_summaries'] as const;
 
-/** The complete current user-owned table set (FDH-1 + FDH-3 + R7 + FDH-7).
- * Used by the repository layer and by any FDH-3/R7/FDH-7-scoped test; NOT
- * used by the frozen FDH-1/FDH-2 schema-contract tests above. */
+/**
+ * New user-scoped tables FDH-11 creates (migration 0106) — Australia
+ * investment STATEMENT EVIDENCE only (spec sections 3, 23-25). None of these
+ * restates a canonical Investment Intelligence entity (see
+ * `II_ENTITIES_FDH_MUST_NOT_RESTATE` below and
+ * `tests/unit/fdh11Isolation.test.ts`). Ordinary owner-scoped `for all`
+ * tables at the RLS-policy level; system-derived columns within them are
+ * additionally protected by an authoritative-write-guard trigger, following
+ * FDH-10's exact precedent — see FDH11_AUTHORITY_AND_MUTATION_MODEL.md.
+ */
+export const FDH11_USER_OWNED_TABLES_ADDED = [
+  'fdh_investment_statements',
+  'fdh_investment_statement_positions',
+  'fdh_investment_statement_activities',
+] as const;
+
+/** The complete current user-owned table set (FDH-1 + FDH-3 + R7 + FDH-7 +
+ * FDH-11). Used by the repository layer and by any FDH-3/R7/FDH-7/FDH-11-
+ * scoped test; NOT used by the frozen FDH-1/FDH-2 schema-contract tests
+ * above. */
 export const FDH_ALL_USER_OWNED_TABLES = [
   ...FDH_USER_OWNED_TABLES,
   ...FDH3_USER_OWNED_TABLES_ADDED,
   ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
   ...R7_USER_OWNED_TABLES_ADDED,
   ...FDH7_USER_OWNED_TABLES_ADDED,
+  ...FDH11_USER_OWNED_TABLES_ADDED,
 ] as const;
 export type FdhAllUserOwnedTable = (typeof FDH_ALL_USER_OWNED_TABLES)[number];
 
@@ -142,6 +160,7 @@ export const FDH_TABLES = [
   ...FDH3_SERVICE_ROLE_INSERT_ONLY_TABLES,
   ...R7_USER_OWNED_TABLES_ADDED,
   ...FDH7_USER_OWNED_TABLES_ADDED,
+  ...FDH11_USER_OWNED_TABLES_ADDED,
 ] as const;
 export type FdhTable = (typeof FDH_TABLES)[number];
 

@@ -985,6 +985,20 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED = [
   'liability_proposal_dismissed',
 ] as const;
 
+/** FDH-11 additions (migration 0106 Part A), same TS-side-enum-must-match-
+ * the-DB-check-constraint discipline as every prior phase. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED = [
+  'investment_statement_extraction_completed',
+  'investment_statement_extraction_failed',
+  'investment_statement_account_matched',
+  'investment_statement_security_matched',
+  'investment_statement_reconciled',
+  'investment_statement_bank_match_completed',
+  'investment_statement_approved',
+  'investment_statement_applied',
+  'investment_statement_apply_rejected_stale',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
  * FDH-7 + FDH-9 + FDH-10). Used everywhere OUTSIDE the frozen
  * fdh3SchemaContract.test.ts assertion — i.e. by `FdhDocumentAuditEventType`
@@ -998,6 +1012,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 
