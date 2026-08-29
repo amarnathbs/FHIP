@@ -274,3 +274,71 @@ unchanged here. **No re-application to DEV is needed or intended for these
 five files** — they are already live under their effects, just now
 correctly numbered in the repository so a fresh clean-rebuild replay is
 deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).
+
+## Admin A0.2 Wave 1 (`0107_admin_recommendations_conditions_import_integrity.sql`)
+
+Allocated 2026-08-29 on `fix/admin-a02-wave1-recommendation-import-integrity`
+(off `origin/main` `e05855f`). Checked against every unmerged branch's active
+migration directory at allocation time: `0103` (`fix/g0-wave2-closure-
+hotfix`), `0104`-`0105` (`feature/mandatory-country-confirmation-beta-
+cleanup`), `0106` (`feature/fdh11-au-investment-statement-intelligence`) were
+already claimed; `0107` was free. Re-checked clean before every subsequent
+commit on this branch.
+
+Purpose: `admin_import_recommendation_conditions(jsonb)` — atomic,
+whole-payload replace of `action_recommendation_conditions` for the
+recommendation_codes named in one Admin CSV upload (D-01 fix: the previous
+delete-then-insert-as-two-requests pattern could leave a recommendation with
+zero conditions, silently, if the insert failed after the delete committed).
+SECURITY DEFINER, pinned `search_path`, `EXECUTE` revoked from
+`public`/`anon`/`authenticated`, granted only to `service_role`.
+
+**Status: applied to DEV by the Product Owner directly via the SQL Editor,
+independently confirmed live by two separate sessions** — the orchestrating
+session via PostgREST introspection (function exists), and this session via
+`scripts/admin_a02_wave1_dev_precheck.mjs` (pre-application: function absent,
+as expected) followed by `scripts/admin_a02_wave1_live_dev_verification.mjs`
+post-application (12/12 PASS against real DEV: valid import, rejected
+invalid import with zero mutation, controlled-failure rollback, anon-key
+direct-call denial, exact before/after row-count reconciliation). SHA-256:
+`f204135605b537ba4350530bf34df482adbe76d0770ee47fc49324fc7a17d8e8`.
+
+## Admin A0.2 Wave 1B (`0109_admin_recommendation_upsert_atomicity.sql`)
+
+Allocated 2026-08-30 on the same branch. Re-checked the collision set fresh
+at allocation time: `0108` had newly landed on `feature/mandatory-country-
+confirmation-beta-cleanup`
+(`0108_mandatory_country_confirmation_crud_and_onboarding_fix.sql`) since
+Wave 1's own allocation the day before; `0109` was free.
+
+Purpose: `admin_upsert_recommendation_atomic(uuid, jsonb, jsonb, boolean)` —
+atomic create/update of one recommendation plus (optionally) a full replace
+of its conditions, closing the same D-01-class defect in the single-record
+POST/PATCH paths (`app/api/admin/recommendations/route.ts`,
+`app/api/admin/recommendations/[id]/route.ts`). Also adds
+`action_recommendation_master.matches_unconditionally` (default `false`) and
+two DEFERRED CONSTRAINT TRIGGERS enforcing the named invariant "a
+recommendation with zero conditions matches every user unconditionally" —
+see the migration's own header for the full write-up. Same SECURITY DEFINER/
+grant posture as `0107`.
+
+**Status: applied to DEV by the Product Owner directly via the SQL Editor,
+independently confirmed live by two separate sessions** — same pattern as
+`0107` above; this session's own pre-check (`scripts/
+admin_a02_wave1b_dev_precheck.mjs`) confirmed the function and column absent
+beforehand, then confirmed both present and the live-DEV verification script
+(`scripts/admin_a02_wave1b_live_dev_verification.mjs`, 16/16 PASS) proved
+atomic create, atomic update, rollback-on-failure, the invariant in both
+directions (rejected without `matches_unconditionally=true`, accepted with
+it), anon-key denial, and exact before/after row-count reconciliation.
+SHA-256: `f16cea9372c3ca6a03b92a2199395864aae6737fbe414142bf8796c61185aa52`.
+
+**No `supabase_migrations.schema_migrations` ledger entry was created or
+updated for either migration, and none should be** — per this project's
+binding process (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`, confirmed still
+accurate by a live, direct PostgREST check against DEV finding no
+`supabase_migrations` table at all): every migration in this project is
+applied by hand-pasting SQL into the Supabase Dashboard SQL editor, no
+Supabase CLI project link exists, and Dashboard execution never populates
+such a ledger. This registry entry — not a database ledger row — is this
+project's actual record that `0107`/`0109` were allocated and applied.

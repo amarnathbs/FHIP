@@ -520,10 +520,18 @@ export function AdminRecommendationsClient() {
             <input type="checkbox" checked={form.include_in_monthly_report} onChange={(e) => setForm((f) => ({ ...f, include_in_monthly_report: e.target.checked }))} />
             Show in Monthly Report
           </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2" title="Must be checked for this recommendation to be saved as active with zero conditions. Otherwise it is refused — a recommendation with zero conditions matches every user unconditionally.">
-            <input type="checkbox" checked={form.matches_unconditionally} onChange={(e) => setForm((f) => ({ ...f, matches_unconditionally: e.target.checked }))} />
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={form.matches_unconditionally}
+              onChange={(e) => setForm((f) => ({ ...f, matches_unconditionally: e.target.checked }))}
+              aria-describedby="matches-unconditionally-hint"
+            />
             Matches unconditionally (always fires — required to save active with zero conditions)
           </label>
+          <p id="matches-unconditionally-hint" className="sr-only">
+            Must be checked for this recommendation to be saved as active with zero conditions. Otherwise it is refused — a recommendation with zero conditions matches every user unconditionally.
+          </p>
         </div>
         <textarea
           className="mt-3 w-full rounded border px-2 py-1.5 text-sm"
