@@ -270,18 +270,27 @@ describe('Wave 1 §10.2 — coupling-regression detector (Second Addendum §1.4b
   it('each capability field comes from its OWN named predicate, not one shared boolean', async () => {
     vi.resetModules();
 
+    type Snapshot = { userId: string | null; isSuperAdmin: boolean; roles: string[] };
+    const predicate = (value: boolean) =>
+      vi.fn((current: Snapshot) => {
+        void current; // recorded in mock.calls below; the return value is fixed
+        return value;
+      });
+
     const spies = {
-      canViewResourceDashboard: vi.fn(() => true),
-      canViewResourceContent: vi.fn(() => false),
-      canViewResourceWorkflow: vi.fn(() => true),
-      canViewResourceDiscovery: vi.fn(() => false),
-      canViewResourceAnalytics: vi.fn(() => true),
+      canViewResourceDashboard: predicate(true),
+      canViewResourceContent: predicate(false),
+      canViewResourceWorkflow: predicate(true),
+      canViewResourceDiscovery: predicate(false),
+      canViewResourceAnalytics: predicate(true),
       // A trap: if the route still fans out one shared staff check, this is
       // what it would call — and its distinctive value would surface.
-      isResourceStaff: vi.fn(() => false),
-      isResourceAnalyst: vi.fn(() => false),
-      canManageResources: vi.fn(() => false),
-      getCurrentResourceRoles: vi.fn(async () => ({ userId: 'u1', isSuperAdmin: false, roles: ['analyst', 'editor'] })),
+      isResourceStaff: predicate(false),
+      isResourceAnalyst: predicate(false),
+      canManageResources: predicate(false),
+      getCurrentResourceRoles: vi.fn(
+        async (): Promise<Snapshot> => ({ userId: 'u1', isSuperAdmin: false, roles: ['analyst', 'editor'] })
+      ),
     };
 
     vi.doMock('@/lib/resources/permissions', () => spies);
