@@ -187,10 +187,14 @@ describe('A. Certification-database failure fails closed', () => {
       expect(ctx.meta.certification_status).not.toBe('INVALID');
 
       const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
       const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
       const provider = new MockAIProvider();
       const spy = vi.spyOn(provider, 'generateStructured');
-      await new AIModelGateway(provider).generateExplanation(gatewayRequest(ctx));
+      await new AIModelGateway(provider, allowAllGate()).generateExplanation(gatewayRequest(ctx));
       expect(spy, 'default-allow lets a database outage reach the provider — exactly the failure mode this round closes').toHaveBeenCalled();
 
       // ...and it also writes canonical financial data while doing it.
@@ -208,10 +212,14 @@ describe('A. Certification-database failure fails closed', () => {
     expect(canonicalWrites(h)).toEqual([]);
 
     const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
     const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
     const provider = new MockAIProvider();
     const spy = vi.spyOn(provider, 'generateStructured');
-    const result = await new AIModelGateway(provider).generateExplanation(gatewayRequest(ctx));
+    const result = await new AIModelGateway(provider, allowAllGate()).generateExplanation(gatewayRequest(ctx));
     expect(result.ok).toBe(false);
     expect(spy).not.toHaveBeenCalled();
   });
@@ -230,6 +238,7 @@ function gatewayRequest(context: Awaited<ReturnType<typeof buildWith>>) {
     context,
     userId: TENANT_A,
     householdId: null,
+    requestClass: 'standard' as const,
   };
 }
 
@@ -239,10 +248,14 @@ describe('B. Provider containment after a certification failure', () => {
     const ctx = await buildWith(h, TENANT_A);
 
     const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
     const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
     const provider = new MockAIProvider();
     const generateSpy = vi.spyOn(provider, 'generateStructured');
-    const gateway = new AIModelGateway(provider);
+    const gateway = new AIModelGateway(provider, allowAllGate());
 
     const result = await gateway.generateExplanation(gatewayRequest(ctx));
 
@@ -259,12 +272,16 @@ describe('B. Provider containment after a certification failure', () => {
     // ...and a null model (the other failure shape) is rejected before any
     // provider call, with the provider proven untouched.
     const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
     const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
     const provider = new MockAIProvider();
     const spy = vi.spyOn(provider, 'generateStructured');
     const healthy = handleFor(TENANT_A, 1000, 'healthy');
     const ctx = await buildWith(healthy, TENANT_A);
-    const res = await new AIModelGateway(provider).generateExplanation({ ...gatewayRequest(ctx), model: null });
+    const res = await new AIModelGateway(provider, allowAllGate()).generateExplanation({ ...gatewayRequest(ctx), model: null });
     expect(res.ok).toBe(false);
     expect(spy).not.toHaveBeenCalled();
   });
@@ -276,12 +293,16 @@ describe('B. Provider containment after a certification failure', () => {
     expect(prompt).toBeNull();
 
     const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
     const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
     const provider = new MockAIProvider();
     const spy = vi.spyOn(provider, 'generateStructured');
     const healthy = handleFor(TENANT_A, 1000, 'healthy');
     const ctx = await buildWith(healthy, TENANT_A);
-    const res = await new AIModelGateway(provider).generateExplanation({ ...gatewayRequest(ctx), prompt: null });
+    const res = await new AIModelGateway(provider, allowAllGate()).generateExplanation({ ...gatewayRequest(ctx), prompt: null });
     expect(res.ok).toBe(false);
     expect(res.ok === false && res.executionStatus).toBe('rejected_certification');
     expect(spy).not.toHaveBeenCalled();

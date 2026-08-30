@@ -5,6 +5,11 @@ import { AIModelGateway } from '@/lib/ai/gateway/aiModelGateway';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
+// Module 11.1: the gateway now enforces entitlement before calling a provider,
+// and its gate defaults to the REAL DB-backed one. These Module 11.0 tests are
+// about provider/schema/certification behaviour, so they inject an explicit
+// always-allow stub — the bypass is visible at every construction site.
+import { allowAllGate } from '@/tests/unit/support/entitlementGateStubs';
 
 vi.mock('@/lib/ai/audit/aiRuns', () => ({
   recordAiRun: vi.fn(async () => 'mock-run-id'),
@@ -122,6 +127,8 @@ function baseRequest(overrides: Partial<Parameters<AIModelGateway['generateExpla
     context: minimalContext(),
     userId: 'user-1',
     householdId: 'household-1',
+    // Module 11.1: request class is required and has no default.
+    requestClass: 'standard' as const,
     ...overrides,
   };
 }
@@ -169,69 +176,69 @@ describe('AIModelGateway (spec sections 25, 47, 51)', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('accepts a valid mock response end-to-end', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'valid' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(true);
   });
 
   it('rejects malformed JSON from the provider (fail closed, spec 51-F)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'malformed_json' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'malformed_json' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_schema');
   });
 
   it('rejects a schema-invalid response', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'schema_invalid' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'schema_invalid' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_schema');
   });
 
   it('rejects a response citing an unknown source (spec 51-E)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'unknown_source_ref' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'unknown_source_ref' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_source_ref');
   });
 
   it('fails safely on provider timeout (spec 51-H)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'timeout' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'timeout' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('timeout');
   });
 
   it('fails safely on provider outage (spec 51-I equivalent: provider unreachable)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'provider_unavailable' }));
+    const gateway = new AIModelGateway(new MockAIProvider({ behavior: 'provider_unavailable' }), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest());
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('provider_error');
   });
 
   it('rejects when no model is configured for the task (spec 51-J: model deactivated)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider());
+    const gateway = new AIModelGateway(new MockAIProvider(), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest({ model: null }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_certification');
   });
 
   it('rejects when no ACTIVE prompt is configured', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider());
+    const gateway = new AIModelGateway(new MockAIProvider(), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest({ prompt: null }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_certification');
   });
 
   it('fails closed when the financial context is UNAVAILABLE (spec 51-G: certification changes during request)', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider());
+    const gateway = new AIModelGateway(new MockAIProvider(), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest({ context: minimalContext('UNAVAILABLE') }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_certification');
   });
 
   it('fails closed when the financial context is INVALID', async () => {
-    const gateway = new AIModelGateway(new MockAIProvider());
+    const gateway = new AIModelGateway(new MockAIProvider(), allowAllGate());
     const result = await gateway.generateExplanation(baseRequest({ context: minimalContext('INVALID') }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.executionStatus).toBe('rejected_certification');
@@ -240,7 +247,7 @@ describe('AIModelGateway (spec sections 25, 47, 51)', () => {
   it('provider abstraction: identical request shape works through MockAIProvider regardless of behavior wiring (proves the interface, not a concrete implementation)', async () => {
     const providers = [new MockAIProvider({ behavior: 'valid' })];
     for (const provider of providers) {
-      const gateway = new AIModelGateway(provider);
+      const gateway = new AIModelGateway(provider, allowAllGate());
       const result = await gateway.generateExplanation(baseRequest());
       expect(result.ok).toBe(true);
     }

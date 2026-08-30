@@ -6,10 +6,18 @@
 
 import { createHash } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 import type { SafetyClassification } from '@/lib/ai/structuredOutput';
 import type { AITaskType } from '@/lib/ai/providers/types';
 
-export type ExecutionStatus = 'success' | 'rejected_schema' | 'rejected_certification' | 'rejected_source_ref' | 'provider_error' | 'timeout' | 'blocked_safety';
+// Module 11.1 added 'rejected_entitlement' (and widened the matching CHECK
+// constraint on ai_runs in migration 0115). ADR-M11-001 decision #8 requires
+// every gateway invocation to write one ai_runs row, so a request refused by
+// the entitlement/quota/kill-switch gate needs a truthful status of its own —
+// reusing 'blocked_safety' or 'rejected_certification' would record a false
+// reason in the audit log. The specific reason (quota_exhausted, not_premium,
+// kill_switch_active, ...) travels in the existing error_code column.
+export type ExecutionStatus = 'success' | 'rejected_schema' | 'rejected_certification' | 'rejected_source_ref' | 'provider_error' | 'timeout' | 'blocked_safety' | 'rejected_entitlement';
 
 export interface RecordAiRunInput {
   userId: string;
@@ -93,10 +101,6 @@ export async function recordAiRun(input: RecordAiRunInput): Promise<string> {
   return data.id as string;
 }
 
-function currentBillingPeriod(date = new Date()): string {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
 interface UsageLedgerUpdate {
   userId: string;
   householdId: string | null;
@@ -113,52 +117,44 @@ interface UsageLedgerUpdate {
 
 /**
  * Increments the current billing period's ledger row for this user/task/
- * model, creating it if absent. No quota enforcement happens here — this is
- * pure accumulation, ready for 11.1 to read from (spec section 33/56: no
- * enforcement in 11.0).
+ * model, creating it if absent.
+ *
+ * MODULE 11.1 DEFECT FIX (disclosed change to Module 11.0 code). This was a
+ * read-modify-write: it SELECTed the row, then INSERTed or UPDATEd using
+ * values computed from that already-stale read. Two concurrent AI runs in the
+ * same billing period could therefore either both miss and race the table's
+ * unique constraint, or lose one run's token and cost increments entirely.
+ *
+ * In Module 11.0 that was an accounting inaccuracy with no consequence,
+ * because nothing read the ledger. Module 11.1 makes the same table the
+ * source of truth for the per-user and platform-wide COST CEILINGS, so a lost
+ * cost increment becomes a ceiling that under-counts real spend — a
+ * correctness defect in enforcement, not just in reporting. It is fixed here
+ * because making the ledger authoritative is precisely what 11.1 does.
+ *
+ * The RPC performs a single atomic
+ * `insert ... on conflict ... do update set col = table.col + excluded.col`,
+ * and deliberately touches only the accumulation columns — the quota counters
+ * are owned by ai_admit_request() and are never written from this path.
  */
 async function upsertUsageLedger(update: UsageLedgerUpdate): Promise<void> {
   const admin = createAdminClient();
-  const billingPeriod = currentBillingPeriod();
-  const { data: existing } = await admin
-    .from('ai_usage_ledger')
-    .select('*')
-    .eq('user_id', update.userId)
-    .eq('billing_period', billingPeriod)
-    .eq('task_type', update.taskType)
-    .eq('provider', update.provider)
-    .eq('model', update.model)
-    .maybeSingle();
-
-  if (!existing) {
-    await admin.from('ai_usage_ledger').insert({
-      user_id: update.userId,
-      household_id: update.householdId,
-      billing_period: billingPeriod,
-      task_type: update.taskType,
-      provider: update.provider,
-      model: update.model,
-      live_call_count: update.isLiveCall ? 1 : 0,
-      batch_call_count: 0,
-      cached_answer_count: 0,
-      input_tokens: update.inputTokens,
-      cached_tokens: update.cachedTokens,
-      output_tokens: update.outputTokens,
-      estimated_cost_usd: update.estimatedCostUsd,
-      actual_cost_usd: update.actualCostUsd,
-    });
-    return;
-  }
-
-  await admin
-    .from('ai_usage_ledger')
-    .update({
-      live_call_count: existing.live_call_count + (update.isLiveCall ? 1 : 0),
-      input_tokens: existing.input_tokens + update.inputTokens,
-      cached_tokens: existing.cached_tokens + update.cachedTokens,
-      output_tokens: existing.output_tokens + update.outputTokens,
-      estimated_cost_usd: existing.estimated_cost_usd + update.estimatedCostUsd,
-      actual_cost_usd: update.actualCostUsd !== null ? (existing.actual_cost_usd ?? 0) + update.actualCostUsd : existing.actual_cost_usd,
-    })
-    .eq('id', existing.id);
+  const { error } = await admin.rpc('ai_usage_ledger_accumulate', {
+    p_user_id: update.userId,
+    p_household_id: update.householdId,
+    p_billing_period: currentBillingPeriod(),
+    p_task_type: update.taskType,
+    p_provider: update.provider,
+    p_model: update.model,
+    p_live_call_count: update.isLiveCall ? 1 : 0,
+    p_input_tokens: update.inputTokens,
+    p_cached_tokens: update.cachedTokens,
+    p_output_tokens: update.outputTokens,
+    p_estimated_cost_usd: update.estimatedCostUsd,
+    p_actual_cost_usd: update.actualCostUsd,
+  });
+  // Accumulation failure must not mask the ai_runs row that was already
+  // written, but it must be visible — a silently-missing ledger increment is
+  // a silently-under-counted cost ceiling.
+  if (error) console.error('ai_usage_ledger_accumulate failed:', error.message);
 }

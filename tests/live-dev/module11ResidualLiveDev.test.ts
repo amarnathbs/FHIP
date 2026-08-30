@@ -129,10 +129,14 @@ async function buildContextFor(t: Tenant) {
  *  provider was reached. */
 async function decideEligibility(context: Awaited<ReturnType<typeof buildContextFor>>, t: Tenant) {
   const { AIModelGateway } = await import('@/lib/ai/gateway/aiModelGateway');
+    // Module 11.1: gateway now enforces entitlement before any provider call and
+    // defaults to the real DB-backed gate; these tests are about certification
+    // and source integrity, so the bypass is explicit here.
+    const { allowAllGate } = await import('@/tests/unit/support/entitlementGateStubs');
   const { MockAIProvider } = await import('@/lib/ai/providers/mockProvider');
   const provider = new MockAIProvider();
   const spy = vi.spyOn(provider, 'generateStructured');
-  const result = await new AIModelGateway(provider).generateExplanation({
+  const result = await new AIModelGateway(provider, allowAllGate()).generateExplanation({
     taskType: 'score_explanation',
     systemPrompt: 'system',
     userPrompt: 'explain my position',
@@ -141,6 +145,7 @@ async function decideEligibility(context: Awaited<ReturnType<typeof buildContext
     context,
     userId: t.userId,
     householdId: null,
+    requestClass: 'standard' as const,
   });
   return { result, providerInvoked: spy.mock.calls.length > 0 };
 }
