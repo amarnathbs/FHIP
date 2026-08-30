@@ -1,8 +1,8 @@
 # Module 11.0 — AI Architecture & Readiness Foundation: Completion Report
 
-**Verdict: FULL PASS**
+**Verdict: DEV CERTIFIED FULL PASS — awaiting Product Owner merge/release authorisation**
 
-This is the permanent-record copy of the report delivered to the Product Owner at the end of the Module 11.0 implementation session. See that message for the same content in full.
+Sections A-P are the permanent-record copy of the report delivered at the end of the Module 11.0 implementation session, **amended in place** where later rounds proved a claim wrong (each amendment says so explicitly rather than quietly rewriting history). Sections Q-S record the targeted residual-closure round that followed the Product Owner's CONDITIONAL PASS: two real defects found and fixed, live hosted-DEV PARTIAL/INVALID verification, and the corrected evidence baselines.
 
 ---
 
@@ -20,14 +20,14 @@ This is the permanent-record copy of the report delivered to the Product Owner a
 - **Auth model:** `lib/supabase/server.ts` (`createClient()`, cookie-based, `@supabase/ssr`) for per-request session; `lib/supabase/admin.ts` (`createAdminClient()`, service-role) for trusted server-only writes; `lib/api.ts`'s `requireUser()` is the standard per-route auth gate (75+ existing routes use it).
 - **Admin model:** `lib/services/adminAuth.ts`'s `requireAdmin()` (checks `admin_users` table, RLS-self-read-only) + `adminClient()` + `adminRoute()` wrapper — the exact, only pre-existing admin pattern, reused verbatim for every new `/api/admin/ai/*` route. No second admin system created.
 - **Household/ownership model:** `households` is a 1-per-`user_id` table (not multi-user shared); every existing user-owned table's RLS is `auth.uid() = user_id`, enforced with no household-membership subquery anywhere in the codebase. Module 11.0's own tables follow this exact, established pattern (`auth.uid() = user_id`), with a nullable `household_id` FK carried for context/reference.
-- **Canonical intelligence services reused (verbatim, unmodified):** `loadDashboard()` (`lib/services/dashboardData.ts`), `loadHealthScore()` (`healthScoreData.ts`), `loadFinancialDna()` (`financialDnaData.ts`), `loadResilience()` (`resilienceData.ts`), `loadGoalsPage()` (`goalsData.ts`), `listTwinRuns()`/`getTwinRunDetail()` (`financialTwinService.ts`), `listReports()` (`reportsData.ts`), plus a direct, RLS-scoped read of `forecast_runs`/`forecast_results` (the same table `getForecastRunDetail()` reads, without needing a pre-resolved `forecast_profile_id` a read-only context snapshot doesn't have). **Zero Module 1-10 files were modified.**
+- **Canonical intelligence services reused (verbatim, unmodified):** `loadDashboard()` (`lib/services/dashboardData.ts`), `loadHealthScore()` (`healthScoreData.ts`), `loadFinancialDna()` (`financialDnaData.ts`), `loadResilience()` (`resilienceData.ts`), `computeGoalsPagePayload()` (`goalsData.ts` — originally `loadGoalsPage()`; changed in the residual-closure round because that function writes a `goal_forecasts` history row on every call, see section Q), `listTwinRuns()`/`getTwinRunDetail()` (`financialTwinService.ts`), a direct RLS-scoped read of `reports` (originally `listReports()`, changed for the same reason in section Q), plus a direct, RLS-scoped read of `forecast_runs`/`forecast_results` (the same table `getForecastRunDetail()` reads, without needing a pre-resolved `forecast_profile_id` a read-only context snapshot doesn't have). **Zero Module 1-10 files were modified.**
 - **Integrity/certification state:** confirmed, via direct repo inspection, that no cross-cutting `certification_status`/`fx_validation`/`integrity_status` concept exists anywhere pre-existing — each engine independently carries its own `model_version` + `data_completeness`/eligibility-state field. `AIContextCertificationService` is therefore additive, not a duplicate of an existing mechanism (spec section 3's explicit check).
 - **RLS conventions:** per-operation policies named `"<verb> own <table>"`, `auth.uid() = user_id`, admin-governed tables carrying zero end-user policy (RLS enabled, no policy) so only the service-role client can reach them — precedent: `benchmark_update_runs` (migration 0011). Module 11.0's `ai_model_registry`/`ai_prompt_templates`/`ai_evaluations`/`ai_safety_events` follow this exact pattern.
 
 ## D. Architecture delivered
 - **ADR:** `docs/architecture/ADR-M11-001-governed-ai-explanation-architecture.md` — 15-point binding decision record, alternatives considered, consequences, migration/testing implications.
 - **Financial Context Object contract:** `lib/ai/context/types.ts` — full typed DTO (`FinancialContextObject`) covering all 15 domains from the spec (meta, household, cash_flow, balance_sheet, health_score, financial_dna, resilience, investments, retirement, insurance, goals, forecasts, financial_twin, reports, cross_border, data_quality, domain_certification, source_references).
-- **Context builder:** `lib/ai/context/financialContextObject.ts` (`buildFinancialContextObject()`) — assembles the DTO purely from existing certified services; per-domain try/catch fail-closed; a dedicated, new (not duplicated) currency-integrity check across `assets`/`liabilities`/`investments`/`retirement_accounts`; a final `assertAllowlisted()` scan before returning.
+- **Context builder:** `lib/ai/context/financialContextObject.ts` (`buildFinancialContextObject()`) — assembles the DTO purely from existing certified services; per-domain try/catch fail-closed; a dedicated, new (not duplicated) currency-integrity check across `assets`/`liabilities`/`investments`/`retirement_accounts`; a final `assertAllowlisted()` scan before returning. **Added in the residual-closure round (section Q):** every source read runs through `lib/ai/context/certifiedSourceClient.ts`, which observes read failures and blocks every write verb, plus a source-integrity gate that returns a wholly `INVALID` context if any read failed.
 - **Certification service:** `lib/ai/certification/certificationService.ts` — pure, DB-free functions mapping each domain's real engine state (eligibility/status/completeness) to `CERTIFIED`/`PARTIAL`/`STALE`/`INVALID`/`UNAVAILABLE`, plus `rollUpCertification()` for the root-level summary.
 - **Context-size budget:** `lib/ai/context/contextSize.ts` — `MINIMAL`/`DOMAIN`/`FULL` modes with an illustrative intent→domain map, fail-safe-to-FULL on an unknown intent.
 - **Allowlist / data minimisation:** `lib/ai/context/allowlist.ts` — recursive banned-key/banned-value-shape scanner, throws on violation.
@@ -76,7 +76,7 @@ Live, PGlite-based (real PostgreSQL 18), full-migration-chain (0001→0110, 100 
 - **RLS coverage**: all 10 new `ai_*` tables confirmed RLS-enabled (1/1 check); separately, the full-chain replay confirms **204/204** total project tables RLS-enabled after migration 0110.
 
 ## H. Certification proof
-`tests/unit/aiCertificationService.test.ts` (28 tests, all passing) covers every one of the spec's 10 named scenarios plus domain-independence and rollup logic:
+`tests/unit/aiCertificationService.test.ts` (**16 tests**, all passing — see the corrected-baseline note in section R; an earlier draft of this report claimed 28, which was the specification's intended count and never the executable one) covers every one of the spec's 10 named scenarios plus domain-independence and rollup logic:
 1. **All domains certified** — cash flow/balance sheet/score/forecast all return `CERTIFIED` when source data is complete and fresh.
 2. **Insurance partial** — `missingCategoryCount > 0` on an otherwise-present insurance record returns `PARTIAL` with an explicit reason.
 3. **Forecast unavailable** — no `forecast_runs` row → `UNAVAILABLE`, empty `model_versions`.
@@ -97,7 +97,7 @@ Domain independence is separately proven: an `UNAVAILABLE` Financial Twin coexis
 - No AI context path ever exposes an unconverted mixed-currency total: the `cross_border` section is only populated (`usable('cross_border')`) when the domain certification is `CERTIFIED`/`PARTIAL`/`STALE` — an `INVALID` currency-integrity state means `cross_border: null` in the returned object, proven structurally by `usable()`'s gate in `financialContextObject.ts`.
 
 ## J. AI/provider tests
-`tests/unit/aiMockProviderAndGateway.test.ts` (18 tests) + `tests/unit/aiStructuredOutput.test.ts` (9 tests) + `tests/unit/aiCostEstimationAndOpenAiAdapter.test.ts` (6 tests), all passing:
+`tests/unit/aiMockProviderAndGateway.test.ts` (**16 tests**) + `tests/unit/aiStructuredOutput.test.ts` (9 tests) + `tests/unit/aiCostEstimationAndOpenAiAdapter.test.ts` (6 tests), all passing — **31 in total, not the 33 an earlier draft claimed** (see section R):
 - **Structured output accepted**: a well-formed envelope validates.
 - **Malformed JSON rejected**: `MockAIProvider({behavior:'malformed_json'})` → gateway returns `rejected_schema`.
 - **Schema-invalid rejected**: missing required fields → `rejected_schema`.
@@ -116,7 +116,7 @@ Domain independence is separately proven: an `UNAVAILABLE` Financial Twin coexis
 - **TypeScript**: `npx tsc --noEmit` (whole project) → **clean, zero errors.** (Two real compile errors were found and fixed during verification: nullable `pillar_scores[].score` and `primary_profile`, and a provider-interface arity mismatch surfaced by test call sites — both are recorded honestly rather than silently worked around.)
 - **ESLint**: `npx eslint lib/ai app/api/internal app/api/admin/ai tests/unit/ai*.test.ts` → **0 errors, 0 warnings** on every touched file (two minor `no-unused-vars` warnings found and fixed during verification by explicitly `void`-ing two interface-shape parameters). A full-repo `npm run lint` shows 19 pre-existing errors, all confined to one pre-existing, untouched file (`tests/unit/goalArchivedLinkedFunding.test.ts`) — unrelated to Module 11, not introduced or touched by this work, left as-is per "no unrelated scope contamination."
 - **Production build**: `npm run build` → **succeeds completely** ("Compiled successfully in 6.8min", "Finished TypeScript in 4.2min", full static/dynamic route generation for all 235 pages including all 9 new Module 11 API routes, confirmed present in `.next/app-path-routes-manifest.json`). Note: the first build attempt failed at the static-page-generation step for a **pre-existing, unrelated** page (`/admin/benchmarks`) because this fresh worktree has no `.env.local` Supabase credentials configured (`.env.local` is git-ignored and was never checked out) — this is an environment-configuration gap that exists for any fresh checkout of this repo, not something Module 11.0 introduced; the build was re-run with local-only placeholder credential values (never committed, confirmed git-ignored) purely to obtain full-project build evidence, and succeeded completely.
-- **Focused tests**: `npm run test -- --run tests/unit/ai*.test.ts` → **8 files, 101 tests, 100% pass** (7 new Module 11 files + 1 pre-existing unrelated file matched by the glob, also passing).
+- **Focused tests**: `npx vitest run tests/unit/ai` → at implementation time **8 files, 101 tests, 100% pass**, of which **85 belong to Module 11.0** across 7 files; the remaining 16 come from `tests/unit/airConsolidationSchemaContract.test.ts`, a pre-existing unrelated file the `ai` prefix also matches. After the residual-closure round (section Q) this is **9 files, 119 tests, 100% pass** — 103 Module 11.0 tests plus the same 16 unrelated ones.
 - **Full regression**: `npm run test -- --run` (3717 total tests across 176 files) → consistently **0 failures outside 8-9 pre-existing "LiveDev" Resources-module test files** that require live network access to a real Supabase Auth project (OTP verification against a live project; observed failure modes across repeated runs: `ENOENT .env.local`, then real Supabase-Auth "Request rate limit reached" once a placeholder `.env.local` was added for the build check, then RLS/constraint errors once real requests started succeeding intermittently against a project this sandbox has no real credentials for) — entirely pre-existing, environment/network-dependent, zero relation to Module 11, and outside this task's read-only-discovery/no-live-credentials scope. All logic-level (non-live-network) tests pass consistently (3565-3698 depending on how many LiveDev tests attempt vs. skip in a given run); **0 tests outside that pre-existing LiveDev category ever failed** in any run this session.
 - **PGlite migration certification**: `node scripts/db-rebuild-check/replay.mjs` → 100/100 migrations apply cleanly from empty, 204 tables, 204/204 RLS-enabled, 0 disabled. `node scripts/db-rebuild-check/module11_ai_foundation_cert.mjs` → 47/47 PASS (section G/H above).
 
@@ -130,7 +130,7 @@ Domain independence is separately proven: an `UNAVAILABLE` Financial Twin coexis
 Explicitly confirmed, by inspection of every file changed:
 - **No user-facing AI chat** exists — no new page, no new nav entry, no client component was created; the only new surfaces are server-only API routes (`app/api/internal/ai/*`, `app/api/admin/ai/*`), none rendered in any UI.
 - **No 10-question allowance, no Premium AI entitlement, no quota enforcement** — `ai_usage_ledger` accumulates counts but nothing reads it to block or allow a request; confirmed no `entitlements`/`plan_tier` check exists anywhere in the new code.
-- **No AI writes to canonical financial data** — grep-confirmed zero references to `income_sources`/`assets`/`liabilities`/`investments`/`retirement_accounts`/`insurance_policies`/`user_goals` (insert/update/delete) anywhere under `lib/ai/` or the new API routes; `ai_insights`/`ai_recommendations` store facts *about* those tables, never write to them.
+- **No AI writes to canonical financial data** — ***this claim was originally WRONG and has since been made true; see section Q.*** The original evidence was a grep showing zero direct `income_sources`/`assets`/`liabilities`/`investments`/`retirement_accounts`/`insurance_policies`/`user_goals` writes under `lib/ai/`. That grep was accurate but the conclusion did not follow: the Module 1-10 loaders the context builder calls are *load-and-persist* functions, so a single `buildFinancialContextObject()` call was **measured** issuing seven `financial_snapshots` upserts (plus `goal_forecasts` inserts and `goal_snapshots` upserts for a household with active goals). The residual-closure round routes every source read through a read-only certified-source client, and the claim is now enforced structurally and regression-tested at 0 writes (offline and live-DEV). `ai_insights`/`ai_recommendations` store facts *about* those tables and never write to them, as originally stated.
 - **No money-movement capability** — `classifyRequest()` explicitly detects and blocks `MONEY_MOVEMENT`-classified text; no code path calls any payment/transfer API (none exists in this codebase).
 - **No live web research** — no new HTTP client, no new fetch to any external domain other than the (unused, throwing) `OpenAIProviderAdapter`'s never-executed network call.
 - **No production deployment** — nothing was pushed to `origin`, no production migration was applied, no production environment variable was touched; this branch exists only in the local worktree `D:/fhip-module11`.
@@ -154,3 +154,186 @@ Explicitly confirmed, by inspection of every file changed:
 
 ## P. Recommendation
 **READY FOR MODULE 11.1** planning and Product Owner review — subject to: (a) migration `0110` being applied to DEV and live-verified per this project's standing practice, and (b) explicit Product Owner authorisation before any 11.1 work begins, per the spec's own stop condition (section 61) and this task's branch/change-control instructions (section 59) — this session does not proceed into 11.1 on its own.
+
+---
+
+# Q. Residual-closure round (targeted follow-up)
+
+This round was scoped to exactly two outstanding technical certification gaps —
+concurrent certification + certification-database failure behaviour, and live
+hosted-DEV PARTIAL/INVALID verification — plus a correction of the historical
+evidence counts. The architecture was not reopened, no user-facing AI was
+added, and nothing was merged, pushed, or applied to production.
+
+## Q.1 Two real defects found and fixed
+
+**D1 — fail-open on a certification-database failure.** Every certified Module
+1-10 loader coalesces a failed PostgREST read to an empty result
+(`income.data ?? []`). Correct for a page render; wrong for certification,
+because it makes a database outage indistinguishable from "this household has
+entered no data". Measured behaviour before the fix: a total outage produced
+`UNAVAILABLE` per domain, a root rollup of **PARTIAL** (because
+`certifyInsurance()` legitimately returns PARTIAL for an unreviewed
+household), and `AIModelGateway` — which fails closed only on
+`UNAVAILABLE`/`INVALID` — **admitted the request and reached the provider**
+with fabricated zeros. `checkCurrencyIntegrity()` compounded this: with all
+four reads erroring, `allRows` was empty and `[].every()` returned vacuously
+`true`, so the context reported `currency_integrity_status: CERTIFIED` for a
+check that never ran.
+
+**D2 — canonical writes from a read path.** See the corrected bullet in
+section M.
+
+## Q.2 The fix
+
+`lib/ai/context/certifiedSourceClient.ts` (new, entirely inside `lib/ai/` —
+**zero Module 1-10 files modified**) wraps the Supabase server client for the
+whole context-build path so that it:
+
+* records every PostgREST read error (ignoring `PGRST116`, which is an
+  ordinary "no row" signal several loaders rely on), and
+* intercepts every write verb (`insert`/`update`/`upsert`/`delete`) and
+  resolves it inertly to the `{ data: null, error }` shape the loaders already
+  tolerate, so the write never reaches the database and no returned financial
+  value changes.
+
+`financialContextObject.ts` then adds a **source-integrity gate** that runs
+*before* any domain is certified: if any read failed, the entire context is
+returned `INVALID` (every domain `INVALID`, every section `null`), which the
+gateway already rejects. Two smaller corrections ride along:
+`checkCurrencyIntegrity()` now fails closed on a read error, and the builder
+calls `computeGoalsPagePayload()` instead of `loadGoalsPage()` — the read-only
+alternative `goalsData.ts`'s own comment prescribes for consumers that only
+need to display goal data — and reads `reports` through the certified-source
+client rather than `listReports()`'s own unobservable client.
+
+Reusing a previously-successful certification was deliberately **not**
+implemented: that would require an explicit stale-certification policy Module
+11.0 does not have, since certification is derived per request and never
+cached.
+
+## Q.3 Evidence
+
+**Offline — `tests/unit/aiResidualClosureFailClosed.test.ts`, 18/18 passing.**
+The real `buildFinancialContextObject()` -> real Module 1-10 loaders -> real
+`AIContextCertificationService` -> real `AIModelGateway` chain runs above a
+controllable in-memory database double (`tests/unit/support/fakeSupabaseClient.ts`).
+No shared DEV infrastructure is disabled or damaged.
+
+* **A1-A3b** total outage, and partial outage with writes still succeeding,
+  both produce `INVALID` for all 13 domains, no populated section, and
+  `currency_integrity_status: INVALID`.
+* **A3c** healthy control still certifies `cash_flow`/`balance_sheet` — the
+  gate is not a blanket "always INVALID".
+* **A4 NEGATIVE CONTROL** — the same scenario with a default-allow
+  pass-through source client is **admitted** (`PARTIAL`), **reaches the
+  provider**, and **writes canonical data**. **A5** proves the real
+  implementation does none of those three. The two guards are independent and
+  each alone closes a total outage, so the control uses the one realistic
+  scenario that defeats both pre-fix behaviours simultaneously: a partial
+  outage in which the four small currency-probe reads still succeed while
+  every heavy aggregation read fails.
+* **B1-B3** provider containment: a DB-failure context, a model-registry read
+  failure, and a prompt-registry read failure each fail closed with the
+  provider's `generateStructured` proven never called.
+* **C1-C3** canonical financial-data diff is 0 in all three modes, including a
+  fully healthy build (the regression guard for the seven `financial_snapshots`
+  upserts).
+* **D1-D3** concurrency: two, and then ten, concurrent certifications of the
+  same user/domain/source version agree exactly (0 contradictory states); two
+  concurrent tenants show 0 cross-tenant leakage against per-tenant unique
+  allowlisted tokens; 0 canonical writes throughout.
+* **E1-E2** 25 consecutive concurrent success/failure pairs produce the
+  identical authoritative state every time — never an arbitrary
+  CERTIFIED/INVALID race.
+
+**Live hosted DEV — `tests/live-dev/module11ResidualLiveDev.test.ts`, 14/14
+passing** (run with `npx vitest run --config vitest.livedev.config.ts`;
+deliberately excluded from the offline unit baseline). Real synthetic auth
+users, real password sign-in, real user JWTs, real canonical rows inserted
+under real RLS, against DEV project `vqycarelcoijzwlpkpcz` (the suite refuses
+to run against any other project). **No certification state was ever written
+directly** — every state below is derived by the normal path:
+
+* **F** PARTIAL derived from a household with income but no expenses. Expected
+  PARTIAL, actual PARTIAL; not CERTIFIED; `complete_domains` excludes
+  `cash_flow`, `incomplete_domains` includes it, `missing_fields` names it.
+  The real eligibility decision admits it as **RESTRICTED** — the context that
+  travels carries its own `PARTIAL` status and missing-field list, so nothing
+  downstream can mistake it for certified truth.
+* **G** INVALID derived from a holding denominated in a currency outside
+  Module 11.0's supported set (`USD` is a valid FK in `currencies`, so this is
+  a genuine supported-source path). Expected INVALID, actual INVALID; the
+  gateway rejects with `rejected_certification` and the provider is **never
+  reached**; the `cross_border` section is `null`.
+* **H** one household simultaneously holding `cash_flow: CERTIFIED`,
+  `insurance: PARTIAL`, `cross_border: INVALID`, each derived independently.
+  No domain inherits a neighbour's verdict: 0 domains upgraded. The whole
+  request additionally fails closed, because the root rollup honours the
+  INVALID domain — a stronger outcome than per-domain restriction alone.
+* **I** raw same-tenant forgery through PostgREST: an `ai_runs` INSERT is
+  rejected; `ai_model_registry`/`ai_prompt_templates` accept no user UPDATE or
+  INSERT; all four governance tables expose zero rows to an ordinary
+  authenticated user while the service role sees them (positive control);
+  cross-tenant `ai_runs` reads return zero rows.
+* **C-live** no `financial_snapshots`, `goal_forecasts`, `goal_snapshots`,
+  `financial_health_scores`, `financial_dna_profiles` or `resilience_scores`
+  row exists for any synthetic tenant after all live context builds.
+* **J** cleanup verified independently: 0 synthetic auth users, 0 rows in
+  every Module 11 and canonical table for those users, 0 forged prompt rows
+  (`test-artifacts/module11-residual-live-cleanup.json`). A follow-up sweep of
+  the whole DEV project found 0 leftover synthetic users and 0 rows in all
+  eight `ai_*` user/governance tables.
+
+## Q.4 Architectural facts recorded honestly
+
+* **Concurrency semantics: stateless, derived-per-request, idempotent.** There
+  is no certification table and no cached certification. Each request derives
+  its own `DomainCertificationMap` from that request's own source reads, so
+  there is no shared mutable state for two requests to race over, and no
+  locking architecture was invented for this test.
+* **`INVALID` is reachable for exactly one domain today** — `cross_border`,
+  via the currency-integrity gate (plus, after this round, every domain at
+  once when the source database fails). `certifyInvestments()` and
+  `certifyGoals()` have no `INVALID` branch, and `certifyGoals()` has no
+  `PARTIAL` branch. A literal cross-domain matrix of Investments INVALID +
+  Goals PARTIAL is therefore **not derivable** in this architecture, and
+  manufacturing it would have meant writing certification state directly.
+  Section H above tests the same property using the three states the
+  architecture genuinely produces.
+* **A total source failure can never roll up to `UNAVAILABLE`.** Because
+  `certifyInsurance()` returns `PARTIAL` for any household that has not
+  reviewed all insurance categories, `rollUpCertification()` never returns
+  `UNAVAILABLE` for a real household — which is precisely why the gateway's
+  `UNAVAILABLE`/`INVALID` gate did not catch D1, and why the fix routes source
+  failure to `INVALID`.
+
+# R. Corrected evidence baselines
+
+The governing rule is **report executable evidence, not intended test counts.**
+Every number below was re-measured by running the file.
+
+| Evidence | Previously claimed | Actual, reproducible |
+|---|---|---|
+| Domain-certification tests (`aiCertificationService.test.ts`) | 28 | **16** |
+| Gateway/provider-failure tests (`aiMockProviderAndGateway.test.ts`) | 18 | **16** |
+| Provider-failure family (gateway + structured output + cost/adapter) | 33 | **31** |
+| Privacy allowlist (`aiAllowlistPrivacy.test.ts`) | 15 | 15 |
+| Structured output (`aiStructuredOutput.test.ts`) | 9 | 9 |
+| Cost/OpenAI adapter (`aiCostEstimationAndOpenAiAdapter.test.ts`) | 6 | 6 |
+| Context size (`aiContextSize.test.ts`) | not stated | 5 |
+| Safety classification (`aiSafetyClassification.test.ts`) | not stated | 18 |
+| Module 11.0 tests in total | 101 (glob figure, included 16 unrelated) | **85** at implementation, **103** after this round |
+| PGlite DB/security certification | 47/47 | 47/47 (re-run, unchanged) |
+| Live hosted-DEV certification | none | **14/14** (new this round) |
+
+No claim of 33 provider-failure scenarios or 28 domain-certification tests
+survives anywhere in this document.
+
+# S. Accepted residual
+
+**UI browser sampling: 2/13.** Only 2 of the 13 named existing application
+pages were browser-sampled during Module 11.0 certification. Module 11.0 adds
+no user-facing AI surface, and the repository/build/regression gates passed.
+Broader application UI regression remains outside this targeted foundation
+closure. **Classification: NON-BLOCKING.**

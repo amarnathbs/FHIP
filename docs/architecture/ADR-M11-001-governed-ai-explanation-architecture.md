@@ -46,3 +46,44 @@ Module 11.0 adds only new, additive tables (`ai_model_registry`, `ai_prompt_temp
 
 ## Testing implications
 Module 11.0's acceptance gate (see completion report, Section 50/51 of the spec) must prove — not merely assert — that: a non-owning user cannot fetch another household's AI context, run, cached answer, insight, recommendation, or feedback (RLS + server-side ownership check, both real, both re-run live); a certification failure in one domain does not block an unrelated CERTIFIED domain; a malformed/hallucinated provider response is rejected by schema validation before it can reach a user; and the identical request produces the identical shaped output through `MockAIProvider` today and would through a real provider adapter later, without any business-service code change.
+
+---
+
+## Amendment 1 — decision #16: the AI context path is a strictly read-only, failure-observing consumer
+
+*Added during the Module 11.0 residual-closure round. See the completion report, section Q.*
+
+**Context.** Decision #1-2 committed Module 11.0 to reading every financial
+value through an existing certified Module 1-10 service rather than
+recomputing it. Certification exercised above a deliberately-failing database
+dependency showed two consequences of that decision that the original ADR did
+not anticipate:
+
+1. Those services are *load-and-persist* functions, not pure readers. Reusing
+   them verbatim meant the AI context build wrote canonical financial rows
+   (`financial_snapshots`, and `goal_forecasts`/`goal_snapshots` for a
+   household with active goals) as a side effect — contradicting the module's
+   own "no AI writes to canonical financial data" invariant.
+2. Those services coalesce a failed read to an empty result, so a database
+   outage was indistinguishable from an empty household. The certification
+   service then honestly reported per-domain `UNAVAILABLE`, the root rollup
+   landed on `PARTIAL`, and `AIModelGateway` admitted the request — a
+   fail-open on exactly the dependency certification depends on.
+
+**Decision.** Every source read on the AI context path goes through
+`lib/ai/context/certifiedSourceClient.ts`, a wrapper that (a) records every
+PostgREST read error and (b) intercepts every write verb before it reaches the
+database. `buildFinancialContextObject()` gates on the recorded read failures
+*before* certifying any domain: any failure returns a wholly `INVALID`
+context, which the gateway already rejects. A certification that could not be
+performed is never a certification that passed, and reusing a previous
+successful certification is explicitly out of scope — Module 11.0 derives
+certification per request and deliberately has no stale-certification policy.
+
+**Consequences.** Decision #1-2's "zero Module 1-10 code changes" property is
+preserved exactly: the wrapper lives entirely inside `lib/ai/`, and the
+loaders' returned financial values are unchanged (each already guards its
+follow-up writes on the result of the first). The AI read path is now
+structurally incapable of mutating canonical financial data, rather than
+merely intended not to. Any future consumer added under `lib/ai/` inherits
+both properties automatically by using the same client.

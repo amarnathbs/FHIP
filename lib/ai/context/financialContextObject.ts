@@ -13,9 +13,9 @@ import { loadDashboard } from '@/lib/services/dashboardData';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
 import { loadResilience } from '@/lib/services/resilienceData';
-import { loadGoalsPage } from '@/lib/services/goalsData';
+import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import { listTwinRuns, getTwinRunDetail } from '@/lib/services/financialTwinService';
-import { listReports } from '@/lib/services/reportsData';
+import { createCertifiedSourceClient, type SourceIntegrity } from '@/lib/ai/context/certifiedSourceClient';
 import {
   certifyCashFlow,
   certifyBalanceSheet,
@@ -67,14 +67,88 @@ function opaqueRef(userId: string): string {
 }
 
 async function checkCurrencyIntegrity(userId: string, supabase: SupabaseServerClient): Promise<boolean> {
-  const [assets, liabilities, investments, retirement] = await Promise.all([
+  const results = await Promise.all([
     supabase.from('assets').select('currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('liabilities').select('currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('investments').select('currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('retirement_accounts').select('currency_code').eq('user_id', userId).eq('is_active', true),
   ]);
-  const allRows = [...(assets.data ?? []), ...(liabilities.data ?? []), ...(investments.data ?? []), ...(retirement.data ?? [])];
+  // FAIL CLOSED on a failed read. Previously a database error made `data`
+  // null, `allRows` empty, and `[].every()` vacuously TRUE — so an outage
+  // reported "currency integrity CERTIFIED" for a check that never actually
+  // ran. A check that could not be performed is never a check that passed.
+  if (results.some((r) => r.error)) return false;
+  const allRows = [...(results[0].data ?? []), ...(results[1].data ?? []), ...(results[2].data ?? []), ...(results[3].data ?? [])];
   return allRows.every((r) => !r.currency_code || SUPPORTED_CURRENCIES.has(r.currency_code));
+}
+
+/**
+ * The fail-closed context returned when the certification source database
+ * could not be read. Every domain is INVALID (not UNAVAILABLE — "we could
+ * not check" is a stronger negative than "there is nothing to check"), every
+ * section is null/empty, and the root `certification_status` is INVALID,
+ * which `AIModelGateway.generateExplanation()` already rejects before any
+ * provider is reached.
+ */
+function buildSourceFailureContext(userId: string, mode: ContextSizeMode, integrity: SourceIntegrity): FinancialContextObject {
+  const reason = `Certification source database read failed (${integrity.readFailures.length} failed read(s); first: ${integrity.readFailures[0]?.table} ${integrity.readFailures[0]?.code ?? ''}). Certification could not be established, so no domain is certified.`;
+  const failed = { status: 'INVALID' as CertificationState, reason, model_versions: [] as string[], data_as_of: null };
+  const domains: ContextDomain[] = [
+    'cash_flow', 'balance_sheet', 'score', 'financial_dna', 'resilience', 'investments',
+    'retirement', 'insurance', 'goals', 'forecasts', 'financial_twin', 'reports', 'cross_border',
+  ];
+  const domainCert = Object.fromEntries(domains.map((d) => [d, { ...failed }])) as DomainCertificationMap;
+
+  return {
+    meta: {
+      context_version: CONTEXT_VERSION,
+      generated_at: new Date().toISOString(),
+      user_scope_identifier: opaqueRef(userId),
+      household_scope_identifier: opaqueRef(userId),
+      reporting_currency: 'AUD',
+      country_of_residence: null,
+      data_as_of: null,
+      snapshot_id: null,
+      source_snapshot_version: null,
+      calculation_status: 'unavailable',
+      integrity_status: 'INVALID',
+      currency_integrity_status: 'INVALID',
+      data_completeness: null,
+      certification_status: 'INVALID',
+      request_scope: mode,
+    },
+    household: null,
+    cash_flow: null,
+    balance_sheet: null,
+    health_score: null,
+    financial_dna: null,
+    resilience: null,
+    investments: null,
+    retirement: null,
+    insurance: null,
+    goals: [],
+    forecasts: [],
+    financial_twin: null,
+    risks: [],
+    recommendations: [],
+    reports: [],
+    cross_border: null,
+    data_quality: {
+      complete_domains: [],
+      incomplete_domains: [],
+      missing_fields: [],
+      confirmed_zero_fields: [],
+      stale_fields: [],
+      rejected_records: [],
+      excluded_duplicates: [],
+      valuation_date_issues: [],
+      unsupported_calculations: [],
+      unavailable_modules: domains,
+      confidence_limitations: [reason],
+    },
+    domain_certification: domainCert,
+    source_references: [],
+  };
 }
 
 /**
@@ -86,7 +160,13 @@ async function checkCurrencyIntegrity(userId: string, supabase: SupabaseServerCl
  * routes).
  */
 export async function buildFinancialContextObject(userId: string, options: BuildContextOptions): Promise<FinancialContextObject> {
-  const supabase: SupabaseServerClient = await createClient();
+  // Every source read on this path goes through the certified-source client:
+  // it observes read failures (so a database outage fails the whole context
+  // CLOSED instead of masquerading as "this household entered no data"), and
+  // it blocks every write verb (so this read path is structurally incapable
+  // of mutating canonical financial data — the Module 1-10 loaders below are
+  // load-AND-persist functions, not pure readers). See certifiedSourceClient.ts.
+  const { client: supabase, integrity } = createCertifiedSourceClient(await createClient());
   const includedDomains = resolveDomainsForMode(options.mode, options.intentCode);
   const include = (d: ContextDomain) => includedDomains.includes(d);
 
@@ -132,9 +212,15 @@ export async function buildFinancialContextObject(userId: string, options: Build
   }
 
   // --- Goals --------------------------------------------------------------
-  let goalsPage: Awaited<ReturnType<typeof loadGoalsPage>> | null = null;
+  // computeGoalsPagePayload(), NOT loadGoalsPage(): goalsData.ts's own
+  // comment says loadGoalsPage "writes a new immutable goal_forecasts history
+  // row plus this month's goal_snapshots upsert" and that "anything else that
+  // just needs to display goal data should call computeGoalsPagePayload
+  // directly to avoid writing a new history row on every view". An AI context
+  // build is exactly such a read-only consumer.
+  let goalsPage: Awaited<ReturnType<typeof computeGoalsPagePayload>>['payload'] | null = null;
   try {
-    goalsPage = await loadGoalsPage(userId);
+    goalsPage = (await computeGoalsPagePayload(userId, supabase)).payload;
   } catch {
     /* fail closed */
   }
@@ -156,11 +242,32 @@ export async function buildFinancialContextObject(userId: string, options: Build
   const twinDetail = latestTwin ? await getTwinRunDetail(userId, latestTwin.id, supabase) : null;
 
   // --- Reports --------------------------------------------------------
-  let reportRows: Awaited<ReturnType<typeof listReports>> = [];
-  try {
-    reportRows = await listReports(userId);
-  } catch {
-    /* fail closed */
+  // The same query listReports() issues, but through the certified-source
+  // client rather than listReports()'s own createClient() — otherwise a
+  // failed reports read would be invisible to the integrity check below.
+  const reportsRes = await supabase
+    .from('reports')
+    .select('*')
+    .eq('user_id', userId)
+    .neq('status', 'archived')
+    .order('report_month', { ascending: false });
+  const reportRows = (reportsRes.data ?? []) as { id: string; status: string | null; report_month: string; as_of_date: string | null; version_number: number; data_completeness_pct: number | null }[];
+
+  // =========================================================================
+  // SOURCE-INTEGRITY GATE — fail closed on a certification-database failure.
+  //
+  // This runs BEFORE any domain is certified. If any source read errored, we
+  // cannot distinguish "no data" from "could not read the data", so nothing
+  // is certified at all: the whole context is INVALID and the gateway rejects
+  // it before a provider is ever reached. This is the only correct answer —
+  // reusing a previously-successful certification would require an explicit
+  // stale-certification policy that Module 11.0 deliberately does not have
+  // (certification is derived per request and never cached).
+  // =========================================================================
+  if (integrity.readFailures.length > 0) {
+    const failureContext = buildSourceFailureContext(userId, options.mode, integrity);
+    assertAllowlisted(failureContext);
+    return failureContext;
   }
 
   // =========================================================================
