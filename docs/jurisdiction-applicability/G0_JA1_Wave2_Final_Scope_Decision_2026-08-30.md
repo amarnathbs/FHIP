@@ -192,7 +192,7 @@ Mandatory Country Confirmation establishes the approved **authoritative country 
 - `user_profiles.country_confirmed_at`
 - `user_profiles.country_source`
 
-Once its migrations, live DEV certification and controlled production release are complete, an active user will no longer proceed into FHIP with unresolved country.
+Its DEV migration and live DEV certification are complete (§5.2). Once the remaining gates — merge to `main` and controlled production migration and release — are also complete, an active user will no longer proceed into FHIP with unresolved country.
 
 ### 5.2 Authoritative status statement
 
