@@ -4,7 +4,7 @@
  * Mirrors `applyLiabilityProposalAtomic.ts` exactly (see that file, and
  * `applyIncomeProposalAtomic.ts`'s header, for the full rationale — not
  * repeated here). One network call to `fdh12_apply_retirement_proposal()`
- * (migration 0111 PART I), the single atomic SECURITY DEFINER RPC that does
+ * (migration 0112 PART I), the single atomic SECURITY DEFINER RPC that does
  * everything inside one Postgres transaction. Correctness depends only on the
  * RPC, not on this function's control flow (spec section 105).
  *
@@ -118,7 +118,7 @@ export async function applyRetirementProposalAtomic(
 /**
  * FDH-12's analogue of `approveLiabilityStatementAtomic` — the one legitimate
  * way to move a retirement statement's `approval_status` to 'approved'
- * (migration 0111 PART H's `fdh12_approve_retirement_statement()`).
+ * (migration 0112 PART H's `fdh12_approve_retirement_statement()`).
  *
  * CANONICAL RETIREMENT IS UNTOUCHED BY THIS CALL (spec section 56). It moves
  * the statement's own approval state and nothing else — which is the whole

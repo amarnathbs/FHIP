@@ -149,7 +149,7 @@ describe('FDH-12 spec 51/130 — duplicate statement', () => {
 
   it('the DB has a unique index as an independent backstop', () => {
     const sql = fs.readFileSync(
-      path.join(__dirname, '..', '..', 'supabase', 'migrations', '0111_fdh12_retirement_statement_intelligence.sql'),
+      path.join(__dirname, '..', '..', 'supabase', 'migrations', '0112_fdh12_retirement_statement_intelligence.sql'),
       'utf8',
     );
     expect(sql).toMatch(/create unique index uq_fdh_retirement_activities_fingerprint/);

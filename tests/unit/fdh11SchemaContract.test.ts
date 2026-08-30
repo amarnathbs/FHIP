@@ -31,10 +31,10 @@ describe('FDH-11 migration 0106 exists', () => {
 });
 
 describe('FDH-11 fdh_document_audit_events.event_type widened constraint matches the TypeScript vocabulary as of FDH-11', () => {
-  // FDH-12 (migration 0111) is now the constraint's latest word, so 0106 is no
+  // FDH-12 (migration 0112) is now the constraint's latest word, so 0106 is no
   // longer expected to carry the FULL current vocabulary — exactly the shape
   // FDH-7/FDH-9/FDH-10's own contract tests already take, each comparing its
-  // migration to the vocabulary AS OF that phase. `0111` is asserted against
+  // migration to the vocabulary AS OF that phase. `0112` is asserted against
   // the full set by `tests/unit/fdh12SchemaContract.test.ts`.
   it("0106 matches everything known up to and including FDH-11", () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');

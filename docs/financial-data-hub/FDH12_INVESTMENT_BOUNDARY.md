@@ -37,7 +37,7 @@ Additionally:
   field.
 * No FDH-12 file references `ii_instruments`, `ii_accounts`, `ii_transactions`,
   `ii_holding_snapshots` or `ii_instrument_identifiers`.
-* Migration 0111 contains no `ii_` token at all.
+* Migration 0112 contains no `ii_` token at all.
 
 All asserted mechanically over the real source tree by
 `tests/unit/fdh12Isolation.test.ts` and

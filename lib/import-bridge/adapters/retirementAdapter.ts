@@ -46,7 +46,7 @@
  * age." A super statement does not contain the user's chosen retirement age;
  * anything that looked like one would be the fund's projection assumption, not
  * the user's decision. The refusal is enforced twice over — here, and again in
- * `fdh12_apply_retirement_proposal()`'s own `v_allowed` array (migration 0111
+ * `fdh12_apply_retirement_proposal()`'s own `v_allowed` array (migration 0112
  * PART I), so a forged proposal row naming it is rejected FORBIDDEN_FIELD by
  * the database even if this file were bypassed.
  *
@@ -309,7 +309,7 @@ export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, Existing
     const reviewReasons = [...evidence.reviewReasons];
     if (duplicate.outcome === 'ambiguous') reviewReasons.push('ambiguous_account_match_review_required');
     // Defence in depth: an SMSF statement should have been routed away long
-    // before reaching the bridge (migration 0111 PART H refuses to approve
+    // before reaching the bridge (migration 0112 PART H refuses to approve
     // one, and an unapproved statement cannot be applied). If one arrives
     // anyway, say so loudly rather than proceeding quietly.
     if (evidence.isSmsf) reviewReasons.push('smsf_statement_must_be_managed_in_the_smsf_section');

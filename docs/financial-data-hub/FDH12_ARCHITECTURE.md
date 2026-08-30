@@ -56,7 +56,7 @@ with `lib/investment-import-bridge/`; FDH-12 follows both.
 | `lib/import-bridge/applyRetirementProposalAtomic.ts` | The single RPC caller. |
 | `app/api/financial-data-hub/retirement-statement/**` | 7 routes: upload, review, account-match, evidence-matches, approve, proposal, apply. |
 | `components/retirement/RetirementStatementImportPanel.tsx` | The Retirement-tab journey. |
-| `supabase/migrations/0111_...sql` | 3 evidence tables, 6 guard triggers, 2 RPCs, bridge extension. |
+| `supabase/migrations/0112_...sql` | 3 evidence tables, 6 guard triggers, 2 RPCs, bridge extension. |
 
 ## "No Silent Apply", mechanically
 

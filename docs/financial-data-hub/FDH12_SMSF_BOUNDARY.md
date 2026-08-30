@@ -79,7 +79,7 @@ Repeating one phrase is now correctly one piece of evidence, not two.
 4. **Migration 0090's guard** raises `42501` on any `current_balance` write to
    an SMSF row outside a `fhip.smsf_balance_write='certified'` window. FDH-12
    never sets that GUC — asserted by test that the string appears nowhere in
-   migration 0111.
+   migration 0112.
 
 Additionally, `matchRetirementAccount` and the bridge adapter both exclude SMSF
 rows from the candidate pool outright, so an SMSF account can never even be

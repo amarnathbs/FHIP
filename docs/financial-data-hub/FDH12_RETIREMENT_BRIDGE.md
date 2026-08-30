@@ -83,7 +83,7 @@ CLOSED on an unrecognised `target_domain`, by design — 0091's own comment says
 a future adapter cannot ship a target without also extending this guard.
 FDH-12 is that future adapter, and had not extended it, so every retirement
 proposal carrying a target was rejected outright. Caught by
-`scripts/fdh12_certification.mjs` section 6, not by inspection. Migration 0111
+`scripts/fdh12_certification.mjs` section 6, not by inspection. Migration 0112
 now re-creates both functions whole, retaining the income and liability
 branches byte-for-byte and adding a `retirement` branch — the same shape 0096
 used when it added `liability`. The retirement branch is itself a

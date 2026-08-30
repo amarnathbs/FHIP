@@ -21,7 +21,7 @@ const metadataSchema = z.object({
   // MASKED ONLY (spec section 89). A value containing a run of 7+ digits is
   // rejected here rather than silently truncated, so a UI bug that sent a full
   // member number produces a visible error instead of quietly persisting it.
-  // Migration 0111's CHECK constraint is the second, independent refusal.
+  // Migration 0112's CHECK constraint is the second, independent refusal.
   masked_account_identifier: z.string().max(64)
     .refine((v) => !/[0-9]{7,}/.test(v), {
       message: 'Enter only the last few digits of your member number, not the whole number.',

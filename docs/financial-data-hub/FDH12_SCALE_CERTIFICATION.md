@@ -61,7 +61,7 @@ introduced by scale alone.
 ## What was NOT done — honestly disclosed
 
 * **The 1,000/1,001 boundary has not been exercised against hosted DEV**,
-  because migration 0111 is not applied there. The PGlite and fake-pager
+  because migration 0112 is not applied there. The PGlite and fake-pager
   evidence above is real, but it is not hosted-PostgREST evidence. Spec section
   139 asks for the live boundary "at minimum"; that step is pending the Product
   Owner applying the migration.

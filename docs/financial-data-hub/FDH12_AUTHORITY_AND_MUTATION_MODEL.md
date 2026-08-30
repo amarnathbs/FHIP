@@ -31,7 +31,7 @@ Spec section 95. Every field FDH-12 touches, classified.
 | `ii_*`, `investments` | **Investment-Intelligence-owned** | FDH-12 references none of them. |
 | `income_sources`, expenses, `fdh_transactions`, `insurance_policies` | **Out of scope; no write path exists** | Asserted mechanically over the real source tree. |
 | Retirement projections, readiness, net worth | **Retirement/Forecasting-owned; derived** | FDH-12 changes no formula. |
-| `fhip_import_proposals` / `_fields` / `_applications` | **Bridge-owned** | `fhip.import_bridge_internal_write` GUC + `fdh9_assert_proposal_owner()` / `fdh9_assert_application_owner()`, extended by 0111 for the retirement domain. |
+| `fhip_import_proposals` / `_fields` / `_applications` | **Bridge-owned** | `fhip.import_bridge_internal_write` GUC + `fdh9_assert_proposal_owner()` / `fdh9_assert_application_owner()`, extended by 0112 for the retirement domain. |
 
 ## Same-tenant authority — proven, not assumed
 

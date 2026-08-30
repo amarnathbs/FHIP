@@ -45,7 +45,7 @@ import { RETIREMENT_APPLICABLE_FIELDS } from '@/lib/import-bridge/adapters/retir
 
 const REPO = path.resolve(__dirname, '..', '..');
 const MIGRATION = fs.readFileSync(
-  path.join(REPO, 'supabase', 'migrations', '0111_fdh12_retirement_statement_intelligence.sql'),
+  path.join(REPO, 'supabase', 'migrations', '0112_fdh12_retirement_statement_intelligence.sql'),
   'utf8',
 );
 

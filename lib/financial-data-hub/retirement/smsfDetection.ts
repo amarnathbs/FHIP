@@ -30,7 +30,7 @@
  * Three outcomes, and the middle one is the important one:
  *
  *   'routed_to_smsf'  — confident. Terminal for FDH-12: the statement can
- *                       never be approved (migration 0111 PART H refuses) and
+ *                       never be approved (migration 0112 PART H refuses) and
  *                       so can never become a proposal.
  *   'possible_smsf'   — ambiguous. ALSO blocks approval, pending the user's
  *                       explicit confirmation. Ambiguity resolves to REVIEW,
@@ -197,7 +197,7 @@ export function detectSmsf(
  * Whether an FDH-12 statement in this classification may proceed to approval
  * and therefore to a proposal.
  *
- * The DB enforces this independently (migration 0111 PART H refuses to approve
+ * The DB enforces this independently (migration 0112 PART H refuses to approve
  * anything other than `not_smsf`). This function exists so the UI can explain
  * the block rather than merely reporting it.
  */

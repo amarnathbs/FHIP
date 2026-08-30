@@ -2,7 +2,7 @@
 
 Spec sections 119-134, 166-167, 171.
 
-## STATUS: BLOCKED — migration 0111 is not applied to DEV
+## STATUS: BLOCKED — migration 0112 is not applied to DEV
 
 This is the expected state, not a failure. This project's standing convention
 is explicit:
@@ -12,7 +12,7 @@ is explicit:
 > apply manually via the Supabase SQL Editor. Only after they confirm
 > application should you do live-DEV verification.
 
-`supabase/migrations/0111_fdh12_retirement_statement_intelligence.sql` is ready
+`supabase/migrations/0112_fdh12_retirement_statement_intelligence.sql` is ready
 and fully certified in PGlite. It has **not** been applied.
 
 ## What WAS verified live, today
@@ -20,7 +20,7 @@ and fully certified in PGlite. It has **not** been applied.
 Against the real hosted DEV Supabase, via PostgREST OpenAPI introspection and
 authenticated REST probing.
 
-### 1. Baseline — 0111 is genuinely not applied
+### 1. Baseline — 0112 is genuinely not applied
 
 | Table | Live DEV |
 | --- | --- |
@@ -38,7 +38,7 @@ no migration was applied by the implementer.
 | `retirement_accounts` | present | Columns confirmed exactly as the audit assumed, including `current_balance`, `employer_contribution`, `personal_contribution`, `contribution_frequency`, `master_item_key`, `retirement_member_id`, `owner`, `source_type`, `target_retirement_age`. |
 | `retirement_members` | present | |
 | `smsf_funds` | present | |
-| `fhip_import_proposals` | present | Confirmed to carry `source_payroll_event_id` and `source_liability_statement_id` but **not** `source_retirement_statement_id` — consistent with 0111 being unapplied. |
+| `fhip_import_proposals` | present | Confirmed to carry `source_payroll_event_id` and `source_liability_statement_id` but **not** `source_retirement_statement_id` — consistent with 0112 being unapplied. |
 | `fdh_payroll_events` | present | |
 | `fdh_transactions` | present | **`currency_original` = true, `currency_code` = false, `description_clean` = true.** |
 
@@ -49,7 +49,7 @@ layer had originally typed the columns as `currency_code` and
 against a local rebuild.
 
 `retirement_accounts` live also lacks `last_import_application_id` and
-`last_imported_at`, which 0111 adds — again consistent.
+`last_imported_at`, which 0112 adds — again consistent.
 
 ### 3. Live RLS behavioural probes on the canonical tables FDH-12 reads
 
@@ -68,7 +68,7 @@ filtering rather than a wrong URL or an empty table.
 ## What is PENDING the migration (spec 119-134)
 
 Every item below is written, tested against real Postgres in PGlite, and
-waiting only on 0111 reaching DEV. None is claimed as passed.
+waiting only on 0112 reaching DEV. None is claimed as passed.
 
 | Spec | Scenario | Status |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ write attempt was the ANON insert, which was correctly refused by the database.
 ## To unblock
 
 1. Product Owner applies
-   `supabase/migrations/0111_fdh12_retirement_statement_intelligence.sql`
+   `supabase/migrations/0112_fdh12_retirement_statement_intelligence.sql`
    via the Supabase SQL Editor (DEV only).
 2. Confirm application.
 3. Live-DEV certification then runs: schema verification (spec 167), the full

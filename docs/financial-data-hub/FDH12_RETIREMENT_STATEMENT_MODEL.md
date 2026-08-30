@@ -1,6 +1,6 @@
 # FDH-12 — Retirement Statement Evidence Model
 
-Spec section 20. Migration `0111_fdh12_retirement_statement_intelligence.sql`.
+Spec section 20. Migration `0112_fdh12_retirement_statement_intelligence.sql`.
 
 ## Three tables
 

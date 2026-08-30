@@ -14,7 +14,7 @@ import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/audi
 // bank matching, balance reconciliation, review, approve evidence, compare —
 // leaves `retirement_accounts` byte-for-byte unchanged (spec sections 56,
 // 129). This route delegates to `fdh12_apply_retirement_proposal()`, the single
-// atomic SECURITY DEFINER RPC (migration 0111 PART I) that:
+// atomic SECURITY DEFINER RPC (migration 0112 PART I) that:
 //
 //   * refuses an SMSF target                       (spec sections 10, 72)
 //   * refuses unapproved evidence                  (spec section 56)

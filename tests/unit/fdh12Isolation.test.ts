@@ -22,7 +22,7 @@ import path from 'node:path';
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const HUB_RETIREMENT = path.join(REPO_ROOT, 'lib', 'financial-data-hub', 'retirement');
 const MIGRATION_PATH = path.join(
-  REPO_ROOT, 'supabase', 'migrations', '0111_fdh12_retirement_statement_intelligence.sql',
+  REPO_ROOT, 'supabase', 'migrations', '0112_fdh12_retirement_statement_intelligence.sql',
 );
 const MIGRATION = fs.readFileSync(MIGRATION_PATH, 'utf8');
 /**

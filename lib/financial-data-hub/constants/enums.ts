@@ -999,7 +999,7 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED = [
   'investment_statement_apply_rejected_stale',
 ] as const;
 
-/** FDH-12 additions (migration 0111 Part A), same TS-side-enum-must-match-
+/** FDH-12 additions (migration 0112 Part A), same TS-side-enum-must-match-
  * the-DB-check-constraint discipline as every prior phase.
  *
  * Note `retirement_statement_routed_to_smsf`: an SMSF-looking statement is

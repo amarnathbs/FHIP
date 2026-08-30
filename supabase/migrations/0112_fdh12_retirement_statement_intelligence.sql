@@ -9,8 +9,19 @@
 -- MIGRATION NUMBER GOVERNANCE (spec section 164)
 -- -----------------------------------------------------------------------------
 -- Migration-number collisions are a recurring, serious problem in this project
--- (six prior occurrences; see docs/architecture/ADR_MIGRATION_LINEAGE_
--- RECONCILIATION.md). The number below was chosen after scanning, fresh:
+-- (seven prior occurrences; see docs/architecture/ADR_MIGRATION_LINEAGE_
+-- RECONCILIATION.md). This file was originally authored, PGlite-certified
+-- and numbered 0111. On 2026-08-30, after that certification, a real
+-- collision surfaced: `feature/mandatory-country-confirmation-beta-cleanup`
+-- (commit `8621968`, unpushed) independently committed its own
+-- `0111_mandatory_country_confirmation_delete_cascade_fix.sql` (MCC-14), and
+-- the Product Owner had already been told that MCC-14's 0111 is next in line
+-- for DEV application. FDH-12 was renumbered to 0112 instead — an EIGHTH
+-- occurrence of the collision class. The SQL body below is unchanged from
+-- the certified 0111 version; only the filename and this header's
+-- self-references moved.
+--
+-- The number was originally chosen after scanning, fresh:
 --
 --   * every commit reachable from every local branch and every origin remote
 --     ref (`git log --all --name-only -- 'supabase/migrations/*.sql'`);
@@ -29,8 +40,12 @@
 --   0110  module11_ai_foundation                             (unmerged)
 --
 -- NOTE: `scripts/check-migration-versions.mjs` reports "next version is 0107"
--- because it only sees this branch. That is NOT the safe number. 0111 is the
--- lowest number claimed by no branch, no worktree and no remote ref.
+-- because it only sees this branch. That is NOT the safe number. At the time
+-- of the original scan, 0111 appeared to be the lowest number claimed by no
+-- branch, no worktree and no remote ref — but the country-confirmation
+-- branch above committed its own unpushed 0111 shortly afterward, invisible
+-- to that scan. A fresh scan on 2026-08-30 confirmed 0112 is genuinely free
+-- across every local branch, every worktree and every origin ref.
 --
 -- Recorded in docs/architecture/MIGRATION_REGISTRY.md.
 --

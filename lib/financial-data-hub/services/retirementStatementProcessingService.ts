@@ -9,7 +9,7 @@
  * re-scoped by `.eq('user_id', userId)` regardless of RLS bypass.
  *
  * The service role is what makes the FDH-11-style authoritative-write guards
- * in migration 0111 PART F meaningful: those triggers refuse system-owned
+ * in migration 0112 PART F meaningful: those triggers refuse system-owned
  * column writes from `auth.role() = 'authenticated'`, so THIS FILE is the only
  * thing that can set `reconciliation_status`, `account_match_status`,
  * `payslip_match_status` and the rest. A user cannot forge them over
@@ -218,7 +218,7 @@ export async function uploadAndProcessRetirementStatement(
   // Checked first so an SMSF statement never becomes ordinary-super evidence
   // even transiently. A `routed_to_smsf` statement row IS created (the user
   // needs to see why their upload stopped, and the routing decision is
-  // auditable), but migration 0111 PART H refuses to approve it, so it can
+  // auditable), but migration 0112 PART H refuses to approve it, so it can
   // never become a proposal and can never reach canonical Retirement.
   const smsf = detectSmsf(metadata.fundName, metadata.statementTextSample);
 
@@ -522,7 +522,7 @@ export async function matchRetirementContributionsToPayslips(
 
   // Payslips already claimed by another activity are removed from the pool:
   // one payslip evidences at most one fund contribution (spec sections 22,
-  // 64). Migration 0111's unique index enforces the same rule at the DB level.
+  // 64). Migration 0112's unique index enforces the same rule at the DB level.
   const claimed = await fetchAllRows(() =>
     admin
       .from('fdh_retirement_statement_activities')

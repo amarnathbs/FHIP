@@ -42,7 +42,7 @@
  * they are not economic events, and giving an annual total the same identity
  * space as an individual line risks a total suppressing a real activity.
  *
- * A null fingerprint never collides — migration 0111's
+ * A null fingerprint never collides — migration 0112's
  * `uq_fdh_retirement_activities_fingerprint` is a PARTIAL unique index
  * `where activity_fingerprint is not null`.
  */

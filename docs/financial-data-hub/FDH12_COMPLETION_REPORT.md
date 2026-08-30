@@ -2,14 +2,14 @@
 
 **STATUS: CONDITIONAL PASS** — every gate that can be closed without applying
 a migration is green; live-DEV certification is BLOCKED pending the Product
-Owner applying migration `0111` to DEV.
+Owner applying migration `0112` to DEV.
 
 ## 1. Repository
 
 * Worktree `D:/fhip-fdh12`, branch
   `feature/fdh12-retirement-statement-intelligence`, cut from `origin/main`
   @ `9e3cdec` (the FDH-11 merge).
-* Migration: `0111_fdh12_retirement_statement_intelligence.sql` — **not
+* Migration: `0112_fdh12_retirement_statement_intelligence.sql` — **not
   applied** to DEV or production.
 * Not merged, not pushed beyond the feature branch, production untouched.
 
@@ -100,7 +100,7 @@ Each was found by a test or harness, not by inspection.
    `fdh9_assert_proposal_owner()` / `fdh9_assert_application_owner()` fail
    closed on an unknown `target_domain` by design. Every retirement proposal
    carrying a target was rejected outright. Caught by
-   `scripts/fdh12_certification.mjs` section 6. Migration 0111 now extends both,
+   `scripts/fdh12_certification.mjs` section 6. Migration 0112 now extends both,
    in the same shape 0096 used for `liability`.
 3. **Wrong `fdh_transactions` column names.** The bank-matching layer typed
    `currency_code` and `description_original`; the real columns are
@@ -136,7 +136,7 @@ Each was found by a test or harness, not by inspection.
 
 ## 9. Residuals — honestly disclosed
 
-* **Live-DEV certification is not done.** Migration 0111 is unapplied, so spec
+* **Live-DEV certification is not done.** Migration 0112 is unapplied, so spec
   sections 119-134, 137, 139 and 167 are PENDING, not passed. Full detail and
   status per scenario: `FDH12_LIVE_DEV_CERTIFICATION.md`.
 * **No named Australian super fund adapter is certified.** Four fund-neutral
@@ -165,5 +165,5 @@ branch, no production credential used at any point.
 ## 11. Next action
 
 STOP. Await Product Owner authorisation. The immediate ask is application of
-`supabase/migrations/0111_fdh12_retirement_statement_intelligence.sql` to
+`supabase/migrations/0112_fdh12_retirement_statement_intelligence.sql` to
 **DEV only**, after which live-DEV certification can complete.

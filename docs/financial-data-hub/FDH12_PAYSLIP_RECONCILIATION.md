@@ -20,7 +20,7 @@ Spec sections 22-27, 64-67, 120. **The highest-risk control in the module.**
 2. **The canonical contribution is a single proposed field.** An assignment,
    not an accumulation. No arithmetic exists that could produce $2,000. The
    RPC builds `col = value`, never `col = col + value` — asserted by test.
-3. **One payslip evidences at most one fund contribution.** Migration 0111's
+3. **One payslip evidences at most one fund contribution.** Migration 0112's
    `uq_fdh_retirement_activities_payroll_event` is a real unique index, proven
    live in PGlite.
 

@@ -22,7 +22,7 @@ Harness: `tests/unit/fdh12FinancialIntegrity.test.ts` — **40 tests, all PASS**
 **Controls 2-6 are proven STRUCTURALLY**, by reading the real source tree and
 confirming that no FDH-12 file — Hub, bridge, API route or component — contains
 a write to `income_sources`, any expense register, `fdh_transactions`,
-`investments` or `insurance_policies`, and that migration 0111 inserts into
+`investments` or `insurance_policies`, and that migration 0112 inserts into
 none of them. A rule enforced by the absence of code is stronger than one
 enforced by an `if`, and a test that only exercised an `if` would not notice if
 someone later added the missing write path.

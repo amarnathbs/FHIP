@@ -275,11 +275,30 @@ five files** — they are already live under their effects, just now
 correctly numbered in the repository so a fresh clean-rebuild replay is
 deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).
 
-## FDH-12 — Retirement Statement Intelligence (migration `0111`)
+## FDH-12 — Retirement Statement Intelligence (migration `0112`)
 
-**Allocated 2026-08-30.** `0111_fdh12_retirement_statement_intelligence.sql`.
+**Allocated 2026-08-30, renumbered from `0111` same day.**
+`0112_fdh12_retirement_statement_intelligence.sql`.
 
-### Why 0111 and not 0107
+### Renumbered: 0111 -> 0112
+
+This migration was originally authored, PGlite-certified (53/53) and
+committed as `0111_fdh12_retirement_statement_intelligence.sql`. Later the
+same day, a real collision was found: `feature/mandatory-country-
+confirmation-beta-cleanup` (commit `8621968`, unpushed, worktree
+`D:/fhip-country-confirm`) had independently committed its own
+`0111_mandatory_country_confirmation_delete_cascade_fix.sql` (MCC-14), and
+the Product Owner had already been told that MCC-14's `0111` is next in line
+for DEV application. Rather than contest that assignment, FDH-12 was
+renumbered to `0112` — an **eighth occurrence** of this project's recurring
+migration-number-collision class. The rename is a pure repository-
+bookkeeping fix: the SQL body is byte-identical to the certified `0111`
+version, and neither number was ever applied to DEV or production, so no
+re-application is needed. The PGlite/DB certification suite (53/53) and the
+full FDH-12 unit-test suite (382/382) were re-run against the renamed file
+and reproduced at the same counts.
+
+### Why 0111 (now 0112) and not 0107
 
 `scripts/check-migration-versions.mjs` reported "next version is 0107", because
 that tool only sees the current branch plus `origin/main` (whose chain tops out
@@ -296,10 +315,14 @@ directory of every `git worktree list` entry, found these already claimed above
 | `0108` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch (`D:/fhip-country-confirm`) |
 | `0109` | `admin_recommendation_upsert_atomicity.sql` | unmerged branch (`D:/fhip-admin-a02-wave1`) |
 | `0110` | `module11_ai_foundation.sql` | unmerged branch (`D:/fhip-module11`) |
+| `0111` | `mandatory_country_confirmation_delete_cascade_fix.sql` | unmerged branch (`D:/fhip-country-confirm`, commit `8621968`) — committed after FDH-12's original scan, invisible to it at the time; this is the reason FDH-12 moved to `0112` |
 
-`0111` is the lowest number claimed by no branch, no worktree and no remote
-ref. FDH-12 takes it and leaves `0103`-`0105` and `0107`-`0110` to their
-owners.
+At the time of FDH-12's original scan, `0111` appeared to be the lowest
+number claimed by no branch, no worktree and no remote ref. A fresh scan on
+2026-08-30 (after the collision above was found) confirmed `0112` is
+genuinely free across every local branch, every worktree and every origin
+ref. FDH-12 takes it and leaves `0103`-`0105`, `0107`-`0110` and `0111` to
+their owners.
 
 ### What it contains
 

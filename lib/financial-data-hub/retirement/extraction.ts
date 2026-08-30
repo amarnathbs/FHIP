@@ -350,7 +350,7 @@ function extractSummary(
 }
 
 // ---------------------------------------------------------------------------
-// Holdings layout — EVIDENCE ONLY (migration 0111 PART D)
+// Holdings layout — EVIDENCE ONLY (migration 0112 PART D)
 // ---------------------------------------------------------------------------
 
 function extractHoldings(

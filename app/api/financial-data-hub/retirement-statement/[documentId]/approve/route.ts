@@ -8,7 +8,7 @@ import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/audi
 // Approving statement EVIDENCE (spec section 56). CANONICAL RETIREMENT IS
 // UNCHANGED BY THIS CALL — it only unlocks Apply. The whole of spec section 56
 // is this distinction, and `fdh12_approve_retirement_statement()` (migration
-// 0111 PART H) is where it is enforced: that function writes to
+// 0112 PART H) is where it is enforced: that function writes to
 // `fdh_retirement_statements` and to nothing else.
 
 /** Refusals that are a legitimate state rather than an error, mapped to the

@@ -13,7 +13,7 @@
  */
 
 // ---------------------------------------------------------------------------
-// Statement-level vocabulary (mirrors migration 0111's CHECK constraints)
+// Statement-level vocabulary (mirrors migration 0112's CHECK constraints)
 // ---------------------------------------------------------------------------
 
 export const RETIREMENT_STATEMENT_TYPES = [
@@ -169,7 +169,7 @@ export interface RetirementActivityEvidence {
 }
 
 /** One investment option held inside the fund. Evidence only — see
- * migration 0111 PART D. */
+ * migration 0112 PART D. */
 export interface RetirementPositionEvidence {
   optionNameRaw: string;
   assetClassRaw?: string;

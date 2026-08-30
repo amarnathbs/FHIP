@@ -20,7 +20,7 @@ import {
 } from '@/lib/financial-data-hub/retirement/smsfDetection';
 
 const MIGRATION = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'supabase', 'migrations', '0111_fdh12_retirement_statement_intelligence.sql'),
+  path.join(__dirname, '..', '..', 'supabase', 'migrations', '0112_fdh12_retirement_statement_intelligence.sql'),
   'utf8',
 ).replace(/--.*$/gm, '');
 

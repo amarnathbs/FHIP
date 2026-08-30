@@ -1,5 +1,5 @@
 /**
- * FDH-12 — schema contract: migration 0111 read from disk and asserted
+ * FDH-12 — schema contract: migration 0112 read from disk and asserted
  * against the TypeScript vocabulary it must mirror.
  *
  * The discipline every prior phase established: a DB CHECK constraint and its
@@ -24,7 +24,7 @@ import {
 } from '@/lib/financial-data-hub/retirement/types';
 
 const MIGRATION_DIR = path.resolve(__dirname, '..', '..', 'supabase', 'migrations');
-const FILE = '0111_fdh12_retirement_statement_intelligence.sql';
+const FILE = '0112_fdh12_retirement_statement_intelligence.sql';
 const RAW = fs.readFileSync(path.join(MIGRATION_DIR, FILE), 'utf8');
 const SQL = RAW.replace(/--.*$/gm, '');
 
@@ -44,7 +44,7 @@ function checkValues(column: string): string[] {
 }
 
 describe('FDH-12 migration numbering governance (spec section 164)', () => {
-  it('is numbered 0111 — above every number claimed by any branch or worktree', () => {
+  it('is numbered 0112 — above every number claimed by any branch or worktree', () => {
     expect(fs.existsSync(path.join(MIGRATION_DIR, FILE))).toBe(true);
     // 0107-0110 are claimed by unmerged sibling branches; 0107 is itself a
     // pre-existing double-claim. The header records the full scan.
@@ -52,8 +52,8 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
     expect(RAW).toMatch(/0110\s+module11_ai_foundation/);
   });
 
-  it('is the only 0111 in the chain', () => {
-    const collisions = fs.readdirSync(MIGRATION_DIR).filter((f) => f.startsWith('0111'));
+  it('is the only 0112 in the chain', () => {
+    const collisions = fs.readdirSync(MIGRATION_DIR).filter((f) => f.startsWith('0112'));
     expect(collisions).toEqual([FILE]);
   });
 
@@ -66,7 +66,7 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
 });
 
 describe('FDH-12 audit-event vocabulary parity', () => {
-  it('0111 is the constraint\'s latest word and matches the FULL TypeScript vocabulary', () => {
+  it('0112 is the constraint\'s latest word and matches the FULL TypeScript vocabulary', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 5000);

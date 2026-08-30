@@ -545,7 +545,7 @@ async function main() {
   // ------------------------------------------------- 7. harness self-check
   console.log('\n7. HARNESS SELF-CHECK');
   const weakDb = await buildDb((filename, sql) => {
-    if (filename.startsWith('0111')) {
+    if (filename.startsWith('0112')) {
       const before = sql;
       const after = sql.replace(
         /create trigger trg_fdh_retirement_statements_authoritative_write[\s\S]*?fdh12_retirement_statements_assert_authoritative_write\(\);/,

@@ -30,7 +30,7 @@
  *      ONE field taking ONE value from ONE proposal. It is an assignment, not
  *      an accumulation, so no arithmetic exists that could produce $2,000.
  *
- *   3. ONE PAYSLIP EVIDENCES AT MOST ONE FUND CONTRIBUTION. Migration 0111's
+ *   3. ONE PAYSLIP EVIDENCES AT MOST ONE FUND CONTRIBUTION. Migration 0112's
  *      `uq_fdh_retirement_activities_payroll_event` is a UNIQUE index on
  *      `matched_payroll_event_id`. Two fund activities cannot both claim the
  *      same payslip even if the matching code regressed.
@@ -172,7 +172,7 @@ function payslipAmountFor(
  * @param payrollEvents  every payslip in the reconciliation window. MUST
  *                       already be scoped to the owning user by the caller —
  *                       cross-tenant safety is enforced independently by
- *                       migration 0111's ownership trigger, but this function
+ *                       migration 0112's ownership trigger, but this function
  *                       is pure and does no I/O, so it trusts its input.
  */
 export function matchContributionToPayslip(

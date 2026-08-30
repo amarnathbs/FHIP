@@ -389,10 +389,10 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // bypass); the module never imports Investment Intelligence code
       // (separately enforced by `tests/unit/fdh11Isolation.test.ts`).
       path.join(FDH_LIB, 'services', 'investmentStatementProcessingService.ts'),
-      // FDH-12 (migration 0111) adds a NINTH:
+      // FDH-12 (migration 0112) adds a NINTH:
       // retirementStatementProcessingService.ts — the same carve-out again,
       // applied to `fdh_retirement_statements`/`_activities`/`_positions`.
-      // The service role is what makes migration 0111 PART F's
+      // The service role is what makes migration 0112 PART F's
       // authoritative-write triggers meaningful: those triggers refuse
       // system-owned column writes from the `authenticated` role, so this file
       // is the ONLY thing that can set reconciliation_status,

@@ -287,7 +287,7 @@ describe('FDH-12 spec 15/112 — member resolution', () => {
 
   it('rejects a confirmed member id that is not in the household', () => {
     // The cross-tenant case: a forged member id from another user's household
-    // is not found here, and migration 0111's ownership trigger refuses it at
+    // is not found here, and migration 0112's ownership trigger refuses it at
     // the database as well.
     const r = resolveRetirementMember(members, { userConfirmedMemberId: 'ffffffff-0000-0000-0000-000000000009' });
     expect(r.memberId).toBeNull();

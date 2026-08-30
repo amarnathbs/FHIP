@@ -23,7 +23,7 @@ import {
 import { RETIREMENT_ACCOUNT_TYPES } from '@/lib/financial-data-hub/retirement/types';
 
 const MIGRATION = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'supabase', 'migrations', '0111_fdh12_retirement_statement_intelligence.sql'),
+  path.join(__dirname, '..', '..', 'supabase', 'migrations', '0112_fdh12_retirement_statement_intelligence.sql'),
   'utf8',
 );
 

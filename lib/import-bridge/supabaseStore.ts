@@ -41,7 +41,7 @@ const DOMAIN_TABLES: Partial<Record<ImportTargetDomain, string>> = {
   // with liability, this entry only lets the ordinary (non-apply) read paths
   // — `loadTargetRow` for the preview/compare screen — resolve the table name.
   // Write authority is enforced by `fdh12_apply_retirement_proposal()`
-  // (migration 0111 PART I) and its own nine-column `v_allowed` array, not by
+  // (migration 0112 PART I) and its own nine-column `v_allowed` array, not by
   // the presence of this line.
   retirement: 'retirement_accounts',
 };

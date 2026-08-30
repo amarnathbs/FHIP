@@ -84,7 +84,7 @@ Three real unique indexes, all proven live:
 
 ## Privacy (spec 87-90)
 
-Not persisted anywhere in the schema — asserted by scanning migration 0111 for
+Not persisted anywhere in the schema — asserted by scanning migration 0112 for
 each token: `tfn`, `tax_file_number`, `pan_number`, `beneficiary`,
 `date_of_birth`. Full bank details and addresses have no column either.
 
@@ -133,7 +133,7 @@ and are excluded from the private-value set.
 ## What was NOT done — honestly disclosed
 
 * **Live-DEV security probing of FDH-12's own tables has not been performed**,
-  because migration 0111 has not been applied to DEV. Applying it is the
+  because migration 0112 has not been applied to DEV. Applying it is the
   Product Owner's action, per this project's standing convention. Everything
   above is real-Postgres (PGlite) evidence, not simulation, but it is not
   hosted-DEV evidence.
