@@ -303,6 +303,17 @@ invalid import with zero mutation, controlled-failure rollback, anon-key
 direct-call denial, exact before/after row-count reconciliation). SHA-256:
 `f204135605b537ba4350530bf34df482adbe76d0770ee47fc49324fc7a17d8e8`.
 
+**Applied to PRODUCTION 2026-08-30 by the Product Owner directly via the SQL
+Editor** (`https://twwpnltizhtjxhamyoxt.supabase.co`), independently
+verified read-only by the orchestrating session before and after: read-only
+preflight confirmed the function absent, `action_recommendation_master`/
+`action_recommendation_conditions` at 562/2183 rows with 0 active-zero-
+condition recommendations (the gate `0109`'s invariant introduces); post-
+application PostgREST introspection confirmed the function live (validation
+error, not "does not exist") and production row counts unchanged at
+562/2183 — zero variance. Merged to `main` the same day as commit `c404787`
+(parents `9e3cdec`, `44ca46d`), pushed, Amplify-deployed.
+
 ## Admin A0.2 Wave 1B (`0109_admin_recommendation_upsert_atomicity.sql`)
 
 Allocated 2026-08-30 on the same branch. Re-checked the collision set fresh
@@ -332,6 +343,16 @@ atomic create, atomic update, rollback-on-failure, the invariant in both
 directions (rejected without `matches_unconditionally=true`, accepted with
 it), anon-key denial, and exact before/after row-count reconciliation.
 SHA-256: `f16cea9372c3ca6a03b92a2199395864aae6737fbe414142bf8796c61185aa52`.
+
+**Applied to PRODUCTION 2026-08-30 by the Product Owner directly via the SQL
+Editor, immediately after `0107` in the same session**, independently
+verified read-only by the orchestrating session: post-application PostgREST
+introspection confirmed both the function (validation error, not "does not
+exist") and the `matches_unconditionally` column (present, defaulting
+`false` on existing rows) live in production, with row counts unchanged at
+562 recommendations / 2183 conditions / 562 active — zero variance from the
+pre-application baseline. Merged to `main` as commit `c404787`, pushed,
+Amplify-deployed.
 
 **No `supabase_migrations.schema_migrations` ledger entry was created or
 updated for either migration, and none should be** — per this project's
