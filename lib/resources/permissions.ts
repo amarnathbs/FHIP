@@ -132,3 +132,65 @@ const DISCOVERY_MANAGE_ROLES: ResourceRole[] = ['resource_admin', 'editor'];
 export function canManageDiscovery(current: CurrentResourceRoles): boolean {
   return current.isSuperAdmin || current.roles.some((r) => DISCOVERY_MANAGE_ROLES.includes(r));
 }
+
+// ---------------------------------------------------------------------------
+// Analyst Analytics Intelligence Centre — Phase A, Wave 1 nav-capability
+// predicates (Second Corrective Addendum §1.2; Admin Architecture Standard
+// §2 "Capability-based access").
+//
+// One predicate per Admin nav destination. Each is its own independently
+// named, independently documented, independently testable policy decision —
+// never a single shared boolean fanned out across several capability fields.
+// Four of the five currently delegate to the same underlying
+// isResourceStaff() check because that IS today's real, shared requirement
+// for those four destinations (First Corrective Addendum §1.1), but each
+// keeps its own named call site so a future change to one destination's
+// requirement (e.g. narrowing Discovery to canManageDiscovery()) is a
+// one-line edit to that function's own body with zero risk of silently
+// changing the other three.
+//
+// Every one of these takes the shared CurrentResourceRoles result produced
+// by getCurrentResourceRoles() above, so all five are pure functions over a
+// single role snapshot. All five fail closed for a logged-out or
+// unresolved caller: getCurrentResourceRoles() returns
+// `{ userId: null, isSuperAdmin: false, roles: [] }` in that case, which
+// every predicate below evaluates to `false`.
+//
+// Multi-role behaviour is additive by construction: each predicate tests
+// role *membership* (`.some(...)` / `.includes(...)`), never role identity,
+// so holding `analyst` alongside `editor` yields the union of both roles'
+// capabilities rather than either role narrowing the other (Standard §3).
+//
+// NOTE (Standard §4): these govern NAVIGATION VISIBILITY only. They are a
+// UX convenience, never the authorisation boundary — every destination
+// keeps its own independent page-level, API-level and RLS enforcement.
+
+/** Nav visibility for Resources → Dashboard. Content-workflow staff only. */
+export function canViewResourceDashboard(current: CurrentResourceRoles): boolean {
+  return isResourceStaff(current);
+}
+
+/** Nav visibility for the Content group (All/New Content, Videos, Glossary, FAQs, Money Updates). */
+export function canViewResourceContent(current: CurrentResourceRoles): boolean {
+  return isResourceStaff(current);
+}
+
+/** Nav visibility for the Workflow group (drafts/review/scheduled/published/review-due/archived queues). */
+export function canViewResourceWorkflow(current: CurrentResourceRoles): boolean {
+  return isResourceStaff(current);
+}
+
+/** Nav visibility for the Discovery group (Related Content, CTAs, Context Mapping). */
+export function canViewResourceDiscovery(current: CurrentResourceRoles): boolean {
+  return isResourceStaff(current);
+}
+
+/**
+ * Nav visibility and route access for the Analytics Intelligence Centre.
+ * Analyst, Resource Admin and Super Admin only — deliberately NOT
+ * isResourceStaff(), so an Author/Editor/Compliance-Reviewer/Publisher does
+ * not automatically inherit Analytics (Standard §3/§5).
+ */
+export function canViewResourceAnalytics(current: CurrentResourceRoles): boolean {
+  return isResourceAnalyst(current) || canManageResources(current);
+}
