@@ -131,6 +131,25 @@ Explicitly confirmed, by inspection of every file changed:
 - **No user-facing AI chat** exists — no new page, no new nav entry, no client component was created; the only new surfaces are server-only API routes (`app/api/internal/ai/*`, `app/api/admin/ai/*`), none rendered in any UI.
 - **No 10-question allowance, no Premium AI entitlement, no quota enforcement** — `ai_usage_ledger` accumulates counts but nothing reads it to block or allow a request; confirmed no `entitlements`/`plan_tier` check exists anywhere in the new code.
 - **No AI writes to canonical financial data** — ***this claim was originally WRONG and has since been made true; see section Q.*** The original evidence was a grep showing zero direct `income_sources`/`assets`/`liabilities`/`investments`/`retirement_accounts`/`insurance_policies`/`user_goals` writes under `lib/ai/`. That grep was accurate but the conclusion did not follow: the Module 1-10 loaders the context builder calls are *load-and-persist* functions, so a single `buildFinancialContextObject()` call was **measured** issuing seven `financial_snapshots` upserts (plus `goal_forecasts` inserts and `goal_snapshots` upserts for a household with active goals). The residual-closure round routes every source read through a read-only certified-source client, and the claim is now enforced structurally and regression-tested at 0 writes (offline and live-DEV). `ai_insights`/`ai_recommendations` store facts *about* those tables and never write to them, as originally stated.
+
+  **Correction (Product Owner review): "0 writes" is imprecise and should not survive as the terminal claim.** Module 11.0 legitimately writes to its own 10 governance/audit tables — that is what auditability requires, not a violation. The precise write boundary, each line independently evidenced above/in section I:
+  ```
+  Canonical financial writes:                    0   (§Q; regression-tested offline + live-DEV)
+  Modules 1-10 business-data writes:              0   (financial_snapshots/goal_forecasts/goal_snapshots
+                                                        included — these are Module 1-10-owned tables the
+                                                        original defect wrote to, now routed through a
+                                                        read-only certified-source client)
+  AI-initiated financial mutations:                0   (no code path in lib/ai calls a payment/transfer API;
+                                                        none exists in this codebase — §M "No money-movement")
+  Module 11 governance/audit writes:      permitted and observed as designed
+                                                        (ai_runs, ai_usage_ledger, ai_answer_cache, ai_insights,
+                                                        ai_recommendations, ai_feedback, ai_evaluations,
+                                                        ai_safety_events — all 10 Module 11.0-owned tables;
+                                                        confirmed live via a same-tenant ai_runs INSERT/read
+                                                        test in §I, and via the RLS/governance-table checks
+                                                        in §M's own evidence trail)
+  ```
+  This is the terminal write-boundary statement for Module 11.0 — supersedes the bare "0 writes" framing anywhere else in this document or in any prior relayed report.
 - **No money-movement capability** — `classifyRequest()` explicitly detects and blocks `MONEY_MOVEMENT`-classified text; no code path calls any payment/transfer API (none exists in this codebase).
 - **No live web research** — no new HTTP client, no new fetch to any external domain other than the (unused, throwing) `OpenAIProviderAdapter`'s never-executed network call.
 - **No production deployment** — nothing was pushed to `origin`, no production migration was applied, no production environment variable was touched; this branch exists only in the local worktree `D:/fhip-module11`.
