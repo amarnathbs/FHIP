@@ -601,6 +601,8 @@ async function main() {
     await grantRole(db, publisher, 'publisher');
     const author = await newUser(db);
     await grantRole(db, author, 'author');
+    const analyst = await newUser(db);
+    await grantRole(db, analyst, 'analyst');
 
     const FUTURE = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
     const FAR_FUTURE = '2099-12-31T23:59:59Z';
@@ -685,6 +687,20 @@ async function main() {
         const res = await tryTransition(db, id, 'scheduled');
         check(`[${type}] a role without publish capability is DENIED`, res.ok === false && /Only a Publisher/.test(res.message), res.message);
         check(`[${type}]   -> denial happens BEFORE the scheduling check leaks any state`, !/publish date and time/.test(res.message));
+        await actAs(db, publisher);
+      }
+      // Admin Architecture Standard §5: ANALYST IS READ-ONLY and must never
+      // be able to schedule or publish. Proved at the database layer, per
+      // content type, with a genuinely future timestamp so the ONLY thing
+      // that can block the transition is the role predicate.
+      {
+        const id = await approvedPost(db, type, publisher, FUTURE);
+        await actAs(db, analyst);
+        const res = await tryTransition(db, id, 'scheduled');
+        check(`[${type}] §5 ANALYST is DENIED scheduling (read-only role)`, res.ok === false && /Only a Publisher/.test(res.message), res.message);
+        const pub = await tryTransition(db, id, 'published');
+        check(`[${type}] §5 ANALYST is DENIED publishing (read-only role)`, pub.ok === false && /Only a Publisher/.test(pub.message), pub.message);
+        check(`[${type}]   -> the post is untouched by either analyst attempt`, (await statusOf(db, id)).status === 'approved');
         await actAs(db, publisher);
       }
       // Unauthenticated direct RPC.
