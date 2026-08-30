@@ -1,6 +1,21 @@
 # DEV apply package: FDH-12 hotfix migrations 0113 and 0114
 
-**Status: BOTH MIGRATIONS ARE NOT IN EFFECT ON DEV.** They were reported
+> ## RESOLVED — 2026-08-31. BOTH MIGRATIONS ARE NOW IN EFFECT ON DEV.
+>
+> The Product Owner re-applied both, this time pasting each migration file in
+> **full** rather than a partial selection — the suspected cause of the original
+> non-effect. Live round 3 then returned **262 PASS / 0 FAIL**, with all 17 of
+> round 2's failing checks passing individually and the `0114` guard messages
+> matching the migration source verbatim. See
+> `docs/financial-data-hub/FDH12_LIVE_DEV_CERTIFICATION.md`.
+>
+> This package is retained as the historical record of the non-effect and the
+> diagnosis. `02_dev_verification.sql` is still useful and still read-only —
+> re-running it should now report both migrations `IN EFFECT`. Everything below
+> describes DEV **before** 2026-08-31.
+
+**Status at the time of writing (2026-08-30): BOTH MIGRATIONS ARE NOT IN EFFECT
+ON DEV.** They were reported
 applied on 2026-08-30 with no error. The live re-certification run that
 followed proves otherwise, twice over and from two independent directions.
 

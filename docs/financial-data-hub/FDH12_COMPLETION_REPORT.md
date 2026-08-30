@@ -1,33 +1,68 @@
 # FDH-12 — Retirement Statement Intelligence: Completion Report
 
-**STATUS: CONDITIONAL PASS** — live-DEV certification has now been EXECUTED IN
-FULL against real hosted DEV (213 PASS / 5 FAIL) and found **two real defects**,
-one of them blocking. Both are fixed forward in migrations `0113` and `0114`,
-which are **not** applied to DEV. Full evidence:
-`FDH12_LIVE_DEV_CERTIFICATION.md`.
+**STATUS: DEV CERTIFIED FULL PASS — READY FOR PRODUCT OWNER MERGE
+AUTHORISATION.**
 
-> **FDH12-LD-1 (BLOCKING).** `fdh12_approve_retirement_statement()` could never
-> succeed for any caller: `security definer` does not change `auth.role()`, so
-> migration 0112 PART F's own guard refused the RPC's write, and the service
-> role is refused by the function's own `auth.uid()` check. No user could
-> approve a retirement statement, so no proposal and no canonical apply were
-> reachable at all. Fixed in `0113`.
+Live-DEV certification was executed in full **three times**.
+
+| Round | Date | Checks | Result | What it established |
+| --- | --- | --- | --- | --- |
+| 1 | 2026-08-30 | 218 | 213 PASS / 5 FAIL | Found **two real defects**, one blocking; both fixed forward in `0113` and `0114`. |
+| 2 | 2026-08-30 | 262 | 245 PASS / 17 FAIL | Complete re-run after the migrations were reported applied. Proved **neither was actually in effect** on DEV. No new defect, no regression. |
+| **3** | **2026-08-31** | **262** | **262 PASS / 0 FAIL** | The Product Owner re-applied both migrations by full-file paste. **Both confirmed genuinely in effect.** All 17 round-2 failures verified passing individually. |
+
+**Round 3 is the certifying run.** Its closure is grounded on four independent
+things, not on the aggregate count alone:
+
+1. **Label-by-label** verification of round 2's exact 17-item failure list —
+   §119/§130/§132 (10 approval-transition and attribution checks),
+   §133 (1 cross-tenant provenance link), §134 (6 provenance forgeries).
+   17 / 17 now PASS. The result file records `"fail": 0` with an empty
+   `failures` array.
+2. **Zero stubs.** Round 2's log carried 16 checks labelled
+   `[approval step stubbed via service role — pending migration 0113 on DEV]`.
+   Round 3 carries none: every §119/§130/§132 downstream check now sits on top
+   of a real owner-authenticated approval.
+3. **String-level proof of `0114`.** The refusal messages observed live match
+   `0114`'s source verbatim (lines 105 and 133), so the blocking behaviour is
+   attributable to that file and not to something else.
+4. **Zero-residue cleanup**, verified by a whole-table cardinality sweep and a
+   content-marker sweep that do not depend on the run's own list of ids.
+
+Full evidence: `FDH12_LIVE_DEV_CERTIFICATION.md`; raw run log
+`scripts/fdh12-live-dev-run.log`.
+
+> **FDH12-LD-1 (BLOCKING) — RESOLVED in `0113`, confirmed live.**
+> `fdh12_approve_retirement_statement()` could never succeed for any caller:
+> `security definer` does not change `auth.role()`, so migration 0112 PART F's
+> own guard refused the RPC's write, and the service role is refused by the
+> function's own `auth.uid()` check. No user could approve a retirement
+> statement, so no proposal and no canonical apply were reachable at all.
+> Round 3: an owner-authenticated call returns `200`, the row genuinely
+> transitions `pending -> approved`, and `approved_by` is the owning end user.
 >
-> **FDH12-LD-2 (HIGH).** 0112 added
+> **FDH12-LD-2 (HIGH) — RESOLVED in `0114`, confirmed live.** 0112 added
 > `retirement_accounts.last_import_application_id` / `last_imported_at` and
 > widened `source_type`, but shipped neither of the two guards `income_sources`
 > (0091) and `liabilities` (0096) pair with those exact columns. Live, an
 > ordinary user could forge or erase their own import provenance, and point
-> their own row at ANOTHER TENANT's import application. Fixed in `0114`.
+> their own row at ANOTHER TENANT's import application. Round 3: all six such
+> attempts return `400 P0001` and the columns are re-read unchanged, while a
+> positive control confirms the rest of the same row stays user-editable.
 
 ## 1. Repository
 
 * Worktree `D:/fhip-fdh12`, branch
   `feature/fdh12-retirement-statement-intelligence`, cut from `origin/main`
   @ `9e3cdec` (the FDH-11 merge).
-* Migration: `0112_fdh12_retirement_statement_intelligence.sql` — **not
-  applied** to DEV or production.
-* Not merged, not pushed beyond the feature branch, production untouched.
+* Migrations, all three **applied to DEV and confirmed in effect**, and **none
+  applied to production**:
+  * `0112_fdh12_retirement_statement_intelligence.sql`
+  * `0113_fdh12_approve_rpc_authoritative_write_fix.sql`
+  * `0114_fdh12_retirement_provenance_guards.sql`
+* Not merged. Pushed to `origin` on the feature branch only. Production
+  untouched — no production migration, no production code, no production
+  credential used at any point.
 
 ## 2. Architecture Audit
 
@@ -64,9 +99,9 @@ bank transaction. Enforced mechanically by `tests/unit/fdh12Isolation.test.ts`.
 | UI | 1 panel + the Retirement page wiring |
 | Unit tests | 11 files, **382 tests** |
 | DB certification harness | `scripts/fdh12_certification.mjs`, **62 checks** (53 + 9 added for FDH12-LD-1/LD-2) |
-| Live-DEV certification harness | `scripts/fdh12_live_dev_certification.mjs`, **218 checks** |
+| Live-DEV certification harness | `scripts/fdh12_live_dev_certification.mjs`, **262 checks** (218 + 26 negative controls for FDH12-LD-1/LD-2 + 18 for the whole-table cleanup sweep) |
 | Documentation | 20 files in `docs/financial-data-hub/` |
-| Hotfix migrations from live-DEV certification | 2 (`0113`, `0114`) — **not applied** |
+| Hotfix migrations from live-DEV certification | 2 (`0113`, `0114`) — **applied to DEV, confirmed in effect** |
 
 ## 5. Test results
 
@@ -85,8 +120,11 @@ bank transaction. Enforced mechanically by `tests/unit/fdh12Isolation.test.ts`.
 | `fdh12SchemaContract` | 23 PASS |
 | **FDH-12 total** | **382 PASS, 0 FAIL** |
 | PGlite DB certification | **62 PASS, 0 FAIL** (incl. anti-vacuity self-check and 9 new regressions for FDH12-LD-1/LD-2, each proven to FAIL with its fix migration removed) |
-| **Live DEV** (`scripts/fdh12_live_dev_certification.mjs`) | **213 PASS, 5 FAIL** — all five are FDH12-LD-1/LD-2 awaiting `0113`/`0114` on DEV |
-| Full repository suite | **4,078 passed, 1 failed, 5 skipped** — the single failure is `resourcesAdminRoleCtaHotfixLiveDev`, a live-DEV Resources test that passes 2/2 in isolation and fails only under full-suite parallel load against shared hosted DEV. Unrelated to FDH-12. |
+| **Live DEV — round 3, certifying** (`scripts/fdh12_live_dev_certification.mjs`) | **262 PASS, 0 FAIL** — all twenty live sections closed, no stubbed check |
+| Live DEV — round 2 (same harness, 262 checks) | 245 PASS, 17 FAIL — `0113`/`0114` not in effect on DEV at the time |
+| Live DEV — round 1 (same harness, 218 checks) | 213 PASS, 5 FAIL — the round that found the two defects |
+| Shared-CSV blast radius (R7 + FDH-5 + FDH-11 + FDH-12, 30 files) | **702 PASS, 0 FAIL** — the `findHeaderRowIndex` fix in `bank-csv/csv.ts` is shared with those modules and none regressed |
+| Full repository suite | **4,075+ passed** — the only failures are Resources live-DEV files failing in `beforeAll` with Supabase Auth `Request rate limit reached`, an environmental quota exhausted by repeated full-suite runs against shared hosted DEV. They pass on retry once the quota recovers, the failing set varies run to run, and this branch touches **no** Resources file (`git diff 9e3cdec..HEAD` — zero Resources paths). Same flakiness class the round-1 report recorded. |
 
 ## 6. Repository gates
 
@@ -155,12 +193,10 @@ Each was found by a test or harness, not by inspection.
 
 ## 9. Residuals — honestly disclosed
 
-* **Live-DEV certification is EXECUTED but not fully CLOSED.** 213 of 218 live
-  checks pass. Eighteen of the twenty live sections closed completely; §119,
-  §130 and §132 each fail only at the Approve step (FDH12-LD-1) and §134 fails
-  two provenance checks (FDH12-LD-2). Both fixes are written and PGlite-proven;
-  neither migration is applied to DEV. Full per-section evidence:
-  `FDH12_LIVE_DEV_CERTIFICATION.md`.
+* **Live-DEV certification is CLOSED** as of round 3 — 262 / 262, all twenty
+  sections, no stubbed check. This certifies **DEV only**; it is not a
+  production certification and does not authorise one. Every residual below
+  stands unchanged and is **not** cancelled by that pass.
 * **No named Australian super fund adapter is certified.** Four fund-neutral
   layouts are. Every named provider is MANUAL_MAPPING_REQUIRED, and the UI says
   so.
@@ -186,17 +222,12 @@ branch, no production credential used at any point.
 
 ## 11. Next action
 
-STOP. Await Product Owner authorisation. The immediate ask is application of
-these two hotfix migrations to **DEV only**, via the Supabase SQL Editor:
+STOP. Await **explicit Product Owner authorisation to merge**.
 
-* `supabase/migrations/0113_fdh12_approve_rpc_authoritative_write_fix.sql`
-* `supabase/migrations/0114_fdh12_retirement_provenance_guards.sql`
+FDH-12 is DEV-certified and the branch is pushed to `origin`. Everything past
+this point — merging to `main`, applying `0112`/`0113`/`0114` to production,
+deploying, and starting FDH-13 — is the Product Owner's call and has not been
+done.
 
-Both are `create or replace` / `drop trigger if exists` only — no schema change,
-no data change, idempotent. `0112` is already applied.
-
-After that, re-running `node scripts/fdh12_live_dev_certification.mjs` (with a
-`next dev` on port 3212 from this worktree) is expected to report 218 / 0, at
-which point the verdict becomes DEV CERTIFIED FULL PASS.
-
-Nothing has been merged, pushed, applied to DEV, or applied to production.
+Nothing has been merged. Nothing has been applied to production. FDH-13 has not
+been started.

@@ -11,8 +11,31 @@ triggers for real.
 live-DEV round for the two defects it found).
 
 Live counterpart: `scripts/fdh12_live_dev_certification.mjs`, run against real
-hosted DEV — **213 PASS / 5 FAIL**, the five being defects FDH12-LD-1 and
-FDH12-LD-2 awaiting migrations `0113` and `0114`. See
+hosted DEV. Round 1: **213 PASS / 5 FAIL** of 218. Round 2 (2026-08-30, a full
+re-run after `0113`/`0114` were reported applied): **245 PASS / 17 FAIL** of
+262 — the round that proved neither migration was actually in effect.
+**Round 3 (2026-08-31, the certifying run): 262 PASS / 0 FAIL.**
+
+**The security gap FDH12-LD-2 describes is CLOSED on DEV.** `0114` is applied
+and confirmed in effect. Round 3 re-ran every attack that previously succeeded,
+as the row's own authenticated owner over PostgREST, and each is now refused
+`400 P0001` with the column re-read unchanged afterwards:
+
+| Attack | Round 2 | Round 3 |
+| --- | --- | --- |
+| Forge `source_type` `manual -> retirement_statement_import` | 200 SUCCEEDED | **400 P0001, still `manual`** |
+| Forge `last_import_application_id` to the owner's own application | 200 SUCCEEDED | **400 P0001, still `null`** |
+| Forge `last_imported_at` | 200 SUCCEEDED | **400 P0001, still `null`** |
+| Forge all three in one request | 200 SUCCEEDED | **400 P0001, still `manual`** |
+| Erase applied provenance | 200 SUCCEEDED | **400, value intact** |
+| Rewrite applied `source_type` | 200 SUCCEEDED | **400, still `retirement_statement_import`** |
+| **Tenant B points B's own account at Tenant A's import application** | 200 SUCCEEDED | **400 P0001 cross-tenant reference, still `null`** |
+
+Two controls keep this non-vacuous: a setup assertion confirms each target
+column genuinely held a different value first, and a positive control confirms
+the rest of the same row (`account_name`, balance, `is_active`) is still
+user-editable — the guard did not simply lock the table. The refusal strings
+match `0114` lines 105 and 133 verbatim. See
 `FDH12_LIVE_DEV_CERTIFICATION.md`.
 
 ## Defects this certification did NOT catch, and live DEV did

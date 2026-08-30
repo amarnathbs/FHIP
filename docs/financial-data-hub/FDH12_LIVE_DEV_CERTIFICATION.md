@@ -2,7 +2,194 @@
 
 Spec sections 119-134, 137, 139, 166-167, 171.
 
-## STATUS: CONDITIONAL PASS — TWO REAL DEFECTS FOUND LIVE; MIGRATIONS `0113` AND `0114` PENDING ON DEV
+## STATUS: **DEV CERTIFIED FULL PASS** — 262 / 262 LIVE CHECKS, 0 FAIL. `0113` AND `0114` CONFIRMED IN EFFECT ON DEV.
+
+### Round 3 — 2026-08-31 (closure)
+
+The Product Owner re-applied `0113` and `0114` to DEV, this time pasting each
+migration file in full rather than a partial selection — the suspected cause of
+the round-2 non-effect. The complete live suite was then re-run from scratch,
+unchanged from round 2, against real hosted DEV
+(`vqycarelcoijzwlpkpcz.supabase.co`) with a real `next dev` started from this
+worktree on port 3212.
+
+```
+=== RESULT: 262 PASS, 0 FAIL ===
+```
+
+**Every one of round 2's 17 failures now passes individually** — verified
+label-by-label against the round-2 failure list, not merely by comparing
+aggregate totals:
+
+| Round-2 failing check | Round 3 |
+| --- | --- |
+| §119 FDH12-LD-1 — `approval_status` transitioned `pending -> approved` through the real RPC as the row's own owner | **PASS** — `pending -> approved (route status=200)` |
+| §119 FDH12-LD-1 — approval attributed to the owning end user, not hand-set by a service role | **PASS** — `approved_by=0e4b4768-…5c4f approved_at=2026-08-30T21:55:19.630005+00:00` |
+| §119 — evidence approved through the real route | **PASS** — `status=200` |
+| §119 FDH12-LD-2 — the import-bridge GUC does not survive the Apply RPC | **PASS** — next owner PATCH refused `400 P0001` |
+| §130 FDH12-LD-1 — approval transition / attribution / real route (3 checks) | **PASS** — `approved_by=da753732-…93db` |
+| §132 FDH12-LD-1 — approval transition / attribution / real route (3 checks) | **PASS** — `approved_by=ca9561a2-…70e3` |
+| §133 FDH12-LD-2 — B points B's OWN retirement account at A's import application | **BLOCKED** — `400 P0001 "retirement_accounts: cross-tenant reference — import application … belongs to a different user"`, column re-read as `null` |
+| §134 — canonical apply provenance cannot be ERASED by direct REST | **BLOCKED** — `400`, value still `c8a6e158-…47e3` |
+| §134 — canonical `source_type` cannot be rewritten by direct REST | **BLOCKED** — `400`, value still `retirement_statement_import` |
+| §134 FDH12-LD-2 — owner forges `source_type` `manual -> retirement_statement_import` | **BLOCKED** — `400 P0001`, value still `manual` |
+| §134 FDH12-LD-2 — owner forges `last_import_application_id` to their OWN real application | **BLOCKED** — `400 P0001`, value still `null` |
+| §134 FDH12-LD-2 — owner forges `last_imported_at` | **BLOCKED** — `400 P0001`, value still `null` |
+| §134 FDH12-LD-2 — owner forges all three provenance columns in ONE request | **BLOCKED** — `400 P0001`, value still `manual` |
+
+17 of 17. The round-3 result file
+(`scripts/fdh12-live-dev-results.json`) records `"fail": 0` with an empty
+`failures` array; the full run log is `scripts/fdh12-live-dev-run.log`.
+
+#### The strongest single indicator: the stubs are gone
+
+Round 2's log carried **16** occurrences of
+`[approval step stubbed via service role — pending migration 0113 on DEV]`,
+marking every downstream check that had only been reachable through a
+service-role approval stub. Round 3's log contains **zero**. Every §119 / §130 /
+§132 downstream check — proposal, compare, Apply, canonical write — now runs on
+top of a genuine owner-authenticated approval.
+
+#### Independent confirmation that the migrations are the ones in the database
+
+Behaviour alone could in principle be explained by something other than these
+two files, so the guard error strings observed live were matched against the
+migration source:
+
+* `retirement_accounts: cross-tenant reference — import application % belongs to a different user` — `0114` line 105, observed verbatim live.
+* `retirement_accounts: source_type/last_import_application_id/last_imported_at are import-bridge provenance and may not be written directly by the authenticated role` — `0114` line 133, observed verbatim live.
+* `0113` is proven by outcome rather than by string: an owner-authenticated call
+  to `fdh12_approve_retirement_statement` **succeeded and persisted**, which is
+  impossible under `0112`'s body (round 1 and round 2 both proved it returns
+  `400 P0001` for every possible caller).
+
+| Run | Harness | Result |
+| --- | --- | --- |
+| **Live DEV — round 3** | `scripts/fdh12_live_dev_certification.mjs` | **262 PASS / 0 FAIL** |
+| Live DEV — round 2 | same harness, 262 checks | 245 PASS / 17 FAIL (`0113`/`0114` not in effect) |
+| Live DEV — round 1 | same harness, 218 checks | 213 PASS / 5 FAIL (defects found) |
+| PGlite (real Postgres, clean rebuild) | `scripts/fdh12_certification.mjs` | **62 PASS / 0 FAIL** |
+| Shared-CSV blast radius (R7 + FDH-5 + FDH-11 + FDH-12) | `vitest` | **702 PASS / 0 FAIL** (30 files) |
+
+#### Round 3 cleanup — zero residue, independently swept
+
+Verified exactly as round 2 was, by two methods neither of which trusts this
+run's own list of ids (full output in `scripts/fdh12-live-dev-run.log`):
+
+* **Whole-table exact cardinality** across all 15 writable tables, captured
+  before the first synthetic row existed and re-checked after cleanup. All 15
+  returned to baseline exactly, including the non-empty ones:
+  `retirement_accounts` 367→367, `retirement_members` 287→287,
+  `fdh_document_audit_events` 1811→1811, `user_profiles` 370→370.
+* **Whole-table content-marker sweep** (`ilike`) for every fixture literal the
+  run writes — `LiveCert`, `Tenant B Super`, `LIVECERT`, `FDH12 Live` — across
+  8 table/column pairs. All 8 returned 0 rows.
+* No `fdh12-livedev-*` auth user remains. The same four synthetic users from
+  *earlier* phases (R9, R11, SMSF) are still on DEV; they were not created or
+  removed by this run and are reported below rather than absorbed.
+
+---
+
+### Round 2 — 2026-08-30 (closure re-run — superseded by round 3)
+
+The Product Owner reported that `0113` and `0114` had both been applied to DEV
+with no error, and asked for the complete live suite to be re-run rather than a
+narrow re-test of the two fixes. That was done. **Neither migration is in
+effect in that database.** The full evidence, an independent read-only
+verification script and the re-apply instructions are in
+`docs/dev-apply/fdh12-0113-0114-activation/`.
+
+**Live result: 245 PASS, 17 FAIL.** Every one of the 17 failures is one of the
+two already-identified defects, still live because the fixes never reached the
+database. **No new defect was found, and nothing regressed.** The suite grew
+from 218 to 262 checks this round: +26 new negative controls demanded for the
+two fixes, +18 for a genuine whole-table cleanup sweep.
+
+| Run | Harness | Result |
+| --- | --- | --- |
+| Live DEV — round 2 | `scripts/fdh12_live_dev_certification.mjs` | **245 PASS / 17 FAIL** (262 checks) |
+| Live DEV — round 1 | same harness, 218 checks | 213 PASS / 5 FAIL |
+| PGlite (real Postgres, clean rebuild) | `scripts/fdh12_certification.mjs` | **62 PASS / 0 FAIL** |
+| Shared-CSV blast radius (R7 + FDH-5 + FDH-11 + FDH-12) | `vitest` | **702 PASS / 0 FAIL** (30 files) |
+
+#### Why "applied with no error" was not enough
+
+`0113` adds no object — it **replaces** two existing functions. `0114` creates
+two functions and two triggers. Checking that
+`fdh12_approve_retirement_statement` merely *exists*, or calling it as the
+service role and seeing `"authentication required"`, cannot distinguish the
+0113 body from the 0112 body: **0112's version returns that same message.** Only
+an authenticated-owner call, or reading `pg_get_functiondef`, tells them apart.
+`docs/dev-apply/fdh12-0113-0114-activation/02_dev_verification.sql` does both
+and prints a one-line verdict per migration.
+
+#### The two proofs the Product Owner asked for, and what they returned
+
+Both were run for real. Both currently FAIL, and both fail for exactly one
+reason: the fixes are not in the database.
+
+**FDH12-LD-1 — the real end-to-end journey** (`upload → parse → review →
+APPROVE → compare → Apply`), driven as a real synthetic user through the actual
+API/RPC chain:
+
+```
+approval_status before the real RPC call : pending
+POST /rest/v1/rpc/fdh12_approve_retirement_statement  (as the row's OWN owner)
+  -> 400 P0001 "fdh_retirement_statements: this field is system-authoritative
+                and may not be written directly by the authenticated role"
+approval_status after  : pending      approved_at: null   approved_by: null
+```
+
+Upload, parse, account/member match and evidence matching all PASS. The journey
+still terminates at Approve. Everything downstream (`/proposal`, Apply, the
+canonical `retirement_accounts` write) is exercised and PASSES, but only via
+the harness's service-role approval stub, and every such check is labelled
+`[approval step stubbed via service role — pending migration 0113 on DEV]` in
+the run log so a stubbed pass can never be read as a genuine one.
+
+**FDH12-LD-2 — the security fix.** Required outcome vs. actual:
+
+| Sequence | Required | Actual on DEV |
+| --- | --- | --- |
+| Owner forges `source_type` on a hand-typed account | BLOCKED | **200 SUCCEEDED** |
+| Owner forges `last_import_application_id` to their own real application | BLOCKED | **200 SUCCEEDED** |
+| Owner forges `last_imported_at` to a chosen timestamp | BLOCKED | **200 SUCCEEDED** |
+| Owner forges all three in one request | BLOCKED | **200 SUCCEEDED** |
+| Owner erases provenance (all to null) | BLOCKED | **200 SUCCEEDED** |
+| Tenant B points B's own account at Tenant A's import application | BLOCKED | **200 SUCCEEDED** |
+| Authoritative Apply via `fdh12_apply_retirement_proposal` under the GUC | PASS | **PASS** |
+
+The last row is the one that does pass, and it matters: the Apply RPC writes
+all three provenance columns successfully, so `0114` — when it is finally
+applied — has a working writer to let through and is not at risk of breaking
+the legitimate path.
+
+One nuance, disclosed rather than glossed: the check
+*"the import-bridge GUC does not survive the Apply RPC"* also fails. That is
+**not** a third defect and not a GUC leak. With no guard present at all, the
+follow-up PATCH succeeds for the same reason every other PATCH in the table
+above succeeds. Once `0114` is applied this check becomes a genuine GUC-leak
+test; today it is simply another face of FDH12-LD-2.
+
+#### Cleanup — zero residue
+
+Verified two ways, neither of which trusts this run's own list of ids:
+
+* **Whole-table exact cardinality**, captured before the first synthetic row
+  existed and re-checked after cleanup, across all 15 tables this run can
+  write to. All 15 returned to baseline exactly — including the non-empty
+  ones: `retirement_accounts` 367→367, `retirement_members` 287→287,
+  `fdh_document_audit_events` 1811→1811, `user_profiles` 370→370.
+* **Whole-table content-marker sweep** (`ilike`) for every fixture literal this
+  run writes — `LiveCert`, `Tenant B Super`, `LIVECERT`, `FDH12 Live` — across
+  8 table/column pairs. All returned 0 rows.
+* No `fdh12-livedev-*` auth user remains. Four synthetic users from *earlier*
+  rounds (R9, R11, SMSF) remain on DEV; they were not created or removed by
+  this run and are reported rather than silently absorbed.
+
+---
+
+### Round 1 — 2026-08-30 (the round that found the defects)
 
 Migration `0112_fdh12_retirement_statement_intelligence.sql` was applied to DEV
 by the Product Owner. Every live section below was then executed for real
@@ -12,11 +199,6 @@ against hosted DEV Postgres (`vqycarelcoijzwlpkpcz.supabase.co`) plus a real
 **Live result: 213 PASS, 5 FAIL.** All five failures are the two genuinely new
 defects this round found, and both are fixed forward in migrations that have
 **not** been applied to DEV. Nothing else failed.
-
-| Run | Harness | Result |
-| --- | --- | --- |
-| Live DEV | `scripts/fdh12_live_dev_certification.mjs` | **213 PASS / 5 FAIL** |
-| PGlite (real Postgres, clean rebuild) | `scripts/fdh12_certification.mjs` | **62 PASS / 0 FAIL** (was 53; +9 new regressions for the two defects) |
 
 ### How the live run was grounded
 
@@ -47,7 +229,13 @@ defects this round found, and both are fixed forward in migrations that have
 Neither was reachable in PGlite, unit tests, `tsc`, the build, or the prior
 round's review. Both were found by driving the real hosted chain.
 
-## FDH12-LD-1 — BLOCKING — `fdh12_approve_retirement_statement()` can never succeed
+> **BOTH ARE NOW CLOSED.** `0113` and `0114` are applied to DEV and confirmed in
+> effect by round 3 (2026-08-31): 262 / 0, with all 17 of round 2's failing
+> checks passing individually. The reproductions below are retained as the
+> historical record of what was found and why the fixes exist — they describe
+> DEV **before** the fixes were activated, not DEV today.
+
+## FDH12-LD-1 — BLOCKING — RESOLVED — `fdh12_approve_retirement_statement()` could never succeed
 
 **Nobody can approve a retirement statement, so nothing can ever be applied to
 canonical Retirement.** The entire FDH-12 user journey terminates at Approve.
@@ -127,7 +315,7 @@ evaluated **before** the GUC is ever set.
 
 `create or replace` only. No schema change, no data change, idempotent.
 
-## FDH12-LD-2 — HIGH — canonical retirement apply provenance shipped unguarded
+## FDH12-LD-2 — HIGH — RESOLVED — canonical retirement apply provenance shipped unguarded
 
 Migration 0112 PART A widened `retirement_accounts.source_type` to accept
 `'retirement_statement_import'`, and PART G added
@@ -213,36 +401,38 @@ without 0114: FAIL spec 96: a user cannot forge canonical retirement provenance 
 
 # LIVE SECTION RESULTS
 
-| Spec | Section | Live result |
-| --- | --- | --- |
-| 119 | Australia live DEV journey | 18 PASS / 1 FAIL (the Approve step — FDH12-LD-1) |
-| 120 | Employer contribution $1,000 + $1,000 = $1,000 | **16 / 0** |
-| 121 | Personal contribution, ordinary expense $0 | **8 / 0** |
-| 122 | Rollover: income $0, expense $0, net worth +$0 | **10 / 0** |
-| 123 | Fee $100 reduces retirement value, no cash expense | **5 / 0** |
-| 124 | Insurance premium $75, no duplicated expense | **3 / 0** |
-| 125 | Retained earnings +$5,000, no bank income event | **5 / 0** |
-| 126 | Withdrawal matched as one economic event | **6 / 0** |
-| 127 | Balance reconciliation → RECONCILED | **3 / 0** |
-| 128 | $0.01 negative control → VARIANCE | **2 / 0** |
-| 129 | Canonical unchanged until Apply | **8 / 0** |
-| 130 | Duplicate statement | 9 PASS / 1 FAIL (Approve step only) |
-| 131 | Overlapping statements | **4 / 0** |
-| 132 | Wrong Self/Spouse account | 8 PASS / 1 FAIL (Approve step only) |
-| 133 | Cross-tenant A/B | **13 / 0** |
-| 134 | Same-tenant forgery | 23 PASS / 2 FAIL (both FDH12-LD-2) |
-| 137 | SMSF routing | **13 / 0** |
-| 139 | PostgREST 1000/1001 boundary | **6 / 0** |
-| 167 | Live schema verification | **29 / 0** |
-| — | Architecture: evidence, not a second ledger | **10 / 0** |
-| 171 | DEV cleanup | **13 / 0** |
+Round 3 (2026-08-31), the certifying run. Counts are taken from
+`scripts/fdh12-live-dev-run.log` and sum to exactly 262.
 
-Where a section shows a FAIL only for the Approve step, the rest of that
-section's chain was still exercised end-to-end live, with the approval step
-stubbed via the service role — the same stub the PGlite harness uses — and
-every downstream check is labelled in the harness output
-`[approval step stubbed via service role — pending migration 0113 on DEV]`.
-Nothing is claimed as fully live that was not.
+| Spec | Section | Round 3 | Round-2 failures now cleared |
+| --- | --- | --- | --- |
+| 119 | Australia live DEV journey | **25 / 0** | 4 |
+| 120 | Employer contribution $1,000 + $1,000 = $1,000 | **16 / 0** | — |
+| 121 | Personal contribution, ordinary expense $0 | **8 / 0** | — |
+| 122 | Rollover: income $0, expense $0, net worth +$0 | **10 / 0** | — |
+| 123 | Fee $100 reduces retirement value, no cash expense | **5 / 0** | — |
+| 124 | Insurance premium $75, no duplicated expense | **3 / 0** | — |
+| 125 | Retained earnings +$5,000, no bank income event | **5 / 0** | — |
+| 126 | Withdrawal matched as one economic event | **6 / 0** | — |
+| 127 | Balance reconciliation → RECONCILED | **3 / 0** | — |
+| 128 | $0.01 negative control → VARIANCE | **2 / 0** | — |
+| 129 | Canonical unchanged until Apply | **8 / 0** | — |
+| 130 | Duplicate statement | **13 / 0** | 3 |
+| 131 | Overlapping statements | **4 / 0** | — |
+| 132 | Wrong Self/Spouse account | **12 / 0** | 3 |
+| 133 | Cross-tenant A/B | **16 / 0** | 1 |
+| 134 | Same-tenant forgery | **31 / 0** | 6 |
+| 137 | SMSF routing | **13 / 0** | — |
+| 139 | PostgREST 1000/1001 boundary | **6 / 0** | — |
+| 167 | Live schema verification | **29 / 0** | — |
+| — | Server-identity probe + Architecture: evidence, not a second ledger | **11 / 0** | — |
+| 171 | DEV cleanup (incl. the whole-table sweep) | **36 / 0** | — |
+| | **TOTAL** | **262 / 0** | **17** |
+
+No check in round 3 is stubbed. The round-2 log carried 16 checks labelled
+`[approval step stubbed via service role — pending migration 0113 on DEV]`;
+round 3 carries none, because the real owner-authenticated approve now
+succeeds and every downstream check runs on top of it.
 
 ## §167 — Live schema verification (29 / 0)
 
@@ -256,7 +446,7 @@ Nothing is claimed as fully live that was not.
   seeded row while ANON returns `200 []`; ANON INSERT is refused `401 / 42501`;
   the approve RPC refuses the ANON role.
 
-## §119 — Australia live DEV journey
+## §119 — Australia live DEV journey (25 / 0)
 
 Real chain, real routes, no mock DB: Retirement → Import Retirement Statement →
 AU Super → Upload → Parse → Match member → Match account → Reconcile → Review →
@@ -270,11 +460,21 @@ insurance 75 − tax 150 = closing 105,675.
 * auto account match resolved the canonical account **and** the household member
 * proposal: `recommended_apply_mode: update_existing`, target = the matched
   account, `current_balance = 105675.00`, `employer_contribution = 1000.00`
-* **Approve: FAILED — FDH12-LD-1**
-* Apply (after the stub): `outcome: applied`; canonical `current_balance`
+* **Approve: PASS (round 3).** Pre-state `approval_status = pending`; the row's
+  own owner calls the real RPC through the real route → `200`; the row
+  genuinely transitions `pending -> approved`, with
+  `approved_by = 0e4b4768-2100-4319-9457-7e5c135b5c4f` (the owning end user, not
+  a service-role hand-set) and
+  `approved_at = 2026-08-30T21:55:19.630005+00:00`. `/proposal` then returns
+  `200` rather than the previous `409`.
+* Apply: `outcome: applied`; canonical `current_balance`
   105,675.00; `last_import_application_id` and `last_imported_at` stamped; the
   `fhip_import_applications` row names this statement as its source and this
-  account as its target.
+  account as its target. No stub anywhere in the chain.
+* GUC containment: immediately after the authoritative Apply writes all three
+  provenance columns under `fhip.import_bridge_internal_write`, the very next
+  owner PATCH of provenance is refused `400 P0001` — the bridge GUC does not
+  survive the RPC.
 
 ## §120 — Employer contribution: $1,000 + $1,000 = $1,000, never $2,000 (16 / 0)
 
@@ -374,7 +574,13 @@ every column, and compared after **each** step:
 `fhip_import_applications = 0` before Apply. Only the USER APPLY call — through
 `fdh12_apply_retirement_proposal()` — changed it.
 
-## §130 / §131 — Duplicates and overlaps (13 / 2 Approve-step only)
+## §130 / §131 — Duplicates and overlaps (17 / 0)
+
+Both sections now include a genuine owner-authenticated approve: §130's
+statement transitioned `pending -> approved` through the real RPC with
+`approved_by = da753732-55a0-4567-853c-b8c6f3ba93db` /
+`approved_at = 2026-08-30T21:57:09.654013+00:00`.
+
 
 * Identical re-upload → `pipeline_status: duplicate_statement`, resolving to the
   **same** statement id
@@ -389,17 +595,20 @@ every column, and compared after **each** step:
   flagged `duplicate_of_activity_id` rather than counted; exactly two distinct
   economic contributions survive
 
-## §132 — Wrong account (8 / 1 Approve-step only)
+## §132 — Wrong account (12 / 0)
 
 Same fund name, two members, two masked identifiers, similar balances.
 
+* the approve step is genuine: `pending -> approved` through the real RPC,
+  `approved_by = ca9561a2-d645-4c5d-bae3-0fd7f88470e3` /
+  `approved_at = 2026-08-30T21:58:11.333101+00:00`
 * the `****1234` statement resolved to **SELF's** account, not the spouse's
 * after Apply, the **spouse's row is byte-unchanged**; only SELF's balance moved
   (to 105,675.00); the spouse balance is still exactly its seeded 100,100.00
 * symmetric control: the `****9876` statement resolved to the **SPOUSE's**
   account
 
-## §133 — Cross-tenant, real Tenant A vs real Tenant B (13 / 0)
+## §133 — Cross-tenant, real Tenant A vs real Tenant B (16 / 0)
 
 | Probe | Required | Live |
 | --- | --- | --- |
@@ -418,7 +627,21 @@ Two positive controls prove none of the above is vacuous: **B CAN see B's own
 statement** (1 row) and **B CAN write an activity on B's own statement**
 (`201`). A's canonical account is untouched by every Tenant B attempt.
 
-## §134 — Same-tenant forgery (23 / 2)
+Round 3 adds the FDH12-LD-2 cross-tenant probe that previously succeeded:
+
+```
+setup   : B's own retirement account holds last_import_application_id = null
+          (so the attempt is a real change, not a no-op)
+PATCH   : B sets B's OWN retirement account's last_import_application_id
+          = A's fhip_import_applications.id
+result  : 400 P0001 "retirement_accounts: cross-tenant reference — import
+                     application c8a6e158-… belongs to a different user"
+re-read : last_import_application_id = null   (unchanged)
+control : A's import application is not even readable by B, so the link could
+          not have been researched in the first place
+```
+
+## §134 — Same-tenant forgery (31 / 0)
 
 Every attempt uses a value **different** from what the row already holds — a
 forgery to the current value is a no-op that `is distinct from` correctly
@@ -436,8 +659,29 @@ activity `matched_payroll_event_id` →null · activity `amount` 1000→999999.
 Also blocked: the canonical apply record cannot be rewritten by its own owner,
 and an APPLIED proposal cannot be reset to `ready` and re-applied.
 
-**FAILED (FDH12-LD-2):** canonical apply provenance can be erased, and
-`source_type` can be rewritten, by direct REST. See the defect section above.
+**Round 3 — the six FDH12-LD-2 forgeries that previously returned `200` are now
+all BLOCKED**, each verified by re-reading the column afterwards rather than by
+trusting the status code:
+
+| Attempt (owner, own row, direct REST) | Status | Column after |
+| --- | --- | --- |
+| erase canonical apply provenance | `400` | still `c8a6e158-350c-4493-8529-f47238747d3e` |
+| rewrite canonical `source_type` | `400` | still `retirement_statement_import` |
+| forge `source_type` `manual -> retirement_statement_import` on a hand-typed account | `400 P0001` | still `manual` |
+| forge `last_import_application_id` to the owner's OWN real application | `400 P0001` | still `null` |
+| forge `last_imported_at` to a chosen timestamp | `400 P0001` | still `null` |
+| forge all three provenance columns in ONE request | `400 P0001` | still `manual` |
+
+Setup assertion first: the fresh account is genuinely `manual / null / null`, so
+each of these is a real change rather than a no-op. Refusal message, verbatim
+live and matching `0114` line 133 exactly:
+`retirement_accounts: source_type/last_import_application_id/last_imported_at
+are import-bridge provenance and may not be written directly by the
+authenticated role`.
+
+Guard-scope positive control: the rest of that same row stays fully
+user-editable (`account_name`, balance, `is_active` → `200`), so `0114` did not
+lock the table.
 
 POSITIVE CONTROLS, all still editable by the owner: `fund_name`, `nickname`,
 `masked_account_identifier`, `statement_date`, `statement_start_date` /
@@ -586,34 +830,57 @@ Re-run this round, on the fixed tree:
 | `npm run build` | **PASS**, all 7 FDH-12 routes present |
 | Migration version guard (`check:migrations`) | OK, 103 active, one file per version, next is `0115` |
 | Cross-branch collision guard vs `origin/main` | OK, no collisions; `0113`/`0114` unused on **every** branch in the repository |
-| Live DEV | **213 PASS / 5 FAIL** |
+| Live DEV — round 3 (certifying) | **262 PASS / 0 FAIL** |
 
 ---
 
-# DEV cleanup (spec 171)
+# DEV cleanup (spec 171) — round 3, 36 / 0
 
-Every synthetic artefact this round created was deleted and the deletion was
-independently re-verified by re-query — first per user id, then by a whole-table
-sweep that does not depend on the id list at all:
+Every synthetic artefact round 3 created was deleted and the deletion was
+independently re-verified three ways, only the first of which depends on this
+run's own list of ids. Verbatim from `scripts/fdh12-live-dev-run.log`.
+
+**1. Per-user re-query** — 12 tables, all `rows=0`:
+`fdh_retirement_statements`, `fdh_retirement_statement_activities`,
+`fdh_retirement_statement_positions`, `fdh_statement_uploads`,
+`fdh_transactions`, `fdh_payroll_events`, `fdh_financial_accounts`,
+`retirement_accounts`, `retirement_members`, `fhip_import_proposals`,
+`fhip_import_applications`, `user_profiles`.
+
+**2. Whole-table exact cardinality** — captured before the first synthetic row
+existed, re-checked after cleanup, across all 15 tables this run can write to.
+Every one returned to baseline exactly:
 
 ```
-TOTAL ROWS IN FDH-12 TABLES ON DEV (whole table, every tenant):
-   fdh_retirement_statements            => 0
-   fdh_retirement_statement_activities  => 0
-   fdh_retirement_statement_positions   => 0
-
-Retirement-domain bridge rows:
-   fhip_import_proposals (retirement)                      => 0
-   fhip_import_applications (retirement)                   => 0
-   retirement_accounts source_type=retirement_statement_import => 0
-   retirement_accounts with last_import_application_id      => 0
-
-Documents of the two FDH-12 document types:
-   fdh_statement_uploads document_type=super_statement => 0
-   fdh_statement_uploads document_type=epf_statement   => 0
-
-auth users total: 375 | fdh12-livedev-* remaining: 0
+fdh_retirement_statements              0 -> 0
+fdh_retirement_statement_activities    0 -> 0
+fdh_retirement_statement_positions     0 -> 0
+fdh_statement_uploads                  0 -> 0
+fdh_transactions                       0 -> 0
+fdh_payroll_events                     0 -> 0
+fdh_financial_accounts                 0 -> 0
+retirement_accounts                  367 -> 367
+retirement_members                   287 -> 287
+fhip_import_proposals                  0 -> 0
+fhip_import_applications               0 -> 0
+fhip_import_proposal_fields            0 -> 0
+fdh_document_audit_events           1811 -> 1811
+fdh_upload_sessions                    0 -> 0
+user_profiles                        370 -> 370
 ```
+
+The four non-zero baselines are the ones that matter: they are pre-existing DEV
+data, and residue would show as an increase rather than as a non-zero count.
+
+**3. Whole-table content-marker sweep** (`ilike`, every fixture literal this run
+writes) — 8 table/column pairs, all `rows=0`:
+`retirement_accounts.account_name` (`LiveCert`, `Tenant B Super`),
+`fdh_retirement_statements.fund_name`, `fdh_financial_accounts.display_name`,
+`fdh_payroll_events.employer_name`, `fdh_transactions.description_raw`
+(`LIVECERT`), `income_sources.source_name`, `user_profiles.full_name`
+(`FDH12 Live`).
+
+**4. Auth** — no `fdh12-livedev-*` user remains.
 
 **Zero synthetic residue.** No pre-existing DEV data was read or written at any
 point.
@@ -621,8 +888,9 @@ point.
 ### Disclosure — residue from EARLIER rounds, not this one
 
 The independent sweep also found four synthetic users left on DEV by previous
-certification rounds. None was created by this run (every one predates it by
-days and carries another phase's tag), and none was removed by this run, because
+FDH/II certification phases — still present in round 3, reported again rather
+than quietly dropped. None was created by any FDH-12 run (every one predates
+FDH-12 by days and carries another phase's tag), and none was removed, because
 deleting another phase's fixtures is not this round's call:
 
 | Email | Created |
@@ -638,23 +906,37 @@ Reported so it is visible rather than absorbed into an "all clean" statement.
 
 # VERDICT
 
-**FDH-12 — CONDITIONAL PASS — LIVE DEV CERTIFICATION EXECUTED IN FULL; TWO REAL
-DEFECTS FOUND, FIXED FORWARD, AND AWAITING MIGRATIONS `0113` AND `0114` ON DEV.**
+**FDH-12 — DEV CERTIFIED FULL PASS — READY FOR PRODUCT OWNER MERGE
+AUTHORISATION.**
 
-Not a FULL PASS, and deliberately not rounded up to one. Eighteen of the twenty
-live sections closed completely. The two that did not are blocked by defects this
-round itself found, and one of them (FDH12-LD-1) is severe enough that the
-feature could not have shipped: no user could have approved a retirement
-statement at all.
+Round 3, 2026-08-31: **262 live checks against real hosted DEV, 262 PASS, 0
+FAIL.** All twenty live sections closed completely. Both defects this
+certification found (FDH12-LD-1 BLOCKING, FDH12-LD-2 HIGH) are fixed in `0113`
+and `0114`, both now confirmed genuinely in effect on DEV by behaviour, not by
+a report of application — with all 17 of round 2's failing checks verified
+passing individually, zero service-role approval stubs remaining in the run
+log, and the `0114` guard messages matched verbatim against the migration
+source.
 
-## To reach DEV CERTIFIED FULL PASS
+Cleanup is zero-residue, verified by a whole-table cardinality sweep and a
+content-marker sweep that do not depend on this run's own list of ids.
 
-1. Product Owner applies, to **DEV only**, via the Supabase SQL Editor:
-   * `supabase/migrations/0113_fdh12_approve_rpc_authoritative_write_fix.sql`
-   * `supabase/migrations/0114_fdh12_retirement_provenance_guards.sql`
-2. Re-run `node scripts/fdh12_live_dev_certification.mjs` (with a `next dev` on
-   port 3212 from this worktree). The five failing checks become the live
-   Approve step and the two live provenance refusals; expected result 218 / 0.
+## Scope of this verdict, stated precisely
 
-Nothing has been merged, pushed, applied to DEV, or applied to production by
-this round. FDH-13 has not been started.
+This certifies **DEV**. It is not a production certification and does not
+authorise one.
+
+* `0112`, `0113`, `0114` are applied to **DEV only**. Production has no FDH-12
+  migration and no FDH-12 code.
+* Nothing has been merged. The branch
+  `feature/fdh12-retirement-statement-intelligence` is pushed to `origin`, and
+  no further.
+* The residuals in `FDH12_COMPLETION_REPORT.md` §9 stand unchanged and are not
+  cancelled by this pass — no named AU super fund adapter, no PDF/OCR, India
+  ingestion is EPF-CSV only, no Playwright e2e, breakpoints certified by
+  construction rather than by screenshots, no malware scanning.
+* FDH-13 has not been started.
+
+## Next action
+
+STOP. Await explicit Product Owner authorisation to merge.
