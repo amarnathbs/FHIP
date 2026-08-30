@@ -84,6 +84,8 @@ async function userRest(user, pathAndQuery, opts = {}) {
 }
 
 const createdUsers = [];
+/** Exact whole-table row counts taken before the first synthetic row exists. */
+let baselineCounts = {};
 
 async function createUser(tag, { country = 'AU', currency = 'AUD' } = {}) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -264,9 +266,30 @@ const money = (v) => (v === null || v === undefined ? null : Number(v));
  * the real call is made first and its real response is asserted on.
  */
 async function approveEvidence(user, documentId, statementId, label) {
+  // FDH12-LD-1 REQUIRED NEGATIVE/POSITIVE CONTROL SEQUENCE.
+  // The transition itself is the proof, not the HTTP status: read the row's
+  // real approval_status immediately before the call and immediately after
+  // it, BEFORE any service-role fallback can touch it, so a stubbed run can
+  // never be mistaken for a genuine one.
+  const pre = (await rest(`fdh_retirement_statements?id=eq.${statementId}&select=approval_status`)).json?.[0];
+  check(`${label} FDH12-LD-1 pre-state: approval_status is 'pending' before the real approve call`,
+    pre?.approval_status === 'pending', `approval_status=${pre?.approval_status}`);
+
   const r = await post(user, documentId, '/approve', {});
-  if (r.status === 200 && r.json?.data?.approved === true) {
-    check(`${label} evidence approved through the real route`, true);
+  const post_ = (await rest(`fdh_retirement_statements?id=eq.${statementId}&select=approval_status,approved_at,approved_by`)).json?.[0];
+  const liveApproval = r.status === 200 && r.json?.data?.approved === true;
+
+  // These two run in BOTH branches so the check count is stable and a blocked
+  // approve is recorded as the failure it is, not as an absent test.
+  check(`${label} FDH12-LD-1: approval_status genuinely transitioned pending -> approved through the real RPC, called as the row's own owner`,
+    pre?.approval_status === 'pending' && post_?.approval_status === 'approved',
+    `${pre?.approval_status} -> ${post_?.approval_status} (route status=${r.status})`);
+  check(`${label} FDH12-LD-1: the approval is attributed to the owning end user, not hand-set by a service role`,
+    post_?.approved_by === user.id && Boolean(post_?.approved_at),
+    `approved_by=${post_?.approved_by} approved_at=${post_?.approved_at}`);
+
+  if (liveApproval) {
+    check(`${label} evidence approved through the real route`, true, `status=${r.status}`);
     return { liveApproval: true };
   }
   const blockedByDefect = r.status === 400 && /system-authoritative/.test(r.text);
@@ -494,6 +517,10 @@ async function phaseJourney() {
   // --- Compare (proposal) -------------------------------------------------
   const pr = await post(user, documentId, '/proposal', {});
   check(`§119 comparison/proposal generated ${stubNote}`, pr.status === 200, `status=${pr.status} ${pr.text.slice(0, 200)}`);
+  // FDH12-LD-1 REQUIRED PROOF: with approval genuinely recorded, /proposal must
+  // no longer refuse with the 409 "not approved" gate.
+  check('§119 FDH12-LD-1: /proposal no longer 409s once the statement is genuinely approved',
+    pr.status !== 409, `status=${pr.status} ${pr.status === 409 ? pr.text.slice(0, 160) : ''}`);
   const proposalId = pr.json?.data?.proposal_id;
   state.A.proposalId = proposalId;
   const fields = pr.json?.data?.fields ?? [];
@@ -535,6 +562,23 @@ async function phaseJourney() {
   check('§119 canonical row records the apply provenance',
     Boolean(after?.last_import_application_id) && Boolean(after?.last_imported_at),
     `${after?.last_import_application_id} / ${after?.last_imported_at}`);
+  // FDH12-LD-2 REQUIRED PROOF: the new provenance guard must NOT break the one
+  // writer that is legitimately allowed through it. fdh12_apply_retirement_
+  // proposal sets fhip.import_bridge_internal_write around its own provenance
+  // write; if 0114 had over-reached, all three columns below would be refused
+  // and this Apply would have failed rather than landed.
+  check('§119 FDH12-LD-2: the authoritative Apply (fdh12_apply_retirement_proposal, under the import-bridge GUC) still writes all three provenance columns — the new guard did not break it',
+    after?.source_type === 'retirement_statement_import'
+    && Boolean(after?.last_import_application_id) && Boolean(after?.last_imported_at),
+    `source_type=${after?.source_type} app=${after?.last_import_application_id} at=${after?.last_imported_at}`);
+  // ...and the GUC must not leak out of the RPC's own transaction.
+  const gucLeak = await userRest(user, `retirement_accounts?id=eq.${account.id}`, {
+    method: 'PATCH', body: JSON.stringify({ last_imported_at: '2000-01-01T00:00:00+00:00' }),
+  });
+  const gucRow = (await rest(`retirement_accounts?id=eq.${account.id}&select=last_imported_at`)).json?.[0];
+  check('§119 FDH12-LD-2: the import-bridge GUC does not survive the Apply RPC — the very next owner PATCH of provenance is still refused',
+    gucLeak.status >= 400 && !String(gucRow?.last_imported_at ?? '').startsWith('2000-01-01'),
+    `status=${gucLeak.status} last_imported_at=${gucRow?.last_imported_at} ${gucLeak.text.slice(0, 130)}`);
   const appRow = (await rest(`fhip_import_applications?id=eq.${after?.last_import_application_id}&select=*`)).json?.[0];
   check('§119 the apply record names THIS retirement statement as its source',
     appRow?.source_retirement_statement_id === statementId, String(appRow?.source_retirement_statement_id));
@@ -1062,6 +1106,24 @@ async function phaseCrossTenant() {
   check('§133 LIVE positive control: B CAN write an activity on B\'s own statement (the refusals above are cross-tenant, not a blanket block)',
     t3p.status === 201, `status=${t3p.status} ${t3p.text.slice(0, 110)}`);
 
+  // FDH12-LD-2 REQUIRED PROOF — CROSS-TENANT PROVENANCE LINK.
+  // B owns bAccount outright, so RLS alone does not stop this: B is writing
+  // B's own row. What must stop it is the import-link ownership guard, because
+  // the VALUE points at Tenant A's fhip_import_applications row. Without it,
+  // B's hand-typed account claims to have been written by A's certified import.
+  const bLinkBefore = (await rest(`retirement_accounts?id=eq.${bAccount.id}&select=last_import_application_id`)).json?.[0];
+  check("§133 FDH12-LD-2 setup: B's own account starts with NO import provenance (so the attempt below is a real change, not a no-op)",
+    bLinkBefore?.last_import_application_id === null, String(bLinkBefore?.last_import_application_id));
+  const bLink = await userRest(B, `retirement_accounts?id=eq.${bAccount.id}`, {
+    method: 'PATCH', body: JSON.stringify({ last_import_application_id: A.applicationId }),
+  });
+  const bLinkAfter = (await rest(`retirement_accounts?id=eq.${bAccount.id}&select=last_import_application_id`)).json?.[0];
+  check("§133 FDH12-LD-2: B pointing B's OWN retirement account at A's import application — BLOCKED",
+    bLink.status >= 400 && bLinkAfter?.last_import_application_id === null,
+    `status=${bLink.status} -> ${bLinkAfter?.last_import_application_id} ${bLink.text.slice(0, 150)}`);
+  check("§133 FDH12-LD-2: A's import application is not reachable by B even to read it (the link above could not have been researched)",
+    ((await userRest(B, `fhip_import_applications?select=id&id=eq.${A.applicationId}`)).json ?? []).length === 0);
+
   // APP-LEVEL and RPC-LEVEL
   const appAccess = await app(B, `/api/financial-data-hub/retirement-statement/${A.documentId}/proposal`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   check("§133 LIVE: B cannot drive A's document through the app's own API", appAccess.status >= 400, `status=${appAccess.status}`);
@@ -1143,6 +1205,38 @@ async function phaseSameTenantForgery() {
   check('§134 LIVE: canonical source_type cannot be rewritten by direct REST',
     typeRow?.source_type === 'retirement_statement_import',
     `status=${pType.status} -> ${typeRow?.source_type} ${typeRow?.source_type === 'retirement_statement_import' ? '' : DEFECT2}`);
+  // FDH12-LD-2 REQUIRED PROOF — SAME-TENANT PROVENANCE FORGERY (not erasure).
+  // A FRESH, hand-entered account of the SAME user, with no provenance at all.
+  // Pointing it at the user's OWN real application keeps the import-link
+  // ownership guard satisfied, so only the provenance-WRITE guard can refuse
+  // it — this isolates the second of 0114's two triggers from the first.
+  const fresh = await seedAccount(user, { name: 'LiveCert hand-entered account', balance: '42.00' });
+  check('§134 FDH12-LD-2 setup: the fresh account is genuinely manual with no provenance (the forgeries below are real changes)',
+    fresh.source_type === 'manual' && fresh.last_import_application_id === null && fresh.last_imported_at === null,
+    `${fresh.source_type} / ${fresh.last_import_application_id} / ${fresh.last_imported_at}`);
+  const forgeProv = async (label, body, column, mustStay) => {
+    const r = await userRest(user, `retirement_accounts?id=eq.${fresh.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    const row = (await rest(`retirement_accounts?id=eq.${fresh.id}&select=${column}`)).json?.[0];
+    check(`§134 FDH12-LD-2: ${label} — BLOCKED`, r.status >= 400 && row?.[column] === mustStay,
+      `status=${r.status} -> ${row?.[column]} ${r.text.slice(0, 130)}`);
+  };
+  await forgeProv('owner FORGES source_type manual -> retirement_statement_import on a hand-typed account',
+    { source_type: 'retirement_statement_import' }, 'source_type', 'manual');
+  await forgeProv("owner FORGES last_import_application_id to their OWN real import application (same tenant, so only the provenance-write guard can refuse it)",
+    { last_import_application_id: appId }, 'last_import_application_id', null);
+  await forgeProv('owner FORGES last_imported_at to a chosen timestamp',
+    { last_imported_at: '2001-09-09T01:46:40+00:00' }, 'last_imported_at', null);
+  await forgeProv('owner FORGES all three provenance columns in ONE request',
+    { source_type: 'retirement_statement_import', last_import_application_id: appId, last_imported_at: '2001-09-09T01:46:40+00:00' },
+    'source_type', 'manual');
+  const freshOk = await userRest(user, `retirement_accounts?id=eq.${fresh.id}`, {
+    method: 'PATCH', body: JSON.stringify({ account_name: 'renamed by hand', current_balance: '99.00', is_active: false }),
+  });
+  check('§134 FDH12-LD-2 POSITIVE CONTROL: the rest of the same row stays fully user-editable (name, balance, is_active) — the guard did not lock the table',
+    freshOk.status < 300 && freshOk.json?.[0]?.account_name === 'renamed by hand' && money(freshOk.json?.[0]?.current_balance) === 99,
+    `status=${freshOk.status} ${freshOk.text.slice(0, 130)}`);
+  state.A.freshAccountId = fresh.id;
+
   // POSITIVE CONTROL for the same finding: the identical move on the FDH-9
   // canonical register IS refused, which is what proves this is one table left
   // out of a working pattern rather than a capability nobody has.
@@ -1324,6 +1418,36 @@ async function phaseEvidenceOnlyTriple() {
   }
 }
 
+/** Tables this run can write to, in the order cleanup must respect. */
+const SWEPT_TABLES = [
+  'fdh_retirement_statements', 'fdh_retirement_statement_activities', 'fdh_retirement_statement_positions',
+  'fdh_statement_uploads', 'fdh_transactions', 'fdh_payroll_events', 'fdh_financial_accounts',
+  'retirement_accounts', 'retirement_members', 'fhip_import_proposals', 'fhip_import_applications',
+  'fhip_import_proposal_fields', 'fdh_document_audit_events', 'fdh_upload_sessions', 'user_profiles',
+];
+
+/**
+ * WHOLE-TABLE exact row count, independent of any user-id list. Uses
+ * PostgREST's count=exact on a HEAD request so the number is the table's real
+ * cardinality, not a page of it.
+ */
+async function wholeTableCounts() {
+  const out = {};
+  for (const t of SWEPT_TABLES) {
+    // `select=*`, never `select=id`: not every swept table has an `id` column
+    // (user_profiles' primary key is user_id), and a table-specific projection
+    // would make this sweep silently unusable on exactly the table it most
+    // needs to cover.
+    const r = await fetch(`${URL_}/rest/v1/${t}?select=*`, {
+      method: 'HEAD',
+      headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, Prefer: 'count=exact', Range: '0-0' },
+    });
+    const cr = r.headers.get('content-range');
+    out[t] = cr ? Number(cr.split('/')[1]) : `ERR:${r.status}`;
+  }
+  return out;
+}
+
 async function phaseCleanup() {
   console.log('\n=== §171 — DEV CLEANUP ===');
   const ids = createdUsers.map((u) => u.id);
@@ -1356,6 +1480,37 @@ async function phaseCleanup() {
   }
   for (const [t, n] of Object.entries(residue)) {
     check(`§171 cleanup verified: 0 synthetic rows remain in ${t}`, n === 0, `rows=${n}`);
+  }
+
+  // WHOLE-TABLE SWEEP — deliberately NOT scoped to this run's id list.
+  // Every table's exact cardinality was recorded before the first synthetic
+  // user existed. If cleanup left ANYTHING behind — including a row written
+  // under an id this run never tracked — the count comes back higher.
+  const post_ = await wholeTableCounts();
+  for (const t of SWEPT_TABLES) {
+    const beforeN = baselineCounts[t];
+    const afterN = post_[t];
+    check(`§171 WHOLE-TABLE SWEEP: ${t} is back to its exact pre-run cardinality`,
+      typeof beforeN === 'number' && beforeN === afterN, `before=${beforeN} after=${afterN}`);
+  }
+
+  // CONTENT-MARKER SWEEP — also not scoped to the id list. Every fixture this
+  // run writes carries one of these literals; a whole-table ILIKE finds any
+  // survivor whatever user_id it ended up under.
+  const markerProbes = [
+    ['retirement_accounts', 'account_name', 'LiveCert'],
+    ['retirement_accounts', 'account_name', 'Tenant B Super'],
+    ['fdh_retirement_statements', 'fund_name', 'LiveCert'],
+    ['fdh_financial_accounts', 'display_name', 'LiveCert'],
+    ['fdh_payroll_events', 'employer_name', 'LiveCert'],
+    ['fdh_transactions', 'description_raw', 'LIVECERT'],
+    ['income_sources', 'source_name', 'LiveCert'],
+    ['user_profiles', 'full_name', 'FDH12 Live'],
+  ];
+  for (const [t, col, marker] of markerProbes) {
+    const r = await rest(`${t}?select=${col}&${col}=ilike.*${encodeURIComponent(marker)}*`);
+    const n = Array.isArray(r.json) ? r.json.length : `ERR:${r.text.slice(0, 60)}`;
+    check(`§171 WHOLE-TABLE MARKER SWEEP: no "${marker}" row survives in ${t}.${col}`, n === 0, `rows=${n}`);
   }
 
   // Independent sweep by the tag pattern, not by the id list.
@@ -1409,6 +1564,12 @@ async function main() {
   // Prove the app server is THIS worktree: the route exists here and nowhere else.
   const probe = await fetch(`${APP}/api/financial-data-hub/retirement-statement/upload`, { method: 'POST' });
   check('The dev server on this port serves THIS branch (FDH-12 route present: 401, not 404)', probe.status === 401, `status=${probe.status}`);
+
+  // WHOLE-TABLE BASELINE, taken before the first synthetic row exists. §171's
+  // sweep compares against this, so residue is detected by the table's own
+  // cardinality rather than by trusting this run's list of ids.
+  baselineCounts = await wholeTableCounts();
+  console.log(`  BASE  whole-table cardinality before the run: ${SWEPT_TABLES.map((t) => `${t}=${baselineCounts[t]}`).join(' ')}`);
 
   try {
     for (const name of selected) {

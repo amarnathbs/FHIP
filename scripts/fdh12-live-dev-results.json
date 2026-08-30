@@ -1,11 +1,5 @@
 {
-  "pass": 213,
-  "fail": 5,
-  "failures": [
-    "\u00a7119 evidence approved through the real route",
-    "\u00a7130 evidence approved through the real route",
-    "\u00a7132 evidence approved through the real route",
-    "\u00a7134 LIVE: canonical apply provenance cannot be ERASED by direct REST",
-    "\u00a7134 LIVE: canonical source_type cannot be rewritten by direct REST"
-  ]
+  "pass": 262,
+  "fail": 0,
+  "failures": []
 }
