@@ -35,21 +35,25 @@ export default async function ResourceAnalyticsPage() {
   const current = await requireResourceAdminAccess();
   if (!canViewResourceAnalytics(current)) redirect('/admin/resources');
 
+  // Layout follows the sibling Resources Admin screens exactly (a plain
+  // `space-y-6` stack using the design-system ink/muted/line/card tokens):
+  // AppShell's own <main> already supplies the page padding and the sole
+  // `main` landmark, so this page adds neither.
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Analytics Intelligence Centre</h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold text-ink">Analytics Intelligence Centre</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted">
           A read-only Admin analytics area. Nothing here creates, edits, approves, schedules or publishes content, and
           nothing here reads an individual person&rsquo;s records.
         </p>
       </header>
 
-      <section aria-labelledby="analytics-status-heading" className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-6">
-        <h2 id="analytics-status-heading" className="text-base font-semibold text-slate-900">
+      <section aria-labelledby="analytics-status-heading" className="max-w-2xl rounded-card border border-line bg-white p-4">
+        <h2 id="analytics-status-heading" className="text-base font-semibold text-ink">
           No analytics surfaces are available yet
         </h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted">
           This area has been created ahead of the reporting it will hold. Its analytics surfaces are being introduced in
           subsequent authorised waves, and no figures of any kind are shown until then. Nothing on this page is a
           placeholder for a real value.
