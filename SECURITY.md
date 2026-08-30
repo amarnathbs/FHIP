@@ -20,6 +20,8 @@ Supabase Auth handles sign-up, login, session management, and password reset. `m
 
 Admin-only API routes and UI (`app/(app)/admin/**`, `app/api/admin/**`) gate on the signed-in user's role via `/api/admin/me` and equivalent server-side checks — a non-admin user hitting an admin route should be rejected server-side, not merely hidden in the UI. Treat any admin route that only checks role in a client component (without a matching server-side check) as a bug to fix, not an accepted pattern.
 
+Admin navigation visibility is a UX control only, not authorisation. Any change to Admin functionality — navigation, pages, roles, capabilities, APIs, privileged database access, or analytics/reporting — must follow the canonical **[FHIP Admin Architecture Standard](docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md)**.
+
 ## Advice boundary
 
 `lib/advice-boundary/check.ts` is a deliberate guardrail: FHIP surfaces financial *information and calculated scenarios*, not licensed personal financial advice. Any new user-facing copy or recommendation text should be checked against this boundary rather than assumed safe — this is a product/compliance requirement, not just a code-style preference.
