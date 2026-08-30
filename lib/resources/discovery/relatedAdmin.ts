@@ -92,12 +92,76 @@ export async function removeRelatedContent(supabase: SupabaseClient, id: string)
 }
 
 // spec §39: "reorder if existing schema supports order" — it does
-// (resource_related_content.sort_order). Plain sequential update, same
-// pattern as reorderPostFaqs in lib/resources/faq/mutations.ts.
-export async function reorderRelatedContent(supabase: SupabaseClient, sourcePostId: string, orderedIds: string[]): Promise<void> {
-  const results = await Promise.all(orderedIds.map((id, index) => supabase.from('resource_related_content').update({ sort_order: index }).eq('id', id).eq('source_post_id', sourcePostId)));
-  const firstError = results.find((r) => r.error);
-  if (firstError?.error) throw firstError.error;
+// (resource_related_content.sort_order).
+//
+// Admin A0.2 Wave 2 (Scope A). This used to be a Promise.all of N
+// independent `.update()` calls — each its own PostgREST request and its own
+// autocommitted transaction — with no transaction, no validation that the
+// payload described the complete set, and no locking. A failure part-way
+// through left the already-committed positions committed, so the ordering
+// ended up duplicated, gapped, or a blend of two concurrent requests, while
+// the caller received a bare HTTP 500. Reproduced against a real database in
+// scripts/admin_a02_wave2_certification.mjs (SECTIONS 1-2) before this
+// replacement was written.
+//
+// It is now a single call to public.admin_reorder_related_content (migration
+// 0116), which is one transaction: it validates the payload as the COMPLETE
+// ordered set for exactly one source, locks that set, writes every position
+// in one statement, and returns the committed ordering read back from the
+// table. It succeeds completely or changes nothing.
+//
+// The RPC's EXECUTE is granted to service_role only, so this must be called
+// with a service-role client. That is deliberate and matches the Wave 1/1B
+// pattern (migrations 0107/0109): the *authority* check lives in the route
+// (canManageDiscovery), and the RPC is unreachable from a browser session
+// key so it can never be invoked directly by an authenticated non-admin.
+
+export const MAX_RELATED_REORDER_ITEMS = 100; // mirrors the RPC's own cap
+
+export type ReorderFailureKind = 'invalid' | 'not_found' | 'conflict' | 'error';
+
+export interface ReorderedRelatedContent {
+  source_post_id: string;
+  count: number;
+  ordered: { id: string; sort_order: number }[];
+}
+
+export type ReorderResult = { ok: true; data: ReorderedRelatedContent } | { ok: false; kind: ReorderFailureKind; message: string };
+
+// SQLSTATEs raised deliberately by admin_reorder_related_content. Anything
+// else is an unexpected server fault and is never surfaced verbatim.
+const REORDER_ERROR_KINDS: Record<string, ReorderFailureKind> = {
+  '22023': 'invalid', // invalid_parameter_value — payload shape/content
+  P0002: 'not_found', // source Resource does not exist
+  '40001': 'conflict', // the link set changed since the client loaded it
+};
+
+// The RPC's messages are written for administrators and are safe to show, but
+// they are prefixed with the function name for server logs. Strip that so the
+// UI shows a clean sentence, and never pass through a message we did not
+// author (i.e. an unexpected SQLSTATE).
+function cleanRpcMessage(message: string): string {
+  return message.replace(/^admin_reorder_related_content:\s*/, '').trim();
+}
+
+export async function reorderRelatedContent(supabase: SupabaseClient, sourcePostId: string, orderedIds: string[]): Promise<ReorderResult> {
+  const { data, error } = await supabase.rpc('admin_reorder_related_content', {
+    p_source_post_id: sourcePostId,
+    p_ordered_ids: orderedIds,
+  });
+
+  if (error) {
+    const kind = REORDER_ERROR_KINDS[error.code ?? ''];
+    if (!kind) {
+      // Unexpected SQLSTATE (or a transport failure). Log the detail
+      // server-side; never leak a raw SQL error to the client.
+      console.error('Resources related-content reorder RPC error:', error);
+      return { ok: false, kind: 'error', message: 'Could not reorder related content.' };
+    }
+    return { ok: false, kind, message: cleanRpcMessage(error.message ?? '') || 'Could not reorder related content.' };
+  }
+
+  return { ok: true, data: data as ReorderedRelatedContent };
 }
 
 export function formatStatusForPicker(status: string): string {

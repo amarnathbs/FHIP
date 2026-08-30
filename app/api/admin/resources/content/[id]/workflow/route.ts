@@ -3,6 +3,7 @@ import { bad } from '@/lib/api';
 import { transitionResourcePostStatus } from '@/lib/resources/workflow';
 import { getResourceEditorPost } from '@/lib/resources/editor/queries';
 import { validateForReview, validateForPublish } from '@/lib/resources/editor/validation';
+import { validateScheduledTransition, schedulingErrorResponse } from '@/lib/resources/scheduling';
 import { createResourceVersion, deriveSeoFallback } from '@/lib/resources/editor/mutations';
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
@@ -91,8 +92,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         seo_description: post.seo_description || fallback.seoDescription,
       });
       if (!check.valid) return Response.json({ error: 'This content is not ready to publish yet.', fields: check.errors }, { status: 422 });
-      if (toStatus === 'scheduled' && !body?.scheduledAt) return Response.json({ error: 'A schedule date/time is required.', fields: { scheduled_at: 'Choose when this should publish.' } }, { status: 422 });
     }
+
+    // Admin A0.2 Wave 2 (Scope B). Canonical scheduling pre-check, shared
+    // verbatim with the Glossary, Money Update and Video routes. This
+    // REPLACES the previous `!body?.scheduledAt` test, which read a
+    // client-supplied property that was never persisted, never forwarded to
+    // the RPC and never compared — so any truthy value satisfied it. The
+    // authoritative, non-bypassable rule is the identical check inside
+    // public.transition_resource_post_status (migration 0116); this one only
+    // gives the administrator a clean field-level error first.
+    const scheduling = validateScheduledTransition(toStatus, post.scheduled_at);
+    if (scheduling) return schedulingErrorResponse(scheduling);
 
     const response = await transitionResourcePostStatus(id, toStatus as ResourceStatus, { reason, notes });
     if (!response.ok) return response; // transitionResourcePostStatus already shapes the RPC's error message safely (spec §74)

@@ -41,6 +41,31 @@ export async function transitionResourcePostStatus(
     // correct default rather than 500 for those, matching how a client
     // should treat "you may not do this" vs "the server broke".
     const msg = error.message ?? 'Workflow transition failed';
+
+    // Admin A0.2 Wave 2 (Scope B). Two narrow, additive mappings so that a
+    // scheduling rejection is reported identically for all four content
+    // types and never leaks raw SQL. Everything else keeps its existing,
+    // already-certified behaviour exactly.
+    //
+    //   22023 — the canonical scheduling invariant inside
+    //           transition_resource_post_status (migration 0116). This is a
+    //           validation failure the administrator can fix, not a
+    //           permission failure, so it is a 422 with a scheduled_at field
+    //           reference — the same envelope the route-level pre-check
+    //           returns.
+    if (error.code === '22023') {
+      return Response.json({ error: msg, code: 'SCHEDULED_AT_INVALID_TRANSITION', fields: { scheduled_at: msg } }, { status: 422 });
+    }
+    //   23514 — the raw chk_resource_posts_scheduled_at CHECK constraint.
+    //           Unreachable now that the RPC checks first, but if it is ever
+    //           reached again the client must NOT receive the internal
+    //           constraint name; it gets the same canonical message instead.
+    if (error.code === '23514' && /chk_resource_posts_scheduled_at/.test(msg)) {
+      const canonical = 'A publish date and time is required before this content can be scheduled.';
+      console.error('Resources workflow: scheduled_at CHECK constraint reached despite the RPC guard:', error);
+      return Response.json({ error: canonical, code: 'SCHEDULED_AT_REQUIRED', fields: { scheduled_at: canonical } }, { status: 422 });
+    }
+
     if (/not authenticated/i.test(msg)) return bad(msg, 401);
     if (/not found/i.test(msg)) return bad(msg, 404);
     return bad(msg, 403);
