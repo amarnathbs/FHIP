@@ -7,7 +7,39 @@ Harness: `scripts/fdh12_certification.mjs` — a clean rebuild of the entire
 `set_config('request.jwt.claims', ...)` + `set role` to exercise RLS and
 triggers for real.
 
-**Result: 53 checks, 53 PASS, 0 FAIL.**
+**Result: 62 checks, 62 PASS, 0 FAIL** (53 originally, plus 9 added by the
+live-DEV round for the two defects it found).
+
+Live counterpart: `scripts/fdh12_live_dev_certification.mjs`, run against real
+hosted DEV — **213 PASS / 5 FAIL**, the five being defects FDH12-LD-1 and
+FDH12-LD-2 awaiting migrations `0113` and `0114`. See
+`FDH12_LIVE_DEV_CERTIFICATION.md`.
+
+## Defects this certification did NOT catch, and live DEV did
+
+Recorded here because a security certification that misses a security defect
+should say so.
+
+* **FDH12-LD-2 — canonical retirement apply provenance was unguarded.**
+  Migration 0112 added `retirement_accounts.last_import_application_id` /
+  `last_imported_at` and widened `source_type`, but shipped neither of the two
+  guards `income_sources` (0091) and `liabilities` (0096) pair with those exact
+  columns. Live, as an ordinary authenticated user over PostgREST: `source_type`
+  forged to `retirement_statement_import` (200), provenance erased (200), and
+  **Tenant B's own retirement account pointed at Tenant A's import application
+  (200)**. The identical request on `income_sources` was refused
+  `400 P0001 "… import-bridge provenance …"`. Fixed forward in migration
+  `0114`; three new checks here now cover it, and all three FAIL with `0114`
+  removed from the chain.
+* **FDH12-LD-1 — the approve RPC could never succeed.** Not a security hole but
+  a security-guard defect: 0112 PART F's `auth.role()`-based guard refused
+  `fdh12_approve_retirement_statement()`'s own write, because `security definer`
+  does not change `auth.role()`. This harness had verified only that the
+  function existed in `pg_proc` and then set `approval_status` by hand as the
+  service role, so the RPC's write path had never run. Fixed forward in
+  migration `0113`; the harness now invokes the RPC for real as an
+  `authenticated` role, and asserts immediately afterwards that a DIRECT client
+  update of `approval_status` is still refused.
 
 ## Same-tenant authority (spec 96)
 

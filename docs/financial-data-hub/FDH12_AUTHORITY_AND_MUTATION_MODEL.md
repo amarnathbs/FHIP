@@ -10,7 +10,7 @@ Spec section 95. Every field FDH-12 touches, classified.
 | `.reconciliation_status`, `.reconciliation_variance` | **System-derived** | same trigger |
 | `.account_match_status`, `.account_match_candidates`, `.canonical_account_id`, `.retirement_member_id` | **System-derived** | same trigger + ownership trigger (cross-tenant) |
 | `.smsf_classification`, `.smsf_evidence` | **System-derived** | same trigger. A user cannot clear their own SMSF routing flag. |
-| `.approval_status`, `.approved_at`, `.approved_by` | **RPC-only** | `fdh12_approve_retirement_statement()` is the sole legitimate writer; the trigger blocks direct writes. |
+| `.approval_status`, `.approved_at`, `.approved_by` | **RPC-only** | `fdh12_approve_retirement_statement()` is the sole legitimate writer; the trigger blocks direct writes. **Live-DEV certification found the trigger was ALSO blocking the RPC itself** (`security definer` does not change `auth.role()`), so no caller could approve at all — defect FDH12-LD-1, fixed in migration `0113`, which has the RPC declare its one sanctioned write via `fhip.import_bridge_internal_write` exactly as FDH-9 and FDH-10 do. |
 | `.duplicate_of_statement_id` | **System-derived** | same trigger |
 | `fdh_retirement_statement_activities.activity_type`, `.amount`, `.currency_code`, dates, `.employer_normalised` | **System-derived** | `fdh12_retirement_activities_assert_authoritative_write()` |
 | `.is_summary_total`, `.is_year_to_date` | **System-derived** | same trigger. These drive the no-double-count rules, so a user must not be able to flip them. |
@@ -26,7 +26,7 @@ Spec section 95. Every field FDH-12 touches, classified.
 | `retirement_accounts.target_retirement_age` | **Retirement-owned; NEVER writable by FDH-12** | Absent from `RETIREMENT_APPLICABLE_FIELDS` **and** from the RPC's `v_allowed`. A forged proposal naming it is refused `FORBIDDEN_FIELD`. |
 | `retirement_members.target_retirement_age` | **Retirement-owned; NEVER writable by FDH-12** | FDH-12 issues no `insert`/`update` against `retirement_members` at all. |
 | `retirement_accounts.master_item_key`, `.is_active`, `.user_id`, `.retirement_member_id`, `.ii_publication_id` | **Retirement-owned; structural, never proposal-driven** | Not in the allow-list. `master_item_key` is forced NULL on ADD NEW. |
-| `retirement_accounts.source_type`, `.last_import_application_id`, `.last_imported_at` | **RPC-only provenance** | Stamped by the RPC after a successful apply. |
+| `retirement_accounts.source_type`, `.last_import_application_id`, `.last_imported_at` | **RPC-only provenance** | Stamped by `fdh12_apply_retirement_proposal()` after a successful apply, under the `fhip.import_bridge_internal_write` GUC. **As shipped in 0112 this classification was intent only, with no enforcement**: live-DEV certification proved an ordinary user could forge or erase all three by direct REST, and could point their own row at another tenant's import application — defect FDH12-LD-2, fixed in migration `0114`, which transposes the two `income_sources` guards (0091) onto `retirement_accounts` unchanged. |
 | `smsf_funds`, `smsf_fund_members`, `smsf_holdings` | **SMSF-owned** | FDH-12 issues no write. The apply RPC refuses an SMSF target; migration 0090's guard is the independent backstop. |
 | `ii_*`, `investments` | **Investment-Intelligence-owned** | FDH-12 references none of them. |
 | `income_sources`, expenses, `fdh_transactions`, `insurance_policies` | **Out of scope; no write path exists** | Asserted mechanically over the real source tree. |
@@ -37,7 +37,10 @@ Spec section 95. Every field FDH-12 touches, classified.
 
 `scripts/fdh12_certification.mjs` section 3 attempts SIX real forgeries as the
 `authenticated` role against a real Postgres, and each is refused with
-`this field is system-authoritative`. Two positive controls prove the result is
+`this field is system-authoritative`. `scripts/fdh12_live_dev_certification.mjs`
+repeats ELEVEN of them against real hosted DEV over PostgREST — each using a
+value genuinely DIFFERENT from the one the row already holds, so no check is a
+no-op — and all eleven are refused live. Two positive controls prove the result is
 not "all updates fail": the user CAN edit `nickname`, and the service-role
 bridge CAN write the authoritative columns.
 

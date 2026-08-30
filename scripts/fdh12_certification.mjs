@@ -217,6 +217,133 @@ async function main() {
   check('POSITIVE CONTROL: the service-role bridge CAN write them (real path proven)',
     svc.rows[0].reconciliation_status === 'reconciled' && svc.rows[0].account_match_status === 'matched');
 
+  // --------------------------------------------------------------------------
+  // REGRESSION: the approve RPC must actually WORK for the only role that can
+  // call it (spec 56).
+  //
+  // This block exists because it did not, and this harness did not notice.
+  // Until migration 0113 this suite proved only that
+  // `fdh12_approve_retirement_statement` EXISTED in pg_proc, then set
+  // `approval_status = 'approved'` by hand as the SERVICE role, so the RPC's
+  // own write path never ran. Live-DEV certification (2026-08-30) invoked it
+  // for real and it was refused by PART F's own trigger: `security definer`
+  // changes the executing role, not `auth.role()`, which still reports
+  // 'authenticated' inside the function. No caller could approve anything, so
+  // no proposal and no canonical apply were reachable at all.
+  //
+  // A positive control alone is not enough here — a guard that let EVERY
+  // authenticated write through would also pass it — so the negative control
+  // is asserted immediately afterwards against the same row.
+  // --------------------------------------------------------------------------
+  const stmtApprove = await seedStatement(db, A, { extraction_status: 'extracted' });
+  let approveResult = null;
+  let approveError = '';
+  try {
+    approveResult = await asRole(db, 'authenticated', A, () =>
+      db.query(`select fdh12_approve_retirement_statement($1) as r`, [stmtApprove]));
+  } catch (e) { approveError = e.message; }
+  check('spec 56: an authenticated user CAN approve their own statement through the RPC',
+    approveResult?.rows?.[0]?.r?.ok === true && approveResult.rows[0].r.code === 'APPROVED',
+    approveError.slice(0, 120) || JSON.stringify(approveResult?.rows?.[0]?.r));
+  const approvedRow = await db.query(
+    `select approval_status, approved_at, approved_by from fdh_retirement_statements where id=$1`, [stmtApprove]);
+  check('spec 56: the approval actually persisted, with who and when',
+    approvedRow.rows[0].approval_status === 'approved'
+    && approvedRow.rows[0].approved_at !== null
+    && approvedRow.rows[0].approved_by === A,
+    JSON.stringify(approvedRow.rows[0]));
+  const approveAgain = await asRole(db, 'authenticated', A, () =>
+    db.query(`select fdh12_approve_retirement_statement($1) as r`, [stmtApprove]));
+  check('spec 56: approving twice is idempotent, not an error',
+    approveAgain.rows[0].r.ok === true && approveAgain.rows[0].r.code === 'ALREADY_APPROVED');
+
+  // NEGATIVE CONTROL, same row, immediately after: the GUC escape hatch the
+  // fix adds must not have opened the table to direct client writes.
+  let postFixForged = false;
+  let postFixMsg = '';
+  const stmtForge = await seedStatement(db, A, { extraction_status: 'extracted' });
+  try {
+    await asRole(db, 'authenticated', A, () =>
+      db.query(`update fdh_retirement_statements set approval_status='approved' where id=$1`, [stmtForge]));
+    postFixForged = true;
+  } catch (e) { postFixMsg = e.message; }
+  check('spec 96: a DIRECT client update of approval_status is STILL refused after the 0113 fix',
+    !postFixForged && /system-authoritative/.test(postFixMsg), postFixMsg.slice(0, 60));
+  // And the GUC does not leak past the RPC's own transaction-local scope.
+  let leaked = false;
+  try {
+    await asRole(db, 'authenticated', A, async () => {
+      await db.query(`select fdh12_approve_retirement_statement($1) as r`, [stmtForge]);
+      await db.query(`update fdh_retirement_statements set reconciliation_status='reconciled' where id=$1`, [stmtForge]);
+      leaked = true;
+    });
+  } catch { leaked = false; }
+  check('spec 96: the internal-write GUC does not survive the RPC that set it', !leaked);
+
+  // --------------------------------------------------------------------------
+  // REGRESSION: canonical retirement APPLY PROVENANCE is authoritative too.
+  //
+  // Also found live on DEV (2026-08-30), fixed forward in migration 0114.
+  // 0112 added retirement_accounts.last_import_application_id /
+  // last_imported_at and widened source_type, but shipped neither of the two
+  // guards that income_sources (0091) and liabilities (0096) pair with those
+  // exact columns. An ordinary authenticated user could, over PostgREST:
+  //   * stamp source_type = 'retirement_statement_import' on a hand-typed row
+  //   * forge or erase last_import_application_id / last_imported_at
+  //   * point their own row at ANOTHER TENANT's import application
+  // all of which returned 200 on real DEV, while the identical move on
+  // income_sources was refused.
+  // --------------------------------------------------------------------------
+  const provAttempts = [
+    ['source_type', `source_type='retirement_statement_import'`],
+    ['last_imported_at', `last_imported_at=now()`],
+  ];
+  for (const [field, setClause] of provAttempts) {
+    let forged = false;
+    let msg = '';
+    try {
+      await asRole(db, 'authenticated', A, () =>
+        db.query(`update retirement_accounts set ${setClause} where id=$1`, [accA]));
+      forged = true;
+    } catch (e) { msg = e.message; }
+    check(`spec 96: a user cannot forge canonical retirement provenance ${field}`,
+      !forged && /import-bridge provenance/.test(msg), msg.slice(0, 60));
+  }
+  // POSITIVE CONTROL — the rest of the canonical row is still freely editable.
+  let ordinaryEdit = false;
+  try {
+    await asRole(db, 'authenticated', A, () =>
+      db.query(`update retirement_accounts set account_name='Renamed by user' where id=$1`, [accA]));
+    const r = await db.query(`select account_name from retirement_accounts where id=$1`, [accA]);
+    ordinaryEdit = r.rows[0].account_name === 'Renamed by user';
+  } catch { ordinaryEdit = false; }
+  check('POSITIVE CONTROL: manual retirement editing is completely unaffected by the provenance guard', ordinaryEdit);
+
+  // CROSS-TENANT: B's own account may not point at A's import application.
+  await db.query(
+    `insert into fhip_import_proposals(id,user_id,target_domain,source_kind,recommended_apply_mode,status,applied_at,target_entity_id)
+     values ('99999999-9999-9999-9999-999999999901',$1,'retirement','retirement_statement','update_existing','applied',now(),$2)`,
+    [A, accA]);
+  const appRow = await db.query(
+    `insert into fhip_import_applications(user_id,proposal_id,target_domain,target_entity_id,apply_mode,applied_fields,previous_values,new_values,applied_by)
+     values ($1,'99999999-9999-9999-9999-999999999901','retirement',$2,'update_existing','[]'::jsonb,'{}'::jsonb,'{}'::jsonb,$1) returning id`,
+    [A, accA]);
+  let crossProv = false;
+  let crossMsg = '';
+  try {
+    await asRole(db, 'service_role', B, async () => {
+      // The provenance-write guard would refuse this first; the GUC is set so
+      // the CROSS-TENANT guard is what is actually being tested here, not the
+      // write guard standing in front of it.
+      await db.query(`select set_config('fhip.import_bridge_internal_write','true',true)`);
+      await db.query(`update retirement_accounts set last_import_application_id=$2 where id=$1`,
+        [accB, appRow.rows[0].id]);
+    });
+    crossProv = true;
+  } catch (e) { crossMsg = e.message; }
+  check("spec 98/102: Tenant B's retirement account cannot point at Tenant A's import application",
+    !crossProv && /cross-tenant/.test(crossMsg), crossMsg.slice(0, 80));
+
   // ---------------------------------------------------- 4. cross-tenant (97-102)
   console.log('\n4. CROSS-TENANT SECURITY (spec 97-102)');
   const visible = await asRole(db, 'authenticated', B, () =>

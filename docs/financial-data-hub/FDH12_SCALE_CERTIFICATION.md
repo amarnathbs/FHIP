@@ -60,11 +60,20 @@ introduced by scale alone.
 
 ## What was NOT done — honestly disclosed
 
-* **The 1,000/1,001 boundary has not been exercised against hosted DEV**,
-  because migration 0112 is not applied there. The PGlite and fake-pager
-  evidence above is real, but it is not hosted-PostgREST evidence. Spec section
-  139 asks for the live boundary "at minimum"; that step is pending the Product
-  Owner applying the migration.
+* ~~The 1,000/1,001 boundary has not been exercised against hosted DEV.~~
+  **CLOSED 2026-08-30.** Migration 0112 was applied to DEV and the boundary was
+  then exercised for real (`scripts/fdh12_live_dev_certification.mjs`, phase
+  `pagination`), 6/6 PASS:
+
+  | Rows | Extracted | Stored in hosted DEV | Seen by the application's own read path |
+  | --- | --- | --- | --- |
+  | 1000 (at PostgREST's cap) | 1000 | 1000 | **1000** |
+  | 1001 (one past the cap) | 1001 | 1001 | **1001** |
+
+  "Seen by the application's own read path" is the sum of every bank-match
+  outcome returned by `/evidence-matches`, which reads through `fetchAllRows`. A
+  silent truncation at `db-max-rows` would have reported 1000 for the 1001-row
+  statement. It did not.
 * **5,000 and 10,000 rows were certified in PGlite and in pure TypeScript, not
   live.** Spec section 139 explicitly permits this ("Retain PGlite
   certification for 5k/10k if live latency is unreasonable").

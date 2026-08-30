@@ -1,0 +1,263 @@
+FDH-12 LIVE DEV CERTIFICATION
+  DEV project : vqycarelcoijzwlpkpcz.supabase.co
+  App server  : http://localhost:3212
+  Phases      : schema, journey, employer, internal, personal, rollover, withdrawal, recon, dedup, wrong, cross, triple, forgery, smsf, pagination
+  PASS  The dev server on this port serves THIS branch (FDH-12 route present: 401, not 404) status=401
+
+=== §167 — LIVE DEV SCHEMA VERIFICATION ===
+  PASS  §167 table fdh_retirement_statements exists live
+  PASS  §167 table fdh_retirement_statement_activities exists live
+  PASS  §167 table fdh_retirement_statement_positions exists live
+  PASS  §167 RPC fdh12_approve_retirement_statement registered live
+  PASS  §167 RPC fdh12_apply_retirement_proposal registered live
+  PASS  §167 retirement_accounts.last_import_application_id exists live
+  PASS  §167 retirement_accounts.last_imported_at exists live
+  PASS  §167 fhip_import_proposals.source_retirement_statement_id exists live
+  PASS  §167 fhip_import_applications.source_retirement_statement_id exists live
+  PASS  §167 fdh_retirement_statements: every migration-declared column exists live (51 declared)
+  PASS  §167 fdh_retirement_statements: live has no column the migration did not declare
+  PASS  §167 fdh_retirement_statements: no floating-point money column live (spec 142)
+  PASS  §167 fdh_retirement_statement_activities: every migration-declared column exists live (29 declared)
+  PASS  §167 fdh_retirement_statement_activities: live has no column the migration did not declare
+  PASS  §167 fdh_retirement_statement_activities: no floating-point money column live (spec 142)
+  PASS  §167 fdh_retirement_statement_positions: every migration-declared column exists live (15 declared)
+  PASS  §167 fdh_retirement_statement_positions: live has no column the migration did not declare
+  PASS  §167 fdh_retirement_statement_positions: no floating-point money column live (spec 142)
+  PASS  §167 service-role can seed a probe statement (positive control) status=201
+  PASS  §167 service-role can seed a probe activity (positive control) status=201
+  PASS  §167 service-role can seed a probe position (positive control) status=201
+  PASS  §167 RLS fdh_retirement_statements: service role SEES the row (positive control — the anon empty result below is not vacuous) rows=1
+  PASS  §167 RLS fdh_retirement_statements: ANON read returns 0 rows status=200 rows=0
+  PASS  §167 RLS fdh_retirement_statement_activities: service role SEES the row (positive control — the anon empty result below is not vacuous) rows=1
+  PASS  §167 RLS fdh_retirement_statement_activities: ANON read returns 0 rows status=200 rows=0
+  PASS  §167 RLS fdh_retirement_statement_positions: service role SEES the row (positive control — the anon empty result below is not vacuous) rows=1
+  PASS  §167 RLS fdh_retirement_statement_positions: ANON read returns 0 rows status=200 rows=0
+  PASS  §167 RLS fdh_retirement_statements: ANON INSERT refused status=401 code=42501
+  PASS  §167 fdh12_approve_retirement_statement refuses the ANON role status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh12_approve_retirement_statement: 
+
+=== §119 / §127 / §129 / §120(canonical) — AUSTRALIA LIVE DEV JOURNEY ===
+  PASS  §119 upload accepted by the real API route status=200 {"data":{"document_id":"a75fe235-e892-489a-ab27-7ad992bcbe32","statement_id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","pipeline_status":"ok","failure_kind":null,"
+  PASS  §119 a document and a statement were created doc=a75fe235-e892-489a-ab27-7ad992bcbe32 stmt=9934e70a-48c3-4977-8fb2-e3349ff255ae
+  PASS  §119 pipeline_status ok ok
+  PASS  §119 extraction_status = extracted extracted
+  PASS  §127 LIVE: a fully reconcilable statement reports RECONCILED status=reconciled variance=0
+  PASS  §127 LIVE: reported variance is exactly zero 0
+  PASS  §119 closing balance read from the statement 105675
+  PASS  §123 LIVE: the admin fee was read as $100 of retirement value reduction 100
+  PASS  §124 LIVE: the insurance premium was read as $75 of retirement value reduction 75
+  PASS  §125 LIVE: investment earnings read as $5,000 of retirement asset movement 5000
+  PASS  §119 account match ran status=200 {"data":{"statement_id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","account_match_status":"matched","canonical_account_id":"ae7d03ca-e13f-4aac-89d0-e19961506999","r
+  PASS  §119 statement matched the canonical account ae7d03ca-e13f-4aac-89d0-e19961506999
+  PASS  §119 statement resolved the household member 50ab8904-d0c4-4e4c-b1a6-227964f6d0cd
+  PASS  §119 evidence matching ran status=200 {"data":{"statement_id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","payslip":{"matched":0,"no_match":0,"multiple_candidates":0,"variance_review":0,"payslip_evidence_not_available":0},"bank":{"matched":0,"
+  FAIL  §119 evidence approved through the real route [DEFECT FDH12-LD-1: fdh12_approve_retirement_statement is refused by 0112 PART F; fixed forward in migration 0113, which is NOT applied to DEV]
+  PASS  §119 comparison/proposal generated [approval step stubbed via service role — pending migration 0113 on DEV] status=200 {"data":{"proposal_id":"bd228735-d86d-4514-9f24-43eeb9c43ef1","statement_id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","recommended_apply_mode":"update_existing","target_entity_id":"ae7d03ca-e13f-4aac-89
+  PASS  §119 proposal recommends UPDATE EXISTING against the matched account [approval step stubbed via service role — pending migration 0113 on DEV] update_existing / ae7d03ca-e13f-4aac-89d0-e19961506999
+  PASS  §119 proposal carries the statement closing balance [approval step stubbed via service role — pending migration 0113 on DEV] 105675.00
+  PASS  §120 proposal carries employer contribution of exactly 1000.00 (ONE figure, not a sum) [approval step stubbed via service role — pending migration 0113 on DEV] 1000.00
+  PASS  §119 Current-vs-Proposed comparison readable [approval step stubbed via service role — pending migration 0113 on DEV]
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after upload+parse
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after account+member match
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after evidence matching
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after approve-evidence
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after compare/proposal
+  PASS  §129 LIVE: canonical retirement_accounts row is byte-unchanged after reading the comparison
+  PASS  §129 LIVE: no canonical apply record exists before the user presses Apply applications=0
+  PASS  §119 USER APPLY succeeded [approval step stubbed via service role — pending migration 0113 on DEV] status=200 {"data":{"outcome":"applied","apply_mode":"update_existing","target_entity_id":"ae7d03ca-e13f-4aac-89d0-e19961506999","application_id":"8c0c6370-abed-46de-a6fa-0030faca175d","applied_fields":["current
+  PASS  §119 canonical Retirement balance updated to the statement closing balance [approval step stubbed via service role — pending migration 0113 on DEV] 105675
+  PASS  §120 LIVE: canonical employer contribution is exactly 1000.00 — never 2000.00 [approval step stubbed via service role — pending migration 0113 on DEV] 1000
+  PASS  §119 canonical row records the apply provenance 8c0c6370-abed-46de-a6fa-0030faca175d / 2026-08-30T06:24:54.757034+00:00
+  PASS  §119 the apply record names THIS retirement statement as its source 9934e70a-48c3-4977-8fb2-e3349ff255ae
+  PASS  §119 the apply record targets THIS canonical account
+
+=== §120 — LIVE EMPLOYER CONTRIBUTION: $1,000 + $1,000 = $1,000 ===
+  PASS  §120 payslip evidence seeded with employer super $1,000 1000
+  PASS  §120 fund contribution statement uploaded status=200 {"data":{"document_id":"7dcf7895-da52-49ad-8f65-296f7aa81f3a","statement_id":"f963c434-4e47-4421-afb3-fe821327e86d","pipeline_status":"ok","failure_kind":null,"failure_message":null,"activities_extrac
+  PASS  §120 exactly one activity extracted from the statement 1
+  PASS  §120 the fund line was classified EMPLOYER_CONTRIBUTION EMPLOYER_CONTRIBUTION
+  PASS  §120 the fund contribution amount is $1,000 1000
+  PASS  §120 contribution statement matched the same canonical account ae7d03ca-e13f-4aac-89d0-e19961506999
+  PASS  §120 payslip reconciliation matched EXACTLY ONE payslip to the fund contribution {"matched":1,"no_match":0,"multiple_candidates":0,"variance_review":0,"payslip_evidence_not_available":0}
+  PASS  §120 the activity is linked to the payslip as EVIDENCE OF THE SAME EVENT matched / 1b9a4d8e-a5fe-4974-b15c-ed767ccc6204
+  PASS  §120 the match reports ZERO variance between payslip and fund figures 0
+  PASS  §120 the payslip row was NOT modified by FDH-12 1000
+  PASS  §120 canonical economic employer contribution is $1,000 — NOT $2,000 1000
+  PASS  §120 no canonical income row was created by either evidence source income_sources=0
+  PASS  §120 exactly ONE canonical retirement account exists (no second contribution posting) accounts=1
+  PASS  §120 a SECOND fund activity cannot claim the same payslip (live unique index) status=409 code=23505
+
+=== §123 / §124 / §125 — LIVE FEE, INSURANCE, EARNINGS (isolated negative controls) ===
+  PASS  §123 LIVE: removing the admin fee from the closing balance produces VARIANCE, not a silent pass variance
+  PASS  §123 LIVE: the admin fee is worth exactly $100 of retirement value variance=-100 expected=-100
+  PASS  §124 LIVE: removing the insurance premium from the closing balance produces VARIANCE, not a silent pass variance
+  PASS  §124 LIVE: the insurance premium is worth exactly $75 of retirement value variance=-75 expected=-75
+  PASS  §125 LIVE: removing the investment earnings from the closing balance produces VARIANCE, not a silent pass variance
+  PASS  §125 LIVE: the investment earnings is worth exactly $5000 of retirement value variance=5000 expected=5000
+  PASS  §123/§124 LIVE: internal fees and premiums created ZERO ordinary cash expense rows expense_items=0
+  PASS  §123/§124 LIVE: internal fees and premiums created ZERO bank transactions fdh_transactions=0
+  PASS  §125 LIVE: retained earnings created ZERO household bank income event income_sources=0 fdh_transactions=0
+  PASS  §125 LIVE: retained earnings created no canonical asset row assets=0
+  PASS  §129 LIVE: uploading three further statements changed canonical Retirement not at all
+
+=== §121 — LIVE PERSONAL CONTRIBUTION: bank -$5,000, super +$5,000, expense $0 ===
+  PASS  §121 statement uploaded 200 {"data":{"document_id":"2ed505fa-7224-48e1-b5b7-9a83efbfd420","statement_id":"294a547b-f907-4ce2-a6c0-d00ab1bab9b2","pipeline_status":"ok","failure_kind":null,"
+  PASS  §121 the fund line was classified PERSONAL_CONTRIBUTION PERSONAL_CONTRIBUTION
+  PASS  §121 the $5,000 bank debit was matched to the $5,000 fund credit as ONE event {"matched":1,"no_match":0,"multiple_candidates":0,"not_expected":0,"bank_evidence_not_available":0}
+  PASS  §121 the activity links the real bank transaction 8d476749-7343-4d5b-a156-c659d444c87e
+  PASS  §121 LIVE: required ordinary expense is $0 — no expense row was created expense_items=0
+  PASS  §121 LIVE: the bank transaction was NOT reclassified as household consumption
+  PASS  §121 LIVE: no second bank transaction was created for the same movement fdh_transactions=1
+  PASS  §121 LIVE: canonical retirement is unchanged (no Apply was pressed)
+
+=== §122 — LIVE ROLLOVER: Fund A -$100,000, Fund B +$100,000 ===
+  PASS  §122 both fund statements uploaded a30c4eaf-92d1-46fa-a4ea-3b7cd7629c86 / fed989cf-58e3-41ce-9e6f-dfc28d14b138
+  PASS  §122 Fund A leg classified ROLLOVER_OUT ROLLOVER_OUT
+  PASS  §122 Fund B leg classified ROLLOVER_IN ROLLOVER_IN
+  PASS  §122 each statement matched its own fund
+  PASS  §122 the two legs were paired as ONE movement {"matched":1,"no_match":0,"multiple_candidates":0}
+  PASS  §122 the IN leg names the OUT leg as its counterpart e7d49b02-86c7-44ad-b701-329fd13ebd8e
+  PASS  §122 LIVE: required income $0 income_sources=0
+  PASS  §122 LIVE: required expense $0 expense_items=0 fdh_transactions=0
+  PASS  §122 LIVE: required net-worth increase $0 before=100000 after=100000
+  PASS  §122 LIVE: no third retirement account was invented for the movement accounts=2
+
+=== §126 — LIVE WITHDRAWAL: super -$20,000, bank +$20,000 ===
+  PASS  §126 the fund line was classified WITHDRAWAL WITHDRAWAL
+  PASS  §126 LIVE: the super debit and the bank credit were matched as a SINGLE economic event {"matched":1,"no_match":0,"multiple_candidates":0,"not_expected":0,"bank_evidence_not_available":0}
+  PASS  §126 exactly one activity, linked to exactly one bank transaction 1 / dbb4b843-d1d6-4b1b-8d54-c15b521baec6
+  PASS  §126 LIVE: the withdrawal was NOT automatically treated as ordinary taxable income income_sources=0
+  PASS  §126 LIVE: the bank credit was NOT reclassified to income by the match
+  PASS  §126 LIVE: no second cash record was created (one event, not two) fdh_transactions=1
+
+=== §128 — LIVE $0.01 NEGATIVE CONTROL ===
+  PASS  §127 LIVE (independent second instance): the balancing statement is RECONCILED reconciled / 0
+  PASS  §128 LIVE: a closing balance off by exactly $0.01 reports VARIANCE, not RECONCILED variance
+  PASS  §128 LIVE: the reported variance is exactly one cent — no float absorption on real Postgres -0.01
+
+=== §130 / §131 — LIVE DUPLICATE AND OVERLAPPING STATEMENTS ===
+  FAIL  §130 evidence approved through the real route [DEFECT FDH12-LD-1: fdh12_approve_retirement_statement is refused by 0112 PART F; fixed forward in migration 0113, which is NOT applied to DEV]
+  PASS  §130 first upload applied to canonical Retirement [approval step stubbed via service role — pending migration 0113 on DEV] {"data":{"outcome":"applied","apply_mode":"update_existing","target_entity_id":"77f2dc14-a135-4012-affe-9d1a07b71f69","application_id":"7536af7d-2992-4874-9c2e-
+  PASS  §130 LIVE: the identical re-upload is recognised as a duplicate document duplicate_statement
+  PASS  §130 LIVE: the duplicate resolves to the SAME statement, not a new one b5779142-87fb-4a42-af51-0fb210ea3269 vs b5779142-87fb-4a42-af51-0fb210ea3269
+  PASS  §130 LIVE: duplicate proposals 0 (proposals total = 1) [approval step stubbed via service role — pending migration 0113 on DEV] proposals=1
+  PASS  §130 LIVE: duplicate canonical contributions 0 (applications total = 1) [approval step stubbed via service role — pending migration 0113 on DEV] applications=1
+  PASS  §130 LIVE: only one retirement statement exists statements=1
+  PASS  §130 LIVE: the canonical balance was not applied twice [approval step stubbed via service role — pending migration 0113 on DEV] 105675 -> 105675
+  PASS  §130 LIVE: an identical activity statement re-upload is a duplicate document duplicate_statement
+  PASS  §130 LIVE: duplicate activities 0 — 3 lines uploaded twice produced 3 activity rows activities=3
+  PASS  §131 the overlapping annual statement is NOT a byte duplicate (different file) ok
+  PASS  §131 LIVE: overlap activity duplicates 0 — no two counted activities share an economic identity counted=2 duplicate_fingerprints=0
+  PASS  §131 LIVE: the repeated July line is flagged as a duplicate of the original, not counted twice flagged=1 rows=3 amounts=1000|1000|1100
+  PASS  §131 LIVE: exactly two distinct economic contributions survive across the overlapping statements counted=2
+
+=== §132 — LIVE WRONG ACCOUNT: Self ****1234 vs Spouse ****9876 ===
+  PASS  §132 identifier history seeded against each account 3fa34ea3-0ed6-47a5-9fe5-d15f40a24b44 / 87abe9cd-0a2c-4322-ba95-c8c6149a8c17
+  PASS  §132 LIVE: the ****1234 statement resolved to SELF's account resolved=3fa34ea3-0ed6-47a5-9fe5-d15f40a24b44 self=3fa34ea3-0ed6-47a5-9fe5-d15f40a24b44 spouse=87abe9cd-0a2c-4322-ba95-c8c6149a8c17
+  PASS  §132 LIVE: it did NOT resolve to the spouse's same-fund account
+  FAIL  §132 evidence approved through the real route [DEFECT FDH12-LD-1: fdh12_approve_retirement_statement is refused by 0112 PART F; fixed forward in migration 0113, which is NOT applied to DEV]
+  PASS  §132 the statement applied to the account it matched [approval step stubbed via service role — pending migration 0113 on DEV] {"data":{"outcome":"applied","apply_mode":"update_existing","target_entity_id":"3fa34ea3-0ed6-47a5-9fe5-d15f40a24b44","application_id":"fd1a5217-759c-4dce-8111-
+  PASS  §132 LIVE: the SPOUSE's account is byte-unchanged by the SELF statement [approval step stubbed via service role — pending migration 0113 on DEV]
+  PASS  §132 LIVE: only SELF's balance moved [approval step stubbed via service role — pending migration 0113 on DEV] 105675
+  PASS  §132 LIVE: the spouse balance is still exactly its seeded value [approval step stubbed via service role — pending migration 0113 on DEV] 100100
+  PASS  §132 LIVE (symmetric control): the ****9876 statement resolved to the SPOUSE's account 87abe9cd-0a2c-4322-ba95-c8c6149a8c17
+
+=== §133 — LIVE CROSS-TENANT: real Tenant A vs real Tenant B ===
+  PASS  §133 LIVE: A's statement visible to B — 0 rows rows=0
+  PASS  §133 LIVE positive control: B CAN see B's own statement (the empty result above is real RLS, not a broken query) rows=1
+  PASS  §133 LIVE: A's statement activities visible to B — 0 rows rows=0
+  PASS  §133 LIVE: A's statement positions visible to B — 0 rows rows=0
+  PASS  §133 LIVE: A's retirement account targetable by B — NO status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: cross-tenant reference — reti
+  PASS  §133 LIVE: A's household member targetable by B — NO status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: cross-tenant reference — reti
+  PASS  §133 LIVE: A's payslip matchable by B — NO status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statement_activities: cross-tenant refere
+  PASS  §133 LIVE: A's bank transaction matchable by B — NO status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statement_activities: cross-tenant refere
+  PASS  §133 LIVE positive control: B CAN write an activity on B's own statement (the refusals above are cross-tenant, not a blanket block) status=201 [{"id":"b26b94d5-2a56-4115-8099-d480428523b7","user_id":"60b9f518-4aff-4da0-a1c8-23198b6b6a0b","statement_id":
+  PASS  §133 LIVE: B cannot drive A's document through the app's own API status=404
+  PASS  §133 LIVE: B cannot approve A's statement via the RPC {"ok":false,"code":"NOT_FOUND","error":"That retirement statement could not be found."}
+  PASS  §133 LIVE: B cannot apply A's proposal via the RPC {"ok":false,"code":"PROPOSAL_NOT_FOUND","error":"That import proposal could not be found."}
+  PASS  §133 LIVE: A's canonical account is untouched by every Tenant B attempt
+
+=== ARCHITECTURE — statement activities are EVIDENCE, not a second canonical ledger ===
+  PASS  Statement activities: stored as evidence (rows exist independently of any canonical write) activities=1
+  PASS  Canonical Retirement: summary state updated only through approved apply applications=1 last_import_application_id=8c0c6370-abed-46de-a6fa-0030faca175d
+  PASS  Canonical Retirement carries no per-activity ledger: the account row holds SUMMARY fields only id,user_id,account_name,account_type,current_balance,currency_code,country_code,is_active,created_at,updated_at,owner,master_item_key,employer_contribution,personal_contribution,contribution_frequency,target_retirement_age,notes,source_type,ii_publication_id,retirement_member_id,currency_override,last_import_application_id,last_imported_at
+  PASS  Second canonical activity ledger created: 0
+  PASS  Migration 0112 creates exactly the three fdh_ evidence tables and nothing canonical fdh_retirement_statements,fdh_retirement_statement_activities,fdh_retirement_statement_positions
+  PASS  Migration 0112 adds only apply-provenance columns to canonical Retirement retirement_accounts.last_import_application_id,retirement_accounts.last_imported_at
+  PASS  No canonical income/expense posting from FDH-12 for tenant A income=0 expense=0
+  PASS  No canonical income/expense posting from FDH-12 for tenant personal income=0 expense=0
+  PASS  No canonical income/expense posting from FDH-12 for tenant rollover income=0 expense=0
+  PASS  No canonical income/expense posting from FDH-12 for tenant withdrawal income=0 expense=0
+
+=== §134 — LIVE SAME-TENANT FORGERY (row owner, direct REST) ===
+  PASS  §134 setup: the statement really is in the authoritative state being attacked reconciled/matched/approved/extracted
+  PASS  §134 LIVE: forge reconciliation_status reconciled -> variance — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge account_match_status matched -> no_match — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge approval_status approved -> pending — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge canonical_account_id -> null (retarget the apply) — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge closing_balance -> 999999.00 — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge employer_contributions -> 999999.00 — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge extraction_status extracted -> manual_mapping_required — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge smsf_classification not_smsf -> routed_to_smsf — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statements: this field is system-authorit
+  PASS  §134 LIVE: forge activity payslip_match_status matched -> no_match — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statement_activities: this field is syste
+  PASS  §134 LIVE: forge activity matched_payroll_event_id -> null — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statement_activities: this field is syste
+  PASS  §134 LIVE: forge activity amount 1000 -> 999999.00 — BLOCKED status=400 {"code":"P0001","details":null,"hint":null,"message":"fdh_retirement_statement_activities: this field is syste
+  PASS  §134 LIVE: canonical apply record cannot be rewritten by its own owner status=200 apply_mode=update_existing
+  PASS  §134 LIVE: an APPLIED proposal cannot be reset to ready and re-applied status=400 proposal_status=applied
+  FAIL  §134 LIVE: canonical apply provenance cannot be ERASED by direct REST status=200 -> null [DEFECT FDH12-LD-2: retirement_accounts provenance is unguarded; fixed forward in migration 0114, which is NOT applied to DEV]
+  FAIL  §134 LIVE: canonical source_type cannot be rewritten by direct REST status=200 -> manual [DEFECT FDH12-LD-2: retirement_accounts provenance is unguarded; fixed forward in migration 0114, which is NOT applied to DEV]
+  PASS  §134 POSITIVE CONTROL: the SAME forgery on income_sources IS refused (FDH-9 guard, migration 0091) status=400 {"code":"P0001","details":null,"hint":null,"message":"income_sources: source_type/last_import_application_id/l
+  PASS  §134 POSITIVE CONTROL: fund_name — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: nickname — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: masked_account_identifier — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: statement_date — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: statement_start_date / statement_end_date — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: review_status — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: source_provenance — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+  PASS  §134 POSITIVE CONTROL: supersedes_statement_id — still editable by the owner status=200 [{"id":"9934e70a-48c3-4977-8fb2-e3349ff255ae","user_id":"c3cfaeab-7521-41ec-8155-e5008517edcc","household_id":
+
+=== §137 — LIVE SMSF ROUTING ===
+  PASS  §137 LIVE: an SMSF-looking statement is ROUTED, not imported as ordinary super routed_to_smsf
+  PASS  §137 LIVE: smsf_classification = routed_to_smsf routed_to_smsf
+  PASS  §137 LIVE: routing evidence is recorded, not merely asserted {"reason":"The fund name identifies this as a self-managed super fund.","evidence":[{"term":"self-managed super fund","f
+  PASS  §137 LIVE: ordinary super import — NO (account matching refuses) status=409 {"error":"This looks like a self-managed super fund statement. SMSFs are managed in the SMSF section of the Re
+  PASS  §137 LIVE: SMSF evidence cannot be approved status=409 {"error":"This looks like a self-managed super fund statement. Manage it in the SMSF section instead."}
+  PASS  §137 LIVE: SMSF evidence can never become a proposal status=409 {"error":"This looks like a self-managed super fund statement. SMSFs are managed in the SMSF section of the Re
+  PASS  §137 LIVE: SMSF route/review PASS — the statement is retained for the SMSF section review_status=pending
+  PASS  §137 LIVE: no duplicate SMSF canonical account was created 2 -> 2
+  PASS  §137 LIVE: no smsf_funds row was created by FDH-12 0 -> 0
+  PASS  §137 LIVE: zero proposals and zero canonical applies from SMSF evidence proposals=0 applications=0
+  PASS  §137 LIVE: an AMBIGUOUS SMSF-looking statement is held as possible_smsf, not silently imported possible_smsf
+  PASS  §137 LIVE: a possible_smsf statement also cannot be approved without confirmation status=409
+  PASS  §137 LIVE: an SMSF canonical account cannot be selected as an import target status=409
+
+=== §139 — LIVE POSTGREST PAGINATION BOUNDARY (1000 / 1001) ===
+  PASS  §139 LIVE: 1000 activity rows extracted from one statement extracted=1000
+  PASS  §139 LIVE: 1000 activity rows actually stored in hosted DEV stored=1000
+  PASS  §139 LIVE: the application's own read path saw all 1000 rows — no silent PostgREST truncation at the cap seen=1000 status=200
+  PASS  §139 LIVE: 1001 activity rows extracted from one statement extracted=1001
+  PASS  §139 LIVE: 1001 activity rows actually stored in hosted DEV stored=1001
+  PASS  §139 LIVE: the application's own read path saw all 1001 rows — no silent PostgREST truncation at the cap seen=1001 status=200
+
+=== §171 — DEV CLEANUP ===
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_retirement_statements rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_retirement_statement_activities rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_retirement_statement_positions rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_statement_uploads rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_transactions rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_payroll_events rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fdh_financial_accounts rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in retirement_accounts rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in retirement_members rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fhip_import_proposals rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in fhip_import_applications rows=0
+  PASS  §171 cleanup verified: 0 synthetic rows remain in user_profiles rows=0
+  PASS  §171 cleanup verified independently: no fdh12-livedev-* auth user remains
+  NOTE  pre-existing synthetic users from EARLIER rounds still on DEV (not created or removed by this run): r11-0088-client-1787665076470@fhip-test.invalid (2026-08-25T13:37:57.385718Z); smsf-ui-live-in-1787657311562@test.fhip.internal (2026-08-25T11:28:33.216949Z); smsf-ui-live-au-1787657311562@test.fhip.internal (2026-08-25T11:28:31.809028Z); r9-live-cert-main-a-1787521743216@test.fhip.internal (2026-08-23T21:49:04.306175Z)
+
+=== RESULT: 213 PASS, 5 FAIL ===
+Failures:
+  - §119 evidence approved through the real route
+  - §130 evidence approved through the real route
+  - §132 evidence approved through the real route
+  - §134 LIVE: canonical apply provenance cannot be ERASED by direct REST
+  - §134 LIVE: canonical source_type cannot be rewritten by direct REST

@@ -5,6 +5,25 @@ forbidden answer proven reachable by the naive computation first.
 
 Harness: `tests/unit/fdh12FinancialIntegrity.test.ts` — **40 tests, all PASS**.
 
+**Now also proven against real hosted DEV** (2026-08-30,
+`scripts/fdh12_live_dev_certification.mjs`, spec sections 120-126, 47 live
+checks, 0 failures). The live counterparts of the controls below, with the real
+figures the live engine produced:
+
+| # | Live section | Live evidence |
+| --- | --- | --- |
+| 1 | §120 | payslip `employer_retirement_contribution = 1000.0000` matched 1:1 to a fund `EMPLOYER_CONTRIBUTION` of `1000`, variance `0`; canonical `retirement_accounts.employer_contribution = 1000` — **not 2000**; `income_sources = 0`; a second activity claiming the same payslip refused `409 / 23505` by the live unique index |
+| 2, 3, 8 | §122 | rollover legs paired (`rollover.matched = 1`); `income_sources = 0`; `expense_items = 0`; `fdh_transactions = 0`; sum of `retirement_accounts.current_balance` **100000 before, 100000 after** |
+| 4 | §121 | bank −$5,000 matched to super +$5,000 as one event; `expense_items = 0`; the bank row byte-identical before and after; `fdh_transactions = 1` |
+| 5 | §125 | removing $5,000 of earnings from the closing balance yields live `reconciliation_variance = 5000` — so earnings move the retirement asset by exactly that and nothing else; `income_sources = 0`, `fdh_transactions = 0`, `assets = 0` |
+| 6 | §123, §124 | removing the fee yields live variance `-100`; removing the insurance premium yields `-75`; `expense_items = 0` and `fdh_transactions = 0` throughout |
+| 7 | §119, architecture | the account row holds summary fields only and no per-activity ledger exists anywhere; positions are evidence with no apply path |
+| 9 | §167, parser | `ytd_*` columns are separate live columns and the reconciliation oracle consumes activity lines OR printed totals, never both |
+
+Additionally live: §126 proved a $20,000 withdrawal matched to a $20,000 bank
+credit as a SINGLE economic event and **not** classified as ordinary taxable
+income (`income_sources = 0`, the bank row unmodified).
+
 | # | Forbidden outcome | Required | Result |
 | --- | --- | --- | --- |
 | 1 | payslip employer super $1,000 + fund contribution $1,000 = **$2,000** | $1,000 | **PASS** |
