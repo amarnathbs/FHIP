@@ -274,3 +274,70 @@ unchanged here. **No re-application to DEV is needed or intended for these
 five files** — they are already live under their effects, just now
 correctly numbered in the repository so a fresh clean-rebuild replay is
 deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).
+
+## FDH-12 — Retirement Statement Intelligence (migration `0111`)
+
+**Allocated 2026-08-30.** `0111_fdh12_retirement_statement_intelligence.sql`.
+
+### Why 0111 and not 0107
+
+`scripts/check-migration-versions.mjs` reported "next version is 0107", because
+that tool only sees the current branch plus `origin/main` (whose chain tops out
+at `0106`, the FDH-11 merge). **0107 is not safe.** A fresh scan of every
+commit reachable from every local branch and every origin ref
+(`git log --all --name-only -- 'supabase/migrations/*.sql'`), plus the working
+directory of every `git worktree list` entry, found these already claimed above
+`0106`:
+
+| Number | File | Where |
+| --- | --- | --- |
+| `0107` | `admin_recommendations_conditions_import_integrity.sql` | unmerged branch |
+| `0107` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch — a **seventh occurrence** of this project's recurring collision class, already present in history before FDH-12 existed; resolved on that branch by renumbering to `0108` |
+| `0108` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch (`D:/fhip-country-confirm`) |
+| `0109` | `admin_recommendation_upsert_atomicity.sql` | unmerged branch (`D:/fhip-admin-a02-wave1`) |
+| `0110` | `module11_ai_foundation.sql` | unmerged branch (`D:/fhip-module11`) |
+
+`0111` is the lowest number claimed by no branch, no worktree and no remote
+ref. FDH-12 takes it and leaves `0103`-`0105` and `0107`-`0110` to their
+owners.
+
+### What it contains
+
+Additive only. No `drop table`, no `drop column`.
+
+* **PART A** — widens `fdh_document_audit_events.event_type` with 11 FDH-12
+  event types (mirrored by `FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED`), and
+  widens `retirement_accounts.source_type` with
+  `'retirement_statement_import'`.
+* **PARTS B/C/D** — three evidence tables:
+  `fdh_retirement_statements`, `fdh_retirement_statement_activities`,
+  `fdh_retirement_statement_positions`, each with RLS and owner-scoped
+  read/insert/update policies (no DELETE policy, matching the 0106 shape).
+* **PART E** — three ownership-guard triggers (cross-tenant FK forgery).
+* **PART F** — three authoritative-write triggers (same-tenant column forgery),
+  FDH-11 `auth.role()` style.
+* **PART G** — generic-bridge extension: `source_retirement_statement_id` on
+  `fhip_import_proposals` and `fhip_import_applications`,
+  `last_import_application_id` / `last_imported_at` on `retirement_accounts`,
+  and **re-creation of `fdh9_assert_proposal_owner()` /
+  `fdh9_assert_application_owner()` with a `retirement` branch** (both fail
+  closed on an unknown `target_domain`, exactly as 0091 intended and 0096
+  extended for `liability`).
+* **PART H** — `fdh12_approve_retirement_statement()`.
+* **PART I** — `fdh12_apply_retirement_proposal()`, the only path from
+  retirement statement evidence to canonical Retirement.
+* **PART J** — durable table/function comments recording the boundaries.
+
+### Status
+
+**NOT APPLIED to DEV. NOT APPLIED to production.**
+
+Certified in PGlite only: full 101-migration clean-rebuild replay PASS
+(`node scripts/db-rebuild-check/replay.mjs`), and 53/53 DB-level security and
+apply checks (`node scripts/fdh12_certification.mjs`), including an
+anti-vacuity self-check.
+
+Live DEV was introspected read-only on 2026-08-30 and confirmed **not** to
+carry any of the three tables — evidence that no migration was applied by the
+implementer, per this project's standing convention that only the Product
+Owner applies migrations.

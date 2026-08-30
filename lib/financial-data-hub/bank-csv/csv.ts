@@ -216,9 +216,33 @@ export function parseCsvSafe(
     throw new CsvIntakeError('header_not_found', 'the declared header row is beyond the end of the file');
   }
 
-  const nonEmptyRows = rows.filter((r) => !(r.length === 1 && r[0] === ''));
-  const header = nonEmptyRows[headerRowIndex] ?? [];
-  const dataRows = nonEmptyRows.slice(headerRowIndex + 1);
+  // HEADER INDEXING MUST AGREE WITH `findHeaderRowIndex`.
+  //
+  // DEFECT FOUND AND FIXED DURING FDH-12 CERTIFICATION (2026-08-30).
+  // `findHeaderRowIndex` (below) returns an index into the RAW line array —
+  // it `continue`s past blank lines without consuming an index. This function
+  // previously filtered blank rows out FIRST and then indexed the filtered
+  // array, so the two disagreed by exactly the number of blank lines
+  // preceding the header.
+  //
+  // Reproduced concretely: for a file beginning with two blank lines followed
+  // by `Date,Description,Amount,Employer`, `findHeaderRowIndex` correctly
+  // returned 2, and this function then read `nonEmptyRows[2]` — the SECOND
+  // DATA ROW — as the header. Every column was silently mis-mapped, so a bank
+  // or statement import would have read amounts out of the description column
+  // and dates out of the amount column, with no error raised.
+  //
+  // The fix indexes the header from the same raw array `findHeaderRowIndex`
+  // walked, and filters blank rows only out of the DATA that follows. For any
+  // file with no blank lines before the header — every file the existing
+  // suites exercise — the two expressions are identical, which is why this is
+  // a correctness fix rather than a behaviour change. Regression-covered by
+  // `tests/unit/fdh12AuSuperStatements.test.ts`'s leading-blank-rows cases and
+  // by the existing R7/FDH-5/FDH-11 CSV suites, all re-run green.
+  const header = rows[headerRowIndex] ?? [];
+  const dataRows = rows
+    .slice(headerRowIndex + 1)
+    .filter((r) => !(r.length === 1 && r[0] === ''));
   if (dataRows.length > CSV_MAX_ROWS) {
     throw new CsvIntakeError('row_limit_exceeded', `the file exceeded ${CSV_MAX_ROWS} data rows`);
   }
