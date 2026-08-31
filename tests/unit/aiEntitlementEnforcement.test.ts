@@ -21,7 +21,7 @@ import { estimateCallCost } from '@/lib/ai/cost/registryCost';
 import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 import { normaliseQuestion, normalisedQuestionHash } from '@/lib/ai/cache/answerCache';
 import { DENY_REASON_MESSAGES } from '@/lib/ai/entitlement/types';
-import { allowAllGate, denyGate } from '@/tests/unit/support/entitlementGateStubs';
+import { allowAllGate, denyGate, idempotencyReplayGate } from '@/tests/unit/support/entitlementGateStubs';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
@@ -340,5 +340,101 @@ describe('Module 11.1 — billing period and cache key derivation', () => {
   it('does NOT conflate genuinely different questions (normalisation is textual, never semantic)', () => {
     expect(normalisedQuestionHash('Why is my savings rate low?')).not.toBe(normalisedQuestionHash('Why is my savings rate high?'));
     expect(normaliseQuestion('Why is my savings rate low?')).toBe('why is my savings rate low');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Full-specification pass — gateway-level obligations added in Part 2.
+// ---------------------------------------------------------------------------
+
+describe('Module 11.1 spec section 15 — the gateway obeys an idempotency replay', () => {
+  beforeEach(() => { recordAiRun.mockClear(); });
+
+  it('does NOT call the provider when the verdict is a REPLAY, even though it is an ALLOW', async () => {
+    // This is the whole point of idempotency: a replayed allow means an
+    // earlier call with this key already holds the credit. Executing here
+    // would be the duplicate provider call the mechanism exists to prevent.
+    const provider = new MockAIProvider({ behavior: 'valid' });
+    const spy = vi.spyOn(provider, 'generateStructured');
+    const gate = idempotencyReplayGate();
+    const result = await new AIModelGateway(provider, gate).generateExplanation(
+      request({ idempotencyKey: 'retry-1' })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(gate.finalisations).toEqual([]);
+    expect(gate.refunds).toEqual([]);
+  });
+
+  it('sends a request HASH rather than the prompts, so no financial context reaches the gate as text', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(
+      request({ idempotencyKey: 'retry-2', userPrompt: 'my net worth is 1234567 dollars' })
+    );
+    const [admission] = gate.admissions;
+    expect(admission.idempotencyKey).toBe('retry-2');
+    expect(admission.requestHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(admission)).not.toContain('1234567');
+  });
+
+  it('sends no hash when no idempotency key was supplied (nothing to correlate against)', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(request());
+    expect(gate.admissions[0].requestHash).toBeNull();
+  });
+
+  it('the same request under the same key produces the SAME hash; a different body produces a different one', async () => {
+    const gate = allowAllGate(true);
+    const g = () => new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate);
+    await g().generateExplanation(request({ idempotencyKey: 'k', userPrompt: 'question A' }));
+    await g().generateExplanation(request({ idempotencyKey: 'k', userPrompt: 'question A' }));
+    await g().generateExplanation(request({ idempotencyKey: 'k', userPrompt: 'question B' }));
+    const [a, b, c] = gate.admissions.map((x) => x.requestHash);
+    expect(a).toBe(b);
+    expect(c).not.toBe(a);
+  });
+});
+
+describe('Module 11.1 spec sections 20/21 — the gateway declares the token budget it will impose', () => {
+  it('sends the SAME output cap to the gate that it will send to the provider', async () => {
+    const provider = new MockAIProvider({ behavior: 'valid' });
+    const spy = vi.spyOn(provider, 'generateStructured');
+    const gate = allowAllGate(true);
+    await new AIModelGateway(provider, gate).generateExplanation(request({ maxOutputTokens: 321 }));
+    expect(gate.admissions[0].outputTokens).toBe(321);
+    expect(spy.mock.calls[0][0].maxOutputTokens).toBe(321);
+  });
+
+  it('declares the default output cap when the caller specifies none', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(request());
+    expect(gate.admissions[0].outputTokens).toBe(800);
+  });
+
+  it('measures free-form user input SEPARATELY from the assembled context', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(
+      request({ systemPrompt: 'S'.repeat(4000), userPrompt: 'U'.repeat(400) })
+    );
+    const a = gate.admissions[0];
+    expect(a.userInputTokens).toBe(100);              // 400 chars / 4
+    expect(a.contextTokens).toBe(1100);               // (4000 + 400) / 4
+    expect(a.userInputTokens!).toBeLessThan(a.contextTokens!);
+  });
+});
+
+describe('Module 11.1 spec section 16 — the gateway passes the declared usage outcome through unchanged', () => {
+  it('forwards an explicitly declared outcome', async () => {
+    const gate = allowAllGate(false);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(
+      request({ requestClass: 'standard', usageOutcome: 'BATCH_AI' })
+    );
+    expect(gate.admissions[0].usageOutcome).toBe('BATCH_AI');
+  });
+
+  it('does NOT invent an outcome when none was declared — the RPC derives it, so the gateway sends undefined', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(request());
+    expect(gate.admissions[0].usageOutcome).toBeUndefined();
   });
 });
