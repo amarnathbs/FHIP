@@ -16,7 +16,14 @@ export type AITaskType =
   | 'goal_progress_explanation'
   | 'general_coach'
   | 'report_explanation'
-  | 'cross_border_explanation';
+  | 'cross_border_explanation'
+  // Module 11.3 — single governed generation producing the whole Monthly
+  // Personalised Insight Pack (spec section 13). Deliberately a NEW value
+  // rather than reusing 'monthly_summary': that task type's registered
+  // contract targets the single-envelope ai_response_envelope schema, and
+  // spec section 36 forbids silently repurposing an existing prompt/task
+  // contract whose shape differs materially.
+  | 'monthly_insight_pack';
 
 export interface AIGenerateRequest {
   /** Rendered system prompt — instructions ONLY, never user/retrieved data. */

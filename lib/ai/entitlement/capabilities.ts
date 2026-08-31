@@ -80,7 +80,11 @@ export const AI_CAPABILITY_IMPLEMENTED: Record<AISubCapability, boolean> = {
   AI_SCENARIO_NARRATION: false,   // Scenario Coach — deferred
   AI_REPORT_EXPLANATION: false,   // not wired to any report surface
   AI_TWIN_EXPLANATION: false,     // not wired to any twin surface
-  AI_INSIGHT_PACK: false,         // Monthly Insight Pack — phase 11.4
+  // Module 11.3 — the Monthly Insight Pack generation service now exists
+  // (lib/ai/insightPack/insightPackService.ts) and is Premium-gated through
+  // this exact flag. Flipped true here, not because "Premium" changed
+  // meaning, but because the feature this flag names is genuinely built now.
+  AI_INSIGHT_PACK: true,
 };
 
 export interface AICapabilitySet {
