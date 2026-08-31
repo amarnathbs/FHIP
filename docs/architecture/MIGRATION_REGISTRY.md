@@ -38,11 +38,15 @@ prevention". This is currently a required **manual** pre-merge step (run it
 yourself before opening/merging a migration-carrying PR) — there is no CI
 pipeline in this repository to wire it into automatically yet.
 
-- **Next free version: `0117`**
-- Active migrations on this branch: 103, one file per version (the chain is
-  sparse — `0079`-`0081`, `0103`-`0105`, `0108`, `0110`-`0115` are allocated
-  on other, unmerged branches and so are absent from this checkout; see the
-  Admin A0.2 Wave 2 collision matrix below for who owns each)
+- **Next free version: `0119`**
+- Active migrations on this branch: 104, one file per version (the chain is
+  sparse — `0079`-`0081`, `0103`-`0105`, `0108`, `0110`-`0115`, `0117` are
+  allocated on other, unmerged branches and so are absent from this checkout;
+  `0117` belongs to the unmerged Module 11.2 branch
+  (`feature/module-11-2-deterministic-answer-router`), confirmed by a fresh
+  scan of every worktree and every local/remote ref on this machine when
+  `0118` was allocated — see the Admin A0.2 Wave 2 collision matrix below for
+  who owns each of the others)
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 > These three lines were stale (`0064` / 63 migrations) and were corrected
@@ -83,7 +87,8 @@ pipeline in this repository to wire it into automatically yet.
 | 0055 | `0055_fdh2_merchant_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0056 | `0056_fdh2_classification_rule_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0057 | `0057_fdh2_closure_research_corrections.sql` | Financial Data Hub FDH-2 (closure-research corrections, hand-written, additive/corrective only) | NOT yet applied to DEV — delivered to Product Owner for manual application alongside 0050-0056 |
-| 0116 | `0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` | Admin A0.2 Wave 2 (Workflow & Ordering Integrity) | NOT yet applied to DEV — delivered to Product Owner for manual application. See the Wave 2 section below. |
+| 0116 | `0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` | Admin A0.2 Wave 2 (Workflow & Ordering Integrity) | **Applied to DEV** (confirmed by the Product Owner). See the Wave 2 section below. |
+| 0118 | `0118_admin_a02_wave2_reorder_conflict_errcode_fix.sql` | Admin A0.2 Wave 2 hotfix (reorder conflict SQLSTATE `40001` → `55000`, per the residual-gate investigation + Product Owner ruling) | NOT yet applied to DEV — delivered to Product Owner for manual application. `0116` is already live on DEV, so per this project's hotfix pattern (`0111`, `0113`/`0114`) this is a new forward-only file, not an edit to `0116`. See `docs/admin/FHIP_A02_Wave2_Terminal_Report.md`. |
 
 **0049 detail** — Purpose: canonical forward re-emission of the archived
 Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed
@@ -441,7 +446,30 @@ Collision matrix at allocation time:
 | 0113 | `0113_fdh12_approve_rpc_authoritative_write_fix.sql` | `feature/fdh12-retirement-statement-intelligence` | FDH-12 | No | Claimed; a live re-certification round found strong evidence it is **not actually in effect** | No | In flight — allocated regardless of activation status, do not reuse |
 | 0114 | `0114_fdh12_retirement_provenance_guards.sql` | `feature/fdh12-retirement-statement-intelligence` | FDH-12 | No | Same as `0113` | No | In flight — allocated regardless, do not reuse |
 | 0115 | `0115_module11_1_ai_entitlements_quotas_cost_controls.sql` | `feature/module-11-1-premium-entitlements` | Module 11.1 | No | No | No | Committed only |
-| **0116** | **`0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql`** | **`fix/admin-a02-wave2-workflow-ordering-integrity`** | **Admin A0.2 Wave 2** | **No** | **NOT yet** | **No** | **This migration** |
+| **0116** | **`0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql`** | **`fix/admin-a02-wave2-workflow-ordering-integrity`** | **Admin A0.2 Wave 2** | **No** | **Yes** (confirmed by the Product Owner) | **No** | **Applied to DEV** |
+| 0117 | `0117_module11_2_deterministic_answer_router.sql` | `feature/module-11-2-deterministic-answer-router` | Module 11.2 | No | Not established here (out of scope) | No | Allocated on an unmerged branch, not pushed to a remote-tracking ref as of this scan |
+| **0118** | **`0118_admin_a02_wave2_reorder_conflict_errcode_fix.sql`** | **`fix/admin-a02-wave2-workflow-ordering-integrity`** | **Admin A0.2 Wave 2 hotfix** | **No** | **NOT yet** | **No** | **This migration — see §"0118 hotfix" below** |
+
+### 0118 hotfix (reorder conflict SQLSTATE `40001` → `55000`)
+
+Allocated 2026-08-31, in the same session that produced
+`docs/admin/FHIP_A02_Wave2_Terminal_Report.md`. `0116` was already applied to
+DEV by the time this fix was authored (confirmed by the Product Owner), so
+per this project's established hotfix-on-an-applied-migration pattern (`0111`
+on top of `0108`'s already-applied MCC chain; `0113`/`0114` on top of `0112`'s
+already-applied FDH-12 base) this is a **new forward-only file**, not an edit
+to `0116` itself. `0116`'s own checksum is unchanged —
+`aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`, reconfirmed
+in this round.
+
+Re-scanned fresh (not assumed) before allocating `0118`:
+`check-migration-versions.mjs` reported `0117` as next-free on this
+branch's own checkout; a scan of every worktree on this machine and every
+local + remote-tracking git ref found `0117` claimed only by the unmerged
+`feature/module-11-2-deterministic-answer-router` branch (present in that
+branch's own worktree and local ref; no remote-tracking ref for it exists,
+i.e. it has not been pushed) and found **no** `0118` file anywhere. `0118` is
+therefore free and is the correct next allocation for this workstream.
 
 Both repository collision tools pass on this allocation:
 `scripts/check-migration-versions.mjs` ("103 active migrations, one file per
