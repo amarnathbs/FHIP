@@ -277,11 +277,21 @@ async function main() {
     const { source, ids } = await seedSet(4);
     const other = await seedSet(2);
     const snapshot = async () => JSON.stringify(await positions(source));
+    // NOTE (migration 0118, 2026-08-31): the stale/incomplete-set conflict
+    // moved from SQLSTATE '40001' to '55000'. See
+    // docs/admin/FHIP_A02_Wave2_Terminal_Report.md and
+    // docs/admin/FHIP_A02_Wave2_Residual_Gate_Investigation_Report.md — the
+    // three cases below (plus the fourth in §A4) never once delivered their
+    // intended 40001 response live, across 13 independent attempts, before
+    // this fix. This script cannot itself confirm 0118 live (0118 has not
+    // been applied to DEV as of this fix), so re-running this exact script
+    // against DEV after 0118 is applied is the next required verification
+    // step.
     const cases = [
       ['duplicate id', [ids[0], ids[0], ids[1], ids[2]], '22023'],
-      ['missing id (incomplete set)', [ids[0], ids[1], ids[2]], '40001'],
-      ['foreign-source id', [ids[0], ids[1], ids[2], other.ids[0]], '40001'],
-      ['unknown id', [ids[0], ids[1], ids[2], '00000000-0000-4000-8000-000000000000'], '40001'],
+      ['missing id (incomplete set)', [ids[0], ids[1], ids[2]], '55000'],
+      ['foreign-source id', [ids[0], ids[1], ids[2], other.ids[0]], '55000'],
+      ['unknown id', [ids[0], ids[1], ids[2], '00000000-0000-4000-8000-000000000000'], '55000'],
       ['empty array', [], '22023'],
     ];
     for (const [label, payload, expected] of cases) {
@@ -330,7 +340,7 @@ async function main() {
     const stale = [...s3.ids].reverse();
     await admin.from('resource_related_content').delete().eq('id', s3.ids[1]);
     const { error: staleErr } = await reorder(RA.client, s3.source, stale);
-    check('stale client set (a link removed underneath) is rejected as a conflict', staleErr?.code === '40001', `${staleErr?.code}: ${staleErr?.message}`);
+    check('stale client set (a link removed underneath) is rejected as a conflict (55000 — was 40001 pre-0118)', staleErr?.code === '55000', `${staleErr?.code}: ${staleErr?.message}`);
     const live = (await positions(s3.source)).map((r) => r.id);
     const { error: refreshedErr } = await reorder(RA.client, s3.source, [...live].reverse());
     check('canonical refresh after the conflict then succeeds', !refreshedErr, JSON.stringify(refreshedErr));
