@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0106_fdh11_au_investment_statement_intelligence.sql';
@@ -30,14 +30,22 @@ describe('FDH-11 migration 0106 exists', () => {
   });
 });
 
-describe('FDH-11 fdh_document_audit_events.event_type widened constraint matches the FULL current TypeScript vocabulary', () => {
-  it("0106 is the constraint's latest word, and it matches FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES exactly", () => {
+describe('FDH-11 fdh_document_audit_events.event_type widened constraint matches the TypeScript vocabulary as of FDH-11', () => {
+  // FDH-12 (migration 0112) is now the constraint's latest word, so 0106 is no
+  // longer expected to carry the FULL current vocabulary — exactly the shape
+  // FDH-7/FDH-9/FDH-10's own contract tests already take, each comparing its
+  // migration to the vocabulary AS OF that phase. `0112` is asserted against
+  // the full set by `tests/unit/fdh12SchemaContract.test.ts`.
+  it("0106 matches everything known up to and including FDH-11", () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 3800);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    const vocabularyAsOfFdh11 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
+      (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t),
+    );
+    expect(values.sort()).toEqual([...vocabularyAsOfFdh11].sort());
   });
 
   it('the nine FDH-11 event types are all present', () => {

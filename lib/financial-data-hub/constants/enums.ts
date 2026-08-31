@@ -999,11 +999,32 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED = [
   'investment_statement_apply_rejected_stale',
 ] as const;
 
+/** FDH-12 additions (migration 0112 Part A), same TS-side-enum-must-match-
+ * the-DB-check-constraint discipline as every prior phase.
+ *
+ * Note `retirement_statement_routed_to_smsf`: an SMSF-looking statement is
+ * routed to the existing SMSF module rather than imported as ordinary super
+ * (spec sections 10-11), and that routing decision is itself an auditable
+ * lifecycle event. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED = [
+  'retirement_statement_extraction_completed',
+  'retirement_statement_extraction_failed',
+  'retirement_statement_account_matched',
+  'retirement_statement_payslip_matched',
+  'retirement_statement_reconciled',
+  'retirement_statement_bank_match_completed',
+  'retirement_statement_routed_to_smsf',
+  'retirement_statement_approved',
+  'retirement_proposal_generated',
+  'retirement_proposal_applied',
+  'retirement_proposal_dismissed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7 + FDH-9 + FDH-10). Used everywhere OUTSIDE the frozen
- * fdh3SchemaContract.test.ts assertion — i.e. by `FdhDocumentAuditEventType`
- * itself, so every caller can use the R7/R8/FDH-5/FDH-7/FDH-9/FDH-10 event
- * types without a second parallel type. */
+ * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12). Used everywhere OUTSIDE the
+ * frozen fdh3SchemaContract.test.ts assertion — i.e. by
+ * `FdhDocumentAuditEventType` itself, so every caller can use the later
+ * phases' event types without a second parallel type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
@@ -1013,6 +1034,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

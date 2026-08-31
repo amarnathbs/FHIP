@@ -207,6 +207,36 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'auAccountResolution.ts'),
       path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'auSecurityResolution.ts'),
       path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'applyAuStatementActivity.ts'),
+      // FDH-12 (2026-08-30): three more files.
+      //
+      // The first two trip the identical naive-substring limitation the
+      // FDH-9/FDH-10/FDH-11 exceptions above document, for the identical
+      // reason — verified by hand, same standard:
+      //   - components/retirement/RetirementStatementImportPanel.tsx is the
+      //     Retirement-tab statement-import UI (spec section 146: FDH-12 is
+      //     not a new top-level destination, it lives behind Retirement). It
+      //     imports nothing from `lib/financial-data-hub`; every reference is
+      //     a `fetch()` call to a public `/api/financial-data-hub/...` route
+      //     string.
+      //   - lib/import-bridge/adapters/retirementAdapter.ts follows
+      //     incomeAdapter.ts's and liabilityAdapter.ts's precedent exactly:
+      //     it deliberately does NOT import the Hub's own matching module and
+      //     keeps its own isolation-safe copy, and the literal substring
+      //     appears only in the prose explaining that choice.
+      path.join(REPO_ROOT, 'components', 'retirement', 'RetirementStatementImportPanel.tsx'),
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'adapters', 'retirementAdapter.ts'),
+      // The third IS a real, intentional import of FDH module code — not a
+      // naive-substring false positive — and is the exact analogue of the
+      // four `lib/investment-import-bridge/` entries above.
+      // `lib/retirement-import-bridge/retirementAccountResolution.ts` exists
+      // OUTSIDE the Hub precisely BECAUSE of this file's own
+      // 'names an Input Data register in exactly one file' rule: matching a
+      // statement to a canonical account necessarily READS
+      // `retirement_accounts`, which no file under `lib/financial-data-hub/`
+      // may ever name. It reads canonical Retirement and writes only FDH-12's
+      // own statement row; it performs no canonical mutation, which
+      // `tests/unit/fdh12Isolation.test.ts` asserts mechanically.
+      path.join(REPO_ROOT, 'lib', 'retirement-import-bridge', 'retirementAccountResolution.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
@@ -232,7 +262,25 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
     // of these, and none may contain a parser/extraction/classification verb
     // in its own path.
     const appDir = path.join(REPO_ROOT, 'app');
-    const fdhFiles = walk(appDir).filter((f) => /financial-data|fdh/i.test(f));
+    // MATCH ON THE REPO-RELATIVE PATH, NOT THE ABSOLUTE ONE.
+    //
+    // TEST DEFECT FOUND AND FIXED DURING FDH-12 CERTIFICATION (2026-08-30).
+    // This filter previously tested the ABSOLUTE path, so any checkout whose
+    // directory name happens to contain "fdh" or "financial-data" — for
+    // instance the `fhip-fdh12` worktree this phase was built in, or the
+    // `fdh4`-named worktree that produced the same false positive during
+    // FDH-4 — made EVERY file under `app/` match, and the loop below then
+    // failed on unrelated routes such as
+    // `app/api/investment-intelligence/source-documents/[id]/parse/route.ts`.
+    //
+    // The consequence was worse than a spurious failure: because the filter
+    // over-selected, `fdhFiles.length` was satisfied by unrelated files, so
+    // the "at least its upload-lifecycle routes" assertion at the end of this
+    // test would still have passed even if every real FDH route were deleted.
+    // The relative path is what the assertion body already uses, so this
+    // makes the filter and the assertion agree.
+    const fdhFiles = walk(appDir).filter((f) =>
+      /financial-data|fdh/i.test(path.relative(REPO_ROOT, f).replace(/\\/g, '/')));
     const FORBIDDEN_PATH_FRAGMENTS = [
       'extract', 'parse', 'parser', 'classify', 'classification', 'ocr', 'reconcile',
     ];
@@ -341,6 +389,19 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // bypass); the module never imports Investment Intelligence code
       // (separately enforced by `tests/unit/fdh11Isolation.test.ts`).
       path.join(FDH_LIB, 'services', 'investmentStatementProcessingService.ts'),
+      // FDH-12 (migration 0112) adds a NINTH:
+      // retirementStatementProcessingService.ts — the same carve-out again,
+      // applied to `fdh_retirement_statements`/`_activities`/`_positions`.
+      // The service role is what makes migration 0112 PART F's
+      // authoritative-write triggers meaningful: those triggers refuse
+      // system-owned column writes from the `authenticated` role, so this file
+      // is the ONLY thing that can set reconciliation_status,
+      // account_match_status, payslip_match_status and the rest. Every read
+      // uses the ordinary RLS-scoped client and every admin write is
+      // explicitly re-scoped by `.eq('user_id', userId)` regardless of bypass.
+      // The module never writes a canonical register — separately enforced by
+      // `tests/unit/fdh12Isolation.test.ts`.
+      path.join(FDH_LIB, 'services', 'retirementStatementProcessingService.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

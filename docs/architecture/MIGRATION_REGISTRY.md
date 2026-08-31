@@ -363,3 +363,127 @@ applied by hand-pasting SQL into the Supabase Dashboard SQL editor, no
 Supabase CLI project link exists, and Dashboard execution never populates
 such a ledger. This registry entry — not a database ledger row — is this
 project's actual record that `0107`/`0109` were allocated and applied.
+
+## FDH-12 — Retirement Statement Intelligence (migration `0112`)
+
+**Allocated 2026-08-30, renumbered from `0111` same day.**
+`0112_fdh12_retirement_statement_intelligence.sql`.
+
+### Renumbered: 0111 -> 0112
+
+This migration was originally authored, PGlite-certified (53/53) and
+committed as `0111_fdh12_retirement_statement_intelligence.sql`. Later the
+same day, a real collision was found: `feature/mandatory-country-
+confirmation-beta-cleanup` (commit `8621968`, unpushed, worktree
+`D:/fhip-country-confirm`) had independently committed its own
+`0111_mandatory_country_confirmation_delete_cascade_fix.sql` (MCC-14), and
+the Product Owner had already been told that MCC-14's `0111` is next in line
+for DEV application. Rather than contest that assignment, FDH-12 was
+renumbered to `0112` — an **eighth occurrence** of this project's recurring
+migration-number-collision class. The rename is a pure repository-
+bookkeeping fix: the SQL body is byte-identical to the certified `0111`
+version, and neither number was ever applied to DEV or production, so no
+re-application is needed. The PGlite/DB certification suite (53/53) and the
+full FDH-12 unit-test suite (382/382) were re-run against the renamed file
+and reproduced at the same counts.
+
+### Why 0111 (now 0112) and not 0107
+
+`scripts/check-migration-versions.mjs` reported "next version is 0107", because
+that tool only sees the current branch plus `origin/main` (whose chain tops out
+at `0106`, the FDH-11 merge). **0107 is not safe.** A fresh scan of every
+commit reachable from every local branch and every origin ref
+(`git log --all --name-only -- 'supabase/migrations/*.sql'`), plus the working
+directory of every `git worktree list` entry, found these already claimed above
+`0106`:
+
+| Number | File | Where |
+| --- | --- | --- |
+| `0107` | `admin_recommendations_conditions_import_integrity.sql` | unmerged branch |
+| `0107` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch — a **seventh occurrence** of this project's recurring collision class, already present in history before FDH-12 existed; resolved on that branch by renumbering to `0108` |
+| `0108` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch (`D:/fhip-country-confirm`) |
+| `0109` | `admin_recommendation_upsert_atomicity.sql` | unmerged branch (`D:/fhip-admin-a02-wave1`) |
+| `0110` | `module11_ai_foundation.sql` | unmerged branch (`D:/fhip-module11`) |
+| `0111` | `mandatory_country_confirmation_delete_cascade_fix.sql` | unmerged branch (`D:/fhip-country-confirm`, commit `8621968`) — committed after FDH-12's original scan, invisible to it at the time; this is the reason FDH-12 moved to `0112` |
+
+At the time of FDH-12's original scan, `0111` appeared to be the lowest
+number claimed by no branch, no worktree and no remote ref. A fresh scan on
+2026-08-30 (after the collision above was found) confirmed `0112` is
+genuinely free across every local branch, every worktree and every origin
+ref. FDH-12 takes it and leaves `0103`-`0105`, `0107`-`0110` and `0111` to
+their owners.
+
+### What it contains
+
+Additive only. No `drop table`, no `drop column`.
+
+* **PART A** — widens `fdh_document_audit_events.event_type` with 11 FDH-12
+  event types (mirrored by `FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED`), and
+  widens `retirement_accounts.source_type` with
+  `'retirement_statement_import'`.
+* **PARTS B/C/D** — three evidence tables:
+  `fdh_retirement_statements`, `fdh_retirement_statement_activities`,
+  `fdh_retirement_statement_positions`, each with RLS and owner-scoped
+  read/insert/update policies (no DELETE policy, matching the 0106 shape).
+* **PART E** — three ownership-guard triggers (cross-tenant FK forgery).
+* **PART F** — three authoritative-write triggers (same-tenant column forgery),
+  FDH-11 `auth.role()` style.
+* **PART G** — generic-bridge extension: `source_retirement_statement_id` on
+  `fhip_import_proposals` and `fhip_import_applications`,
+  `last_import_application_id` / `last_imported_at` on `retirement_accounts`,
+  and **re-creation of `fdh9_assert_proposal_owner()` /
+  `fdh9_assert_application_owner()` with a `retirement` branch** (both fail
+  closed on an unknown `target_domain`, exactly as 0091 intended and 0096
+  extended for `liability`).
+* **PART H** — `fdh12_approve_retirement_statement()`.
+* **PART I** — `fdh12_apply_retirement_proposal()`, the only path from
+  retirement statement evidence to canonical Retirement.
+* **PART J** — durable table/function comments recording the boundaries.
+
+### Status (updated at merge — see below for 0113/0114)
+
+Certified in PGlite: full 101-migration clean-rebuild replay PASS
+(`node scripts/db-rebuild-check/replay.mjs`), and 62/62 DB-level security and
+apply checks (`node scripts/fdh12_certification.mjs`, grown from the original
+53 by 9 regressions added for the two hotfixes below), including an
+anti-vacuity self-check.
+
+**Applied to DEV 2026-08-30/31 by the Product Owner, confirmed genuinely in
+effect** via three rounds of live-DEV certification (218 → 262 checks,
+`scripts/fdh12_live_dev_certification.mjs`), the third of which is the
+certifying run: **262/262 PASS**, independently re-confirmed live by the
+orchestrating session with its own fresh behavioural tests, not just the
+certifying agent's report. **Not applied to production.**
+
+## FDH-12 hotfixes — `0113` (approve RPC) and `0114` (provenance guards)
+
+Both found by live-DEV certification round 2, both **applied to DEV,
+confirmed in effect** as of round 3 (see `FDH12_COMPLETION_REPORT.md` /
+`FDH12_LIVE_DEV_CERTIFICATION.md` for full detail). **Not applied to
+production.**
+
+`0113_fdh12_approve_rpc_authoritative_write_fix.sql` — 0112 Part F's
+authoritative-write guard checked `auth.role() <> 'authenticated'`, correct
+for a service-role writer but wrong for `fdh12_approve_retirement_statement()`,
+whose legitimate writer is the end user themselves via a `SECURITY DEFINER`
+call — `SECURITY DEFINER` changes the executing role, not `auth.role()`, so
+the RPC's own write tripped its own guard and no caller could ever approve a
+statement. Fixed with the same transaction-local GUC pattern (`fhip.import_bridge_internal_write`)
+already established by FDH-9/FDH-10.
+
+`0114_fdh12_retirement_provenance_guards.sql` — 0112's new
+`retirement_accounts` provenance columns (`source_type`,
+`last_import_application_id`, `last_imported_at`) shipped with no guard,
+unlike the equivalent `income_sources`(0091)/`liabilities`(0096) pairs.
+Live: an ordinary user could forge/erase their own provenance and point their
+own account at ANOTHER TENANT's import application. Fixed by transposing the
+exact 0091/0096 guard pair onto `retirement_accounts`.
+
+**DEV activation lesson, worth keeping as a standing practice, not just a
+one-off finding for this module:** both migrations were pasted into the DEV
+SQL Editor once, reported "no error," and were genuinely still absent from
+the live database — proven only by live behavioural testing (an
+authenticated-owner RPC call; a real forgery attempt), never by re-checking
+that the editor reported success a second time. **SQL Editor "success" is
+not sufficient evidence of migration activation for security/authority-
+bearing migrations; behavioural verification is required.**
