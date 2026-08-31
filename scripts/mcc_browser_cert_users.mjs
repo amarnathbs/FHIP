@@ -27,7 +27,6 @@ function env() {
 const E = env();
 const BASE = E.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE = E.SUPABASE_SERVICE_ROLE_KEY;
-const ANON = E.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!BASE?.includes('vqycarelcoijzwlpkpcz')) { console.error(`FATAL: not DEV (${BASE})`); process.exit(2); }
 const SH = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' };
 

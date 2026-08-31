@@ -102,7 +102,6 @@ async function asUser(accessToken, method, path, body) {
   return { status: r.status, body: json, contentRange: r.headers.get('content-range') };
 }
 
-const uuid = () => crypto.randomUUID();
 const rid = () => crypto.randomBytes(4).toString('hex');
 const PASSWORD = 'Mcc14LiveDev!' + crypto.randomBytes(6).toString('hex');
 const createdUserIds = []; // for cleanup + final residue check
