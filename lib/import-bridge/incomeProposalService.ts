@@ -132,11 +132,20 @@ export async function generateIncomeProposal(
     throw new IncomeProposalError('not_approved', 'Approve this payroll evidence before generating an Income proposal.');
   }
 
+  // FDH-15 DEF-001 fix: a payslip is always self-attributed evidence (the
+  // apply RPC's add_new path hardcodes owner='self' — no path exists today
+  // for a spouse/joint-attributed payslip). Restricting the match candidate
+  // pool to owner='self' rows prevents this bridge from ever recommending
+  // (and, combined with the RPC-side guard, from ever executing) an
+  // update_existing against a different household member's income row just
+  // because the employer name happens to fold-match theirs too (spec
+  // sections 30, 81, 120, 197 — same-tenant target/member forgery).
   const { data: existingRows } = await supabase
     .from('income_sources')
     .select('id, source_name, income_type, amount, net_amount, frequency, currency_code, owner, is_taxable, employer_name, notes, master_item_key, source_type, updated_at')
     .eq('user_id', userId)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('owner', 'self');
 
   const evidence = toIncomeEvidence(row);
   const draft = incomeAdapter.buildProposal(evidence, (existingRows ?? []) as ExistingIncomeRow[]);
