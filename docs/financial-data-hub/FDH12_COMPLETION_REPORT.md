@@ -32,6 +32,18 @@ things, not on the aggregate count alone:
 Full evidence: `FDH12_LIVE_DEV_CERTIFICATION.md`; raw run log
 `scripts/fdh12-live-dev-run.log`.
 
+> **Operational lesson, worth preserving beyond this module:** round 2 existed
+> because `0113`/`0114` were pasted into the DEV SQL Editor, reported "no
+> error," and were then genuinely absent from the live database — most likely
+> a partial/highlighted-selection paste, which Supabase Studio runs and
+> reports as successful regardless of what actually executed. **SQL Editor
+> "success" is not sufficient evidence of migration activation; behavioural
+> verification is required for critical security/authority migrations.**
+> Round 3 only became the certifying run once the fixes were proven live by
+> outcome (a real owner-authenticated approval; a real forgery attempt
+> refused) — not by re-checking that the SQL Editor reported no error a
+> second time.
+
 > **FDH12-LD-1 (BLOCKING) — RESOLVED in `0113`, confirmed live.**
 > `fdh12_approve_retirement_statement()` could never succeed for any caller:
 > `security definer` does not change `auth.role()`, so migration 0112 PART F's
@@ -79,6 +91,17 @@ Consequences: spec 58 resolves to "balance is a direct canonical field, safe
 update permitted"; spec 59's event-ledger prohibition does not bind; and spec
 60's double-apply hazard is **unreachable**, because statement activities have
 no canonical destination.
+
+> **Permanent architecture record, for any future maintainer of this table:**
+> **Canonical Retirement remains a summary-balance register. FDH-12 statement
+> activities are evidence/reconciliation records only and do not constitute a
+> second retirement event ledger.** `fdh_retirement_statement_activities`
+> exists to be matched, deduplicated, and reconciled against evidence — never
+> to be read as, or migrated into, an authoritative transaction history for
+> `retirement_accounts`. Proven live in round 3 (§ARCHITECTURE of
+> `FDH12_LIVE_DEV_CERTIFICATION.md`): statement activities accumulate as
+> evidence while canonical `retirement_accounts` sits byte-unchanged until an
+> explicit, approved Apply; zero second canonical ledger was created.
 
 ## 3. Zero Duplicate Retirement Engine
 
