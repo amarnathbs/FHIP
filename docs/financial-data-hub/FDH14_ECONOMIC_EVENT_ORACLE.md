@@ -28,6 +28,26 @@ execution. `REUSED (PGlite)`: proven against real Postgres in-memory, not hosted
 | 15 | Super balance $200,000 backed by the same underlying statement holdings $200,000 | Net-worth contribution = **$200,000**, not $400,000 | REUSED (live) | FDH-12: "super + same holdings → net worth $200,000 not $400,000"; investment-inside-super positions are "terminal by design" (no `apply_status`, no `canonical_*` column) so they can never be recreated as an ordinary Investment. |
 | 16 | Same-tenant provenance forgery on the canonical row itself (`income_sources` / `liabilities` / `retirement_accounts`) | Forgery of `source_type` / `last_import_application_id` / `last_imported_at` is BLOCKED; the rest of the row remains user-editable | **FRESH (this pass, live)** | `scripts/fdh14_cross_domain_security_certification.mjs`, run against live hosted DEV 2026-08-31: 28/28 PASS across all three domains, including a positive control proving the guard does not over-lock the row. See `FDH14_LIVE_DEV_CERTIFICATION.md`. |
 
+## GAP 1 closure (2026-08-31) — fresh golden-household proof, all 9 events in ONE household
+
+Script: `scripts/fdh14_golden_household_e2e_oracle.mjs`. One synthetic AU household (payslip income, bank
+account, credit card, loan, AU brokerage, superannuation) built directly against live hosted DEV. **23/23
+PASS**, every number below is a freshly-committed row read back live, not a citation:
+
+| # | Event | Freshly proven result |
+|---|---|---|
+| 1 | Payslip $5,000 + bank salary $5,000 | `income_sources` has exactly 1 row, `amount=5000` — never 2 rows / $10,000. |
+| 2 | Card purchase $200 + bank repayment $200 | `expense` bucket sums to exactly $200 across the pair (the bank leg is `transfer`, not `expense`). |
+| 3 | Loan drawdown $50,000 | Classified `transfer`, never `income`; household income total unaffected ($5,000 unchanged). |
+| 4 | Loan repayment $2,000 = $1,550 + $430 + $20 | `liabilities.balance` reduced by exactly $1,550 (50,000→48,450); the 3-way allocation sums to $2,000; the interest+fee component = $450; **zero** of the 3 allocations are literally typed `expense` (principal is never counted as expense at all); parent cash outflow = $2,000 exactly. |
+| 5 | Bank→broker $10,000 + BUY $10,000 | Household expense total unaffected ($200, unchanged) — the transfer leg is never `expense`. |
+| 6 | Investment sale $15,000 + bank receipt $15,000 | Household income total unaffected ($5,000, unchanged). |
+| 7 | Broker dividend $400 + bank dividend $400 | Exactly 1 `ii_transactions` dividend row, `gross_amount=400` — never 2 rows / $800. |
+| 8 | Payslip employer super $1,000 + fund contribution $1,000 | `retirement_accounts.employer_contribution=1000`, never $2,000. **Live negative control**: a second fund-contribution activity against the identical payslip event is rejected by the real `uq_fdh_retirement_activities_payroll_event` unique index — genuine Postgres `23505`, not a simulated check. |
+| 9 | FDH evidence assets + canonical assets | Zero rows in `assets`; zero rows in `investments`; household net worth = assets(0) + investments(0) + retirement($200,000, counted exactly once) − liabilities($48,450) = $151,550 — never $400,000-inflated by the matching $200,000 `fdh_retirement_statement_positions` evidence row. |
+
+**Verdict: PASS, unconditional.** Closes Residual Register item R-14-1.
+
 ## Governing statement (spec §134), independently re-confirmed this pass
 
 > A financial document may enter FHIP through different domain adapters, but once inside the Financial Data
