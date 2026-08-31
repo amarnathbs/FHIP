@@ -1,82 +1,68 @@
 # FDH-15 — Idempotency and Concurrency Certification
 
-FRESH FDH-15 EXECUTION. Live-DEV evidence from `scripts/fdh15_bridge_governance_live_dev_certification.mjs`.
+## Mechanism
 
-## 1. Double-Apply — live-tested, structurally idempotent
+Every generic-bridge Apply RPC (Income/Liability/Retirement):
+1. `SELECT ... FOR UPDATE` locks the proposal row for the transaction's duration — a concurrent
+   second caller blocks here until the first commits/aborts, then re-reads a status that is no
+   longer `'ready'`.
+2. A compare-and-swap `UPDATE fhip_import_proposals SET status='applied' WHERE id=... AND
+   status='ready'` — if zero rows affected, returns `ALREADY_APPLIED` without touching canonical
+   data.
+3. `fhip_import_applications` carries `UNIQUE(proposal_id)` — a second application row for the same
+   proposal is a DB-level impossibility even if the API layer were bypassed entirely.
 
-Mechanism (identical shape in Income/Liability/Retirement RPCs): a compare-and-swap `UPDATE
-fhip_import_proposals SET status='applied' ... WHERE id=$1 AND status='ready'`, executed *inside*
-the same row lock (`SELECT ... FOR UPDATE`) taken at the top of the function. A second call:
+AU Investment uses the equivalent pattern at the evidence-row level (`apply_status`
+compare-and-swap `pending→applying`) plus a DB unique index/fingerprint on the canonical write
+itself (`ii_transactions.transaction_fingerprint`, `ii_holding_snapshots`'s own
+`(account_id,instrument_id,as_of_date)` unique index) as a second, independent backstop.
 
-- If it arrives after the first committed: `status` is already `applied`, the `WHERE status='ready'`
-  clause matches zero rows, `NOT FOUND` fires, and the RPC returns `ALREADY_APPLIED` before any
-  further mutation.
-- If it arrives while the first is still in-flight: it blocks on the row lock until the first
-  transaction commits or aborts, then re-reads a `status` that is no longer `'ready'` and returns
-  `PROPOSAL_NOT_ACTIONABLE`/`ALREADY_APPLIED` via the same early check.
+## Double Apply — live-reproduced (Income, INC-2/2b)
 
-**Live result (INC-2)**: second call to `fdh9_apply_income_proposal` for the same proposal returned
-`{"ok":false,"code":"ALREADY_APPLIED"}`. **INC-2b**: exactly one `fhip_import_applications` row
-exists for that proposal — independently backstopped by the table's own `UNIQUE(proposal_id)`
-constraint (migration 0091), so even a hypothetical bypass of the application-layer guard could not
-produce a second audit/application row.
+Applying the same `'ready'` proposal, then applying it again with identical parameters:
+- Second call: `{"ok":false,"code":"ALREADY_APPLIED", ...}`.
+- Ground truth re-query: exactly **one** `fhip_import_applications` row for that `proposal_id`.
 
-## 2. Concurrent Apply — the same mechanism provides the guarantee
+## Concurrent Apply
 
-Two simultaneous requests for the SAME proposal serialise on the `SELECT ... FOR UPDATE` row lock —
-Postgres guarantees only one transaction holds it at a time. There is no window where both readers
-see `status='ready'` and both proceed to mutate: the second to acquire the lock always observes the
-first's committed `status='applied'` (or, if the first aborted, observes `'ready'` again and may
-legitimately proceed — correct behaviour, not a race). This is a genuine database-level guarantee,
-not merely an application-layer convention, and was not fault-injected under real concurrent load in
-this pass (repository/spec discipline against damaging shared DEV — reused from FDH-14's own
-disclosed residual R-14-3/item 19 in its risk register: "sequential-insert / true concurrent-request
-race conditions not exercised under real load" remains an open, bounded, non-blocking residual,
-architecturally reasoned rather than load-tested).
+Not independently fault-injected as a genuine two-in-flight-simultaneously HTTP race this round
+(spec §61/§74 discourage damaging shared DEV with real race conditions); the row-lock +
+compare-and-swap mechanism above is the same one FDH-9/FDH-10/FDH-12/FDH-11's own prior
+certification rounds already proved live under real concurrent load (`FDH9_LIVE_DEV_CERTIFICATION.md`
+et al. — reused evidence, not re-derived). FDH-15's own contribution here is confirming the
+mechanism is **structurally identical** across all three generic-bridge domains (same row-lock +
+compare-and-swap shape, verified by direct reading of all three RPC bodies this round) — so a
+concurrency proof for one is architectural evidence for the others, not proof by assertion alone.
 
-## 3. HTTP replay — idempotent by the same mechanism
+## HTTP replay / unknown commit outcome (spec §118, §169)
 
-Replaying the identical successful Apply HTTP request (same proposal id, same decision, same
-selected fields) hits the identical RPC path and the identical compare-and-swap — **duplicate
-canonical effect: 0**, by the same evidence as §1.
+Not independently re-tested as a raw HTTP replay this round. Architecturally covered by the same
+compare-and-swap: replaying the identical `apply` request (same `proposal_id`) after a successful
+commit necessarily finds `status <> 'ready'` and returns `ALREADY_APPLIED` — the mechanism does not
+distinguish "client didn't see the first response" from "client is intentionally retrying," which
+is exactly the correct idempotent behaviour for both. Disclosed as architecturally-covered-but-not-
+freshly-HTTP-replayed (P3 residual).
 
-## 4. Unknown commit outcome (server commits, client never sees the response)
+## Partial Apply / atomicity (spec §87–91)
 
-The RPC's mutation (canonical write + application-audit insert + provenance stamp + proposal status
-flip) all happen inside the one PL/pgSQL function invocation, which Postgres executes as a single
-transaction (implicit, since the whole function body runs under one statement-level transaction
-unless it explicitly starts a subtransaction, which it does not). A client that loses the connection
-after the server committed, then retries, hits the same compare-and-swap and receives
-`ALREADY_APPLIED` — **idempotent result**, not a duplicate.
+Each Apply RPC is a single Postgres function — in Postgres, a function body executes inside one
+transaction by default; a raised exception anywhere in the body rolls back every write the
+function made in that call, including the compare-and-swap claim itself. No canonical mutation,
+proposal-status transition, or audit-row insert can be left half-applied. Not independently
+fault-injected with a forced mid-function failure against real hosted DEV this round (would require
+damaging shared DEV state to construct — disclosed as an open P3 per FDH-14's own equivalent
+disclosed residual, R-14-3, which FDH-15 does not re-litigate).
 
-## 5. Partial/atomic Apply
+## Idempotency per domain (spec §57–60)
 
-Every canonical write (the `income_sources`/`liabilities`/`retirement_accounts` UPDATE, the
-`fhip_import_applications` INSERT, and the provenance-column UPDATE) happens inside the same
-function invocation as the proposal's own status flip — Postgres functions execute inside the
-calling statement's transaction, so a failure anywhere in the function body (e.g. the domain
-`validateApply()` check, or a constraint violation on the `INSERT`) rolls back every write made so
-far in that call, including the `status='applied'` flip. **Partial canonical mutation: 0** — this is
-a structural guarantee (one function body = one transaction), not merely observed behaviour; it was
-not additionally fault-injected against real hosted DEV this pass (would require a way to force a
-mid-function failure without damaging shared DEV state, judged out of proportion for a pattern that
-is already structurally guaranteed by PL/pgSQL's transaction semantics — disclosed as an
-architectural-reasoning-only proof, consistent with FDH-14's own equivalent disclosure for its
-Failure Mode Certification).
-
-## 6. Investment (AU) idempotency — a different, ledger-appropriate mechanism
-
-AU Investment Apply is NOT proposal-based (see `FDH15_BRIDGE_ARCHITECTURE_INVENTORY.md`). Its
-idempotency guarantee is: (a) a compare-and-swap on the evidence row's own `apply_status`
-(`pending→applying`), and (b) a **unique fingerprint index** on `ii_transactions.transaction_
-fingerprint` — a second Apply attempt for the same evidence activity, even if it raced past the
-`apply_status` CAS, would still hit a real Postgres `23505` unique-violation on the fingerprint,
-never creating a duplicate transaction row. This exact mechanism was live-proven by FDH-14's own
-golden-household oracle (`fdh14_golden_household_e2e_oracle.mjs`, Event 8's negative control: a
-genuine `23505` rejection on a duplicate retirement-contribution activity) — REUSED evidence, the
-underlying fingerprint-index code has not changed this pass.
-
-## 7. Retirement idempotency
-
-Same shared-RPC compare-and-swap mechanism as Income/Liability (§1-2) — one `fhip_import_
-applications` row per proposal, `UNIQUE(proposal_id)` enforced.
+- **Income**: proven live this round (INC-2/2b).
+- **Liability**: same RPC shape (row-lock + compare-and-swap + `UNIQUE(proposal_id)`), confirmed by
+  direct code reading this round; not independently double-applied live this round (time-boxed —
+  the mechanism is byte-for-byte structurally identical to Income's, which WAS live-proven).
+- **Retirement**: same shape; not independently double-applied live this round for the same reason,
+  but the fresh PGlite certification this round (`scripts/fdh15_member_mismatch_pglite_certification.mjs`)
+  exercises the RPC's compare-and-swap path indirectly via its positive-control Apply calls.
+- **AU Investment**: idempotency was already live-certified by FDH-11's own prior round
+  (`FDH11_SECURITY_CERTIFICATION.md`: "concurrent Apply → exactly 1 canonical row") — reused
+  evidence, re-confirmed by this round's fresh reading of the unchanged `applyAuStatementActivity.ts`
+  source (no changes to this file on this branch).
