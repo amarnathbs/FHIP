@@ -43,6 +43,9 @@
 -- transaction-scoped advisory lock plus row locks, applies every position in
 -- a single UPDATE ... FROM unnest(...) WITH ORDINALITY statement, and
 -- returns the committed ordering. It succeeds completely or changes nothing.
+-- It authenticates and authorises its own caller from auth.uid() before it
+-- touches anything — see the PATTERN A security-model note above the function
+-- itself.
 --
 -- INVARIANT (the canonical reorder contract, Wave 2 §5.2):
 --   A reorder request represents the complete ordered set of the existing
@@ -150,21 +153,86 @@
 -- -----------------------------------------------------------------------------
 -- SCOPE A: public.admin_reorder_related_content
 -- -----------------------------------------------------------------------------
--- Security posture matches the established FHIP admin-RPC pattern set by
--- migrations 0107 / 0109 (Wave 1 / 1B):
+-- SECURITY MODEL — PATTERN A (caller-context RPC), per the Product Owner's
+-- privileged-RPC governance ruling of 2026-08-31.
+--
+-- Reordering Related Content is an INTERACTIVE action performed by a
+-- logged-in Editor, Resource Administrator or Super Admin. There is no
+-- controlled batch import, no system job and no reason to lose the user
+-- context, so the Pattern B service-boundary exception does not apply and is
+-- not claimed here. (The production-applied 0107 / 0109 service_role RPCs
+-- remain approved Pattern B exceptions on their own server-only bulk-import
+-- architecture; this migration does not touch them.)
+--
+-- Pattern A requirements, each satisfied below:
+--   * Called with the administrator's own authenticated Supabase session —
+--     see app/api/admin/resources/related/reorder/route.ts, which passes the
+--     request-scoped user client, NOT a service-role client.
+--   * EXECUTE granted to `authenticated`; revoked from `public` and `anon`
+--     (and from `service_role`, which has no legitimate reason to call this
+--     specific RPC — see the grant block below).
+--   * The real actor is obtained from auth.uid() INSIDE the function. No
+--     actor/user/role parameter exists, so a client cannot nominate an
+--     identity: identity is taken from the verified JWT or not at all.
+--   * FAILS CLOSED on a null auth.uid() — an explicit early check that
+--     raises, never an implicit false from a null comparison.
+--   * The required capability is RE-CHECKED here against the canonical role
+--     tables (public.admin_users / public.resource_user_roles, reached via
+--     the canonical private.* predicates), independently of the API route.
 --   * SECURITY DEFINER with a pinned `search_path = public` (never an
 --     empty/mutable path), so an attacker cannot shadow a referenced object.
---   * Fixed SQL only. Every table and column name is a literal in this
---     function's text. No identifier is ever constructed from client input,
+--   * Fixed SQL only, narrow scope. Every table and column name is a literal
+--     in this function's text; no identifier is ever built from client input,
 --     so there is no dynamic-SQL injection surface at all.
---   * EXECUTE revoked from public, anon and authenticated; granted ONLY to
---     service_role. It is therefore unreachable from a browser session key
---     and reachable only through the authorised Admin server route, which
---     performs its own canManageDiscovery() capability check first.
---   * The function trusts NO client-supplied role or identity — it takes no
---     actor parameter and makes no authorisation decision of its own,
---     precisely so it cannot become a privilege-escalation vector. Authority
---     lives in the server route; this function's job is integrity.
+--   * The route-level canManageDiscovery() check REMAINS, as defence in depth
+--     and for a friendly 403. The database check below is the authoritative
+--     one.
+--
+-- The capability itself is unchanged by Wave 2: Related Content management
+-- has been {Super Admin, Resource Admin, Editor} since R1.6
+-- (DISCOVERY_MANAGE_ROLES in lib/resources/permissions.ts). What changes here
+-- is only WHERE it is enforced — it now also holds in the database.
+
+-- The canonical database mirror of canManageDiscovery() from
+-- lib/resources/permissions.ts. Every other predicate in that file already
+-- had a private.* twin from migration 0049 (is_fhip_super_admin,
+-- has_resource_role, can_manage_resources, is_resource_staff,
+-- is_resource_analyst, can_publish_resource); canManageDiscovery was the one
+-- capability that existed only in TypeScript, which is precisely why the
+-- reorder RPC previously had to delegate its authority to the route. This
+-- adds the missing twin. It is NOT a new capability and it widens nothing:
+-- it is composed from the existing canonical predicates and resolves to
+-- exactly the same role set as the TypeScript function
+-- (resource_admin OR editor OR super admin, active roles only).
+--
+-- Same posture as its siblings in 0049: STABLE, SECURITY DEFINER, empty
+-- search_path, every reference fully qualified, EXECUTE never granted to
+-- anon or public. (It is not referenced by any RLS policy, so — unlike
+-- can_manage_resources / is_resource_staff — it does not need the anon
+-- EXECUTE grant those two required; see 0049's note on that.)
+create or replace function private.can_manage_discovery(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.has_resource_role(p_user_id, 'resource_admin')
+      or private.has_resource_role(p_user_id, 'editor')
+      or private.is_fhip_super_admin(p_user_id);
+$$;
+revoke all on function private.can_manage_discovery(uuid) from public;
+revoke all on function private.can_manage_discovery(uuid) from anon;
+grant execute on function private.can_manage_discovery(uuid) to authenticated, service_role;
+
+comment on function private.can_manage_discovery(uuid) is
+  'Canonical database predicate for the Related Content / CTA Library / Context Mapping management capability '
+  '(R1.6 spec §79/§80). Exact mirror of canManageDiscovery() in lib/resources/permissions.ts: Super Admin, '
+  'Resource Administrator or Editor, active roles only. Deliberately narrower than private.is_resource_staff() — '
+  'Author, Compliance Reviewer and Publisher are not discovery administrators, and Analyst is read-only. '
+  'Added by migration 0116 so public.admin_reorder_related_content can recheck authority in the database itself '
+  '(privileged-RPC Pattern A) instead of trusting the API route alone. Introduces no new capability.';
+
 create or replace function public.admin_reorder_related_content(
   p_source_post_id uuid,
   p_ordered_ids uuid[]
@@ -179,12 +247,46 @@ declare
   -- of related items; this cap exists purely so an oversized or malicious
   -- payload is rejected cheaply instead of being sorted and written.
   c_max_items constant int := 100;
+  -- The actor of record. Taken ONLY from the verified session — there is no
+  -- parameter that could supply it, by design.
+  v_actor uuid := auth.uid();
   v_supplied int;
   v_distinct int;
   v_existing int;
   v_matched int;
   v_result jsonb;
 begin
+  -- --- authentication: fail closed -----------------------------------------
+  -- Explicit, not implicit. A null actor must terminate the function here,
+  -- rather than flow into a capability check where `null` would merely
+  -- evaluate to a falsy result somewhere downstream. In practice PostgREST
+  -- cannot reach this branch for an `authenticated`-granted function (an
+  -- unauthenticated request is executed as `anon`, which holds no EXECUTE),
+  -- but the guard is in the function BODY so the function is safe even when
+  -- invoked outside the normal request path.
+  if v_actor is null then
+    raise exception 'admin_reorder_related_content: not authenticated.'
+      using errcode = '42501';
+  end if;
+
+  -- --- authorisation: independent capability recheck -----------------------
+  -- Pattern A. This does NOT trust the API route's canManageDiscovery()
+  -- check (which remains, as defence in depth) and does NOT trust anything
+  -- in the request payload. It reads the canonical role tables —
+  -- public.admin_users and public.resource_user_roles — through the same
+  -- private.* predicates that back this module's RLS policies, so the
+  -- database itself is the authority. An Author, Compliance Reviewer,
+  -- Publisher, Analyst or role-less authenticated user is refused here even
+  -- if they reach the RPC directly, bypassing every route.
+  --
+  -- 42501 (insufficient_privilege) is deliberate: it is the same SQLSTATE a
+  -- missing EXECUTE grant would raise, so the server maps both to one
+  -- HTTP 403 and the client learns nothing about which of the two applied.
+  if not private.can_manage_discovery(v_actor) then
+    raise exception 'admin_reorder_related_content: you do not have permission to manage Related Content.'
+      using errcode = '42501';
+  end if;
+
   -- --- payload shape -------------------------------------------------------
   if p_source_post_id is null then
     raise exception 'admin_reorder_related_content: a source Resource is required.'
@@ -317,10 +419,23 @@ $$;
 
 alter function public.admin_reorder_related_content(uuid, uuid[]) owner to postgres;
 
+-- PATTERN A grant model. Note the order: revoke from every role that must not
+-- hold EXECUTE (including any grant a platform-level ALTER DEFAULT PRIVILEGES
+-- may have applied at CREATE time), then grant to exactly one.
+--
+-- `service_role` is deliberately revoked as well. This RPC is not a service
+-- boundary: it takes its identity from auth.uid(), which a service_role
+-- connection does not carry, so a service_role call could only ever fail
+-- closed at the authentication guard above. Leaving the grant in place would
+-- advertise a call path that cannot work and would blur the Pattern A/B
+-- distinction the governance ruling draws. (Contrast
+-- public.transition_resource_post_status, which is granted to
+-- `authenticated, service_role` — that one genuinely predates this ruling and
+-- is left exactly as it is by this migration.)
 revoke all on function public.admin_reorder_related_content(uuid, uuid[]) from public;
 revoke all on function public.admin_reorder_related_content(uuid, uuid[]) from anon;
-revoke all on function public.admin_reorder_related_content(uuid, uuid[]) from authenticated;
-grant execute on function public.admin_reorder_related_content(uuid, uuid[]) to service_role;
+revoke all on function public.admin_reorder_related_content(uuid, uuid[]) from service_role;
+grant execute on function public.admin_reorder_related_content(uuid, uuid[]) to authenticated;
 
 comment on function public.admin_reorder_related_content(uuid, uuid[]) is
   'Admin A0.2 Wave 2 (Scope A). Atomically reorders the Related Content links of ONE source Resource. '
@@ -328,10 +443,15 @@ comment on function public.admin_reorder_related_content(uuid, uuid[]) is
   'no foreign or unknown ids — and the resulting sort_order values are zero-based, unique and contiguous (0..n-1). '
   'Never creates, deletes or relinks a relationship; it only permutes sort_order. Succeeds completely or changes nothing. '
   'Concurrent reorders of the same source are serialised by a transaction-scoped advisory lock plus row locks, so the '
-  'committed state is always one complete ordering, never a blend. Errors: SQLSTATE 22023 = invalid payload, '
+  'committed state is always one complete ordering, never a blend. '
+  'SECURITY: privileged-RPC Pattern A (caller-context). Called with the administrator''s own authenticated session; '
+  'EXECUTE granted to authenticated only (revoked from public, anon and service_role); the actor is auth.uid() and can '
+  'never be supplied by a caller; a null auth.uid() fails closed; and the function independently rechecks '
+  'private.can_manage_discovery(auth.uid()) against the canonical role tables, so an unauthorised role is refused here '
+  'even if it bypasses the API route. The route''s own canManageDiscovery() check remains as defence in depth. '
+  'Errors: SQLSTATE 42501 = not authenticated or not permitted, 22023 = invalid payload, '
   'P0002 = source Resource not found, 40001 = the link set changed since the client loaded it (refresh and retry). '
-  'Replaces the previous non-atomic Promise.all of independent UPDATEs in lib/resources/discovery/relatedAdmin.ts. '
-  'EXECUTE is granted to service_role only; the caller''s authority is checked by the Admin server route via canManageDiscovery().';
+  'Replaces the previous non-atomic Promise.all of independent UPDATEs in lib/resources/discovery/relatedAdmin.ts.';
 
 
 -- -----------------------------------------------------------------------------

@@ -2,8 +2,11 @@
 //
 // The transactional guarantee itself is a DATABASE property and is certified
 // against a real PostgreSQL instance in
-// scripts/admin_a02_wave2_certification.mjs (SECTIONS 1-6): defect
-// reproduction, rollback, complete-set validation, locking and grants. What
+// scripts/admin_a02_wave2_certification.mjs (SECTIONS 1-6F): defect
+// reproduction, rollback, complete-set validation, locking, grants, and —
+// under privileged-RPC Pattern A — the RPC's own authentication and
+// capability recheck, exercised by each permitted and each denied role
+// calling it with their own authenticated session. What
 // these tests cover is the TypeScript half that the certification script
 // cannot reach — that the wrapper invokes the RPC with exactly the right
 // parameters, and that it classifies each of the function's deliberate
@@ -66,6 +69,34 @@ describe('reorderRelatedContent — SQLSTATE classification', () => {
     if (!res.ok) expect(res.kind).toBe('not_found');
   });
 
+  it('maps 42501 (the RPC\'s own capability recheck refusing the caller) to kind "forbidden"', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { client } = clientReturning({ error: { code: '42501', message: 'admin_reorder_related_content: you do not have permission to manage Related Content.' } });
+    const res = await reorderRelatedContent(client, 'src', ['a']);
+    expect(res).toEqual({ ok: false, kind: 'forbidden', message: "You don't have permission to manage Related Content." });
+    spy.mockRestore();
+  });
+
+  it('maps 42501 (a missing EXECUTE grant) to the SAME kind and the SAME message — the two are indistinguishable to the client', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { client } = clientReturning({ error: { code: '42501', message: 'permission denied for function admin_reorder_related_content' } });
+    const res = await reorderRelatedContent(client, 'src', ['a']);
+    expect(res).toEqual({ ok: false, kind: 'forbidden', message: "You don't have permission to manage Related Content." });
+    // The raw "permission denied for function ..." text names an internal
+    // object and must never reach the client.
+    expect(res.ok === false && res.message).not.toMatch(/permission denied for function/);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('maps 42501 raised by the null-auth.uid() guard to "forbidden" without echoing the RPC sentence', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { client } = clientReturning({ error: { code: '42501', message: 'admin_reorder_related_content: not authenticated.' } });
+    const res = await reorderRelatedContent(client, 'src', ['a']);
+    expect(res).toEqual({ ok: false, kind: 'forbidden', message: "You don't have permission to manage Related Content." });
+    spy.mockRestore();
+  });
+
   it('maps 40001 (stale set) to kind "conflict"', async () => {
     const { client } = clientReturning({ error: { code: '40001', message: 'admin_reorder_related_content: the related items have changed since this list was loaded (1 of 4 supplied ids are not current links of this Resource).' } });
     const res = await reorderRelatedContent(client, 'src', ['a']);
@@ -83,7 +114,9 @@ describe('reorderRelatedContent — SQLSTATE classification', () => {
 describe('reorderRelatedContent — unexpected errors are never leaked', () => {
   it.each([
     ['23514', 'new row for relation "resource_related_content" violates check constraint "resource_related_content_sort_order_check"'],
-    ['42501', 'permission denied for function admin_reorder_related_content'],
+    // 42501 is no longer in this list: under privileged-RPC Pattern A it is a
+    // deliberate SQLSTATE with its own 'forbidden' kind (tested above), not an
+    // unexpected fault. Its message is still never passed through.
     ['42883', 'function public.admin_reorder_related_content(uuid, uuid[]) does not exist'],
     ['08006', 'connection failure'],
     [undefined, 'TypeError: fetch failed'],

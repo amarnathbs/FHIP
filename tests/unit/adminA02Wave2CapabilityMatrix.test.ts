@@ -25,10 +25,18 @@
 // Sections proved elsewhere, cross-referenced so the evidence trail is
 // complete:
 //   §4  database-bypass test  -> scripts/admin_a02_wave2_certification.mjs
-//                               SECTION 6 (anon and authenticated hold NO
-//                               EXECUTE on admin_reorder_related_content)
-//                               and SECTION 8 (unauthenticated direct RPC
-//                               call to the transition RPC is denied).
+//                               SECTIONS 6-6F. Under privileged-RPC Pattern A
+//                               the reorder RPC is granted to `authenticated`
+//                               and rechecks the capability ITSELF, so the
+//                               bypass test is now behavioural as well as
+//                               structural: Analyst/Author/Compliance
+//                               Reviewer/Publisher/no-role each call the RPC
+//                               directly, as themselves, with their own
+//                               session, and are refused 42501 with zero
+//                               database variance (6C); anon is refused at
+//                               the grant layer (6D); a null auth.uid() fails
+//                               closed in the function body (6E). SECTION 8
+//                               covers the transition RPC equivalently.
 //   §4  explicit denial       -> the reorder route returns 401/403/404/409/
 //                               422/500, never a misleading empty success;
 //                               see tests/unit/resourcesRelatedReorder.test.ts
@@ -37,6 +45,8 @@
 //                               ("unexpected errors are never leaked") and
 //                               tests/unit/resourcesSchedulingValidation.test.ts.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { canManageDiscovery, canManageResources, hasResourceRole, type CurrentResourceRoles } from '@/lib/resources/permissions';
 import type { ResourceRole } from '@/lib/resources/types';
 
@@ -141,5 +151,71 @@ describe('§14 no hidden scope expansion — Wave 2 changed no capability defini
     const permitted = ALL_ROLES.filter((r) => canManageDiscovery(as([r])));
     expect(permitted).toEqual(['resource_admin', 'editor']);
     expect(canManageDiscovery(as([], true))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Privileged-RPC PATTERN A (Product Owner governance ruling, 2026-08-31).
+//
+// The reorder RPC is now caller-context: it obtains the actor from auth.uid()
+// and rechecks the capability in the database. That makes the DATABASE the
+// authority and the TypeScript predicate defence in depth — so the two must
+// not be allowed to drift apart. The behavioural proof (each role calling the
+// RPC with its own session) is in the certification script against a real
+// PostgreSQL; what is pinned here is the source-level contract: the migration
+// really does define the database twin, and it really does resolve to the same
+// role set as canManageDiscovery().
+// ---------------------------------------------------------------------------
+describe('PATTERN A — the reorder RPC authorises its own caller', () => {
+  const MIGRATION = readFileSync(
+    join(process.cwd(), 'supabase/migrations/0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql'),
+    'utf8'
+  );
+
+  it('0116 defines private.can_manage_discovery — the database mirror of canManageDiscovery()', () => {
+    expect(MIGRATION).toMatch(/create or replace function private\.can_manage_discovery\(p_user_id uuid\)/);
+  });
+
+  it('the database mirror resolves to the SAME role set as the TypeScript predicate', () => {
+    // Extract the SQL body and check it names exactly the roles
+    // DISCOVERY_MANAGE_ROLES names, plus the super-admin predicate.
+    const body = MIGRATION.split('create or replace function private.can_manage_discovery(p_user_id uuid)')[1].split('$$;')[0];
+    const namedRoles = [...body.matchAll(/has_resource_role\(p_user_id, '([a-z_]+)'\)/g)].map((m) => m[1]).sort();
+    const tsRoles = ALL_ROLES.filter((r) => canManageDiscovery(as([r]))).sort();
+    expect(namedRoles).toEqual(tsRoles);
+    expect(body).toMatch(/is_fhip_super_admin\(p_user_id\)/); // Super Admin, matching isSuperAdmin
+    // and no other role leaks in
+    for (const r of ALL_ROLES.filter((x) => !tsRoles.includes(x))) expect(body).not.toContain(`'${r}'`);
+  });
+
+  it('the reorder RPC takes the actor from auth.uid() and fails closed when it is null', () => {
+    expect(MIGRATION).toMatch(/v_actor uuid := auth\.uid\(\)/);
+    expect(MIGRATION).toMatch(/if v_actor is null then[\s\S]{0,200}?raise exception[\s\S]{0,200}?errcode = '42501'/);
+  });
+
+  it('the reorder RPC rechecks the capability itself, independently of the API route', () => {
+    expect(MIGRATION).toMatch(/if not private\.can_manage_discovery\(v_actor\) then/);
+  });
+
+  it('the reorder RPC accepts no client-supplied identity parameter', () => {
+    const fn = MIGRATION.split('create or replace function public.admin_reorder_related_content(')[1].split(')')[0];
+    expect(fn).toContain('p_source_post_id uuid');
+    expect(fn).toContain('p_ordered_ids uuid[]');
+    expect(fn).not.toMatch(/p_actor|p_user_id|p_role/);
+  });
+
+  it('EXECUTE is granted to authenticated and revoked from public, anon and service_role', () => {
+    const sig = 'public.admin_reorder_related_content(uuid, uuid[])';
+    expect(MIGRATION).toContain(`grant execute on function ${sig} to authenticated;`);
+    for (const role of ['public', 'anon', 'service_role']) {
+      expect(MIGRATION).toContain(`revoke all on function ${sig} from ${role};`);
+    }
+    expect(MIGRATION).not.toContain(`grant execute on function ${sig} to service_role`);
+    expect(MIGRATION).not.toContain(`grant execute on function ${sig} to authenticated, service_role`);
+  });
+
+  it('0107 and 0109 are NOT touched — they remain approved Pattern B exceptions', () => {
+    // The ruling is explicit: do not reopen Waves 1/1B here.
+    expect(MIGRATION).not.toMatch(/admin_import_recommendation_conditions|admin_upsert_recommendation_atomic/);
   });
 });

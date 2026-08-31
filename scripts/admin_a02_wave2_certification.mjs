@@ -16,7 +16,32 @@
 //   SECTION 3  GREEN admin_reorder_related_content() valid behaviour.
 //   SECTION 4  GREEN invalid-payload rejection, each with zero DB variance.
 //   SECTION 5  GREEN rollback / failure injection.
-//   SECTION 6  GREEN security: EXECUTE lockdown, ownership, search_path.
+//   SECTION 6  GREEN Pattern A security posture — STRUCTURAL (grants,
+//                    SECURITY DEFINER, pinned search_path, signature, the
+//                    auth.uid() / fail-closed / capability-recheck guards).
+//   SECTION 6A GREEN private.can_manage_discovery — the new database mirror
+//                    of canManageDiscovery(), proved role by role against
+//                    real rows in the canonical role tables.
+//   SECTION 6B GREEN PERMITTED roles (Editor, Resource Admin, Super Admin)
+//                    each calling the RPC with their OWN session — session
+//                    role `authenticated`, their own JWT subject, no
+//                    service-role or superuser bypass.
+//   SECTION 6C GREEN DENIED roles (Analyst, Author, Compliance Reviewer,
+//                    Publisher, no-role, deactivated role) each calling the
+//                    RPC directly as themselves, refused by the function's
+//                    own capability recheck with zero database variance.
+//   SECTION 6D GREEN anonymous denial, structural AND behavioural.
+//   SECTION 6E GREEN null auth.uid() fails closed inside the function body,
+//                    proved by a direct grant-bypassing call, with a
+//                    positive control.
+//   SECTION 6F GREEN the route-level capability check is RETAINED as defence
+//                    in depth, and route bypass changes nothing.
+//
+// SCOPE A's authorisation model is privileged-RPC PATTERN A (caller-context)
+// per the Product Owner's ruling of 2026-08-31. Every Scope A test above
+// therefore calls the RPC as a real, authorised, signed-in administrator
+// (CERT_ADMIN) — the integrity evidence is produced THROUGH the new
+// authorisation model, not around it.
 //
 // SCOPE B — Scheduling-validation alignment
 //   SECTION 7  RED   reproduce the pre-Wave-2 inconsistency: the DB had no
@@ -164,19 +189,56 @@ function isUniqueContiguous(rows) {
   return s.every((v, i) => v === i);
 }
 
-async function reorder(db, sourceId, orderedIds) {
+// --------------------------------------------------------------------------
+// Pattern A calling context
+//
+// admin_reorder_related_content is now a CALLER-CONTEXT RPC: it reads
+// auth.uid() itself and rechecks the capability in the database. Every
+// integrity test below therefore has to call it the way the application does
+// — as a real, authorised, signed-in administrator. CERT_ADMIN is that
+// administrator (a genuine resource_admin row in resource_user_roles, not a
+// bypass), and reorder()/tryReorder() establish the session before each call
+// so the SECTION 1-5 integrity evidence is produced through the new
+// authorisation model rather than around it.
+// --------------------------------------------------------------------------
+let CERT_ADMIN = null;
+
+async function reorder(db, sourceId, orderedIds, actorId = undefined) {
+  await actAs(db, actorId === undefined ? CERT_ADMIN : actorId);
   const r = await db.query(`select public.admin_reorder_related_content($1::uuid, $2::uuid[]) as result`, [sourceId, orderedIds]);
   return r.rows[0].result;
 }
 
 // Returns { ok, code, message } — never throws, so a test can assert on the
 // exact SQLSTATE the function raised.
-async function tryReorder(db, sourceId, orderedIds) {
+async function tryReorder(db, sourceId, orderedIds, actorId = undefined) {
   try {
-    const result = await reorder(db, sourceId, orderedIds);
+    const result = await reorder(db, sourceId, orderedIds, actorId);
     return { ok: true, result };
   } catch (e) {
     return { ok: false, code: e.code ?? null, message: e.message ?? String(e) };
+  }
+}
+
+// Calls the RPC while the SESSION IS ACTUALLY SET TO `dbRole` — i.e. the real
+// PostgreSQL role PostgREST would use for that class of request
+// (`authenticated` for a signed-in user, `anon` for an anonymous one) — with
+// `actorId` as the JWT subject. This is what makes the permitted/denied role
+// tests genuine: the EXECUTE grant is enforced by PostgreSQL against the
+// session role, not simulated, and no service-role or superuser bypass is in
+// play for the duration of the call.
+async function callAsDbRole(db, dbRole, actorId, sourceId, orderedIds) {
+  await actAs(db, actorId);
+  try {
+    await db.exec(`set role ${dbRole}`);
+    const r = await db.query(`select public.admin_reorder_related_content($1::uuid, $2::uuid[]) as result`, [sourceId, orderedIds]);
+    return { ok: true, result: r.rows[0].result };
+  } catch (e) {
+    return { ok: false, code: e.code ?? null, message: e.message ?? String(e) };
+  } finally {
+    // reset role must always run, or every later verification query in this
+    // single-connection harness would silently inherit the restricted role.
+    await db.exec(`reset role`);
   }
 }
 
@@ -216,10 +278,18 @@ async function main() {
   const base = await buildDb(false);
   console.log('');
 
+  // The signed-in administrator every Scope A test calls the RPC as. Created
+  // as a real, active resource_admin — one of the two non-super-admin roles
+  // canManageDiscovery permits.
+  CERT_ADMIN = await newUser(db);
+  await grantRole(db, CERT_ADMIN, 'resource_admin');
+
   console.log('=== SECTION 0: baseline (pre-0116) measurements ===');
   {
     const b = await functionPosture(base, 'admin_reorder_related_content');
     check('BASELINE: admin_reorder_related_content does not exist before 0116', b === null);
+    const bd = await base.query(`select count(*)::int as n from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace where ns.nspname = 'private' and p.proname = 'can_manage_discovery'`);
+    check('BASELINE: private.can_manage_discovery does not exist before 0116 (canManageDiscovery lived only in TypeScript)', bd.rows[0].n === 0);
 
     const bt = await functionPosture(base, 'transition_resource_post_status');
     const at = await functionPosture(db, 'transition_resource_post_status');
@@ -516,7 +586,7 @@ async function main() {
     check('one reorder repairs a legacy duplicate-position set to unique+contiguous', isUniqueContiguous(await positions(db, source)));
   }
 
-  console.log('\n=== SECTION 6: security posture of admin_reorder_related_content (GREEN) ===');
+  console.log('\n=== SECTION 6: PATTERN A security posture of admin_reorder_related_content — STRUCTURAL (GREEN) ===');
   {
     const meta = await db.query(`
       select p.prosecdef, p.proconfig, pg_get_userbyid(p.proowner) as owner
@@ -531,22 +601,252 @@ async function main() {
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.proname = 'admin_reorder_related_content'`);
     const aclText = acl.rows[0].acl;
-    check('EXECUTE granted to service_role', /service_role=X/.test(aclText), aclText);
-    check('EXECUTE NOT granted to anon', !/\banon=X/.test(aclText), aclText);
-    check('EXECUTE NOT granted to authenticated', !/\bauthenticated=X/.test(aclText), aclText);
-    check('EXECUTE NOT granted to PUBLIC', !/^=X/.test(aclText) && !/,=X/.test(aclText), aclText);
+    check('PATTERN A: EXECUTE granted to authenticated', /\bauthenticated=X/.test(aclText), aclText);
+    check('PATTERN A: EXECUTE NOT granted to anon', !/\banon=X/.test(aclText), aclText);
+    check('PATTERN A: EXECUTE NOT granted to PUBLIC', !/^=X/.test(aclText) && !/,=X/.test(aclText), aclText);
+    check('PATTERN A: EXECUTE NOT granted to service_role (this is not a service-boundary RPC)', !/service_role=X/.test(aclText), aclText);
 
-    for (const role of ['anon', 'authenticated']) {
+    for (const role of ['anon', 'service_role']) {
       const r = await db.query(`select has_function_privilege($1, 'public.admin_reorder_related_content(uuid, uuid[])', 'EXECUTE') as ok`, [role]);
-      check(`${role} has NO EXECUTE privilege (direct RPC denied)`, r.rows[0].ok === false);
+      check(`${role} has NO EXECUTE privilege`, r.rows[0].ok === false);
     }
-    const sr = await db.query(`select has_function_privilege('service_role', 'public.admin_reorder_related_content(uuid, uuid[])', 'EXECUTE') as ok`);
-    check('service_role DOES have EXECUTE (the authorised server route can call it)', sr.rows[0].ok === true);
+    const au = await db.query(`select has_function_privilege('authenticated', 'public.admin_reorder_related_content(uuid, uuid[])', 'EXECUTE') as ok`);
+    check('authenticated DOES have EXECUTE (a signed-in administrator calls it with their own session)', au.rows[0].ok === true);
 
     const src = await db.query(`select prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public' and p.proname='admin_reorder_related_content'`);
     const body = src.rows[0].prosrc;
-    check('function body contains NO dynamic SQL (no EXECUTE/format/quote_ident)', !/\bexecute\s+/i.test(body) && !/\bformat\s*\(/i.test(body) && !/quote_ident/i.test(body));
-    check('function takes no actor/role parameter (cannot be told who to trust)', !/p_role|p_actor|p_user/i.test(body));
+    // Strip `--` comments before the dynamic-SQL scan: the Pattern A note in
+    // the body legitimately contains the word "EXECUTE" (discussing the
+    // grant), and a comment cannot execute anything. The scan must judge
+    // CODE, not prose.
+    const code = body.replace(/--[^\n]*/g, '');
+    check('function body contains NO dynamic SQL (no EXECUTE/format/quote_ident in code)', !/\bexecute\s+/i.test(code) && !/\bformat\s*\(/i.test(code) && !/quote_ident/i.test(code));
+    check('function takes no actor/role parameter (identity can never be client-supplied)', !/p_role|p_actor|p_user/i.test(body));
+
+    const args = await db.query(`select pg_get_function_arguments(p.oid) as a from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public' and p.proname='admin_reorder_related_content'`);
+    check('signature is still exactly (p_source_post_id uuid, p_ordered_ids uuid[]) — no identity parameter was added', args.rows[0].a === 'p_source_post_id uuid, p_ordered_ids uuid[]', args.rows[0].a);
+
+    check('body derives the actor from auth.uid()', /v_actor\s+uuid\s*:=\s*auth\.uid\(\)/.test(body), body.slice(0, 200));
+    check('body FAILS CLOSED on a null actor with an EXPLICIT raise (not an implicit null comparison)', /if\s+v_actor\s+is\s+null\s+then[\s\S]{0,200}?raise\s+exception/i.test(body));
+    check('body independently rechecks the capability via private.can_manage_discovery(v_actor)', /if\s+not\s+private\.can_manage_discovery\(\s*v_actor\s*\)\s+then/i.test(body));
+    check('the capability recheck raises 42501 (insufficient_privilege)', /can_manage_discovery\(\s*v_actor\s*\)[\s\S]{0,300}?errcode\s*=\s*'42501'/i.test(body));
+    check('both auth guards run BEFORE any payload handling or table access', body.indexOf('can_manage_discovery') < body.indexOf('payload shape'), `guard@${body.indexOf('can_manage_discovery')} payload@${body.indexOf('payload shape')}`);
+  }
+
+  console.log('\n=== SECTION 6A: private.can_manage_discovery — the database mirror of canManageDiscovery() (GREEN) ===');
+  {
+    const meta = await db.query(`
+      select p.prosecdef, p.proconfig, coalesce(array_to_string(p.proacl, ','), '') as acl, p.provolatile
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'private' and p.proname = 'can_manage_discovery'`);
+    check('private.can_manage_discovery exists exactly once', meta.rows.length === 1);
+    check('it is SECURITY DEFINER with an EMPTY search_path (same posture as its 0049 siblings)', meta.rows[0].prosecdef === true && JSON.stringify(meta.rows[0].proconfig).includes('search_path='));
+    check('it is STABLE (safe to reuse within one statement)', meta.rows[0].provolatile === 's');
+    check('EXECUTE is not granted to anon', !/\banon=X/.test(meta.rows[0].acl), meta.rows[0].acl);
+    check('EXECUTE is not granted to PUBLIC', !/^=X/.test(meta.rows[0].acl) && !/,=X/.test(meta.rows[0].acl), meta.rows[0].acl);
+
+    // The role set the DB predicate resolves to must be EXACTLY the role set
+    // lib/resources/permissions.ts resolves to — proved role by role against
+    // real rows in the canonical tables, not asserted from reading the SQL.
+    // (TS: DISCOVERY_MANAGE_ROLES = ['resource_admin','editor'], plus
+    // isSuperAdmin.)
+    const EXPECTED = { resource_admin: true, editor: true, author: false, compliance_reviewer: false, publisher: false, analyst: false };
+    for (const [role, expected] of Object.entries(EXPECTED)) {
+      const u = await newUser(db);
+      await grantRole(db, u, role);
+      const r = await db.query(`select private.can_manage_discovery($1::uuid) as ok`, [u]);
+      check(`can_manage_discovery(${role}) = ${expected} — matches canManageDiscovery() in lib/resources/permissions.ts`, r.rows[0].ok === expected, `got ${r.rows[0].ok}`);
+    }
+    const noRole = await newUser(db);
+    check('can_manage_discovery(authenticated user with NO Resources role) = false', (await db.query(`select private.can_manage_discovery($1::uuid) as ok`, [noRole])).rows[0].ok === false);
+
+    const sa = await newUser(db);
+    await db.query(`insert into admin_users (user_id) values ($1)`, [sa]);
+    check('can_manage_discovery(Super Admin, no resource_user_roles row at all) = true', (await db.query(`select private.can_manage_discovery($1::uuid) as ok`, [sa])).rows[0].ok === true);
+
+    check('can_manage_discovery(null) is not true (null actor can never satisfy it)', (await db.query(`select coalesce(private.can_manage_discovery(null::uuid), false) as ok`)).rows[0].ok === false);
+
+    // is_active is honoured: a deactivated Editor loses the capability.
+    const stale = await newUser(db);
+    await db.query(`insert into resource_user_roles (user_id, role, is_active) values ($1, 'editor', false)`, [stale]);
+    check('an INACTIVE editor role does not grant the capability', (await db.query(`select private.can_manage_discovery($1::uuid) as ok`, [stale])).rows[0].ok === false);
+
+    // §14: deliberately narrower than is_resource_staff — proof the new
+    // predicate is not a rename of an existing broader one.
+    const pubUser = await newUser(db);
+    await grantRole(db, pubUser, 'publisher');
+    const both = await db.query(`select private.is_resource_staff($1::uuid) as staff, private.can_manage_discovery($1::uuid) as disc`, [pubUser]);
+    check('a Publisher IS resource staff but is NOT a discovery administrator (not an alias for is_resource_staff)', both.rows[0].staff === true && both.rows[0].disc === false);
+  }
+
+  console.log('\n=== SECTION 6B: PERMITTED roles calling the RPC with their OWN authenticated session (GREEN) ===');
+  {
+    // Each of these calls runs with the PostgreSQL session role set to
+    // `authenticated` — the role PostgREST uses for a signed-in user — and
+    // with that user's own id as the JWT subject. No service_role, no
+    // superuser bypass, no route in the path.
+    const cases = [
+      ['Editor', async () => { const u = await newUser(db); await grantRole(db, u, 'editor'); return u; }],
+      ['Resource Admin', async () => { const u = await newUser(db); await grantRole(db, u, 'resource_admin'); return u; }],
+      ['Super Admin', async () => { const u = await newUser(db); await db.query(`insert into admin_users (user_id) values ($1)`, [u]); return u; }],
+    ];
+    for (const [label, mk] of cases) {
+      const actor = await mk();
+      const { source, ids } = await seedSet(db, 4);
+      const wanted = [...ids].reverse();
+      const res = await callAsDbRole(db, 'authenticated', actor, source, wanted);
+      check(`${label} calling the RPC directly as themselves (session role = authenticated) SUCCEEDS`, res.ok === true, JSON.stringify(res));
+      const after = await positions(db, source);
+      check(`  -> ${label}'s reorder was really committed, unique and contiguous`, JSON.stringify(after.map((x) => x.id)) === JSON.stringify(wanted) && isUniqueContiguous(after));
+      check(`  -> the RPC returned the committed ordering to ${label}`, res.ok && JSON.stringify(res.result.ordered.map((o) => o.id)) === JSON.stringify(wanted));
+    }
+  }
+
+  console.log('\n=== SECTION 6C: DENIED roles calling the RPC directly as themselves (GREEN) ===');
+  {
+    // The point of Pattern A: these roles are refused BY THE FUNCTION'S OWN
+    // capability recheck, not merely by never being routed to it. Each one
+    // holds a real, active Resources role and a real session; each is denied
+    // 42501 with zero database variance.
+    for (const role of ['analyst', 'author', 'compliance_reviewer', 'publisher']) {
+      const actor = await newUser(db);
+      await grantRole(db, actor, role);
+      const { source, ids } = await seedSet(db, 3);
+      const globalBefore = await globalSnapshot(db);
+      const res = await callAsDbRole(db, 'authenticated', actor, source, [...ids].reverse());
+      check(`${role} is DENIED by the RPC's own capability recheck`, res.ok === false, JSON.stringify(res));
+      check(`  -> with SQLSTATE 42501 (insufficient_privilege) for ${role}`, res.code === '42501', `${res.code}: ${res.message}`);
+      check(`  -> and ZERO database variance for ${role}`, (await globalSnapshot(db)) === globalBefore);
+    }
+
+    // An authenticated user with no Resources role at all.
+    {
+      const actor = await newUser(db);
+      const { source, ids } = await seedSet(db, 3);
+      const globalBefore = await globalSnapshot(db);
+      const res = await callAsDbRole(db, 'authenticated', actor, source, [...ids].reverse());
+      check('an authenticated user with NO Resources role is DENIED', res.ok === false && res.code === '42501', JSON.stringify(res));
+      check('  -> and ZERO database variance', (await globalSnapshot(db)) === globalBefore);
+    }
+
+    // A user whose only qualifying role has been DEACTIVATED — the recheck
+    // reads live rows, so revocation takes effect immediately.
+    {
+      const actor = await newUser(db);
+      await grantRole(db, actor, 'editor');
+      const { source, ids } = await seedSet(db, 3);
+      const okRes = await callAsDbRole(db, 'authenticated', actor, source, [...ids].reverse());
+      check('control: while ACTIVE, that editor succeeds', okRes.ok === true, JSON.stringify(okRes));
+      await db.query(`update resource_user_roles set is_active = false where user_id = $1`, [actor]);
+      const globalBefore = await globalSnapshot(db);
+      const res = await callAsDbRole(db, 'authenticated', actor, source, ids);
+      check('after DEACTIVATING the role, the same user is DENIED on the very next call', res.ok === false && res.code === '42501', JSON.stringify(res));
+      check('  -> and ZERO database variance', (await globalSnapshot(db)) === globalBefore);
+    }
+
+    // Identity cannot be borrowed: a denied user presenting a PERMITTED
+    // user's id is irrelevant, because there is no parameter to present it
+    // through — but prove the session subject is what decides, by giving an
+    // Author session the Editor's id as its own subject is impossible; the
+    // realistic attack is forging the JWT subject, which auth.uid() would
+    // then report. Cover the reachable half: the id in the payload (a
+    // relationship id) never influences authorisation.
+    {
+      const author = await newUser(db);
+      await grantRole(db, author, 'author');
+      const editor = await newUser(db);
+      await grantRole(db, editor, 'editor');
+      const { source, ids } = await seedSet(db, 2);
+      const globalBefore = await globalSnapshot(db);
+      const res = await callAsDbRole(db, 'authenticated', author, source, [...ids].reverse());
+      check('an Author is denied even though a permitted Editor exists in the same database', res.ok === false && res.code === '42501');
+      check('  -> ZERO database variance', (await globalSnapshot(db)) === globalBefore);
+      const ok2 = await callAsDbRole(db, 'authenticated', editor, source, [...ids].reverse());
+      check('  -> and the Editor, on the identical payload, succeeds (so the payload was never the reason)', ok2.ok === true, JSON.stringify(ok2));
+    }
+  }
+
+  console.log('\n=== SECTION 6D: ANONYMOUS denial — structural AND behavioural (GREEN) ===');
+  {
+    const priv = await db.query(`select has_function_privilege('anon', 'public.admin_reorder_related_content(uuid, uuid[])', 'EXECUTE') as ok`);
+    check('STRUCTURAL: anon holds no EXECUTE privilege on the RPC', priv.rows[0].ok === false);
+
+    const { source, ids } = await seedSet(db, 3);
+    const globalBefore = await globalSnapshot(db);
+    // A genuinely anonymous request: session role anon, no JWT subject.
+    const res = await callAsDbRole(db, 'anon', null, source, [...ids].reverse());
+    check('BEHAVIOURAL: an anonymous caller is refused', res.ok === false, JSON.stringify(res));
+    check('  -> refused at the GRANT layer with SQLSTATE 42501', res.code === '42501', `${res.code}: ${res.message}`);
+    check('  -> the refusal is a permission denial for the function itself', /permission denied for function/i.test(res.message ?? ''), res.message);
+    check('  -> ZERO database variance from the anonymous attempt', (await globalSnapshot(db)) === globalBefore);
+
+    // Anonymous with a STOLEN administrator id in the JWT subject GUC is
+    // still refused before the body ever runs — the grant is checked first.
+    const res2 = await callAsDbRole(db, 'anon', CERT_ADMIN, source, [...ids].reverse());
+    check('an anonymous session presenting an administrator subject is STILL refused (grant is checked before the body)', res2.ok === false && res2.code === '42501', JSON.stringify(res2));
+    check('  -> ZERO database variance', (await globalSnapshot(db)) === globalBefore);
+  }
+
+  console.log('\n=== SECTION 6E: NULL auth.uid() fails closed inside the function body (GREEN) ===');
+  {
+    // PostgREST cannot reach this branch for an `authenticated`-granted
+    // function (an unauthenticated request executes as `anon`, which SECTION
+    // 6D just proved holds no EXECUTE). So the guard is proved the only way
+    // it can be: by calling the function DIRECTLY, at the database level,
+    // bypassing the request path entirely — as the owner role, which is not
+    // subject to the EXECUTE grant — with no JWT subject set at all.
+    const { source, ids } = await seedSet(db, 3);
+    const globalBefore = await globalSnapshot(db);
+
+    await actAs(db, null);
+    check('precondition: auth.uid() is genuinely null in this session', (await db.query(`select auth.uid() is null as n`)).rows[0].n === true);
+
+    const res = await tryReorder(db, source, [...ids].reverse(), null);
+    check('a direct, grant-bypassing call with NO authenticated context is REFUSED', res.ok === false, JSON.stringify(res));
+    check('  -> by the function body\'s own explicit null-actor guard, SQLSTATE 42501', res.code === '42501', `${res.code}: ${res.message}`);
+    check('  -> with the body\'s own "not authenticated" message, not a grant error', /not authenticated/i.test(res.message ?? '') && !/permission denied for function/i.test(res.message ?? ''), res.message);
+    check('  -> ZERO database variance', (await globalSnapshot(db)) === globalBefore);
+
+    // Control: the identical direct call, identical payload, with a valid
+    // administrator subject, succeeds — so the null actor was the only
+    // difference.
+    const okRes = await tryReorder(db, source, [...ids].reverse(), CERT_ADMIN);
+    check('CONTROL: the identical direct call with a valid administrator subject SUCCEEDS (the null actor was the only variable)', okRes.ok === true, JSON.stringify(okRes));
+  }
+
+  console.log('\n=== SECTION 6F: route-level check retained as defence in depth (GREEN) ===');
+  {
+    // The ruling requires the route-level capability check to REMAIN — it is
+    // not made redundant by the database check. Read from the shipped source.
+    const routePath = path.join(REPO, 'app', 'api', 'admin', 'resources', 'related', 'reorder', 'route.ts');
+    const route = fs.readFileSync(routePath, 'utf8');
+    check('the reorder route still imports canManageDiscovery', /import\s*\{[^}]*canManageDiscovery[^}]*\}\s*from\s*'@\/lib\/resources\/permissions'/.test(route));
+    check('the reorder route still REJECTS a caller without canManageDiscovery with 403', /if\s*\(!canManageDiscovery\(current\)\)\s*return bad\([^)]*403\)/.test(route));
+    check('the reorder route still requires authentication before anything else (401)', /if\s*\(!user\)\s*return bad\('unauthenticated',\s*401\)/.test(route));
+    check('PATTERN A: the route no longer uses a service-role client for the reorder', !/adminClient/.test(route), 'adminClient still referenced');
+    check('PATTERN A: the route passes the caller-scoped client into reorderRelatedContent', /reorderRelatedContent\(supabase,/.test(route));
+    check('the route maps the RPC\'s 42501 refusal to HTTP 403', /case 'forbidden':[\s\S]{0,400}?403/.test(route));
+
+    const lib = fs.readFileSync(path.join(REPO, 'lib', 'resources', 'discovery', 'relatedAdmin.ts'), 'utf8');
+    check("relatedAdmin classifies 42501 as 'forbidden'", /'42501':\s*'forbidden'/.test(lib));
+    check('relatedAdmin never passes the raw 42501 message through (fixed sentence only)', /kind === 'forbidden'[\s\S]{0,300}?message:\s*FORBIDDEN_MESSAGE/.test(lib));
+
+    // And the substantive claim behind "defence in depth": bypassing the
+    // route entirely changes nothing about who may reorder. Already proved
+    // per-role in 6B/6C; restated here as the explicit route-bypass result.
+    const editor = await newUser(db);
+    await grantRole(db, editor, 'editor');
+    const analyst = await newUser(db);
+    await grantRole(db, analyst, 'analyst');
+    const { source, ids } = await seedSet(db, 3);
+
+    const bypassOk = await callAsDbRole(db, 'authenticated', editor, source, [...ids].reverse());
+    check('ROUTE BYPASS, authorised: an Editor calling the RPC directly (no route at all) still SUCCEEDS', bypassOk.ok === true, JSON.stringify(bypassOk));
+
+    const globalBefore = await globalSnapshot(db);
+    const bypassDenied = await callAsDbRole(db, 'authenticated', analyst, source, ids);
+    check('ROUTE BYPASS, unauthorised: an Analyst who somehow got past a route is STILL denied at the RPC layer', bypassDenied.ok === false && bypassDenied.code === '42501', JSON.stringify(bypassDenied));
+    check('  -> and changed nothing in the database', (await globalSnapshot(db)) === globalBefore);
   }
 
   // ======================================================================

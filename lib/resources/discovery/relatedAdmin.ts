@@ -110,15 +110,23 @@ export async function removeRelatedContent(supabase: SupabaseClient, id: string)
 // in one statement, and returns the committed ordering read back from the
 // table. It succeeds completely or changes nothing.
 //
-// The RPC's EXECUTE is granted to service_role only, so this must be called
-// with a service-role client. That is deliberate and matches the Wave 1/1B
-// pattern (migrations 0107/0109): the *authority* check lives in the route
-// (canManageDiscovery), and the RPC is unreachable from a browser session
-// key so it can never be invoked directly by an authenticated non-admin.
+// SECURITY — privileged-RPC PATTERN A (caller-context), per the Product
+// Owner's governance ruling of 2026-08-31. Reordering Related Content is an
+// interactive action by a logged-in Editor / Resource Admin / Super Admin, so
+// the caller's context is KEPT: this must be called with the administrator's
+// own request-scoped Supabase client, never a service-role client. The RPC's
+// EXECUTE is granted to `authenticated` (revoked from public, anon and
+// service_role), it takes the actor from auth.uid() — there is no actor
+// parameter to spoof — it fails closed on a null auth.uid(), and it rechecks
+// private.can_manage_discovery(auth.uid()) against the canonical role tables
+// itself. The route's canManageDiscovery() check remains as defence in depth
+// and for a friendly error; the database check is the authoritative one.
+// (Migrations 0107/0109 stay on Pattern B as documented server-only bulk
+// import/upsert exceptions — a different architecture, not a precedent here.)
 
 export const MAX_RELATED_REORDER_ITEMS = 100; // mirrors the RPC's own cap
 
-export type ReorderFailureKind = 'invalid' | 'not_found' | 'conflict' | 'error';
+export type ReorderFailureKind = 'invalid' | 'not_found' | 'conflict' | 'forbidden' | 'error';
 
 export interface ReorderedRelatedContent {
   source_post_id: string;
@@ -131,10 +139,19 @@ export type ReorderResult = { ok: true; data: ReorderedRelatedContent } | { ok: 
 // SQLSTATEs raised deliberately by admin_reorder_related_content. Anything
 // else is an unexpected server fault and is never surfaced verbatim.
 const REORDER_ERROR_KINDS: Record<string, ReorderFailureKind> = {
+  '42501': 'forbidden', // insufficient_privilege — see FORBIDDEN_MESSAGE below
   '22023': 'invalid', // invalid_parameter_value — payload shape/content
   P0002: 'not_found', // source Resource does not exist
   '40001': 'conflict', // the link set changed since the client loaded it
 };
+
+// 42501 has two possible origins and they must be indistinguishable to the
+// client: the RPC's own "not authenticated" / "not permitted" guards, and
+// PostgreSQL's own "permission denied for function ..." from a missing
+// EXECUTE grant. The second of those names an internal object, so the RPC's
+// message is never passed through for this kind — a single fixed sentence is
+// returned for both.
+const FORBIDDEN_MESSAGE = "You don't have permission to manage Related Content.";
 
 // The RPC's messages are written for administrators and are safe to show, but
 // they are prefixed with the function name for server logs. Strip that so the
@@ -157,6 +174,12 @@ export async function reorderRelatedContent(supabase: SupabaseClient, sourcePost
       // server-side; never leak a raw SQL error to the client.
       console.error('Resources related-content reorder RPC error:', error);
       return { ok: false, kind: 'error', message: 'Could not reorder related content.' };
+    }
+    if (kind === 'forbidden') {
+      // Log the distinction server-side (a missing grant is an operational
+      // fault worth seeing) but never expose it.
+      console.error('Resources related-content reorder denied by the database:', error);
+      return { ok: false, kind, message: FORBIDDEN_MESSAGE };
     }
     return { ok: false, kind, message: cleanRpcMessage(error.message ?? '') || 'Could not reorder related content.' };
   }

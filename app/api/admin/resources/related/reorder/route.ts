@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server';
-import { adminClient } from '@/lib/services/adminAuth';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageDiscovery } from '@/lib/resources/permissions';
 import { reorderRelatedContent, MAX_RELATED_REORDER_ITEMS } from '@/lib/resources/discovery/relatedAdmin';
@@ -19,7 +18,8 @@ import { reorderRelatedContent, MAX_RELATED_REORDER_ITEMS } from '@/lib/resource
 // can tell an invalid payload from a stale set from a server fault:
 //
 //   400  the request body itself is malformed (not JSON, wrong types)
-//   403  the caller lacks canManageDiscovery
+//   403  the caller lacks canManageDiscovery — at the route (below) or, as
+//        the authoritative backstop, inside the RPC itself (SQLSTATE 42501)
 //   404  the source Resource does not exist
 //   409  the link set changed since the client loaded it — refresh and retry
 //   422  the payload is well-formed but not a valid complete ordered set
@@ -28,6 +28,16 @@ import { reorderRelatedContent, MAX_RELATED_REORDER_ITEMS } from '@/lib/resource
 // Success returns the ordering that was actually COMMITTED, read back from
 // the database by the RPC, so the client can never be told "saved" about an
 // ordering that does not exist.
+//
+// SECURITY — privileged-RPC PATTERN A (caller-context), per the Product
+// Owner's governance ruling of 2026-08-31. The RPC is invoked with the
+// administrator's OWN authenticated session client (never a service-role
+// client), so auth.uid() inside the function is the real human actor and the
+// function performs its own capability recheck against the canonical role
+// tables. The canManageDiscovery() check below is retained as DEFENCE IN
+// DEPTH and to produce a friendly 403 without a database round trip — it is
+// not the authority. If it were ever removed or wrongly widened, the database
+// would still refuse the call (SQLSTATE 42501 -> the 'forbidden' kind -> 403).
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -63,12 +73,18 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    // service-role client: admin_reorder_related_content is granted to
-    // service_role only. The caller's authority was established above.
-    const result = await reorderRelatedContent(adminClient(), sourcePostId, orderedIds as string[]);
+    // Pattern A: the administrator's own session client. auth.uid() inside
+    // admin_reorder_related_content is therefore this signed-in user, and the
+    // function rechecks their capability itself.
+    const result = await reorderRelatedContent(supabase, sourcePostId, orderedIds as string[]);
     if (result.ok) return ok(result.data);
 
     switch (result.kind) {
+      case 'forbidden':
+        // The database refused the caller. Only reachable if the route check
+        // above and the database predicate ever disagree — which is exactly
+        // what defence in depth is for.
+        return bad(result.message, 403);
       case 'invalid':
         return bad(result.message, 422);
       case 'not_found':
