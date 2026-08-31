@@ -1,0 +1,934 @@
+{
+  "generic": [
+    {
+      "table": "assets",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "expense_items",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_approved_financial_summaries",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_classification_history",
+      "ops": [
+        "INSERT"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_csv_mapping_templates",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_data_provenance",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_data_quality_results",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_duplicate_candidates",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_evidence_links",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_financial_accounts",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_ingestion_jobs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_liability_statement_activities",
+      "ops": [
+        "INSERT",
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_liability_statements",
+      "ops": [
+        "INSERT",
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_payroll_components",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_payroll_events",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_reconciliation_results",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_recurring_transactions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_review_items",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_statement_uploads",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_transaction_allocations",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_transaction_corrections",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_transaction_links",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_transactions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_upload_sessions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fdh_user_classification_rules",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fhip_import_applications",
+      "ops": [
+        "INSERT"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fhip_import_proposal_fields",
+      "ops": [
+        "INSERT"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "fhip_import_proposals",
+      "ops": [
+        "INSERT",
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_dna_actions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_dna_drivers",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_dna_profile_scores",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_dna_profiles",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_health_component_scores",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_health_recommendations",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_health_scores",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_snapshots",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "financial_twin_runs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_assumptions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_explanations",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_profiles",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_results",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_runs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "forecast_scenarios",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "future_financial_commitments",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "goal_contributions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "goal_forecasts",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "goal_funding_sources",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "goal_milestones",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "goal_snapshots",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "health_check_ins",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "household_members",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "households",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": [
+        "INSERT",
+        "UPDATE"
+      ]
+    },
+    {
+      "table": "ii_accounts",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_document_parse_runs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_fhip_publications",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_goal_allocations",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_insights",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_portfolio_truth_status",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_reconciliation_cases",
+      "ops": [
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_review_items",
+      "ops": [
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_source_documents",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_tax_profiles",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "ii_transaction_source_links",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "income_sources",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "insurance_policies",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "investments",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "liabilities",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "professional_profiles",
+      "ops": [
+        "UPDATE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "property_liability_links",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "resilience_actions",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "resilience_component_scores",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "resilience_risks",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "resilience_scores",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "retirement_accounts",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "retirement_members",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "smsf_fund_members",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "smsf_funds",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "smsf_holdings",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "user_financial_section_status",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "user_goals",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "user_recommendation_matches",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    },
+    {
+      "table": "user_recommendation_runs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "onboardingExempt": []
+    }
+  ],
+  "bespokeOwnerCol": [
+    {
+      "table": "professional_notes",
+      "ownerColumn": "author_user_id",
+      "ops": [
+        "INSERT"
+      ]
+    }
+  ],
+  "bespokeJoin": [
+    {
+      "table": "financial_twin_insights",
+      "via": "financial_twin_run_id",
+      "parentTable": "financial_twin_runs",
+      "parentUserCol": "user_id",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "table": "financial_twin_metric_results",
+      "via": "financial_twin_run_id",
+      "parentTable": "financial_twin_runs",
+      "parentUserCol": "user_id",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "table": "consents",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "spec 1.2 consent/privacy/terms carve-out, all operations"
+    },
+    {
+      "table": "resource_authors",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_categories",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_context_links",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_ctas",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_faqs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_media",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_post_categories",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_post_faqs",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_post_sources",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_post_tags",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_post_versions",
+      "ops": [
+        "INSERT"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_posts",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_related_content",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_settings",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_sources",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_tags",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "resource_videos",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "Resources CMS shared content, not per-user financial data; fully covered by the API-layer gate"
+    },
+    {
+      "table": "user_profiles",
+      "ops": [
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "reason": "signup bootstrap (INSERT) / the confirmation write itself (UPDATE) — a trigger here would make country confirmation impossible to ever perform"
+    }
+  ]
+}

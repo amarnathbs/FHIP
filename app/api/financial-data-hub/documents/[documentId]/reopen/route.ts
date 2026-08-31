@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { reopenStatement, ApprovalError } from '@/lib/financial-data-hub/services/approvalService';
 import { fdhStatementReopenSchema } from '@/lib/financial-data-hub/validation/transactions';
 

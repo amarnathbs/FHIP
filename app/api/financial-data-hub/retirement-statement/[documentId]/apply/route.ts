@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getRetirementStatementIdForDocument } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
 import { applyRetirementProposalAtomic } from '@/lib/import-bridge/applyRetirementProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';

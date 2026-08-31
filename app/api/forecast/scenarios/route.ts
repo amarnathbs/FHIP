@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { getOrCreateForecastProfile, listScenarios, createScenario } from '@/lib/services/forecastData';
 import { forecastScenarioSchema } from '@/lib/validation/forecast';
 

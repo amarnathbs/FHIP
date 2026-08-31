@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { generateReport, type ReportTypeCode } from '@/lib/services/reportsData';
 
 export async function POST(req: Request) {

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-intelligence';
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';

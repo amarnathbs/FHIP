@@ -2,7 +2,7 @@
 // (their own session, never the client) may call this — enforced inside
 // acceptInvitation() by comparing professional_user_id, not trusted from
 // the URL alone.
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { acceptInvitation } from '@/lib/services/professional-access/access';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {

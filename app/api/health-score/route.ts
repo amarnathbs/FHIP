@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 
 export async function GET() {

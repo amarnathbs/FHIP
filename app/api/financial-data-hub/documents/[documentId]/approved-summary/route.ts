@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 // GET /api/financial-data-hub/documents/{documentId}/approved-summary —

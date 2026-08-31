@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { goalSchema } from '@/lib/validation/goal';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

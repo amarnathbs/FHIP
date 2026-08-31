@@ -1,5 +1,12 @@
 import type { SupportedCurrency } from '@/lib/engines/fx';
 
+// Mandatory Country Confirmation, round-3 closure (Gap 1) — the sessionStorage
+// key OnboardingWizard.tsx stashes an optional first-goal draft under, and
+// ConfirmCountryForm.tsx reads it back from once the user has genuinely
+// confirmed their country. Shared here (not duplicated as a magic string in
+// both files) so the two stay in sync by construction.
+export const PENDING_GOAL_STORAGE_KEY = 'fhip_pending_first_goal';
+
 export const COUNTRY_OPTIONS: { value: 'AU' | 'IN'; label: string }[] = [
   { value: 'AU', label: 'Australia' },
   { value: 'IN', label: 'India' },

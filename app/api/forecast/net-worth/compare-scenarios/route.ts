@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { getOrCreateForecastProfile, compareNetWorthAcrossScenarios } from '@/lib/services/forecastData';
 
 export async function POST() {

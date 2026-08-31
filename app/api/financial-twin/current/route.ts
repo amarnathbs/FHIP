@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { listTwinRuns, getTwinRunDetail } from '@/lib/services/financialTwinService';
 
 export async function GET() {

@@ -21,17 +21,57 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const state: { user: { id: string } | null; adminRow: { user_id: string } | null; roleRows: { role: string }[] } = {
+// Mandatory Country Confirmation reconciliation (2026-08-31): these eight
+// Resources admin GET routes are country-gated (MCC-2 — every admin route
+// requires the ADMIN'S OWN country to be confirmed, with no exemption for
+// admin status; see lib/services/countryGate.ts). This fake previously
+// returned `roleRows` for EVERY table, so the gate's `user_profiles` lookup
+// received an array instead of a profile row, classified COUNTRY_MISSING and
+// returned 403 — turning all 64 positive cases red for a reason that has
+// nothing to do with what Wave 1 asserts.
+//
+// Fixed by giving the fake a real `user_profiles` branch, so the caller it
+// models is what these cases always meant: an authorised role holder who has
+// also confirmed their country. `profileRow` stays settable, so a future test
+// can still drive the unconfirmed path deliberately rather than by accident.
+// (Same fix MCC already applied once to two other pre-existing fixtures in
+// commit 150d7ba.)
+interface ProfileRow {
+  country_of_residence: string | null;
+  country_confirmed_at: string | null;
+  country_source: string | null;
+  onboarding_completed: boolean;
+}
+
+const CONFIRMED_PROFILE: ProfileRow = {
+  country_of_residence: 'AU',
+  country_confirmed_at: '2026-08-30T00:00:00.000Z',
+  country_source: 'USER_CONFIRMED',
+  onboarding_completed: true,
+};
+
+const state: {
+  user: { id: string } | null;
+  adminRow: { user_id: string } | null;
+  roleRows: { role: string }[];
+  profileRow: ProfileRow | null;
+} = {
   user: null,
   adminRow: null,
   roleRows: [],
+  profileRow: CONFIRMED_PROFILE,
 };
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
     from(table: string) {
-      const result = table === 'admin_users' ? { data: state.adminRow } : { data: state.roleRows };
+      const result =
+        table === 'admin_users'
+          ? { data: state.adminRow }
+          : table === 'user_profiles'
+            ? { data: state.profileRow }
+            : { data: state.roleRows };
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -123,6 +163,10 @@ beforeEach(() => {
   state.user = null;
   state.adminRow = null;
   state.roleRows = [];
+  // Reset to the country-confirmed caller these cases model (see the note on
+  // CONFIRMED_PROFILE above) so one test cannot leak an unconfirmed profile
+  // into the next.
+  state.profileRow = CONFIRMED_PROFILE;
   for (const spy of Object.values(queryCalls)) spy.mockClear();
 });
 
@@ -152,6 +196,43 @@ describe('Wave 1 §10.5 — eight-route GET access matrix (10 callers x 8 routes
           }
         });
       }
+    });
+  }
+});
+
+describe('Mandatory Country Confirmation — the country gate is genuinely active on all eight routes', () => {
+  // Anti-vacuity guard for the CONFIRMED_PROFILE fix above. Giving the fake a
+  // confirmed profile made the 64 positive cases pass again; that must not be
+  // allowed to mean the country gate has quietly stopped mattering on these
+  // routes. Every one of the eight must still refuse a fully authorised role
+  // holder whose own country is unconfirmed (MCC-2: admin status is NOT an
+  // exemption), and must refuse it BEFORE running any query.
+  const UNCONFIRMED: ProfileRow = { ...CONFIRMED_PROFILE, country_of_residence: null, country_confirmed_at: null, country_source: null };
+
+  for (const route of ROUTES) {
+    it(`GET /api/admin/resources/${route.name} denies a Super Admin whose own country is unconfirmed`, async () => {
+      state.user = { id: 'u1' };
+      state.adminRow = { user_id: 'u1' };
+      state.roleRows = [];
+      state.profileRow = UNCONFIRMED;
+
+      const res = await route.handler(new Request(`https://fhip.test/api/admin/resources/${route.name}`));
+      expect(res.status, route.name).toBe(403);
+      const body = await res.json();
+      expect(body.error, route.name).toBe('COUNTRY_CONFIRMATION_REQUIRED');
+      expect(body.data).toBeUndefined();
+      expect(route.spy, route.name).not.toHaveBeenCalled();
+    });
+
+    it(`GET /api/admin/resources/${route.name} denies an Editor whose profile row is missing entirely`, async () => {
+      state.user = { id: 'u1' };
+      state.roleRows = [{ role: 'editor' }];
+      state.profileRow = null;
+
+      const res = await route.handler(new Request(`https://fhip.test/api/admin/resources/${route.name}`));
+      expect(res.status, route.name).toBe(403);
+      expect((await res.json()).error, route.name).toBe('PROFILE_INCOMPLETE');
+      expect(route.spy, route.name).not.toHaveBeenCalled();
     });
   }
 });

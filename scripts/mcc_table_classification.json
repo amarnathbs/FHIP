@@ -1,0 +1,173 @@
+{
+  "generic": [
+    "fdh_approved_financial_summaries",
+    "fdh_classification_history",
+    "fdh_csv_mapping_templates",
+    "fdh_data_provenance",
+    "fdh_data_quality_results",
+    "fdh_duplicate_candidates",
+    "fdh_evidence_links",
+    "fdh_financial_accounts",
+    "fdh_ingestion_jobs",
+    "fdh_payroll_components",
+    "fdh_payroll_events",
+    "fdh_reconciliation_results",
+    "fdh_recurring_transactions",
+    "fdh_review_items",
+    "fdh_statement_uploads",
+    "fdh_transaction_allocations",
+    "fdh_transaction_corrections",
+    "fdh_transaction_links",
+    "fdh_transactions",
+    "fdh_upload_sessions",
+    "fdh_user_classification_rules",
+    "fhip_import_applications",
+    "fhip_import_proposal_fields",
+    "fhip_import_proposals",
+    "financial_dna_actions",
+    "financial_dna_drivers",
+    "financial_dna_profile_scores",
+    "financial_dna_profiles",
+    "financial_health_component_scores",
+    "financial_health_recommendations",
+    "financial_health_scores",
+    "financial_snapshots",
+    "financial_twin_runs",
+    "forecast_assumptions",
+    "forecast_explanations",
+    "forecast_profiles",
+    "forecast_results",
+    "forecast_runs",
+    "forecast_scenarios",
+    "future_financial_commitments",
+    "goal_contributions",
+    "goal_forecasts",
+    "goal_funding_sources",
+    "goal_milestones",
+    "goal_snapshots",
+    "health_check_ins",
+    "household_members",
+    "households",
+    "ii_accounts",
+    "ii_document_parse_runs",
+    "ii_fhip_publications",
+    "ii_goal_allocations",
+    "ii_insights",
+    "ii_portfolio_truth_status",
+    "ii_source_documents",
+    "ii_tax_profiles",
+    "ii_transaction_source_links",
+    "property_liability_links",
+    "resilience_actions",
+    "resilience_component_scores",
+    "resilience_risks",
+    "resilience_scores",
+    "retirement_members",
+    "smsf_fund_members",
+    "smsf_funds",
+    "smsf_holdings",
+    "user_financial_section_status",
+    "user_recommendation_matches",
+    "user_recommendation_runs"
+  ],
+  "bespokeOwnerCol": [
+    {
+      "table": "professional_notes",
+      "ownerColumn": "author_user_id"
+    }
+  ],
+  "bespokeJoin": [
+    {
+      "table": "financial_twin_insights",
+      "via": "financial_twin_run_id",
+      "parentTable": "financial_twin_runs",
+      "parentKey": "id",
+      "parentUserCol": "user_id"
+    },
+    {
+      "table": "financial_twin_metric_results",
+      "via": "financial_twin_run_id",
+      "parentTable": "financial_twin_runs",
+      "parentKey": "id",
+      "parentUserCol": "user_id"
+    }
+  ],
+  "excluded": [
+    {
+      "table": "consents",
+      "reason": "consent/privacy/terms acceptance must remain reachable regardless of confirmation state (spec 1.2) — currently unused by any code path, but excluded on principle, not just because it is dormant"
+    },
+    {
+      "table": "resource_authors",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_categories",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_context_links",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_ctas",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_faqs",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_media",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_post_categories",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_post_faqs",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_post_sources",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_post_tags",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_post_versions",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_posts",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_related_content",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_settings",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_sources",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_tags",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "resource_videos",
+      "reason": "Resources CMS shared content, not per-user financial data; role-based RLS ownership (resource_user_roles), not auth.uid()=user_id; fully covered by the API-layer gate (all 40 Resources admin write routes gated this round)"
+    },
+    {
+      "table": "user_profiles",
+      "reason": "signup bootstrap — handle_new_user() inserts this row with no prior country state to check; the trigger would always reject its own creation"
+    }
+  ]
+}

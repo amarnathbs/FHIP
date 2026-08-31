@@ -36,9 +36,20 @@ const B = '22222222-2222-2222-2222-222222222222'; // IN resident
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test');`);
 // migration 0002 auto-creates a user_profiles row via an auth.users trigger,
 // so set the fields we need with UPDATE rather than INSERT.
+//
+// Mandatory Country Confirmation (migrations 0104/0105) closure fix
+// (MCC-5): this fixture predates that feature and originally only set
+// country_of_residence — every retirement_accounts/investments INSERT
+// below now goes through the new enforce_country_confirmed() trigger,
+// which requires onboarding_completed=true AND country_confirmed_at to be
+// set before treating a country value as real confirmation (a bare
+// country_of_residence, however it got there, is never itself proof of
+// confirmation — that is the whole point of the new feature). Both tenants
+// here represent fully-onboarded, already-established users, so stamping
+// them as confirmed is the correct fixture update, not a workaround.
 await db.exec(`
-  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD' where user_id='${A}';
-  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR' where user_id='${B}';
+  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${A}';
+  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${B}';
 `);
 
 async function asTenant(uid, fn) {
@@ -194,7 +205,10 @@ await asTenant(A, async () => {
 // yet -- proving that backfill logic is correct and idempotent.
 const C = '33333333-3333-3333-3333-333333333333';
 await db.exec(`insert into auth.users(id,email) values ('${C}','c@t.test');`);
-await db.exec(`update user_profiles set country_of_residence='AU' where user_id='${C}';`);
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — same fix as
+// tenants A/B above: a bare country_of_residence is never itself proof of
+// confirmation under the new trigger (now UPDATE/INSERT-aware, round 3).
+await db.exec(`update user_profiles set country_of_residence='AU', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${C}';`);
 await asTenant(C, async () => {
   const legacyRaId = (await db.query(`insert into retirement_accounts (user_id, account_name, account_type, current_balance, currency_code, country_code, owner, master_item_key, is_active)
     values ('${C}','Legacy SMSF (pre-existing)','super',77000,'AUD','AU','self','smsf',true) returning id`)).rows[0].id;
@@ -215,7 +229,7 @@ await asTenant(B, async () => {
 });
 const C2 = '44444444-4444-4444-4444-444444444444';
 await db.exec(`insert into auth.users(id,email) values ('${C2}','c2@t.test');`);
-await db.exec(`update user_profiles set country_of_residence='AU' where user_id='${C2}';`);
+await db.exec(`update user_profiles set country_of_residence='AU', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${C2}';`);
 await asTenant(C2, async () => {
   const r = await expectOk('AU resident can use smsf_create_fund() to atomically create both rows', async () => {
     return (await db.query(`select * from smsf_create_fund('RPC Fund','RPC Fund',12345,current_date,'self','AUD','AU')`)).rows[0];

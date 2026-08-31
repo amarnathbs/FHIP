@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadAnalyticsDataset } from '@/lib/services/investment-intelligence/analyticsRepository';
 import { runAnalytics } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
 

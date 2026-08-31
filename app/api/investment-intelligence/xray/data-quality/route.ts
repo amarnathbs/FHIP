@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadXrayDataset } from '@/lib/services/investment-intelligence/r5Repository';
 import { runXrayAnalytics, summariseXrayDataQuality } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { HOLDINGS_FRESHNESS_DAYS, COVERAGE_THRESHOLDS, MIXED_DATE_SPREAD_DAYS, XRAY_THRESHOLD_CONFIG_VERSION } from '@/lib/config/investment-intelligence/xrayThresholds';

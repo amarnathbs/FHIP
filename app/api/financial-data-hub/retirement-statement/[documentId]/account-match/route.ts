@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getRetirementStatementIdForDocument } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
 // Canonical Retirement is read by the BRIDGE, never by the Hub — see that
 // module's header and `tests/unit/fdh1Isolation.test.ts`.

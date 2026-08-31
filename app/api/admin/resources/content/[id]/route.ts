@@ -6,6 +6,7 @@ import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions,
 import { updateResourceDraft } from '@/lib/resources/editor/mutations';
 import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/editor/validation';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/content/[id] — full editor payload: the post
 // (including content_blocks — spec §129, one post's worth, not the whole
@@ -16,6 +17,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {
@@ -47,6 +51,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to edit Resources content.", 403);

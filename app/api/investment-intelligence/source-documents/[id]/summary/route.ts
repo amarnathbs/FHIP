@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // R2 — "retrieve parse summary" (spec section 51). Shows exactly what
 // spec section 31 requires the minimal UI to display: statement source,

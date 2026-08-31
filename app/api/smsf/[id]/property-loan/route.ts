@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { linkSmsfPropertyLoan, listSmsfPropertyLoanLinks } from '@/lib/services/smsfData';
 

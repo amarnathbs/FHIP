@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import {
   FdhUploadLifecycleError,
   getDocumentStatus,

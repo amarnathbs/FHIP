@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { iiManualFixtureSchema } from '@/lib/validation/investment-intelligence';
 import { importManualFixture } from '@/lib/services/investment-intelligence/manualImporter';
 

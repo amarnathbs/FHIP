@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { getForecastRunDetail } from '@/lib/services/forecastData';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

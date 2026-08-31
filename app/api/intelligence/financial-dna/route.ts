@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
 
 export async function GET() {

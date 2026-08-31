@@ -5,6 +5,7 @@ import { getFaqList } from '@/lib/resources/faq/queries';
 import { createFaq } from '@/lib/resources/faq/mutations';
 import { validateFaq } from '@/lib/resources/faq/validation';
 import type { FaqSavePatch } from '@/lib/resources/faq/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/faqs — list (spec §33).
 export async function GET(request: Request) {
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&
@@ -49,6 +53,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageFaqs(current)) return bad("You don't have permission to create FAQs.", 403);

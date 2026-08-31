@@ -23,6 +23,15 @@ console.log('fresh rebuild complete\n');
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test');`);
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — this script's
+// own "REAL populated tenant data" seed below inserts into ii_accounts and
+// user_financial_section_status, both now backstopped by
+// enforce_country_confirmed(); a bare country_of_residence is never itself
+// proof of confirmation, so both fixtures need the full confirmation state.
+await db.exec(`
+  update user_profiles set country_of_residence='AU', preferred_currency='AUD', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${A}';
+  update user_profiles set country_of_residence='IN', preferred_currency='INR', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${B}';
+`);
 
 // --- Seed REAL data for both tenants into representative II tables ---
 // One user-scoped table from each of the three affected lineages:

@@ -38,8 +38,13 @@ prevention". This is currently a required **manual** pre-merge step (run it
 yourself before opening/merging a migration-carrying PR) — there is no CI
 pipeline in this repository to wire it into automatically yet.
 
-- **Next free version: `0064`**
-- Active migrations: 63 (`0001`-`0063`), one file per version
+- **Next free version: `0112`** (as of the `0111` allocation below — this
+  header is stale for everything between `0064` and `0111`; treat the
+  dedicated sections further down and `node scripts/check-migration-versions.mjs`
+  as authoritative over this line, which has not been kept current on every
+  round)
+- Active migrations: 63 (`0001`-`0063`), one file per version (stale count —
+  see `0111` allocation section for the current, actually-verified total)
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
 
 ## Allocated versions
@@ -487,3 +492,34 @@ authenticated-owner RPC call; a real forgery attempt), never by re-checking
 that the editor reported success a second time. **SQL Editor "success" is
 not sufficient evidence of migration activation for security/authority-
 bearing migrations; behavioural verification is required.**
+
+## Mandatory Country Confirmation — MCC-14 DELETE-cascade fix (migration `0111`)
+
+**Allocated 2026-08-30**, on branch `feature/mandatory-country-confirmation-beta-cleanup`
+(worktree `D:\fhip-country-confirm`), fixing MCC-14 (see
+`docs/jurisdiction-applicability/Mandatory_Country_Confirmation_Beta_Cleanup_Report_2026-08-29.md`
+section U).
+
+**Collision scan performed before writing the file** (per this section's own
+standing instruction — every local branch/worktree and every branch on
+`origin` checked, not just the current branch):
+
+| Check | Command | Result |
+|---|---|---|
+| Local single-tree checker | `node scripts/check-migration-versions.mjs` | `OK: 102 active migrations... next version is 0109` (this branch's own head was `0108`; the checker cannot see other branches, hence the further checks below) |
+| Cross-branch vs `origin/main` | `node scripts/check-migration-versions-against-branch.mjs --against=origin/main` | OK, no collision (`origin/main` head is `0102`, plus a since-merged `0106`; gaps at `0103`-`0105`/`0107`-`0109` belong to other unmerged branches, none colliding with this branch's `0104`/`0105`/`0108`) |
+| Cross-branch vs `origin/fix/admin-a02-wave1-recommendation-import-integrity` | same script, `--against=` that ref | OK, no collision — that branch independently claims `0107` **and** `0109` (pushed to `origin`) |
+| Cross-branch vs `feature/module-11-0-ai-foundation` (local worktree `D:\fhip-module11`, not pushed) | same script | OK, no collision — that branch independently claims `0110` |
+| Cross-branch vs `fix/g0-wave2-closure-hotfix` (local worktree `D:\fhip-g0-wave2`, not pushed, unauthorised) | same script | OK, no collision — that branch independently claims `0103` |
+| Manual `git ls-tree` sweep, all 112 `origin/*` branches, for anything in `0103`-`0119` | ad-hoc loop over every remote ref | Only `0106`/`0107`/`0109` found (the two branches above); nothing at `0110`-`0119` on any pushed branch |
+| Manual sweep of every other active local worktree's `supabase/migrations/` directory (11 worktrees checked directly) | `ls`/`tail` per worktree | Highest number seen anywhere was `feature/module-11-0-ai-foundation`'s local-only `0110` |
+
+**Numbers `0103` through `0110` are therefore every one already claimed by
+something** (by this branch itself, by `origin`, or by another unmerged
+local worktree) — **`0111` is the first genuinely free number**, allocated
+here before `supabase/migrations/0111_mandatory_country_confirmation_delete_cascade_fix.sql`
+was written.
+
+| Version | File | Module | Status |
+|---|---|---|---|
+| 0111 | `0111_mandatory_country_confirmation_delete_cascade_fix.sql` | Mandatory Country Confirmation — MCC-14 fix | **Applied to DEV by the Product Owner via the Supabase SQL Editor (2026-08-30), same process as `0104`/`0105`/`0108`. NOT applied to production.** Certified in isolation via PGlite (real Postgres) before delivery; see the MCC-14 closure report addendum for the full 11-item proof table. Independently re-confirmed genuinely live on DEV by the terminal certification session (2026-08-31) through behavioural proof, not SQL-Editor success alone — `scripts/mcc14_livedev_verification.mjs` 28/28 PASS and `scripts/mcc_livedev_terminal_certification.mjs`, both against real hosted DEV (`vqycarelcoijzwlpkpcz`), covering the confirmed/unconfirmed cascade split, direct-DELETE blocking, INSERT/UPDATE enforcement and zero post-deletion residue. SHA-256 `d6307b584d3bc69f7166db44c843f83124e0e97e0ebfe6e02d7454ffd5075a76`. |

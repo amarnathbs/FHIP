@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { listIiAccounts, createIiAccount } from '@/lib/services/investment-intelligence/accounts';
 import { iiAccountSchema } from '@/lib/validation/investment-intelligence';
 

@@ -13,7 +13,7 @@
 // helper (lib/services/professional-access/access.ts) — that function
 // existed with no caller anywhere in the app before this route; wiring it
 // up here closes that gap rather than introducing new scope.
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkAccessLive, recordReportAccess, fetchAccessContext } from '@/lib/services/professional-access/access';
 

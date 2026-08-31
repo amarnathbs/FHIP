@@ -4,6 +4,7 @@ import { getCurrentResourceRoles, isResourceStaff, canCreateSpecialistContent } 
 import { parseContentListFilters } from '@/lib/resources/admin/filters';
 import { getVideoList } from '@/lib/resources/video/queries';
 import { createVideoDraft } from '@/lib/resources/video/mutations';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/videos — list (spec §13). Same RLS-scoped-client
 // convention as every other Resources Admin list route (R1.2/R1.3): a
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&
@@ -43,6 +47,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canCreateSpecialistContent(current)) return bad("You don't have permission to add a video.", 403);

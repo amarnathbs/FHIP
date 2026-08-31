@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // R2 — "retrieve reconciliation cases" (spec section 51). Optional query
 // filters: sourceDocumentId, status. RLS-respecting client only.

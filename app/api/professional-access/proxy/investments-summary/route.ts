@@ -14,7 +14,7 @@
 // triple is currently authorised. This is the same pattern documentProcessing.ts
 // already uses for cross-user-safe service-role reads gated by an
 // application-level check rather than RLS.
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkAccessLive } from '@/lib/services/professional-access/access';
 

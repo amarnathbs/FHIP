@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canManageDiscovery } from '@/lib/resources/permissions';
 import { reorderRelatedContent } from '@/lib/resources/discovery/relatedAdmin';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // PATCH /api/admin/resources/related/reorder — spec §39. Body: { source_post_id, ordered_ids: string[] } (ordered_ids are resource_related_content row ids, not post ids).
 export async function PATCH(request: Request) {
@@ -10,6 +11,9 @@ export async function PATCH(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageDiscovery(current)) return bad("You don't have permission to manage Related Content.", 403);

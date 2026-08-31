@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { checkEligibility } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // R3 spec section 61 — eligibility check. Read-only, no side effects other

@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { approveTransaction, ApprovalError } from '@/lib/financial-data-hub/services/approvalService';
 
 // POST /api/financial-data-hub/bank-transactions/{transactionId}/approve —

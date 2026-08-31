@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { buildGoalForecastInputs } from '@/lib/services/goalsData';
 import { computeAllScenarios } from '@/lib/engines/goalForecast';
 

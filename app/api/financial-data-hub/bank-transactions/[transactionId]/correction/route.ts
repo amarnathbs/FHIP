@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { correctTransaction, BankTransactionActionError } from '@/lib/financial-data-hub/services/bankTransactionActionsService';
 import { bankTransactionCorrectionSchema } from '@/lib/financial-data-hub/validation/bankCsv';
 

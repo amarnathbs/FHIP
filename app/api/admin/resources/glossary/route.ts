@@ -4,6 +4,7 @@ import { getCurrentResourceRoles, isResourceStaff, canCreateSpecialistContent } 
 import { parseContentListFilters } from '@/lib/resources/admin/filters';
 import { getGlossaryList } from '@/lib/resources/glossary/queries';
 import { createGlossaryDraft } from '@/lib/resources/glossary/mutations';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/glossary — list (spec §25).
 export async function GET(request: Request) {
@@ -12,6 +13,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&
@@ -44,6 +48,9 @@ export async function POST() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canCreateSpecialistContent(current)) return bad("You don't have permission to create a glossary definition.", 403);

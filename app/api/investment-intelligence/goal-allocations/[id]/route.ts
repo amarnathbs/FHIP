@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { iiGoalAllocationUpdateSchema } from '@/lib/validation/investment-intelligence';
 import { updateGoalAllocation, removeGoalAllocation } from '@/lib/services/investment-intelligence/goalAllocations';
 

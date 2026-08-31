@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { republishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 // R3 spec section 37. [id] is an ii_fhip_publications.id (currently

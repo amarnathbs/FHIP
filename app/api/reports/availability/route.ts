@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { resolveReportSourceData, buildEligibilityInput, isEligibleForOfficialMonthlyReport } from '@/lib/services/reportSnapshotResolver';
 import { createClient } from '@/lib/supabase/server';
 

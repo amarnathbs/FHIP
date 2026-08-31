@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getResourceCategoriesForFilter } from '@/lib/resources/admin/queries';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/categories — active categories for the filter
 // dropdown (spec §28: "Primary Category from active categories").
@@ -11,6 +12,9 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&

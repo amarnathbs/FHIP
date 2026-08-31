@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { transactionsRepository } from '@/lib/financial-data-hub/repositories';
 
 // GET /api/financial-data-hub/bank-transactions/{transactionId} — spec 54.

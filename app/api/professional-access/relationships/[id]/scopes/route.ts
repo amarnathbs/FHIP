@@ -3,7 +3,7 @@
 // list" verb — every change is a single, individually-audited grant/revoke
 // (spec section 47's "auditable" + section 49's "scope reduction must
 // immediately remove access").
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { grantScope, revokeScope } from '@/lib/services/professional-access/access';
 import { isProfessionalScope } from '@/lib/services/professional-access/permissions';
 

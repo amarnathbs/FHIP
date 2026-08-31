@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
 import { getResourceActiveTags } from '@/lib/resources/editor/queries';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/tags — active tags for the editor's Tags
 // multi-select (spec §48). Read-only: R1.3 does not build Tag management.
@@ -11,6 +12,9 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&

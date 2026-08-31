@@ -1,4 +1,4 @@
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { METRIC_CATALOGUE } from '@/lib/engines/twin/metricCatalogue';
 import { METRIC_CATEGORY_LABEL, type MetricCategory } from '@/lib/engines/twin/taxonomy';
 

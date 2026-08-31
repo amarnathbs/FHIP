@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { iiReviewActionSchema } from '@/lib/validation/investment-intelligence';
 import { dismissReviewItem } from '@/lib/services/investment-intelligence/reviewCentreData';
 

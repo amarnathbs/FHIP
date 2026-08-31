@@ -6,6 +6,7 @@ import { validateVideoForReview, validateVideoForPublish } from '@/lib/resources
 import { createResourceVersion, deriveSeoFallback } from '@/lib/resources/editor/mutations';
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // Video workflow transitions — spec §53/§92: identical R1.1 status workflow
 // as every resource_posts row, same RPC, same pre-checks as R1.3's content
@@ -50,6 +51,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {

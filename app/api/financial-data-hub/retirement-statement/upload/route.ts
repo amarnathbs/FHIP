@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import {
   uploadAndProcessRetirementStatement,
   RetirementStatementProcessingError,

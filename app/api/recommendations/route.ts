@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { runRecommendationEvaluation, getLatestRecommendations } from '@/lib/services/recommendationsData';
 
 export async function GET(req: Request) {

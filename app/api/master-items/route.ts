@@ -1,4 +1,4 @@
-import { ok, bad, requireUser } from '@/lib/api';
+import { ok, bad, requireCountryConfirmedUser as requireUser } from '@/lib/api';
 import { listMasterItems, type MasterItemCategory } from '@/lib/services/masterItems';
 import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 import { createClient } from '@/lib/supabase/server';

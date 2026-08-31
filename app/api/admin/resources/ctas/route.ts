@@ -8,6 +8,7 @@ import { validateCta } from '@/lib/resources/cta/validation';
 import { logResourceAudit } from '@/lib/resources/admin/auditLog';
 import type { CtaSavePatch, CtaDestinationType } from '@/lib/resources/cta/types';
 import { CTA_DESTINATION_TYPES } from '@/lib/resources/cta/types';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/ctas — CTA Library listing (spec §42). Every
 // active-Resources-role staff member may view (read-only for anyone who
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!isResourceStaff(current)) return bad("You don't have permission to access Resources administration.", 403);
@@ -42,6 +46,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canManageDiscovery(current)) return bad("You don't have permission to manage the CTA Library.", 403);

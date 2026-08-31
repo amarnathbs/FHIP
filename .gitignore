@@ -53,3 +53,12 @@ scripts/.fdh1-*.json
 # scripts/r8_live_dev_certification.mjs — never committed (disposable,
 # regenerated per session, same pattern as .r7scratch above).
 .r8scratch/
+
+# Mandatory Country Confirmation (2026-08-29) — Gate B restricted cleanup
+# manifest. scripts/mcc_production_readonly_audit.mjs writes this OUTSIDE
+# the repo by default (see MCC_RESTRICTED_MANIFEST_DIR in that script); this
+# pattern is defense-in-depth only, in case that default is ever overridden
+# to a path inside the repo. Contains exact production auth user ids/emails
+# — must never be committed (spec section 7.4).
+mcc_restricted_manifest*.json
+.mcc-restricted/

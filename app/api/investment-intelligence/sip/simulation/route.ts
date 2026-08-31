@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { loadSipDataset } from '@/lib/services/investment-intelligence/r5Repository';
 import { runSipSimulations } from '@/lib/engines/investment-intelligence/sip/sipOrchestrator';
 import { detectSipSeries } from '@/lib/engines/investment-intelligence/sip/sipDetection';

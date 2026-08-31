@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, canCreateSpecialistContent } from '@/lib/resources/permissions';
 import { createMoneyUpdateFromTemplate } from '@/lib/resources/money-update/mutations';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // POST { templateId } — "Create Update from Template" (spec §45): creates a
 // new Draft Money Update, copies the template's structure, assigns a new
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
   if (!canCreateSpecialistContent(current)) return bad("You don't have permission to create a Money Update.", 403);

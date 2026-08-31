@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
 

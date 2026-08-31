@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { getSmsfFund, updateSmsfFundSummary } from '@/lib/services/smsfData';
 import { smsfFundUpdateSchema } from '@/lib/validation/smsf';

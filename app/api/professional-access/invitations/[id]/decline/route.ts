@@ -1,4 +1,4 @@
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { declineInvitation } from '@/lib/services/professional-access/access';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getRecurring } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
 
 // GET /api/financial-data-hub/activity/recurring — FDH-8 spec 37-40.

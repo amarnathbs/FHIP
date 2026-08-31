@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 
 // R3 spec section 61 — provenance/status listing. Read-only, RLS-scoped.
 // Powers the "Review in Investment Intelligence" surface and the FHIP grid's

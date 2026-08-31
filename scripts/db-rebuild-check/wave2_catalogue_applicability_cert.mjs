@@ -75,9 +75,15 @@ const A = '11111111-1111-1111-1111-111111111111'; // AU resident
 const B = '22222222-2222-2222-2222-222222222222'; // IN resident
 const N = '33333333-3333-3333-3333-333333333333'; // null/unresolved country resident
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test'),('${N}','n@t.test');`);
+// Mandatory Country Confirmation (migrations 0104/0105/0108) — A and B are
+// meant to represent genuinely established, usable test tenants, so they
+// also get country_confirmed_at/country_source/onboarding_completed
+// (a bare country_of_residence is never itself proof of confirmation under
+// the new trigger). N is deliberately left with country_of_residence=null
+// and unconfirmed -- that IS this fixture's whole point.
 await db.exec(`
-  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD' where user_id='${A}';
-  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR' where user_id='${B}';
+  update user_profiles set full_name='Tenant A (AU)', country_of_residence='AU', preferred_currency='AUD', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${A}';
+  update user_profiles set full_name='Tenant B (IN)', country_of_residence='IN', preferred_currency='INR', onboarding_completed=true, country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${B}';
   update user_profiles set full_name='Tenant N (unresolved)', country_of_residence=null where user_id='${N}';
 `);
 

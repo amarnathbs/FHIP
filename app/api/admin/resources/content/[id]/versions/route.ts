@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getResourcePostVersions } from '@/lib/resources/editor/queries';
+import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/content/[id]/versions — read-only revision
 // history list (spec §47). Refreshed independently of the main editor load
@@ -11,6 +12,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
 
   const { id } = await params;
   try {

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { investmentSchema } from '@/lib/validation/investment';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';

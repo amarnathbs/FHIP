@@ -2,7 +2,7 @@
 // client themselves can call this (requireUser() from their own session);
 // the professional's user id must already have an existing
 // professional_profiles row (no arbitrary-user search — spec section 62).
-import { requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createInvitation } from '@/lib/services/professional-access/access';
 import { isProfessionalScope, type ProfessionalScope } from '@/lib/services/professional-access/permissions';
 
