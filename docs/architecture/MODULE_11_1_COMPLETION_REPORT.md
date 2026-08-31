@@ -350,28 +350,56 @@ artefact is cited rather than re-implemented.
 
 ## A. VERDICT
 
-> ### MODULE 11.1 — CONDITIONAL PASS
+> ### MODULE 11.1 — DEV CERTIFICATION FULL PASS
 >
-> Every safety-critical and commercial-control requirement is implemented and
-> independently reproducible on a real Postgres rebuilt from empty (379/379).
-> The single outstanding condition is **external and non-code**: migration
-> `0115` has not been applied to DEV, because this environment has no DEV
-> database access and project convention forbids applying migrations directly.
-> Live-DEV verification is therefore owed once the Product Owner applies it.
+> **Superseded 2026-08-31.** Every safety-critical and commercial-control
+> requirement is implemented and independently reproducible on a real
+> Postgres rebuilt from empty (379/379). The one condition this verdict was
+> previously held on — migration `0115` genuinely applied to DEV, with its
+> advisory-lock quota design proven under real multi-connection concurrency,
+> not just PGlite's single connection — is now closed:
 >
-> Per spec section 87, a CONDITIONAL PASS is permitted only for "a genuinely
-> external/non-code prerequisite that does not undermine entitlement, quota,
-> rate-limit, cost-control or kill-switch correctness". Manual migration
-> application is exactly that: the enforcement logic is complete and certified
-> against real Postgres semantics; what is missing is a deployment step this
-> role is not permitted to perform.
+> - Migration `0115` applied to DEV by the Product Owner, 2026-08-31 ("no
+>   error"), and its effect independently confirmed behaviourally, not merely
+>   inferred from the absence of an error (see the standing FDH-12 lesson in
+>   `docs/architecture/MIGRATION_REGISTRY.md`).
+> - `scripts/module11_1_live_dev_concurrency_verification.mjs` (new,
+>   committed `839fedc`) proved, on real hosted DEV Postgres, with one
+>   synthetic Premium user and full cleanup (0 residue, independently
+>   re-verified):
+>   - **Final-credit race**: 6 concurrent `ai_admit_request` calls with
+>     exactly 1 quota slot remaining → exactly 1 admission, 5 denials
+>     (`quota_exhausted`), ledger shows exactly the allowance consumed —
+>     `pg_advisory_xact_lock` genuinely serialises concurrent admissions
+>     under real concurrent connections, not merely in single-connection
+>     PGlite.
+>   - **Idempotency race**: 6 concurrent calls sharing one idempotency key →
+>     exactly one execution (one `admission_id`, one ledger increment, one
+>     `ai_admission_events` row), proving replay protection holds at the
+>     persistence boundary under contention, not just in application memory.
+>   - **16/16 live-DEV assertions passed.**
+>
+> Per spec section 87, the only permitted CONDITIONAL-PASS ground (a genuine
+> external/non-code deployment prerequisite) is now satisfied and closed —
+> the certifying role that authored Part 2 could not apply the migration or
+> reach DEV; a later verification pass, authorised for DEV access, did both
+> and closed the gap without touching the certified enforcement logic itself.
 >
 > No section 87 FAIL condition is met. Specifically: a Free user cannot trigger
-> paid personalised AI; quota cannot exceed its limit under concurrency; a
-> client cannot alter quota; the cost hard stop cannot reach a provider; the
-> kill switch stops provider execution at runtime; a DB outage admits no paid
-> AI; user and household isolation hold; a provider failure does not
-> permanently consume a credit; and Modules 1-10 do not regress.
+> paid personalised AI; quota cannot exceed its limit under concurrency
+> (now proven on real Postgres, not just asserted); a client cannot alter
+> quota; the cost hard stop cannot reach a provider; the kill switch stops
+> provider execution at runtime; a DB outage admits no paid AI; user and
+> household isolation hold; a provider failure does not permanently consume
+> a credit; and Modules 1-10 do not regress.
+>
+> Canonical financial writes: 0. Modules 1-10 business-data mutations: 0.
+> AI-initiated financial writes: 0. Module 11 operational/audit writes: only
+> those authorised by the Module 11 architecture.
+>
+> Migration `0116` (Admin A0.2 Wave 2) is a separate workstream on a separate
+> migration and is explicitly NOT folded into this verdict — see its own
+> certification record.
 
 ---
 
