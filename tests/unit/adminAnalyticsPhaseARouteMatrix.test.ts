@@ -36,7 +36,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // can still drive the unconfirmed path deliberately rather than by accident.
 // (Same fix MCC already applied once to two other pre-existing fixtures in
 // commit 150d7ba.)
-const CONFIRMED_PROFILE = {
+interface ProfileRow {
+  country_of_residence: string | null;
+  country_confirmed_at: string | null;
+  country_source: string | null;
+  onboarding_completed: boolean;
+}
+
+const CONFIRMED_PROFILE: ProfileRow = {
   country_of_residence: 'AU',
   country_confirmed_at: '2026-08-30T00:00:00.000Z',
   country_source: 'USER_CONFIRMED',
@@ -47,7 +54,7 @@ const state: {
   user: { id: string } | null;
   adminRow: { user_id: string } | null;
   roleRows: { role: string }[];
-  profileRow: typeof CONFIRMED_PROFILE | null;
+  profileRow: ProfileRow | null;
 } = {
   user: null,
   adminRow: null,
@@ -200,14 +207,14 @@ describe('Mandatory Country Confirmation — the country gate is genuinely activ
   // routes. Every one of the eight must still refuse a fully authorised role
   // holder whose own country is unconfirmed (MCC-2: admin status is NOT an
   // exemption), and must refuse it BEFORE running any query.
-  const UNCONFIRMED = { ...CONFIRMED_PROFILE, country_of_residence: null, country_confirmed_at: null, country_source: null };
+  const UNCONFIRMED: ProfileRow = { ...CONFIRMED_PROFILE, country_of_residence: null, country_confirmed_at: null, country_source: null };
 
   for (const route of ROUTES) {
     it(`GET /api/admin/resources/${route.name} denies a Super Admin whose own country is unconfirmed`, async () => {
       state.user = { id: 'u1' };
       state.adminRow = { user_id: 'u1' };
       state.roleRows = [];
-      state.profileRow = UNCONFIRMED as typeof CONFIRMED_PROFILE;
+      state.profileRow = UNCONFIRMED;
 
       const res = await route.handler(new Request(`https://fhip.test/api/admin/resources/${route.name}`));
       expect(res.status, route.name).toBe(403);
