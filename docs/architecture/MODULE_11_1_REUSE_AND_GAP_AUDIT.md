@@ -178,3 +178,69 @@ No user-facing AI chat, no "Ask AI" page, no chat UI, no client component, no na
 no Insight Pack, no insight/recommendation generator, no live provider activation
 (`OpenAIProviderAdapter.generateStructured()` still throws unconditionally), no prompt
 activation (all 12 seeded prompts stay `DRAFT`).
+
+---
+
+# Part 2 addendum — full-specification pass
+
+Written when the Product Owner issued the fuller 89-section Module 11.1
+specification. Every discovery finding above was **re-verified fresh against
+current `origin/main` (`2ade18b`)** rather than carried forward on trust; the
+results are unchanged, and the evidence is restated below so the claim is
+checkable rather than asserted.
+
+## Discovery re-verification (spec sections 4, 10, 11)
+
+| Question the spec asks | Answer, and how it was re-checked |
+|---|---|
+| Canonical subscription table/service | `user_entitlements` (migration `0010_module9_reports.sql`), read via `lib/services/entitlements.ts`. `git grep -nE "plan_tier" origin/main -- lib app` returns **exactly two lines**, both in that one file. |
+| How Premium is determined | `plan_tier = 'premium'`. The column is `CHECK`-constrained to `('free','premium')` — verified by reading the constraint on `origin/main`. |
+| Billing provider | **None.** `git grep -lEi "current_period_end\|billing_cycle_anchor\|stripe_customer\|subscription_status\|trial_end" origin/main -- lib app supabase` returns **zero files**. No Stripe/Paddle/Razorpay/LemonSqueezy integration, no `subscriptions` table. |
+| Billing-cycle dates | None exist. The only monthly boundary is `ai_usage_ledger.billing_period` (UTC calendar month), isolated behind `ai_billing_period_for()`. |
+| Trial / grace / past-due state | **Not representable.** The `plan_tier` CHECK admits two values. The certification proves this by attempting to set all ten of the spec's named states and confirming every one is rejected — so no policy was invented for states that cannot occur. |
+| Cancellation-at-period-end / expiry | `user_entitlements.effective_from` / `effective_to` (present since `0010`). Part 1 correctly reported these as **written by nothing and read by nothing**. Part 2 now **reads** them, which is what makes spec section 10's `EXPIRED` and `CANCEL_AT_PERIOD_END` cases genuinely enforceable rather than merely unrepresentable. Disclosed behaviour change: nothing writes `effective_to` today and it defaults to NULL, so no existing row changes behaviour. |
+| Household or individual ownership | **Individual.** `user_entitlements.user_id` is `UNIQUE`. `households.user_id` means a household is owned by exactly one user, and `household_members` rows carry `full_name` / `relationship` / `date_of_birth` — they are **not** authenticated accounts. There is therefore no mechanism for two authenticated adults to share one household, and the "multiple adults share a household" case the spec raises does not arise in this schema. |
+| Quota multiplication by switching household id | Impossible: the ledger, the rate-limit window and the concurrency lease are all keyed on `user_id`. `household_id` is recorded as a descriptive attribute and no decision reads it. Certified directly (a Free subject supplying a Premium household id is still refused, and the Premium subject's ledger is untouched). |
+| Feature flags / admin configuration | Still none outside Module 11. `ai_platform_controls` (Part 1) plus `ai_provider_controls` (Part 2) remain the only DB-backed AI configuration. |
+
+## Additional gaps found in the Part 2 pass
+
+### Gap G4 — the model tier was a trusted input
+Part 1 checked the task's tier cap against the caller's declared
+`p_internal_tier`. Because Part 2 looks the model up anyway for the section 32
+disable check, the registry's own `internal_tier` is now authoritative and the
+parameter is used only where no registry row applies. Certified: declaring
+`LOW_COST` for a model the registry holds as `ADVANCED` no longer bypasses the
+cap.
+
+### Gap G5 — no reservation state, so "in progress" was unanswerable
+Part 1's consume-then-refund lifecycle was behaviourally correct but left the
+in-flight state invisible, which is precisely what section 18's concurrency
+limit needs. `execution_state` + a lease closes it, and the lease (rather than
+an unbounded lock) means a server that dies mid-flight cannot bar a subject
+from their own allowance forever.
+
+### Gap G6 — `ai_safety_events` is the wrong home for commercial events
+Its `event_type` CHECK is Module 11.0's **safety** vocabulary (prompt
+injection, advice-boundary violation, privacy). Section 38 asks for severity
+"appropriate to actual operational risk", which is a different scale, and
+section 27's soft threshold fires on an **allowed** request with no denial row
+to attach to. Hence `ai_operational_events` rather than widening the safety
+table and blurring a security signal into a billing signal.
+
+## Section 43 — shared dashboard summary optimisation: DEFERRED
+
+Section 43 is explicit that "performance improvement is not a condition for
+FULL PASS" and that the work should be **deferred** if safe reuse would require
+touching stable Module 1-10 internals beyond a small backward-compatible
+optional dependency injection.
+
+It would. The Score, DNA and Resilience loaders each acquire their own
+Dashboard data internally rather than accepting an already-derived summary, so
+threading one canonical summary through would mean changing the signatures of
+Module 1-10 service functions that Modules 1-10 also call. Section 77 forbids
+that contamination, and section 87 makes a Modules 1-10 calculation regression
+an automatic FAIL. The redundant fetch is a **read-side cost only** — it
+changes no number anywhere — and Module 11.1 adds no new AI context
+construction, so the situation is exactly as Module 11.0 disclosed it and no
+worse. **Deferred, with the reason recorded, per section 43's own instruction.**
