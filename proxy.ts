@@ -27,13 +27,37 @@ export async function proxy(request: NextRequest) {
   // unauthenticated visitor is redirected to /login same as any other app
   // route, and a not-yet-onboarded user is redirected to /onboarding first
   // (country reconfirmation is a post-onboarding concept — see
-  // app/(app)/layout.tsx's own gate). This list was found during this task
-  // to already be missing several existing route prefixes (financial-data-
-  // hub, investment-intelligence, forecast, profile) — a pre-existing,
-  // unrelated defect left undisturbed here; only the new prefix this task
-  // introduces is added. See the closure report's verification section.
+  // app/(app)/layout.tsx's own gate).
+  //
+  // Terminal certification (2026-08-31): this list was previously missing six
+  // real route prefixes (financial-data-hub, financial-twin, forecast,
+  // investment-intelligence, profile, recommendations). That was recorded
+  // earlier as a pre-existing, unrelated defect and left undisturbed — but it
+  // was then REPRODUCED LIVE as a genuine country-gate hole, so it is fixed
+  // here rather than carried:
+  //
+  //   app/(app)/layout.tsx only redirects an unconfirmed user to
+  //   /confirm-country when onboarding_completed is true, precisely BECAUSE
+  //   it assumes this proxy already confines every not-yet-onboarded user to
+  //   /onboarding. For the six prefixes missing from this list that assumption
+  //   was false, so an authenticated user with onboarding_completed = false
+  //   and NO confirmed country rendered the full AppShell chrome and the
+  //   module page at /financial-data-hub, /forecast, /investment-intelligence,
+  //   /profile, /recommendations and /financial-twin — protected application
+  //   areas, which Product Owner decision 1.2 requires to be unreachable
+  //   before confirmation. (No financial data was exposed: the API layer
+  //   returned COUNTRY_CONFIRMATION_REQUIRED for every read and write, and the
+  //   database backstop blocked writes independently — this was the UI-surface
+  //   layer of the defence failing, not the data layer.)
+  //
+  // Completing the list is the minimal fail-closed fix and matches this
+  // regex's own documented intent (it is meant to name every app route).
+  // tests/unit/countryGateAccessMatrix.test.ts (MC-17) now asserts every
+  // directory under app/(app)/ is matched here, so a future module cannot
+  // reintroduce the gap silently. 'twin', 'coach' and 'settings' are retained
+  // as-is: they are pre-existing entries unrelated to this fix.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|retirement|insurance|score|dna|resilience|goals|twin|reports|coach|settings|admin)/
+    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin)/
   );
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a

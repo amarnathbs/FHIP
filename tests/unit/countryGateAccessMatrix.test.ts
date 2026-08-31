@@ -260,6 +260,36 @@ describe('MC-16 — every authenticated API route is country-gated (reconciliati
     expect(offenders).toEqual([]);
   });
 
+  it('MC-17 — proxy.ts isAppRoute matches EVERY route group directory under app/(app)', () => {
+    // Reproduced live on 2026-08-31: an authenticated user with
+    // onboarding_completed = false and no confirmed country rendered the full
+    // AppShell and module page at /financial-data-hub, /forecast,
+    // /investment-intelligence, /profile, /recommendations and
+    // /financial-twin, because those prefixes were missing from this regex
+    // and app/(app)/layout.tsx only redirects unconfirmed users when
+    // onboardingCompleted is true (it relies on the proxy for the rest).
+    //
+    // This test derives the expected set from the REAL app/(app) directory
+    // listing, so a newly added module that forgets the proxy entry fails
+    // here rather than shipping the same hole a third time.
+    const src = fs.readFileSync(path.resolve(__dirname, '../../proxy.ts'), 'utf8');
+    const match = src.match(/\/\^\\\/\(([^)]+)\)\//);
+    expect(match).not.toBeNull();
+    const regex = new RegExp(`^/(${match![1]})`);
+
+    const appGroup = path.resolve(__dirname, '../../app/(app)');
+    const moduleDirs = fs
+      .readdirSync(appGroup, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      // Route groups "(x)" and private "_x" folders are not URL segments.
+      .filter((e) => !e.name.startsWith('(') && !e.name.startsWith('_'))
+      .map((e) => e.name);
+
+    expect(moduleDirs.length).toBeGreaterThan(15);
+    const unmatched = moduleDirs.filter((d) => !regex.test(`/${d}`));
+    expect(unmatched).toEqual([]);
+  });
+
   it('the one allowed exemption really is secret-authorised, not merely allowlisted', () => {
     const src = fs.readFileSync(path.resolve(apiRoot, 'reports/cron/monthly-generate/route.ts'), 'utf8');
     expect(src).toMatch(/process\.env\.CRON_SECRET/);
