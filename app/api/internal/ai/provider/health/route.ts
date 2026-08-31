@@ -5,7 +5,7 @@
 // default in Module 11.0 since no real provider is activated for any
 // user-facing path yet (ADR-M11-001 decision #5, spec section 48).
 
-import { ok, bad, requireUser } from '@/lib/api';
+import { ok, bad, requireCountryConfirmedUser as requireUser } from '@/lib/api';
 import { AIModelGateway } from '@/lib/ai/gateway/aiModelGateway';
 import { MockAIProvider } from '@/lib/ai/providers/mockProvider';
 

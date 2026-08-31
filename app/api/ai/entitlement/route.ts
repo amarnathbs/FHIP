@@ -20,7 +20,7 @@
 // model routing, model or provider names, rate-limit internals, kill-switch
 // reasons, raw feature-flag state, or any other subject's data.
 
-import { requireUser, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { AIEntitlementService, toPublicEntitlementResponse } from '@/lib/ai/entitlement/aiEntitlementService';
 
 export async function GET() {
