@@ -74,6 +74,13 @@ function makeFakeSupabase(tables: Record<string, unknown[]>) {
       },
       order() { return builder; },
       limit(n: number) { rows = rows.slice(0, n); return builder; },
+      // FDH-16 fix (FDH16-DEF-001): dashboardData.ts's loadDashboard() now
+      // pages every register query via .range() (previously unpaginated,
+      // silently capped at PostgREST's 1000-row default on real DEV). This
+      // fake builder needs the same method so tests routed through
+      // computeGoalsPagePayload() -> loadDashboard() keep working; sliced
+      // faithfully (not a no-op) so it stays a correct stand-in at any scale.
+      range(from: number, to: number) { rows = rows.slice(from, to + 1); return builder; },
       maybeSingle() { return Promise.resolve({ data: rows[0] ?? null, error: null }); },
       single() { return Promise.resolve({ data: rows[0] ?? null, error: null }); },
       upsert() { return Promise.resolve({ data: null, error: null }); },
