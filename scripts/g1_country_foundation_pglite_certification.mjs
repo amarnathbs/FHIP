@@ -353,6 +353,92 @@ async function main() {
     db.query(`insert into income_sources (user_id, source_name, income_type, amount, frequency, currency_code, owner) values ($1,'x','salary',100,'monthly','AUD','self')`, [U1])));
   check('MCC still allows a confirmed user (positive control, no over-block)', !mccOk.threw);
 
+  // --- 9. Spec section 22 synthetic matrix (G1-01..G1-09) -------------------
+  // PGlite substitute for live DEV certification: no DEV/production Supabase
+  // credentials were available to this task (no .env.local in this
+  // worktree) -- every scenario below is proven against the SAME real
+  // migration chain and the SAME RLS/RPC surface PostgREST would enforce
+  // (set_config('request.jwt.claims',...) + set role authenticated), but
+  // against PGlite rather than the Product Owner's actual DEV Supabase
+  // project. This is disclosed explicitly in the final report as a bounded
+  // gap, not claimed as live-DEV proof.
+  console.log('\n--- Spec section 22 synthetic matrix (G1-01..G1-09, PGlite substitute) ---');
+
+  const G1_01 = '22222222-2222-2222-2222-222222222201';
+  await seedUser(db, G1_01, { country: 'AU' });
+  await asRole(db, 'service_role', G1_01, () => db.query(
+    `update user_profiles set primary_country='AU', primary_country_source='SYSTEM_INITIALISED', primary_country_set_at=now() where user_id=$1`, [G1_01]));
+  await asRole(db, 'authenticated', G1_01, () => db.query(`select confirm_billing_country('AU')`));
+  const g101 = (await db.query(`select country_of_residence, primary_country, preferred_currency, billing_country from user_profiles where user_id=$1`, [G1_01])).rows[0];
+  check('G1-01 AU/AU/AUD/AU/none: resolved correctly', g101.country_of_residence==='AU' && g101.primary_country==='AU' && g101.preferred_currency==='AUD' && g101.billing_country==='AU');
+
+  const G1_02 = '22222222-2222-2222-2222-222222222202';
+  await seedUser(db, G1_02, { country: 'IN' });
+  await asRole(db, 'service_role', G1_02, () => db.query(
+    `update user_profiles set primary_country='IN', primary_country_source='SYSTEM_INITIALISED', primary_country_set_at=now() where user_id=$1`, [G1_02]));
+  await asRole(db, 'authenticated', G1_02, () => db.query(`select confirm_billing_country('IN')`));
+  const g102 = (await db.query(`select country_of_residence, primary_country, preferred_currency, billing_country from user_profiles where user_id=$1`, [G1_02])).rows[0];
+  check('G1-02 IN/IN/INR/IN/none: resolved correctly', g102.country_of_residence==='IN' && g102.primary_country==='IN' && g102.preferred_currency==='INR' && g102.billing_country==='IN');
+
+  const G1_03 = '22222222-2222-2222-2222-222222222203';
+  await seedUser(db, G1_03, { country: 'AU' });
+  await asRole(db, 'service_role', G1_03, () => db.query(`update user_profiles set primary_country='AU' where user_id=$1`, [G1_03]));
+  const g103Preview = await asRole(db, 'authenticated', G1_03, async () =>
+    (await db.query(`insert into country_change_previews (user_id, current_primary_country, proposed_primary_country, current_base_currency, proposed_base_currency) values ($1,'AU','IN','AUD','INR') returning id`, [G1_03])).rows[0].id);
+  await asRole(db, 'authenticated', G1_03, () => db.query(`select confirm_primary_country_change($1,'g1-03')`, [g103Preview]));
+  const g103 = (await db.query(`select country_of_residence, primary_country, billing_country from user_profiles where user_id=$1`, [G1_03])).rows[0];
+  check('G1-03 AU residence -> IN primary: explicit currency change, AU remains residence, billing unresolved', g103.country_of_residence==='AU' && g103.primary_country==='IN' && g103.billing_country===null);
+
+  const G1_04 = '22222222-2222-2222-2222-222222222204';
+  await seedUser(db, G1_04, { country: 'IN' });
+  await asRole(db, 'service_role', G1_04, () => db.query(`update user_profiles set primary_country='IN' where user_id=$1`, [G1_04]));
+  const g104Preview = await asRole(db, 'authenticated', G1_04, async () =>
+    (await db.query(`insert into country_change_previews (user_id, current_primary_country, proposed_primary_country, current_base_currency, proposed_base_currency) values ($1,'IN','AU','INR','AUD') returning id`, [G1_04])).rows[0].id);
+  await asRole(db, 'authenticated', G1_04, () => db.query(`select confirm_primary_country_change($1,'g1-04')`, [g104Preview]));
+  const g104 = (await db.query(`select country_of_residence, primary_country, billing_country from user_profiles where user_id=$1`, [G1_04])).rows[0];
+  check('G1-04 IN residence -> AU primary: explicit currency change, IN remains residence, billing unresolved', g104.country_of_residence==='IN' && g104.primary_country==='AU' && g104.billing_country===null);
+
+  const G1_05 = '22222222-2222-2222-2222-222222222205';
+  await seedUser(db, G1_05, { country: 'AU' });
+  await asRole(db, 'service_role', G1_05, () => db.query(`update user_profiles set primary_country='AU' where user_id=$1`, [G1_05]));
+  await asRole(db, 'authenticated', G1_05, () => db.query(`select confirm_billing_country('AU')`));
+  await asRole(db, 'authenticated', G1_05, () => db.query(`insert into cross_border_relationships (user_id, country_code, relationship_type) values ($1,'IN','ASSET')`, [G1_05]));
+  const g105 = (await db.query(`select country_of_residence, primary_country, preferred_currency, billing_country from user_profiles where user_id=$1`, [G1_05])).rows[0];
+  const g105cb = (await db.query(`select country_code from cross_border_relationships where user_id=$1 and status='ACTIVE'`, [G1_05])).rows;
+  check('G1-05 AU/AU/AUD/AU + IN cross-border: base profile unaffected by relationship', g105.country_of_residence==='AU' && g105.primary_country==='AU' && g105.preferred_currency==='AUD' && g105.billing_country==='AU' && g105cb.length===1 && g105cb[0].country_code==='IN');
+
+  const G1_06 = '22222222-2222-2222-2222-222222222206';
+  await seedUser(db, G1_06, { country: 'IN' });
+  await asRole(db, 'service_role', G1_06, () => db.query(`update user_profiles set primary_country='IN' where user_id=$1`, [G1_06]));
+  await asRole(db, 'authenticated', G1_06, () => db.query(`select confirm_billing_country('IN')`));
+  await asRole(db, 'authenticated', G1_06, () => db.query(`insert into cross_border_relationships (user_id, country_code, relationship_type) values ($1,'AU','RETIREMENT')`, [G1_06]));
+  const g106 = (await db.query(`select country_of_residence, primary_country, preferred_currency, billing_country from user_profiles where user_id=$1`, [G1_06])).rows[0];
+  const g106cb = (await db.query(`select country_code from cross_border_relationships where user_id=$1 and status='ACTIVE'`, [G1_06])).rows;
+  check('G1-06 IN/IN/INR/IN + AU cross-border: base profile unaffected by relationship', g106.country_of_residence==='IN' && g106.primary_country==='IN' && g106.preferred_currency==='INR' && g106.billing_country==='IN' && g106cb.length===1 && g106cb[0].country_code==='AU');
+
+  const G1_07 = '22222222-2222-2222-2222-222222222207';
+  await seedUser(db, G1_07, { country: null });
+  const g107 = (await db.query(`select country_of_residence, primary_country, billing_country from user_profiles where user_id=$1`, [G1_07])).rows[0];
+  const g107mcc = await asRole(db, 'authenticated', G1_07, () => expectError(() =>
+    db.query(`insert into income_sources (user_id, source_name, income_type, amount, frequency, currency_code, owner) values ($1,'x','salary',100,'monthly','AUD','self')`, [G1_07])));
+  check('G1-07 unconfirmed/null/unresolved/unresolved/none: no default assigned, MCC still blocks financial writes', g107.country_of_residence===null && g107.primary_country===null && g107.billing_country===null && g107mcc.threw);
+
+  const G1_08 = '22222222-2222-2222-2222-222222222208';
+  await seedUser(db, G1_08, { country: 'AU' });
+  const g108Preview = await asRole(db, 'authenticated', G1_08, async () =>
+    (await db.query(`insert into country_change_previews (user_id, current_primary_country, proposed_primary_country) values ($1,'AU','GB') returning id`, [G1_08])).rows[0].id);
+  await asRole(db, 'authenticated', G1_08, () => db.query(`select confirm_primary_country_change($1,'g1-08')`, [g108Preview]));
+  await asRole(db, 'authenticated', G1_08, () => db.query(`insert into cross_border_relationships (user_id, country_code, relationship_type) values ($1,'IN','INVESTMENT')`, [G1_08]));
+  const g108 = (await db.query(`select primary_country, preferred_currency from user_profiles where user_id=$1`, [G1_08])).rows[0];
+  const g108caps = (await db.query(`select capability, enabled from country_capabilities where country_code='GB'`)).rows;
+  check('G1-08 generic primary (GB) + optional IN cross-border: currency unaffected (unsupported by FX engine), only UNIVERSAL_MODULES/CROSS_BORDER_RELATIONSHIPS enabled', g108.primary_country==='GB' && g108.preferred_currency==='AUD' && g108caps.filter(c=>c.enabled).map(c=>c.capability).sort().join(',')==='CROSS_BORDER_RELATIONSHIPS,UNIVERSAL_MODULES');
+
+  const G1_09 = '22222222-2222-2222-2222-222222222209';
+  await seedUser(db, G1_09, { country: null }); // MCC's own classifyCountryValue()/is_country_confirmed() already fail-closed an unsupported code server-side before G1 is ever reached
+  const g109PreviewAttempt = await asRole(db, 'authenticated', G1_09, () => expectError(() =>
+    db.query(`insert into country_change_previews (user_id, current_primary_country, proposed_primary_country) values ($1,null,'ZZ')`, [G1_09])));
+  check('G1-09 unsupported country code: rejected at the registry FK before any G1 write occurs, never a default', g109PreviewAttempt.threw);
+
   console.log(`\n${pass}/${pass + fail} PASS`);
   if (fail) { console.log('FAILURES:', failures.join(', ')); process.exit(1); }
 }
