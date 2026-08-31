@@ -154,7 +154,17 @@ async function loadEntitlementState(userId: string): Promise<AIPlanEntitlement> 
  * and ignoring it is the honest encoding of "quota cannot be multiplied by
  * switching household IDs" (section 11) — a caller cannot influence the answer
  * by passing a different one.
+ *
+ * The unused-parameter warnings below are suppressed deliberately and only
+ * here. The parameters are NOT dead code to be deleted: keeping them means a
+ * caller that has a household id passes it and is visibly ignored, rather than
+ * discovering there is no place to put it and wondering whether the service is
+ * household-unaware by oversight. Removing them would also silently change
+ * five public signatures the specification names. (This project's ESLint
+ * configuration has no argsIgnorePattern for a leading underscore, so the
+ * convention alone does not quiet it.)
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 export const AIEntitlementService = {
   async getAIPlanEntitlement(userId: string, _householdId?: string | null): Promise<AIPlanEntitlement> {
     return loadEntitlementState(userId);
@@ -191,6 +201,7 @@ export const AIEntitlementService = {
     return resolveAICapabilities(planTier);
   },
 };
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 /**
  * Spec section 8 — the ONLY shape a Premium subject's entitlement may be
