@@ -45,6 +45,7 @@ const KNOWN_DENY_REASONS: ReadonlySet<string> = new Set<AdmissionDenyReason>([
   'cost_estimate_unavailable',
   'controls_unavailable',
   'entitlement_unknown',
+  'entitlement_expired',
   'model_tier_unknown',
   'model_unknown',
   'token_budget_unavailable',

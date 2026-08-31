@@ -1482,6 +1482,7 @@ declare
   v_severity        text;
   v_ev_type         text;
   v_soft_events     jsonb := '[]'::jsonb;
+  v_entitlement_current boolean := null;
 begin
   -- Defence in depth, unchanged from Part 1: inside any authenticated session
   -- the caller may only ever admit requests for themselves.
@@ -1630,10 +1631,43 @@ begin
     -- system/admin evaluation calls must not be charged to a consumer
     -- allowance). It remains subject to every kill switch and every cost
     -- ceiling below.
-    select plan_tier into v_plan_tier from user_entitlements where user_id = p_user_id;
+    --
+    -- SUBSCRIPTION STATE (spec section 10). This codebase has NO subscription
+    -- state machine: there is no billing provider, no subscriptions table, and
+    -- `plan_tier` is CHECK-constrained to exactly 'free' | 'premium'. TRIAL,
+    -- PAST_DUE, GRACE, CANCEL_AT_PERIOD_END, REFUNDED and SUSPENDED are not
+    -- representable, and section 10 is explicit that unsupported policy must
+    -- not be invented. They are therefore not modelled here — the
+    -- certification proves they cannot exist rather than pretending to handle
+    -- them.
+    --
+    -- What IS representable is an entitlement VALIDITY WINDOW:
+    -- user_entitlements.effective_from / effective_to have existed since
+    -- migration 0010. Module 11.0 and Part 1 both ignored them. They are
+    -- honoured here so that section 10's minimum — "ACTIVE Premium -> eligible;
+    -- CANCEL_AT_PERIOD_END while the paid period is valid -> eligible until
+    -- expiry; EXPIRED -> not eligible" — is genuinely enforced rather than
+    -- merely unrepresentable. Cancel-at-period-end is exactly `effective_to`
+    -- set to the end of the paid period: eligible until that date, refused
+    -- after it, with no historical usage erased.
+    --
+    -- BEHAVIOUR CHANGE, disclosed: today nothing writes effective_to, and the
+    -- column defaults to NULL, so no existing row changes behaviour. From now
+    -- on, setting it is meaningful.
+    select plan_tier into v_plan_tier from user_entitlements
+     where user_id = p_user_id;
     if v_plan_tier is null then
       v_deny := 'entitlement_unknown'; exit admission;
     end if;
+
+    select true into v_entitlement_current from user_entitlements
+     where user_id = p_user_id
+       and (effective_from is null or effective_from <= current_date)
+       and (effective_to is null or effective_to >= current_date);
+    if not coalesce(v_entitlement_current, false) then
+      v_deny := 'entitlement_expired'; exit admission;
+    end if;
+
     if v_outcome <> 'ADMIN_EVALUATION'
        and v_plan_tier <> 'premium'
        and (p_request_class = 'custom' or v_controls.standard_requires_premium) then
@@ -1728,10 +1762,20 @@ begin
     end if;
 
     -- 9. Model tier vs the task's tier cap.
+    --
+    -- THE REGISTRY IS AUTHORITATIVE FOR THE TIER, not the caller's declared
+    -- p_internal_tier. Part 1 trusted the parameter, which meant the tier cap
+    -- could be satisfied by a caller holding a stale model row — or, if this
+    -- function were ever reachable from a less trusted path, simply by
+    -- declaring a cheaper tier than the model really is. Since the model row
+    -- is now looked up anyway for the section 32 disable check, using its own
+    -- internal_tier removes a trusted input for free. p_internal_tier is used
+    -- only where no registry row applies (an outcome that reaches no provider,
+    -- and therefore has no model to look up).
     if v_limit_found then
       v_cap_rank := case v_limit.max_internal_tier
                       when 'LOW_COST' then 1 when 'STANDARD' then 2 when 'ADVANCED' then 3 end;
-      v_tier_rank := case p_internal_tier
+      v_tier_rank := case coalesce(case when v_model_found then v_model.internal_tier end, p_internal_tier)
                        when 'LOW_COST' then 1 when 'STANDARD' then 2 when 'ADVANCED' then 3 else null end;
       if v_tier_rank is null then
         v_deny := 'model_tier_unknown'; exit admission;
@@ -1877,7 +1921,18 @@ begin
     v_cache_hit,
     case when v_deny is null then 'allowed' else 'denied' end, v_deny,
     v_quota_consumed, v_counts_rate,
-    coalesce(v_outcome, 'LIVE_AI'), v_state, v_lease,
+    -- SANITISED, and this is load-bearing. When the denial IS
+    -- 'invalid_usage_outcome', v_outcome holds the caller's unrecognised
+    -- string; inserting it would violate this table's own usage_outcome CHECK
+    -- and abort the whole function, losing the audit row and turning a clean,
+    -- specific denial into a thrown exception. The row is a DENIAL either way
+    -- and quota_consumed is false, so the column is recorded as the metered
+    -- default while deny_reason carries what actually happened. (Same class of
+    -- bug as defect D2: a fail-closed path that reports the wrong reason.)
+    case when v_outcome in ('DETERMINISTIC','KNOWLEDGE_BASE','STANDARD_PERSONALISED',
+                            'EXACT_CACHE','SEMANTIC_CACHE','LIVE_AI','BATCH_AI','ADMIN_EVALUATION')
+         then v_outcome else 'LIVE_AI' end,
+    v_state, v_lease,
     case when v_state = 'finalised' then now() else null end,
     nullif(p_idempotency_key, ''), p_request_hash
   )
@@ -1911,6 +1966,7 @@ begin
                    when 'model_unknown'                 then 'model_disabled_blocked'
                    when 'not_premium'                   then 'entitlement_mismatch'
                    when 'entitlement_unknown'           then 'entitlement_mismatch'
+                   when 'entitlement_expired'           then 'entitlement_mismatch'
                    else null
                  end;
     if v_ev_type is not null then
@@ -2100,6 +2156,17 @@ begin
     return jsonb_build_object('refunded', false, 'reason', 'nothing_to_refund');
   end if;
 
+  -- ANTI-MINTING. A FINALISED admission delivered a validated answer, so its
+  -- credit is spent and must stay spent. Without this check the two terminal
+  -- states are not mutually exclusive in both directions: ai_finalise_admission
+  -- already refuses to finalise something released, but a refund could still
+  -- claw back a question the subject genuinely received — which would let any
+  -- path that can call refund mint unlimited allowance out of successful
+  -- answers. Found by this module's own lifecycle certification.
+  if v_ev.execution_state = 'finalised' then
+    return jsonb_build_object('refunded', false, 'reason', 'already_finalised');
+  end if;
+
   -- A live admission that consumed nothing (a 'standard' request, say) still
   -- has to release its reservation, or its lease would bar the subject's next
   -- request for no reason. Releasing and refunding are separate facts.
@@ -2158,6 +2225,7 @@ declare
   v_plan_tier text;
   v_period    text;
   v_used      int := 0;
+  v_current   boolean := null;
   v_eligible  boolean := false;
   v_reason    text := null;
 begin
@@ -2181,9 +2249,20 @@ begin
   end if;
 
   select plan_tier into v_plan_tier from user_entitlements where user_id = p_user_id;
+  -- Same validity window as ai_admit_request(). If these two disagreed, this
+  -- endpoint would promise an allowance the next request would refuse.
+  select true into v_current from user_entitlements
+   where user_id = p_user_id
+     and (effective_from is null or effective_from <= current_date)
+     and (effective_to is null or effective_to >= current_date);
 
   if v_plan_tier is null then
     v_reason := 'entitlement_unknown';
+  elsif not coalesce(v_current, false) then
+    -- Reported as premium_required rather than as an outage: an expired paid
+    -- period IS a state the user can resolve by resubscribing, so the upgrade
+    -- prompt is honest here in a way it would not be for an unreadable row.
+    v_reason := 'premium_required';
   elsif v_plan_tier <> 'premium' then
     v_reason := 'premium_required';
   elsif not v_controls.ai_globally_enabled then

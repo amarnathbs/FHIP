@@ -34,6 +34,7 @@ export type AdmissionDenyReason =
   | 'cost_estimate_unavailable'
   | 'controls_unavailable'
   | 'entitlement_unknown'
+  | 'entitlement_expired'
   | 'model_tier_unknown'
   | 'model_unknown'
   | 'token_budget_unavailable'
@@ -211,6 +212,7 @@ export const DENY_REASON_MESSAGES: Record<AdmissionDenyReason, string> = {
   cost_estimate_unavailable: 'AI is temporarily unavailable because the cost of this request could not be determined.',
   controls_unavailable: 'AI is temporarily unavailable.',
   entitlement_unknown: 'Your plan could not be confirmed, so AI features are unavailable right now.',
+  entitlement_expired: 'Your Premium period has ended, so custom AI questions are no longer available.',
   model_tier_unknown: 'AI is temporarily unavailable because no approved model could be confirmed for this request.',
   model_unknown: 'AI is temporarily unavailable because no approved model could be confirmed for this request.',
   token_budget_unavailable: 'AI is temporarily unavailable because the size of this request could not be determined.',
@@ -304,6 +306,10 @@ export const PUBLIC_ERROR_CODE: Record<AdmissionDenyReason, PublicAIErrorCode> =
   // "temporarily disabled" rather than "premium_required" — telling a user to
   // upgrade because our own database was unreachable would be a false upsell.
   entitlement_unknown: 'ai_temporarily_disabled',
+  // An expired paid period IS something the user can resolve by resubscribing,
+  // so unlike an unreadable entitlement this one honestly maps to the upgrade
+  // path rather than to a temporary outage.
+  entitlement_expired: 'premium_required',
 };
 
 /**
