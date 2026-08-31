@@ -1,12 +1,34 @@
-import { createClient } from '@/lib/supabase/server';
 import { ok } from '@/lib/api';
+import {
+  getCurrentResourceRoles,
+  canViewResourceDashboard,
+  canViewResourceContent,
+  canViewResourceWorkflow,
+  canViewResourceDiscovery,
+  canViewResourceAnalytics,
+} from '@/lib/resources/permissions';
 
-// Lets the nav know whether to show the Admin link (and, since the R1.2
-// Resources shell, the Resources nav group too), without exposing any admin
+// Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
-// both flags false, never a 403 (the actual admin/Resources routes still
+// all-false flags, never a 403 (the actual admin/Resources routes still
 // enforce their own server-side checks — this is UX-only gating per spec
-// §90: "Navigation hiding is only UX", RLS remains the real boundary).
+// §90: "Navigation hiding is only UX", RLS remains the real boundary; see
+// also Admin Architecture Standard §4).
+//
+// Phase A Wave 1 (Final Corrective Addendum §1.6, Second Corrective Addendum
+// §1.3): this route used to re-implement, inline, the same
+// admin_users + resource_user_roles lookup that getCurrentResourceRoles()
+// already performs as the one canonical, shared role-resolution path every
+// other Resources route calls — with `.limit(1)`, an existence-only check
+// that structurally cannot answer "does the caller hold THIS role". Both the
+// drift risk and that structural incapacity are removed here: the shared
+// helper is called exactly once per request, and all five capabilities are
+// pure evaluations over that single role snapshot.
+//
+// Each capability is its own separately named predicate call, never one
+// shared boolean copied across fields (Standard §2) — four of the five
+// resolve to the same underlying check today, but a future change to one
+// destination's requirement touches only that destination's predicate.
 //
 // Mandatory Country Confirmation, round-2 closure (MCC-2): deliberately the
 // ONE admin API route NOT wired to countryConfirmationBlockResponse. Its own
@@ -22,16 +44,18 @@ import { ok } from '@/lib/api';
 // nothing exploitable, only whether admin_users/resource_user_roles rows
 // exist for their own id, which they could already read directly under RLS.
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return ok({ isAdmin: false, hasResourcesAccess: false });
-
-  const [{ data: adminRow }, { data: resourceRoleRows }] = await Promise.all([
-    supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle(),
-    supabase.from('resource_user_roles').select('role').eq('user_id', user.id).eq('is_active', true).limit(1),
-  ]);
-  const isAdmin = Boolean(adminRow);
-  return ok({ isAdmin, hasResourcesAccess: isAdmin || (resourceRoleRows ?? []).length > 0 });
+  const current = await getCurrentResourceRoles();
+  return ok({
+    // Unchanged legacy fields, kept for existing consumers. Neither is used
+    // to derive any capability below.
+    isAdmin: current.isSuperAdmin,
+    hasResourcesAccess: current.isSuperAdmin || current.roles.length > 0,
+    capabilities: {
+      resourcesDashboard: canViewResourceDashboard(current),
+      resourceContentAdmin: canViewResourceContent(current),
+      resourceWorkflowAdmin: canViewResourceWorkflow(current),
+      resourceDiscoveryAdmin: canViewResourceDiscovery(current),
+      resourceAnalytics: canViewResourceAnalytics(current),
+    },
+  });
 }

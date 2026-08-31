@@ -6,6 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+  buildAdminNavGroups,
+  parseAdminCapabilities,
+  parseIsAdmin,
+  shouldShowAdminMenu,
+  NO_ADMIN_CAPABILITIES,
+  type AdminCapabilities,
+} from '@/lib/admin/adminNav';
 
 type NavLink = { type: 'link'; label: string; href: string };
 type NavDropdown = { type: 'dropdown'; id: string; label: string; items: { label: string; href: string }[] };
@@ -104,66 +112,12 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// R1.2 Admin Resources shell nav — spec §41. Shown to any user holding at
-// least one Resources role or Super Admin (hasResourcesAccess, from
-// /api/admin/me); RLS remains the actual access boundary underneath this,
-// this list is UX-only (spec §90/§43: "Do not hide content solely for
-// security... Navigation hiding is only UX"). Future routes named in the
-// spec (§8 — videos/glossary/faqs/categories/etc.) are deliberately not
-// listed here at all, rather than shown disabled, per spec §8's "omit until
-// implementation" option.
-// R1.3 adds "New Content" (spec §10) — role-gated server-side by
-// /admin/resources/content/new itself (canCreateResource()), not by this
-// list; a Resources-role user without create rights simply sees a friendly
-// "you don't have permission" message on that page rather than the link
-// being hidden, matching this list's own stated convention above.
-const RESOURCES_ITEMS: { label: string; href: string }[] = [
-  { label: 'Dashboard', href: '/admin/resources' },
-  { label: 'All Content', href: '/admin/resources/content' },
-  { label: 'New Content', href: '/admin/resources/content/new' },
-];
-
-// The two pre-existing Super Admin surfaces (Benchmarks, Recommendations) —
-// pulled into the same collapsible "Admin" section as everything below so
-// there's one admin entry point in the sidebar, not three independent
-// flat sections at the top level.
-const ADMIN_GENERAL_ITEMS: { label: string; href: string }[] = [
-  { label: 'Benchmarks', href: '/admin/benchmarks' },
-  { label: 'Recommendations', href: '/admin/recommendations' },
-];
-
-// R1.4 (spec §64): specialist content-type shortcuts so admins can reach
-// Video/Glossary/FAQ/Money Update management without going through All
-// Content for every workflow (spec §110). A separate group from
-// RESOURCES_ITEMS/WORKFLOW_ITEMS below, matching the spec's own suggested
-// CONTENT / WORKFLOW grouping.
-const CONTENT_TYPE_ITEMS: { label: string; href: string }[] = [
-  { label: 'Videos', href: '/admin/resources/videos' },
-  { label: 'Glossary', href: '/admin/resources/glossary' },
-  { label: 'FAQs', href: '/admin/resources/faqs' },
-  { label: 'Money Updates', href: '/admin/resources/money-updates' },
-];
-
-const WORKFLOW_ITEMS: { label: string; href: string }[] = [
-  { label: 'Drafts', href: '/admin/resources/content/drafts' },
-  { label: 'Review Queue', href: '/admin/resources/content/review' },
-  { label: 'Scheduled', href: '/admin/resources/content/scheduled' },
-  { label: 'Published', href: '/admin/resources/content/published' },
-  { label: 'Review Due', href: '/admin/resources/content/review-due' },
-  { label: 'Archived', href: '/admin/resources/content/archived' },
-];
-
-// R1.6 (spec §75): "Add operational links: Search & Discovery, Related
-// Content, CTAs, Context Mapping — only where real management surfaces
-// exist. Do not add dead links." Search itself has no admin management
-// surface (it's fully deterministic/automatic, nothing to curate beyond the
-// content already managed above), so no "Search & Discovery" link is added
-// — only the three that have real screens behind them.
-const DISCOVERY_ITEMS: { label: string; href: string }[] = [
-  { label: 'Related Content', href: '/admin/resources/related' },
-  { label: 'CTAs', href: '/admin/resources/ctas' },
-  { label: 'Context Mapping', href: '/admin/resources/context' },
-];
+// Admin nav item lists and group construction live in @/lib/admin/adminNav
+// (moved there verbatim in Phase A Wave 1, unchanged in content) so each
+// group's visibility decision is an independently testable pure function
+// rather than logic embedded in this client component — see that module's
+// header for why, and Admin Architecture Standard §2/§4. This component
+// keeps only the rendering.
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -183,7 +137,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [hasResourcesAccess, setHasResourcesAccess] = useState(false);
+  // Fail closed (Standard §13): every capability starts false and only ever
+  // becomes true from a successfully parsed /api/admin/me response, so no
+  // unauthorised nav group is exposed during loading, and a failed or
+  // malformed response leaves the nav in its denied state rather than
+  // widening it.
+  const [capabilities, setCapabilities] = useState<AdminCapabilities>(NO_ADMIN_CAPABILITIES);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting group only if the initial page load lands
@@ -217,14 +176,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     fetch('/api/admin/me')
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!cancelled) {
-          setIsAdmin(Boolean(j.data?.isAdmin));
-          setHasResourcesAccess(Boolean(j.data?.hasResourcesAccess));
+          // Both parsers fail closed on a null/non-OK/malformed body — an
+          // API failure must never become a default grant (Standard §13).
+          setIsAdmin(parseIsAdmin(j));
+          setCapabilities(parseAdminCapabilities(j));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          setIsAdmin(false);
+          setCapabilities(NO_ADMIN_CAPABILITIES);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -368,7 +334,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
 
-        {(isAdmin || hasResourcesAccess) && (() => {
+        {shouldShowAdminMenu(isAdmin, capabilities) && (() => {
           // Single collapsible "Admin" entry, same dropdown mechanism as
           // Forecasting (one openDropdown slot, Escape-to-close-and-refocus)
           // rather than three-plus independent flat sections at the top
@@ -376,17 +342,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           // one place to look, auto-expanded (see openDropdown's initial
           // state above), instead of hunting across separate headers for
           // e.g. which of six items is the pending-review queue.
-          const adminGroups: { label: string; items: { label: string; href: string }[]; matchMode: 'exact' | 'prefix' }[] = [
-            ...(isAdmin ? [{ label: 'General', items: ADMIN_GENERAL_ITEMS, matchMode: 'exact' as const }] : []),
-            ...(hasResourcesAccess
-              ? [
-                  { label: 'Resources', items: RESOURCES_ITEMS, matchMode: 'exact' as const },
-                  { label: 'Content', items: CONTENT_TYPE_ITEMS, matchMode: 'prefix' as const },
-                  { label: 'Workflow', items: WORKFLOW_ITEMS, matchMode: 'exact' as const },
-                  { label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const },
-                ]
-              : []),
-          ];
+          //
+          // Every group inside reads its own capability field (see
+          // buildAdminNavGroups) — no shared staff boolean gates more than
+          // one group, and the outer gate above is derived from the group
+          // list itself, so it can never act as a capability check for any
+          // particular destination.
+          const adminGroups = buildAdminNavGroups(isAdmin, capabilities);
           const groupItemActive = (item: { href: string }, matchMode: 'exact' | 'prefix') =>
             matchMode === 'exact' ? pathname === item.href : isActive(pathname, item.href);
           const adminActive = adminGroups.some((g) => g.items.some((i) => groupItemActive(i, g.matchMode)));

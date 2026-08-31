@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
-import { getCurrentResourceRoles, canCreateSpecialistContent } from '@/lib/resources/permissions';
+import { getCurrentResourceRoles, isResourceStaff, canCreateSpecialistContent } from '@/lib/resources/permissions';
 import { getMoneyUpdateList, type MoneyUpdateListFilters } from '@/lib/resources/money-update/queries';
 import { createMoneyUpdateDraft } from '@/lib/resources/money-update/mutations';
 import type { MoneyUpdateContentType } from '@/lib/resources/money-update/types';
@@ -21,7 +21,12 @@ export async function GET(request: Request) {
   if (countryBlock) return countryBlock;
 
   const current = await getCurrentResourceRoles();
-  if (!current.isSuperAdmin && current.roles.length === 0) return bad("You don't have permission to access Resources administration.", 403);
+  // Phase A Wave 1: narrowed from the former coarse `!current.isSuperAdmin &&
+  // current.roles.length === 0` check, which any single Resources role
+  // cleared — including Analyst, who then received a misleading RLS-filtered
+  // 200 instead of an honest denial (Admin Architecture Standard §4). Same
+  // message and status code; only the predicate narrows.
+  if (!isResourceStaff(current)) return bad("You don't have permission to access Resources administration.", 403);
 
   try {
     const { searchParams } = new URL(request.url);
