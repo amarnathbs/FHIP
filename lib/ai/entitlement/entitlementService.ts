@@ -27,32 +27,51 @@
 // enforcement layer.
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import type {
-  AdmissionRequest,
-  AdmissionResult,
-  AdmissionDenyReason,
-  EntitlementGate,
+import {
+  AI_USAGE_OUTCOMES,
+  type AdmissionRequest,
+  type AdmissionResult,
+  type AdmissionDenyReason,
+  type AdmissionExecutionState,
+  type AIUsageOutcome,
+  type EntitlementGate,
 } from '@/lib/ai/entitlement/types';
+import { recordAdmissionMetrics, recordAiMetric } from '@/lib/ai/observability/aiMetrics';
 
 const KNOWN_DENY_REASONS: ReadonlySet<string> = new Set<AdmissionDenyReason>([
   'invalid_request',
   'invalid_request_class',
+  'invalid_usage_outcome',
   'cost_estimate_unavailable',
   'controls_unavailable',
   'entitlement_unknown',
   'model_tier_unknown',
+  'model_unknown',
+  'token_budget_unavailable',
   'enforcement_unavailable',
   'ai_disabled',
   'kill_switch_active',
+  'live_provider_disabled',
+  'batch_disabled',
+  'scenario_disabled',
+  'provider_disabled',
+  'model_disabled',
   'not_premium',
   'quota_exhausted',
   'rate_limited',
+  'request_in_progress',
+  'idempotency_conflict',
+  'token_budget_exceeded',
   'request_cost_limit',
   'model_tier_exceeds_task_limit',
   'task_monthly_cost_limit',
+  'provider_cost_limit',
+  'daily_cost_limit',
   'user_cost_ceiling',
   'platform_cost_ceiling',
 ]);
+
+const KNOWN_USAGE_OUTCOMES: ReadonlySet<string> = new Set(AI_USAGE_OUTCOMES);
 
 function denied(reason: AdmissionDenyReason, enforcementError: string | null = null): AdmissionResult {
   return {
@@ -73,6 +92,12 @@ function denied(reason: AdmissionDenyReason, enforcementError: string | null = n
     platformCostUsedUsd: null,
     platformCostCeilingUsd: null,
     estimatedCostUsd: null,
+    usageOutcome: null,
+    executionState: null,
+    idempotencyReuse: false,
+    concurrencyActive: null,
+    concurrencyMax: null,
+    softThresholdsCrossed: [],
     enforcementError,
   };
 }
@@ -110,6 +135,18 @@ export function interpretAdmissionPayload(payload: unknown): AdmissionResult {
     return denied('enforcement_unavailable', 'Admission RPC returned allowed=false with no deny reason.');
   }
 
+  // An unrecognised usage outcome means the DB is running a vocabulary this
+  // build does not know. Since the outcome is what decides whether quota was
+  // metered, disagreeing about it is not something to coerce past.
+  const rawOutcome = typeof row.usage_outcome === 'string' ? row.usage_outcome : null;
+  if (rawOutcome !== null && !KNOWN_USAGE_OUTCOMES.has(rawOutcome)) {
+    return denied('enforcement_unavailable', `Admission RPC returned an unrecognised usage_outcome: ${rawOutcome}`);
+  }
+  const rawState = typeof row.execution_state === 'string' ? row.execution_state : null;
+  if (rawState !== null && rawState !== 'reserved' && rawState !== 'finalised' && rawState !== 'released') {
+    return denied('enforcement_unavailable', `Admission RPC returned an unrecognised execution_state: ${rawState}`);
+  }
+
   return {
     allowed: row.allowed === true,
     denyReason: rawReason as AdmissionDenyReason | null,
@@ -128,6 +165,14 @@ export function interpretAdmissionPayload(payload: unknown): AdmissionResult {
     platformCostUsedUsd: num(row.platform_cost_used_usd),
     platformCostCeilingUsd: num(row.platform_cost_ceiling_usd),
     estimatedCostUsd: num(row.estimated_cost_usd),
+    usageOutcome: rawOutcome as AIUsageOutcome | null,
+    executionState: rawState as AdmissionExecutionState | null,
+    idempotencyReuse: row.idempotency_reuse === true,
+    concurrencyActive: num(row.concurrency_active),
+    concurrencyMax: num(row.concurrency_max),
+    softThresholdsCrossed: Array.isArray(row.soft_thresholds_crossed)
+      ? (row.soft_thresholds_crossed as unknown[]).filter((s): s is string => typeof s === 'string')
+      : [],
     enforcementError: null,
   };
 }
@@ -168,9 +213,26 @@ export async function admitAiRequest(request: AdmissionRequest): Promise<Admissi
       p_internal_tier: request.internalTier,
       p_estimated_cost_usd: request.estimatedCostUsd,
       p_cache_hit: request.cacheHit,
+      p_usage_outcome: request.usageOutcome ?? null,
+      p_idempotency_key: request.idempotencyKey ?? null,
+      p_request_hash: request.requestHash ?? null,
+      p_context_tokens: request.contextTokens ?? null,
+      p_user_input_tokens: request.userInputTokens ?? null,
+      p_output_tokens: request.outputTokens ?? null,
     });
     if (error) return denied('enforcement_unavailable', error.message);
-    return interpretAdmissionPayload(data);
+    const result = interpretAdmissionPayload(data);
+    // Spec section 60 — emit the enforcement counters at the moment of the
+    // decision, with no user identifier and no financial value in any label.
+    recordAdmissionMetrics({
+      allowed: result.allowed,
+      denyReason: result.denyReason,
+      quotaConsumed: result.quotaConsumed,
+      idempotencyReuse: result.idempotencyReuse,
+      executionState: result.executionState,
+      labels: { request_class: request.requestClass, task_type: request.taskType, usage_outcome: result.usageOutcome },
+    });
+    return result;
   } catch (err) {
     return denied('enforcement_unavailable', err instanceof Error ? err.message : 'Admission RPC threw.');
   }
@@ -190,7 +252,31 @@ export async function refundAiAdmission(admissionId: string): Promise<boolean> {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('ai_refund_admission', { p_admission_id: admissionId });
     if (error) return false;
-    return Boolean((data as { refunded?: boolean } | null)?.refunded);
+    const refunded = Boolean((data as { refunded?: boolean } | null)?.refunded);
+    if (refunded) recordAiMetric('ai_quota_released');
+    return refunded;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Spec section 14 — closes the reservation after a valid answer was delivered.
+ *
+ * Best-effort in the same sense as the refund: a failure here must not turn a
+ * SUCCESSFUL AI answer into an error for the user. The consequence of a failed
+ * finalisation is bounded and self-healing — the reservation's lease expires
+ * on its own, so at worst the subject cannot start a second concurrent request
+ * until then. The credit is unaffected either way, because finalisation
+ * confirms a consumption that already happened rather than performing one.
+ */
+export async function finaliseAiAdmission(admissionId: string): Promise<boolean> {
+  if (!admissionId) return false;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('ai_finalise_admission', { p_admission_id: admissionId });
+    if (error) return false;
+    return Boolean((data as { finalised?: boolean } | null)?.finalised);
   } catch {
     return false;
   }
@@ -200,4 +286,5 @@ export async function refundAiAdmission(admissionId: string): Promise<boolean> {
 export const dbEntitlementGate: EntitlementGate = {
   admit: admitAiRequest,
   refund: refundAiAdmission,
+  finalise: finaliseAiAdmission,
 };

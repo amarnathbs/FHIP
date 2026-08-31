@@ -14,9 +14,12 @@ import {
   getPlatformControls,
   updatePlatformControls,
   listTaskCostLimits,
+  listProviderControls,
   summariseUsageForPeriod,
+  validateControlsPatch,
   type PlatformControlsPatch,
 } from '@/lib/ai/entitlement/platformControls';
+import { recordKillSwitchActivation, recordConfigValidationRejection } from '@/lib/ai/observability/operationalEvents';
 import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 
 export const GET = adminRoute(async () => {
@@ -24,9 +27,10 @@ export const GET = adminRoute(async () => {
   if (forbidden) return forbidden;
 
   const billingPeriod = currentBillingPeriod();
-  const [controls, taskCostLimits, usage] = await Promise.all([
+  const [controls, taskCostLimits, providerControls, usage] = await Promise.all([
     getPlatformControls(),
     listTaskCostLimits(),
+    listProviderControls(),
     summariseUsageForPeriod(billingPeriod),
   ]);
 
@@ -34,6 +38,7 @@ export const GET = adminRoute(async () => {
     billing_period: billingPeriod,
     controls,
     task_cost_limits: taskCostLimits,
+    provider_controls: providerControls,
     usage_this_period: usage,
     // Surfaced so an operator is never guessing whether enforcement is live.
     enforcement_status: controls
@@ -47,13 +52,29 @@ export const GET = adminRoute(async () => {
   });
 });
 
-const BOOLEAN_FIELDS = ['ai_globally_enabled', 'custom_ai_enabled', 'standard_requires_premium'] as const;
+const BOOLEAN_FIELDS = [
+  'ai_globally_enabled', 'custom_ai_enabled', 'standard_requires_premium',
+  // Spec section 29 — the remaining three named switches.
+  'live_provider_enabled', 'batch_generation_enabled', 'scenario_ai_enabled',
+] as const;
 const NON_NEGATIVE_INT_FIELDS = ['monthly_custom_question_allowance'] as const;
-const POSITIVE_INT_FIELDS = ['rate_limit_max_requests', 'rate_limit_window_seconds'] as const;
+const POSITIVE_INT_FIELDS = [
+  'rate_limit_max_requests', 'rate_limit_window_seconds',
+  // Spec section 18.
+  'max_concurrent_requests_per_subject', 'concurrency_lease_seconds',
+  // Spec sections 20/21.
+  'max_context_tokens', 'max_user_input_tokens', 'max_output_tokens',
+] as const;
 const NON_NEGATIVE_NUMERIC_FIELDS = [
   'per_user_monthly_cost_ceiling_usd',
   'platform_monthly_cost_ceiling_usd',
   'max_cost_per_request_usd',
+] as const;
+/** Spec sections 26/27 — nullable ceilings, where null genuinely means "not configured". */
+const NULLABLE_NUMERIC_FIELDS = [
+  'platform_soft_cost_threshold_usd',
+  'per_user_soft_cost_threshold_usd',
+  'daily_live_ai_cost_limit_usd',
 ] as const;
 
 export const PUT = adminRoute(async (req: Request) => {
@@ -89,6 +110,14 @@ export const PUT = adminRoute(async (req: Request) => {
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return bad(`${field} must be a number >= 0`, 422);
     patch[field] = v;
   }
+  for (const field of NULLABLE_NUMERIC_FIELDS) {
+    if (raw[field] === undefined) continue;
+    const v = raw[field];
+    if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+      return bad(`${field} must be a number >= 0 or null`, 422);
+    }
+    patch[field] = v as number | null;
+  }
   if (raw.kill_switch_reason !== undefined) {
     if (raw.kill_switch_reason !== null && typeof raw.kill_switch_reason !== 'string') {
       return bad('kill_switch_reason must be a string or null', 422);
@@ -100,11 +129,33 @@ export const PUT = adminRoute(async (req: Request) => {
 
   // Turning a kill switch OFF should say why — an unexplained platform-wide
   // stop is an incident nobody can reconstruct later.
-  const stoppingSomething = patch.ai_globally_enabled === false || patch.custom_ai_enabled === false;
+  const stoppingSomething = patch.ai_globally_enabled === false || patch.custom_ai_enabled === false
+    || patch.live_provider_enabled === false || patch.batch_generation_enabled === false;
   if (stoppingSomething && !patch.kill_switch_reason && typeof raw.kill_switch_reason !== 'string') {
-    return bad('kill_switch_reason is required when disabling AI or custom AI', 422);
+    return bad('kill_switch_reason is required when disabling AI, custom AI, the live provider or batch generation', 422);
+  }
+
+  // Spec section 58 — validate the MERGED configuration, not the patch. A
+  // patch that lowers a hard ceiling below an already-stored soft threshold is
+  // exactly as unsafe as one that raises the soft threshold, and only the
+  // merged view sees either.
+  const current = await getPlatformControls();
+  if (!current) return bad('AI platform controls are not configured; migration 0115 may not be applied.', 503);
+  const invalid = validateControlsPatch(current, patch);
+  if (invalid) {
+    await recordConfigValidationRejection(invalid, user!.id);
+    return bad(invalid, 422);
   }
 
   const updated = await updatePlatformControls(patch, user!.id);
+
+  // Spec section 38: a kill-switch activation is an operational event in its
+  // own right, distinct from the field-level ai_config_audit row the database
+  // trigger writes. HIGH severity — someone stopping AI platform-wide is an
+  // incident, not routine configuration.
+  if (stoppingSomething) {
+    await recordKillSwitchActivation(patch, updated.kill_switch_reason, user!.id);
+  }
+
   return ok(updated);
 });

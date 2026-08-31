@@ -194,17 +194,42 @@ describe('Module 11.1 — a failed provider call refunds the consumed question',
     expect(gate.refunds).toEqual(['admission-stub-id']);
   });
 
-  it('does NOT refund a successful call', async () => {
+  it('does NOT refund a successful call — it FINALISES it (spec section 14)', async () => {
     const gate = allowAllGate(true);
     const result = await new AIModelGateway(new MockAIProvider({ behavior: 'valid' }), gate).generateExplanation(request());
     expect(result.ok).toBe(true);
     expect(gate.refunds).toEqual([]);
+    // RESERVED -> VALIDATED SUCCESS -> CONSUMED. The credit stands and the
+    // concurrency lease is released rather than being left to expire.
+    expect(gate.finalisations).toEqual(['admission-stub-id']);
   });
 
-  it('does NOT attempt a refund when nothing was consumed (a cache hit or a standard request)', async () => {
+  it('does NOT finalise a failed call', async () => {
+    const gate = allowAllGate(true);
+    await new AIModelGateway(new MockAIProvider({ behavior: 'timeout' }), gate).generateExplanation(request());
+    expect(gate.finalisations).toEqual([]);
+  });
+
+  it('releases the reservation on failure even when NO quota was consumed (spec sections 14, 18)', async () => {
+    // CHANGED IN THE FULL-SPEC PASS, deliberately. This test previously
+    // asserted that the gateway made no refund call at all when nothing had
+    // been consumed. That was correct while a refund only ever meant "give the
+    // question back", but section 14 added an explicit reservation lifecycle
+    // and section 18 added a concurrency limit that COUNTS open reservations.
+    //
+    // A 'standard' request consumes no quota but still holds a live
+    // reservation. Leaving it open after a provider failure would count
+    // against the subject's concurrency limit until its lease expired —
+    // blocking their next request because of a failure that was ours.
+    //
+    // So the gateway now always calls refund() on a post-admission failure.
+    // ai_refund_admission() releases the reservation unconditionally and
+    // returns a question ONLY if one was consumed, which the PGlite
+    // certification asserts directly against the real function.
     const gate = allowAllGate(false);
     await new AIModelGateway(new MockAIProvider({ behavior: 'timeout' }), gate).generateExplanation(request({ requestClass: 'standard' }));
-    expect(gate.refunds).toEqual([]);
+    expect(gate.refunds).toEqual(['admission-stub-id']);
+    expect(gate.finalisations).toEqual([]);
   });
 });
 

@@ -6,11 +6,18 @@
 // the construction site, and no test can accidentally pass because
 // enforcement silently defaulted to off.
 
-import type { AdmissionRequest, AdmissionResult, AdmissionDenyReason, EntitlementGate } from '@/lib/ai/entitlement/types';
+import type {
+  AdmissionRequest,
+  AdmissionResult,
+  AdmissionDenyReason,
+  EntitlementGate,
+} from '@/lib/ai/entitlement/types';
 
 export interface RecordingGate extends EntitlementGate {
   admissions: AdmissionRequest[];
   refunds: string[];
+  /** Spec section 14 — records which admissions the gateway closed as successful. */
+  finalisations: string[];
 }
 
 function baseAllowed(admissionId: string, quotaConsumed: boolean): AdmissionResult {
@@ -32,21 +39,58 @@ function baseAllowed(admissionId: string, quotaConsumed: boolean): AdmissionResu
     platformCostUsedUsd: 0,
     platformCostCeilingUsd: 500,
     estimatedCostUsd: 0,
+    usageOutcome: 'LIVE_AI',
+    executionState: 'reserved',
+    idempotencyReuse: false,
+    concurrencyActive: 0,
+    concurrencyMax: 1,
+    softThresholdsCrossed: [],
     enforcementError: null,
   };
+}
+
+function recorders() {
+  return { admissions: [] as AdmissionRequest[], refunds: [] as string[], finalisations: [] as string[] };
 }
 
 /** Allows everything and records what it was asked. Used where the test is about provider/schema behaviour, not entitlement. */
 export function allowAllGate(quotaConsumed = true): RecordingGate {
   const gate: RecordingGate = {
-    admissions: [],
-    refunds: [],
+    ...recorders(),
     async admit(request: AdmissionRequest): Promise<AdmissionResult> {
       gate.admissions.push(request);
       return baseAllowed('admission-stub-id', quotaConsumed);
     },
     async refund(admissionId: string): Promise<boolean> {
       gate.refunds.push(admissionId);
+      return true;
+    },
+    async finalise(admissionId: string): Promise<boolean> {
+      gate.finalisations.push(admissionId);
+      return true;
+    },
+  };
+  return gate;
+}
+
+/**
+ * Spec section 15 — a gate that replays an earlier verdict. The gateway must
+ * treat a replayed allow as "do NOT execute again", so this double exists to
+ * prove that rather than to assume it.
+ */
+export function idempotencyReplayGate(): RecordingGate {
+  const gate: RecordingGate = {
+    ...recorders(),
+    async admit(request: AdmissionRequest): Promise<AdmissionResult> {
+      gate.admissions.push(request);
+      return { ...baseAllowed('admission-stub-id', true), idempotencyReuse: true, executionState: 'finalised' };
+    },
+    async refund(admissionId: string): Promise<boolean> {
+      gate.refunds.push(admissionId);
+      return true;
+    },
+    async finalise(admissionId: string): Promise<boolean> {
+      gate.finalisations.push(admissionId);
       return true;
     },
   };
@@ -56,8 +100,7 @@ export function allowAllGate(quotaConsumed = true): RecordingGate {
 /** Denies everything with a specific reason. */
 export function denyGate(reason: AdmissionDenyReason): RecordingGate {
   const gate: RecordingGate = {
-    admissions: [],
-    refunds: [],
+    ...recorders(),
     async admit(request: AdmissionRequest): Promise<AdmissionResult> {
       gate.admissions.push(request);
       return {
@@ -78,11 +121,21 @@ export function denyGate(reason: AdmissionDenyReason): RecordingGate {
         platformCostUsedUsd: null,
         platformCostCeilingUsd: null,
         estimatedCostUsd: null,
+        usageOutcome: null,
+        executionState: null,
+        idempotencyReuse: false,
+        concurrencyActive: null,
+        concurrencyMax: null,
+        softThresholdsCrossed: [],
         enforcementError: null,
       };
     },
     async refund(admissionId: string): Promise<boolean> {
       gate.refunds.push(admissionId);
+      return true;
+    },
+    async finalise(admissionId: string): Promise<boolean> {
+      gate.finalisations.push(admissionId);
       return true;
     },
   };
