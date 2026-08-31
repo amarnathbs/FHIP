@@ -1,0 +1,15 @@
+{
+  "ai_runs": 0,
+  "ai_usage_ledger": 0,
+  "ai_insights": 0,
+  "ai_recommendations": 0,
+  "ai_feedback": 0,
+  "income_sources": 0,
+  "expense_items": 0,
+  "assets": 0,
+  "liabilities": 0,
+  "financial_snapshots": 0,
+  "user_profiles": 0,
+  "auth_users": 0,
+  "forged_prompt_rows": 0
+}
