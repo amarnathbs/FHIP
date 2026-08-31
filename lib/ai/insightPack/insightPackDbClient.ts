@@ -73,6 +73,20 @@ export const realInsightPackDbClient: InsightPackDbClient = {
     return data ? packRowFromDb(data) : null;
   },
 
+  async findMostRecentGenerationTime(userId: string): Promise<string | null> {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('ai_insight_packs')
+      .select('generated_at')
+      .eq('user_id', userId)
+      .not('generated_at', 'is', null)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`findMostRecentGenerationTime failed: ${error.message}`);
+    return (data?.generated_at as string | undefined) ?? null;
+  },
+
   async insertPendingPack(input: InsertPendingPackInput): Promise<PackRow> {
     const admin = createAdminClient();
     const { data, error } = await admin

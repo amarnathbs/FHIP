@@ -53,6 +53,8 @@ export interface InsightPackDbClient {
   isBatchGenerationEnabled(): Promise<{ globallyEnabled: boolean; batchEnabled: boolean }>;
   findPackByIdentity(identity: PackIdentity, identityHash: string): Promise<PackRow | null>;
   findCurrentPackForUser(userId: string): Promise<PackRow | null>;
+  /** Spec section 34 — the most recent `generated_at` across ALL of this subject's packs (any identity), for the automatic-regeneration cooldown. Null if none exists yet. */
+  findMostRecentGenerationTime(userId: string): Promise<string | null>;
   insertPendingPack(input: InsertPendingPackInput): Promise<PackRow>;
   updatePack(id: string, patch: Partial<PackRow>): Promise<PackRow>;
   insertBlocks(packId: string, userId: string, householdId: string | null, blocks: PersistedBlockInput[]): Promise<void>;
@@ -141,6 +143,7 @@ export type GenerateInsightPackOutcome =
   | { status: 'EXISTING_READY'; pack: PackRow }
   | { status: 'IN_PROGRESS'; pack: PackRow }
   | { status: 'COST_BLOCKED'; denyReason: string | null }
+  | { status: 'REGENERATION_RATE_LIMITED'; nextEligibleAt: string }
   | { status: 'READY'; pack: PackRow }
   | { status: 'PARTIAL'; pack: PackRow }
   | { status: 'FAILED'; pack: PackRow | null; failureCode: string };
@@ -191,7 +194,19 @@ export class AIPersonalisedInsightPackService {
    * or a test/script fixture) — this service never builds it itself, so it
    * carries no Next.js request-context dependency of its own.
    */
-  async generateOrGetPack(input: { userId: string; householdId: string | null; context: FinancialContextObject }): Promise<GenerateInsightPackOutcome> {
+  async generateOrGetPack(input: {
+    userId: string;
+    householdId: string | null;
+    context: FinancialContextObject;
+    /**
+     * Spec section 34's explicit carve-outs — "explicit monthly cycle" (a
+     * real scheduled monthly run is, by construction, >24h since any prior
+     * automatic generation) and "admin-approved forced regeneration". A
+     * caller sets this ONLY for one of those two cases; it is never derived
+     * from user input.
+     */
+    bypassRegenerationCooldown?: boolean;
+  }): Promise<GenerateInsightPackOutcome> {
     const { userId, householdId, context } = input;
 
     // ---- Step 1: Premium entitlement gate (spec section 11) ----
@@ -231,7 +246,22 @@ export class AIPersonalisedInsightPackService {
         return this.executeGeneration(userId, householdId, context, prompt, model, identity, identityHash, existing);
       }
       if (existing.status === 'FAILED') return { status: 'FAILED', pack: existing, failureCode: existing.failure_code ?? 'retry_budget_exhausted' };
-      // STALE/SUPERSEDED/CANCELLED for this exact identity — treat as a fresh generation attempt for the (still current) identity.
+      // STALE/SUPERSEDED/CANCELLED for this exact identity — treat as a fresh generation attempt for the (still current) identity, subject to the cooldown below.
+    }
+
+    // ---- Step 5b: regeneration cadence control (spec section 34) — this is
+    // reached only for a genuinely NEW identity (a new snapshot/context/
+    // prompt combination this user has never had a pack for, or whose prior
+    // pack for that exact identity is STALE/SUPERSEDED/CANCELLED). A retry of
+    // an existing FAILED pack (handled above) is NOT subject to this cooldown
+    // — spec section 35 governs that separately, and conflating the two would
+    // make a transient provider failure block the monthly cycle for a day.
+    const mostRecent = input.bypassRegenerationCooldown ? null : await this.db.findMostRecentGenerationTime(userId);
+    if (mostRecent) {
+      const elapsedMs = Date.now() - new Date(mostRecent).getTime();
+      if (elapsedMs < REGENERATION_COOLDOWN_MS) {
+        return { status: 'REGENERATION_RATE_LIMITED', nextEligibleAt: new Date(new Date(mostRecent).getTime() + REGENERATION_COOLDOWN_MS).toISOString() };
+      }
     }
 
     return this.executeGeneration(userId, householdId, context, prompt, model, identity, identityHash, null);

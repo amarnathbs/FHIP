@@ -61,6 +61,10 @@ class FakeDb implements InsightPackDbClient {
   async findCurrentPackForUser(userId: string): Promise<PackRow | null> {
     return [...this.packs.values()].find((p) => p.user_id === userId && ['READY', 'PARTIAL'].includes(p.status)) ?? null;
   }
+  async findMostRecentGenerationTime(userId: string): Promise<string | null> {
+    const times = [...this.packs.values()].filter((p) => p.user_id === userId && p.generated_at).map((p) => p.generated_at as string);
+    return times.length > 0 ? times.sort().reverse()[0] : null;
+  }
   async insertPendingPack(input: Parameters<InsightPackDbClient['insertPendingPack']>[0]): Promise<PackRow> {
     const id = `pack-${++this.seq}`;
     const row: PackRow & { _identityHash: string } = {
@@ -242,11 +246,51 @@ describe('Module 11.3 — AIPersonalisedInsightPackService', () => {
     const packAId = outcomeA.status === 'READY' ? outcomeA.pack.id : '';
 
     const snapshotB = makeContext({ meta: { ...ctx.meta, snapshot_id: 'snap-B' }, health_score: { ...ctx.health_score!, overall_score: 80 } });
-    const outcomeB = await service.generateOrGetPack({ userId: 'u1', householdId: null, context: snapshotB });
+    // bypassRegenerationCooldown simulates the next monthly cycle (a real
+    // scheduled run is >24h after the last one by construction) — see the
+    // dedicated cooldown test below for the case where this is NOT set.
+    const outcomeB = await service.generateOrGetPack({ userId: 'u1', householdId: null, context: snapshotB, bypassRegenerationCooldown: true });
     expect(outcomeB.status).toBe('READY');
 
     expect(db.packs.get(packAId)!.status).toBe('SUPERSEDED');
     expect(db.packs.get(packAId)!.superseded_at).not.toBeNull();
+  });
+
+  it('Regeneration cadence control (spec section 34): a second NEW-identity generation within 24h of the last one is rate-limited, zero provider calls', async () => {
+    let providerCalls = 0;
+    class CountingProvider extends MockInsightPackProvider {
+      async generateStructured(req: Parameters<MockInsightPackProvider['generateStructured']>[0]) { providerCalls++; return super.generateStructured(req); }
+    }
+    const service = new AIPersonalisedInsightPackService(db, (c) => new CountingProvider(c, 'valid'), allowAllGate(false));
+    const snapshotA = makeContext({ meta: { ...ctx.meta, snapshot_id: 'snap-cooldown-A' } });
+    const outcomeA = await service.generateOrGetPack({ userId: 'u1', householdId: null, context: snapshotA });
+    expect(outcomeA.status).toBe('READY');
+    expect(providerCalls).toBe(1);
+
+    // A DIFFERENT (new) snapshot, no bypass flag, immediately afterward —
+    // must be rate-limited, not silently regenerated.
+    const snapshotB = makeContext({ meta: { ...ctx.meta, snapshot_id: 'snap-cooldown-B' } });
+    const outcomeB = await service.generateOrGetPack({ userId: 'u1', householdId: null, context: snapshotB });
+    expect(outcomeB.status).toBe('REGENERATION_RATE_LIMITED');
+    expect(providerCalls).toBe(1); // still 1 — the rate-limited attempt never reached the provider
+    if (outcomeB.status === 'REGENERATION_RATE_LIMITED') {
+      expect(new Date(outcomeB.nextEligibleAt).getTime()).toBeGreaterThan(Date.now());
+    }
+  });
+
+  it('Regeneration cadence control does NOT apply to a bounded retry of the SAME failed identity (spec section 35 governs that separately)', async () => {
+    // First: an identity that fails (grounding failure), consuming the free retry.
+    const service = new AIPersonalisedInsightPackService(db, (c) => new MockInsightPackProvider(c, 'fabricated_percentage'), allowAllGate(false));
+    const snap = makeContext({ meta: { ...ctx.meta, snapshot_id: 'snap-retry-cooldown' } });
+    const first = await service.generateOrGetPack({ userId: 'u1', householdId: null, context: snap });
+    expect(first.status).toBe('FAILED');
+
+    // Immediately retry the SAME identity (no bypass flag) — must NOT be
+    // blocked by the 24h cooldown, because it is a retry of a FAILED pack,
+    // not a fresh automatic regeneration for a new identity.
+    const retryService = new AIPersonalisedInsightPackService(db, (c) => new MockInsightPackProvider(c, 'valid'), allowAllGate(false));
+    const retried = await retryService.generateOrGetPack({ userId: 'u1', householdId: null, context: snap });
+    expect(retried.status).toBe('READY');
   });
 
   it('Stored answer store integration: score_explanation grounded block upserts an ai_insights-equivalent row mapped to SCORE_EXPLANATION', async () => {

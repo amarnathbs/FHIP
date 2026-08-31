@@ -38,6 +38,12 @@ export const POST = adminRoute(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const userId = typeof body.user_id === 'string' ? body.user_id : null;
   if (!userId) return bad('user_id is required', 422);
+  // Spec section 75 — forcing past the 24h regeneration cooldown (spec
+  // section 34's "admin-approved forced regeneration" carve-out) requires an
+  // explicit reason, not just a boolean flag, so the audit trail says WHY.
+  const force = body.force === true;
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (force && !reason) return bad('reason is required when force=true', 422);
 
   let context: FinancialContextObject;
   try {
@@ -47,6 +53,6 @@ export const POST = adminRoute(async (req: Request) => {
   }
 
   const service = new AIPersonalisedInsightPackService(realInsightPackDbClient, resolveProvider);
-  const outcome = await service.generateOrGetPack({ userId, householdId: null, context });
-  return ok(outcome);
+  const outcome = await service.generateOrGetPack({ userId, householdId: null, context, bypassRegenerationCooldown: force });
+  return ok({ ...outcome, forced: force, reason: force ? reason : null });
 });
