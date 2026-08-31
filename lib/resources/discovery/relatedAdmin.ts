@@ -92,12 +92,117 @@ export async function removeRelatedContent(supabase: SupabaseClient, id: string)
 }
 
 // spec §39: "reorder if existing schema supports order" — it does
-// (resource_related_content.sort_order). Plain sequential update, same
-// pattern as reorderPostFaqs in lib/resources/faq/mutations.ts.
-export async function reorderRelatedContent(supabase: SupabaseClient, sourcePostId: string, orderedIds: string[]): Promise<void> {
-  const results = await Promise.all(orderedIds.map((id, index) => supabase.from('resource_related_content').update({ sort_order: index }).eq('id', id).eq('source_post_id', sourcePostId)));
-  const firstError = results.find((r) => r.error);
-  if (firstError?.error) throw firstError.error;
+// (resource_related_content.sort_order).
+//
+// Admin A0.2 Wave 2 (Scope A). This used to be a Promise.all of N
+// independent `.update()` calls — each its own PostgREST request and its own
+// autocommitted transaction — with no transaction, no validation that the
+// payload described the complete set, and no locking. A failure part-way
+// through left the already-committed positions committed, so the ordering
+// ended up duplicated, gapped, or a blend of two concurrent requests, while
+// the caller received a bare HTTP 500. Reproduced against a real database in
+// scripts/admin_a02_wave2_certification.mjs (SECTIONS 1-2) before this
+// replacement was written.
+//
+// It is now a single call to public.admin_reorder_related_content (migration
+// 0116), which is one transaction: it validates the payload as the COMPLETE
+// ordered set for exactly one source, locks that set, writes every position
+// in one statement, and returns the committed ordering read back from the
+// table. It succeeds completely or changes nothing.
+//
+// SECURITY — privileged-RPC PATTERN A (caller-context), per the Product
+// Owner's governance ruling of 2026-08-31. Reordering Related Content is an
+// interactive action by a logged-in Editor / Resource Admin / Super Admin, so
+// the caller's context is KEPT: this must be called with the administrator's
+// own request-scoped Supabase client, never a service-role client. The RPC's
+// EXECUTE is granted to `authenticated` (revoked from public, anon and
+// service_role), it takes the actor from auth.uid() — there is no actor
+// parameter to spoof — it fails closed on a null auth.uid(), and it rechecks
+// private.can_manage_discovery(auth.uid()) against the canonical role tables
+// itself. The route's canManageDiscovery() check remains as defence in depth
+// and for a friendly error; the database check is the authoritative one.
+// (Migrations 0107/0109 stay on Pattern B as documented server-only bulk
+// import/upsert exceptions — a different architecture, not a precedent here.)
+
+export const MAX_RELATED_REORDER_ITEMS = 100; // mirrors the RPC's own cap
+
+export type ReorderFailureKind = 'invalid' | 'not_found' | 'conflict' | 'forbidden' | 'error';
+
+export interface ReorderedRelatedContent {
+  source_post_id: string;
+  count: number;
+  ordered: { id: string; sort_order: number }[];
+}
+
+export type ReorderResult = { ok: true; data: ReorderedRelatedContent } | { ok: false; kind: ReorderFailureKind; message: string };
+
+// SQLSTATEs raised deliberately by admin_reorder_related_content. Anything
+// else is an unexpected server fault and is never surfaced verbatim.
+//
+// '55000' (object_not_in_prerequisite_state) — NOT '40001' — for the stale/
+// incomplete link-set conflict. Migration 0116 originally raised '40001'
+// (serialization_failure, Class 40 "Transaction Rollback"); a live-DEV
+// investigation (docs/admin/FHIP_A02_Wave2_Residual_Gate_Investigation_Report.md)
+// found that specific code path never once delivered its intended response
+// live across 13 independent attempts — it either timed out at a strikingly
+// consistent ~125.2s or came back with a spurious 42501 — while the RPC's own
+// logic proved sound in every other respect. The Product Owner ruled to move
+// off Class 40 (which some layer in the stack may treat as automatically
+// retryable) to a code with no such conventional retry semantics. Migration
+// 0118 (CREATE OR REPLACE, no other change) makes the RPC raise '55000'
+// instead — the same code this codebase already uses for analogous
+// object-not-in-expected-state conflicts (0084_geo_jurisdiction_smsf.sql,
+// 0090_smsf_current_balance_integrity_guard.sql). '40001' is deliberately
+// NOT listed here any more: the RPC no longer raises it, and if it were ever
+// seen it should fall through to the generic 'error' kind rather than being
+// silently treated as a deliberate conflict.
+const REORDER_ERROR_KINDS: Record<string, ReorderFailureKind> = {
+  '42501': 'forbidden', // insufficient_privilege — see FORBIDDEN_MESSAGE below
+  '22023': 'invalid', // invalid_parameter_value — payload shape/content
+  P0002: 'not_found', // source Resource does not exist
+  '55000': 'conflict', // the link set changed since the client loaded it (was 40001 pre-0118)
+};
+
+// 42501 has two possible origins and they must be indistinguishable to the
+// client: the RPC's own "not authenticated" / "not permitted" guards, and
+// PostgreSQL's own "permission denied for function ..." from a missing
+// EXECUTE grant. The second of those names an internal object, so the RPC's
+// message is never passed through for this kind — a single fixed sentence is
+// returned for both.
+const FORBIDDEN_MESSAGE = "You don't have permission to manage Related Content.";
+
+// The RPC's messages are written for administrators and are safe to show, but
+// they are prefixed with the function name for server logs. Strip that so the
+// UI shows a clean sentence, and never pass through a message we did not
+// author (i.e. an unexpected SQLSTATE).
+function cleanRpcMessage(message: string): string {
+  return message.replace(/^admin_reorder_related_content:\s*/, '').trim();
+}
+
+export async function reorderRelatedContent(supabase: SupabaseClient, sourcePostId: string, orderedIds: string[]): Promise<ReorderResult> {
+  const { data, error } = await supabase.rpc('admin_reorder_related_content', {
+    p_source_post_id: sourcePostId,
+    p_ordered_ids: orderedIds,
+  });
+
+  if (error) {
+    const kind = REORDER_ERROR_KINDS[error.code ?? ''];
+    if (!kind) {
+      // Unexpected SQLSTATE (or a transport failure). Log the detail
+      // server-side; never leak a raw SQL error to the client.
+      console.error('Resources related-content reorder RPC error:', error);
+      return { ok: false, kind: 'error', message: 'Could not reorder related content.' };
+    }
+    if (kind === 'forbidden') {
+      // Log the distinction server-side (a missing grant is an operational
+      // fault worth seeing) but never expose it.
+      console.error('Resources related-content reorder denied by the database:', error);
+      return { ok: false, kind, message: FORBIDDEN_MESSAGE };
+    }
+    return { ok: false, kind, message: cleanRpcMessage(error.message ?? '') || 'Could not reorder related content.' };
+  }
+
+  return { ok: true, data: data as ReorderedRelatedContent };
 }
 
 export function formatStatusForPicker(status: string): string {

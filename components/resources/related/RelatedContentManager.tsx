@@ -82,6 +82,10 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('related');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Wave 2 (Scope A): explicit reorder lifecycle so the administrator can
+  // always tell whether the order on screen is committed.
+  const [reorderState, setReorderState] = useState<'idle' | 'saving' | 'saved' | 'conflict' | 'failed'>('idle');
+  const [reorderMessage, setReorderMessage] = useState<string | null>(null);
 
   const loadRelations = useCallback(async (postId: string) => {
     setLoading(true);
@@ -100,6 +104,11 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
+      // Changing the source Resource clears any stale reorder feedback, so a
+      // "Order saved." from a previous Resource can never appear beside a
+      // different Resource's list.
+      setReorderState('idle');
+      setReorderMessage(null);
       if (source) void loadRelations(source.id);
     }, 0);
     return () => clearTimeout(timer);
@@ -127,18 +136,64 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
     if (res.ok) await loadRelations(source.id);
   }
 
+  // Admin A0.2 Wave 2 (Scope A). This used to reorder optimistically and
+  // fire the PATCH without ever reading the response, so a rejected or
+  // partially applied reorder left the screen showing an ordering that was
+  // never committed. It now: blocks repeated submission while saving, shows
+  // saving/saved/conflict/failure states, and on ANY failure reloads the
+  // canonical ordering from the server rather than keeping the optimistic
+  // one.
   async function move(index: number, direction: -1 | 1) {
-    if (!source) return;
-    const next = [...relations];
+    if (!source || reorderState === 'saving') return;
     const target = index + direction;
-    if (target < 0 || target >= next.length) return;
+    if (target < 0 || target >= relations.length) return;
+
+    const previous = relations;
+    const next = [...relations];
     [next[index], next[target]] = [next[target], next[index]];
     setRelations(next);
-    await fetch('/api/admin/resources/related/reorder', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source_post_id: source.id, ordered_ids: next.map((r) => r.id) }),
-    });
+    setReorderState('saving');
+    setReorderMessage(null);
+
+    try {
+      const res = await fetch('/api/admin/resources/related/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_post_id: source.id, ordered_ids: next.map((r) => r.id) }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        // Re-sort the rows into the order the server actually COMMITTED and
+        // returned, so the screen can never show an ordering the database
+        // did not accept — even if it happens to match what we just sent.
+        const committed: { id: string; sort_order: number }[] = json?.data?.ordered ?? [];
+        if (committed.length === next.length) {
+          const rank = new Map(committed.map((c) => [c.id, c.sort_order]));
+          setRelations([...next].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)));
+        }
+        setReorderState('saved');
+        setReorderMessage('Order saved.');
+        return;
+      }
+
+      // Failed: never leave the uncommitted ordering on screen.
+      setRelations(previous);
+      if (res.status === 409) {
+        setReorderState('conflict');
+        setReorderMessage(json?.error ?? 'The related items for this Resource have changed since this list was loaded. Refresh and try again.');
+        await loadRelations(source.id); // restore the canonical ordering
+      } else {
+        setReorderState('failed');
+        setReorderMessage(json?.error ?? 'Could not save the new order.');
+        await loadRelations(source.id);
+      }
+    } catch {
+      setRelations(previous);
+      setReorderState('failed');
+      setReorderMessage('Could not save the new order.');
+      await loadRelations(source.id);
+    }
   }
 
   return (
@@ -168,6 +223,13 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
             </p>
           )}
 
+          {/* Wave 2 (Scope A): reorder lifecycle feedback. aria-live so a
+              screen-reader user hears the outcome of a keyboard reorder
+              without having to go looking for it. */}
+          <p role="status" aria-live="polite" className={`mb-3 text-sm ${reorderState === 'conflict' || reorderState === 'failed' ? 'text-risk' : 'text-muted'}`}>
+            {reorderState === 'saving' ? 'Saving order…' : (reorderMessage ?? '')}
+          </p>
+
           {loading ? (
             <p className="text-sm text-muted">Loading…</p>
           ) : relations.length === 0 ? (
@@ -189,15 +251,42 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
                       )}
                     </p>
                   </div>
+                  {/* Wave 2 (Scope A): plain Up/Down buttons remain the
+                      reorder mechanism (spec §112 — no drag-and-drop
+                      required), so reordering is keyboard-accessible by
+                      construction. Each button carries an accessible name
+                      naming the item it moves, a visible focus ring, and a
+                      44x44 minimum target (WCAG 2.2 SC 2.5.8, comfortably
+                      above the 24x24 minimum). All three are disabled while
+                      a reorder is in flight so a second request cannot race
+                      the first. */}
                   {canManage && (
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${r.related?.title ?? 'item'} up`} className="rounded border border-line px-2 py-1 text-xs disabled:opacity-30">
+                      <button
+                        type="button"
+                        onClick={() => move(i, -1)}
+                        disabled={i === 0 || reorderState === 'saving'}
+                        aria-label={`Move ${r.related?.title ?? 'item'} up`}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-line text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-30"
+                      >
                         ↑
                       </button>
-                      <button type="button" onClick={() => move(i, 1)} disabled={i === relations.length - 1} aria-label={`Move ${r.related?.title ?? 'item'} down`} className="rounded border border-line px-2 py-1 text-xs disabled:opacity-30">
+                      <button
+                        type="button"
+                        onClick={() => move(i, 1)}
+                        disabled={i === relations.length - 1 || reorderState === 'saving'}
+                        aria-label={`Move ${r.related?.title ?? 'item'} down`}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-line text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-30"
+                      >
                         ↓
                       </button>
-                      <button type="button" onClick={() => removeRelation(r.id)} className="rounded border border-line px-2 py-1 text-xs font-semibold text-risk hover:bg-risk/5">
+                      <button
+                        type="button"
+                        onClick={() => removeRelation(r.id)}
+                        disabled={reorderState === 'saving'}
+                        aria-label={`Remove ${r.related?.title ?? 'item'}`}
+                        className="inline-flex min-h-11 items-center justify-center rounded border border-line px-3 text-xs font-semibold text-risk hover:bg-risk/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-risk disabled:opacity-30"
+                      >
                         Remove
                       </button>
                     </div>

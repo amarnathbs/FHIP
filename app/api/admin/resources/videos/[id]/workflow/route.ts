@@ -3,6 +3,7 @@ import { bad } from '@/lib/api';
 import { transitionResourcePostStatus } from '@/lib/resources/workflow';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
 import { validateVideoForReview, validateVideoForPublish } from '@/lib/resources/video/validation';
+import { validateScheduledTransition, schedulingErrorResponse } from '@/lib/resources/scheduling';
 import { createResourceVersion, deriveSeoFallback } from '@/lib/resources/editor/mutations';
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
@@ -76,6 +77,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const check = validateVideoForPublish({ ...post, seo_title: post.seo_title || fallback.seoTitle, seo_description: post.seo_description || fallback.seoDescription });
       if (!check.valid) return Response.json({ error: 'This video is not ready to publish yet.', fields: check.errors }, { status: 422 });
     }
+
+    // Admin A0.2 Wave 2 (Scope B). Canonical scheduling pre-check, shared
+    // verbatim with the other three content-type routes. Before Wave 2 this
+    // route had no scheduling check at all, so a scheduling attempt fell
+    // through to the raw table CHECK constraint and surfaced as HTTP 403 with
+    // the internal constraint name in the message. The authoritative rule is
+    // the identical check inside public.transition_resource_post_status
+    // (migration 0116).
+    const scheduling = validateScheduledTransition(toStatus, post.scheduled_at);
+    if (scheduling) return schedulingErrorResponse(scheduling);
 
     const response = await transitionResourcePostStatus(id, toStatus as ResourceStatus, { reason, notes });
     if (!response.ok) return response;

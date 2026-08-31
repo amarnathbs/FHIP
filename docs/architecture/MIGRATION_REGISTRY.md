@@ -38,14 +38,20 @@ prevention". This is currently a required **manual** pre-merge step (run it
 yourself before opening/merging a migration-carrying PR) — there is no CI
 pipeline in this repository to wire it into automatically yet.
 
-- **Next free version: `0112`** (as of the `0111` allocation below — this
-  header is stale for everything between `0064` and `0111`; treat the
-  dedicated sections further down and `node scripts/check-migration-versions.mjs`
-  as authoritative over this line, which has not been kept current on every
-  round)
-- Active migrations: 63 (`0001`-`0063`), one file per version (stale count —
-  see `0111` allocation section for the current, actually-verified total)
+- **Next free version: `0121`** (as of this merge — this header is
+  historically stale on almost every round; treat
+  `node scripts/check-migration-versions.mjs` plus a fresh cross-worktree
+  scan as authoritative over this line, never this line alone)
+- Active migrations: 114 (`0001`-`0120`, sparse — `0079`-`0081`, `0103` are
+  the only remaining gaps as of this merge; every other number through
+  `0120` is now on `main`), one file per version
 - Archived historical artefacts: 10 (see `supabase/migration_archive/README.md`) — never executed
+
+> These three lines were stale (`0064` / 63 migrations) and were corrected
+> when `0116` was allocated. Always confirm with
+> `node scripts/check-migration-versions.mjs` **and** the cross-branch guard
+> before allocating — a number absent from your own checkout may still be
+> claimed by an unmerged branch.
 
 ## Allocated versions
 
@@ -79,6 +85,8 @@ pipeline in this repository to wire it into automatically yet.
 | 0055 | `0055_fdh2_merchant_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0056 | `0056_fdh2_classification_rule_seed.sql` | Financial Data Hub FDH-2 (generated seed) | NOT yet applied to DEV |
 | 0057 | `0057_fdh2_closure_research_corrections.sql` | Financial Data Hub FDH-2 (closure-research corrections, hand-written, additive/corrective only) | NOT yet applied to DEV — delivered to Product Owner for manual application alongside 0050-0056 |
+| 0116 | `0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` | Admin A0.2 Wave 2 (Workflow & Ordering Integrity) | **Applied to DEV** (confirmed by the Product Owner). See the Wave 2 section below. |
+| 0118 | `0118_admin_a02_wave2_reorder_conflict_errcode_fix.sql` | Admin A0.2 Wave 2 hotfix (reorder conflict SQLSTATE `40001` → `55000`, per the residual-gate investigation + Product Owner ruling) | NOT yet applied to DEV — delivered to Product Owner for manual application. `0116` is already live on DEV, so per this project's hotfix pattern (`0111`, `0113`/`0114`) this is a new forward-only file, not an edit to `0116`. See `docs/admin/FHIP_A02_Wave2_Terminal_Report.md`. |
 
 **0049 detail** — Purpose: canonical forward re-emission of the archived
 Phase 0C and Resources lineage (the ten displaced `0031`-`0040` files listed
@@ -523,3 +531,193 @@ was written.
 | Version | File | Module | Status |
 |---|---|---|---|
 | 0111 | `0111_mandatory_country_confirmation_delete_cascade_fix.sql` | Mandatory Country Confirmation — MCC-14 fix | **Applied to DEV by the Product Owner via the Supabase SQL Editor (2026-08-30), same process as `0104`/`0105`/`0108`. NOT applied to production.** Certified in isolation via PGlite (real Postgres) before delivery; see the MCC-14 closure report addendum for the full 11-item proof table. Independently re-confirmed genuinely live on DEV by the terminal certification session (2026-08-31) through behavioural proof, not SQL-Editor success alone — `scripts/mcc14_livedev_verification.mjs` 28/28 PASS and `scripts/mcc_livedev_terminal_certification.mjs`, both against real hosted DEV (`vqycarelcoijzwlpkpcz`), covering the confirmed/unconfirmed cascade split, direct-DELETE blocking, INSERT/UPDATE enforcement and zero post-deletion residue. SHA-256 `d6307b584d3bc69f7166db44c843f83124e0e97e0ebfe6e02d7454ffd5075a76`. |
+## Admin A0.2 Wave 2 (`0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql`)
+
+**Version `0116` — allocated after a full collision scan, not by assuming
+"the next number".** The scan covered: current `origin/main`; every local
+branch and every remote-tracking branch (`git ls-tree` over `refs/heads` +
+`refs/remotes`); the `supabase/migrations/` directory on disk in every one of
+the repository's active worktrees, including untracked files; the loose
+`_tmp_migration_*.sql` hand-off files in the Product Owner's own working
+tree; and this registry itself (including a sweep for any
+reserved-but-unwritten number above `0115` — the only hit was a `0119`
+appearing inside a prior *scan range* description, not a reservation).
+
+### Revision 2 — privileged-RPC Pattern A (2026-08-31)
+
+Per the Product Owner's privileged-RPC governance ruling, `0116`'s **Scope A**
+reorder RPC was changed from Pattern B (service-boundary) to **Pattern A**
+(caller-context): `EXECUTE` granted to `authenticated` and revoked from
+`public` / `anon` / `service_role`; the actor taken from `auth.uid()` inside
+the function; an explicit fail-closed guard on a null actor; and an
+independent capability recheck via the new `private.can_manage_discovery()` —
+the canonical database mirror of `canManageDiscovery()` in
+`lib/resources/permissions.ts`, composed from the existing `0049` predicates
+and resolving to the same role set. The API route's own `canManageDiscovery`
+check is retained as defence in depth.
+
+**Only the authorisation model changed.** The reorder RPC's locking,
+serialisation, complete-set validation, atomicity and return contract are
+unchanged, and the **Scope B half of `0116` is byte-for-byte identical** to
+revision 1 (measured, not asserted). `0107` and `0109` are **not touched**
+and remain approved Pattern B service-boundary exceptions.
+
+**Re-scanned for collisions from scratch on 2026-08-31 after
+`git fetch --all --prune`.** `0116` remains free on every surface: 0
+collisions across all **296** local + remote refs in the `0100`+ range, no
+uncommitted `supabase/migrations` file in any of the **57** worktrees, and
+`check-migration-versions.mjs` still reporting next version `0117`. Two
+things the re-scan surfaced, recorded rather than smoothed over:
+
+* The all-refs scan's single "content divergence" at `0116` is **this
+  revision itself** — revision 1 on the branch's own pushed remote mirror vs
+  revision 2 locally. One filename, one workstream; it resolves on push.
+* **`origin/main` advanced mid-revision** from `1b40b0b` to `2ade18b` ("Merge
+  FDH-12 Retirement Statement Intelligence into main"), so `0112` / `0113` /
+  `0114` are now **in `main`** — update the matrix rows below accordingly.
+  Those numbers were already recorded as allocated to FDH-12, so `0116`
+  remains free and correctly ordered after them and **no renumbering is
+  needed**. Verified rather than assumed: the current `origin/main` chain
+  (105 migrations) was replayed from empty into PGlite and revision 2 of
+  `0116` applied on top — clean apply, clean idempotent re-apply, and the
+  reorder RPC's real ACL on that chain measured as
+  `postgres=X/postgres,authenticated=X/postgres` (no `anon`, no
+  `service_role`, no `PUBLIC`).
+
+Collision matrix at allocation time:
+
+| Version | Filename | Branch | Owner / workstream | In `main`? | DEV applied? | Production applied? | Status |
+|---|---|---|---|---|---|---|---|
+| 0106 | `0106_fdh11_au_investment_statement_intelligence.sql` | `main` | FDH-11 | Yes | Yes | No | Merged |
+| 0107 | `0107_admin_recommendations_conditions_import_integrity.sql` | `main` | Admin A0.2 Wave 1 | Yes | Yes | **Yes** | Released |
+| 0108 | `0108_mandatory_country_confirmation_crud_and_onboarding_fix.sql` | `feature/mandatory-country-confirmation-beta-cleanup` | MCC | No | Yes | No | In flight |
+| 0109 | `0109_admin_recommendation_upsert_atomicity.sql` | `main` | Admin A0.2 Wave 1B | Yes | Yes | **Yes** | Released |
+| 0110 | `0110_module11_ai_foundation.sql` | `feature/module-11-0-ai-foundation` | Module 11.0 | No | Yes | No | In flight |
+| 0111 | `0111_mandatory_country_confirmation_delete_cascade_fix.sql` | `feature/mandatory-country-confirmation-beta-cleanup` | MCC-14 | No | Yes | No | In flight |
+| 0112 | `0112_fdh12_retirement_statement_intelligence.sql` | `feature/fdh12-retirement-statement-intelligence` | FDH-12 | No | Yes | No | In flight |
+| 0113 | `0113_fdh12_approve_rpc_authoritative_write_fix.sql` | `feature/fdh12-retirement-statement-intelligence` | FDH-12 | No | Claimed; a live re-certification round found strong evidence it is **not actually in effect** | No | In flight — allocated regardless of activation status, do not reuse |
+| 0114 | `0114_fdh12_retirement_provenance_guards.sql` | `feature/fdh12-retirement-statement-intelligence` | FDH-12 | No | Same as `0113` | No | In flight — allocated regardless, do not reuse |
+| 0115 | `0115_module11_1_ai_entitlements_quotas_cost_controls.sql` | `feature/module-11-1-premium-entitlements` | Module 11.1 | No | No | No | Committed only |
+| **0116** | **`0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql`** | **`fix/admin-a02-wave2-workflow-ordering-integrity`** | **Admin A0.2 Wave 2** | **No** | **Yes** (confirmed by the Product Owner) | **No** | **Applied to DEV** |
+| 0117 | `0117_module11_2_deterministic_answer_router.sql` | `feature/module-11-2-deterministic-answer-router` | Module 11.2 | No | Not established here (out of scope) | No | Allocated on an unmerged branch, not pushed to a remote-tracking ref as of this scan |
+| **0118** | **`0118_admin_a02_wave2_reorder_conflict_errcode_fix.sql`** | **`fix/admin-a02-wave2-workflow-ordering-integrity`** | **Admin A0.2 Wave 2 hotfix** | **No** | **NOT yet** | **No** | **This migration — see §"0118 hotfix" below** |
+
+### 0118 hotfix (reorder conflict SQLSTATE `40001` → `55000`)
+
+Allocated 2026-08-31, in the same session that produced
+`docs/admin/FHIP_A02_Wave2_Terminal_Report.md`. `0116` was already applied to
+DEV by the time this fix was authored (confirmed by the Product Owner), so
+per this project's established hotfix-on-an-applied-migration pattern (`0111`
+on top of `0108`'s already-applied MCC chain; `0113`/`0114` on top of `0112`'s
+already-applied FDH-12 base) this is a **new forward-only file**, not an edit
+to `0116` itself. `0116`'s own checksum is unchanged —
+`aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`, reconfirmed
+in this round.
+
+Re-scanned fresh (not assumed) before allocating `0118`:
+`check-migration-versions.mjs` reported `0117` as next-free on this
+branch's own checkout; a scan of every worktree on this machine and every
+local + remote-tracking git ref found `0117` claimed only by the unmerged
+`feature/module-11-2-deterministic-answer-router` branch (present in that
+branch's own worktree and local ref; no remote-tracking ref for it exists,
+i.e. it has not been pushed) and found **no** `0118` file anywhere. `0118` is
+therefore free and is the correct next allocation for this workstream.
+
+Both repository collision tools pass on this allocation:
+`scripts/check-migration-versions.mjs` ("103 active migrations, one file per
+version, next version is 0117") and
+`scripts/check-migration-versions-against-branch.mjs --against=<ref>` run
+against `origin/main` plus all seven other branches carrying migrations
+(Module 11.0, Module 11.1, MCC, FDH-11, FDH-12, G0-JA-1 Wave 2, Admin A0.2
+Wave 1) — zero cross-branch collisions in every case. No other workstream's
+migration was reused, overwritten or renumbered.
+
+**Purpose (two independent integrity fixes, one forward-only migration):**
+
+*Scope A* — `public.admin_reorder_related_content(uuid, uuid[])`, a new
+SECURITY DEFINER function replacing the previous non-atomic Related Content
+reorder. The old path (`lib/resources/discovery/relatedAdmin.ts`) ran N
+independent, separately committed `UPDATE`s via `Promise.all`, so a
+mid-sequence failure left the already-committed positions committed and the
+ordering duplicated, gapped or blended between two concurrent requests. The
+new function is one transaction: it validates the payload as the COMPLETE
+ordered set for exactly one source Resource, takes a per-source
+`pg_advisory_xact_lock` plus row locks, writes all positions in a single
+`UPDATE ... FROM unnest(...) WITH ORDINALITY`, and returns the committed
+ordering read back from the table. Fixed SQL only (no dynamic SQL, no
+identifier derived from client input), pinned `search_path = public`,
+`EXECUTE` revoked from `public`/`anon`/`authenticated` and granted to
+`service_role` only — the same posture as `0107`/`0109`.
+
+Deliberately **no** table-level `unique (source_post_id, sort_order)`
+constraint was added: 22 of the 25 existing DEV sources already hold
+duplicate positions (bulk-seeded rows all at `sort_order = 0`), so such a
+constraint would either fail to apply or force a silent mass repair of real
+content, both of which Wave 2 forbids. The uniqueness/contiguity invariant is
+therefore enforced *by the operation* — any set this function reorders comes
+out unique and contiguous — not retroactively across untouched historical
+rows. That legacy-data finding is recorded as a deferred item, not fixed
+here.
+
+*Scope B* — `CREATE OR REPLACE` of `public.transition_resource_post_status`
+(same signature, `0098`'s body with a scheduling guard added and nothing else
+altered) to carry the canonical scheduling invariant: **a transition to
+`scheduled` fails unless the Resource already holds a `scheduled_at`
+timestamptz strictly later than database `now()`**, raised as SQLSTATE
+`22023` so the server maps it to one canonical HTTP 422 with a `scheduled_at`
+field reference. Before this, the RPC never examined `scheduled_at` at all;
+the only enforcement was the `0049` CHECK constraint
+`chk_resource_posts_scheduled_at`, whose raw `23514` text reached clients as
+a misleading HTTP 403, and a past `scheduled_at` was accepted outright. Only
+the `content` route checked anything, and it checked a client-supplied body
+property that was never persisted, never forwarded and never compared.
+
+The RPC was **extended, not replaced, not forked per content type**. Its
+grants, `search_path`, SECURITY DEFINER posture, role predicates, column
+protections, workflow-history and audit-log writes are all measured
+byte-identical against a real pre-`0116` baseline database in
+`scripts/admin_a02_wave2_certification.mjs` SECTION 0. Immediate publish is
+untouched and still ignores `scheduled_at`; no transition clears it.
+
+Note that `scheduled_at` itself remains writable only by `service_role` (it
+is absent from the `authenticated` column grant in `0049` and from this RPC's
+parameters) and no scheduled-publishing worker exists — see
+`components/resources/editor/WorkflowPanel.tsx` for the original R1.3
+decision to defer the Schedule action. Wave 2 made the scheduling rule
+consistent, non-bypassable and honestly reported across all four content
+types; it did **not** open a scheduling write path or build the worker, both
+of which would be new product scope.
+
+**Idempotency:** both functions are `CREATE OR REPLACE` and the migration
+re-applies cleanly with zero data variance and no duplicate overloads —
+proved in the certification script's SECTION 10.
+
+**Certification:** `scripts/admin_a02_wave2_certification.mjs`, **325/325**
+checks (revision 1 was 249/249), 0 failures, against real PostgreSQL via PGlite with the full
+migration chain replayed from empty (103 migrations), plus a second
+independently built baseline database excluding `0116` used to measure every
+"before" claim rather than assert it. Covers: reproduction of both original
+defects, complete-set validation with zero database variance on every
+rejection, rollback under injected mid-update failure, stale-set conflict
+handling, the legacy duplicate-position repair case, the full security
+posture, the per-content-type scheduling matrix for all four types
+(including Analyst denial per the Admin Architecture Standard section 5), and
+migration re-application. Revision 2 adds the privileged-RPC **Pattern A**
+evidence: the permitted roles (Editor, Resource Admin, Super Admin) and every
+denied role (Analyst, Author, Compliance Reviewer, Publisher, role-less,
+deactivated) each calling the reorder RPC **directly, as themselves**, with
+the PostgreSQL session role set to `authenticated` and their own JWT subject;
+anonymous denial at the grant layer; and a null `auth.uid()` failing closed
+inside the function body.
+
+**Status: NOT yet applied to DEV.** Delivered to the Product Owner for manual
+application via the Supabase Dashboard SQL editor, per this project's
+standing process (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`): no Supabase CLI
+project link exists, no `supabase_migrations.schema_migrations` ledger is
+populated by Dashboard execution, and this registry entry is the project's
+actual record of allocation. **Not applied to production, and not authorised
+for production by this wave.**
+
+SHA-256 (**revision 2**, privileged-RPC Pattern A):
+`aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`
+(revision 1 was `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`)

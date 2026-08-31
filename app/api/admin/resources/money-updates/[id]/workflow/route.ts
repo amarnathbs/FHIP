@@ -5,6 +5,7 @@ import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { validateMoneyUpdateForReview } from '@/lib/resources/money-update/validation';
 import { createResourceVersion, deriveSeoFallback } from '@/lib/resources/editor/mutations';
 import { validateForPublish } from '@/lib/resources/editor/validation';
+import { validateScheduledTransition, schedulingErrorResponse } from '@/lib/resources/scheduling';
 import type { ResourceStatus } from '@/lib/resources/types';
 import type { PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
@@ -79,6 +80,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const check = validateForPublish({ ...post, content_blocks: post.content_blocks as AnyBlock[], seo_title: post.seo_title || fallback.seoTitle, seo_description: post.seo_description || fallback.seoDescription });
       if (!check.valid) return Response.json({ error: 'This Money Update is not ready to publish yet.', fields: check.errors }, { status: 422 });
     }
+
+    // Admin A0.2 Wave 2 (Scope B). Canonical scheduling pre-check, shared
+    // verbatim with the other three content-type routes. Before Wave 2 this
+    // route had no scheduling check at all, so a scheduling attempt fell
+    // through to the raw table CHECK constraint and surfaced as HTTP 403 with
+    // the internal constraint name in the message. The authoritative rule is
+    // the identical check inside public.transition_resource_post_status
+    // (migration 0116).
+    const scheduling = validateScheduledTransition(toStatus, post.scheduled_at);
+    if (scheduling) return schedulingErrorResponse(scheduling);
 
     const response = await transitionResourcePostStatus(id, toStatus as ResourceStatus, { reason, notes });
     if (!response.ok) return response;
