@@ -10,15 +10,28 @@
  * DB check-constraint widening (fixed in the same pass — see `enums.ts`'s
  * `FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED` comment). This test is what
  * would have caught it, and is what stops the two drifting apart again; it
- * now owns the "matches the FULL current vocabulary" claim that
- * `fdh9SchemaContract.test.ts` no longer can, since 0096 widens the same
- * constraint further.
+ * owned the "matches the FULL current vocabulary" claim that
+ * `fdh9SchemaContract.test.ts` no longer could, since 0096 widened the same
+ * constraint further — FDH-11 (migration 0106) has since widened it again,
+ * so that claim now belongs to `fdh11SchemaContract.test.ts`; this test is
+ * scoped to `VOCABULARY_AS_OF_FDH10` accordingly (same chain, one more link).
  */
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED } from '@/lib/financial-data-hub/constants/enums';
+
+// FDH-11 (migration 0106) has since widened this SAME constraint further —
+// 0096 is no longer "the constraint's latest word" (see
+// `fdh11SchemaContract.test.ts`, which now owns that claim for 0106).
+// Mirrors `fdh9SchemaContract.test.ts`'s own `VOCABULARY_AS_OF_FDH9`
+// precedent exactly: this test still proves 0096 matches everything known
+// UP TO AND INCLUDING FDH-10, filtering out only what FDH-11 added.
+const VOCABULARY_AS_OF_FDH10 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
+  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t)
+    && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t),
+);
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0096_fdh10_credit_cards_loans_intelligence.sql';
@@ -36,14 +49,14 @@ describe('FDH-10 migration 0096 exists', () => {
   });
 });
 
-describe('FDH-10 fdh_document_audit_events.event_type widened constraint matches the FULL current TypeScript vocabulary', () => {
-  it("0096 is the constraint's latest word, and it matches FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES exactly", () => {
+describe('FDH-10 fdh_document_audit_events.event_type widened constraint matches everything known up to and including FDH-10', () => {
+  it('0096 matches everything known up to and including FDH-10 (FDH-11 added its own further widening in 0106 — see fdh11SchemaContract.test.ts)', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 3200);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    expect(values.sort()).toEqual([...VOCABULARY_AS_OF_FDH10].sort());
   });
 
   it('the seven FDH-10 event types are all present', () => {

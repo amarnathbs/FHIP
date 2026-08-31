@@ -37,6 +37,13 @@ const DOMAIN_TABLES: Partial<Record<ImportTargetDomain, string>> = {
   // (non-apply) read paths — `loadTargetRow` for the preview/compare screen —
   // resolve the table name.
   liability: 'liabilities',
+  // FDH-12 addition (spec sections 104, 55-60) — the retirement branch. As
+  // with liability, this entry only lets the ordinary (non-apply) read paths
+  // — `loadTargetRow` for the preview/compare screen — resolve the table name.
+  // Write authority is enforced by `fdh12_apply_retirement_proposal()`
+  // (migration 0112 PART I) and its own nine-column `v_allowed` array, not by
+  // the presence of this line.
+  retirement: 'retirement_accounts',
 };
 
 function tableFor(domain: string): string {
@@ -54,6 +61,11 @@ const PROVENANCE_BY_DOMAIN: Partial<Record<ImportTargetDomain, (applicationId: s
   }),
   liability: (applicationId) => ({
     source_type: 'liability_statement_import',
+    last_import_application_id: applicationId,
+    last_imported_at: new Date().toISOString(),
+  }),
+  retirement: (applicationId) => ({
+    source_type: 'retirement_statement_import',
     last_import_application_id: applicationId,
     last_imported_at: new Date().toISOString(),
   }),
@@ -286,6 +298,66 @@ export async function persistProposal(
  * comparison can never leave two live, independently-applicable proposals for
  * one statement (spec section 34's discipline, same as income).
  */
+export async function persistRetirementProposal(
+  userId: string,
+  draft: ImportProposalDraft,
+  sourceRetirementStatementId: string,
+): Promise<string> {
+  const supabase = await createClient();
+
+  // SUPERSESSION mirrors the income and liability paths: any earlier 'ready'
+  // proposal for the same retirement statement is marked superseded first, so
+  // regenerating a comparison can never leave two live, independently
+  // applicable proposals for one statement. Without this, "Apply" could be
+  // pressed twice on two different proposals and update the same account
+  // twice — the duplicate-apply hazard spec section 106 rules out.
+  await supabase
+    .from('fhip_import_proposals')
+    .update({ status: 'superseded' })
+    .eq('user_id', userId)
+    .eq('source_retirement_statement_id', sourceRetirementStatementId)
+    .eq('status', 'ready');
+
+  const { data, error } = await supabase
+    .from('fhip_import_proposals')
+    .insert({
+      user_id: userId,
+      target_domain: draft.targetDomain,
+      source_kind: draft.sourceKind,
+      source_retirement_statement_id: sourceRetirementStatementId,
+      currency_code: draft.currencyCode,
+      target_entity_id: draft.targetEntityId,
+      target_entity_updated_at: draft.targetEntityUpdatedAt,
+      recommended_apply_mode: draft.recommendedApplyMode,
+      duplicate_of_entity_id: draft.duplicateOfEntityId,
+      status: 'ready',
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'could not create the proposal');
+
+  const proposalId = data.id as string;
+  if (draft.fields.length > 0) {
+    const { error: fieldError } = await supabase.from('fhip_import_proposal_fields').insert(
+      draft.fields.map((f) => ({
+        user_id: userId,
+        proposal_id: proposalId,
+        field_name: f.fieldName,
+        value_kind: f.valueKind,
+        proposed_value: f.proposedValue,
+        existing_value: f.existingValue,
+        is_recommended: f.isRecommended,
+        requires_confirmation: f.requiresConfirmation,
+        confidence: f.confidence ?? null,
+        reason_code: f.reasonCode,
+      })),
+    );
+    if (fieldError) throw new Error(fieldError.message);
+  }
+
+  return proposalId;
+}
+
 export async function persistLiabilityProposal(
   userId: string,
   draft: ImportProposalDraft,

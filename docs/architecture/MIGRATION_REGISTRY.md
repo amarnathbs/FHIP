@@ -280,6 +280,219 @@ five files** — they are already live under their effects, just now
 correctly numbered in the repository so a fresh clean-rebuild replay is
 deterministic (`node scripts/db-rebuild-check/replay.mjs`: 63/63, verified).
 
+## Admin A0.2 Wave 1 (`0107_admin_recommendations_conditions_import_integrity.sql`)
+
+Allocated 2026-08-29 on `fix/admin-a02-wave1-recommendation-import-integrity`
+(off `origin/main` `e05855f`). Checked against every unmerged branch's active
+migration directory at allocation time: `0103` (`fix/g0-wave2-closure-
+hotfix`), `0104`-`0105` (`feature/mandatory-country-confirmation-beta-
+cleanup`), `0106` (`feature/fdh11-au-investment-statement-intelligence`) were
+already claimed; `0107` was free. Re-checked clean before every subsequent
+commit on this branch.
+
+Purpose: `admin_import_recommendation_conditions(jsonb)` — atomic,
+whole-payload replace of `action_recommendation_conditions` for the
+recommendation_codes named in one Admin CSV upload (D-01 fix: the previous
+delete-then-insert-as-two-requests pattern could leave a recommendation with
+zero conditions, silently, if the insert failed after the delete committed).
+SECURITY DEFINER, pinned `search_path`, `EXECUTE` revoked from
+`public`/`anon`/`authenticated`, granted only to `service_role`.
+
+**Status: applied to DEV by the Product Owner directly via the SQL Editor,
+independently confirmed live by two separate sessions** — the orchestrating
+session via PostgREST introspection (function exists), and this session via
+`scripts/admin_a02_wave1_dev_precheck.mjs` (pre-application: function absent,
+as expected) followed by `scripts/admin_a02_wave1_live_dev_verification.mjs`
+post-application (12/12 PASS against real DEV: valid import, rejected
+invalid import with zero mutation, controlled-failure rollback, anon-key
+direct-call denial, exact before/after row-count reconciliation). SHA-256:
+`f204135605b537ba4350530bf34df482adbe76d0770ee47fc49324fc7a17d8e8`.
+
+**Applied to PRODUCTION 2026-08-30 by the Product Owner directly via the SQL
+Editor** (`https://twwpnltizhtjxhamyoxt.supabase.co`), independently
+verified read-only by the orchestrating session before and after: read-only
+preflight confirmed the function absent, `action_recommendation_master`/
+`action_recommendation_conditions` at 562/2183 rows with 0 active-zero-
+condition recommendations (the gate `0109`'s invariant introduces); post-
+application PostgREST introspection confirmed the function live (validation
+error, not "does not exist") and production row counts unchanged at
+562/2183 — zero variance. Merged to `main` the same day as commit `c404787`
+(parents `9e3cdec`, `44ca46d`), pushed, Amplify-deployed.
+
+## Admin A0.2 Wave 1B (`0109_admin_recommendation_upsert_atomicity.sql`)
+
+Allocated 2026-08-30 on the same branch. Re-checked the collision set fresh
+at allocation time: `0108` had newly landed on `feature/mandatory-country-
+confirmation-beta-cleanup`
+(`0108_mandatory_country_confirmation_crud_and_onboarding_fix.sql`) since
+Wave 1's own allocation the day before; `0109` was free.
+
+Purpose: `admin_upsert_recommendation_atomic(uuid, jsonb, jsonb, boolean)` —
+atomic create/update of one recommendation plus (optionally) a full replace
+of its conditions, closing the same D-01-class defect in the single-record
+POST/PATCH paths (`app/api/admin/recommendations/route.ts`,
+`app/api/admin/recommendations/[id]/route.ts`). Also adds
+`action_recommendation_master.matches_unconditionally` (default `false`) and
+two DEFERRED CONSTRAINT TRIGGERS enforcing the named invariant "a
+recommendation with zero conditions matches every user unconditionally" —
+see the migration's own header for the full write-up. Same SECURITY DEFINER/
+grant posture as `0107`.
+
+**Status: applied to DEV by the Product Owner directly via the SQL Editor,
+independently confirmed live by two separate sessions** — same pattern as
+`0107` above; this session's own pre-check (`scripts/
+admin_a02_wave1b_dev_precheck.mjs`) confirmed the function and column absent
+beforehand, then confirmed both present and the live-DEV verification script
+(`scripts/admin_a02_wave1b_live_dev_verification.mjs`, 16/16 PASS) proved
+atomic create, atomic update, rollback-on-failure, the invariant in both
+directions (rejected without `matches_unconditionally=true`, accepted with
+it), anon-key denial, and exact before/after row-count reconciliation.
+SHA-256: `f16cea9372c3ca6a03b92a2199395864aae6737fbe414142bf8796c61185aa52`.
+
+**Applied to PRODUCTION 2026-08-30 by the Product Owner directly via the SQL
+Editor, immediately after `0107` in the same session**, independently
+verified read-only by the orchestrating session: post-application PostgREST
+introspection confirmed both the function (validation error, not "does not
+exist") and the `matches_unconditionally` column (present, defaulting
+`false` on existing rows) live in production, with row counts unchanged at
+562 recommendations / 2183 conditions / 562 active — zero variance from the
+pre-application baseline. Merged to `main` as commit `c404787`, pushed,
+Amplify-deployed.
+
+**No `supabase_migrations.schema_migrations` ledger entry was created or
+updated for either migration, and none should be** — per this project's
+binding process (`ADR_MIGRATION_LINEAGE_RECONCILIATION.md`, confirmed still
+accurate by a live, direct PostgREST check against DEV finding no
+`supabase_migrations` table at all): every migration in this project is
+applied by hand-pasting SQL into the Supabase Dashboard SQL editor, no
+Supabase CLI project link exists, and Dashboard execution never populates
+such a ledger. This registry entry — not a database ledger row — is this
+project's actual record that `0107`/`0109` were allocated and applied.
+
+## FDH-12 — Retirement Statement Intelligence (migration `0112`)
+
+**Allocated 2026-08-30, renumbered from `0111` same day.**
+`0112_fdh12_retirement_statement_intelligence.sql`.
+
+### Renumbered: 0111 -> 0112
+
+This migration was originally authored, PGlite-certified (53/53) and
+committed as `0111_fdh12_retirement_statement_intelligence.sql`. Later the
+same day, a real collision was found: `feature/mandatory-country-
+confirmation-beta-cleanup` (commit `8621968`, unpushed, worktree
+`D:/fhip-country-confirm`) had independently committed its own
+`0111_mandatory_country_confirmation_delete_cascade_fix.sql` (MCC-14), and
+the Product Owner had already been told that MCC-14's `0111` is next in line
+for DEV application. Rather than contest that assignment, FDH-12 was
+renumbered to `0112` — an **eighth occurrence** of this project's recurring
+migration-number-collision class. The rename is a pure repository-
+bookkeeping fix: the SQL body is byte-identical to the certified `0111`
+version, and neither number was ever applied to DEV or production, so no
+re-application is needed. The PGlite/DB certification suite (53/53) and the
+full FDH-12 unit-test suite (382/382) were re-run against the renamed file
+and reproduced at the same counts.
+
+### Why 0111 (now 0112) and not 0107
+
+`scripts/check-migration-versions.mjs` reported "next version is 0107", because
+that tool only sees the current branch plus `origin/main` (whose chain tops out
+at `0106`, the FDH-11 merge). **0107 is not safe.** A fresh scan of every
+commit reachable from every local branch and every origin ref
+(`git log --all --name-only -- 'supabase/migrations/*.sql'`), plus the working
+directory of every `git worktree list` entry, found these already claimed above
+`0106`:
+
+| Number | File | Where |
+| --- | --- | --- |
+| `0107` | `admin_recommendations_conditions_import_integrity.sql` | unmerged branch |
+| `0107` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch — a **seventh occurrence** of this project's recurring collision class, already present in history before FDH-12 existed; resolved on that branch by renumbering to `0108` |
+| `0108` | `mandatory_country_confirmation_crud_and_onboarding_fix.sql` | unmerged branch (`D:/fhip-country-confirm`) |
+| `0109` | `admin_recommendation_upsert_atomicity.sql` | unmerged branch (`D:/fhip-admin-a02-wave1`) |
+| `0110` | `module11_ai_foundation.sql` | unmerged branch (`D:/fhip-module11`) |
+| `0111` | `mandatory_country_confirmation_delete_cascade_fix.sql` | unmerged branch (`D:/fhip-country-confirm`, commit `8621968`) — committed after FDH-12's original scan, invisible to it at the time; this is the reason FDH-12 moved to `0112` |
+
+At the time of FDH-12's original scan, `0111` appeared to be the lowest
+number claimed by no branch, no worktree and no remote ref. A fresh scan on
+2026-08-30 (after the collision above was found) confirmed `0112` is
+genuinely free across every local branch, every worktree and every origin
+ref. FDH-12 takes it and leaves `0103`-`0105`, `0107`-`0110` and `0111` to
+their owners.
+
+### What it contains
+
+Additive only. No `drop table`, no `drop column`.
+
+* **PART A** — widens `fdh_document_audit_events.event_type` with 11 FDH-12
+  event types (mirrored by `FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED`), and
+  widens `retirement_accounts.source_type` with
+  `'retirement_statement_import'`.
+* **PARTS B/C/D** — three evidence tables:
+  `fdh_retirement_statements`, `fdh_retirement_statement_activities`,
+  `fdh_retirement_statement_positions`, each with RLS and owner-scoped
+  read/insert/update policies (no DELETE policy, matching the 0106 shape).
+* **PART E** — three ownership-guard triggers (cross-tenant FK forgery).
+* **PART F** — three authoritative-write triggers (same-tenant column forgery),
+  FDH-11 `auth.role()` style.
+* **PART G** — generic-bridge extension: `source_retirement_statement_id` on
+  `fhip_import_proposals` and `fhip_import_applications`,
+  `last_import_application_id` / `last_imported_at` on `retirement_accounts`,
+  and **re-creation of `fdh9_assert_proposal_owner()` /
+  `fdh9_assert_application_owner()` with a `retirement` branch** (both fail
+  closed on an unknown `target_domain`, exactly as 0091 intended and 0096
+  extended for `liability`).
+* **PART H** — `fdh12_approve_retirement_statement()`.
+* **PART I** — `fdh12_apply_retirement_proposal()`, the only path from
+  retirement statement evidence to canonical Retirement.
+* **PART J** — durable table/function comments recording the boundaries.
+
+### Status (updated at merge — see below for 0113/0114)
+
+Certified in PGlite: full 101-migration clean-rebuild replay PASS
+(`node scripts/db-rebuild-check/replay.mjs`), and 62/62 DB-level security and
+apply checks (`node scripts/fdh12_certification.mjs`, grown from the original
+53 by 9 regressions added for the two hotfixes below), including an
+anti-vacuity self-check.
+
+**Applied to DEV 2026-08-30/31 by the Product Owner, confirmed genuinely in
+effect** via three rounds of live-DEV certification (218 → 262 checks,
+`scripts/fdh12_live_dev_certification.mjs`), the third of which is the
+certifying run: **262/262 PASS**, independently re-confirmed live by the
+orchestrating session with its own fresh behavioural tests, not just the
+certifying agent's report. **Not applied to production.**
+
+## FDH-12 hotfixes — `0113` (approve RPC) and `0114` (provenance guards)
+
+Both found by live-DEV certification round 2, both **applied to DEV,
+confirmed in effect** as of round 3 (see `FDH12_COMPLETION_REPORT.md` /
+`FDH12_LIVE_DEV_CERTIFICATION.md` for full detail). **Not applied to
+production.**
+
+`0113_fdh12_approve_rpc_authoritative_write_fix.sql` — 0112 Part F's
+authoritative-write guard checked `auth.role() <> 'authenticated'`, correct
+for a service-role writer but wrong for `fdh12_approve_retirement_statement()`,
+whose legitimate writer is the end user themselves via a `SECURITY DEFINER`
+call — `SECURITY DEFINER` changes the executing role, not `auth.role()`, so
+the RPC's own write tripped its own guard and no caller could ever approve a
+statement. Fixed with the same transaction-local GUC pattern (`fhip.import_bridge_internal_write`)
+already established by FDH-9/FDH-10.
+
+`0114_fdh12_retirement_provenance_guards.sql` — 0112's new
+`retirement_accounts` provenance columns (`source_type`,
+`last_import_application_id`, `last_imported_at`) shipped with no guard,
+unlike the equivalent `income_sources`(0091)/`liabilities`(0096) pairs.
+Live: an ordinary user could forge/erase their own provenance and point their
+own account at ANOTHER TENANT's import application. Fixed by transposing the
+exact 0091/0096 guard pair onto `retirement_accounts`.
+
+**DEV activation lesson, worth keeping as a standing practice, not just a
+one-off finding for this module:** both migrations were pasted into the DEV
+SQL Editor once, reported "no error," and were genuinely still absent from
+the live database — proven only by live behavioural testing (an
+authenticated-owner RPC call; a real forgery attempt), never by re-checking
+that the editor reported success a second time. **SQL Editor "success" is
+not sufficient evidence of migration activation for security/authority-
+bearing migrations; behavioural verification is required.**
+
 ## Mandatory Country Confirmation — MCC-14 DELETE-cascade fix (migration `0111`)
 
 **Allocated 2026-08-30**, on branch `feature/mandatory-country-confirmation-beta-cleanup`
@@ -309,4 +522,4 @@ was written.
 
 | Version | File | Module | Status |
 |---|---|---|---|
-| 0111 | `0111_mandatory_country_confirmation_delete_cascade_fix.sql` | Mandatory Country Confirmation — MCC-14 fix | **NOT applied to DEV or production.** Per this project's standing policy, this session did not and will not apply it — hand-delivered to the Product Owner for manual application via the Supabase SQL Editor, same process as `0104`/`0105`/`0108`. Certified in isolation via PGlite (real Postgres) before delivery; see the MCC-14 closure report addendum for the full 11-item proof table. |
+| 0111 | `0111_mandatory_country_confirmation_delete_cascade_fix.sql` | Mandatory Country Confirmation — MCC-14 fix | **Applied to DEV by the Product Owner via the Supabase SQL Editor (2026-08-30), same process as `0104`/`0105`/`0108`. NOT applied to production.** Certified in isolation via PGlite (real Postgres) before delivery; see the MCC-14 closure report addendum for the full 11-item proof table. Independently re-confirmed genuinely live on DEV by the terminal certification session (2026-08-31) through behavioural proof, not SQL-Editor success alone — `scripts/mcc14_livedev_verification.mjs` 28/28 PASS and `scripts/mcc_livedev_terminal_certification.mjs`, both against real hosted DEV (`vqycarelcoijzwlpkpcz`), covering the confirmed/unconfirmed cascade split, direct-DELETE blocking, INSERT/UPDATE enforcement and zero post-deletion residue. SHA-256 `d6307b584d3bc69f7166db44c843f83124e0e97e0ebfe6e02d7454ffd5075a76`. |

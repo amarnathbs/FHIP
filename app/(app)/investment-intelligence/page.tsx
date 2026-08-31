@@ -19,8 +19,9 @@ export default async function InvestmentIntelligencePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Investment Intelligence (India)</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Upload a CAMS or KFintech consolidated account statement to reconstruct and verify your mutual fund holdings. This area is separate from your
-          Investments grid — nothing here affects your FHIP net worth or Dashboard yet.
+          Upload a CAMS or KFintech consolidated account statement to reconstruct and verify your mutual fund holdings. Once
+          you publish a position from here, it is included in your FHIP net worth and Dashboard alongside your other
+          Investments.
         </p>
       </div>
       <InvestmentIntelligenceClient />

@@ -57,6 +57,17 @@ export function evaluateCondition(context: EvaluationContext, condition: Pick<Re
 }
 
 export function recommendationMatches(context: EvaluationContext, conditions: RecommendationCondition[]): boolean {
+  // NAMED INVARIANT (A0.2 Wave 1B): a recommendation with zero conditions
+  // matches every user unconditionally. This is intentional here — no gate
+  // means "always applies" — but it makes every WRITE path that can leave a
+  // recommendation with zero conditions BY ACCIDENT a live correctness risk
+  // (a failed partial write turning "never fires" into "fires for
+  // everyone"), not just a data-integrity one. That accidental path is the
+  // one Wave 1 (D-01) and Wave 1B closed: action_recommendation_master's
+  // `matches_unconditionally` column plus two deferred database triggers
+  // (migration 0109) now refuse to let an is_active=true recommendation
+  // commit with zero conditions unless matches_unconditionally=true is set
+  // explicitly. See migration 0109's header for the full write-up.
   if (conditions.length === 0) return true;
 
   const ordered = [...conditions].sort((a, b) => a.evaluationOrder - b.evaluationOrder);
