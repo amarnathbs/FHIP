@@ -33,14 +33,26 @@ export type AIMetricName =
   | 'ai_provider_disabled'
   | 'ai_model_disabled'
   | 'ai_kill_switch_blocked'
-  | 'ai_idempotency_reuse';
+  | 'ai_idempotency_reuse'
+  // Module 11.2 — resolution router (spec sections 58-59).
+  | 'resolver_requests_total'
+  | 'resolver_deterministic'
+  | 'resolver_knowledge_base'
+  | 'resolver_stored_personalised'
+  | 'resolver_exact_cache'
+  | 'resolver_live_ai_required'
+  | 'resolver_blocked'
+  | 'resolver_unsupported'
+  | 'resolver_unavailable'
+  | 'resolver_partial'
+  | 'ai_avoided_calls';
 
 /**
  * The ONLY label keys that may accompany a metric. Everything else is dropped
  * silently rather than sanitised, because a value we did not anticipate is a
  * value we cannot vouch for.
  */
-const ALLOWED_LABELS = new Set(['reason', 'capability', 'request_class', 'usage_outcome', 'task_type', 'provider', 'model', 'outcome']);
+const ALLOWED_LABELS = new Set(['reason', 'capability', 'request_class', 'usage_outcome', 'task_type', 'provider', 'model', 'outcome', 'intent_family', 'resolution_type']);
 
 export type AIMetricLabels = Record<string, string | number | boolean | null | undefined>;
 
@@ -134,6 +146,47 @@ export function recordAdmissionMetrics(input: {
     case 'live_provider_disabled':
     case 'batch_disabled':
     case 'scenario_disabled': recordAiMetric('ai_kill_switch_blocked', { ...l, reason: input.denyReason }); break;
+    default: break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Module 11.2 — resolution router metrics (spec sections 58-59, 94-95).
+//
+// `ai_avoided_calls` is the section-58 KPI: incremented for every request a
+// PERSONALISED intent resolved without reaching a provider (DETERMINISTIC,
+// KNOWLEDGE_BASE, STORED_PERSONALISED, EXACT_CACHE). A non-personalised
+// educational/glossary hit still counts toward `resolver_knowledge_base` but
+// NOT toward `ai_avoided_calls` — it was never a request that would
+// plausibly have needed AI in the first place (spec section 58: "a request
+// that could otherwise PLAUSIBLY require AI").
+// ---------------------------------------------------------------------------
+const ZERO_COST_COUNTER: Record<string, AIMetricName> = {
+  DETERMINISTIC: 'resolver_deterministic',
+  KNOWLEDGE_BASE: 'resolver_knowledge_base',
+  STORED_PERSONALISED: 'resolver_stored_personalised',
+  EXACT_CACHE: 'resolver_exact_cache',
+};
+
+export function recordResolutionMetric(input: {
+  resolution: 'DETERMINISTIC' | 'KNOWLEDGE_BASE' | 'STORED_PERSONALISED' | 'EXACT_CACHE' | 'LIVE_AI_REQUIRED' | 'UNSUPPORTED' | 'BLOCKED' | 'UNAVAILABLE';
+  personalised: boolean;
+  intentFamily?: string;
+}): void {
+  const labels = input.intentFamily ? { intent_family: input.intentFamily } : undefined;
+  recordAiMetric('resolver_requests_total', labels);
+
+  const counter = ZERO_COST_COUNTER[input.resolution];
+  if (counter) {
+    recordAiMetric(counter, labels);
+    if (input.personalised) recordAiMetric('ai_avoided_calls', labels);
+    return;
+  }
+  switch (input.resolution) {
+    case 'LIVE_AI_REQUIRED': recordAiMetric('resolver_live_ai_required', labels); break;
+    case 'BLOCKED': recordAiMetric('resolver_blocked', labels); break;
+    case 'UNSUPPORTED': recordAiMetric('resolver_unsupported', labels); break;
+    case 'UNAVAILABLE': recordAiMetric('resolver_unavailable', labels); break;
     default: break;
   }
 }
