@@ -32,10 +32,28 @@ scale fixture was built fresh in this pass (disclosed residual R-14-4 — this p
 single-account fixtures per tenant, sufficient for the authority/tenant-isolation proof it targeted but not a
 multi-account scale proof).
 
-## 4. Verdict
+## 4. Verdict (original CONDITIONAL PASS round)
 
 100/500/1,000/1,001: **PASS** (mix of fresh-in-their-own-round live evidence and PGlite, reused here). 5,000/
 10,000: **PASS / prior evidence** — genuinely disclosed as such per spec's own template, not claimed as a fresh
 10,000-row run in this pass. Pagination negative control: **PASS** (reused, FDH-6's real found-and-fixed
 defect is the actual negative control, not a synthetic one). Multi-account: **PASS on reused evidence**; no new
 fresh multi-account fixture built this pass.
+
+## 5. GAP 4 closure (2026-08-31) — fresh multi-account fixture, live-proven
+
+Script: `scripts/fdh14_multi_account_cross_border_certification.ts`. Closes residual R-14-4 with a genuinely
+fresh, single live-DEV fixture (2 bank accounts + 1 credit card + 1 loan + 1 AU brokerage + 1 AU super account,
+for one synthetic user), rather than reusing another module's household fixture. **16/16 PASS**:
+
+- Own-account transfer between the user's 2 bank accounts contributes **$0** to both income and expense
+  (real committed rows, re-queried).
+- The real `matchLiabilityFacility()` function (imported and called directly, not a stub) proves a credit-card
+  statement (masked `3333`) matches ONLY the credit-card liability and a loan statement (masked `4444`) matches
+  ONLY the loan liability, even though both share the same lender name — and a statement for an unrelated card
+  at that lender (masked `9999`) is never silently absorbed into either existing facility.
+- AU investment activity lands exactly once in `ii_transactions`, with zero duplicate rows in `assets` or
+  `investments`.
+
+**Verdict: PASS, fresh live-DEV evidence, one fixture as scoped (not a jurisdiction project).** Closes Residual
+Register item R-14-4.

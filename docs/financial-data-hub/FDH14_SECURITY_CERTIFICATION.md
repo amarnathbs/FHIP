@@ -67,13 +67,37 @@ matches**. One benign match was found and inspected: the Supabase JS SDK's own k
 (`e.startsWith("sb_secret_")`) — this is library code checking key *shape*, not a leaked value, confirmed by
 reading the 160-character context around the match.
 
-## 5. Verdict
+## 5. Verdict (original CONDITIONAL PASS round)
 
 - Cross-tenant: **PASS** (fresh + reused).
 - Same-tenant authority forgery: **BLOCKED** (fresh, 3 domains, 28/28).
 - Foreign canonical targets: **BLOCKED** (reused per-module evidence; not independently re-attempted for
   Income/Liability/Investment/Retirement targets specifically in this pass beyond the provenance-column proof
-  above — see Residual Register item R-14-1).
+  above — see Residual Register item R-14-6). **Closed by GAP 2 below.**
 - FDH1 tenant-FK residual: **OPEN, LOW, reviewed and re-classified this pass, not newly discovered**.
 - Bundle security: **PASS**, 0 secrets, freshly re-checked.
 - P0/P1 security defects found in this pass: **0**.
+
+## 6. GAP 2 closure (2026-08-31) — fresh foreign-canonical-target certification
+
+Script: `scripts/fdh14_foreign_canonical_target_certification.ts` (`npx tsx --env-file=.env.local scripts/...`).
+Two fresh synthetic tenants (A, B), all rows + both auth users deleted afterwards, cleanup independently
+re-verified. **13/13 PASS.**
+
+This is a different, more specific claim than §1 above: not "can B read/write A's row" but "can A's OWN
+evidence/proposal row point AUTHORITATIVELY at B's canonical target." Results:
+
+| # | Attack | Target domain | Result | Mechanism |
+|---|---|---|---|---|
+| 1 | A's own `fhip_import_proposals` row, `target_entity_id` = B's `income_sources.id` | Income | **BLOCKED at INSERT** | Real DB trigger `fdh9_assert_proposal_owner` (migration 0091), genuine `P0001` "cross-tenant reference" exception. B's row confirmed untouched by re-query. |
+| 2 | Same, `target_entity_id` = B's `liabilities.id` | Liability | **BLOCKED at INSERT** | Same trigger, widened by migration 0096 ("forged liability target — spec section 91"). |
+| 3 | Same, `target_entity_id` = B's `retirement_accounts.id` | Retirement | **BLOCKED at INSERT** | Same trigger, widened by migration 0112 ("forged retirement target — spec section 98"). |
+| 4a | Same, `target_domain='investment'`, `target_entity_id` = B's `ii_accounts.id` | Investment (generic bridge) | **STRUCTURALLY UNREACHABLE** | The trigger's own `else` branch rejects ANY non-null `target_entity_id` under `target_domain='investment'` outright ("no implemented target guard") — FDH-11 never uses this bridge table for targeting at all, by design (confirmed by reading migration 0106's own header comment). |
+| 4b | A's own `fdh_investment_statements` row, `canonical_account_id` forged to B's `ii_accounts.id` (the REAL FDH-11 targeting column) | Investment (real mechanism) | **DB layer accepts the forgery** (no trigger polices this column) — **but the real `applyAuStatementActivity()` function, invoked directly (the same code path the production Apply route uses), rejects it at runtime with `FOREIGN_ACCOUNT`** before any canonical write. Ground truth: zero `ii_transactions` rows created against B's account. | Application-layer guard, not a DB trigger — a disclosed architectural difference, not a live defect (both stop the same outcome). |
+| 5 | A's own proposal cites B's `fdh_payroll_events.id` as its evidence source (`source_payroll_event_id`) | Foreign EVIDENCE link | **BLOCKED at INSERT** | Same trigger family checks evidence-source ownership, not just target ownership. |
+| — | Positive control: A targeting A's own `income_sources` row via the identical bridge | — | **SUCCEEDS normally** | Confirms the guard is tenant-specific, not over-broad. |
+
+**Verdict: foreign canonical targets are BLOCKED for all four named domains** — three by a real, live-fired DB
+trigger, and the fourth (investment) by a combination of "structurally unreachable via the generic bridge" plus
+a live-confirmed application-layer runtime guard on its actual targeting mechanism. Zero P0/P1 findings.
+Closes Residual Register item R-14-6.

@@ -70,4 +70,61 @@ pre-existing DEV data (the 406/339/367/1,811-row tables noted above) was read, m
 A full five-domain, real-file-upload, single-household live browser E2E run (the "golden household" of spec
 §19) was not built fresh in this pass. See `FDH14_SCOPE_AND_CERTIFICATION_PLAN.md` §4 and
 `FDH14_RESIDUAL_RISK_REGISTER.md` item R-14-1 for why, and for exactly which per-domain live evidence is relied
-on instead.
+on instead. **This gap is closed by the TARGETED CLOSURE round below.**
+
+## 5. TARGETED CLOSURE ROUND (2026-08-31) — five Product-Owner-named gaps
+
+Reconciliation: `origin/main` had advanced by one commit
+(`module11_1_live_dev_concurrency_verification.mjs`) since this branch's base; merged cleanly, zero conflicts.
+`tsc` and both pre-existing FDH-14 scripts were re-run fresh post-merge and still pass identically (34/34,
+28/28).
+
+### 5.1 GAP 1 — fresh golden-household cross-domain E2E oracle
+
+Script: `scripts/fdh14_golden_household_e2e_oracle.mjs`. One synthetic AU household (payslip income, bank
+account, credit card, loan, AU brokerage, superannuation) built directly against live DEV via service-role
+writes mirroring each domain's real Apply-function commit shape. **23/23 PASS**, including a genuine live
+negative control (a second fund-contribution activity against the same payslip event rejected by the real
+`uq_fdh_retirement_activities_payroll_event` unique index, HTTP 409/`23505`). Full detail:
+`FDH14_ECONOMIC_EVENT_ORACLE.md` §"FRESH (closure round)".
+
+### 5.2 GAP 2 — fresh foreign-canonical-target security certification
+
+Script: `scripts/fdh14_foreign_canonical_target_certification.ts` (run via `tsx`, since one attack — FDH-11's
+`canonical_account_id` forgery — requires invoking the real `applyAuStatementActivity()` TypeScript function
+directly, the same code path the production Apply API route uses). **13/13 PASS.** Income/liability/retirement
+targeting via `fhip_import_proposals` is blocked at INSERT time by a real DB trigger
+(`fdh9_assert_proposal_owner`/`fdh9_assert_application_owner`). FDH-11 investment targeting has NO such DB
+trigger (the bridge table is structurally never used for investment — confirmed by a live rejection with "no
+implemented target guard"); its real targeting mechanism (`canonical_account_id`) is guarded only at the
+application layer (`FOREIGN_ACCOUNT`), confirmed live by calling the real function directly and observing zero
+`ii_transactions` rows created against the foreign account. Full detail: `FDH14_SECURITY_CERTIFICATION.md`
+§"GAP 2 closure".
+
+### 5.3 GAP 3 — full migration replay, today's chain
+
+`node scripts/db-rebuild-check/replay.mjs` re-run fresh, post-reconciliation, against this branch's **current
+111/111 migrations** (through `0115_module11_1_ai_entitlements_quotas_cost_controls.sql`). **Result: 111/111
+migrations applied with zero manual intervention**, from empty, one file per version. Manifest: 216 tables (all
+216 RLS-enabled, 0 disabled), 3,111 columns, 3,201 constraints, 709 indexes, 265 policies, 100 functions, 156
+triggers. Two known platform substitutions only (`pg_cron`/`pg_net` no-ops in `0010`, unrelated to this round).
+Re-verified 0116/0117 migration-number collision status: `D:/fhip-a02-wave2` (unmerged) still claims `0116`;
+`0117` remains the next free number.
+
+### 5.4 GAP 4 — fresh multi-account + cross-border boundary fixture
+
+Script: `scripts/fdh14_multi_account_cross_border_certification.ts`. One synthetic AU-resident user: 2 bank
+accounts, 1 credit card, 1 loan, 1 AU brokerage account, 1 AU super account, plus an India investment
+relationship via the pre-existing `ii_accounts`/`ii_transactions` schema. **16/16 PASS**, including a real call
+to `matchLiabilityFacility()` (not a stub) proving no wrong-facility matching, and a live DB CHECK-constraint
+rejection proving FDH-11 structurally cannot accept `investment_jurisdiction='IN'`. Full detail:
+`FDH14_JURISDICTION_CERTIFICATION.md` §"GAP 4 closure" and `FDH14_SCALE_CERTIFICATION.md` §"GAP 4 closure".
+
+### 5.5 GAP 5 — UI/accessibility smoke over the five FDH entry surfaces
+
+Real browser automation (Playwright, this repo's standing `tests/e2e/` tooling and config —
+`playwright.config.ts`'s `webServer` runs `npm run dev`, which loads `.env.local` against the same DEV project)
+against the actual running Next.js app. Spec: `tests/e2e/fdh14-ui-accessibility-smoke.spec.ts`. A synthetic,
+fully-onboarded user was created via the Supabase admin API and logged in through the real `/login` form (not
+an API bypass). See `FDH14_UI_ACCESSIBILITY_SMOKE.md` for the full per-surface result table and the two genuine
+findings this pass surfaced (a payslip PDF-extraction timeout gap, and one non-ideal user-facing error string).

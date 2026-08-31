@@ -43,7 +43,7 @@ institutions/merchants (61/61 RLS + quality checks). This pass's fresh live-DEV 
 reference tables are live and populated (25 categories, 121 subcategories, 123 merchants, 198 merchant
 aliases) — i.e. genuinely in effect in the current environment, not merely designed.
 
-## 6. Verdict
+## 6. Verdict (original CONDITIONAL PASS round)
 
 Australia: **PASS**. India banking: **PASS** (with disclosed coverage limits, not overclaimed as universal).
 India investment boundary: **PASS**, freshly re-confirmed by source inspection this pass — 0 duplication.
@@ -51,3 +51,26 @@ Cross-border: **PASS on reused evidence**; not re-tested fresh this pass (residu
 **PASS** — no gate exists that would erase foreign holdings, and the Mandatory Country Confirmation gate
 (migration `0108`/`0111`, unmerged branch `feature/mandatory-country-confirmation-beta-cleanup`) is explicitly
 a separate, already-tracked workstream, not part of FDH-14.
+
+## 7. GAP 4 closure (2026-08-31) — fresh cross-border user, live-proven
+
+Script: `scripts/fdh14_multi_account_cross_border_certification.ts`. One fresh synthetic AU-resident user with
+2 bank accounts, 1 credit card, 1 loan, 1 AU brokerage account, 1 AU super account, PLUS a real India
+investment relationship, built live on DEV. This closes residual R-14-5 with genuine execution rather than
+reused source-inspection:
+
+- **FDH-11 structurally cannot accept an India statement.** A live attempt to insert
+  `fdh_investment_statements` with `investment_jurisdiction='IN'` was rejected by a real DB CHECK constraint
+  (`23514`) — FDH-11 is AU-only *by construction*, confirming and strengthening the prior source-inspection
+  finding with an actual negative-control proof.
+- **The India investment relationship uses the real, pre-existing India Investment module pathway**: an
+  `ii_accounts` row with `country_code='IN'`, `account_type='demat'` — the same Investment Intelligence schema
+  India investments have always used. Zero `fdh_investment_statements` rows reference the India account (no
+  parallel FDH structure was created for it, live-confirmed by count).
+- AU and India transactions coexist on their own distinct `ii_accounts` within the one shared II schema,
+  never merged (1 AU `ii_transactions` row, 1 India `ii_transactions` row, both independently verified).
+- Household net worth ($163,000: retirement $180,000 − liabilities $17,000, with $0 from `assets`/`investments`)
+  reflects each domain's balance exactly once despite 2 bank accounts + 1 AU brokerage + 1 India demat account +
+  2 liabilities + 1 retirement account all coexisting for the one household.
+
+**Verdict: PASS, fresh live-DEV evidence.** Closes Residual Register item R-14-5.
