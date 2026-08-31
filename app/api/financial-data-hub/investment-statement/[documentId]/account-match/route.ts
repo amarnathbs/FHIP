@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { getAuInvestmentStatementIdForDocument } from '@/lib/financial-data-hub/services/investmentStatementProcessingService';
 import { resolveAndPersistAuStatementAccount, confirmNewAuStatementAccount } from '@/lib/investment-import-bridge/auAccountResolution';

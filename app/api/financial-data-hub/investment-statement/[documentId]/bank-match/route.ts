@@ -1,4 +1,4 @@
-import { requireUser, bad, ok } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getAuInvestmentStatementIdForDocument, matchAuStatementActivitiesToBank } from '@/lib/financial-data-hub/services/investmentStatementProcessingService';
 
 // POST /api/financial-data-hub/investment-statement/{documentId}/bank-match

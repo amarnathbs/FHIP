@@ -209,3 +209,62 @@ describe('MC-15 — Account deletion: "if currently supported" — verified stil
     expect(suspects).toEqual([]);
   });
 });
+
+describe('MC-16 — every authenticated API route is country-gated (reconciliation regression guard)', () => {
+  // Added by the terminal certification (2026-08-31) after reconciling this
+  // branch onto origin/main 2ade18b. That merge brought in 15 brand-new
+  // FDH-11/FDH-12 routes under app/api/financial-data-hub/{investment,
+  // retirement}-statement/** that imported the UNGATED `requireUser` — so an
+  // authenticated user with no confirmed country could have driven the whole
+  // statement upload/approve/apply pipeline through the API layer. The same
+  // class of gap was closed by hand once before (commit d77b8c3, "gate new
+  // FDH-10 routes") and then silently reappeared with the next module merge,
+  // which is precisely why this needs to be a test rather than a review step.
+  //
+  // This walks the REAL app/api tree at test time, so any future route that
+  // lands using the ungated helper fails here instead of shipping.
+  const apiRoot = path.resolve(__dirname, '../../app/api');
+
+  function walkRoutes(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...walkRoutes(full));
+      else if (entry.name === 'route.ts') out.push(full);
+    }
+    return out;
+  }
+
+  // The ONE legitimate exemption: a pg_cron-triggered endpoint that has no
+  // user session at all and authorises via the CRON_SECRET shared secret
+  // (see the route's own header comment). It is not reachable by an
+  // authenticated browser client, so there is no country to confirm.
+  const ALLOWED_UNGATED = new Set([path.join('app', 'api', 'reports', 'cron', 'monthly-generate', 'route.ts')]);
+
+  const routes = walkRoutes(apiRoot);
+
+  it('finds a realistic number of API routes (guards against the walker silently matching nothing)', () => {
+    expect(routes.length).toBeGreaterThan(200);
+  });
+
+  it('no route.ts imports the ungated requireUser except the documented CRON_SECRET-authorised cron route', () => {
+    const offenders: string[] = [];
+    for (const file of routes) {
+      const src = fs.readFileSync(file, 'utf8');
+      if (!/\brequireUser\b/.test(src)) continue;
+      if (/requireCountryConfirmedUser/.test(src)) continue;
+      const rel = path.relative(path.resolve(__dirname, '../..'), file);
+      if (ALLOWED_UNGATED.has(rel)) continue;
+      offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the one allowed exemption really is secret-authorised, not merely allowlisted', () => {
+    const src = fs.readFileSync(path.resolve(apiRoot, 'reports/cron/monthly-generate/route.ts'), 'utf8');
+    expect(src).toMatch(/process\.env\.CRON_SECRET/);
+    expect(src).toMatch(/x-cron-secret/);
+    // And it must not quietly gain a user-session path later.
+    expect(src).not.toMatch(/auth\.getUser\(\)/);
+  });
+});
