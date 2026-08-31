@@ -138,11 +138,29 @@ export type ReorderResult = { ok: true; data: ReorderedRelatedContent } | { ok: 
 
 // SQLSTATEs raised deliberately by admin_reorder_related_content. Anything
 // else is an unexpected server fault and is never surfaced verbatim.
+//
+// '55000' (object_not_in_prerequisite_state) — NOT '40001' — for the stale/
+// incomplete link-set conflict. Migration 0116 originally raised '40001'
+// (serialization_failure, Class 40 "Transaction Rollback"); a live-DEV
+// investigation (docs/admin/FHIP_A02_Wave2_Residual_Gate_Investigation_Report.md)
+// found that specific code path never once delivered its intended response
+// live across 13 independent attempts — it either timed out at a strikingly
+// consistent ~125.2s or came back with a spurious 42501 — while the RPC's own
+// logic proved sound in every other respect. The Product Owner ruled to move
+// off Class 40 (which some layer in the stack may treat as automatically
+// retryable) to a code with no such conventional retry semantics. Migration
+// 0118 (CREATE OR REPLACE, no other change) makes the RPC raise '55000'
+// instead — the same code this codebase already uses for analogous
+// object-not-in-expected-state conflicts (0084_geo_jurisdiction_smsf.sql,
+// 0090_smsf_current_balance_integrity_guard.sql). '40001' is deliberately
+// NOT listed here any more: the RPC no longer raises it, and if it were ever
+// seen it should fall through to the generic 'error' kind rather than being
+// silently treated as a deliberate conflict.
 const REORDER_ERROR_KINDS: Record<string, ReorderFailureKind> = {
   '42501': 'forbidden', // insufficient_privilege — see FORBIDDEN_MESSAGE below
   '22023': 'invalid', // invalid_parameter_value — payload shape/content
   P0002: 'not_found', // source Resource does not exist
-  '40001': 'conflict', // the link set changed since the client loaded it
+  '55000': 'conflict', // the link set changed since the client loaded it (was 40001 pre-0118)
 };
 
 // 42501 has two possible origins and they must be indistinguishable to the

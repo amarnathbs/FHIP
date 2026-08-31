@@ -77,6 +77,14 @@ function check(label, cond, extra = '') {
 }
 
 const WAVE2_MIGRATION = '0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql';
+// Migration 0118 is the errcode hotfix on top of 0116 (Product Owner ruling,
+// 2026-08-31 — see docs/admin/FHIP_A02_Wave2_Terminal_Report.md): moves the
+// stale/incomplete-link-set conflict off SQLSTATE 40001 (Class 40,
+// serialization_failure) onto 55000 (object_not_in_prerequisite_state), and
+// touches nothing else. It is part of Wave 2 exactly as much as 0116 is, so
+// it is excluded from the pre-Wave-2 baseline build alongside 0116.
+const WAVE2_HOTFIX_MIGRATION = '0118_admin_a02_wave2_reorder_conflict_errcode_fix.sql';
+const WAVE2_MIGRATIONS = [WAVE2_MIGRATION, WAVE2_HOTFIX_MIGRATION];
 
 // `includeWave2 = false` builds the exact pre-Wave-2 database (current
 // origin/main), so the "before" claims in this report are measured against a
@@ -85,7 +93,7 @@ async function buildDb(includeWave2 = true) {
   const db = await PGlite.create();
   await db.exec(fs.readFileSync(SHIM, 'utf8'));
   const all = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
-  const files = includeWave2 ? all : all.filter((f) => f !== WAVE2_MIGRATION);
+  const files = includeWave2 ? all : all.filter((f) => !WAVE2_MIGRATIONS.includes(f));
   for (const f of files) {
     let sql = fs.readFileSync(path.join(MIG_DIR, f), 'utf8');
     sql = sql.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '-- [substituted, shimmed]');
@@ -98,16 +106,42 @@ async function buildDb(includeWave2 = true) {
       await db.exec(fs.readFileSync(path.join(MIG_DIR, '..', 'seed.sql'), 'utf8'));
     }
   }
-  console.log(`Replayed ${files.length} migrations clean (${includeWave2 ? 'includes' : 'EXCLUDES'} 0116).`);
+  console.log(`Replayed ${files.length} migrations clean (${includeWave2 ? 'includes' : 'EXCLUDES'} 0116+0118).`);
   return db;
 }
 
-async function functionPosture(db, name) {
+// Builds the database with 0116 applied but WITHOUT 0118 — Wave 2's original,
+// pre-hotfix state (the exact state the Product Owner's ruling and the
+// residual-gate investigation describe). Used ONLY by SECTION 11 to MEASURE
+// 0118's "before" precisely, the same measured-not-asserted discipline
+// SECTION 0 already applies to 0116 itself.
+async function buildDbPreHotfix() {
+  const db = await PGlite.create();
+  await db.exec(fs.readFileSync(SHIM, 'utf8'));
+  const all = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
+  const files = all.filter((f) => f !== WAVE2_HOTFIX_MIGRATION);
+  for (const f of files) {
+    let sql = fs.readFileSync(path.join(MIG_DIR, f), 'utf8');
+    sql = sql.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '-- [substituted, shimmed]');
+    try {
+      await db.exec(sql);
+    } catch (e) {
+      throw new Error(`Migration replay failed at ${f}: ${e.message}`);
+    }
+    if (f.startsWith('0001')) {
+      await db.exec(fs.readFileSync(path.join(MIG_DIR, '..', 'seed.sql'), 'utf8'));
+    }
+  }
+  console.log(`Replayed ${files.length} migrations clean (includes 0116, EXCLUDES 0118 — pre-hotfix baseline).`);
+  return db;
+}
+
+async function functionPosture(db, name, schema = 'public') {
   const r = await db.query(
-    `select p.prosecdef, p.proconfig, coalesce(array_to_string(p.proacl, ','), '') as acl, count(*) over () as n
+    `select p.prosecdef, p.proconfig, p.prosrc, coalesce(array_to_string(p.proacl, ','), '') as acl, count(*) over () as n
        from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
-      where ns.nspname = 'public' and p.proname = $1`,
-    [name]
+      where ns.nspname = $2 and p.proname = $1`,
+    [name, schema]
   );
   return r.rows[0] ?? null;
 }
@@ -468,11 +502,11 @@ async function main() {
 
     const cases = [
       ['empty array where relationships exist', source, [], '22023'],
-      ['missing relationship id (incomplete set)', source, [ids[0], ids[1], ids[2]], '40001'],
-      ['extra relationship id', source, [...ids, unknownId], '40001'],
+      ['missing relationship id (incomplete set)', source, [ids[0], ids[1], ids[2]], '55000'],
+      ['extra relationship id', source, [...ids, unknownId], '55000'],
       ['duplicate id', source, [ids[0], ids[0], ids[1], ids[2]], '22023'],
-      ['id belonging to another source', source, [ids[0], ids[1], ids[2], foreign.ids[0]], '40001'],
-      ['unknown relationship id', source, [ids[0], ids[1], ids[2], unknownId], '40001'],
+      ['id belonging to another source', source, [ids[0], ids[1], ids[2], foreign.ids[0]], '55000'],
+      ['unknown relationship id', source, [ids[0], ids[1], ids[2], unknownId], '55000'],
       ['unknown source id', unknownSource, [ids[0]], 'P0002'],
       ['null source id', null, [ids[0]], '22023'],
       ['null ordered_ids', source, null, '22023'],
@@ -554,7 +588,7 @@ async function main() {
     await db.query(`delete from resource_related_content where id = $1`, [ids[1]]);
     const before = await snapshot(db, source);
     const res = await tryReorder(db, source, [...ids].reverse()); // client still has all 4
-    check('stale set (link removed) is rejected with the conflict SQLSTATE 40001', res.ok === false && res.code === '40001', JSON.stringify(res));
+    check('stale set (link removed) is rejected with the conflict SQLSTATE 55000 (0118: was 40001)', res.ok === false && res.code === '55000', JSON.stringify(res));
     check('stale-set rejection leaves the surviving links untouched', (await snapshot(db, source)) === before);
     // and the refreshed, canonical set reorders cleanly
     const live = (await positions(db, source)).map((x) => x.id);
@@ -568,7 +602,7 @@ async function main() {
     await link(db, source, extra, 'related', 3);
     const before = await snapshot(db, source);
     const res = await tryReorder(db, source, [...ids].reverse()); // client only knows 3
-    check('stale set (link added) is rejected with SQLSTATE 40001', res.ok === false && res.code === '40001', JSON.stringify(res));
+    check('stale set (link added) is rejected with SQLSTATE 55000 (0118: was 40001)', res.ok === false && res.code === '55000', JSON.stringify(res));
     check('add-racing-reorder rejection leaves every link untouched', (await snapshot(db, source)) === before);
   }
   {
@@ -1136,10 +1170,10 @@ async function main() {
   console.log('\n=== SECTION 10: migration re-application (idempotency) ===');
   {
     const before = await globalSnapshot(db);
-    const sql = fs.readFileSync(path.join(MIG_DIR, '0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql'), 'utf8');
+    const sql116 = fs.readFileSync(path.join(MIG_DIR, WAVE2_MIGRATION), 'utf8');
     let reapplied = true;
     try {
-      await db.exec(sql);
+      await db.exec(sql116);
     } catch (e) {
       reapplied = false;
       console.log(`        re-apply error: ${e.message}`);
@@ -1148,6 +1182,110 @@ async function main() {
     check('re-application caused ZERO data variance', (await globalSnapshot(db)) === before);
     const n = await db.query(`select count(*)::int c from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace where ns.nspname='public' and p.proname in ('admin_reorder_related_content','transition_resource_post_status')`);
     check('still exactly two functions after re-application (no duplicate overloads)', n.rows[0].c === 2, JSON.stringify(n.rows));
+
+    // Re-applying 0116's OWN body verbatim (above) is, by construction, the
+    // pre-hotfix function again — that is exactly what "idempotent" means for
+    // 0116's own file. On `db` (the full, current chain) 0118 was already
+    // applied once when buildDb() replayed the migrations directory in order;
+    // re-running 0116 alone here would silently regress this same `db`
+    // instance back to raising 40001 for anything that runs against it AFTER
+    // this point. Nothing does — this is the last thing SECTION 10 does with
+    // `db` — but re-apply 0118 immediately anyway, so `db` is left in the
+    // same fully-fixed state it was in before this idempotency probe, and so
+    // this section cannot become a silent trap for a future edit that adds
+    // code after it.
+    const sql118 = fs.readFileSync(path.join(MIG_DIR, WAVE2_HOTFIX_MIGRATION), 'utf8');
+    await db.exec(sql118);
+    const restored = await functionPosture(db, 'admin_reorder_related_content');
+    check('0118 re-applied after 0116 restores the 55000 fix on `db`', /errcode\s*=\s*'55000'/.test(restored.prosrc) && !/errcode\s*=\s*'40001'/.test(restored.prosrc));
+  }
+
+  console.log('\n=== SECTION 11: migration 0118 — conflict SQLSTATE hotfix, narrow-scope proof ===');
+  {
+    // Built independently from `db`/`base`: 0116 applied, 0118 NOT applied —
+    // Wave 2's exact original (pre-hotfix) state, so every "before 0118" claim
+    // below is measured against a real database, not asserted from reading
+    // the diff. Mirrors the discipline SECTION 0 already applies to 0116.
+    const pre = await buildDbPreHotfix();
+
+    const preReorderFn = await functionPosture(pre, 'admin_reorder_related_content');
+    const preTransitionFn = await functionPosture(pre, 'transition_resource_post_status');
+    const preCapabilityFn = await functionPosture(pre, 'can_manage_discovery', 'private');
+
+    check('PRE-0118 (real 0116 state): the conflict branch still raises 40001', /errcode\s*=\s*'40001'/.test(preReorderFn.prosrc));
+    check('PRE-0118: the conflict branch does not yet raise 55000', !/errcode\s*=\s*'55000'/.test(preReorderFn.prosrc));
+    check('PRE-0118: exactly two 40001 raises exist (both stale-set branches)', (preReorderFn.prosrc.match(/errcode\s*=\s*'40001'/g) ?? []).length === 2);
+
+    const sql118 = fs.readFileSync(path.join(MIG_DIR, WAVE2_HOTFIX_MIGRATION), 'utf8');
+    let applied118 = true;
+    try {
+      await pre.exec(sql118);
+    } catch (e) {
+      applied118 = false;
+      console.log(`        0118 apply error: ${e.message}`);
+    }
+    check('migration 0118 applies cleanly on top of 0116', applied118);
+
+    const postReorderFn = await functionPosture(pre, 'admin_reorder_related_content');
+    const postTransitionFn = await functionPosture(pre, 'transition_resource_post_status');
+    const postCapabilityFn = await functionPosture(pre, 'can_manage_discovery', 'private');
+
+    check('POST-0118: the conflict branch no longer raises 40001', !/errcode\s*=\s*'40001'/.test(postReorderFn.prosrc));
+    check('POST-0118: the conflict branch now raises 55000 instead', /errcode\s*=\s*'55000'/.test(postReorderFn.prosrc));
+    check('POST-0118: exactly two 55000 raises exist (both stale-set branches, same count as before)', (postReorderFn.prosrc.match(/errcode\s*=\s*'55000'/g) ?? []).length === 2);
+
+    check('0118 changes NOTHING else on admin_reorder_related_content: ACL byte-identical', preReorderFn.acl === postReorderFn.acl, `before=${preReorderFn.acl}  after=${postReorderFn.acl}`);
+    check('0118 changes NOTHING else on admin_reorder_related_content: search_path identical', JSON.stringify(preReorderFn.proconfig) === JSON.stringify(postReorderFn.proconfig));
+    check('0118 keeps admin_reorder_related_content SECURITY DEFINER', postReorderFn.prosecdef === true);
+    check('0118 does not fork admin_reorder_related_content (still exactly one)', String(preReorderFn.n) === '1' && String(postReorderFn.n) === '1');
+
+    // 0118's own header and the migration 0116 file itself both say it
+    // touches ONLY the reorder RPC's conflict branch — proved, not assumed,
+    // by showing the two objects it must NOT touch are byte-for-byte
+    // unchanged (ACL, search_path, SECURITY DEFINER posture AND source body).
+    check('0118 does not touch public.transition_resource_post_status at all (ACL identical)', preTransitionFn.acl === postTransitionFn.acl);
+    check('0118 does not touch public.transition_resource_post_status at all (search_path identical)', JSON.stringify(preTransitionFn.proconfig) === JSON.stringify(postTransitionFn.proconfig));
+    check('0118 does not touch public.transition_resource_post_status at all (source body byte-identical)', preTransitionFn.prosrc === postTransitionFn.prosrc);
+    check('0118 does not touch private.can_manage_discovery at all (ACL identical)', preCapabilityFn.acl === postCapabilityFn.acl);
+    check('0118 does not touch private.can_manage_discovery at all (source body byte-identical)', preCapabilityFn.prosrc === postCapabilityFn.prosrc);
+
+    // PATTERN A grant model is untouched by 0118 — same structural assertions
+    // as SECTION 6, re-measured on the freshly-hotfixed function.
+    const aclText = postReorderFn.acl;
+    check('POST-0118: PATTERN A grant model preserved — authenticated granted', /\bauthenticated=X/.test(aclText), aclText);
+    check('POST-0118: PATTERN A grant model preserved — anon NOT granted', !/\banon=X/.test(aclText), aclText);
+    check('POST-0118: PATTERN A grant model preserved — service_role NOT granted', !/service_role=X/.test(aclText), aclText);
+
+    // Live behavioural proof, not just a source-text scan: a real stale/
+    // incomplete link set, reordered through the RPC on this freshly-hotfixed
+    // database, now genuinely raises 55000 and never 40001.
+    const hotfixAdmin = await newUser(pre);
+    await grantRole(pre, hotfixAdmin, 'resource_admin');
+    const { source, ids } = await seedSet(pre, 4);
+    const globalBeforeConflict = await globalSnapshot(pre);
+    const res = await tryReorder(pre, source, [ids[0], ids[1], ids[2]], hotfixAdmin); // incomplete set: 3 of 4
+    check('LIVE: an incomplete set on the hotfixed RPC is rejected', res.ok === false, JSON.stringify(res));
+    check('LIVE: rejected with 55000, not 40001', res.code === '55000', `got ${res.code}: ${res.message}`);
+    check('LIVE: rejection still leaves ZERO database variance', (await globalSnapshot(pre)) === globalBeforeConflict);
+    // And the message contract for the client is unchanged — same sentence,
+    // just a different SQLSTATE carrying it.
+    check('LIVE: the message text is unchanged by the errcode fix', /the related items have changed since this list was loaded/.test(res.message), res.message);
+
+    // Idempotency of 0118 itself, on the same freshly-hotfixed database.
+    const beforeReapply118 = await globalSnapshot(pre);
+    let reapplied118 = true;
+    try {
+      await pre.exec(sql118);
+    } catch (e) {
+      reapplied118 = false;
+      console.log(`        0118 re-apply error: ${e.message}`);
+    }
+    check('migration 0118 re-applies cleanly (idempotent)', reapplied118);
+    check('0118 re-application caused ZERO data variance', (await globalSnapshot(pre)) === beforeReapply118);
+    const n2 = await pre.query(`select count(*)::int c from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace where ns.nspname='public' and p.proname in ('admin_reorder_related_content','transition_resource_post_status')`);
+    check('still exactly two public functions after 0118 re-application (no duplicate overloads)', n2.rows[0].c === 2, JSON.stringify(n2.rows));
+
+    await pre.close();
   }
 
   console.log(`\n================ RESULT: ${pass} passed, ${fail} failed ================`);

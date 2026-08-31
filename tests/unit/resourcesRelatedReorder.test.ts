@@ -97,8 +97,8 @@ describe('reorderRelatedContent — SQLSTATE classification', () => {
     spy.mockRestore();
   });
 
-  it('maps 40001 (stale set) to kind "conflict"', async () => {
-    const { client } = clientReturning({ error: { code: '40001', message: 'admin_reorder_related_content: the related items have changed since this list was loaded (1 of 4 supplied ids are not current links of this Resource).' } });
+  it('maps 55000 (stale set) to kind "conflict" — migration 0118, was 40001', async () => {
+    const { client } = clientReturning({ error: { code: '55000', message: 'admin_reorder_related_content: the related items have changed since this list was loaded (1 of 4 supplied ids are not current links of this Resource).' } });
     const res = await reorderRelatedContent(client, 'src', ['a']);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.kind).toBe('conflict');
@@ -119,6 +119,12 @@ describe('reorderRelatedContent — unexpected errors are never leaked', () => {
     // unexpected fault. Its message is still never passed through.
     ['42883', 'function public.admin_reorder_related_content(uuid, uuid[]) does not exist'],
     ['08006', 'connection failure'],
+    // 40001 moved INTO this list by migration 0118 (it used to be the
+    // deliberate 'conflict' code, tested above as '55000' now). The RPC no
+    // longer raises 40001 at all; this pins that if it were ever seen again
+    // (e.g. some other future code path), it must NOT be silently treated as
+    // a deliberate conflict — it falls through to the generic, logged fault.
+    ['40001', 'admin_reorder_related_content: the related items have changed since this list was loaded (1 of 4 supplied ids are not current links of this Resource).'],
     [undefined, 'TypeError: fetch failed'],
   ])('SQLSTATE %s is classified "error" with a generic message', async (code, message) => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
