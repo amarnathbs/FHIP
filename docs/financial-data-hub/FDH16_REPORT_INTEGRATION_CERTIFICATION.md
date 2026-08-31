@@ -16,6 +16,17 @@ v3 Phase 3a), a Free-tier report and a Premium-tier report both exist on current
 advisor-style Premium redesign is **not** implemented and was correctly not built during this round (§108
 explicitly forbids doing so).
 
+## Fix applied this round (same defect class as FDH16-DEF-001)
+
+While reading `lib/services/reportSnapshotResolver.ts` in full for this certification, its Premium report data
+loader was found to have the identical unpaginated-query pattern discovered in `dashboardData.ts`
+(FDH16-DEF-001) on 6 queries (investments, insurance_policies, assets, liabilities, income_sources,
+expense_items). Fixed in the same pass by reusing the same `fetchAllRows()` pagination helper (now exported from
+`dashboardData.ts`) rather than writing a second bespoke implementation, per spec §244. See
+`FDH16_RESIDUAL_RISK_REGISTER.md` for the full record, including the honest caveat that this specific fix was
+not independently live-re-proven at the 1,001-row boundary the way the original Dashboard defect was (it was
+fixed by pattern-matching once the first instance was found, not by reproducing a second live failure).
+
 ## Not performed fresh this round
 
 - No live report was generated for either of this round's synthetic households and numerically diffed against

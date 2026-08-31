@@ -39,7 +39,7 @@ actually achievable in this pass)
 | Cashflow integration | **FRESH** (income/expense reconciliation, same script) + REUSED FDH-14 transfer/funding/drawdown economic-type classification proofs |
 | Dashboard integration | **FRESH at the calculation-engine level** (real function, real data) — **NOT fresh at the rendered-browser-pixel level**: this environment's browser-preview tool is bound to the Product Owner's own `D:/FHIP` working tree (confirmed via `preview_list`'s `cwd`), and this certification is barred from starting a dev server there. Disclosed as a residual, not silently substituted. |
 | Representative downstream calculation | **FRESH** (Dashboard engine) + **source-verified FRESH** (grep-confirmed zero `fdh_*` references anywhere in `lib/engines/**` — Scores/DNA/Resilience/Twin/Goals/Forecast — and in `lib/services/reportSnapshotResolver.ts`) |
-| 1000/1001 | **REUSED** — FDH-11/FDH-14 prior scale certifications; not re-run fresh this round (time-boxed; disclosed residual) |
+| 1000/1001 | **FRESH** — `scripts/fdh16_scale_1000_1001_certification.mjs`, live DEV; found and fixed a genuine defect (FDH16-DEF-001, Dashboard/Report silent truncation at the 1000-row PostgREST cap), live-re-proven post-fix, 6/6 PASS |
 | Hosted UI smoke | **REUSED** — FDH-14's Playwright-based 5-surface smoke; not re-run fresh this round for the same browser-tooling reason above |
 | TypeScript | **FRESH** — `npx tsc --noEmit`, 0 errors |
 | Build | **FRESH** — `npm run build`, PASS, full route manifest inspected |

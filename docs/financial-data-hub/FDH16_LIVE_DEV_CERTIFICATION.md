@@ -38,6 +38,20 @@ re-queries, and cleanup — every decisive Apply/security/manual-write call used
 | Bundle secret scan (`.next/` server + client chunks vs the real `SUPABASE_SERVICE_ROLE_KEY` value) | **0 matches** |
 | `git fetch origin main` (run twice, start and end of round) | origin/main tip = this branch's own fork point (`6fdcf7e`) both times — **no divergence, no reconciliation required** |
 
+## Test-suite flakiness observed and diagnosed this round (not a regression)
+
+Running the full `vitest` suite concurrently with this round's own live-DEV scripts, and again later in the
+round, surfaced 2-18 apparently-failing tests across different runs — all in `*LiveDev*`-style tests that hit
+the same real hosted DEV project (e.g. `resourcesAdminR1_2.test.ts`'s count-based dashboard-summary assertion,
+`resourcesR1_4LiveDev.test.ts`'s RLS-dependent workflow tests) plus one real-date-dependent test
+(`tests/unit/goals.test.ts`'s "Persona F" case, which calls `new Date()` directly rather than a fixed clock and
+tripped over a month-boundary calculation when the session's calendar date rolled from 2026-08-31 to
+2026-09-01). **Every one of these was re-run in isolation and passed cleanly** — confirming each is a
+pre-existing flake (live-DEV concurrent-state contention, or an unpinned real-clock dependency), not a
+regression introduced by FDH16-DEF-001's fix or any other FDH-16 change. This is disclosed here rather than
+silently reconciled, consistent with rule 6 ("never fabricate test counts... if you can't get it, say so
+honestly").
+
 ## DEV cleanup ledger (every synthetic record created this round)
 
 | Fixture | Rows created | Cleanup verified |

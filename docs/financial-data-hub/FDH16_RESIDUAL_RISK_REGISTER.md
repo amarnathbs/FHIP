@@ -48,6 +48,21 @@
 - **Live re-proof**: `SCALE-1000-FIX`/`SCALE-1001-FIX` in the same script call the real, fixed, imported
   `loadDashboard()` (not a reimplementation) with a service-role-backed client for the exact synthetic user —
   `totalMonthlyExpenses` correctly reads `1000` and then `1001` post-fix. **6/6 PASS.**
+- **Second confirmed instance, same root cause, fixed in the same pass**: `lib/services/reportSnapshotResolver.ts`'s
+  Premium report data loader had the identical unpaginated-query pattern on 6 queries (investments, insurance_policies,
+  assets, liabilities, income_sources, expense_items) feeding the Premium report. Fixed by exporting `fetchAllRows`
+  from `dashboardData.ts` and applying it here too — the shared-layer fix rule (spec §244: "fix shared defects in
+  the canonical shared layer, do not patch downstream symptoms individually") was followed by centralising the
+  pagination helper in one place and reusing it, rather than writing a second bespoke implementation. Regression:
+  `tsc` 0 errors, the two report tests that exercise this resolver
+  (`tests/unit/reportSectionsPremiumStressApplicability.test.ts`, `tests/unit/reportsIIChapters.test.ts`) both
+  pass (18/18) unchanged — their shared fake-Supabase fixture (`tests/unit/support/fakeSupabaseClient.ts`) already
+  had a `range: noop` passthrough, so no fixture update was needed here (unlike the Dashboard fix's
+  `goalArchivedLinkedFunding.test.ts` fixture, whose own bespoke fake builder needed a real `.range()` method
+  added). **Not independently live-re-proven against real DEV at the 1,001-row boundary** the way `loadDashboard()`
+  itself was — this specific query path was fixed by source-inspection-driven pattern-matching once the first
+  instance was found, not by reproducing a second live failure. Disclosed honestly as a lower-confidence fix than
+  FDH16-DEF-001's own directly-reproduced-and-reproven closure.
 
 ## Carried-forward P2/P3 residuals (unchanged by this round, re-confirmed still open where checked)
 

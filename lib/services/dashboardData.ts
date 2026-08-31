@@ -37,7 +37,7 @@ export async function getFxRateAudInr(supabase: SupabaseServerClient): Promise<n
 // always computed from the complete row set. `factory` must return a FRESH
 // query builder each call (a single builder instance cannot be re-awaited
 // with a different .range() and reliably re-execute).
-async function fetchAllRows<T>(factory: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+export async function fetchAllRows<T>(factory: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
   const PAGE = 1000;
   const all: T[] = [];
   let from = 0;

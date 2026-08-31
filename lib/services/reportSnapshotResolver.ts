@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard, getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadDashboard, getFxRateAudInr, fetchAllRows, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadHealthScore, type HealthScorePayload } from '@/lib/services/healthScoreData';
 import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienceData';
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
@@ -268,28 +268,45 @@ export async function resolveReportSourceData(
       taxAndCost,
       reviewItems,
     ] = await Promise.all([
-      supabase
-        .from('investments')
-        .select('id, investment_name, current_value, cost_base, investment_type, country_code, currency_code, annual_contribution, institution')
-        .eq('user_id', userId)
-        .eq('is_active', true),
-      supabase
-        .from('insurance_policies')
-        .select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days')
-        .eq('user_id', userId)
-        .eq('is_active', true),
-      supabase.from('assets').select('asset_name, current_value, asset_class, country_code').eq('user_id', userId).eq('is_active', true),
-      supabase
-        .from('liabilities')
-        .select('liability_name, balance, interest_rate, monthly_repayment, debt_type, country_code')
-        .eq('user_id', userId)
-        .eq('is_active', true),
-      supabase.from('income_sources').select('source_name, employer_name, amount, frequency').eq('user_id', userId).eq('is_active', true),
-      supabase
-        .from('expense_items')
-        .select('expense_name, amount, frequency, is_essential, expense_category')
-        .eq('user_id', userId)
-        .eq('is_active', true),
+      // FDH-16 fix (FDH16-DEF-001, same root cause as dashboardData.ts):
+      // these 6 queries had no .range()/.limit() and were silently subject
+      // to PostgREST's default row cap (1000 on this project, live-confirmed)
+      // for any household whose active row count in one register exceeds it.
+      // fetchAllRows() pages through until a short page confirms completeness.
+      fetchAllRows((from, to) =>
+        supabase
+          .from('investments')
+          .select('id, investment_name, current_value, cost_base, investment_type, country_code, currency_code, annual_contribution, institution')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('insurance_policies')
+          .select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) => supabase.from('assets').select('asset_name, current_value, asset_class, country_code').eq('user_id', userId).eq('is_active', true).range(from, to)),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('liabilities')
+          .select('liability_name, balance, interest_rate, monthly_repayment, debt_type, country_code')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) => supabase.from('income_sources').select('source_name, employer_name, amount, frequency').eq('user_id', userId).eq('is_active', true).range(from, to)),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('expense_items')
+          .select('expense_name, amount, frequency, is_essential, expense_category')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .range(from, to)
+      ),
       buildForecastReportData(userId, undefined, supabase).catch(() => null),
       // goal_snapshots is only written when the Goals page itself is visited
       // (a pre-existing gap, not introduced here) — history may be sparse for
@@ -325,12 +342,12 @@ export async function resolveReportSourceData(
       .slice(-12);
 
     premium = {
-      investments: (investmentsRes.data as PremiumInvestmentRow[]) ?? [],
-      insurancePolicies: (insuranceRes.data as PremiumInsuranceRow[]) ?? [],
-      assets: (assetsRes.data as PremiumAssetRow[]) ?? [],
-      liabilities: (liabilitiesRes.data as PremiumLiabilityRow[]) ?? [],
-      incomeSources: (incomeRes.data as PremiumIncomeRow[]) ?? [],
-      expenseItems: (expensesRes.data as PremiumExpenseRow[]) ?? [],
+      investments: investmentsRes as PremiumInvestmentRow[],
+      insurancePolicies: insuranceRes as PremiumInsuranceRow[],
+      assets: assetsRes as PremiumAssetRow[],
+      liabilities: liabilitiesRes as PremiumLiabilityRow[],
+      incomeSources: incomeRes as PremiumIncomeRow[],
+      expenseItems: expensesRes as PremiumExpenseRow[],
       forecastReportData,
       goalsOnTrackHistory,
       fxRateAudInr,
