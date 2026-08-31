@@ -168,7 +168,8 @@ export class MockInsightPackProvider implements AIProvider {
     const inputTokens = estimateTokens(req.systemPrompt + req.userPrompt);
     let rawText: string;
 
-    const valid = buildValidEnvelope(this.ctx) as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const valid = buildValidEnvelope(this.ctx) as any; // mock-only, mutated per-scenario below; not a production shape guarantee
 
     switch (this.behavior) {
       case 'malformed_json':
@@ -178,7 +179,8 @@ export class MockInsightPackProvider implements AIProvider {
         rawText = JSON.stringify({ headline: 'missing required top-level fields' });
         break;
       case 'missing_mandatory_block': {
-        const { data_quality_summary: _omit, ...rest } = valid.blocks;
+        const rest = { ...(valid.blocks as Record<string, unknown>) };
+        delete rest.data_quality_summary;
         rawText = JSON.stringify({ ...valid, blocks: rest });
         break;
       }

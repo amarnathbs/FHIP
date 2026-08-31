@@ -161,6 +161,11 @@ function classificationViolations(text: string, ctx: FinancialContextObject): Bl
 
 function causalViolations(text: string, ctx: FinancialContextObject): BlockViolation[] {
   if (!CAUSAL_PATTERN.test(text)) return [];
+  // "...because the information is incomplete" etc. is an explanation of a
+  // DATA LIMITATION, not a financial causal claim about a driver — spec
+  // section 46's safe wording pattern must not be penalised by the causal
+  // check that exists to catch invented financial drivers.
+  if (SAFE_LIMITATION_PATTERN.test(text)) return [];
   const approvedDrivers = [
     ...(ctx.health_score?.principal_drivers ?? []),
     ...(ctx.resilience?.active_risks?.map((r) => r.code) ?? []),

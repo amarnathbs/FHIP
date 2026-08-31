@@ -20,6 +20,8 @@
 
 import { AIModelGateway } from '@/lib/ai/gateway/aiModelGateway';
 import type { AIProvider } from '@/lib/ai/providers/types';
+import { dbEntitlementGate } from '@/lib/ai/entitlement/entitlementService';
+import type { EntitlementGate } from '@/lib/ai/entitlement/types';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
@@ -169,9 +171,18 @@ function mandatoryBlocksApplicableFor(ctx: FinancialContextObject): PackBlockCod
 }
 
 export class AIPersonalisedInsightPackService {
+  /**
+   * The entitlement gate defaults to the real DB-backed one — same
+   * enforcing-by-default discipline as AIModelGateway itself (spec/Module
+   * 11.1 convention: "an enforcement layer that is off unless someone
+   * remembers to switch it on is not enforcement"). Tests inject an explicit
+   * stub (tests/unit/support/entitlementGateStubs.ts) so a bypass is always
+   * visible at the construction site.
+   */
   constructor(
     private readonly db: InsightPackDbClient,
-    private readonly providerFactory: (ctx: FinancialContextObject, model: ModelRegistryRow) => AIProvider
+    private readonly providerFactory: (ctx: FinancialContextObject, model: ModelRegistryRow) => AIProvider,
+    private readonly entitlementGate: EntitlementGate = dbEntitlementGate
   ) {}
 
   /**
@@ -242,7 +253,7 @@ export class AIPersonalisedInsightPackService {
       : await this.db.insertPendingPack({ userId, householdId, identity, identityHash, provider: model.provider, model: model.model_identifier, idempotencyKey });
 
     const provider = this.providerFactory(context, model);
-    const gateway = new AIModelGateway(provider);
+    const gateway = new AIModelGateway(provider, this.entitlementGate);
 
     const systemPrompt = prompt.system_prompt;
     const userPrompt = `${prompt.developer_prompt}\n\nCONTEXT:\n${JSON.stringify(context)}`;
