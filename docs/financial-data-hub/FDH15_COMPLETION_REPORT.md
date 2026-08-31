@@ -6,23 +6,27 @@ the same conclusions, for permanence alongside the other `FDH15_*.md` deliverabl
 
 ## Verdict
 
-**FDH-15 — BRIDGE & GOVERNANCE DEV CERTIFICATION — CONDITIONAL PASS.**
+**FDH-15 — BRIDGE & GOVERNANCE DEV CERTIFICATION — UNCONDITIONAL FULL PASS.**
 
-Rationale: two genuine P1 same-tenant authority-forgery defects were found via fresh, real-RPC
-live-DEV testing (FDH15-DEF-001 Income, FDH15-DEF-002 Retirement). Both have a smallest-correct fix
-already written, migrated (`0119`, `0120`), and PGlite-certified with anti-vacuity proof (9/9 PASS
-— the harness demonstrably catches the regression on the unfixed chain). Neither fix has been
-applied to hosted DEV yet (standing rule 1: no direct SQL execution against DEV from this session;
-migrations are handed to the Product Owner for manual application via the Supabase Dashboard SQL
-editor) and therefore neither is confirmed closed live. Per this project's own standing lesson
-("SQL-Editor-success is not sufficient evidence of migration activation," and the explicit
-requirement that no decisive bridge/security claim rest on anything short of the real live RPC
-path), FDH-15 cannot honestly claim UNCONDITIONAL FULL PASS while these two P1s remain
-live-DEV-unconfirmed. Every other mandatory gate this round attempted (migration replay,
-migration-collision guard, TypeScript, relevant unit tests, production build, bundle-secret scan,
-cross-tenant isolation, provenance guards, stale-proposal handling, foreign-target rejection,
+**Superseded 2026-08-31, same day.** Migrations `0119`/`0120` have been applied to DEV by the
+Product Owner and independently confirmed genuinely active, not merely "no error": rerunning
+`scripts/fdh15_bridge_governance_live_dev_certification.mjs` produced **30/30 PASS** (up from the
+prior round's 28/30), with the two previously-failing checks now passing live, through the real
+authenticated RPC path, not PGlite:
+
+- `INC-6`: a Self-attributed payslip proposal targeting a Spouse-owned income row is now **BLOCKED**
+  (`MEMBER_MISMATCH`) on real hosted DEV Postgres.
+- `RET-2`: a Self-sourced retirement statement proposal repointed at a Spouse's account is now
+  **BLOCKED** (`MEMBER_MISMATCH`) on real hosted DEV Postgres.
+
+Both fixes are confirmed live-closed per this project's own standing lesson ("SQL-Editor-success is
+not sufficient evidence of migration activation") — the migration's own successful application was
+independently re-verified by actually exercising the vulnerable path and observing the block, not by
+trusting the paste-succeeded report alone. Every other mandatory gate this round attempted (migration
+replay, migration-collision guard, TypeScript, relevant unit tests, production build, bundle-secret
+scan, cross-tenant isolation, provenance guards, stale-proposal handling, foreign-target rejection,
 Income/Liability/Retirement Apply positive controls) passed cleanly, live, using real authenticated
-RPC calls.
+RPC calls, both before and after this fix.
 
 ## Fresh FDH-15 execution vs. reused prior certified evidence (rule 7)
 
