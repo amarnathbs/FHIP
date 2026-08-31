@@ -6,13 +6,48 @@
 **Worktree:** `D:\fhip-a02-wave2`
 **Base:** `origin/main` @ `1b40b0be0bbb6b7d67b611e08ca255e68562abf1`
 **Migration:** `0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql`
-SHA-256 `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`
+SHA-256 `aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`
+(revision 2 — Pattern A. Revision 1 was
+`2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`.)
 
-**Verdict: CONDITIONAL PASS — CODE COMPLETE, NAMED GATE OUTSTANDING.**
+**Verdict: CODE COMPLETE, ONE NAMED GATE OUTSTANDING.**
 The single outstanding gate is named in §9: migration `0116` has not been
 applied to DEV, because no environment in this workspace can execute DDL
 against a hosted Supabase project. Everything that does not depend on that
 application is complete and certified.
+
+> ### Revision 2 — privileged-RPC **Pattern A** (2026-08-31)
+>
+> Revision 1 of this report requested an §16.1 exception (old §6.3) because
+> the reorder RPC performed no internal authorisation and was granted to
+> `service_role` only. **The Product Owner resolved that conflict by ruling,
+> and the exception request is withdrawn — it is no longer needed.** The
+> ruling establishes two supported patterns:
+>
+> * **Pattern A — caller-context RPC: the default.** Called with the
+>   administrator's own authenticated session; `EXECUTE` to `authenticated`,
+>   not `anon`; actor from `auth.uid()`; the function independently rechecks
+>   the required capability against canonical role tables; fails closed on a
+>   null `auth.uid()`; `SECURITY DEFINER`, pinned `search_path`, fixed SQL,
+>   narrow scope; the route-level check remains for defence in depth, with
+>   the database check authoritative.
+> * **Pattern B — service-boundary RPC: a documented exception**, for
+>   controlled batch imports, system jobs and tightly bounded server-only
+>   operations, requiring Product Owner approval.
+>
+> **Ruling for Wave 2:** reordering Related Content is an interactive action
+> by a logged-in Editor, Resource Admin or Super Admin, with no demonstrated
+> need to lose the user context — therefore `0116` uses **Pattern A**.
+> `0107` / `0109` are **not reopened**: they remain approved Pattern B
+> exceptions on their server-only bulk import/upsert architecture, recorded
+> for later governance review and **not touched by this migration**.
+>
+> What changed in revision 2 is **only the authorisation model**. The
+> reorder RPC's locking, serialisation, complete-set validation, atomicity
+> and return contract are byte-for-byte unchanged, and the Scope B
+> scheduling half of `0116` was not touched at all. Sections marked
+> **[rev 1]** below describe the superseded model and are retained only for
+> traceability.
 
 ---
 
@@ -105,6 +140,49 @@ Both repository tools agree:
 - `node scripts/check-migration-versions-against-branch.mjs --against=<ref>` → zero cross-branch collisions against `origin/main` **and** all seven other migration-carrying branches (Module 11.0, Module 11.1, MCC, FDH-11, FDH-12, G0-JA-1 Wave 2, Admin A0.2 Wave 1).
 
 No other workstream's migration was reused, overwritten or renumbered.
+
+**Revision 2 re-scan (2026-08-31, after `git fetch --all --prune`).** Redone
+from scratch rather than carried forward, because this project has hit
+migration-number collisions repeatedly:
+
+- `node scripts/check-migration-versions.mjs` → "OK: 103 active migrations, one file per version, next version is 0117." (Unused numbers in the chain: `0079`–`0081`, `0103`–`0105`, `0108`, `0110`–`0115` — each allocated by another workstream, none free for reuse.)
+- `node scripts/check-migration-versions-against-branch.mjs --against=origin/main` → "OK: no cross-branch migration collisions between HEAD (103 files) and origin/main (102 files)."
+- **Exhaustive scan of all 296 local + remote-tracking refs** (`git ls-tree` per ref, grouping every `supabase/migrations/*.sql` by its four-digit version): **0 collisions** anywhere in the `0100`+ range — every version in that range is claimed by exactly one filename with exactly one blob. `0116` appears on precisely two refs, `fix/admin-a02-wave2-workflow-ordering-integrity` and its own `origin/` mirror.
+- **All 57 worktrees** checked for uncommitted or untracked files under `supabase/migrations` — **none** in any of them.
+- Revision 2 changed **exactly one** migration file and added none: `git diff --name-only -- supabase/migrations/` returns only `0116_...sql`.
+
+| | SHA-256 of `0116_...sql` |
+|---|---|
+| Revision 1 (`4da780a`) | `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355` |
+| Revision 2 | `aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b` |
+
+**Two things the re-scan surfaced, disclosed rather than smoothed over:**
+
+1. **The all-refs scan reports one "content divergence" at `0116` — it is
+   this revision itself.** The two blobs are revision 1 (still on
+   `origin/fix/admin-a02-wave2-workflow-ordering-integrity`, pushed before
+   the ruling) and revision 2 (local, this change). Same filename, same
+   branch lineage, one workstream. It is not a cross-workstream collision
+   and resolves the moment revision 2 is pushed. Every other version in the
+   `0100`+ range has exactly one filename and exactly one blob across all
+   296 refs.
+
+2. **`origin/main` advanced mid-revision.** It moved from `1b40b0b` (this
+   branch's base) to `2ade18b`, "Merge FDH-12 Retirement Statement
+   Intelligence into main", bringing `0112` / `0113` / `0114` into `main`.
+   Those three numbers were **already recorded as allocated to FDH-12** in
+   the revision 1 scan, so `0116` remains free and correctly ordered after
+   them — no renumbering is needed. This branch is now one merge behind
+   `main`; that is a merge-prep item, not a Wave 2 defect.
+
+   Rather than assume compatibility, it was measured: the **current**
+   `origin/main` chain (105 migrations, including `0112`–`0114`) was replayed
+   from empty into PGlite and revision 2 of `0116` applied on top. Result:
+   clean apply, clean idempotent re-apply, `private.can_manage_discovery`
+   present, an Editor correctly authorised, and the reorder RPC's real ACL
+   on that chain measured as `postgres=X/postgres,authenticated=X/postgres`
+   — owner plus `authenticated` and nothing else, exactly the Pattern A
+   grant model, with no `anon`, no `service_role` and no `PUBLIC` entry.
 
 The registry's own stale header ("Next free version: `0064`", "63 active
 migrations") was corrected in the same change, because leaving it beside a
@@ -235,25 +313,43 @@ recorded as a deferred finding (§10), not silently repaired.
 
 ### 4.7 Security controls
 
+**Privileged-RPC Pattern A (revision 2).**
+
 - `SECURITY DEFINER`, pinned `search_path = public`.
-- Fixed SQL only — every table and column name is a literal; **no dynamic SQL**, no `format()`, no `quote_ident`, no identifier derived from client input. Asserted mechanically against `pg_proc.prosrc`.
-- `EXECUTE` revoked from `public`, `anon` and `authenticated`; granted **only** to `service_role`. Verified via `proacl` and `has_function_privilege()` for each role.
-- The function takes **no actor or role parameter**, so it cannot be told whom to trust. Asserted mechanically.
+- Fixed SQL only — every table and column name is a literal; **no dynamic SQL**, no `format()`, no `quote_ident`, no identifier derived from client input. Asserted mechanically against `pg_proc.prosrc` (comments stripped, so the scan judges code and not the prose that discusses the `EXECUTE` grant).
+- `EXECUTE` **granted to `authenticated`**; revoked from `public`, `anon` **and `service_role`**. Verified via `proacl` and `has_function_privilege()` for each role, and behaviourally (`anon` is refused "permission denied for function"; `service_role` holds no privilege). `service_role` is revoked because a service-role connection carries no `auth.uid()`, so that grant could only ever advertise a path that fails closed.
+- The actor is **`auth.uid()`, obtained inside the function**. The signature is still exactly `(p_source_post_id uuid, p_ordered_ids uuid[])` — there is **no actor, user or role parameter**, so identity can never be client-supplied. Asserted mechanically against `pg_get_function_arguments`.
+- **Fails closed** on a null `auth.uid()` with an explicit early `raise exception ... errcode '42501'`, not an implicit null comparison. Proved by a direct, grant-bypassing call with no session, plus a positive control on the identical payload.
+- **Independent capability recheck**: `private.can_manage_discovery(v_actor)`, reading the canonical role tables (`public.admin_users`, `public.resource_user_roles`) via the canonical `private.*` predicates. Both auth guards run **before** any payload handling or table access (asserted by source position).
 - It can only permute `sort_order` within one source's existing links — it cannot create, delete or relink. Proved by row-level before/after comparison (SECTION 3f).
-- Route-side authority: the existing `canManageDiscovery` capability check, unchanged.
+- Route-side authority: the existing `canManageDiscovery` capability check, **retained as defence in depth** per the ruling. The database check is authoritative.
+
+**New database object:** `private.can_manage_discovery(uuid)` — the canonical
+mirror of `canManageDiscovery()` in `lib/resources/permissions.ts`. Every
+other predicate in that file already had a `private.*` twin from migration
+`0049`; this capability existed only in TypeScript, which is exactly why the
+RPC previously had to delegate its authority to the route. It is composed
+from the existing canonical predicates, resolves to the same role set
+(`resource_admin`, `editor`, plus Super Admin — active roles only), and is
+proved role by role against real rows in SECTION 6A. It **introduces no new
+capability and widens nothing**.
 
 ### 4.8 API and UI behaviour
 
 **API** (`app/api/admin/resources/related/reorder/route.ts`): validates body
 shape, source id UUID form, array-ness, size, element UUID form and
-duplicates before any round trip; applies `canManageDiscovery`; invokes the
-RPC with a service-role client; maps outcomes to **401 / 403 / 404 / 409 /
-422 / 500**. Invalid payload, stale set and server failure are distinct
-responses. No raw SQL error can reach a client: only the three deliberate
-SQLSTATEs are surfaced (with the function-name prefix stripped), and every
-other SQLSTATE is logged server-side and reported as a generic message —
-pinned by tests over `23514`, `42501`, `42883`, `08006` and a transport
-failure. Success returns the committed ordering.
+duplicates before any round trip; applies `canManageDiscovery` (retained as
+defence in depth); invokes the RPC **with the administrator's own
+request-scoped session client** (Pattern A — never `adminClient()`); maps
+outcomes to **401 / 403 / 404 / 409 / 422 / 500**. Invalid payload, stale set
+and server failure are distinct responses. No raw SQL error can reach a
+client: only the four deliberate SQLSTATEs are surfaced, and every other
+SQLSTATE is logged server-side and reported as a generic message — pinned by
+tests over `23514`, `42883`, `08006` and a transport failure.
+`42501` is classified as a new `forbidden` kind → **HTTP 403** with a single
+fixed sentence, so the RPC's own refusal and PostgreSQL's "permission denied
+for function …" are indistinguishable to the client (the latter would
+otherwise name an internal object). Success returns the committed ordering.
 
 **UI** (`components/resources/related/RelatedContentManager.tsx`): previously
 reordered optimistically and fired the PATCH **without reading the
@@ -461,7 +557,7 @@ Wave 2 **introduces no new capability and changes no capability definition.**
 |---|---|---|
 | **§2** capability-based access | Yes | `tests/unit/adminA02Wave2CapabilityMatrix.test.ts` — `canManageDiscovery` is separately named, refuses 4 of the 6 Resources roles (so it is not a coarse "has some Admin role" check), and is **not** an alias for `canManageResources` (Editor passes one and fails the other). The route checks the capability separately from `auth.getUser()`. |
 | **§3** multi-role composition | Yes | Same file — Analyst *plus* Editor still passes; Analyst plus a non-permitted role still fails; any one permitted role in a multi-role set suffices. |
-| **§4** navigation is not authorisation; four-layer enforcement; explicit denial | Yes | **Database layer:** certification SECTION 6 — `anon` and `authenticated` hold **no** `EXECUTE` on the reorder RPC (`has_function_privilege` false for both). **Database-bypass test:** live-DEV §A5 attempts the RPC directly with the anon key, an authenticated Editor, and an Analyst. **Direct-API test:** live-DEV §B1 calls the workflow RPC directly, bypassing the route, and is still blocked. **Server/API layer:** the route's own `canManageDiscovery` check. **Explicit denial:** 401/403/404/409/422 — never a `200` with an empty array, and never a fabricated success. |
+| **§4** navigation is not authorisation; four-layer enforcement; explicit denial | Yes | **Database layer (Pattern A):** the reorder RPC authorises its own caller — `anon` and `service_role` hold **no** `EXECUTE` (`has_function_privilege` false), and every authenticated caller is re-checked against `private.can_manage_discovery(auth.uid())` inside the function. **Database-bypass test:** certification SECTIONS 6B–6E — Editor / Resource Admin / Super Admin succeed and Analyst / Author / Compliance Reviewer / Publisher / role-less / deactivated-role are refused `42501`, each calling the RPC **directly, as themselves, with session role `authenticated`**, no route in the path; anon refused at the grant layer; a null `auth.uid()` fails closed. Repeated live after DEV application by live-DEV §A5. **Direct-API test:** live-DEV §B1 calls the workflow RPC directly, bypassing the route, and is still blocked. **Server/API layer:** the route's own `canManageDiscovery` check, retained as defence in depth (SECTION 6F). **Explicit denial:** 401/403/404/409/422 — never a `200` with an empty array, and never a fabricated success. |
 | **§5** least privilege; **Analyst is read-only** | Yes | Capability matrix (Analyst denied reorder, schedule and publish) **and** certification SECTION 8, which proves at the database layer, for each of the four content types, that an Analyst is denied both scheduling and publishing with a genuinely future timestamp — so only the role predicate can be doing the blocking — with the target post verified unchanged. |
 | **§6** privileged database-access pattern | Partly — see §6.3 | Pinned `search_path`; fixed return type; no dynamic SQL; `EXECUTE` revoked from `PUBLIC`/`anon`; granted only to one specific role; explicit exception for an unauthorised caller. |
 | **§6.1** approved callable pattern | Yes | The wrapper lives in the PostgREST-exposed `public` schema, the same shape as `transition_resource_post_status`. No `private`-schema exposure; no view of any kind. |
@@ -477,7 +573,25 @@ returns only relationship ids and integer positions; the scheduling rule
 reads only a workflow timestamp. No personal, financial or behavioural data
 is touched.
 
-### 6.3 Exception requested under §16.1 — **approval outstanding**
+### 6.3 Exception requested under §16.1 — **WITHDRAWN, RESOLVED BY RULING**
+
+**Status: no exception is required.** The Product Owner's privileged-RPC
+governance ruling of 2026-08-31 resolved the Pattern A / Pattern B conflict
+this section flagged. `0116` now uses **Pattern A**: `EXECUTE` granted to
+`authenticated`, actor from `auth.uid()`, fail-closed on a null actor, and an
+independent in-function capability recheck via
+`private.can_manage_discovery()` — which is exactly what the Standard's §6
+first bullet asked for. The route-level `canManageDiscovery` check is
+retained as defence in depth. **`0116` is now compliant with §6 as written,
+with nothing departed from and nothing to approve.**
+
+`0107` / `0109` are **not reopened** by this wave and are **not touched by
+`0116`**. Per the ruling they remain approved Pattern B service-boundary
+exceptions on their server-only bulk import/upsert architecture, recorded as
+established exceptions for later governance review.
+
+<details>
+<summary><b>[rev 1 — superseded]</b> The original exception request, retained for traceability</summary>
 
 1. **Clause departed from:** §6, first bullet — "internal authorisation using
    `auth.uid()` … an approved capability predicate (§2), evaluated inside the
@@ -511,8 +625,8 @@ is touched.
    or relink, cannot read or return any personal or financial data, and
    cannot escalate privilege; and the database-bypass tests prove `anon`,
    `authenticated` and `analyst` are all refused.
-5. **Approval status: REQUESTED, NOT YET GRANTED.** This is one of the two
-   reasons for the CONDITIONAL verdict.
+5. **Approval status: REQUESTED, NOT YET GRANTED.** This was one of the two
+   reasons for the original CONDITIONAL verdict.
 6. Recorded here, in this certification report, as §16.1(6) requires.
 
 **Related, pre-existing:** the same tension applies to the already
@@ -520,16 +634,49 @@ production-released migrations `0107` and `0109`. Per §1.2 that is recorded,
 not retroactively invalidating their certification, and is **not** fixed by
 this wave (§14).
 
+</details>
+
 ---
 
 ## 7. Verification results
 
 ### 7.1 Focused certification — `scripts/admin_a02_wave2_certification.mjs`
 
-**249 checks, 249 passed, 0 failed.** Real PostgreSQL via PGlite, full
-migration chain replayed from empty (103 migrations), **plus a second
-independently built baseline database excluding `0116`** used to measure
-every "before" claim rather than assert it.
+**Revision 2: 325 checks, 325 passed, 0 failed.** (Revision 1 was 249/249.)
+Real PostgreSQL via PGlite, full migration chain replayed from empty (103
+migrations), **plus a second independently built baseline database excluding
+`0116`** used to measure every "before" claim rather than assert it.
+
+Reconciliation of the 249 → 325 delta:
+
+| | Checks |
+|---|---|
+| Revision 1 total | 249 |
+| Old SECTION 6 grant-posture checks **inverted by the ruling** (service_role granted → revoked; authenticated denied → granted; and the two matching `has_function_privilege` probes) | 4 re-expressed |
+| Old SECTION 6 checks retained unchanged in intent | 8 |
+| SECTIONS 0–5, 7–10 retained **byte-identical**, but now executed **through** the Pattern A model — every Scope A call is made as a real signed-in `resource_admin` | 237 |
+| New: SECTION 6 additions (signature, `auth.uid()`, fail-closed, recheck, errcode, guard ordering) | +6 |
+| New: SECTION 0 baseline (`private.can_manage_discovery` absent pre-`0116`) | +1 |
+| New: SECTION 6A `private.can_manage_discovery` | +16 |
+| New: SECTION 6B permitted roles, own session | +9 |
+| New: SECTION 6C denied roles, own session | +20 |
+| New: SECTION 6D anonymous denial | +7 |
+| New: SECTION 6E null `auth.uid()` fails closed | +6 |
+| New: SECTION 6F route retained + route bypass | +11 |
+| **Revision 2 total** | **325** |
+
+Every one of the 249 baseline checks still exists and still passes; the only
+four whose *assertion* changed are the grant-posture ones the ruling
+deliberately inverted.
+
+**How the role tests are made genuine.** SECTIONS 6B/6C/6D set the
+PostgreSQL **session role** to the role PostgREST would use (`authenticated`
+for a signed-in user, `anon` for an anonymous one) and set that user's own id
+as the JWT subject, then call the RPC. The `EXECUTE` grant is therefore
+enforced by PostgreSQL against the session role rather than simulated, and
+no service-role or superuser bypass is in play for the duration of the call.
+The negative control that proves this is real: under `set role anon` the
+call is refused with PostgreSQL's own "permission denied for function".
 
 | Section | Coverage |
 |---|---|
@@ -539,7 +686,13 @@ every "before" claim rather than assert it.
 | 3 | Valid behaviour: two items, complete reverse, **maximum 100**, idempotent repeat, independent sources, no create/delete/relink, zero-based positions |
 | 4 | 13 invalid payloads — empty, missing, extra, duplicate, foreign-source, unknown id, unknown source, null source, null array, oversized, malformed UUID, non-array, malformed source UUID — each with correct SQLSTATE and **zero variance across the whole table** |
 | 5 | Rollback: mid-`UPDATE` failure injection, validation-stage failure, stale set (removal), stale set (addition), legacy duplicate-position repair |
-| 6 | Security posture: `SECURITY DEFINER`, pinned `search_path`, ACL, per-role `has_function_privilege`, no dynamic SQL, no actor parameter |
+| 6 | **Pattern A structural posture**: `SECURITY DEFINER`, pinned `search_path`, ACL (`authenticated` granted; `public`/`anon`/`service_role` revoked), per-role `has_function_privilege`, no dynamic SQL, no actor parameter, unchanged signature, `auth.uid()` actor, explicit fail-closed guard, in-function capability recheck raising `42501`, both guards ahead of any payload handling |
+| 6A | `private.can_manage_discovery` — exists once, `SECURITY DEFINER` + empty `search_path` + `STABLE`, no `anon`/`PUBLIC` grant; resolves to the same role set as `canManageDiscovery()` proved **role by role against real rows**; Super Admin via `admin_users` alone; `null` actor never satisfies it; an **inactive** role does not grant it; not an alias for `is_resource_staff` (a Publisher is staff but not a discovery admin) |
+| 6B | **Permitted roles with their own session**: Editor, Resource Admin, Super Admin each call the RPC with session role `authenticated` and their own JWT subject — success, committed ordering verified unique and contiguous, returned ordering matches |
+| 6C | **Denied roles with their own session**: Analyst, Author, Compliance Reviewer, Publisher, a role-less authenticated user, and a **deactivated** Editor — each refused `42501` **by the function's own recheck**, each with zero database variance; plus an Author/Editor pair proving the payload was never the reason |
+| 6D | **Anonymous denial**, structural (`has_function_privilege` false) and behavioural (refused with PostgreSQL's own "permission denied for function"), including an anonymous session presenting an administrator subject |
+| 6E | **Null `auth.uid()` fails closed** inside the function body, proved by a direct grant-bypassing call with no session — the body's own "not authenticated" message, not a grant error — with a positive control on the identical payload |
+| 6F | **Route retained as defence in depth**: the route still imports and applies `canManageDiscovery`, still 401s an unauthenticated caller, no longer uses `adminClient`, passes the caller-scoped client, and maps `42501` → 403; plus route-bypass results (an Editor calling the RPC with no route still succeeds; an Analyst still fails at the RPC layer) |
 | 7 | Route-level divergence reproduced by reading all four route sources from `origin/main` |
 | 8 | Full scheduling matrix × 4 content types: missing, null, malformed, past, **boundary equal to now()**, valid future, far future, UTC, +offset, −offset, DST boundary, role denied, **Analyst denied (schedule and publish)**, unauthenticated direct RPC, schedule→draft, schedule→archive, reschedule valid, reschedule stale, immediate publish unchanged |
 | 9 | Existing behaviour unchanged: RED, AMBER, not-approved all still blocked and checked first; full happy-path chain; history and audit correct; **a rejected attempt writes no history and no audit row** |
@@ -550,9 +703,22 @@ every "before" claim rather than assert it.
 | File | Tests | Result |
 |---|---|---|
 | `tests/unit/resourcesSchedulingValidation.test.ts` | 42 | Pass |
-| `tests/unit/resourcesRelatedReorder.test.ts` | 14 | Pass |
-| `tests/unit/adminA02Wave2CapabilityMatrix.test.ts` | 21 | Pass |
-| **Total new** | **77** | **Pass** |
+| `tests/unit/resourcesRelatedReorder.test.ts` | 17 (rev 1: 14) | Pass |
+| `tests/unit/adminA02Wave2CapabilityMatrix.test.ts` | 27 (rev 1: 21) | Pass |
+| **Total new** | **86** (rev 1: 77) | **Pass** |
+
+Revision 2 adds 9: three pinning the `42501` → `forbidden` → fixed-sentence
+classification (the RPC's own refusal, a missing `EXECUTE` grant, and the
+null-actor guard all produce the same client-visible result, and none echoes
+"permission denied for function …"), and six pinning the Pattern A
+source contract — that `0116` defines `private.can_manage_discovery`, that
+it names **exactly** the roles `canManageDiscovery()` names and no others,
+that the RPC takes its actor from `auth.uid()` and fails closed, that it
+rechecks the capability itself, that its signature carries no identity
+parameter, that `EXECUTE` is granted to `authenticated` and revoked from
+`public`/`anon`/`service_role`, and that `0107`/`0109` are not referenced.
+The `42501` case was removed from the "unexpected SQLSTATE" table, where it
+no longer belongs.
 
 Includes a pinned regression for the exact `scheduledAt: "banana"` bug, and
 a recorded, tested note that ECMAScript's `Date.parse` leniently rolls
@@ -572,17 +738,19 @@ therefore separated and both trees measured.
 | Tree | Files | Tests | Failed |
 |---|---|---|---|
 | `origin/main` baseline | 162 | 3511 | **0** |
-| Wave 2 branch | 165 | 3588 | **0** |
+| Wave 2 branch (rev 1) | 165 | 3588 | **0** |
+| Wave 2 branch (rev 2) | 165 | 3597 | **0** |
 
-Delta is exactly +3 files / +77 tests — this wave's own new tests. **Zero
-regressions.**
+Delta is exactly +3 files / +86 tests — this wave's own new tests. **Zero
+regressions**, re-measured after the Pattern A revision.
 
 **Live-DEV subset**, run serially (`--no-file-parallelism`) on each tree:
 
 | Tree | Files | Tests | Failed |
 |---|---|---|---|
 | `origin/main` baseline | 1 failed / 10 passed / 1 skipped | 1 failed / 222 passed / 5 skipped | 1 |
-| Wave 2 branch | 1 failed / 10 passed / 1 skipped | 1 failed / 222 passed / 5 skipped | 1 |
+| Wave 2 branch (rev 1) | 1 failed / 10 passed / 1 skipped | 1 failed / 222 passed / 5 skipped | 1 |
+| Wave 2 branch (rev 2) | 1 failed / 10 passed / 1 skipped | 1 failed / 222 passed / 5 skipped | 1 |
 
 **Identical, and the same single test.** Independently reproduced on the
 baseline tree: `resourcesR1_1.test.ts` → "an ordinary customer cannot edit
@@ -595,12 +763,13 @@ as pre-existing **with evidence**, not by assumption.
 
 | Gate | Result |
 |---|---|
-| `npx tsc --noEmit` | Clean |
-| ESLint on all 12 touched source/test files | Clean, zero warnings |
-| `npm run build` | "✓ Compiled successfully in 41s" |
-| `scripts/check-migration-versions.mjs` | OK, next version `0117` |
-| Cross-branch collision guard | OK against `origin/main` + 7 other branches |
-| PGlite security tests | Included in the 249 (SECTION 6, plus per-role denial in 8) |
+| `npx tsc --noEmit` | Clean (re-run for revision 2) |
+| ESLint on every touched source/test/script file | Clean, zero warnings (re-run for revision 2) |
+| `npm run build` | "✓ Compiled successfully in 49s" (revision 2; rev 1 was 41s) |
+| `scripts/check-migration-versions.mjs` | OK, 103 active migrations, one file per version, next version `0117` |
+| Cross-branch collision guard vs `origin/main` | OK — no cross-branch collision (`HEAD` 103 files vs `origin/main` 102) |
+| Exhaustive collision scan, **all 296 local + remote refs** | **0 collisions** in the `0100`+ range; `0116` claimed by this branch (and its own remote) and by nothing else; no uncommitted `supabase/migrations` file in any of the 57 worktrees |
+| PGlite security tests | SECTIONS 6, 6A–6F (87 checks), plus per-role denial in 8 |
 
 ### 7.5 Responsive and accessibility
 
@@ -708,23 +877,28 @@ Consequently the following remain **unproven on live DEV**, though all are
 proven against real PostgreSQL locally except where noted:
 
 - true multi-session concurrency (four cases — **only** provable on live DEV; PGlite is single-connection and no other real PostgreSQL is available here);
-- live anon / authenticated / analyst direct-RPC denial;
+- live Pattern A authorisation: the permitted roles (Editor, Resource Admin, Super Admin) succeeding with real Supabase sessions, and anon / Analyst / Author / Compliance Reviewer / Publisher / role-less being denied `42501` — plus the service-role key now being refused;
 - the live per-content-type scheduling matrix;
 - live workflow-history and audit correctness for the new path.
 
 **To close it:**
 
-1. Apply `supabase/migrations/0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` to **DEV only** via the Dashboard SQL editor (SHA-256 `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`).
+1. Apply `supabase/migrations/0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` to **DEV only** via the Dashboard SQL editor (revision 2, SHA-256 `aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`).
 2. Run `node scripts/admin_a02_wave2_live_dev_verification.mjs > wave2-live.txt 2>&1` (**do not pipe through `head`**).
 3. Expect all checks to pass and the reconciliation block to show zero variance.
 
-For reference, running that harness against the **un-migrated** database
-gives 96 passed / 49 failed, and every one of the 49 traces solely to `0116`
-being absent. That run is itself a live-DEV reproduction of both defects on
-the real database.
+For reference, running the **revision 1** harness against the un-migrated
+database gave 96 passed / 49 failed, and every one of the 49 traced solely to
+`0116` being absent. That run is itself a live-DEV reproduction of both
+defects on the real database. The revision 2 harness has not been re-run
+against the un-migrated database (it would fail for the same single reason,
+and re-running it creates and sweeps DEV fixtures for no new information) —
+stated plainly rather than implied.
 
-The second, independent gate is the **§16.1 exception in §6.3**, which needs
-a Product Owner ruling.
+**The second gate is now closed.** The §16.1 exception formerly requested in
+§6.3 has been **withdrawn**: the Product Owner's ruling of 2026-08-31 made
+`0116` Pattern A, which is compliant with §6 as written. DEV application is
+the only remaining gate.
 
 ---
 
@@ -735,7 +909,7 @@ a Product Owner ruling.
 | D-1 | 22 of 25 Related Content sources in DEV hold duplicate `sort_order` values (bulk-seeded at 0). Harmless today — read order is merely arbitrary within a tie — and now self-healing for any source an administrator reorders. | A separately authorised one-off normalisation, if the Product Owner wants it. Deliberately not done here: Wave 2 forbids silent repair of existing content. |
 | D-2 | One leftover R1.1 test fixture (`76b4b064-…`, `r1-1-test-1788006660995-6wiffa`) sits at `status='scheduled'` with a past `scheduled_at`. Not one of the 84 curated Resources. | Delete as routine DEV cleanup under separate authority. It does not violate the new invariant, which is transition-time only. |
 | D-3 | There is no authenticated write path for `scheduled_at` and no scheduled-publishing worker, so scheduling is uniformly and correctly *rejected* for every content type in practice. Wave 2 made that rejection consistent, non-bypassable and honestly reported; it did not build the feature. | A future wave, if scheduled publishing is wanted as a product capability. |
-| D-4 | The §6 `auth.uid()`-in-function tension also applies to the production-released `0107`/`0109`. | Per standard §1.2, record and schedule under §16 — not a retroactive invalidation. |
+| D-4 | `0107`/`0109` remain **Pattern B** service-boundary RPCs (server-only bulk import/upsert, `EXECUTE` to `service_role`). The Product Owner's ruling of 2026-08-31 explicitly approves them as established exceptions and forbids reopening them in Wave 2; `0116` does not touch them or their files. | Record as established Pattern B exceptions for a later governance review. Not a defect, and explicitly out of scope here. |
 | D-5 | 12 live-DEV test files share one DEV database and contend when run in parallel, producing a nondeterministic failing set. | Consider serialising them or giving them isolated schemas. Pre-existing; out of Wave 2 scope. |
 
 ---

@@ -67,8 +67,16 @@ console.log('=== 1. Are migration 0116 objects present yet? ===');
   const { error } = await admin.rpc('admin_reorder_related_content', { p_source_post_id: null, p_ordered_ids: null });
   if (error && /could not find the function|does not exist|PGRST202/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) {
     console.log(`admin_reorder_related_content RPC: NOT FOUND (expected BEFORE 0116 is applied) — ${error.code ?? ''} ${error.message}`);
+  } else if (error?.code === '42501') {
+    // Expected once 0116 is applied. Under privileged-RPC Pattern A the RPC
+    // is granted to `authenticated` only — the service-role key this
+    // read-only pre-check uses is deliberately NOT permitted to execute it,
+    // so a permission denial here means the function exists AND carries the
+    // correct Pattern A grant model.
+    console.log(`admin_reorder_related_content RPC: EXISTS and is correctly Pattern A — the service-role key is refused EXECUTE (${error.code}: ${error.message}). Migration 0116 is ALREADY APPLIED.`);
   } else if (error) {
     console.log(`admin_reorder_related_content RPC: EXISTS — the call reached the function body and it correctly rejected the null payload (${error.code}: ${error.message}). Migration 0116 is ALREADY APPLIED.`);
+    console.log('  NOTE: reaching the function body with a SERVICE-ROLE key means the Pattern A grant model is NOT in effect — investigate before proceeding.');
   } else {
     console.log('WARNING: the RPC accepted a null payload. That should be impossible — investigate before proceeding.');
   }

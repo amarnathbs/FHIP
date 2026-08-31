@@ -11,7 +11,12 @@
 //     demonstrated there. Here, two real PostgREST requests are fired
 //     concurrently against real PostgreSQL.
 //   * REAL AUTH. auth.uid(), real Supabase roles, real RLS, real anon-key
-//     denial — not a shim.
+//     denial — not a shim. Under privileged-RPC PATTERN A (Product Owner
+//     ruling, 2026-08-31) this matters more than it did: the reorder RPC is
+//     granted to `authenticated` and authorises its own caller, so §A5 signs
+//     in as each permitted role (Editor, Resource Admin, Super Admin) and
+//     each denied role (Analyst, Author, Compliance Reviewer, Publisher,
+//     no-role) with a real Supabase session and calls the RPC directly.
 //   * The migration actually being in effect on the actual DEV database.
 //
 // SAFETY RULES this script obeys, from the Wave 2 brief §11/§12:
@@ -193,6 +198,11 @@ async function sweepFixtures(label) {
   users = (list?.users ?? []).filter((u) => (u.email ?? '').startsWith('a02w2-'));
   for (const u of users) {
     await admin.from('resource_user_roles').delete().eq('user_id', u.id);
+    // A5 grants one fixture user a Super Admin row to exercise the
+    // isSuperAdmin branch of the capability. It is removed inline, but sweep
+    // it here too so an interrupted run can never leave a fixture super
+    // admin behind.
+    await admin.from('admin_users').delete().eq('user_id', u.id);
     await admin.auth.admin.deleteUser(u.id);
   }
 
@@ -221,18 +231,35 @@ async function main() {
   console.log(`BASELINE  posts=${before.posts} links=${before.links} history=${before.history} audit=${before.audit} published=${before.published} scheduled=${before.scheduled}\n`);
 
   // ============================================================== SCOPE A
-  console.log('=== A1: migration 0116 is actually in effect ===');
+  //
+  // PRIVILEGED-RPC PATTERN A (Product Owner ruling, 2026-08-31). The reorder
+  // RPC is caller-context: EXECUTE is granted to `authenticated` only, the
+  // actor is auth.uid(), and the function rechecks the capability itself. So
+  // every Scope A call below is made with a REAL signed-in Resource
+  // Administrator's session (RA.client), exactly as the application does —
+  // the service-role client is used only for fixture setup and for reading
+  // ground truth, never to perform a reorder.
+  const RA = await makeUser('scope-a-admin', 'resource_admin');
+
+  console.log('=== A1: migration 0116 is actually in effect, with the Pattern A grant model ===');
   {
-    const { error } = await admin.rpc('admin_reorder_related_content', { p_source_post_id: null, p_ordered_ids: null });
+    const { error } = await RA.client.rpc('admin_reorder_related_content', { p_source_post_id: null, p_ordered_ids: null });
     check('admin_reorder_related_content EXISTS on live DEV', !!error && !/could not find the function|PGRST202/i.test(`${error.code} ${error.message}`), JSON.stringify(error));
-    check('  -> and it rejects a null payload with SQLSTATE 22023', error?.code === '22023', JSON.stringify(error));
+    check('  -> an AUTHENTICATED Resource Admin gets past both auth guards (null-payload error, not a permission error)', error?.code === '22023', JSON.stringify(error));
+
+    // The service-role key must now be REFUSED: EXECUTE was revoked from
+    // service_role, and a service-role connection carries no auth.uid()
+    // anyway. This is the structural proof that the grant really flipped.
+    const { error: srErr } = await admin.rpc('admin_reorder_related_content', { p_source_post_id: null, p_ordered_ids: null });
+    check('  -> the SERVICE-ROLE key can no longer execute the RPC (Pattern A: grant revoked)', !!srErr, JSON.stringify(srErr));
+    check('  -> and its refusal is a permission denial (42501), not a payload error', srErr?.code === '42501', `${srErr?.code}: ${srErr?.message}`);
   }
 
   console.log('\n=== A2: normal reorder and complete reverse ===');
   {
     const { source, ids } = await seedSet(5);
     const rev = [...ids].reverse();
-    const { data, error } = await reorder(admin, source, rev);
+    const { data, error } = await reorder(RA.client, source, rev);
     check('complete reverse succeeds', !error, JSON.stringify(error));
     const after = await positions(source);
     check('committed order matches the requested order exactly', JSON.stringify(after.map((r) => r.id)) === JSON.stringify(rev));
@@ -241,7 +268,7 @@ async function main() {
 
     // A single swap back.
     const swapped = [rev[1], rev[0], ...rev.slice(2)];
-    await reorder(admin, source, swapped);
+    await reorder(RA.client, source, swapped);
     check('a normal single-swap reorder applies', JSON.stringify((await positions(source)).map((r) => r.id)) === JSON.stringify(swapped));
   }
 
@@ -259,12 +286,12 @@ async function main() {
     ];
     for (const [label, payload, expected] of cases) {
       const b = await snapshot();
-      const { error } = await reorder(admin, source, payload);
+      const { error } = await reorder(RA.client, source, payload);
       check(`rejected: ${label}`, !!error, JSON.stringify(error));
       check(`  -> SQLSTATE ${expected}`, error?.code === expected, `${error?.code}: ${error?.message}`);
       check(`  -> zero database variance`, (await snapshot()) === b);
     }
-    const { error: srcErr } = await reorder(admin, '11111111-1111-4111-8111-111111111111', [ids[0]]);
+    const { error: srcErr } = await reorder(RA.client, '11111111-1111-4111-8111-111111111111', [ids[0]]);
     check('rejected: unknown source Resource', srcErr?.code === 'P0002', `${srcErr?.code}: ${srcErr?.message}`);
     check('the valid set survived every rejection, still contiguous', uniqueContiguous(await positions(source)));
   }
@@ -278,7 +305,7 @@ async function main() {
     const { source, ids } = await seedSet(6);
     const orderA = [...ids].reverse();
     const orderB = [ids[2], ids[0], ids[4], ids[1], ids[5], ids[3]];
-    const [ra, rb] = await Promise.all([reorder(admin, source, orderA), reorder(admin, source, orderB)]);
+    const [ra, rb] = await Promise.all([reorder(RA.client, source, orderA), reorder(RA.client, source, orderB)]);
     check('same-source concurrency: both requests completed without a server fault', !ra.error && !rb.error, JSON.stringify([ra.error, rb.error]));
     const after = await positions(source);
     const committed = after.map((r) => r.id);
@@ -293,7 +320,7 @@ async function main() {
     // affect one another.
     const s1 = await seedSet(4);
     const s2 = await seedSet(4);
-    const [r1, r2] = await Promise.all([reorder(admin, s1.source, [...s1.ids].reverse()), reorder(admin, s2.source, [...s2.ids].reverse())]);
+    const [r1, r2] = await Promise.all([reorder(RA.client, s1.source, [...s1.ids].reverse()), reorder(RA.client, s2.source, [...s2.ids].reverse())]);
     check('different-source concurrency: both succeeded', !r1.error && !r2.error, JSON.stringify([r1.error, r2.error]));
     check('different-source concurrency: source 1 is exactly its own requested order', JSON.stringify((await positions(s1.source)).map((r) => r.id)) === JSON.stringify([...s1.ids].reverse()));
     check('different-source concurrency: source 2 is exactly its own requested order', JSON.stringify((await positions(s2.source)).map((r) => r.id)) === JSON.stringify([...s2.ids].reverse()));
@@ -302,32 +329,75 @@ async function main() {
     const s3 = await seedSet(4);
     const stale = [...s3.ids].reverse();
     await admin.from('resource_related_content').delete().eq('id', s3.ids[1]);
-    const { error: staleErr } = await reorder(admin, s3.source, stale);
+    const { error: staleErr } = await reorder(RA.client, s3.source, stale);
     check('stale client set (a link removed underneath) is rejected as a conflict', staleErr?.code === '40001', `${staleErr?.code}: ${staleErr?.message}`);
     const live = (await positions(s3.source)).map((r) => r.id);
-    const { error: refreshedErr } = await reorder(admin, s3.source, [...live].reverse());
+    const { error: refreshedErr } = await reorder(RA.client, s3.source, [...live].reverse());
     check('canonical refresh after the conflict then succeeds', !refreshedErr, JSON.stringify(refreshedErr));
     check('positions unique and contiguous after the conflict-and-refresh cycle', uniqueContiguous(await positions(s3.source)));
   }
 
-  console.log('\n=== A5: direct-RPC denial (Admin Architecture Standard §4 database-bypass test) ===');
+  console.log('\n=== A5: PATTERN A authorisation, live (Admin Architecture Standard §4 database-bypass test) ===');
   {
+    // Under Pattern A the RPC is reachable by any signed-in user, and its own
+    // capability recheck — not a missing grant — is what separates the
+    // permitted roles from the denied ones. Both halves are proved here
+    // against real Supabase sessions, with no route in the path.
+
+    // ---- PERMITTED roles, each calling the RPC directly as themselves ----
+    for (const [label, role] of [
+      ['Editor', 'editor'],
+      ['Resource Admin', 'resource_admin'],
+    ]) {
+      const u = await makeUser(`permitted-${role}`, role);
+      const { source, ids } = await seedSet(3);
+      const wanted = [...ids].reverse();
+      const { error } = await reorder(u.client, source, wanted);
+      check(`PERMITTED: an authenticated ${label} CAN execute the RPC with their own session`, !error, JSON.stringify(error));
+      check(`  -> and ${label}'s reorder really committed, unique and contiguous`, JSON.stringify((await positions(source)).map((r) => r.id)) === JSON.stringify(wanted));
+    }
+    {
+      // Super Admin — no resource_user_roles row at all, authority comes from
+      // admin_users, exactly like canManageDiscovery's isSuperAdmin branch.
+      const u = await makeUser('permitted-super-admin', null);
+      const { error: aErr } = await admin.from('admin_users').insert({ user_id: u.userId });
+      check('fixture: Super Admin row created', !aErr, JSON.stringify(aErr));
+      const { source, ids } = await seedSet(3);
+      const wanted = [...ids].reverse();
+      const { error } = await reorder(u.client, source, wanted);
+      check('PERMITTED: an authenticated Super Admin (no Resources role row) CAN execute the RPC', !error, JSON.stringify(error));
+      check('  -> and the Super Admin reorder really committed', JSON.stringify((await positions(source)).map((r) => r.id)) === JSON.stringify(wanted));
+      await admin.from('admin_users').delete().eq('user_id', u.userId);
+    }
+
+    // ---- DENIED: anonymous, and every non-discovery role ----
     const { source, ids } = await seedSet(2);
     const b = JSON.stringify(await positions(source));
 
     const { error: anonErr } = await reorder(anon, source, [...ids].reverse());
-    check('ANON key cannot execute admin_reorder_related_content', !!anonErr, JSON.stringify(anonErr));
-    check('  -> denial is a permission/undiscoverable error, not a successful reorder', !!anonErr && !/^$/.test(anonErr.message ?? ''), JSON.stringify(anonErr));
+    check('DENIED: the ANON key cannot execute admin_reorder_related_content', !!anonErr, JSON.stringify(anonErr));
+    check('  -> refused at the grant layer (EXECUTE revoked from anon)', anonErr?.code === '42501', `${anonErr?.code}: ${anonErr?.message}`);
 
-    const editor = await makeUser('editor', 'editor');
-    const { error: authErr } = await reorder(editor.client, source, [...ids].reverse());
-    check('an AUTHENTICATED Editor cannot execute the RPC directly either (service_role-only grant)', !!authErr, JSON.stringify(authErr));
+    for (const [label, role] of [
+      ['Analyst (§5 read-only)', 'analyst'],
+      ['Author', 'author'],
+      ['Compliance Reviewer', 'compliance_reviewer'],
+      ['Publisher', 'publisher'],
+    ]) {
+      const u = await makeUser(`denied-${role}`, role);
+      const { error } = await reorder(u.client, source, [...ids].reverse());
+      check(`DENIED: an authenticated ${label} is refused BY THE RPC'S OWN capability recheck`, !!error, JSON.stringify(error));
+      check(`  -> with SQLSTATE 42501 for ${role}`, error?.code === '42501', `${error?.code}: ${error?.message}`);
+    }
 
-    const analyst = await makeUser('analyst', 'analyst');
-    const { error: analystErr } = await reorder(analyst.client, source, [...ids].reverse());
-    check('§5 ANALYST cannot execute the RPC directly (read-only role)', !!analystErr, JSON.stringify(analystErr));
+    {
+      // An authenticated user holding no Resources role at all.
+      const u = await makeUser('denied-no-role', null);
+      const { error } = await reorder(u.client, source, [...ids].reverse());
+      check('DENIED: an authenticated user with NO Resources role is refused', error?.code === '42501', `${error?.code}: ${error?.message}`);
+    }
 
-    check('no direct-RPC attempt changed a single position', JSON.stringify(await positions(source)) === b);
+    check('no denied attempt changed a single position', JSON.stringify(await positions(source)) === b);
   }
 
   // ============================================================== SCOPE B
