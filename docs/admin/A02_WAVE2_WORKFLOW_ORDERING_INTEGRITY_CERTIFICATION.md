@@ -795,7 +795,9 @@ session in a running app. Recorded honestly rather than claimed.
 
 ## 8. Scope and data
 
-### 8.1 Exact diff — 17 files, zero unrelated
+### 8.1 Exact diff — 18 files, zero unrelated
+
+**Correction (Product Owner review):** this section originally miscounted the list below as 17 files. It is 18 — corrected here, not silently.
 
 ```
 app/api/admin/resources/content/[id]/workflow/route.ts
