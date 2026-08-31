@@ -386,6 +386,47 @@ tree; and this registry itself (including a sweep for any
 reserved-but-unwritten number above `0115` — the only hit was a `0119`
 appearing inside a prior *scan range* description, not a reservation).
 
+### Revision 2 — privileged-RPC Pattern A (2026-08-31)
+
+Per the Product Owner's privileged-RPC governance ruling, `0116`'s **Scope A**
+reorder RPC was changed from Pattern B (service-boundary) to **Pattern A**
+(caller-context): `EXECUTE` granted to `authenticated` and revoked from
+`public` / `anon` / `service_role`; the actor taken from `auth.uid()` inside
+the function; an explicit fail-closed guard on a null actor; and an
+independent capability recheck via the new `private.can_manage_discovery()` —
+the canonical database mirror of `canManageDiscovery()` in
+`lib/resources/permissions.ts`, composed from the existing `0049` predicates
+and resolving to the same role set. The API route's own `canManageDiscovery`
+check is retained as defence in depth.
+
+**Only the authorisation model changed.** The reorder RPC's locking,
+serialisation, complete-set validation, atomicity and return contract are
+unchanged, and the **Scope B half of `0116` is byte-for-byte identical** to
+revision 1 (measured, not asserted). `0107` and `0109` are **not touched**
+and remain approved Pattern B service-boundary exceptions.
+
+**Re-scanned for collisions from scratch on 2026-08-31 after
+`git fetch --all --prune`.** `0116` remains free on every surface: 0
+collisions across all **296** local + remote refs in the `0100`+ range, no
+uncommitted `supabase/migrations` file in any of the **57** worktrees, and
+`check-migration-versions.mjs` still reporting next version `0117`. Two
+things the re-scan surfaced, recorded rather than smoothed over:
+
+* The all-refs scan's single "content divergence" at `0116` is **this
+  revision itself** — revision 1 on the branch's own pushed remote mirror vs
+  revision 2 locally. One filename, one workstream; it resolves on push.
+* **`origin/main` advanced mid-revision** from `1b40b0b` to `2ade18b` ("Merge
+  FDH-12 Retirement Statement Intelligence into main"), so `0112` / `0113` /
+  `0114` are now **in `main`** — update the matrix rows below accordingly.
+  Those numbers were already recorded as allocated to FDH-12, so `0116`
+  remains free and correctly ordered after them and **no renumbering is
+  needed**. Verified rather than assumed: the current `origin/main` chain
+  (105 migrations) was replayed from empty into PGlite and revision 2 of
+  `0116` applied on top — clean apply, clean idempotent re-apply, and the
+  reorder RPC's real ACL on that chain measured as
+  `postgres=X/postgres,authenticated=X/postgres` (no `anon`, no
+  `service_role`, no `PUBLIC`).
+
 Collision matrix at allocation time:
 
 | Version | Filename | Branch | Owner / workstream | In `main`? | DEV applied? | Production applied? | Status |
@@ -471,8 +512,8 @@ of which would be new product scope.
 re-applies cleanly with zero data variance and no duplicate overloads —
 proved in the certification script's SECTION 10.
 
-**Certification:** `scripts/admin_a02_wave2_certification.mjs`, 249/249
-checks, 0 failures, against real PostgreSQL via PGlite with the full
+**Certification:** `scripts/admin_a02_wave2_certification.mjs`, **325/325**
+checks (revision 1 was 249/249), 0 failures, against real PostgreSQL via PGlite with the full
 migration chain replayed from empty (103 migrations), plus a second
 independently built baseline database excluding `0116` used to measure every
 "before" claim rather than assert it. Covers: reproduction of both original
@@ -481,7 +522,13 @@ rejection, rollback under injected mid-update failure, stale-set conflict
 handling, the legacy duplicate-position repair case, the full security
 posture, the per-content-type scheduling matrix for all four types
 (including Analyst denial per the Admin Architecture Standard section 5), and
-migration re-application.
+migration re-application. Revision 2 adds the privileged-RPC **Pattern A**
+evidence: the permitted roles (Editor, Resource Admin, Super Admin) and every
+denied role (Analyst, Author, Compliance Reviewer, Publisher, role-less,
+deactivated) each calling the reorder RPC **directly, as themselves**, with
+the PostgreSQL session role set to `authenticated` and their own JWT subject;
+anonymous denial at the grant layer; and a null `auth.uid()` failing closed
+inside the function body.
 
 **Status: NOT yet applied to DEV.** Delivered to the Product Owner for manual
 application via the Supabase Dashboard SQL editor, per this project's
@@ -491,4 +538,6 @@ populated by Dashboard execution, and this registry entry is the project's
 actual record of allocation. **Not applied to production, and not authorised
 for production by this wave.**
 
-SHA-256: `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`
+SHA-256 (**revision 2**, privileged-RPC Pattern A):
+`aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`
+(revision 1 was `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`)
