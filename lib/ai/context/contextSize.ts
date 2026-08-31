@@ -43,6 +43,47 @@ const INTENT_DOMAIN_MAP: Record<string, ContextDomain[]> = {
   twin_comparison_question: ['financial_twin'],
   insurance_question: ['insurance'],
   cross_border_question: ['cross_border', 'balance_sheet'],
+
+  // Module 11.2 — deterministic answer router (lib/ai/resolution/intentTaxonomy.ts).
+  // Each entry mirrors that intent's `requires_certified_domain` exactly, so
+  // the router never builds more of the FinancialContextObject than a given
+  // question needs (spec section 74). Intents whose taxonomy entry declares
+  // an empty domain list are deliberately absent here — they use MINIMAL
+  // mode, which needs no per-domain mapping at all.
+  CURRENT_NET_WORTH: ['balance_sheet'],
+  TOTAL_ASSETS: ['balance_sheet'],
+  TOTAL_LIABILITIES: ['balance_sheet'],
+  LIQUID_ASSETS: ['balance_sheet'],
+  MONTHLY_GROSS_INCOME: ['cash_flow'],
+  MONTHLY_NET_INCOME: ['cash_flow'],
+  MONTHLY_EXPENSES: ['cash_flow'],
+  ESSENTIAL_EXPENSES: ['cash_flow'],
+  MONTHLY_SURPLUS: ['cash_flow'],
+  SAVINGS_RATE: ['cash_flow'],
+  FINANCIAL_HEALTH_SCORE: ['score'],
+  FINANCIAL_HEALTH_BAND: ['score'],
+  SCORE_EXPLANATION: ['score'],
+  DNA_PRIMARY_PROFILE: ['financial_dna'],
+  DNA_SECONDARY_PROFILE: ['financial_dna'],
+  DNA_EXPLANATION: ['financial_dna'],
+  RESILIENCE_STATUS: ['resilience'],
+  RESILIENCE_SCORE: ['resilience'],
+  EMERGENCY_FUND_MONTHS: ['resilience'],
+  RESILIENCE_EXPLANATION: ['resilience'],
+  INVESTMENT_TOTAL: ['investments'],
+  INVESTMENT_DIVERSIFICATION: ['investments'],
+  RETIREMENT_BALANCE: ['retirement'],
+  INSURANCE_DATA_STATUS: ['insurance'],
+  GOAL_COUNT: ['goals'],
+  GOALS_ON_TRACK_COUNT: ['goals'],
+  GOALS_AT_RISK_COUNT: ['goals'],
+  FORECAST_LATEST_RUN_DATE: ['forecasts'],
+  TWIN_COHORT: ['financial_twin'],
+  TWIN_CONFIDENCE: ['financial_twin'],
+  REPORT_PERIOD: ['reports'],
+  REPORT_VERSION: ['reports'],
+  COUNTRIES_PRESENT: ['cross_border'],
+  CURRENCIES_PRESENT: ['cross_border'],
 };
 
 export function resolveDomainsForMode(mode: ContextSizeMode, intentCode?: string): ContextDomain[] {
