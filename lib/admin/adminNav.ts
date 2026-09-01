@@ -164,10 +164,19 @@ export interface AdminNavGroup {
  * `isAdmin` (Super Admin, from admin_users) gates only the pre-existing
  * General group, exactly as it did before Wave 1.
  */
+// Admin A0.2 Wave 3, Gate 3 (Product Owner ruling): the Analytics shell
+// (/admin/resources/analytics) completes no task -- it is a certified,
+// honestly-labelled placeholder (Analyst Wave 1), not a working destination.
+// Per this Wave's own disposition rules a visible option that completes no
+// task is hidden from normal navigation rather than left clickable. The
+// ANALYTICS_ITEMS group is therefore no longer built here. The route itself,
+// its capability gate (canViewResourceAnalytics) and its traceability are
+// UNCHANGED and NOT deleted -- only the nav link is removed. See
+// getAdminUnavailableNotice() below for what an Analyst-only caller (who
+// would otherwise see zero Admin destinations at all) sees instead.
 export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabilities): AdminNavGroup[] {
   return [
     ...(isAdmin ? [{ label: 'General', items: ADMIN_GENERAL_ITEMS, matchMode: 'exact' as const }] : []),
-    ...(capabilities.resourceAnalytics ? [{ label: 'Analytics', items: ANALYTICS_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourcesDashboard ? [{ label: 'Resources', items: RESOURCES_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourceContentAdmin ? [{ label: 'Content', items: CONTENT_TYPE_ITEMS, matchMode: 'prefix' as const }] : []),
     ...(capabilities.resourceWorkflowAdmin ? [{ label: 'Workflow', items: WORKFLOW_ITEMS, matchMode: 'exact' as const }] : []),
@@ -176,11 +185,31 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
 }
 
 /**
- * Whether the outer "Admin" entry point is shown at all. Deliberately flat
- * and derived — it is true exactly when at least one group would render, so
- * it can never show an empty dropdown and can never itself act as a
- * capability check for any specific destination (Standard §2/§4).
+ * Wave 3, Gate 3. A fixed, honest, NON-interactive status line -- never a
+ * clickable "coming soon" control (Standard/this Wave's own disposition
+ * rules explicitly prohibit that shape) -- shown only when a caller holds
+ * `resourceAnalytics` and would otherwise see zero Admin destinations at all
+ * (an Analyst with no other Resources role). A caller who holds
+ * `resourceAnalytics` alongside any other capability already sees that
+ * capability's own groups, so no notice is needed for them: hiding the
+ * non-functional Analytics link is enough, because they are not left with
+ * nothing to look at.
+ */
+export function getAdminUnavailableNotice(isAdmin: boolean, capabilities: AdminCapabilities): string | null {
+  if (!capabilities.resourceAnalytics) return null;
+  if (buildAdminNavGroups(isAdmin, capabilities).length > 0) return null;
+  return 'Admin analytics access is confirmed for your account. No analytics features are available yet.';
+}
+
+/**
+ * Whether the outer "Admin" entry point is shown at all. True exactly when
+ * at least one group would render, OR the unavailable notice above would
+ * render (so an Analyst-only caller sees an honest explanation rather than
+ * the Admin entry point silently vanishing) -- so it can never show a
+ * genuinely empty dropdown with nothing in it at all, and still can never
+ * itself act as a capability check for any specific destination
+ * (Standard §2/§4).
  */
 export function shouldShowAdminMenu(isAdmin: boolean, capabilities: AdminCapabilities): boolean {
-  return buildAdminNavGroups(isAdmin, capabilities).length > 0;
+  return buildAdminNavGroups(isAdmin, capabilities).length > 0 || getAdminUnavailableNotice(isAdmin, capabilities) !== null;
 }
