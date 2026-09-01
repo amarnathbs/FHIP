@@ -175,3 +175,170 @@ export async function assertItemCreationAllowedForUser(params: {
     reason: `This item is only available to users whose home jurisdiction is ${(item.country_applicability ?? []).join(', ')}.`,
   };
 }
+
+// =============================================================================
+// G1 Country Foundation (migration 0122) — canonical resolver extension.
+//
+// Everything below reads the G1 schema (countries registry, country_
+// capabilities, user_profiles.primary_country/billing_country,
+// cross_border_relationships) additively. It never changes the meaning of
+// getUserHomeCountry()/isItemAvailableForCountry()/
+// assertItemCreationAllowedForUser() above, which remain the sole authority
+// for residence-based catalogue applicability. This section adds a second,
+// wider typed result (ResolvedCountryContext) for the broader G1 concepts
+// (primary country, base currency, locale, billing, cross-border, experience
+// level, capabilities, provenance) spec section 18 requires — extending the
+// existing canonical service rather than creating a competing one.
+// =============================================================================
+
+export type ExperienceLevel = 'FULL' | 'GENERIC' | 'UNAVAILABLE';
+
+// The exact provenance vocabulary spec section 18 names. CONFIRMED_PROFILE
+// covers both residence and (explicitly, separately) primary/billing
+// confirmation — never conflated with a lower-authority signal.
+export type CountryProvenance =
+  | 'CONFIRMED_PROFILE'
+  | 'EXPLICIT_PRIMARY_SELECTION'
+  | 'ANONYMOUS_SELECTION'
+  | 'DETECTED_REQUEST'
+  | 'PLATFORM_DEFAULT'
+  | 'UNRESOLVED';
+
+export interface CrossBorderRelationshipSummary {
+  countryCode: string;
+  relationshipType: string;
+  status: 'ACTIVE' | 'ENDED';
+}
+
+export interface ResolvedCountryContext {
+  residenceCountry: CountryCode | null;
+  residenceConfirmed: boolean;
+  primaryCountry: string | null;
+  primaryCountryProvenance: CountryProvenance;
+  baseCurrency: string | null;
+  locale: string | null;
+  billingCountry: string | null;
+  billingConfirmed: boolean;
+  crossBorderCountries: CrossBorderRelationshipSummary[];
+  experienceLevel: ExperienceLevel;
+  capabilities: Record<string, boolean>;
+}
+
+const ALL_CAPABILITY_KEYS = [
+  'REGISTRATION',
+  'UNIVERSAL_MODULES',
+  'DOMESTIC_CALCULATIONS',
+  'DOMESTIC_RETIREMENT',
+  'DOMESTIC_TAX_OUTPUTS',
+  'CROSS_BORDER_RELATIONSHIPS',
+  'LOCALISED_RESOURCES',
+  'LOCALISED_REPORTS',
+  'APPROVED_BILLING',
+  'APPROVED_PRICING',
+  'FX_CONVERSION',
+  'REGULATORY_GUIDANCE',
+  'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
+] as const;
+
+function emptyCapabilities(): Record<string, boolean> {
+  return Object.fromEntries(ALL_CAPABILITY_KEYS.map((k) => [k, false]));
+}
+
+/**
+ * The G1 canonical context resolver (spec section 18). Reads ONLY
+ * authenticated-user-owned rows (RLS-scoped via the caller's own Supabase
+ * client) plus world-readable registry data — never trusts a client-supplied
+ * country for anything beyond the ANONYMOUS/DETECTED provenance values,
+ * which this function never returns itself (it always resolves the
+ * AUTHENTICATED case; anonymous/detected resolution belongs to G2's
+ * request-level middleware, not this per-user service). No lower-authority
+ * signal (anonymous/detected/default) ever populates a higher-authority
+ * field here — this function simply has no anonymous/detected inputs to
+ * leak in the first place.
+ */
+export async function resolveCountryContext(
+  userId: string,
+  supabase: SupabaseClient
+): Promise<ResolvedCountryContext> {
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select(
+      'country_of_residence, country_confirmed_at, primary_country, primary_country_source, preferred_currency, billing_country, billing_country_confirmed_at'
+    )
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const residenceCountry = isKnownCountry(profile?.country_of_residence) ? profile!.country_of_residence : null;
+  const residenceConfirmed = Boolean(profile?.country_confirmed_at) && residenceCountry !== null;
+
+  // Effective primary country (spec section 6.4: "initially derived from
+  // confirmed residence where appropriate"): an explicit stored value always
+  // wins; otherwise fall back LIVE to confirmed residence for read purposes
+  // — this is what lets a user created after migration 0122's one-time
+  // backfill still resolve a sensible primary country without a second
+  // write-time hook. An unconfirmed residence never substitutes here (fails
+  // to UNRESOLVED, matching every other fail-closed rule in this file).
+  const storedPrimary = profile?.primary_country ?? null;
+  let primaryCountry: string | null = storedPrimary;
+  let primaryCountryProvenance: CountryProvenance = 'UNRESOLVED';
+  if (storedPrimary) {
+    primaryCountryProvenance =
+      profile?.primary_country_source === 'USER_CONFIRMED' ? 'EXPLICIT_PRIMARY_SELECTION' : 'CONFIRMED_PROFILE';
+  } else if (residenceConfirmed) {
+    primaryCountry = residenceCountry;
+    primaryCountryProvenance = 'CONFIRMED_PROFILE';
+  }
+
+  const billingCountry = profile?.billing_country ?? null;
+  const billingConfirmed = Boolean(profile?.billing_country_confirmed_at) && billingCountry !== null;
+
+  let registryRow: { experience_level?: string | null; default_locale?: string | null } | null = null;
+  if (primaryCountry) {
+    const { data } = await supabase
+      .from('countries')
+      .select('experience_level, default_locale')
+      .eq('country_code', primaryCountry)
+      .maybeSingle();
+    registryRow = data;
+  }
+  const experienceLevel: ExperienceLevel =
+    registryRow?.experience_level === 'FULL' || registryRow?.experience_level === 'GENERIC'
+      ? registryRow.experience_level
+      : 'UNAVAILABLE';
+
+  const capabilities = emptyCapabilities();
+  if (primaryCountry) {
+    const { data: capRows } = await supabase
+      .from('country_capabilities')
+      .select('capability, enabled')
+      .eq('country_code', primaryCountry);
+    for (const row of capRows ?? []) {
+      if (row.capability in capabilities) capabilities[row.capability] = Boolean(row.enabled);
+    }
+  }
+
+  const { data: cbRows } = await supabase
+    .from('cross_border_relationships')
+    .select('country_code, relationship_type, status')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE');
+  const crossBorderCountries: CrossBorderRelationshipSummary[] = (cbRows ?? []).map((r) => ({
+    countryCode: r.country_code,
+    relationshipType: r.relationship_type,
+    status: 'ACTIVE',
+  }));
+
+  return {
+    residenceCountry,
+    residenceConfirmed,
+    primaryCountry,
+    primaryCountryProvenance,
+    baseCurrency: profile?.preferred_currency ?? null,
+    locale: registryRow?.default_locale ?? null,
+    billingCountry,
+    billingConfirmed,
+    crossBorderCountries,
+    experienceLevel,
+    capabilities,
+  };
+}

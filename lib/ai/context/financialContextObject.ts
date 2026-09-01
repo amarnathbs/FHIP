@@ -10,6 +10,7 @@
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
+import { computeDashboard, type DashboardSummary } from '@/lib/engines/dashboard';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
 import { loadResilience } from '@/lib/services/resilienceData';
@@ -180,7 +181,44 @@ export async function buildFinancialContextObject(userId: string, options: Build
   const countryOfResidence = profileRes.data?.country_of_residence ?? null;
   const crossBorderIndicator = Boolean(profileRes.data?.secondary_country);
 
-  const dashboard = await loadDashboard(userId, supabase);
+  // FDH-16 closure round (item 8, regression discovered fresh against a clean
+  // origin/main baseline): FDH16-DEF-001's fetchAllRows() fix
+  // (lib/services/dashboardData.ts) made loadDashboard()'s register queries
+  // THROW on a PostgREST read error, where the previous unpaginated queries
+  // never threw (they silently coalesced a failed read to `data ?? []`).
+  // Every OTHER loader on this path (loadHealthScore/loadFinancialDna/
+  // loadResilience/computeGoalsPagePayload, below) is already wrapped in a
+  // try/catch for exactly this reason — this one was not, so a single failed
+  // dashboard-register read during a database outage used to make
+  // buildFinancialContextObject() itself reject uncaught, well before the
+  // `integrity.readFailures` fail-closed gate further down ever got a chance
+  // to run — bypassing Module 11.0's own designed
+  // INVALID/PARTIAL/CERTIFIED contract entirely (confirmed live: 10/18
+  // tests in tests/unit/aiResidualClosureFailClosed.test.ts failed with an
+  // uncaught "terminating connection due to administrator command" instead
+  // of the expected structured INVALID context; 18/18 pass on a clean
+  // origin/main checkout with the pre-fix, non-throwing dashboardData.ts).
+  // The two real callers of this function (app/api/internal/ai/context/
+  // {validate,preview}/route.ts) already wrap it in their own try/catch and
+  // return a 500 either way, so this was never a live fail-OPEN — but it did
+  // break the certified per-domain INVALID contract this file exists to
+  // provide. certifiedSourceClient's wrapper already observes and records
+  // the underlying failed read(s) into `integrity` regardless of whether
+  // loadDashboard() itself throws or swallows the error, so catching here
+  // and falling back to an explicit, well-typed all-empty DashboardSummary
+  // (computeDashboard() over empty registers — never a hand-rolled literal)
+  // is safe: the `integrity.readFailures.length > 0` gate below still fires
+  // and returns buildSourceFailureContext() before this fallback value is
+  // ever used for anything a provider could see.
+  let dashboard: DashboardSummary;
+  try {
+    dashboard = await loadDashboard(userId, supabase);
+  } catch {
+    dashboard = computeDashboard(
+      { income: [], expenses: [], assets: [], liabilities: [], investments: [], retirement: [], insurance: [], goals: [], snapshots: [] },
+      reportingCurrency
+    );
+  }
 
   const missingFields: string[] = [];
   const staleFields: string[] = [];
