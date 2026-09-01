@@ -11,6 +11,19 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './LandingPage.module.css';
+import { CountrySelector } from './CountrySelector';
+import { getLandingMarketingPrice } from '@/lib/config/landingPricing';
+import type { LandingCountryContext } from '@/lib/services/landingCountryContext';
+
+// G2 — Landing-Page Localisation (spec sections 9-10). `countryContext` is
+// null whenever the G2 feature flag is disabled (see
+// app/(marketing)/page.tsx) — every branch below falls back to the exact
+// pre-G2 behaviour (static AU pricing, no selector) in that case, so
+// disabling the flag restores the original experience with no code change
+// needed here.
+export interface LandingPageProps {
+  countryContext?: LandingCountryContext | null;
+}
 
 const BASE_ALT_POINTS: [number, number][] = [
   [0, 175],
@@ -186,8 +199,17 @@ function ForecastSlider() {
   );
 }
 
-function PricingCards() {
+// G2: `pricingRegion` is undefined/omitted (flag disabled) => the exact
+// original AU-only static markup, byte-for-byte. When the flag is enabled,
+// an AU/IN pricingRegion shows that market's PO-approved price
+// (lib/config/landingPricing.ts — the single controlled source, spec
+// section 10); GENERIC/UNAVAILABLE never invents a price for an
+// unsupported currency (spec section 9: "do not invent GBP/USD/SGD/AED
+// subscription prices") and instead prompts the visitor to pick a country.
+function PricingCards({ pricingRegion }: { pricingRegion?: 'AU' | 'IN' | 'GENERIC' | 'UNAVAILABLE' }) {
   const [annual, setAnnual] = useState(false);
+  const price = pricingRegion === undefined ? getLandingMarketingPrice('AU') : getLandingMarketingPrice(pricingRegion);
+
   return (
     <>
       <div className={styles.pricingToggle} role="group" aria-label="Billing period">
@@ -219,20 +241,37 @@ function PricingCards() {
           <span className={styles.featuredBadge}>Recommended</span>
           <h3>Premium</h3>
           <p className={styles.promise}>Plan, compare and improve.</p>
-          <div className={`${styles.amount} ${styles.tabular}`}>
-            {annual ? (
-              <>
-                A$99<span>/yr</span>
-              </>
-            ) : (
-              <>
-                A$9.99<span>/mo</span>
-              </>
-            )}
-          </div>
-          <p className={styles.billingNote}>
-            {annual ? 'Equivalent to A$8.25/mo, billed annually.' : 'Billed monthly. Cancel anytime.'}
-          </p>
+          {price ? (
+            <>
+              <div className={`${styles.amount} ${styles.tabular}`}>
+                {annual ? (
+                  <>
+                    {price.symbol}
+                    {price.annual}
+                    <span>/yr</span>
+                  </>
+                ) : (
+                  <>
+                    {price.symbol}
+                    {price.monthly}
+                    <span>/mo</span>
+                  </>
+                )}
+              </div>
+              <p className={styles.billingNote}>
+                {annual
+                  ? `Equivalent to ${price.symbol}${price.annualEquivalentMonthly}/mo, billed annually.`
+                  : 'Billed monthly. Cancel anytime.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={`${styles.amount} ${styles.tabular}`} style={{ fontSize: '1.1rem' }}>
+                Pricing varies by country
+              </div>
+              <p className={styles.billingNote}>Choose your country above to see Premium pricing for your region.</p>
+            </>
+          )}
           <ul>
             <li>Full score &amp; component explanations</li>
             <li>Forecasts &amp; scenario comparison</li>
@@ -245,13 +284,51 @@ function PricingCards() {
           </Link>
         </div>
       </div>
+      <p className={styles.assumptionsNote} style={{ marginTop: '1rem' }}>
+        Pricing shown is marketing information for your selected country and is not a live checkout price &mdash;
+        online payment is not yet available. Start free today; billing eligibility is always confirmed separately
+        before any charge.
+      </p>
     </>
   );
 }
 
-export default function PreviewLandingPage() {
+// G2: derives the country-varying FAQ answer for "Does FHIP work in my
+// country?" from experienceLevel/pricingRegion rather than ever claiming
+// certification the G1 registry doesn't back (spec section 9: no India
+// EPF/PPF/NPS/SMSF-equivalence claim, no generic-country domestic-feature
+// claim, no functioning-checkout claim).
+function countryFaqEntry(countryContext: LandingCountryContext | null | undefined): [string, string] {
+  if (!countryContext || !countryContext.presentationCountry) {
+    return [
+      'Does FHIP work in my country?',
+      'FHIP supports multi‑country, multi‑currency households. Choose your country above to see country‑specific examples and pricing; core financial‑health tracking is available everywhere, with additional certified local features in supported countries.',
+    ];
+  }
+  const { presentationCountry, experienceLevel } = countryContext;
+  if (presentationCountry === 'AU') {
+    return [
+      'Does FHIP work in Australia?',
+      'Yes. Australia has FHIP’s full certified experience, including domestic retirement (SMSF) support where applicable. Pricing above is shown in AUD.',
+    ];
+  }
+  if (presentationCountry === 'IN') {
+    return [
+      'Does FHIP work in India?',
+      'Yes, with India‑relevant examples and pricing shown in INR. India‑specific domestic retirement products (EPF, PPF, NPS) are not yet part of FHIP’s certified calculations, and Superannuation is an Australian product, not an equivalent to any Indian retirement scheme — these remain on our roadmap.',
+    ];
+  }
+  return [
+    'Does FHIP work in my country?',
+    `FHIP’s universal financial‑health tracking is available in your region, with a ${experienceLevel === 'FULL' ? 'growing' : 'generic, non‑country‑specific'} set of features. Country‑certified domestic tax, retirement or regulatory calculations are not yet available outside Australia and India, and pricing/billing for your region is not yet confirmed.`,
+  ];
+}
+
+export default function PreviewLandingPage({ countryContext = null }: LandingPageProps) {
   const containerRef = useRevealOnScroll();
   const compact = useCompactHeader();
+  const pricingRegion = countryContext ? countryContext.pricingRegion : undefined;
+  const faqEntry = countryContext !== null ? countryFaqEntry(countryContext) : null;
 
   return (
     <div className={styles.page} ref={containerRef}>
@@ -284,6 +361,18 @@ export default function PreviewLandingPage() {
             </button>
           </div>
         </div>
+        {countryContext && (
+          // G2: deliberately its own full-width bar BELOW the primary header
+          // row, not squeezed into .headerActions alongside Log in/Start
+          // free/the mobile menu toggle -- that row is already width-tight
+          // at mobile breakpoints (spec section 14: "no horizontal
+          // overflow", "avoid cumulative layout shift"); a dedicated row
+          // gives the selector room on every viewport without touching the
+          // pre-existing header's own carefully-tuned responsive behaviour.
+          <div className={`${styles.wrap} ${styles.countrySelectorBar}`}>
+            <CountrySelector activeCountry={countryContext.presentationCountry} />
+          </div>
+        )}
       </header>
 
       <main id="top">
@@ -291,7 +380,11 @@ export default function PreviewLandingPage() {
         <section className={styles.hero}>
           <div className={`${styles.wrap} ${styles.heroGrid}`}>
             <div>
-              <p className={styles.eyebrow}>Your financial health, explained</p>
+              <p className={styles.eyebrow}>
+                Your financial health, explained
+                {countryContext?.presentationCountry === 'AU' && ' — for Australian households'}
+                {countryContext?.presentationCountry === 'IN' && ' — for Indian households'}
+              </p>
               <h1>See your complete financial health &mdash; and what to do next.</h1>
               <p className={styles.lede}>
                 Bring income, spending, assets, debts, investments, insurance and goals into one clear view. FHIP
@@ -588,7 +681,7 @@ export default function PreviewLandingPage() {
               <h2>Start with clarity. Upgrade when you want deeper planning.</h2>
             </div>
             <div className={styles.reveal}>
-              <PricingCards />
+              <PricingCards pricingRegion={pricingRegion} />
             </div>
           </div>
         </section>
@@ -630,7 +723,7 @@ export default function PreviewLandingPage() {
                 ['What happens to my financial data?', 'Your data is used to build your household picture and calculate your results. It is not sold, and it is not used to build an advertising profile. You can review, correct or remove it at any time.'],
                 ['Are the forecasts guaranteed?', 'No. Forecasts are estimates based on the information you provide and the assumptions shown alongside each result. They are clearly labelled as projections, not promises.'],
                 ['Can I cancel Premium at any time?', 'Yes. You can manage or cancel your plan from your account at any time — your Free plan remains available afterwards.'],
-                ['Does FHIP work outside Australia?', 'FHIP supports multi‑country, multi‑currency households, with cross‑border exposure and FX effects shown alongside your results.'],
+                faqEntry ?? ['Does FHIP work outside Australia?', 'FHIP supports multi‑country, multi‑currency households, with cross‑border exposure and FX effects shown alongside your results.'],
               ].map(([q, a]) => (
                 <details className={styles.faqItem} key={q}>
                   <summary>

@@ -214,6 +214,26 @@
 @media (min-width: 980px) and (max-width: 1350px) { .primaryNav { gap: 1.1rem; } }
 
 .headerActions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+
+/* G2 — a dedicated, full-width slim bar for the anonymous country selector,
+   kept separate from .headerActions above (see LandingPage.tsx's own
+   comment) so it never competes for space with Log in/Start free/the
+   mobile menu toggle at narrow viewports. Reserves a fixed height on every
+   viewport (no conditional show/hide of the row itself) so switching
+   countries never causes cumulative layout shift. */
+.countrySelectorBar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .countrySelectorBar { justify-content: center; }
+}
 .btn {
   display: inline-flex;
   align-items: center;
