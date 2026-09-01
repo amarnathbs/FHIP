@@ -776,11 +776,21 @@ lockout (no UPDATE/DELETE policy for authenticated); and MCC regression (an
 unconfirmed user is still blocked from the 8 foundational tables, a
 confirmed user is not over-blocked).
 
-**Status: NOT applied to DEV or production.** Delivered to the Product Owner
-for manual application via the Supabase Dashboard SQL editor, per this
-project's standing process — no Supabase CLI project link exists in this
-worktree, and no DEV/production credentials were available to this task (see
-the G1 closure report's scope-audit section). Local PGlite replay is the
-only certification performed.
+**Status: APPLIED TO DEV, not applied to production.** Applied to DEV by the
+Product Owner via the Supabase Dashboard SQL editor (no Supabase CLI project
+link exists in this worktree). Independently re-confirmed live by this task
+after credentials were provisioned: registry columns/capability rows/new
+tables reachable, `confirm_billing_country` RPC returns a real `401
+UNAUTHENTICATED` (not "function not found"). Full live-DEV certification —
+`scripts/g1_country_foundation_live_dev_certification.mjs`, **54/54 checks**,
+0 failures, real authenticated-user JWTs for every RLS/authority assertion,
+service role used only for synthetic-user setup and cleanup — covers all 9
+spec-section-22 scenarios, the full preview+confirm workflow including
+stale/expired/tampered-preview rejection, the controlled-column guard,
+cross-border relationship RLS with ground-truth re-verification, billing-
+region validation in both directions against a live-read `billing_country`,
+and MCC regression. Cleanup independently re-verified via fresh queries —
+zero residual rows across 5 tables, zero residual synthetic auth users.
+**Not applied to production; no production access occurred at any point.**
 
 SHA-256: `5d67de42435ced7c3a61bfd93f482b57c7e4f0417036f5a280d3afc748123d87`
