@@ -2,29 +2,29 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   computeLandingCountryContext,
   normalizeLandingCountryCode,
-  isKnownLandingCountry,
-  serializeLandingCountryCookie,
+  bucketCountryCodeForLanding,
+  isPlausibleCountryCode,
   parseLandingCountryCookie,
+  serializeLandingCountryCookie,
   readRawDetectedCountry,
   isTestDetectionHeaderAllowed,
+  isLandingPresentationCountry,
+  toAuthoritativeCountryCodeOrNull,
   LANDING_DETECTED_COUNTRY_HEADER,
   LANDING_TEST_DETECTED_COUNTRY_HEADER,
+  LANDING_PRESENTATION_COUNTRIES,
   type LandingCountryRegistrySnapshot,
 } from '@/lib/services/landingCountryContext';
 
-// Mirrors the exact G1 registry seed (migration 0122): AU/IN = FULL,
-// GB/US/SG/AE = GENERIC. This fixture is the ONLY place this test file
-// hardcodes registry shape — computeLandingCountryContext itself never
-// hardcodes a country list, it only ever reads this injected snapshot.
+// Mirrors the G1 registry's own experience-level facts for AU/IN (migration
+// 0122). GB/US/SG/AE/anything-else are never looked up here any more — the
+// PO's AU/IN/Global model buckets all of them to 'GLOBAL' before this
+// snapshot is ever consulted.
 function registryFixture(): LandingCountryRegistrySnapshot {
   return {
     experienceByCountry: new Map([
       ['AU', 'FULL'],
       ['IN', 'FULL'],
-      ['GB', 'GENERIC'],
-      ['US', 'GENERIC'],
-      ['SG', 'GENERIC'],
-      ['AE', 'GENERIC'],
     ]),
   };
 }
@@ -35,14 +35,14 @@ function headersFixture(map: Record<string, string>) {
 
 const notAuthenticated = { isAuthenticated: false, primaryCountry: null, billingConfirmed: false };
 
-describe('G2 landing country context — 20-scenario matrix (spec section 13)', () => {
+describe('G2 landing country context — AU/IN/Global model (PO clarification 2026-09-02)', () => {
   const registry = registryFixture();
 
   it('G2-01: anonymous visitor detected in AU -> AU presentation, presentation-only', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
@@ -53,57 +53,66 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: 'IN',
+      detectedCountryRaw: 'IN',
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: 'IN', source: 'DETECTED_REQUEST', pricingRegion: 'IN', billingConfirmed: false });
   });
 
-  it.each(['GB', 'US', 'SG', 'AE'])('G2-03..06: anonymous visitor detected in %s -> generic presentation, presentation-only', (code) => {
+  it.each(['GB', 'US', 'SG', 'AE'])('G2-03..06: anonymous visitor detected in %s -> GLOBAL presentation (non-AU/IN detection maps to Global)', (code) => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: code,
+      detectedCountryRaw: code,
       platformDefaultCountry: null,
       registry,
     });
-    expect(ctx.presentationCountry).toBe(code);
+    expect(ctx.presentationCountry).toBe('GLOBAL');
     expect(ctx.experienceLevel).toBe('GENERIC');
-    expect(ctx.pricingRegion).toBe('GENERIC');
+    expect(ctx.pricingRegion).toBe('GLOBAL');
     expect(ctx.billingConfirmed).toBe(false);
     expect(ctx.isAuthoritative).toBe(false);
   });
 
-  it('G2-07: anonymous visitor, unsupported detected country -> generic fallback, no authority', () => {
-    const normalized = normalizeLandingCountryCode('ZZ');
-    const detected = isKnownLandingCountry(normalized, registry) ? normalized : null;
+  it('a valid non-AU/IN country NOT in the old 6-country list (e.g. Germany) also maps to Global (PO table row 3: "another valid non-AU/IN country")', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: detected,
+      detectedCountryRaw: 'DE',
+      platformDefaultCountry: null,
+      registry,
+    });
+    expect(ctx).toMatchObject({ presentationCountry: 'GLOBAL', source: 'DETECTED_REQUEST', pricingRegion: 'GLOBAL' });
+  });
+
+  it('G2-07: unsupported/pseudo detected code (not a real country) -> neutral, no preselection, no authority', () => {
+    const ctx = computeLandingCountryContext({
+      authenticated: notAuthenticated,
+      anonymousSelection: null,
+      detectedCountryRaw: 'ZZ', // ISO 3166-1 reserved "unknown or unspecified country"
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: null, source: 'GENERIC_FALLBACK', pricingRegion: 'UNAVAILABLE' });
   });
 
-  it('G2-08: no trusted country signal at all -> generic fallback / neutral prompt (no PO-approved platform default configured)', () => {
+  it('G2-08: no trusted country signal at all -> neutral selector, NO preselected country (PO detection table row 4)', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: null,
+      detectedCountryRaw: null,
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: null, source: 'GENERIC_FALLBACK', experienceLevel: 'GENERIC', pricingRegion: 'UNAVAILABLE', billingConfirmed: false });
   });
 
-  it('G2-08b: platform-default tier is real when a PO value IS configured (proves tier 4 is reachable, not dead code)', () => {
+  it('G2-08b: platform-default tier is real when a PO value IS configured (proves tier 4 is reachable, not dead code) — but is formally CLOSED as a gap since PO row 4 already specifies null as the approved "no signal" behaviour', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: null,
+      detectedCountryRaw: null,
       platformDefaultCountry: 'AU',
       registry,
     });
@@ -114,7 +123,7 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: 'IN',
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
@@ -125,21 +134,38 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: 'AU',
-      detectedCountry: 'IN',
+      detectedCountryRaw: 'IN',
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: 'AU', source: 'ANONYMOUS_SELECTION', billingConfirmed: false });
   });
 
+  it('Global selection -> neutral GLOBAL presentation, no billing confirmation, no AU/IN domestic capability implied', () => {
+    const ctx = computeLandingCountryContext({
+      authenticated: notAuthenticated,
+      anonymousSelection: 'GLOBAL',
+      detectedCountryRaw: 'AU', // detection must not override the manual Global choice
+      platformDefaultCountry: null,
+      registry,
+    });
+    expect(ctx).toMatchObject({
+      presentationCountry: 'GLOBAL',
+      source: 'ANONYMOUS_SELECTION',
+      experienceLevel: 'GENERIC', // never FULL -- no AU/IN domestic capability implied
+      pricingRegion: 'GLOBAL',
+      billingConfirmed: false,
+      isAuthoritative: false,
+    });
+  });
+
   it('G2-11: malformed/forged cookie is ignored, falls through to detected AU, no authority', () => {
-    // parseLandingCountryCookie is exercised directly here (forgery surface).
-    const forged = parseLandingCountryCookie('not-valid-base64!!!', registry);
+    const forged = parseLandingCountryCookie('not-valid-base64!!!');
     expect(forged).toBeNull();
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: forged,
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
@@ -147,14 +173,15 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
   });
 
   it('G2-12: forged/unsupported detected-country header resolves to safe fallback, no authority', () => {
-    const rawForged = 'A1'; // MaxMind-style anonymizer pseudo-code -- never a real registry member
+    const rawForged = 'A1'; // MaxMind-style anonymizer pseudo-code -- never a real country
+    expect(isPlausibleCountryCode(rawForged)).toBe(false);
     const normalized = normalizeLandingCountryCode(rawForged);
-    const detected = isKnownLandingCountry(normalized, registry) ? normalized : null;
+    const detected = bucketCountryCodeForLanding(normalized);
     expect(detected).toBeNull();
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: null,
-      detectedCountry: detected,
+      detectedCountryRaw: normalized,
       platformDefaultCountry: null,
       registry,
     });
@@ -165,7 +192,7 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: { isAuthenticated: true, primaryCountry: 'AU', billingConfirmed: false },
       anonymousSelection: 'IN',
-      detectedCountry: 'IN',
+      detectedCountryRaw: 'IN',
       platformDefaultCountry: null,
       registry,
     });
@@ -176,51 +203,51 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: { isAuthenticated: true, primaryCountry: 'IN', billingConfirmed: false },
       anonymousSelection: 'AU',
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: 'IN', source: 'AUTHENTICATED_PRIMARY', experienceLevel: 'FULL' });
   });
 
-  it('G2-15: authenticated GB (generic) user -> GB generic experience wins over any anonymous/detected signal', () => {
+  it('G2-15: authenticated GB (non-AU/IN) user -> buckets to GLOBAL, wins over any anonymous/detected signal', () => {
     const ctx = computeLandingCountryContext({
       authenticated: { isAuthenticated: true, primaryCountry: 'GB', billingConfirmed: false },
       anonymousSelection: 'IN',
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
-    expect(ctx).toMatchObject({ presentationCountry: 'GB', source: 'AUTHENTICATED_PRIMARY', experienceLevel: 'GENERIC', pricingRegion: 'GENERIC' });
+    expect(ctx).toMatchObject({ presentationCountry: 'GLOBAL', source: 'AUTHENTICATED_PRIMARY', experienceLevel: 'GENERIC', pricingRegion: 'GLOBAL' });
   });
 
   it('G2-16: unconfirmed account (primaryCountry null) behaves as anonymous for landing presentation (MCC gate is a separate, untouched mechanism)', () => {
     const ctx = computeLandingCountryContext({
       authenticated: { isAuthenticated: true, primaryCountry: null, billingConfirmed: false },
       anonymousSelection: null,
-      detectedCountry: 'AU',
+      detectedCountryRaw: 'AU',
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: 'AU', source: 'DETECTED_REQUEST' });
   });
 
-  it('G2-17: anonymous detected IN, manual GB selection -> generic/GB presentation, no India billing implied', () => {
+  it('G2-17: anonymous detected IN, manual Global selection -> Global presentation, no India billing implied', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
-      anonymousSelection: 'GB',
-      detectedCountry: 'IN',
+      anonymousSelection: 'GLOBAL',
+      detectedCountryRaw: 'IN',
       platformDefaultCountry: null,
       registry,
     });
-    expect(ctx).toMatchObject({ presentationCountry: 'GB', source: 'ANONYMOUS_SELECTION', pricingRegion: 'GENERIC', billingConfirmed: false });
+    expect(ctx).toMatchObject({ presentationCountry: 'GLOBAL', source: 'ANONYMOUS_SELECTION', pricingRegion: 'GLOBAL', billingConfirmed: false });
   });
 
-  it('G2-18: anonymous detected GB, manual IN selection -> India presentation, no India billing', () => {
+  it('G2-18: anonymous detected GB (Global), manual IN selection -> India presentation, no India billing', () => {
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: 'IN',
-      detectedCountry: 'GB',
+      detectedCountryRaw: 'GB',
       platformDefaultCountry: null,
       registry,
     });
@@ -231,7 +258,7 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
       anonymousSelection: 'AU',
-      detectedCountry: 'IN', // changed "IP" this visit
+      detectedCountryRaw: 'IN', // changed "IP" this visit
       platformDefaultCountry: null,
       registry,
     });
@@ -241,66 +268,122 @@ describe('G2 landing country context — 20-scenario matrix (spec section 13)', 
   it('G2-20: signed-in after anonymous selection -> authenticated primary wins, cookie cannot override', () => {
     const ctx = computeLandingCountryContext({
       authenticated: { isAuthenticated: true, primaryCountry: 'AU', billingConfirmed: true },
-      anonymousSelection: 'IN', // prior anonymous cookie, now stale
-      detectedCountry: 'IN',
+      anonymousSelection: 'GLOBAL', // prior anonymous cookie, now stale
+      detectedCountryRaw: 'IN',
       platformDefaultCountry: null,
       registry,
     });
     expect(ctx).toMatchObject({ presentationCountry: 'AU', source: 'AUTHENTICATED_PRIMARY', billingConfirmed: true });
   });
+
+  it('a Global user with an AUD-flavoured currency preference (modelled by the authenticated tier never even accepting a currency parameter) remains Global', () => {
+    // computeLandingCountryContext's authenticated input has no currency
+    // field at all -- this is itself the structural proof that currency
+    // cannot influence presentation. This test exercises the GB (Global)
+    // case explicitly regardless of any currency context a caller might
+    // separately be carrying.
+    const ctx = computeLandingCountryContext({
+      authenticated: { isAuthenticated: true, primaryCountry: 'GB', billingConfirmed: false },
+      anonymousSelection: null,
+      detectedCountryRaw: null,
+      platformDefaultCountry: null,
+      registry,
+    });
+    expect(ctx.presentationCountry).toBe('GLOBAL');
+  });
+
+  it('a Global user remains Global regardless of an INR-flavoured currency context for the same reason', () => {
+    const ctx = computeLandingCountryContext({
+      authenticated: { isAuthenticated: true, primaryCountry: 'US', billingConfirmed: false },
+      anonymousSelection: null,
+      detectedCountryRaw: null,
+      platformDefaultCountry: null,
+      registry,
+    });
+    expect(ctx.presentationCountry).toBe('GLOBAL');
+  });
 });
 
-describe('G2 cookie security (spec section 8) — forgery cannot grant authority', () => {
-  const registry = registryFixture();
+describe('GLOBAL is not a country — structural enforcement (PO clarification section 4)', () => {
+  it('GLOBAL is a valid landing PRESENTATION value...', () => {
+    expect(isLandingPresentationCountry('GLOBAL')).toBe(true);
+    expect(LANDING_PRESENTATION_COUNTRIES).toContain('GLOBAL');
+  });
 
-  it('a validly-serialized cookie round-trips to its own country', () => {
-    const cookie = serializeLandingCountryCookie('IN');
-    expect(parseLandingCountryCookie(cookie, registry)).toBe('IN');
+  it('...but toAuthoritativeCountryCodeOrNull() never lets it become an authoritative CountryCode', () => {
+    expect(toAuthoritativeCountryCodeOrNull('GLOBAL')).toBeNull();
+    expect(toAuthoritativeCountryCodeOrNull('AU')).toBe('AU');
+    expect(toAuthoritativeCountryCodeOrNull('IN')).toBe('IN');
+    expect(toAuthoritativeCountryCodeOrNull(null)).toBeNull();
+  });
+
+  it('an arbitrary/forged presentation value is rejected by isLandingPresentationCountry', () => {
+    expect(isLandingPresentationCountry('GB')).toBe(false);
+    expect(isLandingPresentationCountry('global')).toBe(false); // case-sensitive, no silent normalization here
+    expect(isLandingPresentationCountry('')).toBe(false);
+    expect(isLandingPresentationCountry(null)).toBe(false);
+    expect(isLandingPresentationCountry(123)).toBe(false);
+  });
+});
+
+describe('G2 cookie security (spec section 8) — forgery cannot grant authority, and only {AU, IN, GLOBAL} are ever accepted', () => {
+  it('a validly-serialized cookie round-trips to its own bucket, for all three values', () => {
+    for (const value of ['AU', 'IN', 'GLOBAL'] as const) {
+      const cookie = serializeLandingCountryCookie(value);
+      expect(parseLandingCountryCookie(cookie)).toBe(value);
+    }
   });
 
   it('garbage base64 is rejected', () => {
-    expect(parseLandingCountryCookie('!!!not-base64!!!', registry)).toBeNull();
+    expect(parseLandingCountryCookie('!!!not-base64!!!')).toBeNull();
   });
 
   it('valid base64 but non-JSON payload is rejected', () => {
     const raw = Buffer.from('not json', 'utf8').toString('base64url');
-    expect(parseLandingCountryCookie(raw, registry)).toBeNull();
+    expect(parseLandingCountryCookie(raw)).toBeNull();
   });
 
   it('wrong version field is rejected (no silent migration)', () => {
     const raw = Buffer.from(JSON.stringify({ v: 999, country: 'AU', source: 'MANUAL', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
-    expect(parseLandingCountryCookie(raw, registry)).toBeNull();
+    expect(parseLandingCountryCookie(raw)).toBeNull();
   });
 
-  it('a forged country not in the registry (e.g. "ZZ") is rejected even with an otherwise-valid shape', () => {
-    const raw = Buffer.from(JSON.stringify({ v: 1, country: 'ZZ', source: 'MANUAL', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
-    expect(parseLandingCountryCookie(raw, registry)).toBeNull();
+  it('a forged country outside {AU, IN, GLOBAL} (e.g. a raw ISO code like "GB", or garbage like "ZZ") is rejected even with an otherwise-valid shape', () => {
+    for (const forgedCountry of ['GB', 'ZZ', 'AUS', 'global', '']) {
+      const raw = Buffer.from(JSON.stringify({ v: 2, country: forgedCountry, source: 'MANUAL', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
+      expect(parseLandingCountryCookie(raw)).toBeNull();
+    }
   });
 
   it('a forged "source" other than MANUAL is rejected', () => {
-    const raw = Buffer.from(JSON.stringify({ v: 1, country: 'AU', source: 'AUTHENTICATED_PRIMARY', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
-    expect(parseLandingCountryCookie(raw, registry)).toBeNull();
+    const raw = Buffer.from(JSON.stringify({ v: 2, country: 'AU', source: 'AUTHENTICATED_PRIMARY', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
+    expect(parseLandingCountryCookie(raw)).toBeNull();
   });
 
   it('missing cookie resolves to null, not an error', () => {
-    expect(parseLandingCountryCookie(null, registry)).toBeNull();
-    expect(parseLandingCountryCookie(undefined, registry)).toBeNull();
-    expect(parseLandingCountryCookie('', registry)).toBeNull();
+    expect(parseLandingCountryCookie(null)).toBeNull();
+    expect(parseLandingCountryCookie(undefined)).toBeNull();
+    expect(parseLandingCountryCookie('')).toBeNull();
   });
 
   it('a forged cookie can never produce anything beyond a non-authoritative presentation value in the full pipeline', () => {
-    const raw = Buffer.from(JSON.stringify({ v: 1, country: 'AU', source: 'MANUAL', setAt: new Date().toISOString(), billingConfirmed: true, isAuthoritative: true }), 'utf8').toString('base64url');
-    const country = parseLandingCountryCookie(raw, registry);
-    expect(country).toBe('AU'); // the extra forged fields are simply ignored -- shape is fixed, not extensible by the client
+    const raw = Buffer.from(JSON.stringify({ v: 2, country: 'AU', source: 'MANUAL', setAt: new Date().toISOString(), billingConfirmed: true, isAuthoritative: true }), 'utf8').toString('base64url');
+    const bucket = parseLandingCountryCookie(raw);
+    expect(bucket).toBe('AU'); // the extra forged fields are simply ignored -- shape is fixed, not extensible by the client
     const ctx = computeLandingCountryContext({
       authenticated: notAuthenticated,
-      anonymousSelection: country,
-      detectedCountry: null,
+      anonymousSelection: bucket,
+      detectedCountryRaw: null,
       platformDefaultCountry: null,
-      registry,
+      registry: registryFixture(),
     });
     expect(ctx.isAuthoritative).toBe(false);
     expect(ctx.billingConfirmed).toBe(false);
+  });
+
+  it('an old-format (v1, raw-ISO-code) cookie from before the AU/IN/Global migration is safely rejected, not silently accepted', () => {
+    const oldFormatRaw = Buffer.from(JSON.stringify({ v: 1, country: 'GB', source: 'MANUAL', setAt: new Date().toISOString() }), 'utf8').toString('base64url');
+    expect(parseLandingCountryCookie(oldFormatRaw)).toBeNull();
   });
 });
 
@@ -330,14 +413,16 @@ describe('G2 detected-country header handling (spec section 6)', () => {
     expect(readRawDetectedCountry(headers)).toBe('IN');
   });
 
-  it('normalizes/validates whatever the header actually contained', () => {
-    const registry = registryFixture();
+  it('normalizes whatever the header actually contained; bucketing (AU/IN/Global/unresolved) is a separate, dedicated step', () => {
     expect(normalizeLandingCountryCode('au')).toBe('AU');
     expect(normalizeLandingCountryCode('  in ')).toBe('IN');
     expect(normalizeLandingCountryCode('AUS')).toBeNull(); // 3-letter code rejected, not silently truncated
     expect(normalizeLandingCountryCode('')).toBeNull();
     expect(normalizeLandingCountryCode(null)).toBeNull();
-    expect(isKnownLandingCountry('ZZ', registry)).toBe(false);
-    expect(isKnownLandingCountry('AU', registry)).toBe(true);
+    expect(bucketCountryCodeForLanding('AU')).toBe('AU');
+    expect(bucketCountryCodeForLanding('IN')).toBe('IN');
+    expect(bucketCountryCodeForLanding('FR')).toBe('GLOBAL');
+    expect(bucketCountryCodeForLanding('ZZ')).toBeNull();
+    expect(bucketCountryCodeForLanding(null)).toBeNull();
   });
 });

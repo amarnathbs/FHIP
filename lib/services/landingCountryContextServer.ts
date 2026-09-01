@@ -12,7 +12,6 @@ import {
   normalizeLandingCountryCode,
   parseLandingCountryCookie,
   readRawDetectedCountry,
-  isKnownLandingCountry,
   LANDING_COUNTRY_COOKIE_NAME,
   type LandingCountryContext,
 } from '@/lib/services/landingCountryContext';
@@ -29,8 +28,12 @@ export interface ResolveLandingCountryContextForRequestParams {
  *   - the G1 canonical resolver (authenticated tier only, and only when a
  *     userId is present — an anonymous visitor never triggers a
  *     user_profiles lookup);
- *   - the live, world-readable `countries` registry snapshot;
- *   - the validated anonymous-selection cookie;
+ *   - a best-effort snapshot of the live, world-readable `countries`
+ *     registry (used only to cross-check AU/IN's declared experience_level;
+ *     since the PO's AU/IN/Global clarification, no cookie/header/selection
+ *     validation depends on this any more — see
+ *     LandingCountryRegistrySnapshot's own doc comment);
+ *   - the validated anonymous-selection cookie (one of {AU, IN, GLOBAL} or null);
  *   - the validated detected-request-country header.
  * No PO-approved platform default is recorded today (see G2 report), so
  * `platformDefaultCountry` is always null here — see
@@ -65,16 +68,15 @@ export async function resolveLandingCountryContextForRequest(
     }
   }
 
-  const anonymousSelection = parseLandingCountryCookie(cookieValue, registry);
+  const anonymousSelection = parseLandingCountryCookie(cookieValue);
 
   const rawDetected = readRawDetectedCountry(headers);
-  const normalizedDetected = normalizeLandingCountryCode(rawDetected);
-  const detectedCountry = isKnownLandingCountry(normalizedDetected, registry) ? normalizedDetected : null;
+  const detectedCountryRaw = normalizeLandingCountryCode(rawDetected);
 
   return computeLandingCountryContext({
     authenticated,
     anonymousSelection,
-    detectedCountry,
+    detectedCountryRaw,
     platformDefaultCountry: null,
     registry,
   });
