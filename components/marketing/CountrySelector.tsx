@@ -1,7 +1,12 @@
 'use client';
 
 // G2 — the anonymous, public-landing-page country selector (spec section
-// 7). Deliberately dumb: it only ever POSTs a chosen code to
+// 7; PO clarification 2026-09-02 section 1). Exactly THREE top-level
+// experience choices: Australia, India, Global — 'Global' is a first-class,
+// always-selectable option, not merely a fallback shown when nothing else
+// matches.
+//
+// Deliberately dumb: it only ever POSTs a chosen bucket to
 // /api/landing/country (or DELETEs to clear it), then asks the current
 // route to re-render via router.refresh() so the server-rendered
 // LandingCountryContext picks up the new cookie value on the very next
@@ -12,32 +17,25 @@
 import { useId, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './CountrySelector.module.css';
+import type { LandingPresentationCountry } from '@/lib/services/landingCountryContext';
 
 export interface CountrySelectorOption {
-  code: string;
+  code: LandingPresentationCountry;
   label: string;
 }
 
-// Matches the G1 registry's own selectable+active seed (migration 0122):
-// AU/IN (FULL) plus GB/US/SG/AE (GENERIC). Presentation labels only -- this
-// list is NOT a second registry; it exists purely so the <select> has
-// human-readable option text without an extra request on every render. If
-// the registry ever adds/retires a selectable country, this list is the one
-// place to update alongside it.
+/** The exactly-three PO-approved landing presentation choices. Not a country registry — 'GLOBAL' is an experience category, never an ISO country (see lib/services/landingCountryContext.ts's module header). */
 export const COUNTRY_SELECTOR_OPTIONS: CountrySelectorOption[] = [
   { code: 'AU', label: 'Australia' },
   { code: 'IN', label: 'India' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'US', label: 'United States' },
-  { code: 'SG', label: 'Singapore' },
-  { code: 'AE', label: 'United Arab Emirates' },
+  { code: 'GLOBAL', label: 'Global' },
 ];
 
-const OTHER_VALUE = '__OTHER__';
+const UNRESOLVED_VALUE = '__UNRESOLVED__';
 
 export interface CountrySelectorProps {
-  /** The currently active presentation country, or null if none is resolved yet (neutral prompt state). */
-  activeCountry: string | null;
+  /** The currently active presentation bucket, or null if nothing has resolved yet (neutral prompt, no preselection — PO detection-mapping table row 4). */
+  activeCountry: LandingPresentationCountry | null;
 }
 
 export function CountrySelector({ activeCountry }: CountrySelectorProps) {
@@ -46,7 +44,7 @@ export function CountrySelector({ activeCountry }: CountrySelectorProps) {
   const [error, setError] = useState<string | null>(null);
   const labelId = useId();
 
-  async function applySelection(code: string) {
+  async function applySelection(code: LandingPresentationCountry) {
     setError(null);
     try {
       const response = await fetch('/api/landing/country', {
@@ -55,40 +53,27 @@ export function CountrySelector({ activeCountry }: CountrySelectorProps) {
         body: JSON.stringify({ country: code }),
       });
       if (!response.ok) {
-        setError('Could not update your country preference. Please try again.');
+        setError('Could not update your selection. Please try again.');
         return;
       }
       startTransition(() => router.refresh());
     } catch {
-      setError('Could not update your country preference. Please try again.');
-    }
-  }
-
-  async function clearSelection() {
-    setError(null);
-    try {
-      await fetch('/api/landing/country', { method: 'DELETE' });
-      startTransition(() => router.refresh());
-    } catch {
-      setError('Could not reset your country preference. Please try again.');
+      setError('Could not update your selection. Please try again.');
     }
   }
 
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value;
-    if (value === OTHER_VALUE) {
-      void clearSelection();
-      return;
-    }
-    void applySelection(value);
+    if (value === UNRESOLVED_VALUE) return; // placeholder re-selected -- no-op
+    void applySelection(value as LandingPresentationCountry);
   }
 
-  const selectValue = activeCountry ?? OTHER_VALUE;
+  const selectValue = activeCountry ?? UNRESOLVED_VALUE;
 
   return (
     <div className={styles.wrap}>
       <span id={labelId} className={styles.label}>
-        Country
+        Experience
       </span>
       <div style={{ position: 'relative' }}>
         <select
@@ -99,23 +84,21 @@ export function CountrySelector({ activeCountry }: CountrySelectorProps) {
           disabled={isPending}
           onChange={onChange}
         >
-          {!activeCountry && (
-            <option value={OTHER_VALUE}>Choose your country&hellip;</option>
-          )}
+          {!activeCountry && <option value={UNRESOLVED_VALUE}>Choose your experience&hellip;</option>}
           {COUNTRY_SELECTOR_OPTIONS.map((opt) => (
             <option key={opt.code} value={opt.code}>
               {opt.label}
             </option>
           ))}
-          <option value={OTHER_VALUE}>Other / not listed</option>
         </select>
         <span className={styles.chev} aria-hidden="true">
           &#9662;
         </span>
       </div>
       <p id={`${labelId}-hint`} className={styles.hint}>
-        Choose your country to tailor examples and pricing information. This does not confirm your account or
-        billing residence &mdash; you can confirm those separately.
+        Choose Australia, India or Global to tailor examples and pricing information. This changes the website
+        experience only &mdash; it does not confirm your account or billing residence, which you can confirm
+        separately.
       </p>
       {error && (
         <p role="alert" style={{ color: 'var(--red, #dc2626)', fontSize: '0.7rem' }}>

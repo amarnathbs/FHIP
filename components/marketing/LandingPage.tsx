@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './LandingPage.module.css';
 import { CountrySelector } from './CountrySelector';
-import { getLandingMarketingPrice } from '@/lib/config/landingPricing';
+import { getLandingMarketingPrice, GLOBAL_PRICING_COPY, GLOBAL_EXPERIENCE_COPY } from '@/lib/config/landingPricing';
 import type { LandingCountryContext } from '@/lib/services/landingCountryContext';
 
 // G2 — Landing-Page Localisation (spec sections 9-10). `countryContext` is
@@ -203,10 +203,11 @@ function ForecastSlider() {
 // original AU-only static markup, byte-for-byte. When the flag is enabled,
 // an AU/IN pricingRegion shows that market's PO-approved price
 // (lib/config/landingPricing.ts — the single controlled source, spec
-// section 10); GENERIC/UNAVAILABLE never invents a price for an
-// unsupported currency (spec section 9: "do not invent GBP/USD/SGD/AED
-// subscription prices") and instead prompts the visitor to pick a country.
-function PricingCards({ pricingRegion }: { pricingRegion?: 'AU' | 'IN' | 'GENERIC' | 'UNAVAILABLE' }) {
+// section 10); GLOBAL/UNAVAILABLE never invent a price for an unsupported
+// currency (spec section 9 / PO clarification section 2: "do not invent
+// USD/GBP/SGD/AED or a generic subscription price") and instead show the
+// PO-mandated neutral wording.
+function PricingCards({ pricingRegion }: { pricingRegion?: 'AU' | 'IN' | 'GLOBAL' | 'UNAVAILABLE' }) {
   const [annual, setAnnual] = useState(false);
   const price = pricingRegion === undefined ? getLandingMarketingPrice('AU') : getLandingMarketingPrice(pricingRegion);
 
@@ -264,12 +265,19 @@ function PricingCards({ pricingRegion }: { pricingRegion?: 'AU' | 'IN' | 'GENERI
                   : 'Billed monthly. Cancel anytime.'}
               </p>
             </>
+          ) : pricingRegion === 'GLOBAL' ? (
+            <>
+              <div className={`${styles.amount} ${styles.tabular}`} style={{ fontSize: '1rem' }}>
+                {GLOBAL_PRICING_COPY}
+              </div>
+              <p className={styles.billingNote}>{GLOBAL_EXPERIENCE_COPY}</p>
+            </>
           ) : (
             <>
               <div className={`${styles.amount} ${styles.tabular}`} style={{ fontSize: '1.1rem' }}>
-                Pricing varies by country
+                Choose your experience
               </div>
-              <p className={styles.billingNote}>Choose your country above to see Premium pricing for your region.</p>
+              <p className={styles.billingNote}>Choose Australia, India or Global above to see Premium pricing.</p>
             </>
           )}
           <ul>
@@ -293,19 +301,19 @@ function PricingCards({ pricingRegion }: { pricingRegion?: 'AU' | 'IN' | 'GENERI
   );
 }
 
-// G2: derives the country-varying FAQ answer for "Does FHIP work in my
-// country?" from experienceLevel/pricingRegion rather than ever claiming
-// certification the G1 registry doesn't back (spec section 9: no India
-// EPF/PPF/NPS/SMSF-equivalence claim, no generic-country domestic-feature
-// claim, no functioning-checkout claim).
+// G2: derives the FAQ answer for the active experience bucket
+// (AU/IN/Global/unresolved) rather than ever claiming certification the G1
+// registry doesn't back (spec section 9 / PO clarification section 2: no
+// India EPF/PPF/NPS/SMSF-equivalence claim, no Global domestic-feature
+// claim, no functioning-checkout claim, Global never auto-assigned AU/IN).
 function countryFaqEntry(countryContext: LandingCountryContext | null | undefined): [string, string] {
   if (!countryContext || !countryContext.presentationCountry) {
     return [
       'Does FHIP work in my country?',
-      'FHIP supports multi‑country, multi‑currency households. Choose your country above to see country‑specific examples and pricing; core financial‑health tracking is available everywhere, with additional certified local features in supported countries.',
+      'Choose Australia, India or Global above. Australia and India have FHIP’s full certified local experience; Global provides jurisdiction-neutral financial-health functionality everywhere else, with country-certified domestic tax, retirement or regulatory features not yet available.',
     ];
   }
-  const { presentationCountry, experienceLevel } = countryContext;
+  const { presentationCountry } = countryContext;
   if (presentationCountry === 'AU') {
     return [
       'Does FHIP work in Australia?',
@@ -318,9 +326,10 @@ function countryFaqEntry(countryContext: LandingCountryContext | null | undefine
       'Yes, with India‑relevant examples and pricing shown in INR. India‑specific domestic retirement products (EPF, PPF, NPS) are not yet part of FHIP’s certified calculations, and Superannuation is an Australian product, not an equivalent to any Indian retirement scheme — these remain on our roadmap.',
     ];
   }
+  // GLOBAL
   return [
-    'Does FHIP work in my country?',
-    `FHIP’s universal financial‑health tracking is available in your region, with a ${experienceLevel === 'FULL' ? 'growing' : 'generic, non‑country‑specific'} set of features. Country‑certified domestic tax, retirement or regulatory calculations are not yet available outside Australia and India, and pricing/billing for your region is not yet confirmed.`,
+    'What does "Global" mean?',
+    'Global provides jurisdiction-neutral financial-health functionality — the same core tracking available everywhere, without implying Australia- or India-specific tax, retirement or regulatory certification. Global is never automatically assigned Australian or Indian billing, and payment options are shown only once you select or confirm a billing country.',
   ];
 }
 

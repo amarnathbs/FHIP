@@ -2,6 +2,15 @@
 // endpoint (spec sections 7-8). This is the ONLY place that writes the
 // fhip_landing_country cookie.
 //
+// Validation is now a fixed-set membership check against
+// LANDING_PRESENTATION_COUNTRIES ({AU, IN, GLOBAL}) rather than a live
+// registry lookup (PO clarification, 2026-09-02: the landing selector has
+// exactly three top-level presentation choices — Australia, India, Global —
+// not a dynamic list of registry-selectable countries). This also means
+// this endpoint no longer needs a live database call to validate a
+// selection at all; a Supabase client is intentionally NOT constructed here
+// any more.
+//
 // CSRF/origin protection: this repository has no dedicated CSRF-token
 // system to reuse (confirmed during G2 baseline discovery — no existing API
 // route implements one; mutation routes rely on authenticated-session
@@ -14,16 +23,15 @@
 // requests, older browsers) is tolerated but never required to prove
 // anything beyond what it already is: this endpoint can only ever set a
 // NON-authoritative presentation preference (spec section 10) — worst case
-// of a successful forged call is a wrong marketing-copy country shown to
-// the attacker's own victim, never a billing/eligibility change.
+// of a successful forged call is a wrong marketing-copy bucket shown to the
+// attacker's own victim, never a billing/eligibility change, and 'GLOBAL'
+// can never be written to any authoritative field regardless (see
+// lib/services/landingCountryContext.ts's module header).
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getFhipApplicationUrl } from '@/lib/seo/entity';
 import {
   LANDING_COUNTRY_COOKIE_NAME,
-  loadLandingCountryRegistrySnapshot,
-  normalizeLandingCountryCode,
-  isKnownLandingCountry,
+  isLandingPresentationCountry,
   serializeLandingCountryCookie,
 } from '@/lib/services/landingCountryContext';
 
@@ -56,19 +64,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  const code = normalizeLandingCountryCode(
-    body && typeof body === 'object' ? (body as Record<string, unknown>).country : null
-  );
+  const rawCountry = body && typeof body === 'object' ? (body as Record<string, unknown>).country : null;
 
-  const supabase = await createClient();
-  const registry = await loadLandingCountryRegistrySnapshot(supabase);
-
-  if (!code || !isKnownLandingCountry(code, registry)) {
-    return NextResponse.json({ error: 'UNSUPPORTED_COUNTRY' }, { status: 400 });
+  if (!isLandingPresentationCountry(rawCountry)) {
+    return NextResponse.json({ error: 'UNSUPPORTED_SELECTION' }, { status: 400 });
   }
 
-  const response = NextResponse.json({ country: code });
-  response.cookies.set(LANDING_COUNTRY_COOKIE_NAME, serializeLandingCountryCookie(code), {
+  const response = NextResponse.json({ country: rawCountry });
+  response.cookies.set(LANDING_COUNTRY_COOKIE_NAME, serializeLandingCountryCookie(rawCountry), {
     ...cookieOptions(),
     maxAge: COOKIE_MAX_AGE_SECONDS,
   });
