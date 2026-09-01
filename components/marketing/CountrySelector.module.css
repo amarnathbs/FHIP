@@ -1,0 +1,59 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+}
+
+.select {
+  appearance: none;
+  border: 1px solid var(--line, #e2e2e2);
+  border-radius: 8px;
+  background: var(--bg, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 1.6rem 0.4rem 0.65rem;
+  cursor: pointer;
+  min-width: 6.5rem;
+  /* Reserve consistent box size regardless of selected option's text length
+     so switching countries never shifts surrounding layout (spec section
+     14/9: "avoid cumulative layout shift"). */
+  height: 2.1rem;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--purple, #7c3aed);
+  outline-offset: 2px;
+}
+
+.chev {
+  position: absolute;
+  right: 0.55rem;
+  pointer-events: none;
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+.hint {
+  font-size: 0.68rem;
+  color: var(--muted, #6b7280);
+  max-width: 15rem;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    flex-wrap: wrap;
+  }
+  .hint {
+    display: none;
+  }
+}
