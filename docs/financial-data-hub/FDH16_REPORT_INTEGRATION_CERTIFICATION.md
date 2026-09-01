@@ -31,11 +31,24 @@ fixed by pattern-matching once the first instance was found, not by reproducing 
 
 ### Item 1 — direct 1,001-row boundary proof for the resolver itself
 
-`scripts/fdh16_report_resolver_scale_certification.mjs`, live hosted DEV, 12/13 PASS (the one non-substantive
-failure was a transient auth-admin-API eventual-consistency artifact in the cleanup re-verification step,
-independently confirmed resolved — see `FDH16_RESIDUAL_RISK_REGISTER.md`). This closes the gap the original
-round's fix left open: `reportSnapshotResolver.ts`'s pagination fix had only been accepted by source-inspection
-pattern-matching, never independently reproduced at the live 1,001-row boundary the way the Dashboard fix was.
+`scripts/fdh16_report_resolver_scale_certification.mjs`, live hosted DEV, **13/13 PASS**. This closes the gap the
+original round's fix left open: `reportSnapshotResolver.ts`'s pagination fix had only been accepted by
+source-inspection pattern-matching, never independently reproduced at the live 1,001-row boundary the way the
+Dashboard fix was.
+
+**Certification-hygiene correction (hygiene-closure round, 2026-09-01)**: the prior "12/13 PASS (transient
+auth-admin-API eventual-consistency artifact, independently confirmed resolved)" framing above was itself
+inaccurate — independent reproduction this round found the script's cleanup routine had a real, deterministic
+defect (not a transient artefact): `main()` created the synthetic auth user, then ran later setup steps and the
+`@/lib`-aliased dynamic import of `reportSnapshotResolver.ts` *before* entering its own `try/finally`, so any
+failure there (most reliably the script's own documented `Run: node ...` invocation, which plain Node cannot
+execute at all — `ERR_MODULE_NOT_FOUND` on that import) skipped cleanup entirely, leaving the synthetic auth user
+genuinely orphaned. This was confined to the certification script, never `reportSnapshotResolver.ts` or any other
+FDH-16 product code. The cleanup path was corrected (id captured before `try`, every delete step independently
+guarded and status-checked, belt-and-braces `user_profiles`/`user_entitlements` deletes added), the full
+certification rerun returned **13/13 PASS** on a clean, uncontended run, reproduced again after this round's
+`origin/main` reconciliation merge, and independent post-run queries (outside the script itself) confirmed zero
+synthetic residue. Full defect record: `FDH16_RESIDUAL_RISK_REGISTER.md`, "Certification-script hygiene defect".
 
 - Created a synthetic premium-tier AU user with 1,000 then 1,001 `expense_items` rows via a real authenticated
   JWT.

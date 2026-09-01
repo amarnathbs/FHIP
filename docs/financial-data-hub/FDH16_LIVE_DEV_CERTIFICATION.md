@@ -59,7 +59,10 @@ honestly").
 | Manual-vs-import (2 users) | 2 auth users, 2×(income_sources, liabilities, retirement_members, retirement_accounts) manual + 2×(fdh_payroll_events, fhip_import_proposals×3, fhip_import_proposal_fields×~12, fdh_liability_statements, fdh_retirement_statements, income_sources, liabilities, retirement_members, retirement_accounts) imported | 0 residual rows re-queried by id; both auth users 404 |
 | Dashboard proof (1 user) | 1 auth user, 1×(income_sources, expense_items, assets, liabilities, investments, retirement_members, retirement_accounts), 1 financial_snapshots upsert row | 0 residual rows; auth user 404 |
 | Scale 1000/1001 (1 user) | 1 auth user, 1,001 expense_items rows, 1 financial_snapshots upsert row | 0 residual rows; auth user 404 |
+| Report resolver scale (1 user, hygiene-closure round) | 1 auth user, 1,001 expense_items rows, 1,001 investments rows | 0 residual rows; auth user 404 — **after a certification-script cleanup defect was found and fixed this hygiene-closure round** (see `FDH16_RESIDUAL_RISK_REGISTER.md`, "Certification-script hygiene defect"); confirmed via both the fixed script's own re-verification AND a separate independent ad-hoc query outside the script, plus a system-wide sweep confirming 0 leftover `fdh16-reportscale-*` synthetic users |
 
 **Baseline restored: YES** — every script's own final `CLEANUP:` block independently re-queried (not merely
 assumed) and confirmed zero residue each time it was run (including the pre-fix run of the scale script, whose
-cleanup ran in a `finally` block regardless of the FAIL outcome above it).
+cleanup ran in a `finally` block regardless of the FAIL outcome above it). The report-resolver script's cleanup
+routine was found to be unreliable in a prior pass of this same round (it could skip cleanup entirely if setup
+failed before its `try/finally`) and was fixed this hygiene-closure round — see the dedicated row above.

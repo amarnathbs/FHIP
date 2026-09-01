@@ -33,9 +33,12 @@ with 1,000 then 1,001 `expense_items` rows; reproduced the same permanent negati
 capped at 1,000 of 1,001, `content-range` proves it); then called the REAL `resolveReportSourceData()` directly
 (imported, never reimplemented) at both boundaries. `premium.expenseItems.length`/economic total correctly read
 `1000` then `1001` — not silently truncated. The same boundary was also reproduced for a second register,
-`investments` -> `premium.investments`, in the same run. **12/13 PASS** (the one non-decisive failure was a
-transient auth-admin-API eventual-consistency artifact in cleanup verification, independently resolved and
-re-confirmed — see `FDH16_RESIDUAL_RISK_REGISTER.md`). Full detail in `FDH16_REPORT_INTEGRATION_CERTIFICATION.md`.
+`investments` -> `premium.investments`, in the same run. **13/13 PASS**, after a certification-script cleanup
+defect was found this hygiene-closure round and fixed (the script's cleanup routine could be skipped entirely
+if setup/import failed before its own `try/finally` — not a "transient eventual-consistency artifact" as
+originally and inaccurately described) — see `FDH16_RESIDUAL_RISK_REGISTER.md` ("Certification-script hygiene
+defect") for the full root-cause/fix/re-proof/independent-verification record. Full detail in
+`FDH16_REPORT_INTEGRATION_CERTIFICATION.md`.
 
 ## 5,000/10,000-row scale — REUSED PRIOR CERTIFIED EVIDENCE (this label applied per this round's own instruction)
 

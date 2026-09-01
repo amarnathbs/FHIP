@@ -61,8 +61,53 @@
   `goalArchivedLinkedFunding.test.ts` fixture, whose own bespoke fake builder needed a real `.range()` method
   added). **RESOLVED this targeted final-closure round**: previously not independently live-re-proven against
   real DEV at the 1,001-row boundary — now closed by `scripts/fdh16_report_resolver_scale_certification.mjs`
-  (12/13 PASS, real `resolveReportSourceData()` invoked directly, real 1,000/1,001 boundary on both
+  (**13/13 PASS** after the certification-hygiene fix — see "Certification-script hygiene defect" below — real `resolveReportSourceData()` invoked directly, real 1,000/1,001 boundary on both
   `expense_items` and, as a secondary register, `investments`). See `FDH16_REPORT_INTEGRATION_CERTIFICATION.md`.
+
+### Certification-script hygiene defect (hygiene-closure round, 2026-09-01) — NOT a product defect
+
+- **What**: `scripts/fdh16_report_resolver_scale_certification.mjs` itself (the certification script, not
+  `reportSnapshotResolver.ts` or any other FDH-16 product code) had a cleanup-reliability defect. During
+  independent reproduction this round, the script was confirmed to leave a residual synthetic auth user (plus
+  its `user_profiles`/`user_entitlements` rows) fully orphaned, with zero cleanup ever attempted. Two such
+  orphans (`d96aed79-3442-4a6c-9c86-53d828a3b634`, `f33f20bd-20f6-4d1b-99d9-2a7e44d7633f`) had already been found
+  and deleted by the Product Owner's own session before this round began.
+- **Root cause (verified against the real code and a real live API call, not guessed)**: `main()` created the
+  synthetic auth user, then called `finishUserSetup()` and the dynamic `import('../lib/services/
+  reportSnapshotResolver.ts')` (which resolves the `@/lib/...` tsconfig path alias) *before* entering its own
+  `try { ... } finally { ...cleanup... }` block. The script's own header comment instructed `Run: node
+  scripts/fdh16_report_resolver_scale_certification.mjs` — but plain Node's native ESM resolver cannot follow a
+  tsconfig-only path alias and throws `ERR_MODULE_NOT_FOUND` on that exact import. Reproduced live: running the
+  script via the exact command its own header specified crashed immediately after creating the synthetic auth
+  user, the crash propagating straight past the never-entered `finally` block to `main().catch()` — orphaning the
+  user with no cleanup attempt of any kind, and no distinct "cleanup failed" signal, just a fatal crash.
+- **Fix**: split the old `createUser()` into `createAuthUser()` (creates the auth user, returns immediately) and
+  `finishUserSetup()` (profile/entitlement/sign-in); `main()` now captures `createAuthUser()`'s result into a
+  variable *before* entering `try/finally`, so cleanup always has a target regardless of what fails afterward
+  (setup, the aliased dynamic import, or the register 1/2 logic itself). Added `cleanupSyntheticUser(id)`: every
+  delete step is now independently guarded (one failing/erroring step no longer aborts the remaining steps or the
+  residual-verification checks after it), every HTTP result is inspected instead of fire-and-forget, and
+  belt-and-braces deletes for `user_profiles`/`user_entitlements` were added (they should already cascade via
+  migration `0111`'s MCC-14 DELETE-cascade exemption when the auth user is deleted, but are deleted directly first
+  regardless). A cleanup step error now surfaces as a FAIL on the pre-existing `CLEANUP:` checks — verified live: a
+  transient auth-admin-API `504` hit during reproduction was correctly reported as `9/13 FAIL` rather than
+  silently passing, proving the fix actually changes behaviour. Also corrected the stale `Run: node ...` header
+  line to the invocation that actually works (`npx tsx scripts/fdh16_report_resolver_scale_certification.mjs`).
+- **Not a product defect**: `reportSnapshotResolver.ts`'s pagination fix (FDH16-DEF-001's second confirmed
+  instance) is completely unaffected — the fix here is entirely confined to the certification script's own
+  cleanup routine and run instructions.
+- **Regression on the financial/pagination proof**: unweakened, byte-for-byte identical register 1/2 assertions.
+- **Full certification, fixed**: `13/13 PASS` reproduced on a clean, uncontended run (`tsx`), reproduced again
+  after this round's `origin/main` reconciliation merge.
+- **Independent verification, outside the script itself**: a separate ad-hoc script (auth admin API + REST
+  queries, using this run's own captured synthetic user id — no pre-existing DEV user or financial record
+  touched) confirmed, after the fixed script's own cleanup ran: 0 residual auth user (404 on re-query), 0
+  `expense_items`/`investments`/`financial_snapshots`/`user_profiles`/`user_entitlements` rows for that id, and a
+  system-wide sweep for any `fdh16-reportscale-*`/`fdh16-diag-*` email pattern confirmed 0 total leftover
+  synthetic users (this sweep also caught and manually closed 2 further orphans created incidentally during this
+  round's own root-cause reproduction: one from running the unfixed script via plain `node` exactly as its old
+  header said, one from a machine-contention-induced hang that had to be force-killed mid-run — neither is a
+  defect in the fixed script's own behaviour, both independently confirmed closed).
 
 ### FDH16-DEF-002 (this targeted final-closure round, 2026-09-01)
 
@@ -135,6 +180,7 @@
 | 11 | Test `A4`'s incidental `canonicalWrites(h).length > 0` assertion in `tests/unit/aiResidualClosureFailClosed.test.ts` is now stale (see FDH16-DEF-002 above) — the negative control's actual decisive assertions still pass; only this one incidental appendix assertion no longer holds, because real-world behaviour became strictly safer. | NEW — this closure round, surfaced by FDH16-DEF-002's fix | OPEN, disclosed, not fixed (Module 11.0-owned test file, out of scope to edit) | P3 (test-fixture staleness, not a live defect) |
 | 12 | `resourcesR1_1.test.ts`'s "customer cannot edit content" test times out (5000ms) intermittently. Independently re-confirmed this closure round to occur IDENTICALLY on a clean `origin/main` baseline (temporary worktree, isolated run) — pre-existing, unrelated to any file this branch touched. | Pre-existing, confirmed via fresh baseline diff this closure round | OPEN, confirmed pre-existing | P3 |
 | 13 | `resourcesAdminR1_2.test.ts`'s "draft count increases by exactly 1" assertion flaked once (256 vs 257) when run as part of the full ~4,868-test suite under vitest's parallel-worker execution, racing against other test files that also create/delete draft content in the same shared real-DEV tables. Re-run in isolation immediately after: 26/26 PASS. Neither `dashboardData.ts`, `reportSnapshotResolver.ts`, nor `financialContextObject.ts` (the only files this branch has ever touched) reference resources/draft-content tables. | Pre-existing test-suite parallelism hygiene issue, unrelated to this branch's changes | OPEN, confirmed a parallelism flake, not a regression | P3 |
+| 14 | `tests/unit/resourcesR1_4LiveDev.test.ts` failed 5/20 (RLS-violation and permission errors on `resource_posts`) on one post-`origin/main`-reconciliation full suite run (hygiene-closure round); `resourcesAdminR1_2.test.ts` also recurred. Zero Resources-module files are touched by this branch's diff (confirmed via `git diff --stat origin/main...HEAD`) and this exact failure signature — RLS/permission errors on `resource_posts` under heavy concurrent load on this same shared DEV project — is already independently documented as a recurring DEV-concurrency flake in `FDH8_COMPLETION_REPORT.md`, `FDH10_COMPLETION_REPORT.md`, and this same file's own `FDH16_LIVE_DEV_CERTIFICATION.md`. Re-run in isolation immediately after: both files 46/46 PASS. A second, later full-suite run surfaced the actual proximate cause directly: Supabase Auth's own OTP-verification rate limit ("Request rate limit reached") on these same two files plus `resourcesAdminRoleCtaHotfixLiveDev.test.ts` — a live-DEV-project-wide infrastructure limit, not a code defect, entirely consistent with (and now directly confirming) the "DEV-concurrency" framing. | Pre-existing DEV-concurrency/auth-rate-limit flake (same documented pattern as FDH-8/FDH-10), re-confirmed this hygiene-closure round, unrelated to this branch's changes or the `origin/main` merge | OPEN, confirmed via isolated re-run (46/46) and a direct rate-limit error message, not a regression | P3 |
 
 ## New scope gaps disclosed by the original round — STATUS THIS CLOSURE ROUND
 
