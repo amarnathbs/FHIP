@@ -28,10 +28,10 @@ Each task below carries a stable identifier (`ADM-nn`) for the central index. "L
 | ADM-16 | Manage Related Content (add/reorder/remove) | `resourceDiscoveryAdmin` | Operational | Wave 2 |
 | ADM-17 | Manage Context Mapping ("What does this mean?" links) | `resourceDiscoveryAdmin` | Operational | R1.6 |
 | ADM-18 | Manage Resources Users & Roles (assign/revoke) | Super Admin (write) / `isResourceStaff` (read) | Operational | R1.2 |
-| ADM-19 | View Resources Analytics | `resourceAnalytics` | **Shell only — see status note** | Analyst Wave 1 |
+| ADM-19 | View Resources Analytics | `resourceAnalytics` | **Shell only, hidden from normal navigation — see status note** | Analyst Wave 1; nav visibility updated Wave 3 closure round |
 | ADM-20 | View Admin Capabilities (`/api/admin/me`) | none (self-resolution) | Operational | Analyst Wave 1 |
 
-Tasks **not** in this index because they have no discoverable Admin entry point today (BACKEND_WITHOUT_UI, deferred — see the Discovery register): the 17-route AI Admin surface, and `GET /api/admin/resources/glossary/terms`. Per this Wave's own rule, a task manual is not written for a surface that isn't reachable — writing one would itself misrepresent it as operational.
+Tasks **not** in this index because they have no discoverable Admin entry point today (BACKEND_WITHOUT_UI, deferred — see the Discovery register): the 17-route AI Admin surface. Per this Wave's own rule, a task manual is not written for a surface that isn't reachable — writing one would itself misrepresent it as operational. (`GET /api/admin/resources/glossary/terms`, previously listed here, was removed in the closure round as a confirmed duplicate of the Glossary editor's own Related Terms picker — see the Certification Report §2.4 — so there is no longer a surface here to document at all.)
 
 ---
 
@@ -97,13 +97,13 @@ Tasks **not** in this index because they have no discoverable Admin entry point 
 
 These 15 tasks (Recommendations management, the full Resources content-type CRUD set, Related Content, Context Mapping, and Users & Roles) were not modified by Wave 3 and remain exactly as certified by their own owning Wave (cited in the index table above). Per this Wave's own instruction not to reopen certified work without a direct regression, and per the "no hidden scope expansion" principle, this Wave does not re-author their manuals from zero — each is already documented in its own Wave's completion report, cross-referenced here so the central index is complete. **This is a disclosed scoping decision**, not an omission: reproducing 15 already-accurate manuals verbatim would not improve their accuracy, and this Wave's incremental budget is better spent verifying and completing the surfaces that were actually broken. A0.2 Wave 5 (per the programme schedule) is the phase explicitly named for standardising every manual into one consistent format — this Wave defers that formatting pass rather than duplicating it early.
 
-## ADM-19 — View Resources Analytics (status: shell only, not operational)
+## ADM-19 — View Resources Analytics (status: shell only, not operational, hidden from normal navigation)
 
 1. **Purpose.** Intended future home for Resources usage/engagement analytics.
 2. **Eligible role/capability.** `resourceAnalytics` (Analyst, Resource Admin, Super Admin).
 3. **Prerequisites.** None.
-4. **Navigation path.** Admin menu → Analytics → Analytics.
-5. **Procedure.** Opening the page shows a title and one sentence stating this is a read-only area with no analytics yet.
+4. **Navigation path.** **No longer in normal navigation as of the Wave 3 closure round** (Product Owner ruling: a destination that completes no task should not be a clickable nav item). Reachable only by direct URL (`/admin/resources/analytics`) for a caller who holds the capability. An Analyst-only caller (whose only capability is `resourceAnalytics`, and who would otherwise see zero Admin destinations) instead sees a fixed, non-interactive note in the Admin menu: *"Admin analytics access is confirmed for your account. No analytics features are available yet."*
+5. **Procedure.** Opening the page (by direct URL) shows a title and one sentence stating this is a read-only area with no analytics yet.
 6-10. **Not applicable — there is no metric, chart, filter, export or control on this page.** No figure of any kind is rendered (tested by Wave 1's own assertion that the page contains no digit).
 11. **Audit evidence.** None — no data is read or written beyond the access-gate check itself.
 12. **Rollback.** N/A.
