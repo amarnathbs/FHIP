@@ -75,6 +75,52 @@ export function AdminBenchmarksClient() {
     }
   }
 
+  // Wave 3: completes the "import -> validate -> correct -> commit" task
+  // graph. Activate already runs this same check server-side and records
+  // an audited rejection on failure, so this button changes nothing about
+  // what is allowed to activate — it lets an admin see why a dataset isn't
+  // ready *before* triggering that audited attempt.
+  async function validate(datasetId: string) {
+    setBusyId(datasetId);
+    try {
+      const res = await fetch('/api/admin/benchmarks/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataset_id: datasetId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error ?? 'Could not validate');
+        return;
+      }
+      const result = json.data as { valid: boolean; errors: string[] };
+      alert(result.valid ? 'Valid — this dataset is ready to activate.' : `Not ready to activate:\n\n${result.errors.join('\n')}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Wave 3: the Sources tab previously had no Admin entry point at all for
+  // PUT /api/admin/benchmarks/sources/[id] (BACKEND_WITHOUT_UI) — a source
+  // could never leave 'draft', which in turn blocks every dataset linked to
+  // it from ever passing validateDatasetForActivation(). Mirrors the
+  // existing Activate/Retire pattern already used for datasets.
+  async function setSourceStatus(sourceId: string, status: 'approved' | 'suspended') {
+    setBusyId(sourceId);
+    try {
+      const res = await fetch(`/api/admin/benchmarks/sources/${sourceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const json = await res.json();
+      if (!res.ok) alert(json.error ?? 'Could not update source');
+      await load(tab);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const columns = columnsFor(tab);
 
   return (
@@ -116,7 +162,7 @@ export function AdminBenchmarksClient() {
                     {c}
                   </th>
                 ))}
-                {tab === 'datasets' && <th className="px-3 py-2 font-medium">Actions</th>}
+                {(tab === 'datasets' || tab === 'sources') && <th className="px-3 py-2 font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -136,23 +182,79 @@ export function AdminBenchmarksClient() {
                   ))}
                   {tab === 'datasets' && (
                     <td className="whitespace-nowrap px-3 py-2">
-                      {r.data_status === 'active' ? (
+                      <div className="flex min-h-11 items-center gap-1.5">
                         <button
                           disabled={busyId === r.id}
-                          onClick={() => retire(r.id as string)}
-                          className="rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 disabled:opacity-50"
+                          onClick={() => validate(r.id as string)}
+                          aria-label={`Validate ${fmt(cell(r, 'Dataset'))} for activation`}
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border px-2 py-1 text-xs hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
                         >
-                          Retire
+                          Validate
                         </button>
-                      ) : (
-                        <button
-                          disabled={busyId === r.id}
-                          onClick={() => activate(r.id as string)}
-                          className="rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
-                        >
-                          Activate
-                        </button>
-                      )}
+                        {r.data_status === 'active' ? (
+                          <button
+                            disabled={busyId === r.id}
+                            onClick={() => {
+                              if (confirm(`Retire "${fmt(cell(r, 'Dataset'))}"? It will stop being served as an active benchmark.`)) retire(r.id as string);
+                            }}
+                            aria-label={`Retire ${fmt(cell(r, 'Dataset'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Retire
+                          </button>
+                        ) : (
+                          <button
+                            disabled={busyId === r.id}
+                            onClick={() => activate(r.id as string)}
+                            aria-label={`Activate ${fmt(cell(r, 'Dataset'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Activate
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                  {tab === 'sources' && (
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <div className="flex min-h-11 items-center gap-1.5">
+                        {(r.status === 'draft' || r.status === 'under_review') && (
+                          <button
+                            disabled={busyId === r.id}
+                            onClick={() => setSourceStatus(r.id as string, 'approved')}
+                            aria-label={`Approve ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {(r.status === 'approved' || r.status === 'active') && (
+                          <button
+                            disabled={busyId === r.id}
+                            onClick={() => {
+                              if (confirm(`Suspend "${fmt(cell(r, 'Source'))}"? Datasets that depend on it will fail validation until it is reinstated.`))
+                                setSourceStatus(r.id as string, 'suspended');
+                            }}
+                            aria-label={`Suspend ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Suspend
+                          </button>
+                        )}
+                        {r.status === 'suspended' && (
+                          <button
+                            disabled={busyId === r.id}
+                            onClick={() => setSourceStatus(r.id as string, 'approved')}
+                            aria-label={`Reinstate ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Reinstate
+                          </button>
+                        )}
+                        {!['draft', 'under_review', 'approved', 'active', 'suspended'].includes(String(r.status)) && (
+                          <span className="text-gray-400">No action available</span>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

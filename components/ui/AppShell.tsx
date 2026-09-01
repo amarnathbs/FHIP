@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   buildAdminNavGroups,
+  getAdminUnavailableNotice,
   parseAdminCapabilities,
   parseIsAdmin,
   shouldShowAdminMenu,
@@ -379,6 +380,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               {openDropdown === 'admin' && (
                 <div id={`${scope}-admin-group`} role="menu" aria-label="Admin" className="ml-2 space-y-2 border-l border-white/10 pl-3">
+                  {/* Wave 3, Gate 3: a caller who holds resourceAnalytics but no
+                      other capability (Analyst-only) would otherwise see this
+                      dropdown open onto nothing at all, since the
+                      non-functional Analytics link was removed from
+                      buildAdminNavGroups. This is a fixed, honest,
+                      NON-interactive status line -- not a link, not a button,
+                      no onClick -- so it can never be mistaken for a working
+                      destination. Renders only in that one case; every other
+                      caller either sees their real groups or the Admin entry
+                      point is hidden entirely (shouldShowAdminMenu). */}
+                  {adminGroups.length === 0 && (
+                    <p role="note" className="px-3 py-1.5 text-xs text-white/60">
+                      {getAdminUnavailableNotice(isAdmin, capabilities)}
+                    </p>
+                  )}
                   {adminGroups.map((group) => (
                     <div key={group.label} role="none">
                       {/* "Content" is a static grouping label with no link/dropdown of its
