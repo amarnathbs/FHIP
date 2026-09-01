@@ -74,6 +74,7 @@ class FakeDb implements InsightPackDbClient {
       country_context: input.identity.countryContext, language: input.identity.language, provider: input.provider, model: input.model,
       model_version: null,
       status: 'GENERATING', overall_confidence: null, grounding_status: null, critical_safety_failure: false, generation_mode: 'BATCH_AI',
+      batch_id: null,
       ai_run_id: null, idempotency_key: input.idempotencyKey, input_tokens: null, output_tokens: null, estimated_cost_usd: null,
       generated_at: null, validated_at: null, ready_at: null, stale_at: null, superseded_at: null, failure_code: null, retry_count: 0,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),

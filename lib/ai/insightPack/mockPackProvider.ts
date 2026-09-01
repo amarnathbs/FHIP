@@ -10,6 +10,7 @@ import type { AIGenerateRequest, AIGenerateResult, AIProvider, CostEstimate, Pro
 import { ProviderError } from '@/lib/ai/providers/types';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import { PACK_SCHEMA_VERSION } from '@/lib/ai/insightPack/types';
+import type { BatchCapableProvider, BatchPackItemRequest, BatchPollResult } from '@/lib/ai/insightPack/batchTypes';
 
 export type MockPackBehavior =
   | 'valid'
@@ -150,28 +151,28 @@ function buildValidEnvelope(ctx: FinancialContextObject): Record<string, unknown
   };
 }
 
-export class MockInsightPackProvider implements AIProvider {
-  readonly providerName = 'mock';
-  private behavior: MockPackBehavior;
-  private ctx: FinancialContextObject;
+/**
+ * Builds the raw provider response text for a given (ctx, behavior) pair.
+ * Extracted so BOTH the single-call `MockInsightPackProvider` and the
+ * batch-capable `MockBatchInsightPackProvider` produce IDENTICAL scenario
+ * behaviour from the SAME code — the batch path is a different transport,
+ * never a different (and therefore divergent) mock implementation.
+ *
+ * Throws a `ProviderError` for the two behaviours that represent the
+ * provider never returning usable text at all (timeout/outage) — callers in
+ * a single-call context let this propagate; a batch context catches it and
+ * reports a per-item failure instead (a provider failing on ONE household's
+ * item must never abort the whole batch).
+ */
+export function buildMockPackRawText(ctx: FinancialContextObject, behavior: MockPackBehavior): string {
+  if (behavior === 'timeout') throw new ProviderError('TIMEOUT', 'Mock pack provider simulated a timeout.');
+  if (behavior === 'provider_unavailable') throw new ProviderError('PROVIDER_UNAVAILABLE', 'Mock pack provider simulated an outage.');
 
-  constructor(ctx: FinancialContextObject, behavior: MockPackBehavior = 'valid') {
-    this.ctx = ctx;
-    this.behavior = behavior;
-  }
+  let rawText: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const valid = buildValidEnvelope(ctx) as any; // mock-only, mutated per-scenario below; not a production shape guarantee
 
-  async generateStructured(req: AIGenerateRequest): Promise<AIGenerateResult> {
-    const start = Date.now();
-    if (this.behavior === 'timeout') throw new ProviderError('TIMEOUT', 'Mock pack provider simulated a timeout.');
-    if (this.behavior === 'provider_unavailable') throw new ProviderError('PROVIDER_UNAVAILABLE', 'Mock pack provider simulated an outage.');
-
-    const inputTokens = estimateTokens(req.systemPrompt + req.userPrompt);
-    let rawText: string;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const valid = buildValidEnvelope(this.ctx) as any; // mock-only, mutated per-scenario below; not a production shape guarantee
-
-    switch (this.behavior) {
+  switch (behavior) {
       case 'malformed_json':
         rawText = '{ this is not valid pack json ';
         break;
@@ -199,7 +200,7 @@ export class MockInsightPackProvider implements AIProvider {
         rawText = JSON.stringify(valid);
         break;
       case 'wrong_currency':
-        valid.blocks.net_worth_explanation.metric_claims = [{ metric_code: 'net_worth', source_value: this.ctx.balance_sheet?.net_worth ?? 0, display_value: 'value', currency: this.ctx.meta.reporting_currency === 'AUD' ? 'INR' : 'AUD' }];
+        valid.blocks.net_worth_explanation.metric_claims = [{ metric_code: 'net_worth', source_value: ctx.balance_sheet?.net_worth ?? 0, display_value: 'value', currency: ctx.meta.reporting_currency === 'AUD' ? 'INR' : 'AUD' }];
         rawText = JSON.stringify(valid);
         break;
       case 'invented_dna':
@@ -219,7 +220,7 @@ export class MockInsightPackProvider implements AIProvider {
         rawText = JSON.stringify(valid);
         break;
       case 'unsupported_causality':
-        valid.blocks.score_explanation.explanation = `Your score is ${this.ctx.health_score?.overall_score ?? 0} because your liquidity is extremely poor, a driver not in the supplied context.`;
+        valid.blocks.score_explanation.explanation = `Your score is ${ctx.health_score?.overall_score ?? 0} because your liquidity is extremely poor, a driver not in the supplied context.`;
         rawText = JSON.stringify(valid);
         break;
       case 'fake_trend':
@@ -258,11 +259,29 @@ export class MockInsightPackProvider implements AIProvider {
         valid.blocks.insurance_explanation = { block_code: 'insurance_explanation', status: 'POPULATED', headline: 'Insurance', short_answer: 'FHIP cannot assess your insurance position because the information is incomplete.', explanation: 'FHIP cannot assess your insurance position because the information is incomplete.', why_it_matters: 'Completing insurance data enables an assessment.', metric_claims: [], source_refs: [], limitations: ['Insurance data incomplete.'], confidence: 'LOW', data_as_of: null, related_module: 'insurance', action_route: '/insurance' };
         rawText = JSON.stringify(valid);
         break;
-      case 'valid':
-      default:
-        rawText = JSON.stringify(valid);
-        break;
-    }
+    case 'valid':
+    default:
+      rawText = JSON.stringify(valid);
+      break;
+  }
+
+  return rawText;
+}
+
+export class MockInsightPackProvider implements AIProvider {
+  readonly providerName = 'mock';
+  private behavior: MockPackBehavior;
+  private ctx: FinancialContextObject;
+
+  constructor(ctx: FinancialContextObject, behavior: MockPackBehavior = 'valid') {
+    this.ctx = ctx;
+    this.behavior = behavior;
+  }
+
+  async generateStructured(req: AIGenerateRequest): Promise<AIGenerateResult> {
+    const start = Date.now();
+    const inputTokens = estimateTokens(req.systemPrompt + req.userPrompt);
+    const rawText = buildMockPackRawText(this.ctx, this.behavior); // throws ProviderError for timeout/provider_unavailable, same as before
 
     return {
       rawText,
@@ -282,4 +301,87 @@ export class MockInsightPackProvider implements AIProvider {
   estimateCost(inputTokens: number, outputTokens: number): CostEstimate {
     return { inputTokens, outputTokens, estimatedCostUsd: (inputTokens / 1000) * 0.001 + (outputTokens / 1000) * 0.002 };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Module 11.3 continuation — batch-capable mock provider (spec sections
+// 25-26, 66-69). Provider-neutral: implements BatchCapableProvider
+// (lib/ai/insightPack/batchTypes.ts) exactly as a real batch-capable vendor
+// provider eventually would, so AIInsightPackBatchOrchestrator never
+// branches on "is this the mock".
+//
+// HOW IT RECOVERS PER-HOUSEHOLD CONTEXT. A real batch API only ever sees
+// rendered prompt TEXT (systemPrompt/userPrompt), never a typed
+// FinancialContextObject — exactly the same contract this mock's items
+// carry. The mock therefore does what a real model would: it reads the
+// context back out of the rendered prompt. insightPackService.ts's own
+// executeGeneration() (and the batch orchestrator, identically) render
+// userPrompt as `${developerPrompt}\n\nCONTEXT:\n${JSON.stringify(context)}`
+// — this class parses that exact convention. It is NOT a smuggled side
+// channel: a real provider that ignored the rendered context and used a
+// side-channel object would be the mock behaving unrealistically; reading
+// what's actually in the prompt text is the realistic behaviour.
+//
+// PER-ITEM BEHAVIOUR OVERRIDE (test-only). setBehaviorForRequest() lets a
+// test force a specific requestId to simulate a specific scenario
+// (fabrication, timeout, schema-invalid, ...) — a hook only the MOCK
+// exposes; a real provider has no such method and the orchestrator never
+// calls it.
+const CONTEXT_MARKER = '\n\nCONTEXT:\n';
+
+function extractContextFromUserPrompt(userPrompt: string): FinancialContextObject {
+  const idx = userPrompt.indexOf(CONTEXT_MARKER);
+  if (idx === -1) throw new ProviderError('INVALID_REQUEST', 'Mock batch provider could not find the CONTEXT: marker in the rendered prompt.');
+  const jsonText = userPrompt.slice(idx + CONTEXT_MARKER.length);
+  return JSON.parse(jsonText) as FinancialContextObject;
+}
+
+export class MockBatchInsightPackProvider implements BatchCapableProvider {
+  readonly providerName = 'mock';
+  private behaviorOverrides = new Map<string, MockPackBehavior>();
+  private batches = new Map<string, BatchPollResult>();
+  private seq = 0;
+
+  /** Test-only hook — a real provider has nothing analogous; the orchestrator never calls this. */
+  setBehaviorForRequest(requestId: string, behavior: MockPackBehavior): void {
+    this.behaviorOverrides.set(requestId, behavior);
+  }
+
+  async submitBatch(items: BatchPackItemRequest[]): Promise<{ providerBatchId: string; itemCount: number }> {
+    const providerBatchId = `mock-batch-${++this.seq}-${Date.now()}`;
+    const results = items.map((item): ReturnType<typeof buildOneResult> => buildOneResult(item, this.behaviorOverrides.get(item.requestId) ?? 'valid'));
+    // Simulate out-of-order return — a real batch API gives no ordering
+    // guarantee, and the orchestrator's reconciliation must not assume one.
+    // Reversing (rather than a random shuffle) keeps this deterministic and
+    // reproducible for a test asserting "genuinely out of order", while
+    // still guaranteeing a different order than submission for any batch
+    // with 2+ items.
+    const reordered = results.slice().reverse();
+    this.batches.set(providerBatchId, { status: 'COMPLETED', results: reordered });
+    return { providerBatchId, itemCount: items.length };
+  }
+
+  async pollBatch(providerBatchId: string): Promise<BatchPollResult> {
+    const found = this.batches.get(providerBatchId);
+    if (!found) throw new ProviderError('INVALID_REQUEST', `Unknown providerBatchId: ${providerBatchId}`);
+    return found;
+  }
+}
+
+function buildOneResult(item: BatchPackItemRequest, behavior: MockPackBehavior): ReturnType<typeof successResult> | ReturnType<typeof failureResult> {
+  try {
+    const ctx = extractContextFromUserPrompt(item.userPrompt);
+    const rawText = buildMockPackRawText(ctx, behavior);
+    return successResult(item.requestId, rawText);
+  } catch (err) {
+    const code = err instanceof ProviderError ? err.code : 'UNKNOWN';
+    const message = err instanceof Error ? err.message : 'Unknown mock batch item error.';
+    return failureResult(item.requestId, code, message);
+  }
+}
+function successResult(requestId: string, rawText: string) {
+  return { requestId, ok: true as const, rawText, inputTokens: estimateTokens(rawText), outputTokens: estimateTokens(rawText) };
+}
+function failureResult(requestId: string, errorCode: string, errorMessage: string) {
+  return { requestId, ok: false as const, errorCode, errorMessage };
 }

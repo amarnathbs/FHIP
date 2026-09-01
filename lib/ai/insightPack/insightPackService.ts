@@ -82,6 +82,8 @@ export interface PackRow {
   grounding_status: string | null;
   critical_safety_failure: boolean;
   generation_mode: string;
+  /** Module 11.3 continuation — the ai_insight_pack_batches row this pack was generated as part of, if any (single-call generations leave this null). */
+  batch_id: string | null;
   ai_run_id: string | null;
   idempotency_key: string | null;
   input_tokens: number | null;
@@ -106,6 +108,8 @@ export interface InsertPendingPackInput {
   provider: string;
   model: string;
   idempotencyKey: string;
+  /** Module 11.3 continuation — set only by AIInsightPackBatchOrchestrator; the single-call service (this file) never sets it, so existing single-call packs keep batch_id=null exactly as before this field was added. */
+  batchId?: string | null;
 }
 
 export interface PersistedBlockInput {
@@ -165,8 +169,8 @@ export function buildPackIdentity(userId: string, ctx: FinancialContextObject, p
   };
 }
 
-/** Spec section 51 — mandatory blocks that don't require a domain the certified context actually lacks are skipped (not counted a failure) so a genuinely unavailable domain doesn't hard-fail a pack it was never meant to answer for. */
-function mandatoryBlocksApplicableFor(ctx: FinancialContextObject): PackBlockCode[] {
+/** Spec section 51 — mandatory blocks that don't require a domain the certified context actually lacks are skipped (not counted a failure) so a genuinely unavailable domain doesn't hard-fail a pack it was never meant to answer for. Exported (not just for tests) — batchOrchestrator.ts reuses this verbatim rather than reimplementing it. */
+export function mandatoryBlocksApplicableFor(ctx: FinancialContextObject): PackBlockCode[] {
   return MANDATORY_BLOCK_CODES.filter((code) => {
     if (code === 'overall_financial_summary') return ctx.cash_flow !== null || ctx.balance_sheet !== null;
     return true; // data_quality_summary/strengths/risks are always in-scope — data_quality is never null

@@ -193,6 +193,42 @@ await asService(async () => {
   check('PARTIAL row with no validated_at is REJECTED', rejected);
 });
 
+console.log('\n=== H2. NULL-propagation bypass of the READY/PARTIAL invariants (migration 0123) ===');
+// Migration 0123 continuation — a real, live-DEV-discovered gap in 0121's
+// original constraint wording: `grounding_status = 'PASS'` evaluates to
+// NULL (not FALSE) when grounding_status IS NULL, and Postgres CHECK
+// constraints only reject an expression that evaluates to FALSE, so a raw
+// UPDATE nulling grounding_status alone on an otherwise-READY row was
+// SILENTLY ACCEPTED under the original 0121 wording. This section proves
+// migration 0123's IS NOT DISTINCT FROM / explicit IS NOT NULL fix closes
+// that gap, against the REAL rebuilt chain (0001..latest, 0123 included).
+await asService(async () => {
+  await db.exec(`
+    insert into ai_insight_packs (id, user_id, household_id, snapshot_id, financial_context_hash, context_schema_version, pack_schema_version, prompt_code, prompt_version, provider, model, status, grounding_status, critical_safety_failure, validated_at, ready_at)
+    values ('ffffffff-0000-0000-0000-000000000001', '${A}', null, 'snap-nullsafety', 'hash-nullsafety', 'v1', 'v1', 'PR-AI-013', 1, 'mock', 'mock-1', 'READY', 'PASS', false, now(), now());
+  `);
+  let rejected = false;
+  try {
+    await db.exec(`update ai_insight_packs set grounding_status = null where id = 'ffffffff-0000-0000-0000-000000000001';`);
+  } catch (e) { rejected = true; }
+  check('POST-0123: raw UPDATE nulling grounding_status alone on a status=READY row is REJECTED (the live-DEV-discovered NULL-propagation gap is fixed)', rejected);
+
+  const stillGood = await db.query(`select grounding_status from ai_insight_packs where id = 'ffffffff-0000-0000-0000-000000000001'`);
+  check('the row is genuinely unchanged after the rejected attempt (grounding_status still PASS)', stillGood.rows[0]?.grounding_status === 'PASS');
+
+  // PARTIAL invariant's own IN(...) term has the same NULL-propagation
+  // shape — prove it independently.
+  await db.exec(`
+    insert into ai_insight_packs (id, user_id, household_id, snapshot_id, financial_context_hash, context_schema_version, pack_schema_version, prompt_code, prompt_version, provider, model, status, grounding_status, critical_safety_failure, validated_at)
+    values ('ffffffff-0000-0000-0000-000000000002', '${A}', null, 'snap-nullsafety-2', 'hash-nullsafety-2', 'v1', 'v1', 'PR-AI-013', 1, 'mock', 'mock-1', 'PARTIAL', 'PARTIAL', false, now());
+  `);
+  let partialRejected = false;
+  try {
+    await db.exec(`update ai_insight_packs set grounding_status = null where id = 'ffffffff-0000-0000-0000-000000000002';`);
+  } catch (e) { partialRejected = true; }
+  check('POST-0123: raw UPDATE nulling grounding_status alone on a status=PARTIAL row is also REJECTED', partialRejected);
+});
+
 console.log('\n=== I. Pack identity uniqueness (spec section 9) ===');
 await asService(async () => {
   await db.exec(`

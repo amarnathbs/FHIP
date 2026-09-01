@@ -106,6 +106,7 @@ export const realInsightPackDbClient: InsightPackDbClient = {
         model: input.model,
         status: 'GENERATING',
         idempotency_key: input.idempotencyKey,
+        batch_id: input.batchId ?? null,
       })
       .select('*')
       .single();
