@@ -721,3 +721,76 @@ for production by this wave.**
 SHA-256 (**revision 2**, privileged-RPC Pattern A):
 `aeac16c50a11e49707bad7e7086a5f91002d93346bd1d966edb475d21bf6882b`
 (revision 1 was `2da81ecd155e83c0c5ee2a9f5a41d13b6071b78bbd71ae74df300c2a00b8c355`)
+
+---
+
+## `0122_g1_country_foundation.sql` — G1 Country Foundation
+
+**Allocation context:** local chain head at authoring time was `0120`
+(`0120_fdh15_income_member_mismatch_guard.sql`), with unused numbers
+`0079-0081, 0103, 0117` in the gap list. Collision guard
+(`scripts/check-migration-versions-against-branch.mjs`) run against
+`origin/main` (115 files, clean), `cert/fdh16-full-integration-certification`
+(115 files, clean), `fix/admin-a02-wave3-disconnected-content-dead-routes`
+(115 files, clean), and `feature/module-11-3-insight-pack` (117 files — that
+branch has already filled `0117` with `0117_module11_2_deterministic_
+answer_router.sql` and additionally claimed `0121_module11_3_insight_
+pack.sql` on its own, unmerged branch; no collision, disjoint number space).
+Allocated **`0122`** to avoid any future collision with that in-flight work.
+
+**Scope:** extends the existing `countries` reference table (0001) into a
+real registry (experience level, locale, selectability, active/effective-
+date/audit metadata) without changing the meaning or values of its
+pre-existing `is_supported` column (still AU/IN only, still the sole input
+to MCC's `is_country_confirmed()`); adds one governed capability
+relationship (`country_capabilities`, 13-key closed vocabulary, no JSON
+blob); adds `user_profiles.primary_country`/`billing_country` and their
+provenance columns (additive only — `country_of_residence`/
+`country_confirmed_at`/`country_source` untouched); adds a BEFORE UPDATE
+trigger (`enforce_controlled_country_columns()`) that rejects any direct
+client write to the new controlled columns outside the two new SECURITY
+DEFINER RPCs; adds `country_change_previews` (integrity-bound, expiring,
+single-use preview store) and `cross_border_relationships` (RLS-protected,
+user-owned); reuses the existing `audit_events` table for the audit trail
+(no new competing audit table).
+
+**Certification:** `scripts/g1_country_foundation_pglite_certification.mjs`,
+**58/58 checks**, 0 failures, against real PostgreSQL via PGlite with the
+full migration chain replayed from empty (116 migrations). Covers: registry/
+capability seed correctness (including the evidence-based AU/IN capability
+split — AU has no certified CGT engine, IN's R6 tax engine is certified, so
+`DOMESTIC_TAX_OUTPUTS` differs by country on that basis, not by assumption);
+existing-user backfill logic (re-run against a fresh confirmed row, since a
+one-time migration-time UPDATE cannot be re-observed against a row created
+after replay); the controlled-column write guard (direct UPDATE rejected,
+ordinary fields still freely editable); the full preview+confirm workflow
+(AU→IN, IN→AU, AU→GENERIC, same-country idempotency, unsupported-country
+rejection, explicit-currency preservation, stale-preview rejection,
+cross-user/tampered-preview rejection, duplicate-confirmation idempotency,
+already-consumed-preview rejection); billing-country confirmation and
+rejection of an unselectable code; cross-border relationship RLS (owner
+CRUD, cross-tenant SELECT/UPDATE/DELETE blocked, forged ownership blocked,
+duplicate-active-relationship rejected, end-then-redeclare allowed,
+non-effect on residence/primary/billing/currency); audit-history mutation
+lockout (no UPDATE/DELETE policy for authenticated); and MCC regression (an
+unconfirmed user is still blocked from the 8 foundational tables, a
+confirmed user is not over-blocked).
+
+**Status: APPLIED TO DEV, not applied to production.** Applied to DEV by the
+Product Owner via the Supabase Dashboard SQL editor (no Supabase CLI project
+link exists in this worktree). Independently re-confirmed live by this task
+after credentials were provisioned: registry columns/capability rows/new
+tables reachable, `confirm_billing_country` RPC returns a real `401
+UNAUTHENTICATED` (not "function not found"). Full live-DEV certification —
+`scripts/g1_country_foundation_live_dev_certification.mjs`, **54/54 checks**,
+0 failures, real authenticated-user JWTs for every RLS/authority assertion,
+service role used only for synthetic-user setup and cleanup — covers all 9
+spec-section-22 scenarios, the full preview+confirm workflow including
+stale/expired/tampered-preview rejection, the controlled-column guard,
+cross-border relationship RLS with ground-truth re-verification, billing-
+region validation in both directions against a live-read `billing_country`,
+and MCC regression. Cleanup independently re-verified via fresh queries —
+zero residual rows across 5 tables, zero residual synthetic auth users.
+**Not applied to production; no production access occurred at any point.**
+
+SHA-256: `5d67de42435ced7c3a61bfd93f482b57c7e4f0417036f5a280d3afc748123d87`
