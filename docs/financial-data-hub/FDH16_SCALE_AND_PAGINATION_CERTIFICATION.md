@@ -25,18 +25,44 @@ vacuous — the underlying risk is real, and the fix, not the platform, is what 
   `lib/services/investment-intelligence/pagination.ts` — confirmed present, unaffected by this round's fix).
 - FDH-8's Transaction Explorer, R8's 200-case certification, R10/R12's own pagination certifications.
 
+## CLOSED this targeted final-closure round (2026-09-01): report resolver's own 1,001-row boundary, directly
+
+The report resolver follow-up flagged above is now closed by direct reproduction, not source-inspection.
+`scripts/fdh16_report_resolver_scale_certification.mjs`, live hosted DEV: created a premium-tier synthetic user
+with 1,000 then 1,001 `expense_items` rows; reproduced the same permanent negative control (raw PostgREST
+capped at 1,000 of 1,001, `content-range` proves it); then called the REAL `resolveReportSourceData()` directly
+(imported, never reimplemented) at both boundaries. `premium.expenseItems.length`/economic total correctly read
+`1000` then `1001` — not silently truncated. The same boundary was also reproduced for a second register,
+`investments` -> `premium.investments`, in the same run. **12/13 PASS** (the one non-decisive failure was a
+transient auth-admin-API eventual-consistency artifact in cleanup verification, independently resolved and
+re-confirmed — see `FDH16_RESIDUAL_RISK_REGISTER.md`). Full detail in `FDH16_REPORT_INTEGRATION_CERTIFICATION.md`.
+
+## 5,000/10,000-row scale — REUSED PRIOR CERTIFIED EVIDENCE (this label applied per this round's own instruction)
+
+Not re-run this closure round, per explicit instruction: reuse unless code affecting those paths changed since
+the evidence was produced. The only files this branch has touched, across both rounds, are
+`lib/services/dashboardData.ts` and `lib/services/reportSnapshotResolver.ts` (confirmed via `git diff
+origin/main..HEAD --stat` — exactly these two files, nothing else). The 5,000/10,000-row evidence cited in
+`FDH16_SCALE_AND_PAGINATION_CERTIFICATION.md`'s original pass (FDH-11/FDH-14's Investment Intelligence
+repositories via `lib/services/investment-intelligence/pagination.ts`, and FDH-8/R8/R10/R12's own pagination
+certifications) lives entirely outside those two touched files — confirmed unaffected. **REUSED PRIOR CERTIFIED
+EVIDENCE.** The 1,000→1,001 boundary (both Dashboard and, as of this closure round, the Report resolver) remains
+the decisive live pagination proof for the one defect class this branch actually changed.
+
 ## Not performed fresh this round
 
-- 5,000/10,000-row reuse-and-relabel exercise (§167) — not attempted.
 - Investment position-list truncation re-check (§171) beyond the REUSED evidence above.
 - An exhaustive audit of every remaining list-returning query in the codebase for the same unpaginated-default
-  pattern FDH16-DEF-001 exposed in `dashboardData.ts` specifically — `lib/services/reportSnapshotResolver.ts`'s
-  queries (read during this round's report-integration check) were **not** re-checked for the identical
-  `.range()` gap; this is flagged as a follow-up recommendation, not asserted as safe.
+  pattern FDH16-DEF-001 exposed — beyond the two files this branch actually touched (`dashboardData.ts`,
+  `reportSnapshotResolver.ts`, both now fixed and live-proven), no whole-codebase sweep for a THIRD unrelated
+  instance of the same pattern was performed; flagged as a standing follow-up recommendation, not asserted as
+  safe beyond these two files.
 
 ## Verdict
 
-**Scale and pagination: PASS for the boundary freshly tested this round** (Dashboard's 8 register queries, now
-fixed and live-re-proven). **Not exhaustively audited across every other list-returning query in the codebase**
-— disclosed as a residual/follow-up recommendation in `FDH16_RESIDUAL_RISK_REGISTER.md`, not asserted as a
-whole-codebase guarantee.
+**Scale and pagination: PASS.** Both files this branch actually modified (Dashboard's 8 register queries, and
+the Report resolver's 6 Premium queries) are now fixed and live-re-proven at the decisive 1,000→1,001 boundary —
+the report resolver by direct reproduction this closure round, no longer by source-inspection alone.
+5,000/10,000-row scale REUSED and confirmed unaffected by this branch's diff. **Not exhaustively audited across
+every OTHER list-returning query in the codebase** beyond the two files this branch touched — disclosed as a
+standing residual/follow-up recommendation, not asserted as a whole-codebase guarantee.
