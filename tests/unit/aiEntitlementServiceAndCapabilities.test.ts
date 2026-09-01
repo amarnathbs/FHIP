@@ -73,18 +73,27 @@ describe('Module 11.1 section 6 — AI feature entitlement codes', () => {
     }
   });
 
-  it('refuses the deferred capabilities even to a Premium subject (sections 1, 44, 45, 46)', () => {
+  it('refuses the still-deferred capabilities even to a Premium subject (sections 1, 44, 45, 46)', () => {
     // An entitlement to a feature nobody built must never read as permission
-    // to invoke one.
-    for (const deferred of ['AI_INSIGHT_PACK', 'AI_STANDARD_QUESTIONS', 'AI_SCENARIO_NARRATION'] as const) {
+    // to invoke one. AI_INSIGHT_PACK moved OUT of this list in Module 11.3
+    // (see the dedicated test below) because that feature is now genuinely
+    // built and governed; AI_STANDARD_QUESTIONS/AI_SCENARIO_NARRATION remain
+    // deferred (11.4 and beyond).
+    for (const deferred of ['AI_STANDARD_QUESTIONS', 'AI_SCENARIO_NARRATION'] as const) {
       expect(hasAICapability('premium', deferred)).toBe(false);
     }
   });
 
-  it('grants the two capabilities the enforcement layer genuinely governs', () => {
+  it('grants the three capabilities the enforcement layer genuinely governs', () => {
     expect(hasAICapability('premium', 'AI_CUSTOM_QUESTIONS')).toBe(true);
     expect(hasAICapability('premium', 'AI_PERSONALISED_EXPLANATIONS')).toBe(true);
     expect(hasAICapability('free', 'AI_CUSTOM_QUESTIONS')).toBe(false);
+  });
+
+  it('Module 11.3 — grants AI_INSIGHT_PACK to Premium only, now that the Insight Pack service is built', () => {
+    expect(hasAICapability('premium', 'AI_INSIGHT_PACK')).toBe(true);
+    expect(hasAICapability('free', 'AI_INSIGHT_PACK')).toBe(false);
+    expect(hasAICapability(null, 'AI_INSIGHT_PACK')).toBe(false);
   });
 });
 
