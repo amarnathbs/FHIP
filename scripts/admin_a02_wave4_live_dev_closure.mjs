@@ -119,7 +119,6 @@ async function main() {
   // ---- Before counts -------------------------------------------------
   const beforeSources = (await admin.from('benchmark_sources').select('id', { count: 'exact', head: true })).count;
   const beforeRuns = (await admin.from('benchmark_update_runs').select('id', { count: 'exact', head: true })).count;
-  const beforeUsers = (await admin.auth.admin.listUsers({ page: 1, perPage: 1 })).data.total ?? null;
   console.log(`BEFORE: benchmark_sources=${beforeSources}, benchmark_update_runs=${beforeRuns}`);
 
   console.log('\n=== 0. Connectivity + migration-applied confirmation ===');
@@ -218,14 +217,13 @@ async function main() {
     // row is targeted).
     const { data: anyAuditRow } = await admin.from('resource_audit_log').select('id').limit(1).maybeSingle();
     if (anyAuditRow) {
-      const { error: e1 } = await nonAdmin.client.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
-      check('ordinary authenticated user: UPDATE on resource_audit_log affects zero rows / is refused', !e1 || true, e1); // presence check below is authoritative
+      await nonAdmin.client.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
       const { data: afterNonAdmin } = await admin.from('resource_audit_log').select('action').eq('id', anyAuditRow.id).maybeSingle();
 
-      const { error: e2 } = await analyst.client.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
+      await analyst.client.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
       const { data: afterAnalyst } = await admin.from('resource_audit_log').select('action').eq('id', anyAuditRow.id).maybeSingle();
 
-      const { error: e3 } = await anonClient.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
+      await anonClient.from('resource_audit_log').update({ action: 'TAMPERED' }).eq('id', anyAuditRow.id).select();
       const { data: afterAnon } = await admin.from('resource_audit_log').select('action').eq('id', anyAuditRow.id).maybeSingle();
 
       check('resource_audit_log row unchanged after non-admin, Analyst and anon tamper attempts (RLS-filtered to zero rows, real DEV data)', afterNonAdmin?.action !== 'TAMPERED' && afterAnalyst?.action !== 'TAMPERED' && afterAnon?.action !== 'TAMPERED', { afterNonAdmin, afterAnalyst, afterAnon });
@@ -262,7 +260,6 @@ async function main() {
   const afterSources = (await admin.from('benchmark_sources').select('id', { count: 'exact', head: true })).count;
   const afterRuns = (await admin.from('benchmark_update_runs').select('id', { count: 'exact', head: true })).count;
   const residualSources = await admin.from('benchmark_sources').select('id').ilike('source_name', `${RUN}%`);
-  const residualUsers = createdUserIds.length;
 
   console.log(`AFTER:  benchmark_sources=${afterSources}, benchmark_update_runs=${afterRuns}`);
   check('benchmark_sources fixtures fully removed (source rows)', (residualSources.data ?? []).length === 0, residualSources.data);
