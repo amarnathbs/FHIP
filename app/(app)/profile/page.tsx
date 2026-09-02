@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { SectionCard } from '@/components/dashboard/SectionCard';
-import { COUNTRY_OPTIONS } from '@/lib/constants';
+import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
+import type { CountryCode } from '@/lib/services/jurisdiction';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
+import { CrossBorderRelationshipsPanel } from '@/components/profile/CrossBorderRelationshipsPanel';
 
 // App Review tier-2 fix pass (2026-08-28 branch reconciliation), Fix 1 —
 // Profile Page. Ported from app/(app)/profile/page.tsx on
@@ -46,7 +48,7 @@ import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 type ProfileData = {
   full_name: string | null;
   date_of_birth: string | null;
-  country_of_residence: 'AU' | 'IN' | null;
+  country_of_residence: CountryCode | null;
   secondary_country: 'AU' | 'IN' | null;
   preferred_currency: 'AUD' | 'INR' | null;
   employment_status: string | null;
@@ -239,29 +241,49 @@ export default function ProfilePage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted">Country of residence</label>
+            <label htmlFor="profile-country" className="block text-xs font-medium text-muted">
+              Country of residence
+            </label>
             <select
+              id="profile-country"
               value={profile.country_of_residence ?? ''}
-              onChange={(e) => updateField('country_of_residence', e.target.value as 'AU' | 'IN')}
+              onChange={(e) => updateField('country_of_residence', e.target.value as CountryCode)}
+              aria-describedby="profile-country-help"
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             >
-              {COUNTRY_OPTIONS.map((o) => (
+              {REGISTRATION_COUNTRY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
+            {/* G3: country and currency are presented as SEPARATE concepts
+                (spec section 16), and the consequence of changing country is
+                stated up front rather than discovered after saving. */}
+            <p id="profile-country-help" className="mt-1 text-xs text-muted">
+              Where you currently live. Changing this asks you to confirm your new country again before you can
+              continue, and never changes your reporting currency or any financial data you have entered.
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted">Preferred currency</label>
+            <label htmlFor="profile-currency" className="block text-xs font-medium text-muted">
+              Reporting currency
+            </label>
             <select
+              id="profile-currency"
               value={profile.preferred_currency ?? ''}
               onChange={(e) => updateField('preferred_currency', e.target.value as 'AUD' | 'INR')}
+              aria-describedby="profile-currency-help"
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             >
               <option value="AUD">AUD</option>
               <option value="INR">INR</option>
             </select>
+            <p id="profile-currency-help" className="mt-1 text-xs text-muted">
+              The currency your totals are presented in. This is a display choice only — it does not say where you
+              live, does not change where any record is held, and never alters the original currency of anything you
+              have already entered.
+            </p>
           </div>
         </div>
 
@@ -280,6 +302,13 @@ export default function ProfilePage() {
           )}
         </div>
       </SectionCard>
+
+      {/* G3 section 9. Deliberately its own section, separate from the
+          residence/currency controls above — a cross-border declaration is
+          not a residence statement, not a primary-country statement and not a
+          billing statement, and presenting it alongside them would blur
+          exactly the distinction G3 requires to be kept sharp. */}
+      <CrossBorderRelationshipsPanel residenceCountry={profile.country_of_residence} />
 
       <SectionCard title="Email" description="Your sign-in email, managed securely through account verification.">
         <p className="text-sm text-ink">
