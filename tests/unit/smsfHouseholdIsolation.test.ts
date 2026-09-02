@@ -295,7 +295,7 @@ describe('LR-FI-1 §5/§28 — SMSF economic value stays in household wealth', (
         assets: [{ current_value: 800000, asset_class: 'property', master_item_key: 'investment_property', owner: SMSF_OWNER }],
         investments: [{ current_value: 250000, cost_base: 200000, investment_type: 'shares', master_item_key: 'shares', country_code: 'AU', annual_contribution: 0, owner: SMSF_OWNER }],
         retirement: [{ current_balance: 1050000, employer_contribution: 0, personal_contribution: 0, contribution_frequency: 'monthly', owner: SMSF_OWNER }],
-      } as DashboardInput,
+      },
       'AUD'
     );
     expect(d.totalAssets).toBe(800000);

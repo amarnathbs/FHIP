@@ -29,12 +29,21 @@ export interface ExpenseRow {
   expense_category?: string | null;
   owner?: string | null;
 }
+// LR-FI-1: assets/investments/retirement_accounts carry the same `owner`
+// column as the other four registers (migration 0004), so it is declared here
+// too — but this engine DELIBERATELY never filters on it for these three.
+// They are pure wealth registers: an SMSF-owned asset, investment or
+// retirement balance must keep contributing to totalAssets/totalInvestments/
+// totalRetirement and therefore to Net Worth (spec §5, §28). Declaring the
+// field makes that decision explicit and lets tests assert it directly,
+// rather than leaving "why isn't this filtered?" to inference.
 export interface AssetRow {
   current_value: number;
   asset_class: string;
   master_item_key?: string | null;
   country_code?: string | null;
   currency_code?: string | null;
+  owner?: string | null;
 }
 export interface LiabilityRow {
   balance: number;
@@ -58,6 +67,7 @@ export interface InvestmentRow {
   annual_contribution: number | null;
   institution?: string | null;
   currency_code?: string | null;
+  owner?: string | null; // see AssetRow — declared, deliberately never filtered
 }
 export interface RetirementRow {
   current_balance: number;
@@ -66,6 +76,7 @@ export interface RetirementRow {
   contribution_frequency: Frequency | null;
   country_code?: string | null;
   currency_code?: string | null;
+  owner?: string | null; // see AssetRow — declared, deliberately never filtered
 }
 export interface InsuranceRow {
   policy_name: string;
