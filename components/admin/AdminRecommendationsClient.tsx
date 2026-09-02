@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
+import { AdminActionStatus, type AdminActionOutcome } from '@/components/admin/AdminActionStatus';
+import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely } from '@/lib/resources/admin/resultState';
 
 interface Condition {
   id?: string;
@@ -136,28 +140,46 @@ export function AdminRecommendationsClient() {
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [saveErrors, setSaveErrors] = useState<EditRowError[] | null>(null);
   const [confirmClearConditions, setConfirmClearConditions] = useState(false);
+  const [pendingToggle, setPendingToggle] = useState<Recommendation | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleOutcome, setToggleOutcome] = useState<AdminActionOutcome>(null);
 
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
       const [recRes, gapRes] = await Promise.all([fetch('/api/admin/recommendations'), fetch('/api/admin/recommendations/gaps')]);
-      const recJson = await recRes.json();
-      const gapJson = await gapRes.json();
-      if (!recRes.ok) throw new Error(recJson.error ?? 'Could not load recommendations');
-      if (!gapRes.ok) throw new Error(gapJson.error ?? 'Could not load gap review');
-      setList(recJson.data);
-      setGaps(gapJson.data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      // Admin A0.2 Wave 5 (§9, §19): both branches previously threw the raw
+      // server string and rendered it, and an HTML error page from the edge
+      // surfaced a `SyntaxError` as the operator's message. Both responses
+      // are now read safely and classified.
+      const recJson = await readJsonSafely(recRes);
+      const gapJson = await readJsonSafely(gapRes);
+      if (!recRes.ok) {
+        setError(failureFromResponse(recRes.status, recJson, 'the recommendation library').message);
+        return;
+      }
+      if (!gapRes.ok) {
+        setError(failureFromResponse(gapRes.status, gapJson, 'the gap review').message);
+        return;
+      }
+      setList((recJson?.data as Recommendation[]) ?? []);
+      setGaps((gapJson?.data as GapRun[]) ?? []);
+    } catch {
+      setError(failureFromThrown(null, 'the recommendation library').message);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadAll();
-     
+    // Deferred a tick, matching the convention the sibling Resources admin
+    // screens already use: `loadAll` begins its own setState calls before
+    // its first `await`, which react-hooks/set-state-in-effect flags as a
+    // cascading-render risk. Behaviour is unchanged.
+    const timer = setTimeout(() => void loadAll(), 0);
+    return () => clearTimeout(timer);
+
   }, []);
 
   const filtered = useMemo(() => {
@@ -280,38 +302,68 @@ export function AdminRecommendationsClient() {
       const res = editingId
         ? await fetch(`/api/admin/recommendations/${editingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         : await fetch('/api/admin/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const json = await res.json();
+      const json = (await readJsonSafely(res)) as { data?: { status?: string; errors?: EditRowError[] } } | null;
       if (!res.ok) {
-        if (json.data?.status === 'validation_failed' && Array.isArray(json.data.errors)) {
+        if (json?.data?.status === 'validation_failed' && Array.isArray(json.data.errors)) {
           setSaveErrors(json.data.errors);
           setSaveStatus('Not saved — see the errors below. Nothing was changed.');
           return;
         }
-        setSaveStatus(`Not saved: ${json.error ?? 'Could not save recommendation'}. Nothing was changed.`);
+        // Wave 5 (§19): the raw server string was interpolated straight into
+        // the operator's status line.
+        setSaveStatus(`${actionFailureMessage(res.status, json as Record<string, unknown> | null, 'save this recommendation')} Nothing was changed.`);
         return;
       }
-      setSaveStatus(editingId ? 'Saved.' : 'Created.');
+      // Admin A0.2 Wave 5 (§9): this previously set 'Saved.'/'Created.' and
+      // then immediately called resetForm(), which sets saveStatus back to
+      // null in the same tick — so a successful save produced NO visible
+      // confirmation at all, ever. Reset first, then report the outcome.
+      const confirmation = editingId
+        ? 'Saved. The library below has been reloaded from the server and shows the committed values.'
+        : 'Created. The new recommendation appears in the library below.';
       resetForm();
+      setSaveStatus(confirmation);
       await loadAll();
-    } catch (e) {
-      setSaveStatus(`Not saved: ${e instanceof Error ? e.message : 'Something went wrong'}. Nothing was changed.`);
+    } catch {
+      setSaveStatus('Not saved: the server could not be reached. Nothing was changed. Check your connection and try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  async function toggleActive(rec: Recommendation) {
+  // Admin A0.2 Wave 5 (§9, §10): deactivating a recommendation stops it
+  // being served to every user it currently matches, and this was a single
+  // unconfirmed click with no busy guard (rapid clicks raced N PATCHes) and
+  // no success confirmation. It now confirms, blocks re-entry, reports the
+  // committed outcome, and never forwards a raw server string.
+  async function applyToggleActive(rec: Recommendation) {
+    setTogglingId(rec.id);
+    setToggleOutcome(null);
     try {
       const res = await fetch(`/api/admin/recommendations/${rec.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !rec.is_active }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not update status');
+      if (!res.ok) {
+        const json = await readJsonSafely(res);
+        setToggleOutcome({
+          kind: 'failure',
+          message: actionFailureMessage(res.status, json, rec.is_active ? 'deactivate this recommendation' : 'activate this recommendation'),
+        });
+        return;
+      }
+      setToggleOutcome({
+        kind: 'success',
+        message: rec.is_active
+          ? `${rec.recommendation_code} is now inactive and will not be served to anyone.`
+          : `${rec.recommendation_code} is now active and will be served to everyone it matches.`,
+      });
       await loadAll();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } catch {
+      setToggleOutcome({ kind: 'failure', message: 'Could not reach the server, so nothing was changed. Check your connection and try again.' });
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -327,9 +379,9 @@ export function AdminRecommendationsClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileType: uploadType, csvText }),
       });
-      const json = await res.json();
-      if (uploadType === 'conditions' && json.data && (json.data.status === 'success' || json.data.status === 'validation_failed')) {
-        const outcome = json.data as ConditionsImportOutcome;
+      const json = (await readJsonSafely(res)) as { data?: { status?: string } } | null;
+      if (uploadType === 'conditions' && json?.data && (json.data.status === 'success' || json.data.status === 'validation_failed')) {
+        const outcome = json.data as unknown as ConditionsImportOutcome;
         setConditionsOutcome(outcome);
         if (outcome.status === 'validation_failed') {
           setUploadStatus(`Import failed validation — no existing conditions were changed. ${outcome.errors?.length ?? 0} row error(s) found out of ${outcome.rowsReceived} row(s).`);
@@ -339,11 +391,25 @@ export function AdminRecommendationsClient() {
         }
         return;
       }
-      if (!res.ok) throw new Error(json.error ?? 'Upload failed');
-      setUploadStatus(`Success: ${JSON.stringify(json.data)}`);
+      if (!res.ok) {
+        // Wave 5 (§19): the raw server string was thrown and then rendered.
+        setUploadStatus(`${actionFailureMessage(res.status, json as Record<string, unknown> | null, 'apply this file')} No changes were made.`);
+        return;
+      }
+      // Admin A0.2 Wave 5 (§8.5, §19): this previously reported success as
+      // `Success: ${JSON.stringify(json.data)}` — a raw JSON blob rendered
+      // as the operator's confirmation message. State what changed instead.
+      const summary = json?.data as { rowsReceived?: number; upserted?: number; rowsUpserted?: number } | undefined;
+      const applied = summary?.upserted ?? summary?.rowsUpserted;
+      const received = summary?.rowsReceived;
+      setUploadStatus(
+        applied !== undefined || received !== undefined
+          ? `Success: ${applied ?? received} row(s) applied${received !== undefined && applied !== undefined && applied !== received ? ` out of ${received} received` : ''}. Codes not present in this file were left unchanged.`
+          : 'Success: the file was applied. Codes not present in this file were left unchanged.'
+      );
       await loadAll();
-    } catch (e) {
-      setUploadStatus(`Error: ${e instanceof Error ? e.message : 'Upload failed'}. No changes were made.`);
+    } catch {
+      setUploadStatus('The server could not be reached, so the file was not applied. No changes were made. Check your connection and try again.');
     } finally {
       setUploading(false);
       if (inputEl) inputEl.value = '';
@@ -351,9 +417,44 @@ export function AdminRecommendationsClient() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-semibold text-trust">Recommendations Admin</h1>
-      {error && <p className="text-sm text-risk">{error}</p>}
+    <div className="space-y-6 p-4 sm:p-6">
+      <ConfirmDialog
+        open={!!pendingToggle}
+        title={pendingToggle?.is_active ? 'Deactivate this recommendation?' : 'Activate this recommendation?'}
+        message={
+          pendingToggle
+            ? pendingToggle.is_active
+              ? `${pendingToggle.recommendation_code} — "${pendingToggle.action_title_template}" — will stop being served to every user it currently matches. Nothing is deleted; you can activate it again at any time.`
+              : `${pendingToggle.recommendation_code} — "${pendingToggle.action_title_template}" — will start being served to every user it matches. Check its conditions first if you are not certain who that is.`
+            : ''
+        }
+        confirmLabel={pendingToggle?.is_active ? 'Deactivate' : 'Activate'}
+        cancelLabel="Cancel"
+        destructive={!!pendingToggle?.is_active}
+        onConfirm={() => {
+          const rec = pendingToggle;
+          setPendingToggle(null);
+          if (rec) void applyToggleActive(rec);
+        }}
+        onCancel={() => setPendingToggle(null)}
+      />
+
+      <div>
+        <h1 className="text-2xl font-semibold text-ink">Recommendations</h1>
+        <p className="mt-1 max-w-3xl text-sm text-muted">
+          The library of guidance FHIP serves to a person based on their own results. A recommendation is only shown when
+          every one of its conditions matches, and only while it is active.
+        </p>
+      </div>
+
+      <AdminTaskHelp taskId="ADM-04" />
+
+      {error && (
+        <p role="alert" className="rounded-compact border border-risk/30 bg-risk/5 px-3 py-2 text-sm font-medium text-risk">
+          {error}
+        </p>
+      )}
+      <AdminActionStatus outcome={toggleOutcome} />
 
       <section className="rounded-card border bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-900">Bulk update via CSV upload</h2>
@@ -635,7 +736,7 @@ export function AdminRecommendationsClient() {
             Library ({filtered.length} of {list.length})
           </h2>
           <div className="flex flex-wrap items-center gap-2">
-            <select className="rounded border px-2 py-1 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <select aria-label="Filter the library by category" className="min-h-11 rounded border px-2 py-1 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option value="all">All categories</option>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -643,11 +744,32 @@ export function AdminRecommendationsClient() {
                 </option>
               ))}
             </select>
-            <input className="rounded border px-2 py-1 text-sm" placeholder="Search code / title / signal" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              type="search"
+              aria-label="Search the library by code, title or signal"
+              className="min-h-11 rounded border px-2 py-1 text-sm"
+              placeholder="Search code / title / signal"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+          <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-500">
+            Loading recommendations…
+          </p>
+        ) : filtered.length === 0 ? (
+          /* §8 — the library previously rendered an entirely blank panel when
+             a filter matched nothing, so "no matches" and "the request
+             returned nothing" were indistinguishable. */
+          <div className="mt-3 rounded-card border border-dashed border-line bg-gray-50/50 px-6 py-10 text-center">
+            <p className="text-sm font-semibold text-ink">
+              {list.length === 0 ? 'No recommendations exist yet.' : 'No recommendations match these filters.'}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {list.length === 0 ? 'Create one using the form above, or bulk-import a CSV file.' : 'Try a different search, or set the category filter back to All categories.'}
+            </p>
+          </div>
         ) : (
           <div className="mt-3 max-h-[600px] space-y-2 overflow-y-auto">
             {filtered.slice(0, 300).map((rec) => (
@@ -661,7 +783,7 @@ export function AdminRecommendationsClient() {
                     <span
                       className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${rec.is_active ? 'bg-progress/10 text-progress' : 'bg-gray-100 text-gray-500'}`}
                     >
-                      {rec.is_active ? 'active' : 'inactive'}
+                      {rec.is_active ? 'Active' : 'Inactive'}
                     </span>
                     {rec.is_premium && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Premium</span>}
                     {rec.matches_unconditionally && <span className="ml-2 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">Unconditional — always fires</span>}
@@ -677,11 +799,22 @@ export function AdminRecommendationsClient() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => startEdit(rec)} className="text-xs font-semibold text-trust">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(rec)}
+                      aria-label={`Edit ${rec.recommendation_code} — ${rec.action_title_template}`}
+                      className="min-h-11 text-xs font-semibold text-trust"
+                    >
                       Edit
                     </button>
-                    <button onClick={() => toggleActive(rec)} className={`text-xs font-semibold ${rec.is_active ? 'text-risk' : 'text-progress'}`}>
-                      {rec.is_active ? 'Deactivate' : 'Activate'}
+                    <button
+                      type="button"
+                      disabled={togglingId === rec.id}
+                      onClick={() => setPendingToggle(rec)}
+                      aria-label={`${rec.is_active ? 'Deactivate' : 'Activate'} ${rec.recommendation_code} — ${rec.action_title_template}`}
+                      className={`min-h-11 text-xs font-semibold disabled:opacity-50 ${rec.is_active ? 'text-risk' : 'text-progress'}`}
+                    >
+                      {togglingId === rec.id ? 'Working…' : rec.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                   </div>
                 </div>
@@ -698,19 +831,40 @@ export function AdminRecommendationsClient() {
           Each row is a real user evaluation where nothing in the library matched. Expand to see the exact data evaluated, to decide whether a
           new recommendation is needed.
         </p>
+        {/* Admin A0.2 Wave 5 (§19) — an honest, visible caution rather than a
+            silent change. Expanding a row shows one real person's evaluated
+            financial figures. This Wave did not alter what is shown here
+            (that is a certified Wave 1 surface and a business decision, not
+            a UX one), but an operator should know what they are opening
+            before they open it, and that it is not for sharing. The wider
+            question of whether this payload should be shown at all is
+            recorded as a disclosed finding for Product Owner decision. */}
+        <p className="mt-1 text-sm font-medium text-attention">
+          Expanding a row shows the real financial figures evaluated for one person. Open it only when you need it to decide
+          whether a recommendation is missing, and do not copy it anywhere else.
+        </p>
         <div className="mt-3 space-y-2">
           {gaps.map((g) => (
             <div key={g.id} className="rounded border p-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-gray-700">
                   User {g.user_id.slice(0, 8)}… · {new Date(g.run_at).toLocaleString()}
                 </p>
-                <button onClick={() => setExpandedGap((cur) => (cur === g.id ? null : g.id))} className="text-xs font-semibold text-trust">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGap((cur) => (cur === g.id ? null : g.id))}
+                  aria-expanded={expandedGap === g.id}
+                  aria-controls={`gap-context-${g.id}`}
+                  aria-label={`${expandedGap === g.id ? 'Hide' : 'Show'} the evaluated data for the run at ${new Date(g.run_at).toLocaleString()}`}
+                  className="min-h-11 text-xs font-semibold text-trust"
+                >
                   {expandedGap === g.id ? 'Hide context' : 'Show context'}
                 </button>
               </div>
               {expandedGap === g.id && (
-                <pre className="mt-2 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs text-gray-600">{JSON.stringify(g.context_snapshot, null, 2)}</pre>
+                <pre id={`gap-context-${g.id}`} className="mt-2 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs text-gray-600">
+                  {JSON.stringify(g.context_snapshot, null, 2)}
+                </pre>
               )}
             </div>
           ))}

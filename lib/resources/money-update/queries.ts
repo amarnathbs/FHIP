@@ -7,6 +7,14 @@ import type { MoneyUpdateEditorPost, MoneyUpdateSource } from './types';
 export interface MoneyUpdateListItem {
   id: string;
   title: string;
+  // Admin A0.2 Wave 5 (§8.7 — a row must carry the identity the filter above
+  // it implies). This list mixes Money Updates and Money Update Templates,
+  // and offers a filter to separate them, but the row itself carried no
+  // content type at all — so with the filter set to "Updates + Templates"
+  // (the default) an editor could not tell which kind any row was, and both
+  // kinds link to the same edit route. The column was already being filtered
+  // on; it simply was not selected or returned.
+  content_type: string;
   jurisdiction: string;
   event_date: string | null;
   status: string;
@@ -40,7 +48,7 @@ function sanitizeSearchTerm(raw: string): string {
 export async function getMoneyUpdateList(supabase: SupabaseClient, filters: MoneyUpdateListFilters): Promise<MoneyUpdateListResult> {
   let query = supabase
     .from('resource_posts')
-    .select('id, title, jurisdiction, event_date, status, compliance_classification, next_review_at, expires_at, updated_at', { count: 'exact' });
+    .select('id, title, content_type, jurisdiction, event_date, status, compliance_classification, next_review_at, expires_at, updated_at', { count: 'exact' });
 
   if (filters.contentType === 'all') query = query.in('content_type', ['money_update', 'money_update_template']);
   else query = query.eq('content_type', filters.contentType);

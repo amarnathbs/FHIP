@@ -2,12 +2,25 @@
 
 // R1.4 Money Update list — spec §41. Covers both money_update and
 // money_update_template rows (filterable by `type`).
+//
+// Admin A0.2 Wave 5:
+//   §9  Every non-2xx outcome collapsed into the one red "We couldn't load
+//       Resources content. Try again." panel — a 403 offered a Retry that
+//       could never succeed, and a non-JSON edge response surfaced a raw
+//       `SyntaxError` to the operator. Outcomes are now classified once,
+//       centrally, and rendered as the state they actually are.
+//   §11 There was no result count, so filtering and paging changed the list
+//       with nothing announced; the loading skeleton had no specific label.
+//   §17 The page carried no Help affordance.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge } from '@/components/resources/admin/ResourceBadges';
 import { ResourcePagination } from '@/components/resources/admin/ResourcePagination';
-import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
+import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } from '@/components/resources/admin/ResourceStates';
+import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, COMPLIANCE_LABELS, COMPLIANCE_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import type { MoneyUpdateListItem } from '@/lib/resources/money-update/queries';
 
@@ -20,6 +33,7 @@ function isReviewDue(item: MoneyUpdateListItem): boolean {
 }
 
 export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [contentType, setContentType] = useState<'all' | 'money_update' | 'money_update_template'>('all');
   const [status, setStatus] = useState('all');
@@ -30,13 +44,13 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AdminFailure | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const qp = new URLSearchParams();
       if (search) qp.set('q', search);
@@ -46,13 +60,21 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
       if (compliance !== 'all') qp.set('compliance', compliance);
       if (page > 1) qp.set('page', String(page));
       const res = await fetch(`/api/admin/resources/money-updates?${qp.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "We couldn't load Money Updates. Try again.");
-      setItems(json.data.items);
-      setTotal(json.data.total);
-      setPageSize(json.data.pageSize);
+      const json = await readJsonSafely(res);
+      if (!res.ok) {
+        setFailure(failureFromResponse(res.status, json, 'Money Updates'));
+        setItems([]);
+        setTotal(0);
+        return;
+      }
+      const data = json?.data as { items?: MoneyUpdateListItem[]; total?: number; pageSize?: number } | undefined;
+      setItems(data?.items ?? []);
+      setTotal(data?.total ?? 0);
+      setPageSize(data?.pageSize ?? 25);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setFailure(failureFromThrown(e, 'Money Updates'));
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -80,11 +102,13 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
           <p className="mt-1 text-sm text-muted">Governed interpretation of important financial developments — not generic news.</p>
         </div>
         {canCreate && (
-          <Link href="/admin/resources/money-updates/new" className="rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+          <Link href="/admin/resources/money-updates/new" className="inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
             New Money Update
           </Link>
         )}
       </div>
+
+      <AdminTaskHelp taskId="ADM-13" />
 
       <div className="rounded-card border border-line bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -119,20 +143,28 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
           )}
         </div>
 
-        <div className="mt-4">
+        {/* §11 — the result count is announced, so filtering and paging are
+            perceivable without sight. Previously the list simply changed. */}
+        <p role="status" aria-live="polite" className="mt-3 text-xs text-muted">
+          {loading || failure ? '' : `${items.length} ${items.length === 1 ? 'Money Update' : 'Money Updates'} shown.`}
+        </p>
+
+        <div className="mt-2">
           {loading ? (
-            <ResourceLoadingSkeleton />
-          ) : error ? (
-            <ResourceErrorState message={error} onRetry={() => setReloadToken((t) => t + 1)} />
+            <ResourceLoadingSkeleton label="Loading Money Updates" />
+          ) : failure ? (
+            <ResourceFailureState failure={failure} onRetry={() => setReloadToken((t) => t + 1)} />
           ) : items.length === 0 ? (
             <ResourceEmptyState
               title={hasFilters ? 'No Money Updates match these filters.' : 'No Money Updates have been created yet.'}
               message={hasFilters ? 'Try adjusting or clearing your filters.' : 'Create your first Money Update.'}
-              action={canCreate && !hasFilters ? { label: 'New Money Update', onClick: () => (window.location.href = '/admin/resources/money-updates/new') } : undefined}
+              action={canCreate && !hasFilters ? { label: 'New Money Update', onClick: () => router.push('/admin/resources/money-updates/new') } : undefined}
             />
           ) : (
             <>
-              <div className="hidden overflow-x-auto sm:block">
+              {/* `relative` — see ResourceContentTable for why this is
+                  load-bearing rather than cosmetic. */}
+              <div className="relative hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
@@ -153,6 +185,13 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
                           <Link href={editHref(m)} className="font-medium text-ink hover:text-trust hover:underline">
                             {m.title}
                           </Link>
+                          {/* Wave 5 (§8.7): the list mixes Money Updates and
+                              Templates and offers a filter to separate them,
+                              but the row itself said nothing about which kind
+                              it was. */}
+                          {m.content_type === 'money_update_template' && (
+                            <span className="ml-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">Template</span>
+                          )}
                           {isReviewDue(m) && <span className="ml-2 inline-block rounded-full bg-risk/10 px-2 py-0.5 text-xs font-semibold text-risk">Review Due</span>}
                         </td>
                         <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={m.jurisdiction} /></td>
@@ -162,7 +201,7 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
                         <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(m.next_review_at ?? m.expires_at)}</td>
                         <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(m.updated_at)}</td>
                         <td className="py-2.5 pl-3 text-right">
-                          <Link href={editHref(m)} className="text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${m.title}"`}>
+                          <Link href={editHref(m)} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${m.title}"`}>
                             Edit
                           </Link>
                         </td>
@@ -175,10 +214,16 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
               <ul className="space-y-2 sm:hidden">
                 {items.map((m) => (
                   <li key={m.id} className="rounded-card border border-line p-3">
-                    <Link href={editHref(m)} className="font-medium text-ink hover:text-trust hover:underline">
+                    {/* break-words: operator-entered titles contain long
+                        unbroken tokens that otherwise force page-level
+                        horizontal scroll at 320px (§12). */}
+                    <Link href={editHref(m)} className="block break-words font-medium text-ink hover:text-trust hover:underline">
                       {m.title}
                     </Link>
                     <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.content_type === 'money_update_template' && (
+                        <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">Template</span>
+                      )}
                       <ResourceStatusBadge status={m.status} />
                       <ResourceComplianceBadge compliance={m.compliance_classification} />
                       <ResourceJurisdictionBadge jurisdiction={m.jurisdiction} />

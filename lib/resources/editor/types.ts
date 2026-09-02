@@ -101,6 +101,28 @@ export interface EditorSavePatch {
   seo_description: string | null;
   canonical_url: string | null;
   is_indexable: boolean;
+  // Admin A0.2 Wave 5 (§28 "no misleading success remains"). The content
+  // editors have always rendered a "Featured" checkbox, bound to real state,
+  // which marks the form dirty and reports "Saved" — but `is_featured` was
+  // absent from this patch type, so it was never sent and the change was
+  // silently discarded on every save. The column is real, is already inside
+  // migration 0049's column-scoped `authenticated` UPDATE grant on
+  // resource_posts (so no grant and no migration change is needed), and is
+  // genuinely consumed: lib/resources/public/queries.ts's getStartHereCards
+  // filters the public Resources landing page's "Start here" cards on
+  // `is_featured = true`. The control was therefore not aspirational — it
+  // was wired to a column the product reads, and simply never written.
+  //
+  // Optional, deliberately. Several scripts and existing tests build this
+  // patch literally and have no opinion about featuring; making the field
+  // required would force every one of them to state a value, and the only
+  // safe value to invent on their behalf would be `false` — which would
+  // silently un-feature content on every save made through those paths.
+  // `updateResourceDraft` therefore writes the column only when a caller
+  // explicitly supplies it, so an omitting caller leaves it exactly as it
+  // was, and the four content editors (which always supply it) get the
+  // behaviour the checkbox has always promised.
+  is_featured?: boolean;
   primary_cta_id: string | null;
   secondary_cta_id: string | null;
   content_id: string | null; // only meaningful on create; ignored by updateResourceDraft after creation (see mutations.ts)

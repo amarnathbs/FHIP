@@ -8,13 +8,29 @@
 // reorder with plain Up/Down buttons (spec §112: "Do not require
 // drag-and-drop").
 
+// Admin A0.2 Wave 5 fixed four defects on this screen. The Wave 2 reorder
+// lifecycle below is deliberately untouched — it is already the strongest
+// mutation path in Admin and this Wave found nothing wrong with it:
+//   §9/§10 `Remove` deleted a curated relationship on a single unconfirmed
+//          click, and — worse — never inspected the response (`if (res.ok)`
+//          with no else), so a failed delete silently appeared to succeed
+//          until the next reload.
+//   §9     Adding a relationship gave no confirmation at all.
+//   §9     The picker swallowed search failures, leaving stale results on
+//          screen with no signal, and had no zero-results state.
+//   §19    The purpose sentence cited "spec §29-30" to operators.
+
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
+import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/AdminActionStatus';
+import { actionFailureMessage, readJsonSafely } from '@/lib/resources/admin/resultState';
 import { RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABELS, formatStatusForPicker, formatContentTypeForPicker, type RelationshipType, type RelatedContentAdminRow, type RelatableSearchResult } from '@/lib/resources/discovery/relatedAdmin';
 
 function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSearchResult) => void; excludeId?: string; label: string }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<RelatableSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [searchState, setSearchState] = useState<'idle' | 'searching' | 'done' | 'failed'>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -25,17 +41,25 @@ function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSear
     debounceRef.current = setTimeout(async () => {
       if (!q.trim()) {
         setResults([]);
+        setSearchState('idle');
         return;
       }
-      setLoading(true);
+      setSearchState('searching');
       try {
         const qp = new URLSearchParams({ q });
         if (excludeId) qp.set('exclude', excludeId);
         const res = await fetch(`/api/admin/resources/related/search-posts?${qp.toString()}`);
-        const json = await res.json();
-        setResults(res.ok ? json.data : []);
-      } finally {
-        setLoading(false);
+        const json = await readJsonSafely(res);
+        if (!res.ok) {
+          setResults([]);
+          setSearchState('failed');
+          return;
+        }
+        setResults((json?.data as RelatableSearchResult[]) ?? []);
+        setSearchState('done');
+      } catch {
+        setResults([]);
+        setSearchState('failed');
       }
     }, 300);
     return () => {
@@ -49,7 +73,12 @@ function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSear
         {label}
       </label>
       <input id={`picker-${label}`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title…" className="w-full rounded-compact border border-line px-3 py-2 text-sm" />
-      {loading && <p className="mt-1 text-xs text-muted">Searching…</p>}
+      <p role="status" aria-live="polite" className="mt-1 text-xs text-muted">
+        {searchState === 'searching' && 'Searching…'}
+        {searchState === 'failed' && 'That search could not be run. Try again.'}
+        {searchState === 'done' && results.length === 0 && 'No resources match that search.'}
+        {searchState === 'done' && results.length > 0 && `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`}
+      </p>
       {results.length > 0 && (
         <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-compact border border-line p-2">
           {results.map((r) => (
@@ -60,8 +89,9 @@ function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSear
                   onPick(r);
                   setQ('');
                   setResults([]);
+                  setSearchState('idle');
                 }}
-                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-gray-50"
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm outline-offset-2 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-trust"
               >
                 <span className="truncate text-ink">{r.title}</span>
                 <span className="shrink-0 text-xs text-muted">
@@ -86,6 +116,9 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
   // always tell whether the order on screen is committed.
   const [reorderState, setReorderState] = useState<'idle' | 'saving' | 'saved' | 'conflict' | 'failed'>('idle');
   const [reorderMessage, setReorderMessage] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<RelatedContentAdminRow | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const { outcome, reportSuccess, reportFailure, clearOutcome } = useAdminActionStatus();
 
   const loadRelations = useCallback(async (postId: string) => {
     setLoading(true);
@@ -117,23 +150,54 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
   async function addRelation(target: RelatableSearchResult) {
     if (!source) return;
     setError(null);
-    const res = await fetch('/api/admin/resources/related', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source_post_id: source.id, related_post_id: target.id, relationship_type: relationshipType }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? 'Could not add this relationship.');
-      return;
+    clearOutcome();
+    try {
+      const res = await fetch('/api/admin/resources/related', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_post_id: source.id, related_post_id: target.id, relationship_type: relationshipType }),
+      });
+      const json = await readJsonSafely(res);
+      if (!res.ok) {
+        reportFailure(actionFailureMessage(res.status, json, 'add this relationship'));
+        return;
+      }
+      reportSuccess(`"${target.title}" added as ${RELATIONSHIP_TYPE_LABELS[relationshipType]}, at the end of the list.`);
+      await loadRelations(source.id);
+    } catch {
+      reportFailure('Could not reach the server, so nothing was changed. Check your connection and try again.');
     }
-    await loadRelations(source.id);
   }
 
-  async function removeRelation(id: string) {
-    if (!source) return;
-    const res = await fetch(`/api/admin/resources/related/${id}`, { method: 'DELETE' });
-    if (res.ok) await loadRelations(source.id);
+  async function confirmRemoveRelation() {
+    const row = pendingRemove;
+    if (!source || !row) return;
+    setPendingRemove(null);
+    setRemoving(true);
+    clearOutcome();
+    const title = row.related?.title ?? 'that relationship';
+    try {
+      const res = await fetch(`/api/admin/resources/related/${row.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const json = await readJsonSafely(res);
+        // Wave 4 made this route return a real 404 when the relationship has
+        // already gone. That is the desired end state, not a failure the
+        // operator must act on — say so plainly instead of reporting an error.
+        if (res.status === 404) {
+          reportSuccess(`"${title}" was already removed. The list below has been refreshed.`);
+        } else {
+          reportFailure(actionFailureMessage(res.status, json, 'remove this relationship'));
+        }
+        await loadRelations(source.id);
+        return;
+      }
+      reportSuccess(`"${title}" is no longer shown as related content. You can add it again at any time.`);
+      await loadRelations(source.id);
+    } catch {
+      reportFailure('Could not reach the server, so nothing was changed. Check your connection and try again.');
+    } finally {
+      setRemoving(false);
+    }
   }
 
   // Admin A0.2 Wave 2 (Scope A). This used to reorder optimistically and
@@ -198,10 +262,30 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={!!pendingRemove}
+        title="Remove this related item?"
+        message={
+          pendingRemove
+            ? `"${pendingRemove.related?.title ?? 'This item'}" will stop being shown alongside "${source?.title ?? 'this resource'}". If no manual relationships remain, readers fall back to the automatic category, tag and jurisdiction match instead. You can add it again at any time.`
+            : ''
+        }
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmRemoveRelation}
+        onCancel={() => setPendingRemove(null)}
+      />
+
       <div>
         <h1 className="text-2xl font-semibold text-ink">Related Content</h1>
-        <p className="mt-1 text-sm text-muted">Manually curated relationships always take priority over the deterministic fallback (spec §29-30). Public readers never see a linked Resource that isn&rsquo;t currently public.</p>
+        <p className="mt-1 max-w-3xl text-sm text-muted">
+          Choose exactly which other resources appear alongside a resource. What you curate here always wins over the
+          automatic match, and readers never see a linked resource that is not currently public.
+        </p>
       </div>
+
+      <AdminTaskHelp taskId="ADM-16" />
 
       <div className="max-w-lg rounded-card border border-line bg-white p-4">
         <PostPicker label="Choose a Resource to manage" onPick={setSource} />
@@ -230,8 +314,12 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
             {reorderState === 'saving' ? 'Saving order…' : (reorderMessage ?? '')}
           </p>
 
+          <AdminActionStatus outcome={outcome} className="mb-3" />
+
           {loading ? (
-            <p className="text-sm text-muted">Loading…</p>
+            <p role="status" aria-live="polite" className="text-sm text-muted">
+              Loading related content…
+            </p>
           ) : relations.length === 0 ? (
             <p className="text-sm text-muted">No manual relationships yet. The public detail page will fall back to a deterministic category/tag/jurisdiction match.</p>
           ) : (
@@ -282,8 +370,8 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
                       </button>
                       <button
                         type="button"
-                        onClick={() => removeRelation(r.id)}
-                        disabled={reorderState === 'saving'}
+                        onClick={() => setPendingRemove(r)}
+                        disabled={reorderState === 'saving' || removing}
                         aria-label={`Remove ${r.related?.title ?? 'item'}`}
                         className="inline-flex min-h-11 items-center justify-center rounded border border-line px-3 text-xs font-semibold text-risk hover:bg-risk/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-risk disabled:opacity-30"
                       >

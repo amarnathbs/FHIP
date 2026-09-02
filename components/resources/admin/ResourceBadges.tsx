@@ -3,7 +3,7 @@
 // §7 mirrors the app-wide UXD-007 finding: colour-only signalling is a
 // known accessibility gap elsewhere in FHIP, deliberately not repeated here).
 
-import { STATUS_LABELS, COMPLIANCE_LABELS, JURISDICTION_LABELS, CONTENT_TYPE_LABELS } from '@/lib/resources/admin/labels';
+import { STATUS_LABELS, COMPLIANCE_LABELS, COMPLIANCE_LABELS_LONG, JURISDICTION_LABELS, CONTENT_TYPE_LABELS } from '@/lib/resources/admin/labels';
 import type { ResourceStatus, ComplianceClassification, ResourceJurisdiction, ResourceContentType } from '@/lib/resources/types';
 
 const STATUS_STYLES: Record<ResourceStatus, string> = {
@@ -31,13 +31,27 @@ const COMPLIANCE_STYLES: Record<ComplianceClassification, string> = {
   red: 'bg-risk/10 text-risk',
 };
 
+// Admin A0.2 Wave 5 (§8.3 "every status badge must have accessible
+// meaning"). The compliance badge's visible text is the name of its own
+// colour — GREEN / AMBER / RED — which carries no meaning at all on its own,
+// and the only place the meaning existed was a `title` tooltip, which is
+// mouse-only: unreachable by keyboard and unreachable on touch. The
+// already-written long labels in labels.ts (`Green — Education`,
+// `Amber — Review Required`, `Red — Restricted`) were sitting unused. The
+// compact word stays visible so table rows do not grow, and the meaning is
+// now attached where assistive technology will actually read it.
 export function ResourceComplianceBadge({ compliance }: { compliance: ComplianceClassification | string }) {
   const c = compliance as ComplianceClassification;
   const style = COMPLIANCE_STYLES[c] ?? 'bg-gray-100 text-gray-600';
   const label = COMPLIANCE_LABELS[c] ?? compliance;
+  const longLabel = COMPLIANCE_LABELS_LONG[c];
   return (
-    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${style}`} title={`Compliance classification: ${label}`}>
-      {label}
+    <span
+      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}
+      title={longLabel ? `Compliance classification: ${longLabel}` : `Compliance classification: ${label}`}
+    >
+      <span aria-hidden="true">{label}</span>
+      <span className="sr-only">{longLabel ? `Compliance classification: ${longLabel}` : `Compliance classification: ${label}`}</span>
     </span>
   );
 }

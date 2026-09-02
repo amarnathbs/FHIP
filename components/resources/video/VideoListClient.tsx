@@ -2,12 +2,25 @@
 
 // R1.4 Video list — spec §13. Metadata-only columns (no transcript/chapters
 // — spec §124). Reuses R1.2's states/pagination components.
+//
+// Admin A0.2 Wave 5:
+//   §9  Every non-2xx outcome collapsed into the one red "We couldn't load
+//       Resources content. Try again." panel — a 403 offered a Retry that
+//       could never succeed, and a non-JSON edge response surfaced a raw
+//       `SyntaxError` to the operator. Outcomes are now classified once,
+//       centrally, and rendered as the state they actually are.
+//   §11 There was no result count, so filtering and paging changed the list
+//       with nothing announced; the loading skeleton had no specific label.
+//   §17 The page carried no Help affordance.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge } from '@/components/resources/admin/ResourceBadges';
 import { ResourcePagination } from '@/components/resources/admin/ResourcePagination';
-import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
+import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } from '@/components/resources/admin/ResourceStates';
+import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, COMPLIANCE_LABELS, COMPLIANCE_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import { buildYouTubeThumbnailUrl } from '@/lib/resources/video/youtube';
 import type { VideoListItem } from '@/lib/resources/video/queries';
@@ -22,6 +35,7 @@ function formatDuration(seconds: number | null): string {
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
 export function VideoListClient({ canCreate }: { canCreate: boolean }) {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [jurisdiction, setJurisdiction] = useState('all');
@@ -31,13 +45,13 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AdminFailure | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const qp = new URLSearchParams();
       if (search) qp.set('q', search);
@@ -46,13 +60,21 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
       if (compliance !== 'all') qp.set('compliance', compliance);
       if (page > 1) qp.set('page', String(page));
       const res = await fetch(`/api/admin/resources/videos?${qp.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "We couldn't load Videos. Try again.");
-      setItems(json.data.items);
-      setTotal(json.data.total);
-      setPageSize(json.data.pageSize);
+      const json = await readJsonSafely(res);
+      if (!res.ok) {
+        setFailure(failureFromResponse(res.status, json, 'the video library'));
+        setItems([]);
+        setTotal(0);
+        return;
+      }
+      const data = json?.data as { items?: VideoListItem[]; total?: number; pageSize?: number } | undefined;
+      setItems(data?.items ?? []);
+      setTotal(data?.total ?? 0);
+      setPageSize(data?.pageSize ?? 25);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setFailure(failureFromThrown(e, 'the video library'));
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -78,11 +100,13 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
           </p>
         </div>
         {canCreate && (
-          <Link href="/admin/resources/videos/new" className="rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+          <Link href="/admin/resources/videos/new" className="inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
             Add @GKTC Video
           </Link>
         )}
       </div>
+
+      <AdminTaskHelp taskId="ADM-11" />
 
       <div className="rounded-card border border-line bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -112,20 +136,29 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
           )}
         </div>
 
-        <div className="mt-4">
+        {/* §11 — the result count is announced, so filtering and paging are
+            perceivable without sight. Previously the list simply changed. */}
+        <p role="status" aria-live="polite" className="mt-3 text-xs text-muted">
+          {loading || failure ? '' : `${items.length} ${items.length === 1 ? 'video' : 'videos'} shown.`}
+        </p>
+
+        <div className="mt-2">
           {loading ? (
-            <ResourceLoadingSkeleton />
-          ) : error ? (
-            <ResourceErrorState message={error} onRetry={() => setReloadToken((t) => t + 1)} />
+            <ResourceLoadingSkeleton label="Loading videos" />
+          ) : failure ? (
+            <ResourceFailureState failure={failure} onRetry={() => setReloadToken((t) => t + 1)} />
           ) : items.length === 0 ? (
             <ResourceEmptyState
               title={hasFilters ? 'No videos match these filters.' : 'No @GKTC videos have been added yet.'}
               message={hasFilters ? 'Try adjusting or clearing your filters.' : 'Add a video by entering its YouTube URL or video ID.'}
-              action={canCreate && !hasFilters ? { label: 'Add @GKTC Video', onClick: () => (window.location.href = '/admin/resources/videos/new') } : undefined}
+              action={canCreate && !hasFilters ? { label: 'Add @GKTC Video', onClick: () => router.push('/admin/resources/videos/new') } : undefined}
             />
           ) : (
             <>
-              <div className="hidden overflow-x-auto sm:block">
+              {/* `relative` prevents the sr-only "Actions" heading (position:
+                  absolute) escaping this scroll container and creating a
+                  page-level horizontal scrollbar — see ResourceContentTable. */}
+              <div className="relative hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
@@ -163,7 +196,7 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
                           <td className="py-2.5 pr-3"><ResourceComplianceBadge compliance={v.compliance_classification} /></td>
                           <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(v.updated_at)}</td>
                           <td className="py-2.5 pl-3 text-right">
-                            <Link href={`/admin/resources/videos/${v.id}/edit`} className="text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
+                            <Link href={`/admin/resources/videos/${v.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
                               Edit
                             </Link>
                           </td>
@@ -177,7 +210,8 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
               <ul className="space-y-2 sm:hidden">
                 {items.map((v) => (
                   <li key={v.id} className="rounded-card border border-line p-3">
-                    <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                    {/* break-words — see ResourceContentTable (§12). */}
+                    <Link href={`/admin/resources/videos/${v.id}/edit`} className="block break-words font-medium text-ink hover:text-trust hover:underline">
                       {v.title}
                     </Link>
                     <div className="mt-2 flex flex-wrap gap-1.5">

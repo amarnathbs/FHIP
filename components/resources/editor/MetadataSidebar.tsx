@@ -53,7 +53,11 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
   return (
     <details open={defaultOpen} className="group rounded-card border border-line bg-white">
       <summary className="cursor-pointer select-none list-none px-4 py-3 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
-        <span className="mr-2 inline-block transition-transform group-open:rotate-90">›</span>
+        {/* Wave 5 (§11): decorative, so hidden from assistive technology —
+            it was previously announced as a stray "›" character before every
+            section heading. The <details>/<summary> element already conveys
+            expanded/collapsed state on its own. */}
+        <span aria-hidden="true" className="mr-2 inline-block transition-transform group-open:rotate-90">›</span>
         {title}
       </summary>
       <div className="space-y-3 border-t border-line px-4 py-3">{children}</div>
