@@ -10,6 +10,11 @@ import { runTaxSimulation, type TaxSimulationInputs } from '@/lib/engines/invest
 import type { AcquisitionEvent, DisposalEvent } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
 import type { SchemeClassificationResult } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6-taxpayer-ctx';
+
 describe('resolveTaxpayerContext — pure function', () => {
   it('no profile supplied at all -> UNKNOWN_PROFILE, never assumed resident', () => {
     const r = resolveTaxpayerContext({});
@@ -70,8 +75,8 @@ describe('runTaxSimulation — taxpayerContext wiring is additive, never changes
     disclosureDate: null,
     note: '',
   };
-  const acquisitions: AcquisitionEvent[] = [{ sourceEventId: 'a1', instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2022-01-10', units: 100, costPerUnit: 20 }];
-  const disposals: DisposalEvent[] = [{ sourceEventId: 'd1', instrumentKey: INSTRUMENT, disposalDate: '2024-01-10', units: 100, saleValue: 3000 }];
+  const acquisitions: AcquisitionEvent[] = [{ sourceEventId: 'a1', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2022-01-10', units: 100, costPerUnit: 20 }];
+  const disposals: DisposalEvent[] = [{ sourceEventId: 'd1', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, disposalDate: '2024-01-10', units: 100, saleValue: 3000 }];
 
   function run(taxProfile?: TaxSimulationInputs['taxProfile']) {
     return runTaxSimulation({

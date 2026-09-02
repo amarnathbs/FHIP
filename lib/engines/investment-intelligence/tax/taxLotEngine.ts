@@ -13,6 +13,43 @@
 // reinvestment units carry their correct (later, separate) acquisition date
 // for holding-period purposes, rather than inheriting the original
 // investment's date.
+//
+// ---------------------------------------------------------------------------
+// LOT SCOPE — (user, ACCOUNT, instrument). II-PC1-F1, 2026-09-02.
+// ---------------------------------------------------------------------------
+// FIFO candidacy is scoped to the DISPOSING ACCOUNT as well as the
+// instrument. A redemption booked against one folio/demat account may only
+// consume lots opened in THAT SAME account — never a lot opened in another
+// folio, even when both folios hold the identical scheme/ISIN.
+//
+// This engine previously matched on `instrumentKey` alone, which let a
+// Folio B redemption consume a chronologically older Folio A lot whenever a
+// user held the same scheme in two folios (the dataset is already
+// user-scoped, so contamination was never cross-user — but it was
+// cross-account). II-PC1 disclosed this as a known, unfixed architectural
+// characteristic; II-PC1-F1 established the correct rule and repaired it.
+//
+// Authority for the rule (see docs/investment-intelligence/
+// II_PC1_F1_FIFO_SCOPE_DECISION.md for the full evidence chain):
+//   * CBDT Circular No. 768 dated 24-6-1998, interpreting s.45(2A) of the
+//     Income-tax Act 1961: "where an investor has more than one security
+//     account, FIFO method will be applied accountwise", because
+//     "securities lying in his other account cannot be construed to have
+//     been sold as they continue to remain in that account".
+//   * For non-demat (folio-mode) mutual-fund units the same result follows
+//     directly from s.45 itself: a redemption instruction names one folio
+//     and transfers only the units standing to that folio's credit, so
+//     units in another folio are not transferred at all and no charge can
+//     attach to them.
+//   * CAMS/KFintech realised-capital-gains statements — the documents the
+//     taxpayer actually files from — apply FIFO within a folio.
+//
+// `accountKey` is a REQUIRED field, deliberately not optional: making it
+// optional would let a caller silently fall back to the old, incorrect
+// instrument-wide behaviour by omission. It carries the canonical
+// `ii_accounts.id` — never an institution name, folio-number string, AMC
+// name, source-document id, or display label.
+// ---------------------------------------------------------------------------
 
 import type { IsoDate } from './holdingPeriod';
 
@@ -28,6 +65,9 @@ export interface AcquisitionEvent {
   /** Stable id of the originating transaction/event — carried through onto
    * the lot for traceability, never used for matching logic itself. */
   sourceEventId: string;
+  /** Canonical `ii_accounts.id` (folio / demat account) this acquisition was
+   * booked under. Half of the lot-scope key — see the LOT SCOPE header. */
+  accountKey: string;
   instrumentKey: string; // scheme/instrument identifier lots are scoped to
   kind: AcquisitionKind;
   acquisitionDate: IsoDate;
@@ -41,6 +81,9 @@ export interface AcquisitionEvent {
 
 export interface DisposalEvent {
   sourceEventId: string;
+  /** Canonical `ii_accounts.id` the redemption/switch-out/sale was booked
+   * against. FIFO may only consume lots carrying this same accountKey. */
+  accountKey: string;
   instrumentKey: string;
   disposalDate: IsoDate;
   units: number;
@@ -51,6 +94,10 @@ export interface DisposalEvent {
 
 export interface TaxLot {
   lotId: string; // derived deterministically from sourceEventId, stable across recomputation
+  /** Canonical `ii_accounts.id` this lot belongs to — persisted verbatim to
+   * `ii_tax_lots.account_id`, which R3 publication reads back when it
+   * computes a position's cost basis per (account_id, instrument_id). */
+  accountKey: string;
   instrumentKey: string;
   kind: AcquisitionKind;
   acquisitionDate: IsoDate;
@@ -62,6 +109,10 @@ export interface TaxLot {
 export interface LotConsumption {
   disposalEventId: string;
   lotId: string;
+  /** The account both sides of this consumption belong to. By construction
+   * (see consumeLotsFifo) the consumed lot's account and the disposal's
+   * account are always identical — a differing pair is unrepresentable. */
+  accountKey: string;
   instrumentKey: string;
   acquisitionDate: IsoDate;
   kind: AcquisitionKind;
@@ -76,17 +127,27 @@ const EPSILON = 1e-9;
 
 /**
  * Build the initial set of open tax lots from a chronologically-ordered list
- * of acquisition events. Lots are built independently per instrument; the
- * caller is expected to have already scoped `events` to one instrument (or
- * this function partitions safely regardless since consumption below is
- * also instrument-scoped).
+ * of acquisition events. Callers may safely pass every acquisition the user
+ * has, across all accounts and instruments, in one array: consumption below
+ * partitions by (accountKey, instrumentKey), so a mixed pool cannot leak
+ * units between folios or between schemes.
  */
 export function buildTaxLots(events: readonly AcquisitionEvent[]): TaxLot[] {
   return events.map((e) => {
+    // II-PC1-F1 RUNTIME GUARD. The TypeScript `accountKey: string` is the
+    // first line of defence, but it is not the last: data deserialised from
+    // JSON (certification case packs, cached payloads, API bodies) is cast
+    // to these interfaces without the compiler ever seeing the real shape.
+    // An `undefined` accountKey on BOTH sides of the candidacy comparison in
+    // consumeLotsFifo would compare EQUAL and silently restore the exact
+    // instrument-wide behaviour this dispatch removed — a silent wrong tax
+    // answer. Fail loudly instead.
+    if (!e.accountKey) throw new Error(`buildTaxLots: acquisition event ${e.sourceEventId} has no accountKey — FIFO is account-scoped and cannot place a lot without its canonical account`);
     if (e.units < 0) throw new Error(`buildTaxLots: negative units in acquisition event ${e.sourceEventId}`);
     if (e.costPerUnit < 0) throw new Error(`buildTaxLots: negative costPerUnit in acquisition event ${e.sourceEventId}`);
     return {
       lotId: `lot:${e.sourceEventId}`,
+      accountKey: e.accountKey,
       instrumentKey: e.instrumentKey,
       kind: e.kind,
       acquisitionDate: e.acquisitionDate,
@@ -100,7 +161,12 @@ export function buildTaxLots(events: readonly AcquisitionEvent[]): TaxLot[] {
 /**
  * Consume open lots FIFO (acquisition-date order, ties broken by input
  * order which callers should make deterministic e.g. via a stable secondary
- * sort key) for a single disposal event. Mutates `lots` in place
+ * sort key — `loadTaxDataset` orders by transaction_date then transaction
+ * id, and Array.prototype.sort is stable per ES2019, so equal-dated lots
+ * resolve by ascending transaction id) for a single disposal event.
+ *
+ * Candidate lots are restricted to the DISPOSING ACCOUNT and instrument.
+ * Mutates `lots` in place
  * (decrementing `unitsRemaining`) and returns the per-lot consumption
  * records. Supports partial-lot consumption — a disposal can consume the
  * remainder of one lot plus part of the next — and never consumes more
@@ -108,8 +174,21 @@ export function buildTaxLots(events: readonly AcquisitionEvent[]): TaxLot[] {
  * not by trusting the caller).
  */
 export function consumeLotsFifo(lots: TaxLot[], disposal: DisposalEvent): LotConsumption[] {
+  // Same runtime guard as buildTaxLots — see there for why the type alone is
+  // not sufficient. Without this, a disposal deserialised from JSON with no
+  // accountKey would match `undefined === undefined` against JSON-built lots
+  // and silently revert to instrument-wide FIFO.
+  if (!disposal.accountKey) {
+    throw new Error(`consumeLotsFifo: disposal ${disposal.sourceEventId} has no accountKey — FIFO is account-scoped and cannot resolve candidate lots without the disposing account`);
+  }
+
+  // LOT CANDIDACY — (account, instrument), not instrument alone. See this
+  // module's LOT SCOPE header for the legal and canonical-model authority.
+  // The account predicate is deliberately FIRST: it is the constraint that
+  // was missing, and reading it first makes the scope self-documenting at
+  // the single point where it is enforced.
   const candidateLots = lots
-    .filter((l) => l.instrumentKey === disposal.instrumentKey && l.unitsRemaining > EPSILON)
+    .filter((l) => l.accountKey === disposal.accountKey && l.instrumentKey === disposal.instrumentKey && l.unitsRemaining > EPSILON)
     .sort((a, b) => (a.acquisitionDate < b.acquisitionDate ? -1 : a.acquisitionDate > b.acquisitionDate ? 1 : 0));
 
   let remainingToConsume = disposal.units;
@@ -133,6 +212,7 @@ export function consumeLotsFifo(lots: TaxLot[], disposal: DisposalEvent): LotCon
     consumptions.push({
       disposalEventId: disposal.sourceEventId,
       lotId: lot.lotId,
+      accountKey: lot.accountKey, // === disposal.accountKey by the candidacy filter above
       instrumentKey: lot.instrumentKey,
       acquisitionDate: lot.acquisitionDate,
       kind: lot.kind,
@@ -147,9 +227,15 @@ export function consumeLotsFifo(lots: TaxLot[], disposal: DisposalEvent): LotCon
   }
 
   if (remainingToConsume > EPSILON) {
+    // The account is named explicitly: under account-scoped FIFO this is the
+    // honest diagnosis of "this folio does not hold enough units", which the
+    // previous instrument-wide matching would have silently masked by
+    // borrowing units from a DIFFERENT folio and reporting a confident but
+    // wrong cost basis, holding period and gain.
     throw new Error(
       `consumeLotsFifo: disposal ${disposal.sourceEventId} for ${disposal.units} units of ` +
-        `${disposal.instrumentKey} exceeds available open-lot balance by ${remainingToConsume}`
+        `${disposal.instrumentKey} in account ${disposal.accountKey} exceeds that account's ` +
+        `available open-lot balance by ${remainingToConsume}`
     );
   }
 

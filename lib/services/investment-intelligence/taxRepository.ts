@@ -76,13 +76,15 @@ export interface TaxDataset {
   fmv31Jan2018ByInstrument: Map<string, number | null>;
   exitLoadSchedules: ExitLoadSchedule[];
   instrumentNames: Map<string, string>;
-  /** R6-FINAL fix (see persistTaxLots below): account_id per acquisition
-   * transaction id, needed to satisfy ii_tax_lots' not-null account_id FK
-   * when persisting lots. The pure engine's AcquisitionEvent/TaxLot types
-   * deliberately do not carry account_id (no engine change needed for this
-   * fix), so this side map is threaded through from the raw transaction
-   * read instead. */
-  accountIdByTransactionId: Map<string, string>;
+  /** Every canonical account id that appears in this user's usable
+   * transactions, per instrument. Exposed so callers that must name a
+   * specific folio (the redemption simulator) can resolve and validate an
+   * account against canonical truth instead of trusting client input. */
+  accountIdsByInstrument: Map<string, string[]>;
+  /** Display label per canonical account id (institution + folio), for
+   * disambiguating "which folio did you mean?" back to the user. Never used
+   * for matching — matching is always on the canonical id. */
+  accountLabels: Map<string, string>;
 }
 
 /** true iff a Supabase error looks like "relation does not exist" — i.e. the
@@ -125,16 +127,26 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
   const acquisitionsByInstrument = new Map<string, AcquisitionEvent[]>();
   const disposalsByInstrument = new Map<string, DisposalEvent[]>();
   const salePricePerUnitByDisposal = new Map<string, number>();
-  const accountIdByTransactionId = new Map<string, string>(usable.map((r) => [r.id, r.account_id]));
+  // II-PC1-F1: which canonical accounts hold each instrument. Built from the
+  // SAME server-side, user-scoped transaction read as everything else — this
+  // is the only thing any caller is allowed to resolve a folio against.
+  const accountIdsByInstrument = new Map<string, string[]>();
 
   for (const r of usable) {
     const units = Number(r.units);
     const instrumentKey = r.instrument_id;
+    // II-PC1-F1: the canonical `ii_accounts.id` (folio / demat account) that
+    // owns this transaction. NOT NULL on ii_transactions, so always present.
+    // FIFO candidacy is scoped to (accountKey, instrumentKey) — see
+    // taxLotEngine.ts's LOT SCOPE header and
+    // docs/investment-intelligence/II_PC1_F1_FIFO_SCOPE_DECISION.md.
+    const accountKey = r.account_id;
     if (r.transaction_type in ACQUISITION_TYPE_MAP) {
       const costPerUnit = r.price_per_unit !== null ? Number(r.price_per_unit) : units > 0 ? Number(r.gross_amount) / units : 0;
       const list = acquisitionsByInstrument.get(instrumentKey) ?? [];
       list.push({
         sourceEventId: r.id,
+        accountKey,
         instrumentKey,
         kind: ACQUISITION_TYPE_MAP[r.transaction_type],
         acquisitionDate: r.transaction_date,
@@ -142,10 +154,13 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
         costPerUnit,
       });
       acquisitionsByInstrument.set(instrumentKey, list);
+      const accounts = accountIdsByInstrument.get(instrumentKey) ?? [];
+      if (!accounts.includes(accountKey)) accounts.push(accountKey);
+      accountIdsByInstrument.set(instrumentKey, accounts);
     } else if (DISPOSAL_TYPES.has(r.transaction_type)) {
       const saleValue = Math.abs(Number(r.gross_amount));
       const list = disposalsByInstrument.get(instrumentKey) ?? [];
-      list.push({ sourceEventId: r.id, instrumentKey, disposalDate: r.transaction_date, units, saleValue });
+      list.push({ sourceEventId: r.id, accountKey, instrumentKey, disposalDate: r.transaction_date, units, saleValue });
       disposalsByInstrument.set(instrumentKey, list);
       salePricePerUnitByDisposal.set(r.id, units > 0 ? saleValue / units : 0);
     }
@@ -189,6 +204,33 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
     instrumentNames = new Map(instrumentRows.map((r) => [r.id, r.instrument_name]));
   } catch (e) {
     warnings.push({ scope: 'instruments', detail: `Instrument names could not be read (${e instanceof Error ? e.message : String(e)}).` });
+  }
+
+  // --- Canonical account labels (II-PC1-F1). ------------------------------
+  // Display-only: lets the redemption simulator say "you hold this scheme in
+  // Folio X and Folio Y — which one?" instead of silently guessing. Matching
+  // is ALWAYS on the canonical account id, never on these strings. Read with
+  // the RLS-respecting client, so a label can only ever be this user's own.
+  const accountLabels = new Map<string, string>();
+  {
+    const accountIds = [...new Set(usable.map((r) => r.account_id))];
+    interface AccountRow {
+      id: string;
+      institution_name: string;
+      folio_number: string | null;
+      account_number_masked: string | null;
+    }
+    try {
+      const rows = await fetchAllRows<AccountRow>(() =>
+        supabase.from('ii_accounts').select('id, institution_name, folio_number, account_number_masked').in('id', accountIds).order('id', { ascending: true })
+      );
+      for (const row of rows) {
+        const ref = row.folio_number ?? row.account_number_masked;
+        accountLabels.set(row.id, ref ? `${row.institution_name} — ${ref}` : row.institution_name);
+      }
+    } catch (e) {
+      warnings.push({ scope: 'accounts', detail: `Account labels could not be read (${e instanceof Error ? e.message : String(e)}) — folios will be identified by id only.` });
+    }
   }
 
   // --- Scheme tax classification (durable cache table, R6-P1's own). -----
@@ -329,7 +371,8 @@ export async function loadTaxDataset(supabase: SupabaseClient, userId: string, o
       fmv31Jan2018ByInstrument,
       exitLoadSchedules,
       instrumentNames,
-      accountIdByTransactionId,
+      accountIdsByInstrument,
+      accountLabels,
     },
     warnings,
     empty: false,
@@ -385,17 +428,21 @@ export function deterministicLotId(lotKey: string): string {
  * `deterministicLotId` guarantees this without needing a DB-level unique
  * constraint this session cannot add.
  */
-export async function persistTaxLots(userId: string, lots: readonly TaxLot[], accountIdByTransactionId: ReadonlyMap<string, string>): Promise<{ persisted: number; error: string | null }> {
+export async function persistTaxLots(userId: string, lots: readonly TaxLot[]): Promise<{ persisted: number; error: string | null }> {
   if (lots.length === 0) return { persisted: 0, error: null };
   try {
     const admin = createAdminClient();
     const payload = lots.map((l) => {
       const sourceEventId = l.lotId.startsWith('lot:') ? l.lotId.slice(4) : l.lotId;
-      const accountId = accountIdByTransactionId.get(sourceEventId);
+      // II-PC1-F1: the account now travels ON the lot (it is half of the
+      // lot's FIFO scope key), so it is read straight off the lot rather
+      // than re-derived from a side map keyed by transaction id. This
+      // removes the possibility of the persisted `account_id` disagreeing
+      // with the account the engine actually matched the lot under.
       return {
         id: deterministicLotId(l.lotId),
         user_id: userId,
-        account_id: accountId ?? null,
+        account_id: l.accountKey || null,
         instrument_id: l.instrumentKey,
         opening_transaction_id: sourceEventId,
         status: l.unitsRemaining <= 1e-6 ? 'closed' : l.unitsRemaining < l.unitsAcquired ? 'partially_closed' : 'open',

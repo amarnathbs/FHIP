@@ -47,6 +47,11 @@ import { applyGrandfathering } from '@/lib/engines/investment-intelligence/tax/g
 import { resolveExitLoadPct } from '@/lib/engines/investment-intelligence/tax/exitLoad';
 import type { SchemeClassificationResult } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6-canonical-instrument';
+
 // ---------------------------------------------------------------------------
 // Section 14 — mocked Supabase admin client for resolveOrCreateInstrument.
 // ---------------------------------------------------------------------------
@@ -274,16 +279,16 @@ describe('R6-FINAL Sec.15: two same-named instruments never merge, resolved and 
   });
 
   it('FIFO tax lots for two same-named instruments never cross-contaminate', () => {
-    const acquisitionsA: AcquisitionEvent[] = [{ sourceEventId: 'a1', instrumentKey: 'canon-A', kind: 'purchase', acquisitionDate: '2020-01-01', units: 100, costPerUnit: 10 }];
-    const acquisitionsB: AcquisitionEvent[] = [{ sourceEventId: 'b1', instrumentKey: 'canon-B', kind: 'purchase', acquisitionDate: '2020-01-01', units: 100, costPerUnit: 999 }]; // deliberately very different cost
+    const acquisitionsA: AcquisitionEvent[] = [{ sourceEventId: 'a1', accountKey: ACCOUNT, instrumentKey: 'canon-A', kind: 'purchase', acquisitionDate: '2020-01-01', units: 100, costPerUnit: 10 }];
+    const acquisitionsB: AcquisitionEvent[] = [{ sourceEventId: 'b1', accountKey: ACCOUNT, instrumentKey: 'canon-B', kind: 'purchase', acquisitionDate: '2020-01-01', units: 100, costPerUnit: 999 }]; // deliberately very different cost
     const lots = buildTaxLots([...acquisitionsA, ...acquisitionsB]);
 
-    const disposalA: DisposalEvent = { sourceEventId: 'da', instrumentKey: 'canon-A', disposalDate: '2022-01-01', units: 40, saleValue: 4000 };
+    const disposalA: DisposalEvent = { sourceEventId: 'da', accountKey: ACCOUNT, instrumentKey: 'canon-A', disposalDate: '2022-01-01', units: 40, saleValue: 4000 };
     const consumedA = consumeLotsFifo(lots, disposalA);
     expect(consumedA).toHaveLength(1);
     expect(consumedA[0].costPerUnit).toBe(10); // must draw from canon-A's lot, never canon-B's
 
-    const disposalB: DisposalEvent = { sourceEventId: 'db', instrumentKey: 'canon-B', disposalDate: '2022-01-01', units: 40, saleValue: 40000 };
+    const disposalB: DisposalEvent = { sourceEventId: 'db', accountKey: ACCOUNT, instrumentKey: 'canon-B', disposalDate: '2022-01-01', units: 40, saleValue: 40000 };
     const consumedB = consumeLotsFifo(lots, disposalB);
     expect(consumedB).toHaveLength(1);
     expect(consumedB[0].costPerUnit).toBe(999); // canon-B's own cost, untouched by A's consumption
@@ -299,8 +304,8 @@ describe('R6-FINAL Sec.15: two same-named instruments never merge, resolved and 
     const classA: SchemeClassificationResult = { instrumentKey: 'canon-A', classification: 'equity_oriented', domesticEquityPct: 80, basis: 'computed_from_holdings', disclosureDate: '2024-01-01', note: '' };
     const classB: SchemeClassificationResult = { instrumentKey: 'canon-B', classification: 'debt_specified', domesticEquityPct: null, basis: 'known_debt_specified_category', disclosureDate: null, note: '' };
 
-    const consumptionA = { disposalEventId: 'da', lotId: 'la', instrumentKey: 'canon-A', acquisitionDate: '2016-06-01', kind: 'purchase' as const, disposalDate: '2026-06-15', unitsConsumed: 100, costPerUnit: 20, costBasis: 2000, saleValueApportioned: 9000 };
-    const consumptionB = { disposalEventId: 'db', lotId: 'lb', instrumentKey: 'canon-B', acquisitionDate: '2016-06-01', kind: 'purchase' as const, disposalDate: '2026-06-15', unitsConsumed: 100, costPerUnit: 20, costBasis: 2000, saleValueApportioned: 9000 };
+    const consumptionA = { disposalEventId: 'da', lotId: 'la', accountKey: ACCOUNT, instrumentKey: 'canon-A', acquisitionDate: '2016-06-01', kind: 'purchase' as const, disposalDate: '2026-06-15', unitsConsumed: 100, costPerUnit: 20, costBasis: 2000, saleValueApportioned: 9000 };
+    const consumptionB = { disposalEventId: 'db', lotId: 'lb', accountKey: ACCOUNT, instrumentKey: 'canon-B', acquisitionDate: '2016-06-01', kind: 'purchase' as const, disposalDate: '2026-06-15', unitsConsumed: 100, costPerUnit: 20, costBasis: 2000, saleValueApportioned: 9000 };
 
     const resultA = computeDisposalTax({ consumption: consumptionA, saleValuePerUnit: 90, classification: classA, fmv31Jan2018PerUnit: 60 });
     const resultB = computeDisposalTax({ consumption: consumptionB, saleValuePerUnit: 90, classification: classB, fmv31Jan2018PerUnit: 60 });

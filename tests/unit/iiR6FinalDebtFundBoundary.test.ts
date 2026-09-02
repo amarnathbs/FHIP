@@ -39,6 +39,11 @@ import { RULE_1961_POST_20240723 } from '@/lib/engines/investment-intelligence/t
 import type { LotConsumption } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
 import type { SchemeClassificationResult } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6-debt-fund-boundary';
+
 function debtClassification(): SchemeClassificationResult {
   return {
     instrumentKey: 'SCH-DEBT-BOUNDARY',
@@ -54,6 +59,7 @@ function consumptionFor(acquisitionDate: string, disposalDate: string): LotConsu
   return {
     disposalEventId: 'd',
     lotId: 'l',
+    accountKey: ACCOUNT,
     instrumentKey: 'SCH-DEBT-BOUNDARY',
     acquisitionDate,
     kind: 'purchase',

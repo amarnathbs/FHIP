@@ -30,6 +30,11 @@ import { mapInstrumentClassToMasterItemKey } from '@/lib/services/investment-int
 import { calculatePortfolioLookThrough, type FundHoldingsSnapshot, type PortfolioFundPosition } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { LotConsumption } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r12-oracle';
+
 const CERT_DIR = path.join(process.cwd(), 'scripts', 'r12-certification');
 const cases = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'r12_cases.json'), 'utf8')).cases as Array<Record<string, unknown>>;
 const oracleResults = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'r12_oracle_results.json'), 'utf8')).results as Array<Record<string, unknown>>;
@@ -98,6 +103,7 @@ describe('R12 independent oracle — tax (direct listed equity, computeDisposalT
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-disp`,
         lotId: `${c.id}-lot`,
+        accountKey: ACCOUNT,
         instrumentKey: c.id as string,
         acquisitionDate: c.acquisitionDate as string,
         kind: 'purchase',

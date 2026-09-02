@@ -14,6 +14,11 @@ import { unitDeltaForTransaction } from '@/lib/services/investment-intelligence/
 import { isProductionCertifiedAssetClass, mapInstrumentClassToMasterItemKey } from '@/lib/services/investment-intelligence/publicationLogic';
 import { resolvePriceFreshness, shouldPresentAsCurrentValue } from '@/lib/engines/investment-intelligence/valuation/priceFreshness';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r12-wider-india';
+
 describe('R12 — classifyDirectListedSecurity (direct equity / equity-oriented ETF tax classification)', () => {
   it('classifies a direct listed equity as equity_oriented by statute, not by allocation', () => {
     const result = classifyDirectListedSecurity({ instrumentKey: 'RELIANCE-ISIN', instrumentClass: 'equity' });
@@ -40,6 +45,7 @@ describe('R12 — classifyDirectListedSecurity (direct equity / equity-oriented 
     const consumption: LotConsumption = {
       disposalEventId: 'disp-1',
       lotId: 'lot-1',
+      accountKey: ACCOUNT,
       instrumentKey: 'RELIANCE-ISIN',
       acquisitionDate: '2020-06-15',
       kind: 'purchase',
@@ -68,6 +74,7 @@ describe('R12 — classifyDirectListedSecurity (direct equity / equity-oriented 
     const consumption: LotConsumption = {
       disposalEventId: 'disp-2',
       lotId: 'lot-2',
+      accountKey: ACCOUNT,
       instrumentKey: 'TCS-ISIN',
       acquisitionDate: '2025-01-01',
       kind: 'purchase',
@@ -137,6 +144,7 @@ describe('R12 — NC4: wrong tax classification produces a materially wrong resu
     const consumption: LotConsumption = {
       disposalEventId: 'nc4-1',
       lotId: 'nc4-lot-1',
+      accountKey: ACCOUNT,
       instrumentKey: 'NC4-ISIN',
       acquisitionDate: '2025-03-01',
       kind: 'purchase',

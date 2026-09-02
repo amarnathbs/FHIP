@@ -31,6 +31,11 @@ import {
 import type { SchemeClassificationResult } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
 import type { LotConsumption } from '@/lib/engines/investment-intelligence/tax/taxLotEngine';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6-security-final';
+
 function makeClassification(kind: 'equity_oriented' | 'debt_specified' | 'unresolved'): SchemeClassificationResult {
   return {
     instrumentKey: 'x',
@@ -49,6 +54,7 @@ describe('R6-SECURITY-FINAL closure — grandfathering continuity across the 196
     const consumption: LotConsumption = {
       disposalEventId: `d-${disposalDate}`,
       lotId: `l-${disposalDate}`,
+      accountKey: ACCOUNT,
       instrumentKey: 'SCH-CONTINUITY',
       acquisitionDate: facts.acquisitionDate,
       kind: 'purchase',
@@ -115,7 +121,7 @@ describe('R6-SECURITY-FINAL closure — negative control: an uncertified rule ve
     );
 
     const consumption: LotConsumption = {
-      disposalEventId: 'neg-1', lotId: 'neg-1', instrumentKey: 'SCH-NEG',
+      disposalEventId: 'neg-1', lotId: 'neg-1', accountKey: ACCOUNT, instrumentKey: 'SCH-NEG',
       acquisitionDate: '2020-01-01', kind: 'purchase', disposalDate: '2026-06-15',
       unitsConsumed: 10, costPerUnit: 100, costBasis: 1000, saleValueApportioned: 1500,
     };
