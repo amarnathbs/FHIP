@@ -656,6 +656,15 @@ export interface PersistedCapitalGainsRow {
  * persistCapitalGainsComputations), so all rows of a run share one exact
  * value and "latest" orders runs, not rows. Ties on an identical timestamp
  * are all kept — they are by construction the same run.
+ *
+ * `computed_at` is compared as a STRING, deliberately. Every value here comes
+ * from the same `timestamptz` column through PostgREST, so all of them arrive
+ * in one identical ISO-8601 UTC format — and for a fixed format, lexicographic
+ * order IS chronological order (the fractional part compares digit-by-digit
+ * like a decimal, and the '+' of the offset sorts below every digit, so a
+ * shorter fraction correctly compares as smaller). Parsing to Date instead
+ * would silently truncate Postgres's microseconds to JavaScript milliseconds
+ * and could collapse two genuinely distinct runs into a tie.
  */
 export function selectCurrentCapitalGainsRows<T extends { disposal_transaction_id: string; engine_version: string; computed_at: string }>(
   rows: readonly T[]
