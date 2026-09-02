@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { validateEditConditions } from '@/lib/services/recommendationEditValidation';
 
@@ -27,6 +27,19 @@ type AdminClient = ReturnType<typeof adminClient>;
 // incomplete input. Paginating this fetch is what actually closes that gap.
 const PAGE_SIZE = 1000;
 
+// Gate G6: preserves the original PostgrestError shape ({ message, code })
+// across the throw/catch boundary so the GET handler's catch block can
+// still classify it via safeDbError() — a plain `Error(error.message)`
+// would have discarded the SQLSTATE and left only the (potentially
+// internal-schema-naming) raw message string.
+class PostgrestFetchError extends Error {
+  original: { message?: string; code?: string };
+  constructor(original: { message?: string; code?: string }) {
+    super(original.message ?? 'Database error');
+    this.original = original;
+  }
+}
+
 async function fetchAllMasterRows(client: AdminClient): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -36,7 +49,7 @@ async function fetchAllMasterRows(client: AdminClient): Promise<Record<string, u
       .order('forecast_category')
       .order('priority_score', { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
+    if (error) throw new PostgrestFetchError(error);
     all.push(...(data ?? []));
     if (!data || data.length < PAGE_SIZE) break;
   }
@@ -47,7 +60,7 @@ async function fetchAllConditionRows(client: AdminClient): Promise<Record<string
   const all: Record<string, unknown>[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await client.from('action_recommendation_conditions').select('*').range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
+    if (error) throw new PostgrestFetchError(error);
     all.push(...(data ?? []));
     if (!data || data.length < PAGE_SIZE) break;
   }
@@ -63,7 +76,12 @@ export async function GET() {
   try {
     [masterRows, conditionRows] = await Promise.all([fetchAllMasterRows(client), fetchAllConditionRows(client)]);
   } catch (e) {
-    return bad(e instanceof Error ? e.message : 'Could not load recommendations');
+    // Gate G6: the paginated fetch helpers below re-throw the raw
+    // PostgrestError as an Error (preserving `.message`) — safeDbError()
+    // still needs the original `{ message, code }` shape to classify it,
+    // so unwrap it back out rather than losing the SQLSTATE.
+    const original = e instanceof PostgrestFetchError ? e.original : { message: e instanceof Error ? e.message : 'unknown', code: undefined };
+    return safeDbError(original, 'Recommendations list (paginated fetch)');
   }
 
   const conditionsByCode = new Map<string, unknown[]>();

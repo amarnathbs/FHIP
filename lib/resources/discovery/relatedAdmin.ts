@@ -86,9 +86,18 @@ export async function addRelatedContent(supabase: SupabaseClient, sourcePostId: 
   return { ok: true, id: data.id as string };
 }
 
-export async function removeRelatedContent(supabase: SupabaseClient, id: string): Promise<void> {
-  const { error } = await supabase.from('resource_related_content').delete().eq('id', id);
+// Admin A0.2 Wave 4 (PO4-4 / DEF4-10): a plain `.delete().eq('id', id)` with
+// no `.select()` succeeds (error === null) whether zero or one row actually
+// matched — PostgREST's DELETE does not error on zero matched rows. That
+// made this function report "removed" for an id that never existed. It now
+// returns whether a row genuinely existed and was deleted, so the calling
+// route can return the canonical zero-row contract: first successful
+// deletion -> 200 (existing compatible shape); already-gone/unknown id ->
+// 404, not a false 200.
+export async function removeRelatedContent(supabase: SupabaseClient, id: string): Promise<{ deleted: boolean }> {
+  const { data, error } = await supabase.from('resource_related_content').delete().eq('id', id).select('id');
   if (error) throw error;
+  return { deleted: (data ?? []).length > 0 };
 }
 
 // spec §39: "reorder if existing schema supports order" — it does

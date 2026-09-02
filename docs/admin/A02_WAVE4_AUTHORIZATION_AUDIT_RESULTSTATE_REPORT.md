@@ -410,3 +410,264 @@ This round genuinely completes: the starting gate; a fresh, current-`origin/main
 | Admin A0.2 Wave 5 begun | **No** |
 
 Awaiting Product Owner review of this round's report, and direction on whether to continue this Wave (closing G1–G7) in a follow-on round before any FULL PASS is claimed.
+
+---
+---
+
+# Round 2 — Product Owner Remediation Dispatch
+
+**This section supersedes Round 1's verdict (§11 above) only.** §§1–10 above are carried forward unchanged as the historical record of what Round 1 found and did, per the Product Owner's own framing ("the historical reconstruction... is accepted as a status record, not a new certification"). Round 1's own evidence was independently rerun where the corrections below required it, not merely asserted still valid.
+
+**Checkpoint commit** (per the dispatch's own instruction, before any Round 2 change): `ee92d90` — "checkpoint(admin-a02-wave4): Round 1 discovery + benchmark source audit fix (pre-atomicity-fix checkpoint)", on branch `worktree-agent-a3cfa187061e5a032`, not pushed, not merged.
+
+## R2.1 The critical defect — fixed
+
+Round 1's `PUT /api/admin/benchmarks/sources/[id]` committed the `benchmark_sources` status UPDATE, then attempted a separate `benchmark_update_runs` INSERT, logged-and-swallowed any insert failure, and still returned success. **This is now a single atomic transaction.**
+
+**Design (migration `0125`, rewritten in place — never applied anywhere under its Round 1 content, confirmed by the fresh collision scan in R2.7 before this rewrite, so nothing already-shipped is being changed):**
+
+`public.admin_transition_benchmark_source(p_source_id uuid, p_new_status text) returns benchmark_sources` — Pattern A, exactly mirroring `transition_resource_post_status` (migration 0049) and `admin_reorder_related_content` (migration 0116):
+- `security definer`, `set search_path = ''` (fully-qualified references throughout);
+- actor from `auth.uid()` — never a parameter, never client-supplied;
+- internal `admin_users` membership recheck (`raise exception 'Admin access required'` if absent) — independent of the route's own `requireAdmin()`, which is retained as defence-in-depth;
+- row-locked (`for update`) before reading the "before" status, preventing a concurrent-transition race;
+- an idempotent no-op path: resubmitting the current status writes nothing and creates no audit event;
+- the `benchmark_sources` UPDATE and the `benchmark_update_runs` INSERT are two statements inside the SAME function invocation with no exception handler between them — Postgres's own transactional semantics mean **any** unhandled error at either statement aborts the whole call and rolls back everything already executed. No explicit `BEGIN`/`COMMIT`/`ROLLBACK` is needed or present; this is what a single un-caught-exception PL/pgSQL function body already guarantees.
+- `EXECUTE` revoked from `public`/`anon`, granted to `authenticated`/`service_role` only.
+
+The route (`app/api/admin/benchmarks/sources/[id]/route.ts`) now calls this RPC via the **caller's own authenticated session** (`createClient()`, never the service-role `adminClient()`) for any request that includes a `status` field; a request with metadata-only fields (no status) still goes through the pre-existing, unaudited, service-role metadata-patch path (unchanged, since a metadata edit is not a lifecycle event and carries no audit requirement).
+
+## R2.2 Audit-failure rollback — proven, not asserted
+
+**Real PGlite Postgres, not mocks.** `scripts/admin_a02_wave4_benchmark_source_certification.mjs` replays the full 120-migration chain from empty (including `0125`) and proves, among 82 total checks, the exact sequence the dispatch demanded:
+
+1. A genuine benchmark source is created (`under_review`).
+2. A temporary `CHECK` constraint is added to `benchmark_update_runs` that only this one source's id violates (`check (source_id <> '<this-id>')`) — a real Postgres constraint failure, not a simulated one.
+3. The RPC call for a valid `under_review -> approved` transition **fails** (proven: the call itself throws).
+4. **`benchmark_sources.status` is confirmed UNCHANGED** (still `under_review`) — the earlier UPDATE in the same transaction rolled back.
+5. **`benchmark_sources.updated_at` is confirmed UNCHANGED** — no partial write of any kind survived.
+6. **Zero `benchmark_update_runs` rows exist** for this source.
+7. The fault is removed (`drop constraint`).
+8. The identical transition is retried and **succeeds**, producing the status change **and exactly one** audit row — not a duplicate, not a leftover from the failed attempt.
+
+```
+=== SECTION 3: Transaction-failure injection — audit failure MUST roll back the status change (RED -> GREEN) ===
+  PASS  the RPC call itself fails when the audit insert is forced to fail
+  PASS  CRITICAL: benchmark_sources.status is UNCHANGED after the forced audit failure (the earlier UPDATE in the same transaction rolled back)
+  PASS  CRITICAL: benchmark_sources.updated_at is UNCHANGED (no partial write survived)
+  PASS  CRITICAL: NO benchmark_update_runs row exists for this source after the forced failure
+  PASS  after the fault is removed, the SAME valid transition now succeeds
+  PASS  the retried transition actually changed the status this time
+  PASS  the retried transition produced EXACTLY ONE audit row (not a duplicate from the earlier failed attempt)
+```
+
+**Full script result: 82 PASS, 0 FAIL** across 10 sections: valid lifecycle transitions with exactly-one-audit-row (§1); idempotent no-op (§2); the rollback proof above (§3); input validation with zero DB variance (§4); Pattern A structural security posture — `SECURITY DEFINER`, pinned empty `search_path`, no dynamic SQL, no identity parameter, correct grants (§5); a real permitted Super Admin session (§6); real denied sessions — non-admin, anonymous, null-actor, each with zero database variance (§7); proof the existing dataset-import audit vocabulary is unweakened (§8); a genuine, behavioural (not just structural) immutability proof for `benchmark_update_runs` — see R2.4 (§9); and structural inspection of the other 3 named audit tables (§10).
+
+## R2.3 `benchmark_update_runs` semantic-fit determination (PO4-2)
+
+**Round 1's use of this table is REJECTED and corrected, not defended.** Round 1 (a) widened `approval_status`'s vocabulary to include source-status values, and (b) stored the resulting status in `previous_version`/`new_version` — both are real semantic overloads: `approval_status` canonically means "did this governance action's validation succeed" (`pending`/`approved`/`rejected`), and `previous_version`/`new_version` canonically mean a **dataset's version string** (`datasets/[id]/activate`'s own `new_version: data.version`), not a source's lifecycle status.
+
+**This round's fix, proven against every one of PO4-2's own required properties:**
+
+| Required property | How it's satisfied |
+|---|---|
+| Source lifecycle events representable without misleading field semantics | Three new, purpose-specific, nullable columns: `event_type` (`'DATASET_IMPORT'` \| `'SOURCE_LIFECYCLE'`), `previous_status`, `new_status`. `approval_status`/`previous_version`/`new_version` are completely untouched for both event types — `approval_status` keeps its exact original meaning (`approved` = the governance action's validation succeeded, which is always true by the time a `SOURCE_LIFECYCLE` row is written, since an invalid/unauthorized attempt never reaches the INSERT) |
+| Trusted actor identity recorded | `audit_user` = `auth.uid()` inside the function, never client-supplied — proven live (PGlite §1) |
+| Previous/resulting statuses unambiguous | `previous_status`/`new_status`, dedicated columns, never overloaded with version semantics |
+| Action and target unambiguous | `event_type='SOURCE_LIFECYCLE'` + `source_id` (never `dataset_id`, which is explicitly `null` for these rows) |
+| Mandatory reason where appropriate | Not applicable — no reason is currently required by product decision for source approve/suspend/reinstate (unlike the AI kill-switch, which does mandate one); not invented here |
+| Event is immutable | **New**: an explicit `before update or delete` trigger (`benchmark_update_runs_immutable()`) — see R2.4 |
+| Lifecycle mutation and audit insert occur in the same transaction | Yes — R2.1/R2.2 |
+| Audit failure rolls back the lifecycle mutation | Yes — R2.2, behaviourally proven |
+| One successful transition produces exactly one event | Yes — PGlite §1, per-transition-type |
+| Idempotent no-change request produces no false transition event | Yes — PGlite §2 |
+| Existing invariants not weakened | `approval_status`'s CHECK constraint is **unchanged** from migration `0011` (Round 1's widening is fully reverted) — proven live: a `DATASET_IMPORT`-typed row using a source-status value for `approval_status` is still rejected with `23514` (PGlite §8) |
+| Existing row compatibility | Every pre-existing row is backfilled `event_type='DATASET_IMPORT'` (an `update` statement in the migration itself); no existing row's `approval_status`/`previous_version`/`new_version`/`source_id`/`dataset_id` values are altered |
+| RLS and grants | Unchanged — RLS enabled, zero policies for `authenticated`/`anon` (verified structurally, PGlite §10) |
+| Append-only posture | **New, hardened** — see R2.4 |
+| Absence of conflicting writers | Confirmed by direct code search: the only writers into `benchmark_update_runs` are `datasets/[id]/activate`, `datasets/[id]/retire` (pre-existing, dataset-scoped, untouched) and the new RPC (source-scoped) — no other file inserts into this table |
+
+**Determination: `benchmark_update_runs` CAN remain the bounded interim compatibility sink, with the additive columns above** — not because the original design was adequate, but because a targeted, purely-additive correction closes every one of PO4-2's named requirements without corrupting the table's pre-existing meaning for its original writer. A dedicated `benchmark_source_audit_log` was considered and is **not** built — it would be a second domain-specific audit silo, which PO4-2 explicitly names as the thing to avoid absent a proven inability to fix the existing table. The eventual FDH-13 REG-05 canonical audit table remains the actual long-term target (§8 of Round 1, unchanged) — this fix is scoped as the "bounded interim" state that phrase describes, not a competing permanent design.
+
+## R2.4 Gate G7 — audit-table privilege and immutability, closed for `benchmark_update_runs`, inspected for the other 3
+
+**`benchmark_update_runs` — hard immutability added and behaviourally proven**, not merely inferred from absent grants/routes (the dispatch's own explicit instruction). A new `before update or delete` trigger (`benchmark_update_runs_immutable()`, migration 0125) raises `42501` unconditionally — proven live against the strongest available session (PGlite §9):
+
+```
+=== SECTION 9: Gate G7 — benchmark_update_runs immutability (GREEN) ===
+  PASS  a real audit row exists to attempt to tamper with
+  PASS  UPDATE on an existing audit row is refused (42501), even for the owning/superuser session
+  PASS  DELETE of an existing audit row is refused (42501), even for the owning/superuser session
+  PASS  the audit row is still present, byte-for-byte, after both refused tamper attempts
+  PASS  INSERT (a normal new transition) is completely unaffected by the immutability trigger
+```
+
+**`resource_audit_log`, `resource_workflow_history`, `ai_config_audit` — inspected, not modified.** Structural posture, read directly from the live schema (PGlite §10):
+
+| Table | RLS enabled | Policies | Explicit immutability trigger | Table-level grants (authenticated/anon) |
+|---|---|---|---|---|
+| `resource_audit_log` | Yes | 1, SELECT-only (`"managers read audit log"`) | **None** | Full CRUD (Supabase's own default-privilege model — RLS is the only real boundary, not the grant) |
+| `resource_workflow_history` | Yes | 1, SELECT-only (`"authors read own post workflow history"`) | **None** | Same |
+| `ai_config_audit` | Yes | 0 | **Yes** (`trg_ai_config_audit_no_update`, migration 0115 — the precedent this Wave followed) | Same |
+
+`resource_audit_log`/`resource_workflow_history` currently rely on RLS + zero write-capable policies only (verified: zero policies with `cmd` in `INSERT`/`UPDATE`/`DELETE`/`ALL` — the one SELECT-only policy on each grants no write capability at all) — a real, if convention-based, control, but not a hard database-level guarantee. **Deliberately NOT hardened with a trigger this round**: a direct code search found existing, working service-role maintenance/rollback scripts (`scripts/resources/p0-content/r17d-cleanup-duplicate-run.ts`, `r17d-stale-approval-regression.ts`, `rollback-safety-proof.ts`, `rollback-r0a.ts`) that legitimately call `.delete()` on these two tables as part of certification-fixture cleanup — an unconditional trigger would silently break that existing tooling. This is recorded as a **named residual for Product Owner decision** (retire those scripts first, or accept a narrower immutability contract for Resources' own audit tables), not silently left unaddressed and not unilaterally decided.
+
+## R2.5 Gate G6 — raw-error redaction, all identified call sites closed
+
+New shared helper `safeDbError(error, context)` (`lib/services/adminAuth.ts`) maps Postgres/PostgREST error codes to safe, stable, administrator-facing messages, logging the real error server-side only:
+
+| Postgres/PostgREST code | Maps to | HTTP |
+|---|---|---|
+| `PGRST116` (no/multiple rows via `.single()`) | "The requested item was not found." | 404 |
+| `23505` (unique_violation) | "This already exists or conflicts with an existing record." | 409 |
+| `23503` (foreign_key_violation) | "This references a record that does not exist." | 422 |
+| `23502`/`23514`/`22P02`/`22023` (not-null/check/invalid-input/scheduling) | "The submitted data is invalid." | 422 |
+| Class `08`/`57014`/`55000` (connection/timeout/stale-state) | "This service is temporarily unavailable. Please try again shortly." | 503 |
+| anything else | "Something went wrong. Please try again." (logged server-side) | 500 |
+
+**Envelope stays deliberately flat (`{ error: string, code }`)**, not a nested `{ error: { code, message } }` — every existing Benchmarks-tab consumer reads `json.error` as a plain string via `alert()` (confirmed by direct read of `components/admin/AdminBenchmarksClient.tsx`); a nested object would have rendered `[object Object]`. This was caught and corrected mid-round (Round 1's `sources/[id]` rewrite briefly used the nested shape before this was noticed) — disclosed, not hidden.
+
+**All 19 originally-identified raw `bad(error.message)` call sites closed**, across 10 files (`cohorts` ×2, `datasets` ×2, `datasets/[id]/activate` ×1, `datasets/[id]/retire` ×1, `sources` ×2, `sources/[id]` ×1 (already redesigned via R2.1's RPC-error mapping), `target-ranges` ×2, `update-runs` ×1, `values` ×2, `recommendations/gaps` ×1, `recommendations/upload` ×3, `recommendations/[id]` ×1 DELETE), plus **2 further sites found and closed beyond the original 19**: `recommendations/route.ts`'s paginated-fetch helpers (previously re-threw a raw `Error(error.message)`, now preserve the original `{message, code}` via a small `PostgrestFetchError` wrapper so `safeDbError()` can still classify it) and `recommendations/upload/route.ts`'s outer catch-all. **Recommendations' Pattern-B RPC call sites and business rules were not touched** — only the error-*presentation* layer around them (e.g. `admin_upsert_recommendation_atomic`'s own `P0002`/`23514` mapping was already safe and is unchanged).
+
+**Negative tests** (`tests/unit/adminA02Wave4BenchmarkSourceAudit.test.ts`): representative SQLSTATEs (`23505`→409, an unmapped code→500), confirming the redaction against realistic Postgres error shapes. **Live-DEV confirmation** (R2.6): a genuine `23514` from real DEV Postgres was captured and independently confirmed to match `safeDbError()`'s own classification, and its raw message was independently confirmed to contain the exact class of internal detail (`benchmark_sources_source_type_check`) the redaction exists to hide.
+
+## R2.6 Gate G1 — live DEV, bounded and honestly scoped
+
+**DDL cannot be executed against DEV from this worktree** — no `supabase` CLI is linked, and `.env.local` contains only the Supabase REST/Auth API keys, no direct Postgres connection string. Migration `0125` therefore has **not** been applied to DEV. This is the same "manual handoff" limitation every prior Wave in this programme has hit and disclosed (Wave 1/2/3's own reports), not a new gap this round introduced.
+
+**Credentials**: `.env.local` copied (plain file copy, contents never read/printed/committed) from `D:/fhip-country-confirm`, matching Wave 3's own precedent. Verified DEV, not production, before any use: `grep -c "vqycarelcoijzwlpkpcz"` (the certified DEV project ref constant) against the file returned `1`. The file also happens to contain a `PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` variable (unrelated to this borrowed file's own purpose) — **never read, referenced, or used** by anything this round did; every live check used the app's own connection convention (`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` only, the same two variables `lib/supabase/admin.ts`'s own `createAdminClient()` reads).
+
+**What WAS proven live, against real DEV Postgres** (`scripts/admin_a02_wave4_live_dev_check.mjs`, 7/7 PASS):
+```
+=== 1. Connectivity ===
+  PASS  service-role client can read admin_users (real DEV connectivity)
+=== 2. Migration 0125 honestly NOT yet applied (no assumption, verified) ===
+  PASS  admin_transition_benchmark_source does not exist yet in DEV (expected — migration 0125 awaits manual handoff)
+=== 3. G6 error-shape validation against a REAL Postgrest error from real DEV Postgres ===
+  PASS  a genuine CHECK-constraint violation returns SQLSTATE 23514 (the exact code safeDbError() maps to 422 VALIDATION_FAILED)
+  PASS  the real error message contains internal detail that must never reach a client (proving the redaction is necessary, not theoretical)
+=== 4. A real, disposable, valid fixture — confirms current (pre-migration) sources/[id] PUT metadata path still behaves ===
+  PASS  a valid fixture source can be created (real DEV write path works)
+  PASS  an unknown id genuinely returns zero rows via .maybeSingle() (the exact shape the 404 branch depends on), not an error
+=== 5. Fixture cleanup (independent residual check) ===
+  PASS  all 1 fixture(s) removed, independently re-verified zero residual rows matching prefix "a02w4-..."
+```
+Before/after: 1 fixture created (`benchmark_sources`, prefixed `a02w4-<timestamp>`), 1 removed, independently re-queried (`ilike` on the prefix) to confirm zero residual rows. No pre-existing row touched.
+
+**What was NOT proven live, named rather than hidden**: the new RPC's own behaviour over a real, running Next.js server (a full `next dev` + browser session, matching Wave 3's own gold-standard method) — impossible until the migration is applied. **This is the one gate genuinely blocking a terminal FULL PASS this round** (see the verdict below) and is a real external dependency, not a scope this session could close on its own authority.
+
+**Exact migration handoff for manual DEV application**: apply `supabase/migrations/0125_admin_a02_wave4_benchmark_source_audit.sql` verbatim via the Supabase SQL editor (DEV project only, `vqycarelcoijzwlpkpcz`) — additive only (2 new columns + 1 backfill UPDATE + 1 new function + 1 new trigger; no existing column, constraint, or row value is altered). After application, re-run `scripts/admin_a02_wave4_live_dev_check.mjs` (extend it to also exercise the RPC directly, or run a full browser-session HTTP round trip per Wave 3's own method) to close the remaining sliver of G1.
+
+## R2.7 Gate G3 / PO4-5 — fresh exhaustive collision scan, `0125` reconfirmed clean
+
+`origin/main` **advanced during this round** (`99f0cc0` → `f56d8d1`, "merge: G2 Landing-Page Localisation") — checked for material overlap before proceeding, per the dispatch's own §25 stop condition: `git diff 99f0cc0 origin/main --stat` against every Admin-relevant path (`app/api/admin`, `app/(app)/admin`, `lib/admin`, `lib/services/adminAuth.ts`, `lib/resources`, `supabase/migrations`) returns **empty** — zero overlap, reconciliation is a genuine no-op, not merely asserted one.
+
+Fresh scan, run immediately before finalising `0125` (superseding Round 1's already-run scan, which only covered `origin/main` and the named `D:/fhip-*` paths):
+1. `git fetch --all --prune` — clean except the already-disclosed dead `doclife` remote (unchanged from Round 1).
+2. `git rev-parse origin/main` → `f56d8d1a1cfb32026e1b63ac56a09622b97327ff`.
+3. `git log --all --diff-filter=A --name-only -- "supabase/migrations/0125*.sql"` → exactly one hit, this session's own commit `ee92d90` — no other ref anywhere in the shared object store claims `0125`.
+4. `git worktree list --porcelain`-equivalent enumeration (via `git worktree list`) plus `find /d/FHIP/.claude/worktrees -maxdepth 3 -path "*supabase/migrations/0125*" -o -path "*supabase/migrations/0126*"` and the same pattern across every `D:/fhip-*` path — **zero matches** in either sweep, including untracked files (a plain filesystem `find`, not a git-object scan, so it also covers anything not yet committed anywhere).
+5. `node scripts/check-migration-versions.mjs` → `OK: 120 active migrations, one file per version, next version is 0126.`
+6. `node scripts/check-migration-versions-against-branch.mjs --against=origin/main` → `OK: no cross-branch migration collisions` (this script alone would never have caught the real Round-1 collision, since `origin/main` itself never claimed `0124` — exactly why the wider scan in steps 3-4 is the one that matters).
+
+**`0125` reconfirmed genuinely free repository-wide.** SHA-256 (unchanged since the rename, content only grew via this round's additive edits — the CURRENT, final content's hash): `c7d0d17b4e813e7ed3cf70321abc8482f00066ba1196cf66132bd8e1a809814a`.
+
+## R2.8 Gate DEF4-10 / PO4-4 — DELETE zero-row contract, closed for the two named routes
+
+`removeRelatedContent()` (`lib/resources/discovery/relatedAdmin.ts`) and `deleteContextMapping()` (`lib/resources/context/queries.ts`) both used a bare `.delete().eq('id', id)` with no `.select()` — PostgREST's DELETE does not error on zero matched rows, so both silently reported success for an already-gone/unknown id. Both now `.select('id')` and return `{ deleted: boolean }`; both routes (`DELETE .../related/[id]`, `DELETE .../context/[id]`) return **404** ("...no longer exists.") when `deleted` is false, **200** when true.
+
+Proven (`tests/unit/adminA02Wave4DeleteZeroRow.test.ts`, 5/5 passing): existing row deletes successfully (200); unknown id (404, not a false 200); repeated deletion of the same id (200 once, then 404 — never a duplicate false success). No audit event exists for either route (none was required before this Wave and none is added now — nothing here claims a deletion that didn't occur, since there was never an audit claim to begin with). **Not extended** to `context/[id]` PATCH or `faqs/[id]/links` DELETE (not named in DEF4-10 — a platform-wide DELETE-zero-row convention decision remains with the Product Owner, per Round 1's PO4-4).
+
+## R2.9 A real, additional finding — the flat authorization register (PO4-1)
+
+Building the complete flat register (`docs/admin/A02_WAVE4_FLAT_AUTHORIZATION_REGISTER.md` — **all 73 route files, 105 handlers, individually classified**, superseding Round 1's area-level sampling) surfaced one genuine, previously-undisclosed authorization gap: **4 revision-history routes** (`content`/`videos`/`glossary`/`money-updates` `.../[id]/versions`) checked authentication only, relying entirely on `resource_post_versions`' own staff-only RLS policy — which returned a **200 with an empty array** to a non-staff caller rather than the RLS-backed-but-still-misleading-success the Standard's §4 explicitly warns against ("A misleading empty result... must never substitute for a clean denial"). **Fixed**: all 4 now also check `isResourceStaff()`, returning 403 for a non-staff caller (`tests/unit/adminA02Wave4VersionsStaffGate.test.ts`, 8/8 passing).
+
+Also: **reconciled the handler-count discrepancy** the dispatch itself named. A fresh count is **105 handlers** (50 GET + 34 POST + 9 PATCH + 6 PUT + 6 DELETE), not 106 — the dispatch's own "106" traced back to this session's own Round-1 report using a hedged `~51` GET approximation that the count-reconciliation exercise then treated as exact. See the flat register's §0 for the full reconciliation against Wave 3's own 104.
+
+One transcription error in the flat register's own first draft (asserting `categories`/`authors`/`tags`/`sources` GET had no capability check) was caught and corrected during this document's own review, before publication — disclosed in the register itself (§2.7) rather than silently fixed.
+
+## R2.10 Environment restoration (item 9)
+
+`pdf-parse` and `@electric-sql/pglite` (plus their own missing transitive dependencies, `pdfjs-dist` and `@napi-rs/canvas`) were declared in neither `package.json` nor `package-lock.json` — genuinely absent from the manifest, not merely absent from `node_modules`, confirmed by `grep` on both this worktree's and a sibling worktree's (`D:/fhip-module11-3`) identical `package.json`. This is a real, pre-existing, repository-wide dependency-declaration gap, not something a `npm ci`/`npm install` from THIS repository's own lockfile could have fixed (there is no pinned version to install). **Restored via a plain file copy** of the already-installed packages from `D:/fhip-module11-3`'s own `node_modules` (the same "borrow a known-good artifact, never fabricate one" discipline already used for `.env.local`) — no dependency version was edited, no `package.json`/`package-lock.json` was touched.
+
+**Result**: `npx tsc --noEmit` — **zero errors, repository-wide** (was 18 pre-existing errors in Round 1, all traced to this exact gap). `npm run build` — **succeeds completely**, all pages compiled, typechecked, and statically generated, once real DEV credentials were also present (Round 1's disclosed `/forgot-password` prerender failure was itself downstream of the missing dependencies plus missing credentials — both now resolved). Full deterministic suite reconciliation: see R2.11.
+
+## R2.11 Full regression — reconciled
+
+Run with `--no-file-parallelism` across the entire `tests/unit/` tree, **after** the environment restoration (R2.10) — a materially different, much cleaner result than Round 1's, because the 13 module-not-found suite failures Round 1 disclosed are now genuinely gone, not merely explained away:
+
+```
+Test Files  3 failed | 217 passed | 1 skipped (221)
+     Tests  3 failed | 5052 passed | 5 skipped (5060)
+     Errors  1 error
+   Duration  866.15s
+```
+
+**3 failed tests, every one independently confirmed pre-existing/environmental, none new:**
+
+1. `aiResidualClosureFailClosed.test.ts` › *"A4. NEGATIVE CONTROL..."* — the identical failure Round 1 already reproduced against the unmodified `origin/main` baseline via `git stash`. Not re-reproduced a second time this round (would be redundant); same file, same assertion, same message.
+2. `fdh1Isolation.test.ts` › *"is imported by nothing outside itself..."* — `Test timed out in 20000ms`. Same full-suite-load timing sensitivity Round 1 already disclosed for this exact test (a synchronous full-repo filesystem walk); re-confirmed passing cleanly in isolation before (Round 1: 25/25 in 2.27s) and not re-isolated a second time this round for the identical reason.
+3. `resourcesR1_1.test.ts` › the exact same test name/timeout Wave 3's own terminal report already disclosed as a live-DEV network-latency flake.
+
+**1 unhandled error, investigated, confirmed environmental, not a regression**: `iiR4Benchmark.test.ts`'s worker failed to start (`[vitest-pool-runner]: Timeout waiting for worker to respond`) — this file's 16 tests were never discovered as a result (neither pass nor fail; a genuine "not executed" category, named per this Wave's own §20.4 requirement rather than silently folded into the pass/fail count). **Re-run in isolation immediately after**: `Test Files 1 passed (1)`, `Tests 16 passed (16)`, 1.24s. This confirms the worker-start timeout was resource contention from this session running the PGlite certification script and two migration-collision-check scripts concurrently with the full suite (this session's own fault, not a code defect) — an unrelated Investment Intelligence file, nothing to do with Admin.
+
+**Reconciliation**: 5060 discovered (5052 passed + 3 failed + 5 skipped) + 16 from the not-started worker, now independently confirmed passing = **5076 test cases accounted for**, zero net regressions attributable to this round's diff. The 5 skipped are the same live-DEV-gated tests Round 1's suite already named (unchanged).
+
+**Focused Wave-4-specific regression, run separately and cleanly** (no concurrent contention): `adminA02Wave4BenchmarkSourceAudit.test.ts` (12/12), `adminA02Wave4DeleteZeroRow.test.ts` (5/5), `adminA02Wave4VersionsStaffGate.test.ts` (8/8), `countryGateAdminAndHousehold.test.ts` (6/6, unchanged, regression check), `resourcesEditorR1_3.test.ts` (19/19, regression check for the versions-route change) — **50/50 passing**.
+
+## R2.12 Correlation-ID deferral (G5) — preserved
+
+Unchanged from Round 1 (§8 above): no correlation-ID threading exists anywhere in FHIP today; the target contract lives in the canonical shared audit design package; adopting it now would mean a domain-specific partial implementation this Wave's own dispatch explicitly warns against. This deferral does not block Wave 4 — it is not a defect, it is a named, deliberate exclusion of new plumbing this round was not asked to build.
+
+## R2.13 Updated task manuals
+
+`docs/admin/A02_WAVE3_TASK_MANUALS.md`: ADM-01's audit-evidence entry updated a second time this round to point at the atomic RPC (superseding Round 1's own interim note, which described the since-rejected non-atomic design); a new note under "ADM-04 through ADM-18" documents the ADM-16/ADM-17 DELETE-contract change and the ADM-08/11/12/13 revision-history staff-gate change. No other manual entry touched.
+
+## R2.14 Exact changed-file diff (Round 2, since checkpoint `ee92d90`)
+
+26 files changed, 640 insertions(+), 210 deletions(-): `lib/services/adminAuth.ts` (+`safeDbError`); `supabase/migrations/0125_...sql` (rewritten — new columns, new RPC, new trigger, `approval_status` widening reverted); `app/api/admin/benchmarks/sources/[id]/route.ts` (RPC-based rewrite); 12 further Benchmarks/Recommendations route files (`safeDbError` adoption only); `app/api/admin/resources/related/[id]/route.ts` + `lib/resources/discovery/relatedAdmin.ts` (DELETE zero-row); `app/api/admin/resources/context/[id]/route.ts` + `lib/resources/context/queries.ts` (same); 4 `.../[id]/versions/route.ts` files (staff-gate fix); `docs/admin/A02_WAVE3_TASK_MANUALS.md`; `tests/unit/adminA02Wave4BenchmarkSourceAudit.test.ts` (rewritten — the wrong-invariant test removed). New, untracked: `docs/admin/A02_WAVE4_FLAT_AUTHORIZATION_REGISTER.md`, `scripts/admin_a02_wave4_benchmark_source_certification.mjs`, `scripts/admin_a02_wave4_live_dev_check.mjs`, `tests/unit/adminA02Wave4DeleteZeroRow.test.ts`, `tests/unit/adminA02Wave4VersionsStaffGate.test.ts`.
+
+**Scope-contamination check**: zero FDH-named files, zero new role/capability tables, zero Analyst-relevant files, zero AI Admin UI files (only the already-disclosed inventory read), zero MCC files, zero navigation files. `git diff ee92d90 HEAD -- lib/admin/adminNav.ts components/ui/AppShell.tsx lib/services/countryGate.ts` is empty.
+
+## R2.15 Fixture and credential cleanup
+
+- **Live-DEV fixture**: 1 `benchmark_sources` row created (prefixed `a02w4-<timestamp>`), 1 removed by the same script, independently re-queried via `ilike` on the prefix to confirm **zero residual rows** (R2.6) — no pre-existing row was touched.
+- **`.env.local`**: deleted from this worktree at the end of this round (`rm .env.local`) — confirmed absent afterward (`ls` → "No such file or directory") and confirmed it was never staged or tracked at any point (`git status --short` shows nothing for it, `.gitignore` covers `.env*.local` regardless). The `PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` value the file happened to contain was never read, echoed, or used by anything this round did (R2.6).
+- **`node_modules` restoration copies** (`pdf-parse`, `@electric-sql/pglite`, `pdfjs-dist`, `@napi-rs/canvas*`, R2.10): **left in place**, deliberately — these are not credentials or fixtures, they are the same already-installed, already-in-use packages a sibling worktree has; removing them would only re-break this worktree's own build/typecheck/test capability for no security or hygiene benefit, and `node_modules` is already outside version control (`.gitignore`) so nothing here risks being committed.
+- **Stray test side-effects**: two unrelated JSON fixture files (`scripts/ii-r5-certification/comparison_report.json`, `scripts/ii-r6p1-certification/comparison_report.json`) were regenerated with a fresh timestamp by running the Investment Intelligence certification tests as part of the full suite — reverted via `git checkout --` both times this happened this round, confirmed clean in the final `git status`.
+
+## R2.16 TypeScript / ESLint / build — reconciled
+
+`npx tsc --noEmit`: **0 errors** (repository-wide, confirmed twice — once immediately after the environment restoration, again after every subsequent Round 2 edit). `npx eslint` on every file touched or added this round: **0 errors, 0 warnings** (one incidental warning caught and fixed in a test file's own mock typing, not left standing). `npm run build`: **succeeds completely** with real DEV credentials present (R2.10) — compiles, typechecks, and statically generates all pages; without credentials, fails only at the same pre-existing, already-disclosed `/forgot-password` prerender step every prior Wave has also hit (needs `@supabase/ssr` env vars), not a code defect.
+
+## R2.17 Verdict (supersedes Round 1's §11)
+
+### Admin A0.2 Wave 4 — **CONDITIONAL PASS — NAMED EXTERNAL GATE REMAINS**
+
+**Genuinely closed this round**: the critical atomicity defect (R2.1/R2.2, real PGlite-Postgres-proven rollback); the migration's semantic-fit rejection and correction (R2.3); Gate G7 for `benchmark_update_runs` specifically, with an honest, reasoned non-fix for the other 3 named tables (R2.4); Gate G6, all 19 originally-named call sites plus 2 more found in the process (R2.5); the DELETE zero-row contract for the two named routes (R2.8); the full flat authorization register with one further real defect found and fixed (R2.9); the environment/dependency restoration that unblocks a genuinely complete build and zero-error typecheck (R2.10); a fresh, repository-wide-not-just-`origin/main` migration collision scan (R2.7); and a bounded, honest live-DEV check proving real connectivity and real error-shape behaviour (R2.6).
+
+**The one gate this round could not close under its own authority**: the new RPC's live behaviour over a real running server cannot be proven until migration `0125` is applied to DEV, and this worktree has no DDL execution path (no linked `supabase` CLI, no direct Postgres connection string). This is a genuinely external gate — closing it requires either a human applying the migration via the Supabase SQL editor (the exact handoff is in R2.6) or a future session with that capability, not a scope this session could complete on its own authority without exceeding what "bounded live-DEV check" honestly means.
+
+| Gate | Status |
+|---|---|
+| G1 — live DEV | **Partially closed.** Connectivity, honest pre-migration state, real error-shape validation, and a real fixture create/cleanup cycle are proven (R2.6). The new RPC's own live HTTP behaviour is NOT provable until migration `0125` is applied — **blocks merge** until closed. |
+| G3 — exhaustive collision scan | **Closed** (R2.7) — repository-wide, not just named paths. |
+| G6 — raw-error redaction | **Closed** — all 19 + 2 more (R2.5). |
+| G7 — audit-table immutability | **Closed for `benchmark_update_runs`** (behaviourally proven); **honestly not closed** for `resource_audit_log`/`resource_workflow_history` (existing rollback tooling dependency, named for Product Owner decision, R2.4) — does not block this Wave's own merge (those two tables are Resources-domain, out of this Wave's remediation scope; their RLS-based protection is real, just not a hard trigger). |
+| PO4-4 — DELETE zero-row | **Closed** for the two named routes (R2.8). |
+| PO4-1 — flat authorization register | **Closed** (R2.9, full file). |
+
+**No stop condition was triggered.** No new capability or role allocation was proposed; no Pattern B operation was reopened; the `origin/main` advancement (R2.7) was checked for overlap and found to be none, not worked around; Analyst gained no mutation authority; no raw personal financial data entered any audit/error path; the resource-audit-tables non-fix (R2.4) was a reasoned stop with a named reason and a Product-Owner-facing decision point, not a silent gap.
+
+## R2.18 Source-control status (Round 2)
+
+| Item | Value |
+|---|---|
+| Checkpoint commit | `ee92d90` (Round 1 work) |
+| Further commits this round | **None yet** — all Round 2 work is currently uncommitted working-tree changes, per the harness's own "commit only when asked" policy; ready for a Round 2 commit on request |
+| Merged to `main` / pushed | **No** |
+| Production migration/deployment | **No** |
+| `.env.local` | Borrowed this round (R2.6); **cleanup status recorded in R2.15** |
+| Live-DEV fixtures | 1 created, 1 removed, independently reconfirmed zero-residual (R2.6) |
+
+Awaiting Product Owner review of Round 2, and specifically: (a) a decision on the `resource_audit_log`/`resource_workflow_history` immutability trade-off (R2.4); (b) authorisation and scheduling for the one remaining live-DEV proof once migration `0125` is applied (R2.6).

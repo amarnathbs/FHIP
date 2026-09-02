@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async (req: Request) => {
@@ -13,7 +13,7 @@ export const GET = adminRoute(async (req: Request) => {
     .limit(300);
   if (metricCode) query = query.eq('benchmark_metric_definitions.metric_code', metricCode);
   const { data, error } = await query;
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark target-ranges list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
@@ -24,5 +24,5 @@ export const POST = adminRoute(async (req: Request) => {
     return bad('metric_definition_id, band_label and band_tier are required', 422);
   }
   const { data, error } = await adminClient().from('benchmark_target_ranges').insert(body).select('*').single();
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark target-range create') : ok(data);
 });

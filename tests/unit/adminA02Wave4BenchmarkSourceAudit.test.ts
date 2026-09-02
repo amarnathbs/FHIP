@@ -1,19 +1,34 @@
 // Admin A0.2 Wave 4 — Authorization, Audit and Result-State Consistency.
+// Round 2 (Product Owner remediation dispatch).
 //
-// Focused evidence for the one concrete AUDIT_MISSING_HIGH_RISK gap this
-// Wave found and closed: PUT /api/admin/benchmarks/sources/[id] could
-// approve/suspend/reinstate a benchmark source (spec §9 priorities 2/4)
-// with zero audit trail, unlike its sibling dataset lifecycle
-// (datasets/[id]/activate, which has always written benchmark_update_runs).
-// Migration 0125 widens benchmark_update_runs.approval_status's CHECK
-// constraint so the existing (already-locked-down, service-role-only) audit
-// table can honestly record a source status transition; this test proves
-// the route's own new behaviour, not the database constraint itself
-// (that is exercised live in DEV — see the Wave 4 certification report).
+// SUPERSEDES this file's Round 1 content. Round 1 shipped a test asserting
+// "a failed audit insert does not turn the (already-committed) status
+// change into a failure response" — i.e. it certified that a benchmark
+// source could be approved/suspended/reinstated with ZERO audit evidence
+// and still report success. The Product Owner correctly rejected this as
+// certifying the WRONG invariant for a mandatory high-risk audit action.
+// That test is REMOVED, not merely renamed — the correct invariant (audit
+// failure rolls back the business mutation) can only be genuinely proven
+// against a real transactional Postgres engine, not a mocked
+// `supabase.from()` chain (a mock cannot simulate one statement's failure
+// aborting an EARLIER statement in the same transaction — there is no
+// "earlier statement" in a mock, only separately-scripted return values).
+// That proof lives in scripts/admin_a02_wave4_benchmark_source_certification.mjs
+// (real PGlite Postgres, full migration chain replayed from empty, genuine
+// fault injection via a temporary CHECK constraint) — see that script for
+// the actual rollback evidence.
+//
+// This file's job, post-remediation, is narrower and appropriate for a
+// mocked unit test: prove the ROUTE HANDLER's own logic — which client it
+// calls (the caller's own session for a status change, never service-role),
+// what it passes to the RPC, and how it maps the RPC's error responses to
+// safe, stable HTTP result states (Gate G6) — never the RPC's atomicity
+// itself, which mocks cannot meaningfully exercise.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGetUser = vi.fn();
 const mockServerFrom = vi.fn();
+const mockRpc = vi.fn();
 const mockAdminFrom = vi.fn();
 const ADMIN_ID = 'wave4-admin-under-test';
 
@@ -21,6 +36,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: mockGetUser },
     from: mockServerFrom,
+    rpc: mockRpc,
   }),
 }));
 
@@ -49,108 +65,136 @@ beforeEach(() => {
   });
 });
 
-describe('PUT /api/admin/benchmarks/sources/[id] — audit evidence (Wave 4)', () => {
-  it('a genuine status transition writes a benchmark_update_runs audit row with source_id, previous/new status and the trusted actor id', async () => {
-    const insert = vi.fn<(row: Record<string, unknown>) => Promise<{ data: null; error: null }>>(async () => ({ data: null, error: null }));
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'benchmark_sources') {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'under_review' }, error: null }), single: async () => ({ data: { id: 'src-1', status: 'approved' }, error: null }) }) }),
-          update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: 'src-1', status: 'approved' }, error: null }) }) }) }),
-        };
-      }
-      if (table === 'benchmark_update_runs') return { insert };
-      throw new Error(`unexpected admin-client table: ${table}`);
-    });
-
+describe('PUT /api/admin/benchmarks/sources/[id] — a status change calls the atomic RPC via the CALLER\'s own session', () => {
+  it('calls admin_transition_benchmark_source with the exact source id and new status, never a direct table write', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'src-1', status: 'approved' }, error: null });
     const res = await PUT(req({ status: 'approved' }), params());
     expect(res.status).toBe(200);
-    expect(insert).toHaveBeenCalledTimes(1);
-    const row = insert.mock.calls[0][0];
-    expect(row).toMatchObject({
-      source_id: 'src-1',
-      dataset_id: null,
-      approval_status: 'approved',
-      previous_version: 'under_review',
-      new_version: 'approved',
-      audit_user: ADMIN_ID, // trusted actor from requireAdmin(), never client-supplied
-    });
+    expect(mockRpc).toHaveBeenCalledWith('admin_transition_benchmark_source', { p_source_id: 'src-1', p_new_status: 'approved' });
+    // The status path must never touch benchmark_sources directly through
+    // the service-role client — the RPC is the only sanctioned writer.
+    expect(mockAdminFrom).not.toHaveBeenCalledWith('benchmark_sources');
   });
 
-  it('an edit that does not change status (e.g. methodology_notes only) writes NO audit row', async () => {
-    const insert = vi.fn(async () => ({ data: null, error: null }));
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'benchmark_sources') {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'active' }, error: null }) }) }),
-          update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: 'src-1', status: 'active' }, error: null }) }) }) }),
-        };
-      }
-      if (table === 'benchmark_update_runs') return { insert };
-      throw new Error(`unexpected admin-client table: ${table}`);
-    });
-
-    const res = await PUT(req({ methodology_notes: 'updated wording' }), params());
-    expect(res.status).toBe(200);
-    expect(insert).not.toHaveBeenCalled();
+  it('a successful RPC result is returned as the response body', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'src-1', status: 'suspended' }, error: null });
+    const res = await PUT(req({ status: 'suspended' }), params());
+    const body = await res.json();
+    expect(body.data).toEqual({ id: 'src-1', status: 'suspended' });
   });
+});
 
-  it('re-submitting the SAME status (idempotent no-op) writes NO duplicate audit row', async () => {
-    const insert = vi.fn(async () => ({ data: null, error: null }));
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'benchmark_sources') {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'approved' }, error: null }) }) }),
-          update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: 'src-1', status: 'approved' }, error: null }) }) }) }),
-        };
-      }
-      if (table === 'benchmark_update_runs') return { insert };
-      throw new Error(`unexpected admin-client table: ${table}`);
-    });
-
+describe('PUT /api/admin/benchmarks/sources/[id] — Gate G6: RPC errors map to safe, stable codes, never a raw message', () => {
+  // Response envelope is deliberately flat ({ error: string, code }), not
+  // { error: { code, message } } — every existing Benchmarks-tab consumer
+  // reads json.error as a plain string via alert(), confirmed by direct
+  // read of components/admin/AdminBenchmarksClient.tsx; a nested object
+  // would render as "[object Object]" in that alert.
+  it('"Not authenticated" -> 401, safe message, no raw message leaked', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Not authenticated' } });
     const res = await PUT(req({ status: 'approved' }), params());
-    expect(res.status).toBe(200);
-    expect(insert).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(typeof body.error).toBe('string');
+    expect(body.error).not.toContain('auth.uid');
   });
 
-  it('an unknown source id returns a clean 404 (not a raw Postgrest error mapped to 400) and writes no audit row', async () => {
-    const insert = vi.fn(async () => ({ data: null, error: null }));
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === 'benchmark_sources') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
-      if (table === 'benchmark_update_runs') return { insert };
-      throw new Error(`unexpected admin-client table: ${table}`);
-    });
+  it('"Admin access required" -> 403', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Admin access required' } });
+    const res = await PUT(req({ status: 'approved' }), params());
+    expect(res.status).toBe(403);
+  });
 
+  it('"Benchmark source ... not found" -> 404, fixed generic message', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Benchmark source 00000000-0000-0000-0000-000000000000 not found' } });
     const res = await PUT(req({ status: 'approved' }), params());
     expect(res.status).toBe(404);
-    expect(insert).not.toHaveBeenCalled();
+    const body = await res.json();
+    // This route intentionally returns a fixed, generic message rather
+    // than echoing the RPC's own interpolated id.
+    expect(body.error).toBe('Benchmark source not found.');
   });
 
-  it('an invalid status is rejected 422 before any table is touched', async () => {
-    mockAdminFrom.mockImplementation((table: string) => {
-      throw new Error(`no table should be touched for invalid input: ${table}`);
-    });
-    const res = await PUT(req({ status: 'not_a_real_status' }), params());
+  it('"Invalid target status" -> 422', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Invalid target status: bogus' } });
+    const res = await PUT(req({ status: 'approved' }), params());
+    // Note: this specific message never actually reaches the RPC in
+    // practice (the route's own VALID_STATUSES check rejects it first,
+    // see the next describe block) — this proves the RPC-side mapping
+    // defensively, in case the two enums ever drift apart.
     expect(res.status).toBe(422);
   });
 
-  it('a failed audit insert does not turn the (already-committed) status change into a failure response', async () => {
-    const insert = vi.fn(async () => ({ data: null, error: { message: 'simulated audit-log outage' } }));
+  it('an unexpected/unmapped RPC error (real SQLSTATE 23505) -> 500 via safeDbError, raw Postgres detail never reaches the client', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'duplicate key value violates unique constraint "benchmark_update_runs_pkey"', code: '23505' } });
+    const res = await PUT(req({ status: 'approved' }), params());
+    // 23505 (unique_violation) maps to 409 CONFLICT via safeDbError() —
+    // this specific message doesn't match any of the route's own
+    // message-text mappings above, so it falls through to the generic
+    // Postgres-error-code mapper.
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('CONFLICT');
+    expect(JSON.stringify(body)).not.toContain('constraint');
+    expect(JSON.stringify(body)).not.toContain('benchmark_update_runs_pkey');
+    errSpy.mockRestore();
+  });
+
+  it('a genuinely unmapped error code -> 500 INTERNAL_ERROR, raw detail logged server-side only', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'some internal function public.foo() raised an unexpected condition', code: 'XX000' } });
+    const res = await PUT(req({ status: 'approved' }), params());
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.code).toBe('INTERNAL_ERROR');
+    expect(JSON.stringify(body)).not.toContain('public.foo');
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});
+
+describe('PUT /api/admin/benchmarks/sources/[id] — input validation happens before any RPC call', () => {
+  it('an invalid status is rejected 422 without ever calling the RPC', async () => {
+    const res = await PUT(req({ status: 'not_a_real_status' }), params());
+    expect(res.status).toBe(422);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/admin/benchmarks/sources/[id] — metadata-only edits remain a direct, unaudited service-role update', () => {
+  it('a metadata-only edit (no status field) never calls the RPC and writes via the service-role client', async () => {
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'benchmark_sources') {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'draft' }, error: null }) }) }),
-          update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: 'src-1', status: 'suspended' }, error: null }) }) }) }),
-        };
+        return { update: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'src-1', methodology_notes: 'updated' }, error: null }) }) }) }) };
       }
-      if (table === 'benchmark_update_runs') return { insert };
       throw new Error(`unexpected admin-client table: ${table}`);
     });
+    const res = await PUT(req({ methodology_notes: 'updated' }), params());
+    expect(res.status).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
 
-    const res = await PUT(req({ status: 'suspended' }), params());
-    expect(res.status).toBe(200); // the business mutation already committed — an audit-log outage must not be reported as a failed request
-    expect(insert).toHaveBeenCalledTimes(1);
-    errSpy.mockRestore();
+  it('a metadata edit against an unknown id returns a clean 404, not a raw error', async () => {
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'benchmark_sources') return { update: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) };
+      throw new Error(`unexpected admin-client table: ${table}`);
+    });
+    const res = await PUT(req({ methodology_notes: 'updated' }), params());
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('Benchmark source not found.');
+  });
+
+  it('a request with neither a status nor any writable field returns the current row, not a bare null', async () => {
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'benchmark_sources') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'src-1', status: 'active' }, error: null }) }) }) };
+      throw new Error(`unexpected admin-client table: ${table}`);
+    });
+    const res = await PUT(req({}), params());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toEqual({ id: 'src-1', status: 'active' });
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
