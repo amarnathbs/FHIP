@@ -215,15 +215,60 @@ directly in `tests/unit/g3RegistrationAlignment.test.ts`.
 
 ```
 File:     supabase/migrations/0127_g3_registration_country_expansion.sql
-SHA-256:  9293943DCC5E4908E8EA8E897281059E0AC2093B63EB2E1BF077E355388C5CFC
-Size:     23054 bytes / 384 lines
+SHA-256:  D7A80F6A3DE2D276326F3FFD3B3C5735BFA797597C23E69EDD86A04354A3D836
+Size:     26109 bytes / 426 lines
 ```
 
 Next free migration number verified as `0127` by `npm run check:migrations`
-(`0079`, `0080`, `0081`, `0103`, `0125` are unused; `0125` is reserved by the in-flight Admin A0.2
-Wave 4 workstream and deliberately not taken).
+(`0079`, `0080`, `0081`, `0103` remain unused). `0125` was reserved by the then-in-flight Admin
+A0.2 Wave 4 workstream and deliberately not taken — Wave 4 has since merged and **did** take
+`0125`, so that reservation proved correct.
+
+`npm run check:migrations:against-main` reports **no cross-branch collision** against the current
+`origin/main` (`0e21039`), which now carries `0125` and `0126`.
 
 **Not applied to DEV.** Product Owner authorisation for this exact file is required first.
+
+### Verification after application
+
+```sql
+-- All six countries registration-eligible; is_supported still AU/IN only.
+select c.country_code, c.experience_level, c.is_supported,
+       coalesce(cc.enabled, false) as registration
+from countries c
+left join country_capabilities cc
+  on cc.country_code = c.country_code and cc.capability = 'REGISTRATION'
+order by c.country_code;
+-- Expect: AU/IN FULL+is_supported=true; GB/US/SG/AE GENERIC+is_supported=false;
+--         registration=true for all six.
+
+-- The two tiers are genuinely different.
+select public.is_country_registration_eligible('GB') as gb_may_register,   -- expect true
+       public.is_country_registration_eligible('NZ') as nz_may_register;   -- expect false
+
+-- The four new objects exist.
+select proname from pg_proc
+where proname in ('is_country_registration_eligible','is_country_registration_confirmed',
+                  'enforce_country_confirmed_registration','enforce_generic_disclosure_acknowledgement',
+                  'enforce_cross_border_country_is_foreign')
+order by proname;  -- expect 5 rows
+
+-- The three new constraints exist.
+select conname from pg_constraint
+where conname in ('countries_country_code_is_real_iso_check',
+                  'user_profiles_generic_disclosure_complete_check',
+                  'user_profiles_preferred_currency_supported_check')
+order by conname;  -- expect 3 rows
+
+-- Existing users untouched (aggregate only, no identifiers).
+select count(*) filter (where country_of_residence='AU' and country_confirmed_at is not null) as au_confirmed,
+       count(*) filter (where country_of_residence='IN' and country_confirmed_at is not null) as in_confirmed,
+       count(*) filter (where country_of_residence is null)                                   as missing,
+       count(*) filter (where generic_disclosure_version is not null)                         as generic_ack,
+       count(*) filter (where billing_country is not null)                                    as billing_confirmed
+from user_profiles;
+-- Expect generic_ack = 0 and billing_confirmed = 0 immediately after application.
+```
 
 ---
 
