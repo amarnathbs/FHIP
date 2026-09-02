@@ -26,7 +26,25 @@
 
 **Wave 4 behavioural proof against production** was not attempted, and could not be: neither this session nor the coordinating session holds production administrator credentials. This is consistent with §23.2, which directs Wave 5's own browser testing at **DEV**, and with §29's prohibition on touching production. It is recorded here so it is not later mistaken for something this Wave verified.
 
-**`origin/main` did not move during certification** — re-checked at the end of the run and still `0e21039`, so §27's "current `origin/main` materially changes during certification" stop condition was never triggered.
+**`origin/main` moved during the privacy-closure round — assessed, not ignored.** It was `0e21039` when this Wave started and at the end of the first round. By the end of the closure round it was **`bd45308`**, six commits ahead:
+
+```
+bd45308 fix(LR-FI-1): declare `owner` on the three wealth row types
+3fa1400 fix(LR-FI-1): isolate SMSF-owned rows from household operating cash flow
+88eee33 merge: II-PC1-F2 — R6 Stale Engine-Version Consumer Review — UNCONDITIONAL FULL PASS
+7023f74 docs(ii-f2): justify lexicographic computed_at comparison in the selector
+e039776 test(ii-f2): clean up the synthetic scheme the live-DEV suite creates
+21db12c fix(ii-f2): select only the current R6 tax computation for persisted consumers
+```
+
+§27 names this as a stop-and-report condition, so it is reported rather than absorbed. **It is not material to Wave 5:**
+
+- Those six commits touch **13 files** (Investment Intelligence tax-result selection, and SMSF/household cash-flow isolation). Wave 5 touches **47**. The intersection is **empty** — verified by set intersection of the two file lists, not by inspection.
+- **Neither side adds a migration** (`git diff --name-only -- supabase/migrations` is empty for both), so the migration-collision pattern that has bitten this repository seven times is not in play.
+- No Admin page, Admin API route, capability, navigation entry or authorization path is touched by either side.
+- `git merge-tree --write-tree origin/main HEAD` exits **0** — a merge would apply cleanly with no conflict.
+
+Wave 5's certification therefore still holds against current `origin/main`. This branch was **not** rebased or merged, per §29; the Product Owner may merge from `bd45308` without reconciliation work.
 
 ---
 
