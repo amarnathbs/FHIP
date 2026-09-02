@@ -39,6 +39,12 @@ export const PUT = adminRoute(async (req: Request, { params }: { params: Promise
     return bad(`status must be one of: ${VALID_STATUSES.join(', ')}`, 422);
   }
 
+  const admin = adminClient();
+
+  const { data: before, error: beforeErr } = await admin.from('benchmark_sources').select('status').eq('id', id).maybeSingle();
+  if (beforeErr) return bad(beforeErr.message);
+  if (!before) return bad('Benchmark source not found.', 404);
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const field of WRITABLE_FIELDS) {
     if (body[field] !== undefined) patch[field] = body[field];
@@ -48,6 +54,34 @@ export const PUT = adminRoute(async (req: Request, { params }: { params: Promise
     patch.approved_at = new Date().toISOString();
   }
 
-  const { data, error } = await adminClient().from('benchmark_sources').update(patch).eq('id', id).select('*').single();
-  return error ? bad(error.message) : ok(data);
+  const { data, error } = await admin.from('benchmark_sources').update(patch).eq('id', id).select('*').single();
+  if (error) return bad(error.message);
+
+  // Admin A0.2 Wave 4 (spec §9, priorities 2/4): every status-changing
+  // action on a benchmark source (approve/suspend/reinstate) now produces
+  // immutable audit evidence, mirroring the sibling dataset lifecycle
+  // (datasets/[id]/activate, migration 0011) rather than leaving this as
+  // the one Benchmarks lifecycle action with zero audit trail. Recorded
+  // only when the status actually changed — an edit to a non-status field
+  // (e.g. methodology_notes) is not itself a lifecycle event and does not
+  // need one (see the audit inventory: AUDIT_NOT_REQUIRED for non-status
+  // field edits, AUDITED_COMPLETE for status transitions).
+  if (body.status !== undefined && body.status !== before.status) {
+    const { error: auditErr } = await admin.from('benchmark_update_runs').insert({
+      source_id: id,
+      dataset_id: null,
+      approval_status: body.status,
+      previous_version: before.status,
+      new_version: body.status,
+      audit_user: user!.id,
+    });
+    // Audit failure must never be reported as if the underlying status
+    // change failed — the write above already committed. Log and continue
+    // (same "log, don't fail the business result" discipline already used
+    // for the Resources version-snapshot failure path in
+    // app/api/admin/resources/content/[id]/workflow/route.ts).
+    if (auditErr) console.error('Benchmark source audit-log insert error:', auditErr);
+  }
+
+  return ok(data);
 });
