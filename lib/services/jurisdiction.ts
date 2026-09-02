@@ -13,12 +13,77 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // never independently read for any logic branch — it is not a second
 // source of truth, so this module deliberately never reads it.
 //
-// Only AU/IN are seeded/zod-enforced today (lib/validation/profile.ts:
-// z.enum(['AU', 'IN'])); this type is written to extend cleanly if that
-// ever grows without becoming a breaking change at every call site.
-export type CountryCode = 'AU' | 'IN';
+// G3 — Registration and Existing-User Alignment (spec section 5.3).
+//
+// THIS IS THE ONE CANONICAL AUTHORITATIVE COUNTRY REPRESENTATION for the
+// whole application. Before G3 it was `'AU' | 'IN'`, which had become a lie:
+// the G1 registry (migration 0122) already describes six countries, and G3
+// opens registration to all six. A residence country read from
+// user_profiles.country_of_residence can now legitimately be any of them.
+//
+// Deliberately derived from a single `as const` array so the runtime
+// vocabulary check (isKnownCountry) and the compile-time union can never
+// drift apart -- the exact failure mode that let 'AU' | 'IN' survive past
+// G1.
+//
+// 'GLOBAL' is NOT a member and never will be: it is a G2 landing-page
+// PRESENTATION bucket, not a country. lib/services/landingCountryContext.ts
+// keeps its own disjoint LandingPresentationCountry type, and
+// toAuthoritativeCountryCodeOrNull() there is the only bridge (GLOBAL ->
+// null). The database independently makes it impossible -- every
+// authoritative country column is char(2) with an FK to `countries`, and
+// migration 0127 additionally forbids two-letter catch-all placeholders.
+export const AUTHORITATIVE_COUNTRY_CODES = ['AU', 'IN', 'GB', 'US', 'SG', 'AE'] as const;
 
-const KNOWN_COUNTRIES: readonly CountryCode[] = ['AU', 'IN'];
+export type CountryCode = (typeof AUTHORITATIVE_COUNTRY_CODES)[number];
+
+const KNOWN_COUNTRIES: readonly CountryCode[] = AUTHORITATIVE_COUNTRY_CODES;
+
+// -----------------------------------------------------------------------------
+// The FULL/GENERIC split, at the type level
+// -----------------------------------------------------------------------------
+// Widening CountryCode alone would have been actively dangerous: dozens of
+// AU/IN domestic engines (tax, retirement, catalogue applicability, income
+// bands, statement adapters) accept a "country" and would silently have
+// started receiving 'GB'. G3 spec section 5.3 requires the opposite -- that
+// missed AU/IN assumptions FAIL COMPILATION.
+//
+// So the widened CountryCode is paired with a NARROWER named type for the two
+// countries that actually have domestic coverage. Every domestic call site
+// keeps a FullExperienceCountryCode and must narrow explicitly, at which
+// point a generic country resolves to `null` -- i.e. "unresolved" -- which
+// every one of those call sites already handles fail-closed.
+//
+// This is a type-level restatement of the database's own two-tier model
+// (migration 0127): countries.is_supported is true for AU/IN only, so the
+// ~85-table MCC backstop already rejects generic-country users outright.
+export const FULL_EXPERIENCE_COUNTRY_CODES = ['AU', 'IN'] as const;
+
+export type FullExperienceCountryCode = (typeof FULL_EXPERIENCE_COUNTRY_CODES)[number];
+
+export function isFullExperienceCountry(value: unknown): value is FullExperienceCountryCode {
+  return typeof value === 'string' && (FULL_EXPERIENCE_COUNTRY_CODES as readonly string[]).includes(value);
+}
+
+/**
+ * The single sanctioned narrowing from the authoritative six-country
+ * vocabulary down to the two countries with domestic coverage. A GENERIC
+ * country (GB/US/SG/AE) maps to `null` -- NOT to 'AU', NOT to 'IN'.
+ *
+ * This is the function that makes G3's mandatory negative controls
+ * structurally true rather than conventionally true:
+ *   - "Not IN" never becomes AU, and "not AU" never becomes IN, because
+ *     neither branch of this function can produce a country it was not
+ *     given.
+ *   - Generic countries fail closed wherever only AU/IN rules exist,
+ *     because `null` is exactly the "unresolved jurisdiction" value every
+ *     such call site already refuses to act on.
+ */
+export function toFullExperienceCountryOrNull(
+  country: CountryCode | null | undefined
+): FullExperienceCountryCode | null {
+  return isFullExperienceCountry(country) ? country : null;
+}
 
 // G0-JA-1 Wave 2: the five Product-Owner-approved canonical applicability
 // classes (01-canonical-architecture.md S7). Metadata only -- see
@@ -74,6 +139,25 @@ export async function getUserHomeCountry(
     .eq('user_id', userId)
     .maybeSingle();
   return isKnownCountry(data?.country_of_residence) ? data.country_of_residence : null;
+}
+
+/**
+ * G3: the caller's home country ONLY IF it is one of the two countries with
+ * domestic coverage (AU/IN); `null` for a GENERIC-experience country
+ * (GB/US/SG/AE) exactly as for a genuinely unresolved one.
+ *
+ * Provided so the ~8 domestic call sites that previously relied on
+ * getUserHomeCountry() returning a two-value union express their narrowing
+ * once, identically, rather than each inventing its own `=== 'IN' ? 'IN' :
+ * 'AU'`-style fallback -- the precise defect class G3's negative controls
+ * forbid. Callers that genuinely want all six countries (capability
+ * resolution, registry lookups, disclosure) keep using getUserHomeCountry().
+ */
+export async function getUserFullExperienceHomeCountry(
+  userId: string,
+  supabase: SupabaseClient
+): Promise<FullExperienceCountryCode | null> {
+  return toFullExperienceCountryOrNull(await getUserHomeCountry(userId, supabase));
 }
 
 /**

@@ -18,7 +18,7 @@
 // country, or a client-supplied "region" string as if it were confirmed
 // billing authority (spec section 17's explicit list of things that are NOT
 // billing country).
-import { isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
+import { isFullExperienceCountry, type CountryCode } from '@/lib/services/jurisdiction';
 
 export interface PriceCatalogueEntry {
   priceId: string;
@@ -61,7 +61,26 @@ export function validatePriceForBilling(params: {
 }): PriceValidationResult {
   const { billingCountry, billingConfirmed, requestedPriceId, catalogue } = params;
 
-  if (!billingConfirmed || !billingCountry || !isKnownCountry(billingCountry)) {
+  // G3 NO-REGRESSION NARROWING. This check used to read
+  // `!isKnownCountry(billingCountry)`, and isKnownCountry() covered exactly
+  // AU and IN. G3 widened that vocabulary to six countries, which would have
+  // silently CHANGED this pure function's behaviour: a confirmed GB billing
+  // country would have started falling through to the catalogue lookup and
+  // could have been allowed a GENERIC-region price, where before G3 it was
+  // always denied.
+  //
+  // That would have been a weakening of an already-certified negative
+  // control, achieved by accident, in a phase whose scope explicitly forbids
+  // "locally certified pricing or checkout" for generic countries and forbids
+  // confirming a billing country at all. So the check is pinned to the
+  // FULL-experience countries, which preserves this function's pre-G3
+  // behaviour byte-for-byte for every possible input.
+  //
+  // Generic-country billing therefore remains unreachable by three
+  // independent means: this check, the fact that
+  // /api/user/billing-country/confirm still uses the non-generic guard, and
+  // APPROVED_BILLING being false for every country in the registry.
+  if (!billingConfirmed || !billingCountry || !isFullExperienceCountry(billingCountry)) {
     return { allowed: false, reason: 'BILLING_COUNTRY_NOT_CONFIRMED' };
   }
 
