@@ -5,7 +5,9 @@
 // this app's existing INSERT/reactivation-only gating convention, e.g.
 // SMSF's trigger, migration 0084).
 import { z } from 'zod';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+// G3 section 9/10: generic-experience users may manage their own
+// declarations (see ../route.ts).
+import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 const endSchema = z.object({ end_date: z.string().date().optional() });

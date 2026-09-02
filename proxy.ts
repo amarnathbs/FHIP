@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
+import { loadCountryRegistrySnapshot } from '@/lib/services/countryGate';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -57,8 +58,34 @@ export async function proxy(request: NextRequest) {
   // reintroduce the gap silently. 'twin', 'coach' and 'settings' are retained
   // as-is: they are pre-existing entries unrelated to this fix.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights)/
+    /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights)/
   );
+
+  // ---------------------------------------------------------------------
+  // G3 section 10 — the interim pre-G4 boundary, at the routing layer
+  // ---------------------------------------------------------------------
+  // G4's application-wide capability layer does not exist yet, so every
+  // module under app/(app)/ still assumes an AU/IN domestic user. A
+  // GENERIC-experience user (GB/US/SG/AE) may therefore reach only the
+  // surfaces G3 has actually reasoned about, and is redirected to
+  // /global-setup everywhere else.
+  //
+  // This is an ALLOWLIST, and the list names what is PERMITTED. A module
+  // added tomorrow is blocked for generic users by default and must be
+  // deliberately added here (or, properly, released by G4) to become
+  // reachable — the fail-closed direction. "Do not assume that every
+  // existing module is universal."
+  //
+  // Defence in depth, not the only defence. Independently:
+  //   * every one of the ~241 country-gated API routes refuses generic users
+  //     via countryConfirmationBlockResponse()'s allowGenericExperience
+  //     default of false (lib/services/countryGate.ts), so a page that
+  //     somehow rendered would have no data to render; and
+  //   * the database refuses generic users outright on all ~85 financial
+  //     tables, because countries.is_supported remains true for AU/IN only
+  //     and MCC's is_country_confirmed() joins it (migrations 0104/0127).
+  // A bypass of this middleware alone therefore exposes nothing.
+  const isGenericAllowedRoute = /^\/(global-setup|profile|confirm-country|onboarding)/.test(pathname);
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a
   // short-lived, single-use render_token query param — this proxy only
@@ -74,7 +101,7 @@ export async function proxy(request: NextRequest) {
   if (isAppRoute && user) {
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('onboarding_completed')
+      .select('onboarding_completed, country_of_residence, country_confirmed_at')
       .eq('user_id', user.id)
       .single();
 
@@ -83,6 +110,24 @@ export async function proxy(request: NextRequest) {
     }
     if (profile?.onboarding_completed && isOnboardingRoute) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    // G3: generic-experience containment. Only evaluated for a user who has
+    // actually CONFIRMED a country — an unconfirmed user is app/(app)/
+    // layout.tsx's problem (it redirects them to /confirm-country), and
+    // pre-empting that here would produce the wrong destination.
+    //
+    // The experience level is read from the live registry, never inferred
+    // from the country code, the reporting currency, the landing cookie or
+    // the request's IP. If the registry cannot be read, `experienceLevel` is
+    // null and this branch does nothing — the request then meets the API and
+    // database gates, both of which fail closed on their own.
+    if (profile?.country_confirmed_at && profile.country_of_residence && !isGenericAllowedRoute) {
+      const registry = await loadCountryRegistrySnapshot(supabase);
+      const entry = registry?.get(String(profile.country_of_residence).trim().toUpperCase());
+      if (entry?.experienceLevel === 'GENERIC') {
+        return NextResponse.redirect(new URL('/global-setup', request.url));
+      }
     }
   }
 

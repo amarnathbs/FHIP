@@ -7,7 +7,9 @@
 // than a second application, see the RPC's own idempotent-replay branch).
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+// G3 section 10: see ../preview/route.ts. The authoritative write itself is
+// still owned entirely by confirm_primary_country_change() (migration 0122).
+import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 const confirmSchema = z.object({
