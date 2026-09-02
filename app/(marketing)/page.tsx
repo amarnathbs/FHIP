@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
+import { headers, cookies } from 'next/headers';
 import { Inter, Newsreader } from 'next/font/google';
 import LandingPage from '@/components/marketing/LandingPage';
+import { createClient } from '@/lib/supabase/server';
+import { isG2LandingLocalisationEnabled } from '@/lib/services/landingLocalisationFlag';
+import { resolveLandingCountryContextForRequest } from '@/lib/services/landingCountryContextServer';
+import { LANDING_COUNTRY_COOKIE_NAME } from '@/lib/services/landingCountryContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -55,10 +60,50 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LandingRoute() {
+// G2 — Landing-Page Localisation (spec section 4-5). Country resolution
+// only runs when the feature flag is on (default OFF — see
+// lib/services/landingLocalisationFlag.ts); with the flag off,
+// `countryContext` stays null and LandingPage renders its exact pre-G2
+// markup, so disabling the flag has zero behavioural difference from
+// before this task, with no cookie/detection code path ever touched.
+//
+// This is a server component precisely so country resolution (G1
+// authenticated lookup, registry read, cookie/header validation) happens
+// server-side before any HTML is sent — the client never re-derives or
+// second-guesses the resolved country, avoiding the "rendering
+// nondeterministic during hydration" failure mode spec section 6 warns
+// against.
+export default async function LandingRoute() {
+  const countryContext = isG2LandingLocalisationEnabled() ? await resolveServerLandingCountryContext() : null;
+
   return (
     <div className={`${inter.variable} ${newsreader.variable} ${newsreaderItalic.variable}`}>
-      <LandingPage />
+      <LandingPage countryContext={countryContext} />
     </div>
   );
+}
+
+async function resolveServerLandingCountryContext() {
+  const supabase = await createClient();
+  // A transient auth-lookup failure must degrade to "treat as anonymous",
+  // never crash the public landing page (same fail-closed principle as
+  // resolveLandingCountryContextForRequest's own internal try/catch).
+  let userId: string | null = null;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+  } catch {
+    userId = null;
+  }
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+
+  return resolveLandingCountryContextForRequest({
+    supabase,
+    userId,
+    cookieValue: cookieStore.get(LANDING_COUNTRY_COOKIE_NAME)?.value ?? null,
+    headers: headerStore,
+  });
 }
