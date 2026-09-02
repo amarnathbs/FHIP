@@ -62,6 +62,34 @@ function extractLiveValueForIntent(intentCode: string, ctx: FinancialContextObje
       return null; // DNA profile is not numeric — temporal validity governs instead
     case 'RESILIENCE_EXPLANATION':
       return ctx.resilience?.resilience_score ?? null;
+    // Module 11.4 additions — only wired where the FinancialContextObject has
+    // ONE unambiguous canonical numeric field for the block's subject. Left
+    // deliberately unwired below (falls to `default: null`) for blocks whose
+    // "headline number" cannot be picked out reliably (e.g. a multi-item
+    // strengths/priority list, an insurance data-quality state, a cross-
+    // border summary) — for those, freshness is governed by temporal
+    // validity alone (valid_from/valid_until), same as DNA_EXPLANATION above.
+    // This is the conservative direction: a block that DOES record a numeric
+    // metric_claims[0] here without a matching case below simply never
+    // matches (valuesMatch() requires a live number to compare against), so
+    // it fails closed to "not yet available" rather than ever risking a
+    // stale personalised answer being served as current.
+    case 'CASH_FLOW_EXPLANATION':
+      return ctx.cash_flow?.monthly_surplus_or_deficit ?? null;
+    case 'SAVINGS_EXPLANATION':
+      return ctx.cash_flow?.savings_rate ?? null;
+    case 'NET_WORTH_EXPLANATION':
+      return ctx.balance_sheet?.net_worth ?? null;
+    case 'ASSET_CONCENTRATION_EXPLANATION':
+      return ctx.balance_sheet?.investment_concentration ?? ctx.balance_sheet?.property_concentration ?? null;
+    case 'LIQUIDITY_EXPLANATION':
+      return ctx.resilience?.emergency_fund_months ?? null;
+    case 'DEBT_EXPLANATION':
+      return ctx.balance_sheet?.total_liabilities ?? null;
+    case 'INVESTMENT_EXPLANATION':
+      return ctx.investments?.total_investment_value ?? null;
+    case 'RETIREMENT_EXPLANATION':
+      return ctx.retirement?.retirement_balance ?? null;
     default:
       return null;
   }

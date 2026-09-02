@@ -159,3 +159,16 @@ export interface ResolveRequest {
   /** Free text — normalised/matched for DEV testing and any surface without a structured intent yet. */
   question?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Module 11.4 — additive execution policy (spec section 9). STANDARD is the
+// unmodified Module 11.2 behaviour (default, when the field is omitted) —
+// every existing caller of resolveAnswer() is unaffected. ZERO_COST_ONLY is
+// used exclusively by AIStandardQuestionService: it never changes WHICH
+// zero-cost resolver produces an answer, it only forbids the router from
+// ever reporting a path that a caller could act on to reach a provider —
+// a result that would otherwise be LIVE_AI_REQUIRED is converted to
+// RESOLUTION_UNAVAILABLE with requires_live_ai/consumes_custom_quota forced
+// false, never merely re-labelled while leaving the escalation fields true.
+// ---------------------------------------------------------------------------
+export type ResolutionPolicy = 'STANDARD' | 'ZERO_COST_ONLY';

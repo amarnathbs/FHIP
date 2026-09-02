@@ -84,6 +84,25 @@ const INTENT_DOMAIN_MAP: Record<string, ContextDomain[]> = {
   REPORT_VERSION: ['reports'],
   COUNTRIES_PRESENT: ['cross_border'],
   CURRENCIES_PRESENT: ['cross_border'],
+
+  // Module 11.4 — additive STANDARD_QUESTION_EXPLANATION_INTENTS (lib/ai/
+  // resolution/intentTaxonomy.ts). Each mirrors that intent's
+  // requires_certified_domain exactly, same convention as above.
+  SCORE_CHANGE_EXPLANATION: ['score'],
+  CASH_FLOW_EXPLANATION: ['cash_flow'],
+  SAVINGS_EXPLANATION: ['cash_flow'],
+  EXPENSE_EXPLANATION: ['cash_flow'],
+  NET_WORTH_EXPLANATION: ['balance_sheet'],
+  ASSET_CONCENTRATION_EXPLANATION: ['balance_sheet'],
+  LIQUIDITY_EXPLANATION: ['resilience'],
+  DEBT_EXPLANATION: ['resilience'],
+  INVESTMENT_EXPLANATION: ['investments'],
+  RETIREMENT_EXPLANATION: ['retirement'],
+  INSURANCE_EXPLANATION: ['insurance'],
+  GOAL_RISK_EXPLANATION: ['goals'],
+  FORECAST_SUMMARY_EXPLANATION: ['forecasts'],
+  TWIN_SUMMARY_EXPLANATION: ['financial_twin'],
+  CROSS_BORDER_SUMMARY_EXPLANATION: ['cross_border'],
 };
 
 export function resolveDomainsForMode(mode: ContextSizeMode, intentCode?: string): ContextDomain[] {
