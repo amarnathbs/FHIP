@@ -18,8 +18,11 @@ vi.mock('@/lib/supabase/server', () => ({
 // is evaluated — referencing an ordinary outer `const` from a mock factory is
 // a temporal-dead-zone hazard, not a guarantee.
 const auditSpies = vi.hoisted(() => ({
-  recordCountryAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
-  recordReportingCurrencyAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
+  // Typed via the generic rather than a named parameter so the argument shape
+  // is still available to `.mock.calls[0][0]` without declaring an unused
+  // binding.
+  recordCountryAuditEvent: vi.fn<(event: Record<string, unknown>) => Promise<void>>(async () => undefined),
+  recordReportingCurrencyAuditEvent: vi.fn<(event: Record<string, unknown>) => Promise<void>>(async () => undefined),
 }));
 vi.mock('@/lib/services/countryAudit', () => auditSpies);
 const recordCountryAuditEvent = auditSpies.recordCountryAuditEvent;

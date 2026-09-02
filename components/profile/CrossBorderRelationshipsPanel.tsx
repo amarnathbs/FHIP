@@ -67,21 +67,50 @@ export function CrossBorderRelationshipsPanel({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Fetches the caller's own declarations. Returns the rows rather than
+  // setting state itself, so the two callers can each decide what to do:
+  // the mount effect below discards a response that arrived after unmount,
+  // while the post-mutation refresh always applies.
+  async function fetchRows(): Promise<RelationshipRow[]> {
+    const res = await fetch('/api/user/cross-border-relationships');
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'LOAD_FAILED');
+    return (json.data as RelationshipRow[]) ?? [];
+  }
+
+  // Initial load. Follows this app's established effect convention (see
+  // app/(app)/profile/page.tsx): the async function is declared inside the
+  // effect and a `cancelled` flag discards a late response, so nothing is
+  // written to state after unmount.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const next = await fetchRows();
+        if (cancelled) return;
+        setRows(next);
+      } catch {
+        if (cancelled) return;
+        setRows([]);
+        setError('We could not load your declarations. Please refresh the page.');
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Refresh after the user adds or ends a declaration. Always applies — this
+  // only ever runs from an event handler on a mounted component.
+  const reload = useCallback(async () => {
     try {
-      const res = await fetch('/api/user/cross-border-relationships');
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'LOAD_FAILED');
-      setRows((json.data as RelationshipRow[]) ?? []);
+      setRows(await fetchRows());
     } catch {
       setRows([]);
       setError('We could not load your declarations. Please refresh the page.');
     }
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   // The user's own country is removed from the list rather than offered and
   // then rejected — the same rule the database enforces
@@ -108,7 +137,7 @@ export function CrossBorderRelationshipsPanel({
       setCountry('');
       setRelationshipType('');
       setStatus('Declaration added.');
-      await load();
+      await reload();
     } catch (err) {
       setError(friendly(err instanceof Error ? err.message : ''));
     } finally {
@@ -131,7 +160,7 @@ export function CrossBorderRelationshipsPanel({
         throw new Error(typeof json.error === 'string' ? json.error : 'END_FAILED');
       }
       setStatus('Declaration ended.');
-      await load();
+      await reload();
     } catch (err) {
       setError(friendly(err instanceof Error ? err.message : ''));
     } finally {
