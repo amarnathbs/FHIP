@@ -88,6 +88,15 @@ function makeFakeClient(tables: Record<string, Row[]>) {
         filtered = filtered.filter((r) => r[col] === val);
         return builder;
       },
+      // LR-FI-1: loadTwinSourceData's expense_items read now chains
+      // .neq('owner', SMSF_OWNER) so an SMSF property's housing-coded expense
+      // rows can't be read as the household's own housing cost. Implemented
+      // with real filtering semantics (not a no-op passthrough) so this fake
+      // genuinely exercises the exclusion rather than merely tolerating it.
+      neq(col: string, val: unknown) {
+        filtered = filtered.filter((r) => r[col] !== val);
+        return builder;
+      },
       order() {
         return builder;
       },

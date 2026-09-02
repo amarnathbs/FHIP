@@ -87,12 +87,12 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
     await Promise.all([
       supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
       fetchAllRows((from, to) =>
-        supabase.from('income_sources').select('source_name, amount, net_amount, frequency, master_item_key, employer_name').eq('user_id', userId).eq('is_active', true).range(from, to)
+        supabase.from('income_sources').select('source_name, amount, net_amount, frequency, master_item_key, employer_name, owner').eq('user_id', userId).eq('is_active', true).range(from, to)
       ),
       fetchAllRows((from, to) =>
         supabase
           .from('expense_items')
-          .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category')
+          .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner')
           .eq('user_id', userId)
           .eq('is_active', true)
           .range(from, to)
@@ -103,7 +103,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       fetchAllRows((from, to) =>
         supabase
           .from('liabilities')
-          .select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code')
+          .select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner')
           .eq('user_id', userId)
           .eq('is_active', true)
           .range(from, to)
@@ -127,7 +127,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       fetchAllRows((from, to) =>
         supabase
           .from('insurance_policies')
-          .select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days')
+          .select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days, owner')
           .eq('user_id', userId)
           .eq('is_active', true)
           .range(from, to)

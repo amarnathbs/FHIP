@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { SupabaseServerClient } from './dashboardData';
 import { getFxRateAudInr } from './dashboardData';
 import { computeDashboard, type DashboardSummary, computeInsuranceAdequacy } from '@/lib/engines/dashboard';
+import { SMSF_OWNER } from '@/lib/engines/householdContext';
 import { toMonthly } from '@/lib/engines/money';
 import { loadHealthScore, type HealthScorePayload } from './healthScoreData';
 import { loadResilience, type ResiliencePayload } from './resilienceData';
@@ -118,7 +119,13 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       getUserHomeCountry(userId, supabase),
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
-      supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true),
+      // LR-FI-1: this register feeds expenseHousingMonthly (housing_cost_ratio)
+      // and remittanceMonthly (remittance_burden) — both pure household
+      // operating cash flow, and both matched purely on master_item_key, so an
+      // SMSF property's 'mortgage'/'council_rates' expense row would otherwise
+      // be read as the household's own housing cost. expense_items has no
+      // balance-sheet role at all, so it is excluded at the query level.
+      supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true).neq('owner', SMSF_OWNER),
       supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
       supabase.from('retirement_members').select('member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true).eq('member_type', 'self').maybeSingle(),
       supabase.from('insurance_policies').select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days').eq('user_id', userId).eq('is_active', true),
@@ -230,13 +237,17 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
 async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClient): Promise<DashboardSummary> {
   const [profile, income, expenses, assets, liabilities, investments, retirement, insurance, goals, snapshots, fxRateAudInr] = await Promise.all([
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
-    supabase.from('income_sources').select('amount, net_amount, frequency, master_item_key, employer_name').eq('user_id', userId).eq('is_active', true),
-    supabase.from('expense_items').select('expense_name, amount, frequency, is_essential, master_item_key, expense_category').eq('user_id', userId).eq('is_active', true),
+    // LR-FI-1: `owner` is selected on the four cash-flow-bearing registers so
+    // computeDashboard() can apply the household/SMSF separation here exactly
+    // as it does for loadDashboard() — the Twin must never see a different
+    // household cash-flow figure from the Dashboard it is compared against.
+    supabase.from('income_sources').select('amount, net_amount, frequency, master_item_key, employer_name, owner').eq('user_id', userId).eq('is_active', true),
+    supabase.from('expense_items').select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner').eq('user_id', userId).eq('is_active', true),
     supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
+    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner').eq('user_id', userId).eq('is_active', true),
     supabase.from('investments').select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
     supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days').eq('user_id', userId).eq('is_active', true),
+    supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days, owner').eq('user_id', userId).eq('is_active', true),
     supabase.from('user_goals').select('goal_name, target_amount, current_amount, currency_code, target_date, priority, status').eq('user_id', userId).eq('status', 'active'),
     supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
     getFxRateAudInr(supabase),
