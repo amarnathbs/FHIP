@@ -20,6 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { countryRegistryFrom } from './support/countryRegistryFake';
 
 // Mandatory Country Confirmation reconciliation (2026-08-31): these eight
 // Resources admin GET routes are country-gated (MCC-2 — every admin route
@@ -62,24 +63,37 @@ const state: {
   profileRow: CONFIRMED_PROFILE,
 };
 
+function buildChain(result: { data: unknown }) {
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    limit: () => chain,
+    maybeSingle: async () => result,
+    then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve(result).then(res, rej),
+  };
+  return chain;
+}
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
     from(table: string) {
+      // G3 (2026-09-03): the country gate now also derives the admin's own
+      // experience level from the countries registry. Without this branch the
+      // catch-all below would hand the gate `roleRows` for `countries`, it
+      // would fail closed, and all 64 positive cases would go red again for a
+      // reason unrelated to what Wave 1 asserts — the exact failure mode the
+      // header comment above describes, one phase later.
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry as ReturnType<typeof buildChain>;
+
       const result =
         table === 'admin_users'
           ? { data: state.adminRow }
           : table === 'user_profiles'
             ? { data: state.profileRow }
             : { data: state.roleRows };
-      const chain = {
-        select: () => chain,
-        eq: () => chain,
-        limit: () => chain,
-        maybeSingle: async () => result,
-        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve(result).then(res, rej),
-      };
-      return chain;
+      return buildChain(result);
     },
   }),
 }));

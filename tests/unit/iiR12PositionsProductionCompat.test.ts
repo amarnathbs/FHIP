@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 import { GET } from '@/app/api/investment-intelligence/positions/route';
+import { countryRegistryFrom } from './support/countryRegistryFake';
 
 function rangeableQuery(pages: Array<{ data: unknown[] | null; error: { message: string } | null }>) {
   let call = 0;
@@ -45,8 +46,18 @@ function rangeableQuery(pages: Array<{ data: unknown[] | null; error: { message:
 // mockFrom to expect exactly one table name; a CONFIRMED, supported-country
 // profile response for 'user_profiles' keeps this test's original intent
 // (production-shape compatibility for ii_holding_snapshots) unaffected.
+//
+// G3 (2026-09-03): the same gate now also derives the caller's experience
+// level from the countries registry, so it issues two further reads
+// (`countries`, `country_capabilities`). Those are served from the shared
+// fixture rather than inlined here, and are intercepted BEFORE this file's
+// own `expect(table).toBe('ii_holding_snapshots')` assertion — that
+// assertion is about this route's own query, and should never have to know
+// about the shared gate's.
 function withCountryConfirmed(handleOtherTable: (table: string) => unknown) {
   return (table: string) => {
+    const registry = countryRegistryFrom(table);
+    if (registry) return registry;
     if (table === 'user_profiles') {
       return {
         select: () => ({
