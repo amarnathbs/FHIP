@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 interface ForecastResultRow {
   period_number: number;
@@ -169,6 +170,17 @@ export function RunForecastPanel({
               <p className="mt-2 font-mono text-xs text-gray-500">{topExplanation.calculation_formula}</p>
             </div>
           )}
+          {/* Module 11.5 (spec sections 39-41). Explains the CURRENTLY
+              DISPLAYED base-case forecast. It accepts no assumption, rate,
+              retirement age or scenario input — there is no such field on the
+              contextual request — so it can never run a new projection. The
+              stored commentary it surfaces preserves the forecast's own
+              uncertainty wording (spec section 40); nothing here rewrites it. */}
+          <ContextualExplain
+            targetCode="FORECAST_SUMMARY"
+            accessibleLabel="Explain what your net worth forecast means"
+            className="mt-4 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+          />
         </>
       )}
     </SectionCard>

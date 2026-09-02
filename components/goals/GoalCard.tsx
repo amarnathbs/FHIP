@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { formatMoney } from '@/lib/engines/money';
 import type { GoalPayload } from '@/lib/services/goalsData';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
+
+// The same two certified track statuses AIStandardQuestionService treats as
+// "off track" for SQ-AI-021 (its AT_RISK_STATUSES). Kept identical so the
+// control is offered exactly when the server would answer it.
+const AT_RISK_TRACK_STATUSES = new Set(['at_risk', 'off_track']);
 
 const TRACK_LABEL: Record<string, string> = {
   ahead_of_track: 'Ahead of Track',
@@ -87,9 +93,27 @@ export function GoalCard({ goal, currency }: { goal: GoalPayload; currency: 'AUD
         </p>
       )}
 
-      <Link href={`/goals/${goal.id}`} className="mt-4 inline-block text-xs font-medium text-trust hover:underline">
-        View details →
-      </Link>
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <Link href={`/goals/${goal.id}`} className="inline-block text-xs font-medium text-trust hover:underline">
+          View details →
+        </Link>
+        {/* Module 11.5 (spec sections 36-38). Rendered ONLY for a goal that is
+            genuinely at risk / off track: spec section 38 is explicit that an
+            on-track goal must not be shown an off-track explanation, so rather
+            than offering a control that would resolve to "not applicable", the
+            control is simply not offered. The server enforces the same rule
+            independently — SQ-AI-021 only ever matches the caller's own
+            off-track goals — so hiding it here is UX, not the security
+            boundary. The accessible name identifies WHICH goal (section 68). */}
+        {AT_RISK_TRACK_STATUSES.has(forecast.trackStatus) && (
+          <ContextualExplain
+            targetCode="GOAL_STATUS"
+            targetId={goal.id}
+            accessibleLabel={`Explain status for ${goal.goalName} goal`}
+            className="inline-flex min-h-[32px] items-center gap-1 text-xs font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+          />
+        )}
+      </div>
     </div>
   );
 }

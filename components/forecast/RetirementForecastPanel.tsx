@@ -84,6 +84,11 @@ export function RetirementForecastPanel({
     <SectionCard
       title="Retirement Forecast"
       description="Projected retirement readiness using your current retirement account balances and contributions."
+      // Module 11.5 (spec sections 39-41). Explains the certified retirement
+      // forecast that is already displayed. The panel's own target-method and
+      // input controls are untouched and are NOT reachable from the
+      // explanation — 11.5 never runs an alternative scenario.
+      explain={{ targetCode: 'FORECAST_RETIREMENT', accessibleLabel: 'Explain what is affecting your retirement forecast' }}
     >
       <div className="flex flex-wrap items-end gap-3">
         <div>

@@ -22,7 +22,11 @@ export function DataQualityPanel({ dataQuality, dataConfidencePct }: { dataQuali
   const confidenceTier: 'high' | 'medium' | 'low' = dataConfidencePct >= 80 ? 'high' : dataConfidencePct >= 50 ? 'medium' : 'low';
 
   return (
-    <SectionCard title="Data Quality" description={confidenceExplanation(confidenceTier, limitingArea)}>
+    <SectionCard
+      title="Data Quality"
+      description={confidenceExplanation(confidenceTier, limitingArea)}
+      explain={{ targetCode: 'DASHBOARD_DATA_QUALITY', accessibleLabel: 'Explain your data quality state' }}
+    >
       <ul className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
         {rows.map((row) => (
           <li key={row.area} className="flex items-center justify-between gap-2 text-sm">

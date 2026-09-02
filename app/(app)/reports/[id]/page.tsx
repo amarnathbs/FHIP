@@ -34,11 +34,16 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
 
+        {/* Module 11.5 (spec sections 44-45, 98): contextual Explain controls
+            are enabled on the INTERACTIVE web report only. The print/PDF route
+            (app/(print)/reports/[id]/print/page.tsx) deliberately does not
+            pass this, so the generated PDF is unchanged. */}
         <ReportPreview
           report={result.report}
           sections={result.sections}
           currency={result.report.reporting_currency as 'AUD' | 'INR'}
           content={content}
+          enableContextualExplain
         />
       </div>
   );
