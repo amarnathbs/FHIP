@@ -2,7 +2,14 @@ import { createClient } from '@/lib/supabase/server';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 export const ok = (data: unknown) => Response.json({ data });
-export const bad = (msg: string, code = 400) => Response.json({ error: msg }, { status: code });
+// `errorCode` is optional and additive (PC1-D2/D4): when omitted, behaviour
+// is byte-identical to before (`{ error: msg }`) for every one of this
+// helper's existing call sites. When a stable machine-readable code is
+// supplied, the body becomes `{ error: CODE, message: msg }` — the
+// contract PC1's ISIN/date validation error responses use so a client can
+// branch on `error` without parsing prose.
+export const bad = (msg: string, code = 400, errorCode?: string) =>
+  Response.json(errorCode ? { error: errorCode, message: msg } : { error: msg }, { status: code });
 
 export async function requireUser() {
   const supabase = await createClient();

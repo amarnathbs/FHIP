@@ -33,11 +33,44 @@ function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
-function isValidCalendarDate(year: number, month: number, day: number): boolean {
+export function isValidCalendarDate(year: number, month: number, day: number): boolean {
   if (month < 1 || month > 12) return false;
   if (day < 1) return false;
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return day <= daysInMonth;
+}
+
+export interface ValidatedIsoDate {
+  ok: true;
+  iso: string; // YYYY-MM-DD, unchanged from input once validated
+}
+export interface InvalidIsoDate {
+  ok: false;
+  error: string;
+}
+
+// PC1-D4 — strict manual-entry date boundary. Unlike parseStatementDate
+// above (which tolerantly accepts several REAL statement-printed formats
+// because a parser has no choice about what a provider prints), a
+// user-facing manual-entry API sets its own contract and should accept
+// exactly one unambiguous shape: ISO 8601 calendar dates (YYYY-MM-DD).
+// This is intentionally the ONLY gate a manual transaction/as-of date must
+// pass before it reaches a DB write — reject here, before Postgres ever
+// sees the value, so an impossible or malformed date never surfaces a raw
+// database error to the client (spec section 16/17).
+export function validateIsoDateStrict(raw: unknown): ValidatedIsoDate | InvalidIsoDate {
+  if (typeof raw !== 'string') return { ok: false, error: 'Date must be a string in YYYY-MM-DD format.' };
+  const s = raw.trim();
+  if (s.length === 0) return { ok: false, error: 'Date is required.' };
+  if (s.length > 32) return { ok: false, error: 'Date value is too long.' };
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return { ok: false, error: 'Date must be in YYYY-MM-DD format.' };
+  const [, y, mo, d] = m;
+  const year = Number(y);
+  const month = Number(mo);
+  const day = Number(d);
+  if (!isValidCalendarDate(year, month, day)) return { ok: false, error: 'Date is not a valid calendar date.' };
+  return { ok: true, iso: `${y}-${mo}-${d}` };
 }
 
 /**

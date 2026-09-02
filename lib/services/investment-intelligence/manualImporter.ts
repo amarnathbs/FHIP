@@ -38,6 +38,100 @@ export interface ManualImportResult {
   error: string | null;
 }
 
+// PC1-D3 — idempotent-replay result builder. Shared by (a) the up-front
+// checksum lookup below and (b) the race-losing branch of the insert
+// itself (two concurrent identical submissions can both pass the up-front
+// SELECT before either INSERTs — see the 23505 handling below). Populates
+// EVERY field from the already-committed chain, including instrumentId and
+// transactionIds, which the previous implementation left null/empty on
+// replay — that made a perfectly safe idempotent replay look like a
+// failure to submitManualDirectPosition's `!importResult.instrumentId`
+// error branch, discarding unitsAfter/valueAfter on a harmless resubmit.
+async function buildReplayResult(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  institutionName: string,
+  sourceDocumentId: string
+): Promise<ManualImportResult> {
+  const { data: account } = await admin
+    .from('ii_accounts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('institution_name', institutionName)
+    .maybeSingle();
+  const { data: snapshot } = await admin
+    .from('ii_holding_snapshots')
+    .select('id, instrument_id')
+    .eq('user_id', userId)
+    .eq('source_document_id', sourceDocumentId)
+    .maybeSingle();
+  const { data: txnRows } = await admin
+    .from('ii_transactions')
+    .select('id, instrument_id')
+    .eq('user_id', userId)
+    .eq('source_document_id', sourceDocumentId)
+    .order('id', { ascending: true });
+  const instrumentId = (snapshot?.instrument_id as string | undefined) ?? (txnRows?.[0]?.instrument_id as string | undefined) ?? null;
+
+  return {
+    sourceDocumentId,
+    accountId: (account?.id as string) ?? null,
+    instrumentId,
+    transactionIds: (txnRows ?? []).map((r) => r.id as string),
+    holdingSnapshotId: (snapshot?.id as string) ?? null,
+    reconciliationCaseId: null,
+    wasNewDocument: false,
+    error: null,
+  };
+}
+
+// PC1-D3 — deterministic storage_path this importer always writes a
+// fixture's ii_source_documents row under (see the INSERT below). Exported
+// so a caller that knows its own stable `fixtureKey` BEFORE building the
+// full fixture object (manualDirectPositionService.ts) can check for an
+// existing submission by that key alone, without needing content-derived
+// fields that depend on current DB state (see findExistingManualImportByFixtureKey's
+// doc comment for why that distinction is the actual D3 fix).
+export function manualFixtureStoragePath(userId: string, fixtureKey: string): string {
+  return `${userId}/fixtures/${fixtureKey}.json`;
+}
+
+// PC1-D3 — the ROOT CAUSE this closes: computeFixtureChecksum hashes the
+// ENTIRE fixture, including manualDirectPositionService.ts's `holdingSnapshot`
+// (unitsAfter/valueAfter), which are DERIVED from the CURRENT position read
+// fresh from the DB at call time. Resubmitting the exact same raw user
+// input a second time — AFTER the first submission has already
+// committed — makes readCurrentPosition() see a DIFFERENT "current"
+// position than the first call did, so the derived holdingSnapshot (and
+// therefore the whole-fixture checksum) differs even though the user
+// submitted nothing new. That silently defeated import-level idempotency
+// for buy/sale actions specifically (live-DEV-reproduced: a sequential
+// exact-duplicate 'buy' created a SECOND ii_source_documents/transaction
+// with a doubled cumulative unitsAfter, instead of replaying the first).
+//
+// Fix: check for an existing submission using ONLY the caller's stable,
+// content-derived `fixtureKey` (deterministic from the RAW input alone —
+// stableFixtureKey() in manualDirectPositionService.ts never depends on
+// current position) — BEFORE any derived/current-state-dependent value is
+// computed. `storage_path` is where that key already deterministically
+// lives once the first submission wrote it.
+export async function findExistingManualImportByFixtureKey(userId: string, fixtureKey: string): Promise<{ id: string } | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('ii_source_documents')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('storage_path', manualFixtureStoragePath(userId, fixtureKey))
+    .maybeSingle();
+  return (data as { id: string } | null) ?? null;
+}
+
+/** Public wrapper around buildReplayResult for a caller (manualDirectPositionService.ts) that found an existing submission via findExistingManualImportByFixtureKey. */
+export async function resolveManualImportReplay(userId: string, institutionName: string, sourceDocumentId: string): Promise<ManualImportResult> {
+  const admin = createAdminClient();
+  return buildReplayResult(admin, userId, institutionName, sourceDocumentId);
+}
+
 export async function importManualFixture(userId: string, fixture: IiManualFixture): Promise<ManualImportResult> {
   const admin = createAdminClient();
   const empty: ManualImportResult = {
@@ -64,25 +158,7 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
     .maybeSingle();
 
   if (existingDoc) {
-    const { data: account } = await admin
-      .from('ii_accounts')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('institution_name', fixture.account.institutionName)
-      .maybeSingle();
-    const { data: snapshot } = await admin
-      .from('ii_holding_snapshots')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('source_document_id', existingDoc.id)
-      .maybeSingle();
-    return {
-      ...empty,
-      sourceDocumentId: existingDoc.id as string,
-      accountId: (account?.id as string) ?? null,
-      holdingSnapshotId: (snapshot?.id as string) ?? null,
-      wasNewDocument: false,
-    };
+    return buildReplayResult(admin, userId, fixture.account.institutionName, existingDoc.id as string);
   }
 
   // Resolve the superseded document, if this fixture represents a refreshed
@@ -125,7 +201,21 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
     })
     .select('id')
     .single();
-  if (docErr || !doc) return { ...empty, error: docErr?.message ?? 'Source document creation failed' };
+  if (docErr?.code === '23505') {
+    // PC1-D3 concurrency — the up-front SELECT above found nothing, but a
+    // concurrent duplicate submission won the race and committed first;
+    // `uidx_ii_source_documents_user_checksum` (migration 0032) rejected
+    // this INSERT. This is NOT a real error — it is exactly the
+    // idempotent-replay case, just discovered one step later than usual —
+    // so re-look-up the winner and return the same safe replay result a
+    // sequential resubmission would have gotten, never the raw
+    // unique-constraint text (no internal schema/constraint detail must
+    // reach the client).
+    const { data: winner } = await admin.from('ii_source_documents').select('id').eq('user_id', userId).eq('checksum', checksum).maybeSingle();
+    if (winner) return buildReplayResult(admin, userId, fixture.account.institutionName, winner.id as string);
+    return { ...empty, error: 'This submission could not be recorded — please retry.' };
+  }
+  if (docErr || !doc) return { ...empty, error: docErr ? 'This submission could not be recorded — please retry.' : 'Source document creation failed' };
 
   await emitAuditEvent({
     userId,

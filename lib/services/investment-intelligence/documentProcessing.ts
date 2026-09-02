@@ -34,7 +34,7 @@ import { downloadSourceDocumentObject } from './storage';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
 import type { ParsedInstrumentRecord } from './parsers/types';
-import { resolveOrCreateAccount } from './accountResolution';
+import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
 import { reconcilePosition, determineHistoryCompleteness, type ReconciliationTransactionInput } from './reconciliation';
@@ -267,31 +267,37 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // --- 3. Folio/account resolution ---------------------------------------
   const countryCode = doc.country_code as string;
   const currencyCode = countryCode === 'IN' ? 'INR' : 'AUD';
-  const accountIdByFolio = new Map<string, string>();
+  // PC1-D1 fix — see accountResolution.ts's planFolioAccountResolution()
+  // doc comment for the full defect history (the old
+  // `acc.amcName || parsed.transactions[0]?.scheme.amcName` attributed
+  // every folio in a multi-AMC document to whichever AMC owned the
+  // document's first transaction). Institution/AMC attribution is now
+  // computed as a pure, unit-tested function of this document's own
+  // parsed evidence, keyed by DISTINCT (folio, amcName) pairs.
+  const resolutionPlan = planFolioAccountResolution({ accounts: parsed.accounts, transactions: parsed.transactions, holdings: parsed.holdings });
+  const accountIdByFolioAmc = new Map<string, string>(); // key = assignment.key (accountResolutionKey(folioNumber, amcName))
   let reconciliationCasesOpened = 0;
 
-  for (const acc of parsed.accounts) {
-    const folioKey = acc.folioNumber ?? '__no_folio__';
-    if (accountIdByFolio.has(folioKey)) continue;
+  for (const assignment of resolutionPlan.assignments) {
     const resolved = await resolveOrCreateAccount(userId, {
       accountType: 'mf_folio',
-      institutionName: acc.amcName || (parsed.transactions[0]?.scheme.amcName ?? 'Unknown AMC'),
+      institutionName: assignment.amcName,
       countryCode,
       currencyCode,
-      folioNumber: acc.folioNumber,
-      accountNumberMasked: acc.accountNumberMasked,
+      folioNumber: assignment.folioNumber,
+      accountNumberMasked: assignment.accountNumberMasked,
       ownerMemberId: (doc.owner_member_id as string | null) ?? null,
       sourceDocumentId,
     });
     if (resolved.accountId) {
-      accountIdByFolio.set(folioKey, resolved.accountId);
-      await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: acc.folioNumber, created: resolved.created, parseRunId } });
+      accountIdByFolioAmc.set(assignment.key, resolved.accountId);
+      await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId } });
     }
   }
 
   const ownerUnresolved = !doc.owner_member_id;
   if (ownerUnresolved) {
-    for (const [, accountId] of accountIdByFolio) {
+    for (const [, accountId] of accountIdByFolioAmc) {
       const caseId = await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
@@ -485,8 +491,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   }
 
   for (const t of parsed.transactions) {
-    const folioKey = t.folioNumber ?? '__no_folio__';
-    const accountId = accountIdByFolio.get(folioKey);
+    const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
     const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
     if (!accountId || !instrumentId) continue; // account/instrument unresolved — already logged as a reconciliation case above; skip writing an orphaned transaction
 
@@ -645,8 +650,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   // --- 6. Holding snapshots -------------------------------------------------
   for (const h of parsed.holdings) {
-    const folioKey = h.folioNumber ?? '__no_folio__';
-    const accountId = accountIdByFolio.get(folioKey);
+    const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(h.folioNumber, h.scheme.amcName));
     const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
     if (!accountId || !instrumentId) continue;
 
@@ -675,7 +679,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // --- 7. Reconciliation + certification, per position ----------------------
   for (const [key, instrumentId] of instrumentIdByKey) {
     void key;
-    for (const [, accountId] of accountIdByFolio) {
+    for (const [, accountId] of accountIdByFolioAmc) {
       await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, instrumentUnresolvedKeys.size > 0);
     }
   }
@@ -710,7 +714,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       document_type_detected: parsed.metadata.documentTypeDetected,
       format_version_detected: parsed.metadata.formatVersionDetected,
       extraction_method: extractionMethod,
-      accounts_found: accountIdByFolio.size,
+      accounts_found: accountIdByFolioAmc.size,
       schemes_found: uniqueSchemes.size,
       transactions_found: parsed.transactions.length,
       holdings_found: parsed.holdings.length,
@@ -736,7 +740,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     summary: {
       sourceDetected: detection.detection.sourceKey,
       sourceConfidence: detection.detection.confidence,
-      accountsFound: accountIdByFolio.size,
+      accountsFound: accountIdByFolioAmc.size,
       schemesFound: uniqueSchemes.size,
       transactionsFound: parsed.transactions.length,
       holdingsFound: parsed.holdings.length,

@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return bad(parsed.error.message, 422);
 
   const result = await submitManualDirectPosition(user.id, parsed.data);
-  if (result.validationError) return bad(result.validationError, 422);
+  if (result.validationError) return bad(result.validationError, 422, result.validationErrorCode ?? undefined);
   if (result.error) return bad(result.error, 400);
 
   return ok({
