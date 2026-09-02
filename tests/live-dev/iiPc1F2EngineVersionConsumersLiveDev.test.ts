@@ -277,10 +277,23 @@ afterAll(async () => {
 
     await admin.auth.admin.deleteUser(userId);
   }
-  // Reference data this suite created (instrument-scoped, not user-scoped).
+  // Reference data this suite created. NOTE: these are INSTRUMENT-scoped, not
+  // user-scoped, so deleting the synthetic users does not reach them — and
+  // `ii_instruments` itself is a shared canonical catalogue that CAMS
+  // ingestion appends to. A user-scoped cleanup alone therefore leaves an
+  // orphan scheme row behind; this suite removes its own, and only after
+  // confirming nothing still references it.
   for (const instrumentId of cleanupInstrumentIds) {
     await admin.from('ii_exit_load_schedules').delete().eq('instrument_id', instrumentId);
     await admin.from('ii_scheme_tax_classification').delete().eq('instrument_id', instrumentId);
+    await admin.from('ii_prices_nav').delete().eq('instrument_id', instrumentId);
+
+    let refs = 0;
+    for (const t of ['ii_transactions', 'ii_holding_snapshots', 'ii_tax_lots', 'ii_capital_gains_computations', 'ii_scheme_tax_classification', 'ii_exit_load_schedules', 'ii_prices_nav']) {
+      const { count } = await admin.from(t).select('id', { count: 'exact', head: true }).eq('instrument_id', instrumentId);
+      refs += count ?? 0;
+    }
+    if (refs === 0) await admin.from('ii_instruments').delete().eq('id', instrumentId);
   }
 
   // Zero-residue proof (dispatch §35) — freshly queried, never inferred from
@@ -298,11 +311,16 @@ afterAll(async () => {
     expect(authUser?.user ?? null, `residual auth user ${userId}`).toBeNull();
   }
   for (const instrumentId of cleanupInstrumentIds) {
-    const { count: elc } = await admin.from('ii_exit_load_schedules').select('id', { count: 'exact', head: true }).eq('instrument_id', instrumentId);
-    expect(elc ?? 0, `residual ii_exit_load_schedules for ${instrumentId}`).toBe(0);
-    const { count: scc } = await admin.from('ii_scheme_tax_classification').select('id', { count: 'exact', head: true }).eq('instrument_id', instrumentId);
-    expect(scc ?? 0, `residual ii_scheme_tax_classification for ${instrumentId}`).toBe(0);
+    for (const t of ['ii_exit_load_schedules', 'ii_scheme_tax_classification', 'ii_prices_nav']) {
+      const { count } = await admin.from(t).select('id', { count: 'exact', head: true }).eq('instrument_id', instrumentId);
+      expect(count ?? 0, `residual ${t} for ${instrumentId}`).toBe(0);
+    }
+    const { count: ic } = await admin.from('ii_instruments').select('id', { count: 'exact', head: true }).eq('id', instrumentId);
+    expect(ic ?? 0, `residual ii_instruments row ${instrumentId}`).toBe(0);
   }
+  // No synthetic scheme may survive under this suite's naming, whatever id it got.
+  const { data: strayInstruments } = await admin.from('ii_instruments').select('id, instrument_name').ilike('instrument_name', 'F2 Alpha%');
+  expect(strayInstruments ?? [], 'residual F2 synthetic instruments').toHaveLength(0);
 
   // Evidence is written to a file rather than stdout: vitest suppresses hook
   // console output on a passing run, which is exactly the run whose evidence
