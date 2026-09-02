@@ -4,6 +4,7 @@ import { METRIC_CATEGORY_LABEL, COMPARISON_STATUS_LABEL, COHORT_TIER_LABEL, BENC
 import type { StoredTwinDetail } from '@/lib/services/financialTwinService';
 import { Stat } from '@/components/dashboard/SectionCard';
 import { formatDateShort } from '@/lib/engines/date';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 const STATUS_COLOR: Record<ComparisonStatus, string> = {
   materially_ahead: 'text-green-700 bg-green-50',
@@ -42,6 +43,16 @@ export function TwinDetailView({ twin, currency }: { twin: StoredTwinDetail; cur
               Cohort tier: {twin.cohortTier ? COHORT_TIER_LABEL[twin.cohortTier as 1 | 2 | 3 | 4 | 5] : '—'} · Generated{' '}
               {formatDateShort(twin.createdAt, currency)}
             </p>
+            {/* Module 11.5 (spec sections 42-43). Explains the household's OWN
+                certified Twin comparison. When the Twin domain is unavailable
+                the server returns a controlled unavailable state — generic
+                benchmark education is never substituted for a personal
+                comparison, and no benchmark is ever invented. */}
+            <ContextualExplain
+              targetCode="TWIN_COMPARISON"
+              accessibleLabel="Explain how you compare with your Financial Twin"
+              className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+            />
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -49,7 +60,10 @@ export function TwinDetailView({ twin, currency }: { twin: StoredTwinDetail; cur
           <Stat label="Ahead of benchmark" value={String(twin.aheadCount)} />
           <Stat label="Broadly aligned" value={String(twin.alignedCount)} />
           <Stat label="Below benchmark" value={String(twin.behindCount)} />
-          <Stat label="Benchmark confidence" value={twin.overallConfidence !== null ? `${twin.overallConfidence.toFixed(0)}%` : '—'} />
+          <div>
+            <Stat label="Benchmark confidence" value={twin.overallConfidence !== null ? `${twin.overallConfidence.toFixed(0)}%` : '—'} />
+            <ContextualExplain targetCode="TWIN_CONFIDENCE" accessibleLabel="Explain what your Twin benchmark confidence means" />
+          </div>
         </div>
       </section>
 

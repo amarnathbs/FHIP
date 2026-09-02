@@ -11,6 +11,7 @@ import { CheckInsPanel } from '@/components/score/CheckInsPanel';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { formatDateShort } from '@/lib/engines/date';
 import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 export default async function ScorePage() {
   const supabase = await createClient();
@@ -41,6 +42,9 @@ export default async function ScorePage() {
           <p className="mt-1 text-muted">
             One clear measure of your overall financial position, explained component by component.
           </p>
+          {/* Spec section 22 — the ordinary, non-Premium educational link
+              stays exactly as it was. The Premium personalised "Why?" below is
+              an addition beside it, never a replacement for it. */}
           <WhatDoesThisMean contextKey="scores.financial_health_score" compact={false} />
         </div>
 
@@ -52,6 +56,13 @@ export default async function ScorePage() {
               statusBand={payload.statusBand}
               eligibility={payload.eligibility}
             />
+            {/* Module 11.5 (spec section 28) — the flagship contextual entry
+                point: "Why is my score 58?" answered where the score is shown. */}
+            <ContextualExplain
+              targetCode="SCORE_OVERALL"
+              accessibleLabel="Explain why your Financial Health Score is what it is"
+              className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+            />
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="rounded-card border bg-white p-4">
@@ -59,6 +70,9 @@ export default async function ScorePage() {
               <p className="text-lg font-semibold text-ink">
                 {payload.scoreChange !== null ? `${payload.scoreChange >= 0 ? '+' : ''}${payload.scoreChange.toFixed(1)}` : '—'}
               </p>
+              {/* Spec section 29 — returns NOT_APPLICABLE, never an invented
+                  reason, when there is no prior comparable score. */}
+              <ContextualExplain targetCode="SCORE_CHANGE" accessibleLabel="Explain why your Financial Health Score changed" />
             </div>
             <div className="rounded-card border bg-white p-4">
               <p className="text-xs text-muted">Financial data confidence</p>

@@ -317,11 +317,36 @@ export const STANDARD_QUESTION_EXPLANATION_INTENTS: IntentDefinition[] = [
   whyExp('DATA_QUALITY_SUMMARY_EXPLANATION', 'DATA_QUALITY', [], 'A stored, grounded explanation of current data-quality limitations.'),
 ];
 
+// ---------------------------------------------------------------------------
+// F. Module 11.5 — contextual Explain / Why? intents (spec section 10:
+// "If a contextual UI target genuinely requires an intent not represented by
+// the existing 25 standard questions: add only the narrow controlled intent
+// needed").
+//
+// Exactly ONE was needed. Every other Module 11.5 contextual target composes
+// intents already declared above — the DNA, Resilience, data-quality, Twin-
+// confidence and report-period targets all map onto existing DETERMINISTIC_
+// INTENTS / KNOWLEDGE_INTENTS / WHY_EXPLANATION_INTENTS / STANDARD_QUESTION_
+// EXPLANATION_INTENTS entries.
+//
+// `report_reading_summary` is the one Module 11.3 Insight Pack block
+// (lib/ai/insightPack/types.ts PACK_BLOCK_CODES) that had no intent code at
+// all, so its validated, grounded, ALREADY-GENERATED content was unreachable
+// by any resolver. This intent makes exactly that block reachable — it
+// declares STORED_PERSONALISED as its only resolver, so it can never reach a
+// provider, and when no compatible grounded block exists it simply misses and
+// the contextual layer reports INSIGHT_PREPARING.
+// ---------------------------------------------------------------------------
+export const CONTEXTUAL_EXPLANATION_INTENTS: IntentDefinition[] = [
+  whyExp('REPORT_READING_EXPLANATION', 'REPORT', ['reports'], 'A stored, grounded explanation of how to read the household’s current report.'),
+];
+
 export const ALL_INTENTS: IntentDefinition[] = [
   ...DETERMINISTIC_INTENTS,
   ...KNOWLEDGE_INTENTS,
   ...WHY_EXPLANATION_INTENTS,
   ...STANDARD_QUESTION_EXPLANATION_INTENTS,
+  ...CONTEXTUAL_EXPLANATION_INTENTS,
   ...BOUNDARY_INTENTS,
 ];
 

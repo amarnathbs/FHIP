@@ -34,6 +34,22 @@ export interface AiPlatformControls {
   live_provider_enabled: boolean;
   batch_generation_enabled: boolean;
   scenario_ai_enabled: boolean;
+  /**
+   * Module 11.5 (spec sections 58-59) — AI_CONTEXTUAL_EXPLANATIONS_ENABLED.
+   *
+   * KILL-SWITCH SEMANTICS, stated exactly (spec section 59):
+   *   ai_globally_enabled = false  -> contextual explanations STOP (they are
+   *       an AI-surfaced feature and the global switch outranks everything).
+   *   live_provider_enabled = false -> contextual explanations CONTINUE.
+   *       11.5 resolves only from certified deterministic data, approved
+   *       Knowledge Base content and already-validated stored Insight Pack
+   *       blocks; it never invokes a provider, so disabling live providers
+   *       must not disable it. This is asserted as a test, not just a comment.
+   *   contextual_explanations_enabled = false -> contextual explanations
+   *       STOP, while every ordinary financial module keeps working and the
+   *       Module 11.4 standard question library is unaffected.
+   */
+  contextual_explanations_enabled: boolean;
   // Spec section 18.
   max_concurrent_requests_per_subject: number;
   concurrency_lease_seconds: number;
@@ -122,6 +138,7 @@ export type PlatformControlsPatch = Partial<
     | 'live_provider_enabled'
     | 'batch_generation_enabled'
     | 'scenario_ai_enabled'
+    | 'contextual_explanations_enabled'
     | 'max_concurrent_requests_per_subject'
     | 'concurrency_lease_seconds'
     | 'max_context_tokens'
@@ -391,6 +408,7 @@ export interface AiUsageDashboard {
     live_provider_enabled: boolean;
     batch_generation_enabled: boolean;
     scenario_ai_enabled: boolean;
+    contextual_explanations_enabled: boolean;
   } | null;
 }
 
@@ -497,6 +515,7 @@ export async function buildUsageDashboard(billingPeriod: string): Promise<AiUsag
           live_provider_enabled: controls.live_provider_enabled,
           batch_generation_enabled: controls.batch_generation_enabled,
           scenario_ai_enabled: controls.scenario_ai_enabled,
+          contextual_explanations_enabled: controls.contextual_explanations_enabled,
         }
       : null,
   };

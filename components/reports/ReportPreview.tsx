@@ -21,6 +21,7 @@ import {
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { ReportTrendChart, ReportScenarioBarChart } from '@/components/forecast/ForecastReportCharts';
 import type { ReportContent } from '@/lib/services/reportContentData';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -116,12 +117,33 @@ export function ReportPreview({
   sections,
   currency,
   content,
+  enableContextualExplain = false,
 }: {
   report: ReportRow;
   sections: BuiltSectionLike[];
   currency: 'AUD' | 'INR';
   content: ReportContent;
+  /**
+   * Module 11.5 (spec sections 44-45, 98). OPT-IN, default OFF.
+   *
+   * This component is shared between the interactive web report
+   * (app/(app)/reports/[id]/page.tsx) and the print/PDF renderer
+   * (app/(print)/reports/[id]/print/page.tsx). Spec section 98 is explicit
+   * that 11.5 must not alter report generation or redesign PDF navigation, so
+   * only the web view opts in. The print path passes nothing and renders
+   * byte-identically to before — no interactive control can leak into a PDF.
+   *
+   * Nothing about report CALCULATION, section building or export changes here
+   * (spec sections 45, 115); this adds display-only controls beside existing
+   * headings.
+   */
+  enableContextualExplain?: boolean;
 }) {
+  // Every report Explain control is bound to THIS report's id, so the server
+  // resolves within this report's own certified context and can decide
+  // current-vs-historical for itself (spec sections 46-48).
+  const reportExplain = (targetCode: string, accessibleLabel: string) =>
+    enableContextualExplain ? { targetCode, accessibleLabel, targetId: report.id } : undefined;
   const byCode = (code: string) => sections.find((s) => s.sectionCode === code);
   const fmt = (n: unknown) => formatMoneyWhole(Number(n ?? 0), currency);
 
@@ -211,6 +233,14 @@ export function ReportPreview({
           Reporting currency: {content.currencyName(currency)} — {currency}
         </p>
         <p className="mt-2 text-xs font-medium text-gray-400">Confidential — prepared for personal use</p>
+        {enableContextualExplain && (
+          <ContextualExplain
+            targetCode="REPORT_OVERVIEW"
+            targetId={report.id}
+            accessibleLabel="Explain what period and data this report covers"
+            className="mt-3 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+          />
+        )}
       </div>
       <div className="report-section rounded-card border bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-900">About this report</h2>
@@ -257,6 +287,13 @@ export function ReportPreview({
                 {scoreEligibility.state !== 'not_yet_scored' && (
                   <div className="rounded-card border bg-white p-6">
                     <p className="text-sm text-gray-600">{content.scoreGaugeExplanation}</p>
+                    {enableContextualExplain && (
+                      <ContextualExplain
+                        targetCode="REPORT_SCORE"
+                        targetId={report.id}
+                        accessibleLabel="Explain the Financial Health Score in this report"
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -511,7 +548,11 @@ export function ReportPreview({
         )}
 
         {execSummary && (
-          <SectionCard title="Core figures" className="report-section">
+          <SectionCard
+            title="Core figures"
+            className="report-section"
+            explain={reportExplain('REPORT_CASH_FLOW', 'Explain the cash-flow figures in this report')}
+          >
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <MetricExplainer label="Net monthly income" value={fmt(cashFlowChart?.netMonthlyIncome)} meaning={content.coreFigureDefinition('netIncome')} />
               <MetricExplainer label="Monthly expenses" value={fmt(cashFlowChart?.totalMonthlyOutflow)} meaning={content.coreFigureDefinition('expenses')} />

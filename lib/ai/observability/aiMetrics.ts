@@ -45,14 +45,29 @@ export type AIMetricName =
   | 'resolver_unsupported'
   | 'resolver_unavailable'
   | 'resolver_partial'
-  | 'ai_avoided_calls';
+  | 'ai_avoided_calls'
+  // Module 11.5 — contextual Explain / Why? (spec sections 60-62).
+  | 'contextual_explain_impression'
+  | 'contextual_explain_selected'
+  | 'contextual_explain_resolved'
+  | 'contextual_explain_unavailable'
+  | 'contextual_explain_premium_blocked'
+  | 'contextual_provider_calls_avoided'
+  | 'contextual_stored_answer_reuse';
 
 /**
  * The ONLY label keys that may accompany a metric. Everything else is dropped
  * silently rather than sanitised, because a value we did not anticipate is a
  * value we cannot vouch for.
  */
-const ALLOWED_LABELS = new Set(['reason', 'capability', 'request_class', 'usage_outcome', 'task_type', 'provider', 'model', 'outcome', 'intent_family', 'resolution_type']);
+const ALLOWED_LABELS = new Set([
+  'reason', 'capability', 'request_class', 'usage_outcome', 'task_type', 'provider', 'model', 'outcome', 'intent_family', 'resolution_type',
+  // Module 11.5 dimensions (spec section 60). All four are closed, non-personal
+  // vocabularies: a module name, a registry target code, an availability enum
+  // and a current-vs-historical marker. No entity id and no financial value can
+  // reach here — neither is an accepted label key.
+  'module', 'target_code', 'availability', 'resolution_origin', 'snapshot_context',
+]);
 
 export type AIMetricLabels = Record<string, string | number | boolean | null | undefined>;
 
@@ -189,4 +204,100 @@ export function recordResolutionMetric(input: {
     case 'UNAVAILABLE': recordAiMetric('resolver_unavailable', labels); break;
     default: break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Module 11.5 — contextual Explain / Why? metrics (spec sections 60-62).
+//
+// AVOIDED-CALL HONESTY (spec section 61). `contextual_provider_calls_avoided`
+// is incremented exactly ONCE per contextual explanation that a user actively
+// requested AND that resolved to a real answer. It is deliberately NOT
+// incremented when:
+//   - an Explain control is merely rendered (that is
+//     `contextual_explain_impression`, a separate counter);
+//   - a request resolved to an unavailable/preparing/not-applicable state;
+//   - a Free user was shown the Premium gate.
+//
+// It is also deliberately a SEPARATE counter from `ai_avoided_calls`. The
+// router already increments that one per resolved personalised COMPONENT, so
+// a three-component contextual answer moves it by three. Counting one
+// contextual explanation as three avoided provider calls would overstate the
+// saving, so section 62's Contextual Explanation Zero-Cost Resolution Rate is
+// computed from this per-explanation counter instead.
+// ---------------------------------------------------------------------------
+export function recordContextualExplanationMetric(input: {
+  event: 'impression' | 'selected' | 'resolved' | 'unavailable' | 'premium_blocked';
+  module: string;
+  targetCode: string;
+  availability?: string;
+  resolutionOrigin?: string;
+  historicalContext?: boolean;
+  storedAnswerUsed?: boolean;
+}): void {
+  const labels: AIMetricLabels = {
+    module: input.module,
+    target_code: input.targetCode,
+    availability: input.availability,
+    resolution_origin: input.resolutionOrigin,
+    snapshot_context: input.historicalContext === undefined ? undefined : input.historicalContext ? 'historical' : 'current',
+  };
+
+  switch (input.event) {
+    case 'impression':
+      recordAiMetric('contextual_explain_impression', labels);
+      return;
+    case 'selected':
+      recordAiMetric('contextual_explain_selected', labels);
+      return;
+    case 'premium_blocked':
+      recordAiMetric('contextual_explain_premium_blocked', labels);
+      return;
+    case 'unavailable':
+      recordAiMetric('contextual_explain_unavailable', labels);
+      return;
+    case 'resolved':
+      recordAiMetric('contextual_explain_resolved', labels);
+      // Section 61 — only a genuinely resolved, user-requested explanation.
+      recordAiMetric('contextual_provider_calls_avoided', labels);
+      if (input.storedAnswerUsed) recordAiMetric('contextual_stored_answer_reuse', labels);
+      return;
+    default:
+      return;
+  }
+}
+
+/**
+ * Spec section 62 — Contextual Explanation Zero-Cost Resolution Rate:
+ *   successfully resolved contextual explanations without a provider call
+ *   / supported contextual explanation attempts.
+ *
+ * "Supported attempts" deliberately EXCLUDES premium-blocked requests (the
+ * caller was never entitled, so the attempt was not a supported one) while
+ * INCLUDING unavailable ones (those were supported attempts that simply had
+ * no certified answer — section 62: "Track unavailable separately").
+ *
+ * By construction the numerator is also the count of provider-free
+ * resolutions: no Module 11.5 path can call a provider, so provider-based
+ * resolutions are 0 and the rate is never inflated by one.
+ */
+export function contextualZeroCostResolutionRate(): {
+  resolved: number;
+  unavailable: number;
+  premium_blocked: number;
+  supported_attempts: number;
+  provider_based_resolutions: 0;
+  rate: number | null;
+} {
+  const resolved = getAiMetricTotal('contextual_explain_resolved');
+  const unavailable = getAiMetricTotal('contextual_explain_unavailable');
+  const premium_blocked = getAiMetricTotal('contextual_explain_premium_blocked');
+  const supported_attempts = resolved + unavailable;
+  return {
+    resolved,
+    unavailable,
+    premium_blocked,
+    supported_attempts,
+    provider_based_resolutions: 0,
+    rate: supported_attempts === 0 ? null : resolved / supported_attempts,
+  };
 }

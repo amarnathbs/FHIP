@@ -4,6 +4,7 @@ import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import type { DnaDriver, DnaTrait } from '@/lib/engines/financialDna';
 import type { Archetype, DnaHistoryPoint } from '@/lib/services/financialDnaData';
 import { formatDateShort } from '@/lib/engines/date';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 const LEVEL_COLOR: Record<DnaTrait['level'], string> = {
   low: '#C7362F',
@@ -41,6 +42,13 @@ export function HeroCard({
       <p className="text-sm font-medium uppercase tracking-wide text-gray-400">Your Financial DNA</p>
       <h1 className="mt-2 text-3xl font-bold text-trust">{archetype.profile_name}</h1>
       <p className="mt-3 max-w-2xl text-gray-600">{archetype.long_description}</p>
+      {/* Module 11.5 (spec sections 31-32). Explains the household's OWN
+          certified classification — it never independently classifies DNA. */}
+      <ContextualExplain
+        targetCode="DNA_PRIMARY_PROFILE"
+        accessibleLabel="Explain what your Financial DNA profile means"
+        className="mt-3 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+      />
       <div className="mt-5 flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <span>
           <span className="text-gray-500">Confidence: </span>
@@ -52,6 +60,13 @@ export function HeroCard({
           <span>
             <span className="text-gray-500">Secondary trait: </span>
             <span className="font-semibold text-gray-900">{secondaryArchetype.profile_name}</span>
+            {/* Spec section 32 — reads the certified secondary classification;
+                never reclassifies, and NOT_APPLICABLE when none exists. */}
+            <ContextualExplain
+              targetCode="DNA_SECONDARY_PROFILE"
+              accessibleLabel="Explain your secondary Financial DNA trait"
+              className="ml-2 inline-flex min-h-[32px] items-center gap-1 text-xs font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+            />
           </span>
         )}
         <span>

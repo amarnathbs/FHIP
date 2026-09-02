@@ -132,6 +132,14 @@ export const BLOCK_INTENT_MAP: ReadonlyMap<PackBlockCode, string> = new Map([
   ['twin_summary', 'TWIN_SUMMARY_EXPLANATION'],
   ['cross_border_summary', 'CROSS_BORDER_SUMMARY_EXPLANATION'],
   ['data_quality_summary', 'DATA_QUALITY_SUMMARY_EXPLANATION'],
+  // MODULE 11.5 ADDITION: the last block with no intent code. Its validated,
+  // grounded content was previously generated but unreachable by any
+  // resolver; CONTEXTUAL_EXPLANATION_INTENTS in
+  // lib/ai/resolution/intentTaxonomy.ts now declares the matching
+  // STORED_PERSONALISED-only intent. Purely additive — this adds one more
+  // (block -> intent) pair to the same existing loop and changes nothing
+  // about HOW a block reaches ai_insights.
+  ['report_reading_summary', 'REPORT_READING_EXPLANATION'],
 ]);
 
 // ---------------------------------------------------------------------------

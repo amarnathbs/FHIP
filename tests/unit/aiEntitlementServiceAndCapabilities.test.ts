@@ -54,8 +54,10 @@ describe('Module 11.1 section 6 — AI feature entitlement codes', () => {
     expect(Object.values(set.capabilities).every((v) => v === false)).toBe(true);
   });
 
-  it('declares all seven sub-capabilities named by the specification', () => {
+  it('declares all eight sub-capabilities named by the specification', () => {
+    // Module 11.5 added AI_CONTEXTUAL_EXPLANATIONS as the eighth.
     expect([...AI_SUB_CAPABILITIES].sort()).toEqual([
+      'AI_CONTEXTUAL_EXPLANATIONS',
       'AI_CUSTOM_QUESTIONS',
       'AI_INSIGHT_PACK',
       'AI_PERSONALISED_EXPLANATIONS',
@@ -75,12 +77,35 @@ describe('Module 11.1 section 6 — AI feature entitlement codes', () => {
 
   it('refuses the still-deferred capabilities even to a Premium subject (sections 1, 44, 45, 46)', () => {
     // An entitlement to a feature nobody built must never read as permission
-    // to invoke one. AI_INSIGHT_PACK moved OUT of this list in Module 11.3
-    // (see the dedicated test below) because that feature is now genuinely
-    // built and governed; AI_STANDARD_QUESTIONS/AI_SCENARIO_NARRATION remain
-    // deferred (11.4 and beyond).
-    for (const deferred of ['AI_STANDARD_QUESTIONS', 'AI_SCENARIO_NARRATION'] as const) {
+    // to invoke one. Capabilities leave this list only when the feature they
+    // name is genuinely built: AI_INSIGHT_PACK left in Module 11.3,
+    // AI_STANDARD_QUESTIONS in Module 11.4, and AI_REPORT_EXPLANATION /
+    // AI_TWIN_EXPLANATION in Module 11.5 (which wires the contextual Explain
+    // estate to the report and Financial Twin surfaces).
+    //
+    // PRE-EXISTING FAILURE FIXED HERE (Module 11.5): this list still named
+    // AI_STANDARD_QUESTIONS long after Module 11.4 set
+    // AI_CAPABILITY_IMPLEMENTED.AI_STANDARD_QUESTIONS = true, so this
+    // assertion had been failing on origin/main. The list is now corrected to
+    // reality rather than the assertion being weakened — AI_SCENARIO_NARRATION
+    // is the only genuinely deferred capability left, and it is still proven
+    // to be refused.
+    for (const deferred of ['AI_SCENARIO_NARRATION'] as const) {
       expect(hasAICapability('premium', deferred)).toBe(false);
+    }
+  });
+
+  it('Module 11.5 — grants AI_CONTEXTUAL_EXPLANATIONS to Premium only', () => {
+    expect(hasAICapability('premium', 'AI_CONTEXTUAL_EXPLANATIONS')).toBe(true);
+    expect(hasAICapability('free', 'AI_CONTEXTUAL_EXPLANATIONS')).toBe(false);
+    expect(hasAICapability(null, 'AI_CONTEXTUAL_EXPLANATIONS')).toBe(false);
+  });
+
+  it('Module 11.5 — grants the now-built report and Twin explanation capabilities to Premium only', () => {
+    for (const cap of ['AI_REPORT_EXPLANATION', 'AI_TWIN_EXPLANATION'] as const) {
+      expect(hasAICapability('premium', cap)).toBe(true);
+      expect(hasAICapability('free', cap)).toBe(false);
+      expect(hasAICapability(null, cap)).toBe(false);
     }
   });
 
@@ -198,6 +223,8 @@ describe('Module 11.1 section 58 — admin configuration validation', () => {
     custom_ai_enabled: true,
     kill_switch_reason: null,
     standard_requires_premium: true,
+    // Module 11.5 feature switch (migration 0126) — defaults on.
+    contextual_explanations_enabled: true,
     monthly_custom_question_allowance: 10,
     rate_limit_max_requests: 12,
     rate_limit_window_seconds: 3600,

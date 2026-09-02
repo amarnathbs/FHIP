@@ -46,7 +46,11 @@ export type AISubCapability =
   | 'AI_SCENARIO_NARRATION'
   | 'AI_REPORT_EXPLANATION'
   | 'AI_TWIN_EXPLANATION'
-  | 'AI_INSIGHT_PACK';
+  | 'AI_INSIGHT_PACK'
+  // Module 11.5 — contextual Explain / Why? controls embedded in existing
+  // FHIP modules. Additive: an eighth named sub-capability, resolved through
+  // the same one function as every other.
+  | 'AI_CONTEXTUAL_EXPLANATIONS';
 
 export const AI_SUB_CAPABILITIES: readonly AISubCapability[] = [
   'AI_PERSONALISED_EXPLANATIONS',
@@ -56,6 +60,7 @@ export const AI_SUB_CAPABILITIES: readonly AISubCapability[] = [
   'AI_REPORT_EXPLANATION',
   'AI_TWIN_EXPLANATION',
   'AI_INSIGHT_PACK',
+  'AI_CONTEXTUAL_EXPLANATIONS',
 ] as const;
 
 /**
@@ -83,10 +88,29 @@ export const AI_CAPABILITY_IMPLEMENTED: Record<AISubCapability, boolean> = {
   // never calls it — it only gates whether the standard-question endpoints
   // treat the caller as entitled (spec sections 22-25).
   AI_STANDARD_QUESTIONS: true,
-  // Declared, not built. Spec section 1/44/45 defer every one of these.
+
+  // Module 11.5 — the contextual Explain / Why? estate
+  // (lib/ai/contextualExplanations/service.ts) is genuinely built and
+  // Premium-gated through this flag. Like AI_STANDARD_QUESTIONS, it never
+  // goes through the ai_admit_request() admission gate — the contextual
+  // service never calls it — it only gates whether the contextual endpoint
+  // treats the caller as entitled (spec sections 20-21).
+  AI_CONTEXTUAL_EXPLANATIONS: true,
+
+  // Module 11.5 wires the report and Twin explanation surfaces these two
+  // flags name. Both were false with the comment "not wired to any report/
+  // twin surface" — that statement is no longer true: the contextual target
+  // registry now declares REPORT_OVERVIEW/REPORT_SCORE/REPORT_CASH_FLOW
+  // against the on-screen report and TWIN_COMPARISON/TWIN_CONFIDENCE against
+  // the Financial Twin view, and both are served zero-cost through the same
+  // Premium-gated contextual service. Flipped for the same reason
+  // AI_INSIGHT_PACK and AI_STANDARD_QUESTIONS were flipped in 11.3/11.4: the
+  // feature the flag names now exists.
+  AI_REPORT_EXPLANATION: true,
+  AI_TWIN_EXPLANATION: true,
+
+  // Declared, not built. Spec section 1/50 defers this one to a later phase.
   AI_SCENARIO_NARRATION: false,   // Scenario Coach — deferred
-  AI_REPORT_EXPLANATION: false,   // not wired to any report surface
-  AI_TWIN_EXPLANATION: false,     // not wired to any twin surface
   // Module 11.3 — the Monthly Insight Pack generation service now exists
   // (lib/ai/insightPack/insightPackService.ts) and is Premium-gated through
   // this exact flag. Flipped true here, not because "Premium" changed

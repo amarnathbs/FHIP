@@ -2,6 +2,7 @@ import { formatMoney } from '@/lib/engines/money';
 import type { GoalSummary } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from '@/lib/engines/goalAffordability';
 import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 export function GoalsSummaryHero({
   summary,
@@ -28,7 +29,15 @@ export function GoalsSummaryHero({
           </>
         )}
       </p>
+      {/* Spec section 22 — the existing non-Premium educational link is kept
+          exactly as it was; the Premium personalised explanation sits beside
+          it rather than replacing it. */}
       <WhatDoesThisMean contextKey="goals.progress" compact={false} />
+      <ContextualExplain
+        targetCode="GOALS_OVERALL_STATUS"
+        accessibleLabel="Explain which of your goals are on track"
+        className="ml-3 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
+      />
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
           <p className="text-xs text-gray-500">Combined target</p>

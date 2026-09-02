@@ -20,6 +20,7 @@ export function EmergencyFundDetail({
     <SectionCard
       title="Emergency Fund Detail"
       description="Accessible resources exclude cash already committed to known upcoming outflows."
+      explain={{ targetCode: 'RESILIENCE_EMERGENCY_FUND', accessibleLabel: 'Explain your emergency fund coverage' }}
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Accessible cash" value={formatMoney(v.accessibleResources ?? 0, currency)} />

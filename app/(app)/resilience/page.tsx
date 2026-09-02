@@ -14,6 +14,7 @@ import { StressTestPanel } from '@/components/resilience/StressTestPanel';
 import { Methodology } from '@/components/resilience/Methodology';
 import { formatDateShort } from '@/lib/engines/date';
 import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 export default async function ResiliencePage() {
   const supabase = await createClient();
@@ -61,6 +62,16 @@ export default async function ResiliencePage() {
               statusBand={payload.statusBand}
               confidence={payload.confidence}
               eligibility={payload.eligibility}
+            />
+            {/* Module 11.5 (spec section 33). Reads the certified resilience
+                status band. Deliberately NO Explain control on the stress-test
+                panel below: that result is ephemeral and never persisted, so
+                there is no EXISTING certified stress result to explain, and
+                producing one would be Scenario Coach (spec section 35). */}
+            <ContextualExplain
+              targetCode="RESILIENCE_OVERALL"
+              accessibleLabel="Explain what your Financial Resilience status means"
+              className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-sm font-medium text-ai hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-1"
             />
           </div>
           <div className="lg:col-span-2 grid grid-cols-2 gap-4 sm:grid-cols-3">

@@ -197,7 +197,10 @@ export function SavingsAnalyticsSection({ summary }: { summary: DashboardSummary
   const recommendedBuffer = summary.essentialMonthlyExpenses * 6;
   const fiRatio = summary.ratios.find((r) => r.key === 'financial_independence_ratio');
   return (
-    <SectionCard title="Savings Analytics">
+    <SectionCard
+      title="Savings Analytics"
+      explain={{ targetCode: 'DASHBOARD_SAVINGS_RATE', accessibleLabel: 'Explain your savings rate' }}
+    >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Monthly Savings" value={formatMoney(Math.max(summary.monthlySurplus, 0), summary.currency)} />
         <Stat label="Annual Savings" value={formatMoney(Math.max(summary.monthlySurplus, 0) * 12, summary.currency)} />
@@ -216,7 +219,10 @@ export function SavingsAnalyticsSection({ summary }: { summary: DashboardSummary
 
 export function DebtAnalyticsSection({ summary }: { summary: DashboardSummary }) {
   return (
-    <SectionCard title="Debt Analytics">
+    <SectionCard
+      title="Debt Analytics"
+      explain={{ targetCode: 'RESILIENCE_DEBT_PRESSURE', accessibleLabel: 'Explain your debt pressure' }}
+    >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Total Debt" value={formatMoney(summary.totalLiabilities, summary.currency)} />
         <Stat label="Good Debt" value={formatMoney(summary.goodDebt, summary.currency)} />

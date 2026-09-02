@@ -1,4 +1,5 @@
 import { WhatDoesThisMeanLink } from '@/components/resources/context/WhatDoesThisMeanLink';
+import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 
 export function MetricCard({
   label,
@@ -7,6 +8,7 @@ export function MetricCard({
   tooltip,
   status = 'neutral',
   contextResolved,
+  explain,
 }: {
   label: string;
   value: string;
@@ -19,6 +21,14 @@ export function MetricCard({
   // itself never fetches). Omitted/undefined entirely by every pre-R1.6
   // caller, so this is a zero-behaviour-change addition for them.
   contextResolved?: { slug: string } | null;
+  // Module 11.5 (spec §22-26): the Premium PERSONALISED explanation for this
+  // metric. Deliberately independent of `contextResolved` above — that is the
+  // ordinary, non-Premium educational help ("what is net worth?") and spec
+  // §22 requires it be preserved, not replaced. Both may render together.
+  // Omitted by every pre-11.5 caller, so this is a zero-behaviour-change
+  // addition for them, and ContextualExplain itself renders nothing when the
+  // feature switch is off.
+  explain?: { targetCode: string; accessibleLabel: string; targetId?: string | null; contextId?: string | null };
 }) {
   const ring = {
     good: 'ring-positive',
@@ -32,6 +42,14 @@ export function MetricCard({
       <p className="mt-2 text-3xl font-semibold tabular-nums text-ink">{value}</p>
       {trend && <p className="mt-1 text-sm text-muted">{trend}</p>}
       {contextResolved !== undefined && <WhatDoesThisMeanLink resolved={contextResolved} metricLabel={label} />}
+      {explain && (
+        <ContextualExplain
+          targetCode={explain.targetCode}
+          targetId={explain.targetId}
+          contextId={explain.contextId}
+          accessibleLabel={explain.accessibleLabel}
+        />
+      )}
     </div>
   );
 }
