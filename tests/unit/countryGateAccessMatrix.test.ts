@@ -29,6 +29,7 @@ vi.mock('@/lib/services/countryAudit', () => ({
   recordCountryAuditEvent: vi.fn(async () => undefined),
 }));
 
+import { __resetCountryRegistryCacheForTests } from '@/lib/services/countryGate';
 import { GET as stateGET } from '@/app/api/user/country/state/route';
 import { POST as confirmPOST } from '@/app/api/user/country/confirm/route';
 import { GET as incomeGET } from '@/app/api/income/route';
@@ -52,8 +53,29 @@ const STATES: Record<string, ProfileRow> = {
 // routes use (select().eq().maybeSingle()) and the update shape the confirm
 // route uses (select().eq().maybeSingle() for its pre-read, then
 // update().eq().select().single() for the write).
+// G3: the gate and the confirm/state routes additionally read the country
+// registry (`countries` + `country_capabilities`) to derive registration
+// eligibility and experience level server-side. Served here with the real
+// post-0127 registry contents so these tests exercise the same decisions
+// production makes.
+const G3_COUNTRY_ROWS = [
+  { country_code: 'AU', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'IN', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'GB', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'US', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'SG', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'AE', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+];
+const G3_CAPABILITY_ROWS = G3_COUNTRY_ROWS.map((c) => ({ country_code: c.country_code, capability: 'REGISTRATION', enabled: true }));
+
 function fakeFromFor(profile: ProfileRow) {
   return (table: string) => {
+    if (table === 'countries') {
+      return { select: async () => ({ data: G3_COUNTRY_ROWS, error: null }) };
+    }
+    if (table === 'country_capabilities') {
+      return { select: () => ({ eq: async () => ({ data: G3_CAPABILITY_ROWS, error: null }) }) };
+    }
     if (table !== 'user_profiles') throw new Error(`unexpected table in this test: ${table}`);
     return {
       select: () => ({
@@ -74,6 +96,9 @@ function fakeFromFor(profile: ProfileRow) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // G3: the registry snapshot is memoised behind a TTL — clear it so one
+  // test's fake registry can never leak into the next.
+  __resetCountryRegistryCacheForTests();
   mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
 });
 

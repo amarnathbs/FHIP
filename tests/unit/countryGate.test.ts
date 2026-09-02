@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   classifyCountryValue,
   assertCountryConfirmedForUser,
@@ -8,25 +8,81 @@ import {
   SUPPORTED_COUNTRY_CODES,
   COUNTRY_GATE_ERROR_CODE,
   COUNTRY_GATE_HTTP_STATUS,
+  __resetCountryRegistryCacheForTests,
   type CountryGateResult,
 } from '@/lib/services/countryGate';
 
 type Row = Record<string, unknown> | null;
 
-// Same fake-Supabase-client shape used by tests/unit/jurisdictionApplicability.test.ts
-// (assertCountryConfirmedForUser issues exactly one query:
-// .from('user_profiles').select(...).eq('user_id', ...).maybeSingle()).
-function fakeClient(row: Row, opts: { error?: { message: string } } = {}) {
+// The registry rows as G1 (migration 0122) + G3 (migration 0127) leave them:
+// AU/IN FULL, GB/US/SG/AE GENERIC, REGISTRATION enabled for all six.
+const DEFAULT_COUNTRY_ROWS = [
+  { country_code: 'AU', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'IN', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'GB', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'US', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'SG', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'AE', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+];
+
+const DEFAULT_CAPABILITY_ROWS = DEFAULT_COUNTRY_ROWS.map((c) => ({
+  country_code: c.country_code,
+  capability: 'REGISTRATION',
+  enabled: true,
+}));
+
+// G3: assertCountryConfirmedForUser now issues up to THREE queries — the
+// profile row (as before) plus the two registry reads
+// loadCountryRegistrySnapshot() performs. This fake therefore routes by
+// table name instead of returning the same row for everything.
+function fakeClient(
+  row: Row,
+  opts: {
+    error?: { message: string };
+    countryRows?: typeof DEFAULT_COUNTRY_ROWS;
+    capabilityRows?: typeof DEFAULT_CAPABILITY_ROWS;
+    registryError?: { message: string };
+  } = {}
+) {
+  const countryRows = opts.countryRows ?? DEFAULT_COUNTRY_ROWS;
+  const capabilityRows = opts.capabilityRows ?? DEFAULT_CAPABILITY_ROWS;
   return {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: row, error: opts.error ?? null }),
+    from: (table: string) => {
+      if (table === 'countries') {
+        return {
+          select: () =>
+            Promise.resolve(
+              opts.registryError ? { data: null, error: opts.registryError } : { data: countryRows, error: null }
+            ),
+        };
+      }
+      if (table === 'country_capabilities') {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve(
+                opts.registryError ? { data: null, error: opts.registryError } : { data: capabilityRows, error: null }
+              ),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: row, error: opts.error ?? null }),
+          }),
         }),
-      }),
-    }),
+      };
+    },
   } as unknown as Parameters<typeof assertCountryConfirmedForUser>[0];
 }
+
+// The registry snapshot is memoised in-process behind a TTL, so it MUST be
+// cleared between tests — otherwise one test's registry leaks into the next
+// and the suite silently stops testing what it claims to.
+beforeEach(() => {
+  __resetCountryRegistryCacheForTests();
+});
 
 describe('classifyCountryValue', () => {
   it('treats null, undefined and blank/whitespace as MISSING', () => {
@@ -45,21 +101,31 @@ describe('classifyCountryValue', () => {
     expect(classifyCountryValue('!!')).toBe('INVALID');
   });
 
-  it('treats a well-formed but not-yet-supported code as UNSUPPORTED, never as invalid or as AU/IN', () => {
+  // G3: 'US' moved from UNSUPPORTED to SUPPORTED because it is now one of the
+  // six authoritative registration countries. 'NZ' and 'ZZ' stay UNSUPPORTED,
+  // which is the load-bearing half of this assertion — G3 spec section 5.1
+  // forbids accepting arbitrary two-letter codes just because they are
+  // syntactically valid.
+  it('treats a well-formed but not-offered code as UNSUPPORTED, never as invalid or as AU/IN', () => {
     expect(classifyCountryValue('NZ')).toBe('UNSUPPORTED');
-    expect(classifyCountryValue('US')).toBe('UNSUPPORTED');
+    expect(classifyCountryValue('FR')).toBe('UNSUPPORTED');
     expect(classifyCountryValue('ZZ')).toBe('UNSUPPORTED');
   });
 
-  it('accepts AU and IN case-insensitively as SUPPORTED', () => {
-    expect(classifyCountryValue('AU')).toBe('SUPPORTED');
-    expect(classifyCountryValue('IN')).toBe('SUPPORTED');
-    expect(classifyCountryValue('au')).toBe('SUPPORTED');
-    expect(classifyCountryValue('in')).toBe('SUPPORTED');
+  it('accepts all six authoritative countries case-insensitively as SUPPORTED', () => {
+    for (const code of ['AU', 'IN', 'GB', 'US', 'SG', 'AE']) {
+      expect(classifyCountryValue(code)).toBe('SUPPORTED');
+      expect(classifyCountryValue(code.toLowerCase())).toBe('SUPPORTED');
+    }
   });
 
-  it('exposes exactly the two currently-supported countries (repository evidence: supabase/seed.sql)', () => {
-    expect([...SUPPORTED_COUNTRY_CODES].sort()).toEqual(['AU', 'IN']);
+  it('never classifies GLOBAL as anything but INVALID — it is a presentation bucket, not a country', () => {
+    expect(classifyCountryValue('GLOBAL')).toBe('INVALID');
+    expect(classifyCountryValue('global')).toBe('INVALID');
+  });
+
+  it('exposes exactly the six authoritative registration countries (G1 registry + G3 section 5.1)', () => {
+    expect([...SUPPORTED_COUNTRY_CODES].sort()).toEqual(['AE', 'AU', 'GB', 'IN', 'SG', 'US']);
   });
 });
 
@@ -213,6 +279,7 @@ describe('shouldRedirectToConfirmCountry — MCC-12 fix (found + fixed 2026-08-2
       countryConfirmedAt: null,
       countrySource: null,
       onboardingCompleted,
+      experienceLevel: null,
     };
   }
 
