@@ -12,7 +12,7 @@
 // wording changes — spec section 68 keeps those separate). Nothing in this
 // codebase currently needs a version above 1.
 
-import type { IntentDefinition } from '@/lib/ai/resolution/types';
+import type { IntentDefinition, IntentFamily } from '@/lib/ai/resolution/types';
 
 export const INTENT_TAXONOMY_VERSION = 'intent-taxonomy-1.0.0';
 
@@ -264,10 +264,64 @@ export const BOUNDARY_INTENTS: IntentDefinition[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// E. Module 11.4 — standard-question stored-personalised explanation intents.
+// Additive only: nothing above is changed. These complete the block->intent
+// mapping the Module 11.3 comment in lib/ai/insightPack/types.ts explicitly
+// deferred to this phase (BLOCK_INTENT_MAP). Every one of these follows the
+// exact same shape as WHY_EXPLANATION_INTENTS above: STORED_PERSONALISED
+// only (no DETERMINISTIC — a prose explanation is never fabricated from a
+// point-in-time metric read, and no LIVE_AI — AIStandardQuestionService
+// always calls the router under ZERO_COST_ONLY, so an intent never needing
+// to name LIVE_AI as an allowed resolver is the honest declaration that this
+// code path can never reach one). When the relevant Insight Pack block has
+// not (yet) produced a GROUNDED stored answer, resolution simply misses
+// here and the standard-question service reports PACK_NOT_READY /
+// INSUFFICIENT_DATA — never LIVE_AI_REQUIRED.
+// ---------------------------------------------------------------------------
+function whyExp(intent_code: string, intent_family: IntentFamily, domain: IntentDefinition['requires_certified_domain'], description: string): IntentDefinition {
+  return {
+    intent_code,
+    intent_version: 1,
+    intent_family,
+    personalised: true,
+    requires_certified_domain: domain,
+    allowed_resolvers: ['STORED_PERSONALISED'],
+    country_scope: null,
+    required_context_mode: 'DOMAIN',
+    safety_class: 'SAFE',
+    enabled: true,
+    description,
+  };
+}
+
+export const STANDARD_QUESTION_EXPLANATION_INTENTS: IntentDefinition[] = [
+  whyExp('OVERALL_FINANCIAL_SUMMARY_EXPLANATION', 'DASHBOARD', [], 'A stored, grounded summary of overall financial health.'),
+  whyExp('STRENGTHS_EXPLANATION', 'DASHBOARD', [], "A stored, grounded summary of the household's strongest financial areas."),
+  whyExp('PRIORITY_REVIEW_AREAS_EXPLANATION', 'DASHBOARD', [], 'A stored, grounded, already-ranked list of what to focus on first (reused from Module 11.3 — never re-ranked here).'),
+  whyExp('SCORE_CHANGE_EXPLANATION', 'SCORE', ['score'], 'Why the Financial Health Score changed since the previous valid comparison.'),
+  whyExp('CASH_FLOW_EXPLANATION', 'CASH_FLOW', ['cash_flow'], 'A stored, grounded explanation of the strength of monthly cash flow.'),
+  whyExp('SAVINGS_EXPLANATION', 'CASH_FLOW', ['cash_flow'], "A stored, grounded explanation of what the household's savings rate means for them."),
+  whyExp('EXPENSE_EXPLANATION', 'CASH_FLOW', ['cash_flow'], 'A stored, grounded explanation of where most monthly spending goes.'),
+  whyExp('NET_WORTH_EXPLANATION', 'NET_WORTH', ['balance_sheet'], 'A stored, grounded explanation of what makes up current net worth.'),
+  whyExp('ASSET_CONCENTRATION_EXPLANATION', 'NET_WORTH', ['balance_sheet'], 'A stored, grounded explanation of whether wealth is concentrated.'),
+  whyExp('LIQUIDITY_EXPLANATION', 'LIQUIDITY', ['resilience'], 'A stored, grounded explanation of emergency-savings adequacy.'),
+  whyExp('DEBT_EXPLANATION', 'DEBT', ['resilience'], 'A stored, grounded explanation of current debt pressure.'),
+  whyExp('INVESTMENT_EXPLANATION', 'INVESTMENTS', ['investments'], 'A stored, grounded explanation of investment diversification and (where covered) the main risks in the portfolio.'),
+  whyExp('RETIREMENT_EXPLANATION', 'RETIREMENT', ['retirement'], 'A stored, grounded explanation of retirement progress.'),
+  whyExp('INSURANCE_EXPLANATION', 'INSURANCE', ['insurance'], 'A stored, grounded explanation of what the current protection position means, given recorded cover data.'),
+  whyExp('GOAL_RISK_EXPLANATION', 'GOALS', ['goals'], 'A stored, grounded, household-level explanation of why a goal is off track (never a substitute for the per-goal deterministic facts).'),
+  whyExp('FORECAST_SUMMARY_EXPLANATION', 'FORECAST', ['forecasts'], 'A stored, grounded explanation of what the current forecast means.'),
+  whyExp('TWIN_SUMMARY_EXPLANATION', 'TWIN', ['financial_twin'], 'A stored, grounded explanation of the Financial Twin comparison.'),
+  whyExp('CROSS_BORDER_SUMMARY_EXPLANATION', 'CROSS_BORDER', ['cross_border'], 'A stored, grounded explanation of cross-border financial exposures.'),
+  whyExp('DATA_QUALITY_SUMMARY_EXPLANATION', 'DATA_QUALITY', [], 'A stored, grounded explanation of current data-quality limitations.'),
+];
+
 export const ALL_INTENTS: IntentDefinition[] = [
   ...DETERMINISTIC_INTENTS,
   ...KNOWLEDGE_INTENTS,
   ...WHY_EXPLANATION_INTENTS,
+  ...STANDARD_QUESTION_EXPLANATION_INTENTS,
   ...BOUNDARY_INTENTS,
 ];
 

@@ -101,6 +101,10 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: 'link', label: 'Recommendations', href: '/recommendations' },
       { type: 'link', label: 'Reports', href: '/reports' },
+      // Module 11.4 — the standard question library / Insight experience.
+      // Deliberately labelled "Insights", not "AI Coach" (that would imply
+      // open chat, which does not exist until a later phase).
+      { type: 'link', label: 'Insights', href: '/ai-insights' },
     ],
   },
   // App Review tier-2 Fix 1: Profile page (app/(app)/profile/page.tsx) had

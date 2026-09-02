@@ -75,8 +75,15 @@ export const AI_CAPABILITY_IMPLEMENTED: Record<AISubCapability, boolean> = {
   AI_CUSTOM_QUESTIONS: true,
   AI_PERSONALISED_EXPLANATIONS: true,
 
+  // Module 11.4 — the 25-question zero-cost standard-question library
+  // (lib/ai/standardQuestions/service.ts) now genuinely exists and is
+  // Premium-gated through this exact flag, the same way AI_INSIGHT_PACK was
+  // flipped true in Module 11.3. Flipping this does NOT go through the
+  // ai_admit_request() admission gate at all — AIStandardQuestionService
+  // never calls it — it only gates whether the standard-question endpoints
+  // treat the caller as entitled (spec sections 22-25).
+  AI_STANDARD_QUESTIONS: true,
   // Declared, not built. Spec section 1/44/45 defer every one of these.
-  AI_STANDARD_QUESTIONS: false,   // the 20-25 question library — phase 11.3
   AI_SCENARIO_NARRATION: false,   // Scenario Coach — deferred
   AI_REPORT_EXPLANATION: false,   // not wired to any report surface
   AI_TWIN_EXPLANATION: false,     // not wired to any twin surface

@@ -101,10 +101,37 @@ export const MANDATORY_BLOCK_CODES: readonly PackBlockCode[] = [
  * mapping the numeric check was never designed to validate, so only the one
  * genuine, exact mapping is wired here. The full 20-25 question catalogue
  * that would map every remaining block is explicitly Module 11.4 (spec
- * sections 59, 100) — this is deliberately NOT built ahead of that phase.
+ * sections 59, 100).
+ *
+ * MODULE 11.4 UPDATE: the full mapping is now wired, using the additive
+ * STANDARD_QUESTION_EXPLANATION_INTENTS declared in
+ * lib/ai/resolution/intentTaxonomy.ts (none of which existed when the
+ * comment above was written). Nothing about HOW a block reaches
+ * ai_insights changes — insightPackService.ts still only feeds this table
+ * from a GROUNDED block (spec section 29/59), unchanged — this only adds
+ * more (block -> intent) pairs to the same existing loop.
  */
 export const BLOCK_INTENT_MAP: ReadonlyMap<PackBlockCode, string> = new Map([
   ['score_explanation', 'SCORE_EXPLANATION'],
+  ['overall_financial_summary', 'OVERALL_FINANCIAL_SUMMARY_EXPLANATION'],
+  ['strengths', 'STRENGTHS_EXPLANATION'],
+  ['priority_review_areas', 'PRIORITY_REVIEW_AREAS_EXPLANATION'],
+  ['score_change_explanation', 'SCORE_CHANGE_EXPLANATION'],
+  ['cash_flow_explanation', 'CASH_FLOW_EXPLANATION'],
+  ['savings_explanation', 'SAVINGS_EXPLANATION'],
+  ['expense_explanation', 'EXPENSE_EXPLANATION'],
+  ['net_worth_explanation', 'NET_WORTH_EXPLANATION'],
+  ['asset_concentration_explanation', 'ASSET_CONCENTRATION_EXPLANATION'],
+  ['liquidity_explanation', 'LIQUIDITY_EXPLANATION'],
+  ['debt_explanation', 'DEBT_EXPLANATION'],
+  ['investment_explanation', 'INVESTMENT_EXPLANATION'],
+  ['retirement_explanation', 'RETIREMENT_EXPLANATION'],
+  ['insurance_explanation', 'INSURANCE_EXPLANATION'],
+  ['goal_risk_summary', 'GOAL_RISK_EXPLANATION'],
+  ['forecast_summary', 'FORECAST_SUMMARY_EXPLANATION'],
+  ['twin_summary', 'TWIN_SUMMARY_EXPLANATION'],
+  ['cross_border_summary', 'CROSS_BORDER_SUMMARY_EXPLANATION'],
+  ['data_quality_summary', 'DATA_QUALITY_SUMMARY_EXPLANATION'],
 ]);
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,7 @@ export async function proxy(request: NextRequest) {
   // reintroduce the gap silently. 'twin', 'coach' and 'settings' are retained
   // as-is: they are pre-existing entries unrelated to this fix.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin)/
+    /^\/(dashboard|onboarding|confirm-country|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights)/
   );
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a

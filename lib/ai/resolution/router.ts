@@ -26,7 +26,7 @@ import { resolveStoredPersonalised } from '@/lib/ai/resolution/storedPersonalise
 import { resolveExactCache } from '@/lib/ai/resolution/exactCacheResolver';
 import { recordResolutionMetric } from '@/lib/ai/observability/aiMetrics';
 import { hashNormalisedQuestion } from '@/lib/ai/resolution/audit';
-import type { ResolutionResult, ResolveRequest, ResolverAttempt } from '@/lib/ai/resolution/types';
+import type { ResolutionPolicy, ResolutionResult, ResolveRequest, ResolverAttempt } from '@/lib/ai/resolution/types';
 
 export const RESOLUTION_ROUTER_VERSION = 'resolution-router-1.0.0';
 
@@ -43,6 +43,42 @@ export interface ResolveAnswerInput {
   userId: string;
   householdId: string | null;
   request: ResolveRequest;
+  /**
+   * Module 11.4 (spec section 9). Omitted/'STANDARD' = unchanged Module 11.2
+   * behaviour. 'ZERO_COST_ONLY' is the additive policy
+   * AIStandardQuestionService always passes — see applyZeroCostPolicy() below.
+   */
+  policy?: ResolutionPolicy;
+}
+
+/**
+ * Module 11.4 (spec section 9) — the ZERO_COST_ONLY enforcement point.
+ * DETERMINISTIC / KNOWLEDGE_BASE / STORED_PERSONALISED / EXACT_CACHE results
+ * pass through completely unchanged (every zero-cost path was already the
+ * router's only way of answering anything — nothing about them differs
+ * under this policy). Anything that would otherwise ask a caller to run a
+ * provider (LIVE_AI_REQUIRED, or a compound/component result that carries
+ * requires_live_ai=true) is converted to a safe, inert result: resolution
+ * becomes 'UNAVAILABLE', every escalation field is forced false, and no
+ * response/source_refs are returned. This is enforced on the OUTPUT of the
+ * router, not merely a label change — a caller cannot recover a path to
+ * LIVE_AI/consumes_custom_quota from the returned object under this policy.
+ */
+function applyZeroCostPolicy(result: ResolutionResult, policy: ResolutionPolicy | undefined): ResolutionResult {
+  if (policy !== 'ZERO_COST_ONLY') return result;
+  if (!result.requires_live_ai && result.resolution !== 'LIVE_AI_REQUIRED') return result;
+  return {
+    ...result,
+    resolution: 'UNAVAILABLE',
+    completeness: 'UNRESOLVED',
+    answer_available: false,
+    requires_live_ai: false,
+    consumes_custom_quota: false,
+    source_refs: [],
+    response: null,
+    components: undefined,
+    resolver_trace: [...result.resolver_trace, { resolver: 'LIVE_AI', hit: false, answer: null, miss_reason: 'zero_cost_only_policy_blocked_live_ai' }],
+  };
 }
 
 function boundaryResponse(intentCode: string, headline: string): NonNullable<ResolutionResult['response']> {
@@ -486,6 +522,8 @@ export async function resolveAnswer(deps: RouterDependencies, input: ResolveAnsw
   } else {
     result = await resolveClause(deps, { userId: input.userId, householdId: input.householdId, intentCode: input.request.intent_code, question: input.request.question }, requestId, startedAt);
   }
+
+  result = applyZeroCostPolicy(result, input.policy);
 
   if (deps.writeAudit) {
     const normalisedHash = input.request.question ? hashNormalisedQuestion(normaliseQuestion(input.request.question).text) : null;
