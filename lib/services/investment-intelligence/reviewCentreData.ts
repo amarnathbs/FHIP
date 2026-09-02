@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { emitAuditEvent } from './audit';
 import { computePortfolioAllocationSummary } from './portfolioAttribution';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
+import { loadCurrentCapitalGainsComputations } from './taxRepository';
 import {
   REVIEW_ENGINE_VERSION,
   detectUnallocatedInvestments,
@@ -185,14 +186,28 @@ export async function runReviewCentreRefresh(userId: string): Promise<{ created:
   const exitLoadRule = rules.get('exit_load_exposure');
   const taxIncompleteRule = rules.get('tax_lot_incomplete');
   if (exitLoadRule || taxIncompleteRule) {
-    const rows = await fetchAllPages<{ id: string; lot_id: string; instrument_id: string; classification: string; gain_type: string; exit_load_pct: number | null; engine_version: string }>((from, to) =>
-      admin
-        .from('ii_capital_gains_computations')
-        .select('id, lot_id, instrument_id, classification, gain_type, exit_load_pct, engine_version')
-        .eq('user_id', userId)
-        .order('id')
-        .range(from, to)
-    );
+    // II-PC1-F2: this read previously took EVERY persisted capital-gains row
+    // for the user, with no version, recency or status predicate. Because
+    // `ii_capital_gains_computations` upserts on (disposal_transaction_id,
+    // lot_id), a change in WHICH lot a disposal consumes — II-PC1-F1's FIFO
+    // account-scoping fix, or simply a late-arriving backdated transaction —
+    // orphans the old row instead of overwriting it, and nothing ever
+    // deletes it. Review Centre is the ONLY reader of this table, so it was
+    // the one place a superseded computation could reach a user: proven
+    // live, a v2 row (ltcg, gain 30,000) raised a real open review item
+    // while the correct current answer for the same disposal was stcg /
+    // 22,000.
+    //
+    // Current-result selection is deliberately NOT re-implemented here. It
+    // lives in taxRepository — the canonical R6 data-access layer — so the
+    // rule has exactly one definition. See that function's header and
+    // docs/investment-intelligence/II_PC1_F2_CURRENT_RESULT_SELECTION_DECISION.md.
+    const { rows, supersededCount } = await loadCurrentCapitalGainsComputations(admin, userId);
+    if (supersededCount > 0) {
+      // Not an error: retained history is expected and healthy. Recorded so
+      // the volume of superseded rows is observable rather than invisible.
+      console.info(`[review-centre] user ${userId}: ${supersededCount} superseded R6 computation row(s) excluded from current-result selection.`);
+    }
     if (exitLoadRule) {
       candidates.push(
         ...detectExitLoadExposure(

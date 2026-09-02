@@ -481,6 +481,8 @@ export async function persistTaxLotConsumptions(userId: string, disposalResults:
   if (disposalResults.length === 0) return { persisted: 0, error: null };
   try {
     const admin = createAdminClient();
+    // II-PC1-F2: one timestamp for the whole run — see persistCapitalGainsComputations.
+    const runAt = new Date().toISOString();
     const payload = disposalResults
       .filter((d) => d.classification !== 'unresolved') // unresolved disposals never opened a real lot_id-backed consumption record
       .map((d) => ({
@@ -491,6 +493,7 @@ export async function persistTaxLotConsumptions(userId: string, disposalResults:
         cost_basis_pre_grandfathering: d.costBasisPreGrandfathering,
         sale_value_apportioned: d.saleValue,
         engine_version: TAX_ENGINE_VERSION,
+        created_at: runAt,
       }));
     if (payload.length === 0) return { persisted: 0, error: null };
     const { error } = await admin.from('ii_tax_lot_consumptions').upsert(payload, { onConflict: 'disposal_transaction_id,lot_id', ignoreDuplicates: false });
@@ -522,6 +525,25 @@ export async function persistCapitalGainsComputations(
     const admin = createAdminClient();
     const exitLoadByLotAndDisposal = new Map(exitLoadResults.map((e) => [`${e.disposalEventId}:${e.lotId}`, e]));
 
+    // ---------------------------------------------------------------------
+    // II-PC1-F2: `computed_at` is stamped EXPLICITLY, once for the whole run.
+    //
+    // The column has DEFAULT now(), but a column default does not re-fire on
+    // the UPDATE half of an upsert — so before this dispatch a row that had
+    // been recomputed a dozen times still reported its ORIGINAL insert time
+    // (verified against live DEV). That made `computed_at` useless as a
+    // freshness marker, which is precisely what
+    // `loadCurrentCapitalGainsComputations` below needs in order to tell a
+    // row produced by the latest run from one left behind by an earlier one.
+    //
+    // One timestamp for the whole run (not `new Date()` per row) is what
+    // makes selection DETERMINISTIC: every row of a run shares one exact
+    // value, so "the latest run" is a total order over runs rather than a
+    // race between rows. See docs/investment-intelligence/
+    // II_PC1_F2_CURRENT_RESULT_SELECTION_DECISION.md §5.
+    // ---------------------------------------------------------------------
+    const runAt = new Date().toISOString();
+
     const payload = disposalResults.map((d) => {
       const exitLoad = exitLoadByLotAndDisposal.get(`${d.disposalEventId}:${d.lotId}`);
       return {
@@ -542,6 +564,7 @@ export async function persistCapitalGainsComputations(
         exit_load_pct: exitLoad?.applicableLoadPct ?? null,
         exit_load_amount: exitLoad?.exitLoadAmount ?? null,
         engine_version: TAX_ENGINE_VERSION,
+        computed_at: runAt,
         note: d.note,
       };
     });
@@ -552,6 +575,128 @@ export async function persistCapitalGainsComputations(
   } catch (e) {
     return { persisted: 0, error: e instanceof Error ? e.message : 'Unknown persistence error' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// II-PC1-F2 — CURRENT-RESULT SELECTION over persisted capital-gains rows.
+//
+// THE PROBLEM
+// -----------
+// `ii_capital_gains_computations` upserts on (disposal_transaction_id,
+// lot_id). That key silently assumes the SET OF LOTS a disposal consumes
+// never changes. II-PC1-F1 changed exactly that — FIFO candidacy moved from
+// (instrument) to (account, instrument) — so for a user holding one scheme
+// in two folios a disposal now consumes a DIFFERENT lot. The v3 write lands
+// on a NEW key, and the row the old rule wrote is neither updated nor
+// deleted. Nothing in this codebase ever deletes from this table, so the
+// orphan is permanent.
+//
+// Proven live against DEV (tests/live-dev/
+// iiPc1F2EngineVersionConsumersLiveDev.test.ts): a superseded v2 row
+// carrying gain_type 'ltcg' / taxable_gain 30,000 survived alongside the
+// correct v3 answer (stcg, 22,000 total) for the SAME disposal, and Review
+// Centre — the only reader of this table — raised a real, open, user-facing
+// item from it.
+//
+// TWO INDEPENDENT STALENESS AXES
+// ------------------------------
+// A. ENGINE GENERATION — a v2 row outliving a v3 recomputation.
+// B. DATA FRESHNESS AT THE SAME VERSION — a legitimate new backdated
+//    acquisition re-matches FIFO under the SAME v3 engine, orphaning a v3
+//    row. Also proven live (F2-T04).
+//
+// Axis B is why filtering on engine version ALONE is not the fix: it would
+// answer F2's literal question while leaving an identical defect one
+// transaction away.
+//
+// THE RULE — LATEST_VALID_COMPUTATION_FOR_CURRENT_ENGINE
+// ------------------------------------------------------
+// A row is CURRENT for a disposal iff (1) its engine_version equals what the
+// currently deployed code would produce, and (2) its computed_at is the
+// newest among rows satisfying (1) for that same disposal.
+//
+// Clause (1) is written against the TAX_ENGINE_VERSION CONSTANT, never a
+// literal 'v3'. A future v4 bump therefore re-scopes every consumer with no
+// consumer edit — this function must not become the next version's defect.
+// It also gives the honest answer when a user has ONLY pre-bump rows: no
+// current computation exists, so none is returned, rather than falling back
+// on an arbitrary historical row.
+//
+// Clause (2) is scoped PER DISPOSAL because the disposal is the calculation
+// context. Post-fix per-disposal and per-user coincide (a run always
+// recomputes every disposal for the user); per-disposal simply degrades more
+// gracefully on rows written before this change.
+//
+// HISTORY IS NOT DESTROYED: superseded rows are retained in the table for
+// provenance and are merely never presented as current.
+//
+// Full reasoning, rejected alternatives and the disclosed residual:
+// docs/investment-intelligence/II_PC1_F2_CURRENT_RESULT_SELECTION_DECISION.md
+// ---------------------------------------------------------------------------
+
+/** One persisted capital-gains computation, as consumers read it back. */
+export interface PersistedCapitalGainsRow {
+  id: string;
+  disposal_transaction_id: string;
+  lot_id: string;
+  instrument_id: string;
+  classification: string;
+  gain_type: string;
+  exit_load_pct: number | null;
+  engine_version: string;
+  computed_at: string;
+}
+
+/**
+ * Reduce a raw row set to only those that are CURRENT under
+ * LATEST_VALID_COMPUTATION_FOR_CURRENT_ENGINE. Exported separately from the
+ * query so the rule itself is unit-testable without a database.
+ *
+ * Deterministic: `computed_at` is stamped once per run (see
+ * persistCapitalGainsComputations), so all rows of a run share one exact
+ * value and "latest" orders runs, not rows. Ties on an identical timestamp
+ * are all kept — they are by construction the same run.
+ */
+export function selectCurrentCapitalGainsRows<T extends { disposal_transaction_id: string; engine_version: string; computed_at: string }>(
+  rows: readonly T[]
+): T[] {
+  const atCurrentEngine = rows.filter((r) => r.engine_version === TAX_ENGINE_VERSION);
+  const newestByDisposal = new Map<string, string>();
+  for (const r of atCurrentEngine) {
+    const seen = newestByDisposal.get(r.disposal_transaction_id);
+    if (seen === undefined || r.computed_at > seen) newestByDisposal.set(r.disposal_transaction_id, r.computed_at);
+  }
+  return atCurrentEngine.filter((r) => r.computed_at === newestByDisposal.get(r.disposal_transaction_id));
+}
+
+/**
+ * THE canonical read of persisted R6 capital-gains results. Every consumer
+ * that needs "the user's current tax computation" must come through here
+ * rather than querying `ii_capital_gains_computations` directly — that is
+ * what keeps current-result semantics in ONE place instead of being
+ * re-derived (differently, eventually wrongly) per consumer.
+ *
+ * `supabase` is the caller's client: pass an RLS-respecting request client
+ * for user-initiated reads. `userId` must be the SERVER-resolved id, never
+ * client-supplied — same discipline as every other read in this module.
+ *
+ * Paging goes through `fetchAllRows` with a unique, deterministic order (the
+ * table's primary key), so a user with more than one PostgREST page of
+ * history cannot have rows silently truncated away — see pagination.ts.
+ */
+export async function loadCurrentCapitalGainsComputations(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ rows: PersistedCapitalGainsRow[]; supersededCount: number }> {
+  const all = await fetchAllRows<PersistedCapitalGainsRow>(() =>
+    supabase
+      .from('ii_capital_gains_computations')
+      .select('id, disposal_transaction_id, lot_id, instrument_id, classification, gain_type, exit_load_pct, engine_version, computed_at')
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+  );
+  const rows = selectCurrentCapitalGainsRows(all);
+  return { rows, supersededCount: all.length - rows.length };
 }
 
 // ---------------------------------------------------------------------------
