@@ -123,6 +123,11 @@ interface OracleEntry {
   grandfatheringEligible: boolean;
 }
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6p1-cert';
+
 const CERT_DIR = path.resolve(__dirname, '../../scripts/ii-r6p1-certification');
 const casesData = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'cases.json'), 'utf8'));
 const oracleData = JSON.parse(fs.readFileSync(path.join(CERT_DIR, 'oracle_results.json'), 'utf8'));
@@ -185,8 +190,14 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
   describe('FIFO family', () => {
     const fifoCases = cases.filter((c) => c.family === 'fifo');
     it.each(fifoCases)('$id', (c: CertCase) => {
-      const acquisitions: AcquisitionEvent[] = c.acquisitions;
-      const disposals: DisposalEvent[] = c.disposals as DisposalEvent[];
+      // II-PC1-F1: cases.json predates account-scoped FIFO and carries no
+      // accountKey. Every case in the pack is a single-account scenario, so
+      // stamping one shared account preserves each case's original expected
+      // result exactly. (The engine now REFUSES an event with no accountKey
+      // rather than silently matching instrument-wide, which is why this
+      // must be explicit rather than left undefined.)
+      const acquisitions: AcquisitionEvent[] = c.acquisitions.map((a) => ({ ...a, accountKey: ACCOUNT }));
+      const disposals: DisposalEvent[] = (c.disposals as DisposalEvent[]).map((d) => ({ ...d, accountKey: ACCOUNT }));
       const { consumptions } = replayFifo(acquisitions, disposals);
       const exp = oracleById[c.id].byDisposal;
 
@@ -208,7 +219,10 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
 
     it('never over-consumes a lot (running remainder never negative)', () => {
       for (const c of fifoCases) {
-        const { lots } = replayFifo(c.acquisitions, c.disposals as DisposalEvent[]);
+        const { lots } = replayFifo(
+          c.acquisitions.map((a) => ({ ...a, accountKey: ACCOUNT })),
+          (c.disposals as DisposalEvent[]).map((d) => ({ ...d, accountKey: ACCOUNT }))
+        );
         for (const lot of lots) expect(lot.unitsRemaining).toBeGreaterThanOrEqual(-1e-9);
       }
     });
@@ -262,6 +276,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-d`,
         lotId: `${c.id}-l`,
+        accountKey: ACCOUNT,
         instrumentKey: c.instrumentKey,
         acquisitionDate: c.acquisitionDate,
         kind: 'purchase',
@@ -303,6 +318,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-d`,
         lotId: `${c.id}-l`,
+        accountKey: ACCOUNT,
         instrumentKey: c.instrumentKey,
         acquisitionDate: c.acquisitionDate,
         kind: 'purchase',
@@ -490,6 +506,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-d`,
         lotId: `${c.id}-l`,
+        accountKey: ACCOUNT,
         instrumentKey: 'X',
         acquisitionDate: c.acquisitionDate,
         kind: 'purchase',
@@ -559,6 +576,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-d`,
         lotId: `${c.id}-l`,
+        accountKey: ACCOUNT,
         instrumentKey: 'SCH-ACTTRANS',
         acquisitionDate: c.acquisitionDate,
         kind: 'purchase',
@@ -602,7 +620,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
         const post = pair.find((c) => c.side === 'post')!;
         const preResult = computeDisposalTax({
           consumption: {
-            disposalEventId: 'pre', lotId: 'pre', instrumentKey: 'X', acquisitionDate: pre.acquisitionDate,
+            disposalEventId: 'pre', lotId: 'pre', accountKey: ACCOUNT, instrumentKey: 'X', acquisitionDate: pre.acquisitionDate,
             kind: 'purchase', disposalDate: pre.disposalDate, unitsConsumed: pre.unitsConsumed,
             costPerUnit: pre.costPerUnit, costBasis: pre.unitsConsumed * pre.costPerUnit,
             saleValueApportioned: pre.unitsConsumed * pre.salePricePerUnit,
@@ -613,7 +631,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
         });
         const postResult = computeDisposalTax({
           consumption: {
-            disposalEventId: 'post', lotId: 'post', instrumentKey: 'X', acquisitionDate: post.acquisitionDate,
+            disposalEventId: 'post', lotId: 'post', accountKey: ACCOUNT, instrumentKey: 'X', acquisitionDate: post.acquisitionDate,
             kind: 'purchase', disposalDate: post.disposalDate, unitsConsumed: post.unitsConsumed,
             costPerUnit: post.costPerUnit, costBasis: post.unitsConsumed * post.costPerUnit,
             saleValueApportioned: post.unitsConsumed * post.salePricePerUnit,
@@ -649,6 +667,7 @@ describe('II R6-P1 Independent Certification (142 cases: 120 original + 12 R6-FI
       const consumption: LotConsumption = {
         disposalEventId: `${c.id}-d`,
         lotId: `${c.id}-l`,
+        accountKey: ACCOUNT,
         instrumentKey: 'SCH-GRANDBOUND',
         acquisitionDate: c.acquisitionDate,
         kind: 'purchase',

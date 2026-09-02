@@ -51,6 +51,12 @@ export async function GET(request: Request) {
         lotId: l.lotId,
         instrumentId: l.instrumentKey,
         instrumentName: dataset.instrumentNames.get(l.instrumentKey) ?? l.instrumentKey,
+        // II-PC1-F1: FIFO is scoped to (account, instrument), so a lot list
+        // that showed only the instrument would imply the wrong thing to a
+        // user holding one scheme in two folios — two separate FIFO queues
+        // would look like one pooled queue. The folio is now explicit.
+        accountId: l.accountKey,
+        accountLabel: dataset.accountLabels.get(l.accountKey) ?? l.accountKey,
         kind: l.kind,
         acquisitionDate: l.acquisitionDate,
         unitsAcquired: l.unitsAcquired,

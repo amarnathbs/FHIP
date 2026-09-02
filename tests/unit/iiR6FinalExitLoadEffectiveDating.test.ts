@@ -23,6 +23,11 @@ import type { SchemeClassificationResult } from '@/lib/engines/investment-intell
 
 const INSTRUMENT = 'SCH-EXITLOAD-HIST';
 
+// II-PC1-F1: FIFO is now scoped to (account, instrument). Every case in this
+// pre-existing suite is a single-folio scenario, so one shared account key
+// preserves the original behaviour and expectations exactly.
+const ACCOUNT = 'acct-r6-exit-load-hist';
+
 function baseInputs(overrides: Partial<TaxSimulationInputs>): TaxSimulationInputs {
   const classification: SchemeClassificationResult = {
     instrumentKey: INSTRUMENT,
@@ -67,9 +72,9 @@ describe('R6-FINAL: exit-load schedule is selected by the DISPOSAL date, not "wh
     // the historical schedule's effectiveTo (2024-12-31) and inside its own
     // 90-day tier.
     const acquisitions: AcquisitionEvent[] = [
-      { sourceEventId: 'acq-h', instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2024-11-15', units: 100, costPerUnit: 20 },
+      { sourceEventId: 'acq-h', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2024-11-15', units: 100, costPerUnit: 20 },
     ];
-    const disposals: DisposalEvent[] = [{ sourceEventId: 'disp-h', instrumentKey: INSTRUMENT, disposalDate: '2024-12-01', units: 50, saleValue: 1500 }];
+    const disposals: DisposalEvent[] = [{ sourceEventId: 'disp-h', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, disposalDate: '2024-12-01', units: 50, saleValue: 1500 }];
     const inputs = baseInputs({
       acquisitions,
       disposals,
@@ -83,9 +88,9 @@ describe('R6-FINAL: exit-load schedule is selected by the DISPOSAL date, not "wh
 
   it('a CURRENT disposal (after the new schedule takes effect, held < 90 days) gets the NEW 1% tier', () => {
     const acquisitions: AcquisitionEvent[] = [
-      { sourceEventId: 'acq-c', instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2026-05-01', units: 100, costPerUnit: 20 },
+      { sourceEventId: 'acq-c', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2026-05-01', units: 100, costPerUnit: 20 },
     ];
-    const disposals: DisposalEvent[] = [{ sourceEventId: 'disp-c', instrumentKey: INSTRUMENT, disposalDate: '2026-06-01', units: 50, saleValue: 1500 }];
+    const disposals: DisposalEvent[] = [{ sourceEventId: 'disp-c', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, disposalDate: '2026-06-01', units: 50, saleValue: 1500 }];
     const inputs = baseInputs({
       acquisitions,
       disposals,
@@ -99,15 +104,15 @@ describe('R6-FINAL: exit-load schedule is selected by the DISPOSAL date, not "wh
 
   it('the two disposals above, run TOGETHER in one simulation, still resolve to their OWN correct era\'s schedule (no cross-contamination)', () => {
     const acquisitions: AcquisitionEvent[] = [
-      { sourceEventId: 'acq-h2', instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2024-11-15', units: 100, costPerUnit: 20 },
-      { sourceEventId: 'acq-c2', instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2026-05-01', units: 100, costPerUnit: 20 },
+      { sourceEventId: 'acq-h2', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2024-11-15', units: 100, costPerUnit: 20 },
+      { sourceEventId: 'acq-c2', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, kind: 'purchase', acquisitionDate: '2026-05-01', units: 100, costPerUnit: 20 },
     ];
     const disposals: DisposalEvent[] = [
       // disp-h2 fully drains acq-h2's lot (FIFO would otherwise let disp-c2
       // spill into the older lot and pick up ITS acquisition date, which
       // would test FIFO ordering rather than schedule-era selection).
-      { sourceEventId: 'disp-h2', instrumentKey: INSTRUMENT, disposalDate: '2024-12-01', units: 100, saleValue: 3000 },
-      { sourceEventId: 'disp-c2', instrumentKey: INSTRUMENT, disposalDate: '2026-06-01', units: 50, saleValue: 1500 },
+      { sourceEventId: 'disp-h2', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, disposalDate: '2024-12-01', units: 100, saleValue: 3000 },
+      { sourceEventId: 'disp-c2', accountKey: ACCOUNT, instrumentKey: INSTRUMENT, disposalDate: '2026-06-01', units: 50, saleValue: 1500 },
     ];
     const inputs = baseInputs({
       acquisitions,

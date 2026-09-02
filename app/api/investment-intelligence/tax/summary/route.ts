@@ -105,7 +105,7 @@ export async function GET(request: Request) {
     // Lots must be persisted first — ii_capital_gains_computations.lot_id
     // is a not-null FK into ii_tax_lots (see persistTaxLots's header for the
     // defect this fixes).
-    const lotsPersistence = await persistTaxLots(user.id, result.lots, dataset.accountIdByTransactionId);
+    const lotsPersistence = await persistTaxLots(user.id, result.lots);
     const consumptionsPersistence = await persistTaxLotConsumptions(user.id, result.disposalResults);
     const persistence = await persistCapitalGainsComputations(user.id, result.disposalResults, result.exitLoadResults);
 

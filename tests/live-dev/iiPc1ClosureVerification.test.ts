@@ -505,7 +505,7 @@ describe('Gate 2 — R6 FIFO tax-lot sequencing (independent oracle vs actual)',
 
     // --- Persist through the SAME pipeline the real route uses, then verify
     // against fresh persisted ground truth (not just the in-memory result). --
-    const lotsPersist = await persistTaxLots(ground.userA.userId, result.lots, dataset!.accountIdByTransactionId);
+    const lotsPersist = await persistTaxLots(ground.userA.userId, result.lots);
     expect(lotsPersist.error, `persistTaxLots error: ${lotsPersist.error}`).toBeNull();
     const consumptionsPersist = await persistTaxLotConsumptions(ground.userA.userId, result.disposalResults);
     expect(consumptionsPersist.error, `persistTaxLotConsumptions error: ${consumptionsPersist.error}`).toBeNull();
