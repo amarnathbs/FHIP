@@ -214,6 +214,26 @@
 @media (min-width: 980px) and (max-width: 1350px) { .primaryNav { gap: 1.1rem; } }
 
 .headerActions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+
+/* G2 — a dedicated, full-width slim bar for the anonymous country selector,
+   kept separate from .headerActions above (see LandingPage.tsx's own
+   comment) so it never competes for space with Log in/Start free/the
+   mobile menu toggle at narrow viewports. Reserves a fixed height on every
+   viewport (no conditional show/hide of the row itself) so switching
+   countries never causes cumulative layout shift. */
+.countrySelectorBar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .countrySelectorBar { justify-content: center; }
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -243,10 +263,26 @@
 .btnOutlineOnNavy:hover { border-color: #fff; }
 .menuToggle { display: inline-flex; background: none; border: 1.5px solid var(--line); border-radius: 8px; padding: 0.5rem 0.65rem; color: var(--ink); }
 @media (min-width: 980px) { .menuToggle { display: none; } }
+/* G2 live-DEV closure (2026-09-02): a real, pre-existing (not G2-caused)
+   horizontal-overflow defect was reproduced live at 320px -- .headerActions
+   (Log in + Start free + this toggle) doesn't fit alongside the logo at
+   that width. This button has no click handler anywhere in
+   LandingPage.tsx -- it is purely decorative today -- so hiding it at the
+   one width where it doesn't fit removes zero functionality while fully
+   closing the overflow. Smallest possible correction: no other element
+   touched, no broader redesign. */
+@media (max-width: 380px) { .menuToggle { display: none; } }
 
 /* hero */
 .hero { padding-top: clamp(3rem, 6vw, 4.75rem); padding-bottom: clamp(3rem, 6vw, 5rem); background: var(--surface); }
-.heroGrid { display: grid; gap: clamp(2.5rem, 5vw, 4rem); grid-template-columns: 1fr; align-items: center; }
+/* G2 live-DEV closure (2026-09-02): `1fr` alone leaves a CSS Grid item's
+   default min-width:auto in effect, so the track cannot shrink below the
+   previewCard mockup's intrinsic min-content width -- a real, pre-existing
+   (not G2-caused) ~6px horizontal-overflow defect reproduced live at
+   320px. `minmax(0, 1fr)` is the standard, minimal fix for exactly this
+   pattern -- same visual layout at every width already tested, just
+   removes the overflow floor. */
+.heroGrid { display: grid; gap: clamp(2.5rem, 5vw, 4rem); grid-template-columns: minmax(0, 1fr); align-items: center; }
 @media (min-width: 960px) { .heroGrid { grid-template-columns: 1.05fr 0.95fr; } }
 .hero h1 {
   font-weight: 600;
