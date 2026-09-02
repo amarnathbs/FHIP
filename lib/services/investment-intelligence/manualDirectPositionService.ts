@@ -20,24 +20,36 @@ import { createHash } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { IiManualDirectPositionInput } from '@/lib/validation/investment-intelligence';
 import type { IiManualFixture } from '@/lib/validation/investment-intelligence';
-import { importManualFixture, type ManualImportResult } from './manualImporter';
+import { importManualFixture, findExistingManualImportByFixtureKey, resolveManualImportReplay, type ManualImportResult } from './manualImporter';
 import { classifyDirectListedSecurity } from '@/lib/engines/investment-intelligence/tax/schemeClassification';
+import { validateIsin } from './isinValidation';
+import { validateIsoDateStrict } from './dateNormalisation';
 
 export interface ManualDirectPositionResult extends ManualImportResult {
   taxClassificationSeeded: boolean;
   unitsAfter: number | null;
   valueAfter: number | null;
   validationError: string | null;
+  // PC1-D2/D4 — stable, machine-readable error code alongside
+  // `validationError`'s human-readable message (e.g. 'INVALID_ISIN',
+  // 'INVALID_TRANSACTION_DATE'). null for every pre-existing validation
+  // path (frozen-scope, oversell) — unchanged contract for those.
+  validationErrorCode: string | null;
 }
 
 const ENGINE_VERSION = 'ii-r12-direct-security-classification-1.0.0';
 
-function stableFixtureKey(userId: string, input: IiManualDirectPositionInput): string {
+function stableFixtureKey(userId: string, input: IiManualDirectPositionInput, normalisedIsin: string): string {
   // Deterministic, content-derived key so a genuine double-submit (same
   // user, same action, same instrument, same date, same amounts) resolves
   // idempotently via importManualFixture's own checksum de-dup, while a
-  // materially different action always gets a different key.
-  const parts: (string | number)[] = [userId, input.action, input.instrumentClass, input.isin, input.accountInstitutionName];
+  // materially different action always gets a different key. Keyed off
+  // the NORMALISED ISIN (PC1-D2) so "same investment, different case"
+  // (e.g. a copy-pasted lowercase ISIN) is recognised as the same
+  // idempotency identity rather than spuriously treated as distinct
+  // (PC1-D3's fingerprint must not be case-sensitive on an identifier
+  // whose own validator normalises case).
+  const parts: (string | number)[] = [userId, input.action, input.instrumentClass, normalisedIsin, input.accountInstitutionName];
   if (input.action === 'buy' || input.action === 'sale') {
     parts.push(input.transactionDate, input.units, input.pricePerUnit, input.fees ?? 0, input.taxes ?? 0);
   } else if (input.action === 'dividend') {
@@ -122,19 +134,71 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
     unitsAfter: null,
     valueAfter: null,
     validationError: null,
+    validationErrorCode: null,
   };
 
   if (input.instrumentClass === 'etf' && input.action !== 'reprice' && input.isEquityOriented !== true) {
     return { ...empty, validationError: 'ETF positions must be explicitly declared equity-oriented to enter R12 scope — non-equity ETFs are deferred (R12_ASSET_CLASS_SCOPE_MATRIX.md).' };
   }
 
-  const current = await readCurrentPosition(userId, input.isin);
+  // PC1-D2 — server-side ISIN syntax/check-digit validation. A
+  // syntactically valid ISIN is a SEPARATE concern from asset-class scope
+  // (the ETF check above) — validating it here, after the scope check but
+  // before any DB read/write, means an invalid identifier is rejected
+  // regardless of asset class, and a valid-but-out-of-scope ISIN is still
+  // correctly blocked by the scope check rather than bypassing it.
+  const isinResult = validateIsin(input.isin);
+  if (!isinResult.ok || !isinResult.normalised) {
+    return { ...empty, validationError: isinResult.error ?? 'Enter a valid 12-character ISIN.', validationErrorCode: 'INVALID_ISIN' };
+  }
+  const normalisedIsin = isinResult.normalised;
+
+  // PC1-D4 — strict manual-entry date boundary, validated before any DB
+  // read/write touches this value (the malformed-date reproduction showed
+  // Postgres' own cast/constraint error reaching the client otherwise).
+  const dateToValidate = input.action === 'reprice' ? input.asOfDate : input.transactionDate;
+  const dateResult = validateIsoDateStrict(dateToValidate);
+  if (!dateResult.ok) {
+    return { ...empty, validationError: dateResult.error, validationErrorCode: 'INVALID_TRANSACTION_DATE' };
+  }
+
+  // PC1-D3 — idempotency pre-check using the RAW INPUT's own stable
+  // content-derived identity, computed BEFORE readCurrentPosition/
+  // unitsAfter (root-cause fix — see manualImporter.ts's
+  // findExistingManualImportByFixtureKey doc comment for the full defect
+  // history: hashing the DERIVED unitsAfter/valueAfter for de-dup silently
+  // broke idempotency for a sequential exact-duplicate resubmit, because
+  // the second call's "current position" already reflects the first
+  // call's effect, live-DEV-reproduced as a doubled cumulative holding).
+  const fixtureKey = `r12-manual-${stableFixtureKey(userId, input, normalisedIsin)}`;
+  const existingByFixtureKey = await findExistingManualImportByFixtureKey(userId, fixtureKey);
+  if (existingByFixtureKey) {
+    const replay = await resolveManualImportReplay(userId, input.accountInstitutionName, existingByFixtureKey.id);
+    let replayUnitsAfter: number | null = null;
+    let replayValueAfter: number | null = null;
+    if (replay.holdingSnapshotId) {
+      const admin = createAdminClient();
+      const { data: snap } = await admin.from('ii_holding_snapshots').select('units, value').eq('id', replay.holdingSnapshotId).maybeSingle();
+      replayUnitsAfter = snap ? Number(snap.units) : null;
+      replayValueAfter = snap ? Number(snap.value) : null;
+    }
+    return {
+      ...replay,
+      taxClassificationSeeded: false, // never re-seed an existing classification on replay
+      unitsAfter: replayUnitsAfter,
+      valueAfter: replayValueAfter,
+      validationError: null,
+      validationErrorCode: null,
+    };
+  }
+
+  const current = await readCurrentPosition(userId, normalisedIsin);
 
   if ((input.action === 'sale' || input.action === 'dividend' || input.action === 'reprice') && current.units <= 0 && !current.instrumentId) {
-    return { ...empty, validationError: `No existing position found for ISIN ${input.isin} — a ${input.action} action requires a prior 'buy'.` };
+    return { ...empty, validationError: `No existing position found for ISIN ${normalisedIsin} — a ${input.action} action requires a prior 'buy'.` };
   }
   if (input.action === 'sale' && input.units > current.units) {
-    return { ...empty, validationError: `Cannot sell ${input.units} units — only ${current.units} units are currently held (ISIN ${input.isin}).` };
+    return { ...empty, validationError: `Cannot sell ${input.units} units — only ${current.units} units are currently held (ISIN ${normalisedIsin}).` };
   }
 
   let unitsAfter: number;
@@ -194,7 +258,7 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
   }
 
   const fixture: IiManualFixture = {
-    fixtureKey: `r12-manual-${stableFixtureKey(userId, input)}`,
+    fixtureKey,
     sourceKey: 'manual',
     countryCode: 'IN',
     currencyCode: 'INR',
@@ -212,7 +276,7 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
       countryOfDomicile: 'IN',
       baseCurrency: 'INR',
       identifiers: [
-        { scheme: 'isin' as const, value: input.isin, countryCode: 'IN' as const },
+        { scheme: 'isin' as const, value: normalisedIsin, countryCode: 'IN' as const },
         ...(input.exchange && input.exchangeSymbol
           ? [{ scheme: (input.exchange === 'NSE' ? 'nse_symbol' : 'bse_code') as 'nse_symbol' | 'bse_code', value: input.exchangeSymbol, countryCode: 'IN' as const }]
           : []),
@@ -226,7 +290,7 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
 
   const importResult = await importManualFixture(userId, fixture);
   if (importResult.error || !importResult.instrumentId) {
-    return { ...empty, ...importResult, validationError: null };
+    return { ...empty, ...importResult, validationError: null, validationErrorCode: null };
   }
 
   const taxClassificationSeeded = await ensureDirectSecurityTaxClassification(importResult.instrumentId, input.instrumentClass, input.isEquityOriented);
@@ -237,5 +301,6 @@ export async function submitManualDirectPosition(userId: string, input: IiManual
     unitsAfter,
     valueAfter,
     validationError: null,
+    validationErrorCode: null,
   };
 }
