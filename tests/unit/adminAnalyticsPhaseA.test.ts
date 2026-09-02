@@ -103,6 +103,7 @@ import {
 } from '@/lib/resources/permissions';
 import {
   buildAdminNavGroups,
+  getAdminUnavailableNotice,
   shouldShowAdminMenu,
   parseAdminCapabilities,
   parseIsAdmin,
@@ -319,42 +320,40 @@ function navFor(current: CurrentResourceRoles): string[] {
   return buildAdminNavGroups(current.isSuperAdmin, capsFor(current)).map((g) => g.label);
 }
 
+// Wave 3, Gate 3 (Product Owner ruling): the Analytics shell completes no
+// task, so it was removed from buildAdminNavGroups() -- it is no longer a
+// clickable nav destination for ANY caller, Analyst included. An
+// Analyst-only caller (who would otherwise see zero Admin destinations at
+// all) instead sees the fixed, non-interactive notice from
+// getAdminUnavailableNotice() -- asserted in its own describe block below,
+// not as a nav group. Every expected array below is updated to remove
+// 'Analytics' accordingly; no other group's order or membership changed.
 const NAV_MATRIX: [string, CurrentResourceRoles, string[]][] = [
   ['no role', roles([]), []],
-  ['Analyst only', roles(['analyst']), ['Analytics']],
+  ['Analyst only', roles(['analyst']), []],
   ['Author only', roles(['author']), ['Resources', 'Content', 'Workflow', 'Discovery']],
   ['Editor only', roles(['editor']), ['Resources', 'Content', 'Workflow', 'Discovery']],
   ['Compliance Reviewer only', roles(['compliance_reviewer']), ['Resources', 'Content', 'Workflow', 'Discovery']],
   ['Publisher only', roles(['publisher']), ['Resources', 'Content', 'Workflow', 'Discovery']],
-  ['Resource Admin', roles(['resource_admin']), ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery']],
-  ['Super Admin', roles([], true), ['General', 'Analytics', 'Resources', 'Content', 'Workflow', 'Discovery']],
-  ['Analyst + Author', roles(['analyst', 'author']), ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery']],
-  ['Analyst + Editor', roles(['analyst', 'editor']), ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery']],
-  [
-    'Analyst + Compliance Reviewer',
-    roles(['analyst', 'compliance_reviewer']),
-    ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery'],
-  ],
-  ['Analyst + Publisher', roles(['analyst', 'publisher']), ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery']],
-  [
-    'Analyst + Resource Admin',
-    roles(['analyst', 'resource_admin']),
-    ['Analytics', 'Resources', 'Content', 'Workflow', 'Discovery'],
-  ],
+  ['Resource Admin', roles(['resource_admin']), ['Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Super Admin', roles([], true), ['General', 'Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Analyst + Author', roles(['analyst', 'author']), ['Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Analyst + Editor', roles(['analyst', 'editor']), ['Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Analyst + Compliance Reviewer', roles(['analyst', 'compliance_reviewer']), ['Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Analyst + Publisher', roles(['analyst', 'publisher']), ['Resources', 'Content', 'Workflow', 'Discovery']],
+  ['Analyst + Resource Admin', roles(['analyst', 'resource_admin']), ['Resources', 'Content', 'Workflow', 'Discovery']],
 ];
 
-describe('Wave 1 §10.3 — Admin navigation group visibility', () => {
+describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: Analytics is no longer a nav group)', () => {
   for (const [label, current, expected] of NAV_MATRIX) {
     it(`${label} sees exactly [${expected.join(', ')}]`, () => {
       expect(navFor(current)).toEqual(expected);
     });
   }
 
-  it('Analyst-only sees an Analytics entry and NO other Resources administrative group', () => {
+  it('Analyst-only sees ZERO nav groups (Analytics is no longer a clickable destination for anyone)', () => {
     const groups = buildAdminNavGroups(false, capsFor(roles(['analyst'])));
-    expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('Analytics');
-    expect(groups[0].items).toEqual([{ label: 'Analytics', href: '/admin/resources/analytics' }]);
+    expect(groups).toEqual([]);
   });
 
   it('no existing non-Analyst Resources role automatically receives the Analytics entry', () => {
@@ -363,30 +362,38 @@ describe('Wave 1 §10.3 — Admin navigation group visibility', () => {
     }
   });
 
-  it('each group is driven by its own capability field, independently of the others', () => {
-    // Five one-field-true probes: exactly one group must appear each time.
-    const fields: (keyof AdminCapabilities)[] = [
-      'resourcesDashboard',
-      'resourceContentAdmin',
-      'resourceWorkflowAdmin',
-      'resourceDiscoveryAdmin',
-      'resourceAnalytics',
-    ];
-    const expectedLabel: Record<keyof AdminCapabilities, string> = {
+  it('no caller, of any capability combination including Super Admin, ever sees an Analytics nav group again', () => {
+    const all: AdminCapabilities = {
+      resourcesDashboard: true,
+      resourceContentAdmin: true,
+      resourceWorkflowAdmin: true,
+      resourceDiscoveryAdmin: true,
+      resourceAnalytics: true,
+    };
+    expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
+  });
+
+  it('each remaining group is driven by its own capability field, independently of the others', () => {
+    // Four one-field-true probes: exactly one group must appear each time.
+    // resourceAnalytics is deliberately excluded here -- it no longer
+    // produces a nav group at all (see the getAdminUnavailableNotice tests).
+    const fields: (keyof AdminCapabilities)[] = ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin'];
+    const expectedLabel: Record<string, string> = {
       resourcesDashboard: 'Resources',
       resourceContentAdmin: 'Content',
       resourceWorkflowAdmin: 'Workflow',
       resourceDiscoveryAdmin: 'Discovery',
-      resourceAnalytics: 'Analytics',
     };
     for (const field of fields) {
       const caps = { ...NO_ADMIN_CAPABILITIES, [field]: true } as AdminCapabilities;
       const labels = buildAdminNavGroups(false, caps).map((g) => g.label);
       expect(labels).toEqual([expectedLabel[field]]);
     }
+    // resourceAnalytics alone now produces zero groups.
+    expect(buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true })).toEqual([]);
   });
 
-  it('each group is hidden by its own capability field, independently of the others', () => {
+  it('each remaining group is hidden by its own capability field, independently of the others', () => {
     const allTrue: AdminCapabilities = {
       resourcesDashboard: true,
       resourceContentAdmin: true,
@@ -399,19 +406,43 @@ describe('Wave 1 §10.3 — Admin navigation group visibility', () => {
       resourceContentAdmin: 'Content',
       resourceWorkflowAdmin: 'Workflow',
       resourceDiscoveryAdmin: 'Discovery',
-      resourceAnalytics: 'Analytics',
     };
-    for (const field of Object.keys(allTrue) as (keyof AdminCapabilities)[]) {
+    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin'] as (keyof AdminCapabilities)[]) {
       const labels = buildAdminNavGroups(false, { ...allTrue, [field]: false }).map((g) => g.label);
       expect(labels).not.toContain(expectedLabel[field]);
-      expect(labels).toHaveLength(4);
+      expect(labels).toHaveLength(3); // 4 real groups minus the one just turned off; resourceAnalytics never contributed one
     }
   });
 
-  it('the outer Admin menu is hidden when no group would render, and shown when any would', () => {
+  it('the outer Admin menu is hidden when no group would render and no notice would show, and shown when either would', () => {
     expect(shouldShowAdminMenu(false, NO_ADMIN_CAPABILITIES)).toBe(false);
     expect(shouldShowAdminMenu(true, NO_ADMIN_CAPABILITIES)).toBe(true); // Super Admin: General group
+    // Wave 3: Analyst-only no longer renders a group, but the menu itself
+    // must still show so the unavailable notice has somewhere to appear.
     expect(shouldShowAdminMenu(false, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true })).toBe(true);
+  });
+});
+
+describe('Wave 3 Gate 3 — getAdminUnavailableNotice()', () => {
+  const FIXED_NOTICE = 'Admin analytics access is confirmed for your account. No analytics features are available yet.';
+
+  it('shows the fixed notice for an Analyst-only caller (who would otherwise see zero Admin destinations)', () => {
+    expect(getAdminUnavailableNotice(false, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true })).toBe(FIXED_NOTICE);
+  });
+
+  it('shows nothing for a caller without resourceAnalytics at all', () => {
+    expect(getAdminUnavailableNotice(false, NO_ADMIN_CAPABILITIES)).toBeNull();
+    expect(getAdminUnavailableNotice(true, NO_ADMIN_CAPABILITIES)).toBeNull(); // Super Admin without the capability
+  });
+
+  it('shows nothing for a caller who holds resourceAnalytics alongside any other capability -- they already have real groups to look at', () => {
+    expect(getAdminUnavailableNotice(false, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true, resourcesDashboard: true })).toBeNull();
+    expect(getAdminUnavailableNotice(true, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true })).toBeNull(); // Super Admin already has General
+  });
+
+  it('the notice is a plain string, never a link, control or object shaped like a nav item', () => {
+    const notice = getAdminUnavailableNotice(false, { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true });
+    expect(typeof notice).toBe('string');
   });
 });
 
@@ -436,8 +467,12 @@ describe('Wave 1 §7.1 — loading, failure and revocation behaviour', () => {
         capabilities: { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true },
       },
     };
-    expect(navFor(roles(['analyst']))).toEqual(['Analytics']);
-    expect(buildAdminNavGroups(parseIsAdmin(body), parseAdminCapabilities(body)).map((g) => g.label)).toEqual(['Analytics']);
+    // Wave 3: resourceAnalytics alone no longer produces a nav group -- it
+    // produces the unavailable notice instead (asserted in its own describe
+    // block). The nav-group array itself is empty either way.
+    expect(navFor(roles(['analyst']))).toEqual([]);
+    expect(buildAdminNavGroups(parseIsAdmin(body), parseAdminCapabilities(body))).toEqual([]);
+    expect(getAdminUnavailableNotice(parseIsAdmin(body), parseAdminCapabilities(body))).not.toBeNull();
   });
 
   it('a truthy legacy hasResourcesAccess NEVER grants a group on its own', () => {
@@ -469,11 +504,13 @@ describe('Wave 1 §7.1 — loading, failure and revocation behaviour', () => {
     }
   );
 
-  it('role revocation: the next /api/admin/me response removes the group', () => {
+  it('role revocation: the next /api/admin/me response removes the notice (there is no group to remove any more)', () => {
     const before = { data: { isAdmin: false, capabilities: { ...NO_ADMIN_CAPABILITIES, resourceAnalytics: true } } };
     const after = { data: { isAdmin: false, capabilities: { ...NO_ADMIN_CAPABILITIES } } };
-    expect(buildAdminNavGroups(parseIsAdmin(before), parseAdminCapabilities(before)).map((g) => g.label)).toEqual(['Analytics']);
+    expect(buildAdminNavGroups(parseIsAdmin(before), parseAdminCapabilities(before))).toEqual([]);
+    expect(getAdminUnavailableNotice(parseIsAdmin(before), parseAdminCapabilities(before))).not.toBeNull();
     expect(buildAdminNavGroups(parseIsAdmin(after), parseAdminCapabilities(after))).toEqual([]);
+    expect(getAdminUnavailableNotice(parseIsAdmin(after), parseAdminCapabilities(after))).toBeNull();
   });
 
   it('the fail-closed default is frozen, so no caller can mutate it into a grant', () => {
@@ -721,7 +758,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
     expect(ANALYTICS_ITEMS[0]).toEqual({ label: 'Analytics', href: '/admin/resources/analytics' });
   });
 
-  it('group order and match modes for pre-existing groups are unchanged', () => {
+  it('group order and match modes for pre-existing groups are unchanged (Wave 3: Analytics no longer among them)', () => {
     const all: AdminCapabilities = {
       resourcesDashboard: true,
       resourceContentAdmin: true,
@@ -732,7 +769,6 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
     const groups = buildAdminNavGroups(true, all);
     expect(groups.map((g) => `${g.label}:${g.matchMode}`)).toEqual([
       'General:exact',
-      'Analytics:exact',
       'Resources:exact',
       'Content:prefix',
       'Workflow:exact',
