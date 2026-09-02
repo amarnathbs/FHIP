@@ -1,11 +1,11 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient().from('benchmark_sources').select('*').order('created_at', { ascending: false });
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark sources list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
@@ -20,5 +20,5 @@ export const POST = adminRoute(async (req: Request) => {
     .insert({ ...body, status: 'draft', created_by: user!.id })
     .select('*')
     .single();
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark source create') : ok(data);
 });

@@ -50,7 +50,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!canManageDiscovery(current)) return bad("You don't have permission to manage Context Mapping.", 403);
 
   try {
-    await deleteContextMapping(supabase, id);
+    // Admin A0.2 Wave 4 (PO4-4 / DEF4-10): canonical single-resource DELETE
+    // contract — first successful deletion -> 200; unknown/already-gone id
+    // -> 404, never a false 200.
+    const { deleted } = await deleteContextMapping(supabase, id);
+    if (!deleted) return bad('This mapping no longer exists.', 404);
     return ok({ id });
   } catch (err) {
     console.error('Resources context mapping delete error:', err);

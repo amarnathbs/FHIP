@@ -1,5 +1,5 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
-import { ok, bad } from '@/lib/api';
+import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
+import { ok } from '@/lib/api';
 
 // Gap review: evaluation runs where nothing in the library matched. Each row
 // keeps the exact context_snapshot the matcher evaluated against, so an
@@ -15,5 +15,5 @@ export async function GET() {
     .eq('matched_count', 0)
     .order('run_at', { ascending: false })
     .limit(200);
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Recommendation gaps list') : ok(data);
 }

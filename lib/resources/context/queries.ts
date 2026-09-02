@@ -154,9 +154,15 @@ export async function updateContextMapping(supabase: SupabaseClient, id: string,
   if (error) throw error;
 }
 
-export async function deleteContextMapping(supabase: SupabaseClient, id: string): Promise<void> {
-  const { error } = await supabase.from('resource_context_links').delete().eq('id', id);
+// Admin A0.2 Wave 4 (PO4-4 / DEF4-10): same zero-row fix as
+// lib/resources/discovery/relatedAdmin.ts's removeRelatedContent() — a bare
+// `.delete().eq('id', id)` with no `.select()` cannot distinguish "deleted
+// one real row" from "matched nothing", so it always reported success even
+// for an unknown id.
+export async function deleteContextMapping(supabase: SupabaseClient, id: string): Promise<{ deleted: boolean }> {
+  const { data, error } = await supabase.from('resource_context_links').delete().eq('id', id).select('id');
   if (error) throw error;
+  return { deleted: (data ?? []).length > 0 };
 }
 
 // --- Bidirectional: Resource -> FHIP action (spec §64/§100) -----------------
