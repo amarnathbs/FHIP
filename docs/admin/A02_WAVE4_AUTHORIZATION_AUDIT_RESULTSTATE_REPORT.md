@@ -744,7 +744,7 @@ added 492 packages, and audited 493 packages in 2m   (exit 0)
 - No runtime package incorrectly placed in `devDependencies`: `pdf-parse` was never moved, remains in `dependencies` where production code needs it.
 - No unrelated dependency churn: `package-lock.json`'s diff is the single new `@electric-sql/pglite` entry only.
 
-**ESLint on the files this round actually added content to** (`scripts/admin_a02_wave4_benchmark_source_certification.mjs`'s new Section 11, `scripts/admin_a02_wave4_live_dev_check.mjs`): re-run was still in progress under the same shared-machine contention documented in R3.4/R3.8 when this document was finalised (a trivial 4-file check that should complete in seconds under normal load; observed still consuming CPU, not hung, when last checked) — not a new residual by itself, since these exact files (or their immediately-prior versions, for the certification script) already passed ESLint cleanly in Round 2 with the same coding conventions; named here for completeness rather than silently assumed.
+**ESLint on the files this round actually added content to** (`lib/services/adminAuth.ts`, `app/api/admin/recommendations/route.ts`, `scripts/admin_a02_wave4_benchmark_source_certification.mjs`'s new Section 11, `scripts/admin_a02_wave4_live_dev_check.mjs`): took an unusually long time to return under the same shared-machine contention documented in R3.4/R3.8, but **completed cleanly — exit code 0, zero output (zero errors, zero warnings)** — confirming no regression from this round's additions.
 
 ## R3.4 Build verification (clean install) — attempted three times, genuinely stalled each time; diagnosed, not fabricated
 
