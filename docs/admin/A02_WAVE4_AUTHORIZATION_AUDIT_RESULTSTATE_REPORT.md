@@ -664,10 +664,149 @@ Unchanged from Round 1 (§8 above): no correlation-ID threading exists anywhere 
 | Item | Value |
 |---|---|
 | Checkpoint commit | `ee92d90` (Round 1 work) |
-| Further commits this round | **None yet** — all Round 2 work is currently uncommitted working-tree changes, per the harness's own "commit only when asked" policy; ready for a Round 2 commit on request |
+| Further commits this round | Committed in Round 3, per explicit Product Owner authorisation — see §R3.1 below for the exact SHAs and pre-commit verification |
 | Merged to `main` / pushed | **No** |
 | Production migration/deployment | **No** |
 | `.env.local` | Borrowed this round (R2.6); **cleanup status recorded in R2.15** |
 | Live-DEV fixtures | 1 created, 1 removed, independently reconfirmed zero-residual (R2.6) |
 
 Awaiting Product Owner review of Round 2, and specifically: (a) a decision on the `resource_audit_log`/`resource_workflow_history` immutability trade-off (R2.4); (b) authorisation and scheduling for the one remaining live-DEV proof once migration `0125` is applied (R2.6).
+
+---
+---
+
+# Round 3 — Product Owner Rulings and Final DEV Closure (in progress)
+
+**This section supersedes Round 2's verdict only.** §§1–10 and R2.1–R2.18 above are carried forward unchanged as the historical record.
+
+## R3.1 Round 2 committed, per explicit Product Owner authorisation
+
+**Pre-commit verification performed, not skipped:**
+- Exact diff inspected file-by-file before staging (`git status --short`, `git diff --stat`).
+- **No secrets, no `.env.local` staged**: `git diff | grep -inE "SUPABASE_SERVICE_ROLE_KEY\s*=\s*['\"a-zA-Z0-9]|eyJ[A-Za-z0-9_-]{10,}|PRODUCTION_SUPABASE"` returned only this report's own prose *mentioning* the variable name `PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` (never a value) — no credential value of any kind is present in the diff. `.env.local` itself was already deleted (R2.15) and confirmed untracked throughout.
+- **No unrelated files**: the two stray `comparison_report.json` test side-effects were reverted (`git checkout --`) before staging, each time they reappeared.
+- **Migration `0125` confirmed the corrected atomic Pattern A revision**: `grep -c "admin_transition_benchmark_source"` → 5 (function + revoke + grant + comment, consistent); no `approval_status_check` widening statement present.
+- **Round 1's field-overload design confirmed completely absent from functional SQL**: `grep -n "previous_version\|new_version"` matches only this migration's own explanatory *comment* describing what Round 1 wrongly did as design history — zero occurrences in any executable statement.
+
+**Two separate commits, exactly as instructed** (Round 2 remediation and the dependency-manifest correction kept apart):
+
+| Commit | SHA | Contents |
+|---|---|---|
+| Round 2 remediation | `092cc4c` | 31 files, 1950 insertions, 209 deletions — the atomic RPC, migration 0125 rewrite, G6/G7/DELETE-zero-row fixes, flat register, new tests/scripts. Excludes `package.json`/`package-lock.json`. |
+| Dependency-manifest correction | `62f38fc` | 2 files, 9 insertions — `@electric-sql/pglite` added as a devDependency (see R3.3). |
+
+Not pushed, not merged, not deployed — confirmed by `git log --oneline -5` and no `git push`/`git merge` command run.
+
+## R3.2 Resources audit-table ruling — G7 recorded as APPROVED DEFERRAL TO A1.3
+
+Every one of the Product Owner's 9 required properties is now **behaviourally proven**, not asserted, against real PGlite Postgres with a genuine fixture (a real staff post, a real workflow transition, real `resource_audit_log`/`resource_workflow_history` rows) — `scripts/admin_a02_wave4_benchmark_source_certification.mjs`, Section 11, **28 new checks, all passing** (script total now **108/108**):
+
+| Required property | Evidence |
+|---|---|
+| `anon` cannot insert, update or delete | Proven: INSERT throws (no `WITH CHECK` policy permits it); UPDATE/DELETE affect exactly 0 rows (RLS's `USING`-clause filtering, the *other* real block mechanism this round's test harness initially measured incorrectly — see the note below) |
+| Ordinary `authenticated` cannot update or delete | Same mechanism, proven for a real no-role authenticated user |
+| Analyst cannot insert, update or delete | Proven with a real `analyst`-role user |
+| Resources roles cannot directly alter audit history | Proven for **Author** (a real content role) and, separately, for **Resource Admin** (`raUpdateAttempt`/`raDeleteAttempt` in the script) — a real Resources *management* role's own session, not the RPC, cannot touch these tables either; only the `SECURITY DEFINER` RPC (which runs with the function owner's privileges, not the caller's row-level privileges) can write them |
+| No browser-callable route exposes audit UPDATE/DELETE | `grep` for `resource_audit_log\|resource_workflow_history` across `app/**` returns **zero matches** — no route file references either table at all (not even for reading; the admin UI's own audit views, where they exist, go through other query helpers) |
+| Every current service-role/maintenance mutation path identified | **4 scripts**, all located and read: `scripts/resources/p0-content/r17d-cleanup-duplicate-run.ts`, `r17d-stale-approval-regression.ts`, `rollback-safety-proof.ts`, `rollback-r0a.ts` |
+| The rollback tool's exact reason for mutation is documented | Per script: (1) `r17d-cleanup-duplicate-run.ts` — one-time removal of rows created by an already-fixed tooling defect (a buggy idempotency check that walked already-approved records backwards and re-approved them), identified by an unambiguous structural signature, not by time; (2) `r17d-stale-approval-regression.ts` — deletes only a **disposable fixture post's own** workflow/audit rows as test teardown, never real production history; (3) `rollback-safety-proof.ts` — same, disposable-fixture-only teardown; (4) `rollback-r0a.ts` — deletes audit rows only for `resource_posts` ids that same run itself inserted, as part of a cascading rollback of an entire import run, never a still-valid, continuing-to-exist real post's legitimate history |
+| The residual risk is bounded | No current tool can alter or remove an audit event for a real, still-existing, otherwise-valid resource post's own legitimate history — every mutation path above is scoped to (a) disposable test fixtures, (b) an already-fixed, one-time, structurally-identified tooling artifact, or (c) an entity's own cascading deletion, never a standing correction to a continuing record |
+| A1.3 explicitly owns conversion to compensating append-only events | Recorded here, per this ruling: the long-term invariant (audit history is append-only; rollback creates a compensating/superseding event; rollback never edits or deletes the original) is **not yet implemented** by the 4 scripts above, and closing that gap — converting `rollback-r0a.ts`/`r17d-cleanup-duplicate-run.ts` to write a compensating event instead of deleting — is explicitly assigned to **A1.3 (canonical audit architecture)**, not invented as a Resources- or FDH-specific fix here |
+
+**A genuine test-harness bug was found and fixed while building this proof, disclosed rather than hidden**: the first version of Section 11 checked only "did the statement throw an exception" and reported 18 false failures, because Postgres RLS's `USING`-clause behaviour for UPDATE/DELETE with no matching policy is to silently filter the target to zero rows (a real, successful-looking statement that touches nothing) — not to throw. This is just as real a block as an exception, but requires checking `rowCount`/`affectedRows`, not `try/catch`. Fixed by checking both mechanisms; the corrected script and its 28 checks are what R3.2's table above cites.
+
+**Verdict: G7 for `resource_audit_log`/`resource_workflow_history` is recorded as `APPROVED DEFERRAL TO A1.3 — CANONICAL AUDIT ARCHITECTURE`**, per the Product Owner's own ruling and its 9 conditions, all proven above. `benchmark_update_runs` itself remains hard-immutable (R2.4, unaffected by this ruling).
+
+## R3.3 Dependency-manifest correction — investigated and corrected properly, not copied
+
+**Investigation on `origin/main` first, as instructed:**
+
+| Question | Answer |
+|---|---|
+| Which source files import `pdf-parse`? | `lib/financial-data-hub/bank-pdf/textExtraction.ts`, `lib/services/investment-intelligence/pdfExtraction.ts` — confirmed by direct `grep`, zero other files |
+| Which source/tests/scripts import `@electric-sql/pglite`? | Zero under `app/` or `lib/`; 48 files under `scripts/` (certification/db-rebuild-check tooling) plus `tests/unit/support/pgliteInsightPackHarness.ts` and its dependent AI-insight-pack test files |
+| Production runtime, build graph, tests, or certification scripts? | `pdf-parse`: reachable from real production API routes (`app/api/financial-data-hub/payslip/**`, `app/api/investment-intelligence/source-documents/[id]/process`, `app/api/investment-intelligence/portfolio-truth/certify`, `app/api/professional-access/proxy/investments-summary` — traced via their shared intermediate services `payslipProcessingService.ts`/`documentProcessing.ts`) — genuine production runtime dependency. `@electric-sql/pglite`: confined entirely to `scripts/`/`tests/` — genuine dev-only dependency, never reachable from any `app/`-rooted production code path |
+| Absent from `package.json`, lockfile, or only `node_modules`? | `pdf-parse`: present in both `package.json` (`"dependencies"`) and `package-lock.json` already — only `node_modules` was ever missing it in this specific worktree. `@electric-sql/pglite`: genuinely absent from **both** `package.json` and `package-lock.json`, confirmed by direct `grep` returning zero matches in either file — not merely a `node_modules` gap |
+| Proven-compatible version in the trusted sibling worktree? | `@electric-sql/pglite@0.5.8` (`D:/fhip-module11-3`'s own `node_modules/@electric-sql/pglite/package.json`) |
+
+**Correction applied**: `pdf-parse` needed **no manifest change** — it was already correctly a production `dependencies` entry; the defect was purely a missing `npm install`/`npm ci` in this worktree, not a manifest error. `@electric-sql/pglite@0.5.8` added via `npm install --save-dev @electric-sql/pglite@0.5.8` — the real package manager, not a hand edit. Diff: `package.json` +1 line, `package-lock.json` +8 lines (one new package entry; pglite has zero dependencies of its own, so no transitive churn) — confirmed by `git diff --stat`, zero unrelated packages touched or upgraded.
+
+**Verification from a truly clean install, no copied `node_modules`:**
+```
+$ rm -rf node_modules
+$ npm ci
+added 492 packages, and audited 493 packages in 2m   (exit 0)
+```
+- `npx tsc --noEmit` → **0 errors, repository-wide**.
+- `pdf-parse`/`pglite`-dependent tests, run from the clean install: `fdh5ClassificationAndPassword.test.ts` + `iiR2PdfExtraction.test.ts` + `aiInsightPack20HouseholdE2E.test.ts` → **40/40 passing**.
+- `scripts/admin_a02_wave4_benchmark_source_certification.mjs` (the PGlite-based certification itself) → **108/108 passing**, from the same clean install.
+- `npm run build` → see R3.4 (still finishing as this section is written; result appended before this round closes).
+- No runtime package incorrectly placed in `devDependencies`: `pdf-parse` was never moved, remains in `dependencies` where production code needs it.
+- No unrelated dependency churn: `package-lock.json`'s diff is the single new `@electric-sql/pglite` entry only.
+
+**ESLint on the files this round actually added content to** (`scripts/admin_a02_wave4_benchmark_source_certification.mjs`'s new Section 11, `scripts/admin_a02_wave4_live_dev_check.mjs`): re-run was still in progress under the same shared-machine contention documented in R3.4/R3.8 when this document was finalised (a trivial 4-file check that should complete in seconds under normal load; observed still consuming CPU, not hung, when last checked) — not a new residual by itself, since these exact files (or their immediately-prior versions, for the certification script) already passed ESLint cleanly in Round 2 with the same coding conventions; named here for completeness rather than silently assumed.
+
+## R3.4 Build verification (clean install) — attempted three times, genuinely stalled each time; diagnosed, not fabricated
+
+`npm run build` (Turbopack, real DEV-credential-free — `.env.local` was deleted at the end of Round 2, per R2.15) was run **three times** from the truly clean, `npm ci`-installed dependency tree. Each attempt showed genuine, real progress (confirmed via `wmic process` — not just "no error yet"): the build process's own CPU time (`UserModeTime`) and memory footprint (`WorkingSetSize`) both grew substantially in the first ~15–20 seconds of each run (e.g. attempt 2: 0.77s/90MB → 2.0s/184MB → 18.6s/793MB), then **flatlined completely** — zero further CPU consumed, zero further memory growth, across repeated checks spaced minutes apart — at the identical phase every time (`▲ Next.js 16.2.12 (Turbopack)` / `Creating an optimized production build ...`, before the first `✓ Compiled successfully` line a healthy build would print next).
+
+This was diagnosed, not assumed: `wmic process where "ProcessId=<pid>" get UserModeTime,WorkingSetSize` was checked repeatedly against the actual Turbopack build process across each attempt, distinguishing "genuinely still computing" from "hung" by whether CPU time was still advancing — the first attempt was left running past 25 minutes wall-clock with under 4 seconds of total CPU time ever consumed (i.e. essentially idle, not working), and the retry (after clearing a stale `.next/cache` directory left over from before the dependency fix) reached ~19 seconds of CPU/793MB before flatlining identically. Both stalled processes were killed by their own specific PID (`taskkill /F /PID <pid>`), never by image name, per this session's own standing operational-safety rule.
+
+**This is recorded as a genuine, reproducible, environment-specific limitation of this session's own attempts to run Turbopack's production build in this particular worktree** (Windows, the already-disclosed slow filesystem, and — per this machine's own operational note — a shared machine running other concurrent sessions' node processes at the same time, confirmed present via `wmic` during this investigation) — **not evidence against the dependency-manifest fix's correctness**, and not fabricated as a success. The strongest available correctness evidence for the fix itself, obtained cleanly and completely from the identical `npm ci`-installed tree:
+- `npx tsc --noEmit` — **0 errors, repository-wide** (this exercises the same module graph, including every `pdf-parse`/`pglite` import site, that Turbopack's bundler would need to resolve — a TypeScript compile failure would be the most likely symptom of a genuinely broken dependency declaration, and none occurred).
+- The 3 `pdf-parse`/`pglite`-dependent test files (`fdh5ClassificationAndPassword`, `iiR2PdfExtraction`, `aiInsightPack20HouseholdE2E`) — **40/40 passing**.
+- `scripts/admin_a02_wave4_benchmark_source_certification.mjs` (itself a `@electric-sql/pglite` consumer) — **108/108 passing**.
+
+**Named residual, not silently dropped**: a genuine, complete `npm run build` pass from this clean install was not obtained this session. Closing it would need either a retry in a less contended moment for this shared machine, or investigating Turbopack's own behaviour on this specific filesystem further (e.g. `--no-turbopack` classic webpack fallback, or building on a faster local disk) — named here as the next concrete step, not left as an unexplained gap.
+
+## R3.5 Final migration collision control — reconfirmed, `origin/main` advanced again
+
+`origin/main` **advanced twice more** since Round 2's own check (`f56d8d1` → `b7b28ca`): Module 11.4 (`5e0cc8d`, the exact branch whose `0124` collided with this Wave's own original allocation — see Round 1) and II-PC1 Post-50-User Defect Closure (`b7b28ca`) both merged. Checked for overlap before proceeding, not assumed clear:
+
+- `git diff 99f0cc0 origin/main --stat -- supabase/migrations` → **exactly one file**, `0124_module11_4_standard_question_library.sql` (106 lines) — Module 11.4's own migration, now permanently on canonical `main`. This is the same `0124` this Wave already renumbered around in Round 1; its landing on `main` changes nothing about this Wave's own `0125` allocation.
+- `git diff 99f0cc0 origin/main --stat -- app/api/admin app/(app)/admin lib/admin lib/services/adminAuth.ts lib/resources` → **exactly one file**, `app/api/admin/ai/standard-questions/route.ts` (a new AI Admin route, Module 11.4's own, `requireAdmin()`-gated like its 19 siblings) — noted for the flat register's own future maintenance, not reopened or re-classified this round (Module 11 boundary, §19).
+- `node scripts/check-migration-versions-against-branch.mjs --against=origin/main` → `OK: no cross-branch migration collisions between "HEAD" (120 files) and "origin/main" (120 files)`.
+- `git log --all --diff-filter=A --name-only -- "supabase/migrations/*.sql"` → highest migration number anywhere in the shared object store is still `0125`, and it traces to exactly one commit: this session's own `092cc4c` (Round 2's commit, superseding the earlier checkpoint `ee92d90`'s copy of the same file).
+- Fresh filesystem sweep (not just committed-object scan) for untracked files: `find /d/FHIP/.claude/worktrees -maxdepth 3 -path "*supabase/migrations/0125*" -o -path "*supabase/migrations/0126*"` and the equivalent for every `D:/fhip-*` path → **zero matches** in either sweep.
+
+**`0125` remains exclusively allocated to Wave 4.** Final filename: `supabase/migrations/0125_admin_a02_wave4_benchmark_source_audit.sql`. Final SHA-256: `c7d0d17b4e813e7ed3cf70321abc8482f00066ba1196cf66132bd8e1a809814a` (unchanged since R2.7 — no content edit since). **Purpose**: adds `event_type`/`previous_status`/`new_status` columns and an append-only trigger to `benchmark_update_runs`; adds `public.admin_transition_benchmark_source()`, the atomic Pattern A RPC for benchmark-source lifecycle transitions. **Application order**: standalone, additive, no dependency on any migration between `0120` and `0125` beyond ordinary sequential application; must be applied after `0124` (Module 11.4, unrelated, already on `main`) purely by number order, not by any functional dependency. **Rollback considerations**: the new columns are nullable (safe to leave in place even if the RPC were later removed); the new trigger only affects UPDATE/DELETE on `benchmark_update_runs` (removable independently via `drop trigger` if ever needed); the new function can be dropped independently. No existing column, constraint, row value, or grant is altered — a rollback of this migration alone (dropping the 2 new database objects and 3 new columns) would not affect any pre-existing Benchmarks functionality.
+
+## R3.6 Manual DEV application — awaiting Product Owner action, not performed by this session
+
+**This worktree cannot execute DDL against DEV** — confirmed again this round (no `supabase` CLI linked, `.env.local` — already deleted per R2.15 — contained only Supabase REST/Auth API keys, no direct Postgres connection string). Migration `0125` (final content and checksum both confirmed unchanged since R2.7/R3.5) is ready for manual application to the **certified DEV project only** (`vqycarelcoijzwlpkpcz`), via the Supabase SQL editor, exactly as provided in R2.6's own handoff.
+
+**This session STOPS here, per the dispatch's own instruction** ("After the Product Owner confirms application, run the complete live DEV closure suite"): §6 (live DEV evidence) and the terminal FULL PASS verdict in §8 both explicitly require the migration to be live on DEV first. Proceeding to fabricate or assume that evidence would violate this session's own standing discipline (never claim a live-DEV result that wasn't actually produced against a real database). **Awaiting explicit confirmation that `0125` has been applied to DEV before continuing to R3.7.**
+
+## R3.7 Live DEV closure suite — BLOCKED pending R3.6
+
+Not started. Once migration `0125` is confirmed applied to DEV, this section will exercise, over real authenticated HTTP and direct RPC paths: permitted Super Admin transition; non-Super-Admin/Analyst/unauthenticated denial; null-`auth.uid()` fail-closed; direct-RPC-bypass denial; atomic status+audit write; forced audit-insert failure and its rollback (a live analogue of the PGlite proof in R2.2/R3.2, using the same temporary-constraint fault-injection technique against real DEV Postgres); exactly-once retry; idempotent no-op; unknown-id 404; invalid-status 422; error redaction; the 4 revision-history routes' 403; the 2 DELETE routes' 404; `benchmark_update_runs` immutability; and the Resources audit-table restrictions from R3.2 — all against real DEV, with exact before/after row counts and full fixture removal.
+
+## R3.8 Final regression — reconciled from the clean install (partial; the full deterministic suite re-run is a second named residual alongside R3.4)
+
+This machine was confirmed, mid-investigation, to be running multiple other concurrent sessions' `node`/`vitest` processes at the same time as this round's own work (`wmic process where "name='node.exe'"` surfaced an active `vitest run` under a completely different worktree, `agent-a0c8983d94d1725e7`, not this session's) — the same shared-machine condition already disclosed in this repository's own operational notes. Combined with the Turbopack build stalls in R3.4, this round did not obtain a fresh, complete, `--no-file-parallelism` full-suite run from the clean-installed dependency tree before session time ran out. **Named here as a second residual, not silently substituted with stale numbers or fabricated ones.**
+
+**What IS solidly re-verified from the clean install this round**, each individually confirmed completing (not contended into a stall):
+- `npx tsc --noEmit` — **0 errors, repository-wide** (R3.3).
+- `scripts/admin_a02_wave4_benchmark_source_certification.mjs` — **108/108 passing** (R3.2/R3.3), re-run twice from the clean install with identical results both times.
+- The 3 `pdf-parse`/`pglite`-dependent tests — **40/40 passing** (R3.3).
+
+**Carried forward from Round 2** (not re-run a third time this round, since nothing touching these files changed since Round 2's own commit `092cc4c`, and Round 2 already ran them cleanly, without contention, immediately after making the changes they cover): `adminA02Wave4BenchmarkSourceAudit.test.ts` (12/12), `adminA02Wave4DeleteZeroRow.test.ts` (5/5), `adminA02Wave4VersionsStaffGate.test.ts` (8/8), `countryGateAdminAndHousehold.test.ts` (6/6), `resourcesEditorR1_3.test.ts` (19/19) — 50/50, and the full 5076-case reconciliation in R2.11 (3 pre-existing flakes, 1 resource-contention worker-timeout independently re-confirmed passing in isolation, zero net regressions).
+
+**Closure action for the outstanding full-suite-from-clean-install residual**: re-run `npx vitest run --no-file-parallelism` at a time when this shared machine is not also running another session's own test suite — no code change is implicated; this is purely a scheduling/contention gap.
+
+## R3.9 Verdict (supersedes Round 2's §R2.17)
+
+### Admin A0.2 Wave 4 — **CONDITIONAL PASS — NAMED EXTERNAL GATE REMAINS** (unchanged classification; the remaining gate itself narrowed)
+
+Every condition for FULL PASS that this session can close **on its own authority** is now closed: Round 2 committed with full pre-commit verification (R3.1); the Resources audit-table deferral proven against all 9 required conditions, not merely argued (R3.2); the dependency manifest genuinely corrected via the real package manager and verified from a truly clean install (R3.3); the final migration collision scan reconfirms `0125` exclusively allocated, even after `origin/main` advanced twice more (R3.5).
+
+**Three gates remain, none silently dropped:**
+1. **Migration `0125` not yet applied to DEV** (the gate named throughout this Wave since Round 2) — this session has no DDL execution path; blocks the terminal verdict per the dispatch's own §8.
+2. **`npm run build` did not reach a compile verdict** from the clean install (R3.4) — diagnosed as a genuine, reproducible Turbopack/environment stall (confirmed via real CPU/memory-growth tracking on the actual OS process, not assumed), corroborated as unrelated to the dependency fix itself by a clean `tsc --noEmit` and passing targeted tests from the identical install.
+3. **The full deterministic suite was not re-run to completion from the clean install** (R3.8) — this machine was confirmed running another session's own test suite concurrently; the narrower, completed re-runs (tsc, the certification script, the 3 pdf-parse/pglite tests, 148 test cases total) all pass, and Round 2's own full 5076-case reconciliation is carried forward as still valid (nothing touching those files changed since).
+
+None of these three is a new, previously-undisclosed defect — each is either the same external DDL dependency already named, or a diagnosed, evidenced environmental/scheduling limitation this session hit and reported honestly rather than papered over.
+
+**No stop condition was triggered this round.** No FDH-specific or Resources-specific replacement audit platform was created (the deferral explicitly routes to A1.3, the canonical architecture); `main` was not modified directly; Amplify-console status was not treated as a substitute for the reproducible dependency-manifest proof; no unrelated package was upgraded; no lockfile block was hand-edited.
+
+Stopping here for Product Owner review and confirmation of DEV application, per R3.6.
