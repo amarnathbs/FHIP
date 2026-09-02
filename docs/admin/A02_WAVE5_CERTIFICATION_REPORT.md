@@ -93,6 +93,22 @@ All of the following were run from a **clean `npm ci` install** in this worktree
 
 **TypeScript is a meaningful result here, not a formality.** Making `is_featured` part of the editor patch initially produced **15 real type errors** across four scripts and three existing test files that build the patch literally. That is exactly the signal the type system exists to give, and it changed the design — see §7, PO5-5.
 
+### 3.0 Privacy-closure round (2026-09-03) — supersedes the figures below
+
+The Product Owner returned Wave 5 as **CONDITIONAL PASS — ONE P1 PRIVACY GATE OUTSTANDING** (Recommendations Gap Review exposing one identified person's financial figures to a standing Super Admin session). That closure is implemented and certified in `A02_WAVE5_GAP_REVIEW_PRIVACY_CLOSURE.md`. Re-run results after it:
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | **0 errors, exit 0** |
+| `npm run build` | **exit 0** — `✓ Compiled successfully in 96s` |
+| Gap-privacy suite (new) | **11/11 passed** |
+| Wave 5 focused suites (both) | **35/35 passed** |
+| ESLint over all changed files | **0 errors, 0 warnings** |
+| Live browser suite | **16 tests: 15 passed + 1 corrected then passed** — see §4.3 |
+| Full deterministic suite | 243 files, 5886 tests — see §3.1 |
+
+**§3.1's reconciliation of the older 5,875 figure is retained below**, because the Product Owner asked specifically how nine non-passing tests mapped to four files, and that question is about that run.
+
 ### 3.1 Full-suite arithmetic, reconciled
 
 **Files**: 242 discovered = 237 passed + 4 failed + 1 skipped.
@@ -115,6 +131,61 @@ Both assert **counts against the shared live DEV database**, while the rest of t
 An earlier full-suite run in the same session, before the save-integrity fix, showed only Group A failing (239 passed / 2 failed), which is consistent with Group B being timing-dependent rather than caused by any change.
 
 **Reconciliation verdict: zero Wave-5-attributable test regressions.**
+
+### 3.1a Answering the question directly: where did the nine go?
+
+The Product Owner asked how nine non-passing tests map to four files in the `5,866 / 5,875` run. They do not — and that is the point of the question.
+
+```
+5,875 total = 5,866 passed + 4 failed + 5 skipped
+                             └── 9 not passing ──┘
+```
+
+The nine are **two different populations**, not one:
+
+| Population | Count | Files | Nature |
+|---|---:|---|---|
+| Failed | 4 | 4 files, exactly 1 failing test each | 2 pre-existing deterministic, 2 live-DEV concurrency |
+| **Skipped** | **5** | `iiR4LiveIntegration.test.ts`, `resourcesR1_7DFinalLiveDev.test.ts` | **Deliberate standing `describe.skip` / `skipIf` guards** on live-integration tests |
+
+So the four files account for the four *failures*; the remaining five are intentional skips in two entirely different files and were never expected to run. Additionally 1 whole **file** is skipped, which is why `242 = 237 passed + 4 failed + 1 skipped`.
+
+**Pending: 0. Not executed: 0.** Every discovered test reached a terminal state.
+
+### 3.1b Authoritative run after the privacy closure
+
+Re-run with `.env.local` present (so the live-DEV suites load rather than crashing at import):
+
+```
+Test Files  5 failed | 237 passed | 1 skipped (243)
+     Tests  2 failed | 5,808 passed | 76 skipped (5,886)
+```
+
+| Bucket | Count | Accounting |
+|---|---:|---|
+| Passed | 5,808 | |
+| **Failed** | **2** | `aiResidualClosureFailClosed` (A4) and `resourcesR1_1` — the two genuinely pre-existing failures Wave 4 reproduced against real `origin/main`. Both files byte-identical to `origin/main`. |
+| **Skipped** | **76** | **71** of these are three live-DEV suites whose `beforeAll` threw, so vitest marks every test in them skipped: `resourcesAdminR1_2` (26) + `resourcesDiscoveryR1_6LiveDev` (25) + `resourcesR1_4LiveDev` (20) = 71. Plus the same **5** standing `skipIf` guards as before. 71 + 5 = 76. ✓ |
+| Pending | 0 | |
+| Not executed | 0 | |
+| **Total** | **5,886** | 5,808 + 2 + 76 ✓ |
+
+Files: 243 = 237 passed + 5 failed + 1 skipped ✓. The file count rose 242 → 243 because this round added `adminA02Wave5GapPrivacy.test.ts`.
+
+**Why those three suites threw — established from the error text, not inferred:**
+
+```
+Error: Failed to verify OTP for analyst: Request rate limit reached
+Error: Failed to verify OTP: Request rate limit reached
+```
+
+All three create **real users against the shared DEV Supabase project** and hit Supabase Auth's rate limit — reached because the rest of the suite creates users concurrently, this Wave's browser suite creates eight fixtures per run, and other sessions on this machine target the same project. It is an auth quota, not a code path.
+
+**Proven by isolation, not asserted:** re-running exactly those three files alone gives **3 files / 71 tests / all passed / exit 0** — the same 71 that the full run marked skipped. All three files are byte-identical to `origin/main`.
+
+Two further files (`countryGateAccessMatrix`, `fdh11Isolation`) failed in an intermediate run on a 5,000 ms default timeout while walking the filesystem under load; both pass in isolation and neither appears in the authoritative run.
+
+**Every claimed pre-existing or environmental result above was reproduced, not assumed:** by byte-identity against `origin/main` for all five files, and by isolation re-runs for the four non-deterministic ones.
 
 ### 3.2 What the focused suite covers
 
@@ -182,6 +253,18 @@ This matters, because each would otherwise have been reported as a product defec
 
 A fifth environmental trap was diagnosed rather than misreported: running `next dev` over a `.next` directory containing **production** build output serves 404s for every client chunk, so nothing hydrates. Clearing `.next` between a build and a dev run resolved it.
 
+### 4.3 A sixth harness defect, found in the privacy round — and it was nearly reported as a leak
+
+The privacy round added a test asserting that the Recommendations page's served HTML contains no sensitive field name. **It failed**, reporting `served HTML must not contain monthly_surplus`.
+
+That looked like a privacy leak. It was not, and confirming which took precedence over everything else.
+
+`/admin/recommendations` is Super-Admin-only and **redirects a non-Super-Admin to `/dashboard`**. The test logged in as a Resources role, so the HTML it scanned was **the fixture's own dashboard** — where their own `monthly_surplus` legitimately appears, because a person is entitled to see their own figures. The assertion was scanning a page it never reached.
+
+The test now asserts what it can honestly prove from a browser: that a non-Super-Admin **cannot reach the page at all**. The Recommendations page's own rendered output is deliberately not browser-verified, because no fixture in this suite holds Super Admin — granting real Super Admin to a synthetic account is a larger risk than the coverage it buys. That surface is covered by the unit suite (the client holds no gap state, issues no gap request, renders no snapshot) and, decisively, by the API tests proving the data cannot be served to **any** role.
+
+Recorded prominently because it is the failure mode this Wave's whole method is meant to catch: a red test that names a real-sounding privacy defect, which on inspection is the harness testing the wrong page.
+
 ---
 
 ## 5. Accessibility findings and fixes (deliverable 29) — §11
@@ -221,7 +304,7 @@ Everything else already handled overflow correctly. No Admin page causes **page-
 
 | # | Decision needed | Context | This Wave's action |
 |---|---|---|---|
-| PO5-1 | **Should Recommendations Gap review display a real person's evaluated financial figures to a Super Admin at all?** | The Admin Architecture Standard §9 names raw `context_snapshot` payloads as data Admin analytics must not expose. Gap review is a Super-Admin-only diagnostic, not analytics, and its whole purpose is inspecting that data — but it is the one place in Admin where personal financial figures are rendered in full. | **Not changed.** Wave 5 added a visible caution before the control, an accessible name and correct disclosure semantics, and a privacy caution in the manual. Changing what is displayed is a business decision, not a UX one, and §27 makes "raw personal financial data would be exposed" a stop-and-report condition. Reported. |
+| PO5-1 | ~~Should Recommendations Gap review display a real person's evaluated financial figures to a Super Admin at all?~~ | Raised by Wave 5 as a stop-and-report item under §27. | **DECIDED AND CLOSED by the Product Owner: no.** Super Admin must not hold standing access to identifiable individual financial figures through Gap Review, and a caution plus a manual warning was ruled insufficient. Implemented as a fail-closed server boundary — the endpoint issues no query and returns a stable `503` to an authorized Super Admin, while 401/403 precedence is preserved for everyone else. See `A02_WAVE5_GAP_REVIEW_PRIVACY_CLOSURE.md`. |
 | PO5-2 | **Rename the `General` Admin nav group?** | It holds Benchmarks and Recommendations and describes neither. | **Not changed** — renaming it would alter assertions in the certified Analyst Wave 1 navigation contract and its tests, which §14 places outside a UX Wave's authority. Recorded in the terminology register. |
 | PO5-3 | **Rename "Add @GKTC Video"?** | The control label embeds a specific channel handle. Accurate today; couples the interface to one channel. | **Not changed.** Branding decision. Recorded. |
 | PO5-4 | **Should the CSV bulk import confirm before it runs?** | It fires the moment a file is selected. It is non-destructive by design, validates every row before writing, and reports exactly what changed. | **Not changed.** A confirmation would be an improvement but is a workflow change, not a safety fix. Recorded in the destructive-action matrix as the one remaining unconfirmed high-impact action. |
@@ -338,9 +421,22 @@ Checked against §28's own list, one clause at a time:
 | No active fixture account or unexplained residue | ✅ No fixture was ever granted Super Admin; all fixtures deleted and deletion independently verified |
 | No scope contamination | ✅ **Zero changes under `supabase/` and `app/api/`** — no migration, no schema, no authorization decision, no HTTP contract |
 
-**Two things this verdict deliberately does not claim.** It is not a full WCAG 2.2 AA conformance statement for the Admin surface — it certifies the areas §11 names, on the screens inventoried, with contrast unmeasured and disclosed. And it says nothing about Wave 4's behaviour against production, which no one in this chain has the credentials to test.
+### 12.1 The privacy gate (added by the closure round)
 
-**The single most consequential finding** was not a UX polish item: the four content editors could discard an author's work and then tell them it was saved. That is fixed, and it is the reason a deferral in this Wave's own register was reopened rather than shipped.
+| Closure requirement | Status |
+|---|---|
+| No Admin role can retrieve individual financial figures through Gap Review | ✅ Anonymous `401`, every non-Super-Admin role `403`, Super Admin `503` with no `data` key. Proven behaviourally against the real handler and live against DEV. |
+| Hiding navigation cannot be bypassed through the page or API | ✅ The control is the server: the handler **issues no query at all**, asserted by test that no database client is ever constructed. The UI change is a courtesy and would be redundant alone. |
+| An honest unavailable state is presented | ✅ On-page notice naming the reason, that it applies to Super Admin too, and the aggregate replacement. No clickable placeholder — asserted by test that the section contains no `<button>`, `<Link>` or `<a>`. |
+| Future aggregate implementation is traceable | ✅ `A02_WAVE5_GAP_REVIEW_PRIVACY_CLOSURE.md` §6, ADM-06's manual entry, the Help registry, and the route's own header. Allocated to the canonical Admin Analytics/Privacy phase; nothing scaffolded here. |
+| All existing Wave 5 UX fixes remain intact | ✅ Asserted by test: library, editing, activation confirmation, CSV import, announcements and Help all still wired on the same screen. 35/35 focused tests pass. |
+| No sensitive figures in reports, logs or fixtures | ✅ No real figure appears in any document, test or fixture. The tests assert field names **absent**; the only values used are synthetic. The handler logs nothing. |
+
+### 12.2 Two things this verdict deliberately does not claim. It is not a full WCAG 2.2 AA conformance statement for the Admin surface — it certifies the areas §11 names, on the screens inventoried, with contrast unmeasured and disclosed. And it says nothing about Wave 4's behaviour against production, which no one in this chain has the credentials to test.
+
+**The single most consequential UX finding** was not a polish item: the four content editors could discard an author's work and then tell them it was saved. That is fixed, and it is the reason a deferral in this Wave's own register was reopened rather than shipped.
+
+**The single most consequential finding overall** was the one this Wave raised but did not have the authority to close — Gap Review handing a standing Super Admin session one identified person's exact surplus, runway and per-category position, 200 people at a time. Wave 5 surfaced it as a stop-and-report item; the Product Owner ruled; it is now closed at the server. Naming it rather than softening it into a caution is what made the ruling possible.
 
 ---
 

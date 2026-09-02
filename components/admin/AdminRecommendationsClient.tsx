@@ -69,13 +69,13 @@ interface ConditionsImportOutcome {
   codes?: string[];
   errors?: ConditionsImportRowError[];
 }
-interface GapRun {
-  id: string;
-  user_id: string;
-  run_at: string;
-  matched_count: number;
-  context_snapshot: Record<string, unknown>;
-}
+// The `GapRun` shape that used to live here — id, user_id, run_at,
+// matched_count and the raw `context_snapshot` — was deliberately DELETED,
+// not merely unused, as part of the Wave 5 privacy closure. Keeping a type
+// that describes one identified person's exact financial figures would
+// invite a future contributor to re-wire the fetch that populated it. The
+// endpoint no longer returns that payload; see
+// app/api/admin/recommendations/gaps/route.ts.
 
 const CATEGORIES = ['net_worth', 'retirement', 'goal', 'debt', 'investment_growth', 'cross_border', 'resilience', 'data_quality'];
 const STATUSES = ['ahead_of_plan', 'on_track', 'slightly_behind', 'at_risk', 'significantly_off_track', 'review_required'];
@@ -124,12 +124,10 @@ const emptyForm = () => ({
 
 export function AdminRecommendationsClient() {
   const [list, setList] = useState<Recommendation[]>([]);
-  const [gaps, setGaps] = useState<GapRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [expandedGap, setExpandedGap] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [uploadType, setUploadType] = useState('master');
@@ -148,23 +146,21 @@ export function AdminRecommendationsClient() {
     setLoading(true);
     setError(null);
     try {
-      const [recRes, gapRes] = await Promise.all([fetch('/api/admin/recommendations'), fetch('/api/admin/recommendations/gaps')]);
-      // Admin A0.2 Wave 5 (§9, §19): both branches previously threw the raw
-      // server string and rendered it, and an HTML error page from the edge
-      // surfaced a `SyntaxError` as the operator's message. Both responses
-      // are now read safely and classified.
+      // Wave 5 privacy closure: the gap-review request is GONE, not merely
+      // ignored. This screen no longer asks the server for individual-level
+      // evaluation data at all, so there is no response to cache, no payload
+      // in memory, and nothing for a devtools Network tab to reveal.
+      const recRes = await fetch('/api/admin/recommendations');
+      // Admin A0.2 Wave 5 (§9, §19): this previously threw the raw server
+      // string and rendered it, and an HTML error page from the edge
+      // surfaced a `SyntaxError` as the operator's message. The response is
+      // now read safely and classified.
       const recJson = await readJsonSafely(recRes);
-      const gapJson = await readJsonSafely(gapRes);
       if (!recRes.ok) {
         setError(failureFromResponse(recRes.status, recJson, 'the recommendation library').message);
         return;
       }
-      if (!gapRes.ok) {
-        setError(failureFromResponse(gapRes.status, gapJson, 'the gap review').message);
-        return;
-      }
       setList((recJson?.data as Recommendation[]) ?? []);
-      setGaps((gapJson?.data as GapRun[]) ?? []);
     } catch {
       setError(failureFromThrown(null, 'the recommendation library').message);
     } finally {
@@ -825,51 +821,38 @@ export function AdminRecommendationsClient() {
         )}
       </section>
 
-      <section className="rounded-card border bg-white p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Gap Review — evaluations with no match ({gaps.length})</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Each row is a real user evaluation where nothing in the library matched. Expand to see the exact data evaluated, to decide whether a
-          new recommendation is needed.
+      {/* Gap Review — WITHHELD PENDING PRIVACY-SAFE REIMPLEMENTATION.
+          Product Owner decision, Admin A0.2 Wave 5 privacy closure.
+
+          What used to be here: a browsable list of real evaluation runs,
+          each row showing a truncated user id and a "Show context" control
+          that printed that person's raw evaluated financial figures —
+          monthly surplus, emergency-fund months, exact variance amounts and
+          forecast values — as formatted JSON.
+
+          This is now a static, honest unavailable state. There is NO
+          request, NO row list, NO expandable control and NO placeholder to
+          click: the section renders the same fixed text regardless of what
+          exists in the database, and the endpoint that used to feed it
+          refuses to return individual-level data to any role. Hiding this
+          section is a courtesy to the operator, not the control — see the
+          route handler for the control. */}
+      <section aria-labelledby="gap-review-heading" className="rounded-card border bg-white p-6">
+        <h2 id="gap-review-heading" className="text-lg font-semibold text-gray-900">
+          Gap review — unavailable
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Reviewing individual evaluations has been withdrawn. It showed one identified person’s exact financial figures, and no
+          Admin role — including Super Admin — may hold standing access to those.
         </p>
-        {/* Admin A0.2 Wave 5 (§19) — an honest, visible caution rather than a
-            silent change. Expanding a row shows one real person's evaluated
-            financial figures. This Wave did not alter what is shown here
-            (that is a certified Wave 1 surface and a business decision, not
-            a UX one), but an operator should know what they are opening
-            before they open it, and that it is not for sharing. The wider
-            question of whether this payload should be shown at all is
-            recorded as a disclosed finding for Product Owner decision. */}
-        <p className="mt-1 text-sm font-medium text-attention">
-          Expanding a row shows the real financial figures evaluated for one person. Open it only when you need it to decide
-          whether a recommendation is missing, and do not copy it anywhere else.
+        <p className="mt-2 text-sm text-muted">
+          It will return as an aggregated report: how many evaluations matched nothing, grouped by reason and by the
+          recommendation family involved, with small groups withheld so no individual can be identified from them. Until then
+          there is no supported way to review gaps person by person, and none should be sought.
         </p>
-        <div className="mt-3 space-y-2">
-          {gaps.map((g) => (
-            <div key={g.id} className="rounded border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-gray-700">
-                  User {g.user_id.slice(0, 8)}… · {new Date(g.run_at).toLocaleString()}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setExpandedGap((cur) => (cur === g.id ? null : g.id))}
-                  aria-expanded={expandedGap === g.id}
-                  aria-controls={`gap-context-${g.id}`}
-                  aria-label={`${expandedGap === g.id ? 'Hide' : 'Show'} the evaluated data for the run at ${new Date(g.run_at).toLocaleString()}`}
-                  className="min-h-11 text-xs font-semibold text-trust"
-                >
-                  {expandedGap === g.id ? 'Hide context' : 'Show context'}
-                </button>
-              </div>
-              {expandedGap === g.id && (
-                <pre id={`gap-context-${g.id}`} className="mt-2 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs text-gray-600">
-                  {JSON.stringify(g.context_snapshot, null, 2)}
-                </pre>
-              )}
-            </div>
-          ))}
-          {gaps.length === 0 && !loading && <p className="text-sm text-gray-500">No gaps recorded yet.</p>}
-        </div>
+        <p className="mt-2 text-sm text-muted">
+          Everything else on this page is unaffected — the library, editing, activation and CSV import all work as before.
+        </p>
       </section>
     </div>
   );

@@ -369,6 +369,68 @@ test.describe('Wave 5 — in-product Help and result states (§9, §17)', () => 
   });
 });
 
+test.describe('Wave 5 privacy closure — Recommendations Gap Review', () => {
+  // Every assertion here is about the ABSENCE of a real person's data. No
+  // synthetic figure is created and no real figure is ever read or printed.
+  const SENSITIVE_FIELDS = [
+    'context_snapshot',
+    'forecast_profile_id',
+    'monthly_surplus',
+    'emergency_fund_months',
+    'actual_till_date',
+    'forecast_till_date',
+    'revised_forecast_value',
+    'estimated_future_impact',
+  ];
+
+  test('an anonymous direct call is denied, and does not reveal the feature state', async ({ request }) => {
+    const res = await request.get('/api/admin/recommendations/gaps');
+    expect(res.status(), 'anonymous gets 401, not the withheld-feature 503').toBe(401);
+    const body = await res.text();
+    for (const field of SENSITIVE_FIELDS) expect(body).not.toContain(field);
+  });
+
+  test('an authenticated non-admin is denied, and does not reveal the feature state', async ({ page }) => {
+    await login(page, 'resource_admin');
+    const res = await page.request.get('/api/admin/recommendations/gaps');
+    expect(res.status(), 'a Resources role gets 403, not 503').toBe(403);
+    const body = await res.text();
+    for (const field of SENSITIVE_FIELDS) expect(body).not.toContain(field);
+  });
+
+  test('an Analyst is denied and cannot retrieve the prior payload', async ({ page }) => {
+    await login(page, 'analyst');
+    const res = await page.request.get('/api/admin/recommendations/gaps');
+    expect([401, 403], 'Analyst is denied outright').toContain(res.status());
+    const body = await res.text();
+    for (const field of SENSITIVE_FIELDS) expect(body).not.toContain(field);
+    expect(body).not.toMatch(/"data"\s*:/);
+  });
+
+  test('a non-Super-Admin cannot reach the Recommendations page at all', async ({ page }) => {
+    // An earlier version of this test navigated here as a Resources role and
+    // then scanned the served HTML for sensitive field names. That assertion
+    // was meaningless and produced a FALSE positive: this page redirects a
+    // non-Super-Admin to /dashboard, so the HTML being scanned was the
+    // fixture's OWN dashboard, where their own `monthly_surplus` legitimately
+    // appears — that person is entitled to see their own figures. The test
+    // was checking a page it never reached.
+    //
+    // What can honestly be proven from a browser here is the route gate. The
+    // Recommendations page's own rendered output cannot be browser-verified,
+    // because no fixture in this suite is granted Super Admin (a deliberate
+    // choice: granting real Super Admin to a synthetic account is a larger
+    // risk than the coverage it buys). That surface is covered instead by
+    // tests/unit/adminA02Wave5GapPrivacy.test.ts, which proves the client
+    // holds no gap state, issues no gap request and renders no snapshot —
+    // and, more importantly, by the API tests above, which prove the data
+    // cannot be served to ANY role in the first place.
+    await login(page, 'resource_admin');
+    await page.goto('/admin/recommendations');
+    await expect(page, 'a Resources role is redirected away').not.toHaveURL(/\/admin\/recommendations/, { timeout: 30_000 });
+  });
+});
+
 test.describe('Wave 5 — responsive certification (§12)', () => {
   const WIDTHS = [320, 375, 768, 1024, 1280];
   const PAGES = [

@@ -153,18 +153,17 @@ export const ADMIN_TASK_HELP: Record<string, AdminTaskHelp> = {
     taskId: 'ADM-06',
     name: 'Review recommendation coverage gaps',
     purpose:
-      'See real evaluations where nothing in the library matched, so you can decide whether a new recommendation is needed.',
-    eligibleRoles: 'Super Admin only.',
+      'See where evaluations matched nothing in the library, so a missing recommendation can be identified.',
+    eligibleRoles: 'Not applicable while this is unavailable — no Admin role has access, including Super Admin.',
     prerequisites: [],
-    steps: [
-      'Scroll to Gap review.',
-      'Select Show context on a row to see the exact data that was evaluated.',
-      'Decide whether to add or broaden a recommendation.',
-    ],
-    successEvidence: 'Not applicable — nothing is changed by reviewing gaps.',
+    steps: [],
+    successEvidence: 'Not applicable.',
     reversal: 'Not applicable.',
-    nextStep: 'Create or edit a recommendation to cover the gap.',
-    availability: 'operational',
+    nextStep:
+      'Use the coverage warnings already shown in the library — for example a recommendation marked active with zero conditions — and the conditions themselves to judge coverage.',
+    availability: 'not_operational',
+    unavailableReason:
+      'Reviewing individual evaluations has been withdrawn on privacy grounds. It showed one identified person’s exact financial figures, and no Admin role may hold standing access to those. It will return as an aggregated report — how many evaluations matched nothing, grouped by reason and by recommendation family, with small groups withheld so no individual can be identified. There is currently no supported way to review gaps person by person.',
   },
   'ADM-07': {
     taskId: 'ADM-07',

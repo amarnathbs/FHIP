@@ -23,7 +23,7 @@ Manuals use the words the interface uses. Where this Wave changed a label, the m
 | ADM-03 | Review benchmark reference data and the audit log | `/admin/benchmarks` → 4 read-only tabs | Super Admin (`isAdmin`) | Operational (read-only) | ✅ below | Wave 5 |
 | ADM-04 | Create, edit, activate or deactivate a recommendation | `/admin/recommendations` | Super Admin (`isAdmin`) | Operational | ✅ below | Wave 5 |
 | ADM-05 | Bulk update recommendations from a CSV file | `/admin/recommendations` | Super Admin (`isAdmin`) | Operational | ✅ below | Wave 5 |
-| ADM-06 | Review recommendation coverage gaps | `/admin/recommendations` | Super Admin (`isAdmin`) | Operational (read-only) | ✅ below | Wave 5 |
+| ADM-06 | Review recommendation coverage gaps | `/admin/recommendations` (notice only) | **none — withdrawn** | **Not operational — withdrawn on privacy grounds** | ✅ availability note | Wave 5 |
 | ADM-07 | Use the Resources dashboard | `/admin/resources` | `resourcesDashboard` | Operational (read-only) | ✅ below | Wave 5 |
 | ADM-08 | Create or edit an article, guide or FHIP explainer | `/admin/resources/content/**` | `resourceContentAdmin` + `canCreateResource` | Operational | ✅ below | Wave 5 |
 | ADM-09 | Move content through the publishing workflow | Any content editor's Workflow panel | `resourceWorkflowAdmin` | Operational | ✅ below | Wave 5 |
@@ -217,32 +217,29 @@ Deliberately **not** built (Wave 5 §17's own boundary): no separate documentati
 
 ---
 
-## ADM-06 — Review recommendation coverage gaps
+## ADM-06 — Review recommendation coverage gaps *(withdrawn on privacy grounds)*
 
 1. **Task ID.** ADM-06
 2. **Task name.** Review recommendation coverage gaps
-3. **Purpose.** See real evaluations where nothing in the library matched, so a missing recommendation can be identified.
-4. **Business outcome.** People are not left with no guidance because of a gap nobody noticed.
-5. **Eligible capability.** `isAdmin`.
-6. **Eligible roles.** Super Admin only.
-7. **Prerequisites.** None.
-8. **Navigation path.** Admin menu → General → Recommendations → *Gap review*.
-9. **Step-by-step.** Read the list. Select **Show context** on a row to expand the exact data that was evaluated. Select it again to collapse.
-10. **Required fields.** Not applicable.
-11. **Validation rules.** Not applicable.
-12. **Status meanings.** Not applicable.
-13. **Success confirmation.** Not applicable — nothing is changed.
-14. **Common errors.** None specific to this section.
+3. **Purpose.** See where evaluations matched nothing in the library, so a missing recommendation can be identified.
+4. **Business outcome.** Intended. The individual-review form of it is withdrawn; the aggregate form is not yet built.
+5. **Eligible capability.** None currently. **No Admin role has access, including Super Admin.**
+6. **Eligible roles.** None.
+7. **Prerequisites.** Not applicable.
+8. **Navigation path.** None. The section on the Recommendations page now shows only an unavailability notice, with nothing to open and nothing to click.
+9. **Step-by-step.** **Deliberately none.** Operating instructions for reviewing individuals have been removed rather than reworded — an operator following old steps would be attempting something the system now refuses.
+10–13. **Not applicable.**
+14. **Common errors.** If you have an old link or script that calls this directly, it returns a stable "unavailable" response rather than data. That is the system working correctly, not a fault to report.
 15. **Recovery.** Not applicable.
 16. **Conflict / stale state.** Not applicable.
-17. **Audit evidence.** None is written by reading.
-18. **Reversal or supersession.** Not applicable.
-19. **Privacy and jurisdiction cautions.** **This is the one place in Admin where expanding a control shows one real person's evaluated financial figures.** The page now says so before you expand a row. Open it only when you need it to decide whether a recommendation is missing; do not copy it anywhere else; do not screenshot it. Whether this payload should be visible in Admin at all is a live question recorded for Product Owner decision in the Wave 5 certification report — this Wave did not change what is displayed, only disclosed it.
-20. **Related tasks.** ADM-04.
-21. **Recommended next step.** Create or edit a recommendation to cover the gap.
-22. **Current availability.** Operational, read-only.
-23. **Last validation date.** 2026-09-03, Wave 5, against DEV.
-24. **Owning Admin phase.** Wave 1; privacy caution and disclosure semantics added Wave 5.
+17. **Audit evidence.** None. Nothing is read and nothing is written.
+18. **Reversal or supersession.** Not reversible by configuration. It returns only when the aggregated replacement is built, under the canonical Admin Analytics/Privacy phase.
+19. **Privacy and jurisdiction cautions.** This is the reason the task was withdrawn. It previously showed one identified person's exact financial figures — their monthly surplus, emergency-fund months, and exact variance and forecast values — alongside an identifier, browsable one person at a time by any standing Super Admin session. The Product Owner's decision is that no Admin role may hold standing access to that. Hiding the section is a courtesy to operators; the actual control is at the server, which no longer returns the data to anyone.
+20. **Related tasks.** ADM-04 — the library's own coverage warnings (for example a recommendation marked active with zero conditions) remain visible and are the supported way to judge coverage today.
+21. **Recommended next step.** Use the library's coverage warnings and the conditions themselves.
+22. **Current availability.** **Not operational — withdrawn pending privacy-safe reimplementation.** The replacement will report how many evaluations matched nothing, grouped by reason and by recommendation family, with small groups withheld so no individual can be identified from them. It is allocated to the canonical Admin Analytics/Privacy phase and is deliberately not built as part of Wave 5. See `A02_WAVE5_GAP_REVIEW_PRIVACY_CLOSURE.md`.
+23. **Last validation date.** 2026-09-03, Wave 5 privacy closure — verified that the section renders no person-level data, that the endpoint returns no individual data to any role, and that authorization precedence is unchanged.
+24. **Owning Admin phase.** Wave 1 (original); withdrawn by the Wave 5 privacy closure; aggregate replacement owned by the canonical Analytics/Privacy phase.
 
 ---
 
@@ -673,7 +670,7 @@ Deliberately **not** built (Wave 5 §17's own boundary): no separate documentati
 | ADM-03 | Yes | `isAdmin` | Yes | Yes | Yes | N/A (read-only) | Yes | Complete |
 | ADM-04 | Yes | `isAdmin` | Yes | Yes | Yes | Yes | Yes | Complete |
 | ADM-05 | Yes | `isAdmin` | Yes | Yes | Yes | N/A (no undo, stated) | Yes | Complete |
-| ADM-06 | Yes | `isAdmin` | Yes | Yes | N/A | N/A (read-only) | Yes | Complete |
+| ADM-06 | Notice only | none — withdrawn | Availability note only | Yes | N/A | N/A | Yes (states unavailable) | **Correctly unavailable — privacy** |
 | ADM-07 | Yes | `resourcesDashboard` | Yes | Yes | Yes | N/A (read-only) | Yes | Complete |
 | ADM-08 | Yes | `resourceContentAdmin` | Yes | Yes | Yes | Yes | Yes | Complete |
 | ADM-09 | Yes | `resourceWorkflowAdmin` | Yes | Yes | Yes | Yes | Yes | Complete |
