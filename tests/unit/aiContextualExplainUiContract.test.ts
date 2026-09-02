@@ -121,7 +121,12 @@ describe('spec sections 67-68 — accessibility contract', () => {
       expect(label.toLowerCase(), `${file}: "${label}"`).not.toBe('why?');
       expect(label.split(/\s+/).length, `${file}: "${label}"`).toBeGreaterThanOrEqual(3);
     }
-  });
+    // Same reason as fdh1Isolation.test.ts: this test does a synchronous fs
+    // walk + readFileSync of every .tsx under app/ and components/. It runs in
+    // ~1s alone but exceeds the 5000ms vitest default when the full suite runs
+    // it in parallel with other IO-heavy suites, which showed up as a spurious
+    // timeout rather than a real contract failure.
+  }, 30000);
 
   it('a dynamic accessible label is used where the target is one of several like items (spec section 68 goal example)', () => {
     const goalCard = read('components', 'goals', 'GoalCard.tsx');
