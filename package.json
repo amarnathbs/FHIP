@@ -48,6 +48,7 @@
     "minimatch": "^10.2.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/eslintrc": "^3.3.6",
     "@playwright/test": "^1.62.0",
     "@types/node": "^20.14.0",
