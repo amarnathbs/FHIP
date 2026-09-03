@@ -4,7 +4,11 @@
 // plus the computed effects — confirm (see ../confirm/route.ts) re-reads
 // this stored row rather than trusting anything the client echoes back.
 import { z } from 'zod';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+// G3 section 10: a generic-experience user must be able to run G1's
+// controlled country-change workflow — otherwise a user who confirmed the
+// wrong country would be permanently stuck. Preview writes no authoritative
+// field (it only stores a 15-minute, single-use row).
+import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 const previewSchema = z.object({ proposed_primary_country: z.string().length(2) });

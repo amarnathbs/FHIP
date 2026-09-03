@@ -25,6 +25,8 @@
 // safe, stable HTTP result states (Gate G6) — never the RPC's atomicity
 // itself, which mocks cannot meaningfully exercise.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// G3: the shared country gate now also reads the countries registry.
+import { countryRegistryFrom } from './support/countryRegistryFake';
 
 const mockGetUser = vi.fn();
 const mockServerFrom = vi.fn();
@@ -59,6 +61,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetUser.mockResolvedValue({ data: { user: { id: ADMIN_ID } } });
   mockServerFrom.mockImplementation((table: string) => {
+    const registry = countryRegistryFrom(table);
+    if (registry) return registry;
     if (table === 'admin_users') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { user_id: ADMIN_ID }, error: null }) }) }) };
     if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
     throw new Error(`unexpected server-client table: ${table}`);

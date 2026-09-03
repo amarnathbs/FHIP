@@ -3,7 +3,13 @@
 // only input validation and the MCC gate, matching the existing pattern of
 // every other catalogue-adjacent route in this app.
 import { z } from 'zod';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+// G3 section 9/10: a GENERIC-experience user (GB/US/SG/AE) may DECLARE
+// cross-border relationships — that is one of the few things G3 explicitly
+// permits them before G4 — so this route uses the allowing-generic guard.
+// The declaration remains non-authoritative: it never changes residence,
+// primary country, billing country or currency, and no cross-border
+// CALCULATION is performed anywhere in G3 (that is G6).
+import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 const RELATIONSHIP_TYPES = ['ASSET', 'INVESTMENT', 'PROPERTY', 'INCOME', 'LIABILITY', 'RETIREMENT', 'TAX', 'OTHER'] as const;

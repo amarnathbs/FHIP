@@ -19,6 +19,66 @@ export interface CountryAuditEvent {
   newCountry: string | null;
   actor: 'self' | 'admin';
   actorId?: string | null;
+  /**
+   * G3: the experience level the SERVER derived from the registry at the
+   * moment of confirmation. Recorded so the audit trail answers "what was
+   * this user actually told they were getting?" without having to re-derive
+   * it later from a registry that may since have changed.
+   */
+  experienceLevel?: 'FULL' | 'GENERIC' | 'UNAVAILABLE' | null;
+  /**
+   * G3 section 7.2: the exact coverage-disclosure version acknowledged, for a
+   * GENERIC country. Null for FULL countries (no acknowledgement applies).
+   * This is the audit-trail half of the requirement; the durable half is
+   * user_profiles.generic_disclosure_version (migration 0127).
+   */
+  disclosureVersion?: string | null;
+}
+
+/**
+ * G3 section 8.4 — "Be auditable where existing architecture supports profile
+ * -setting audit." Reporting currency is a controlled user setting, so a
+ * change to it is recorded on the same `audit_events` table, through the same
+ * service-role client, with the same never-break-the-primary-operation
+ * discipline as the country events above.
+ *
+ * Deliberately a SEPARATE function with a SEPARATE entity value
+ * ('user_profiles.preferred_currency'). Folding a currency change into
+ * recordCountryAuditEvent() would have put currency and country changes in
+ * one indistinguishable stream — the precise conflation G3 spends most of its
+ * effort keeping apart. An auditor reading this table can tell, without
+ * interpretation, that a currency change is not a country change.
+ */
+export async function recordReportingCurrencyAuditEvent(event: {
+  userId: string;
+  previousCurrency: string | null;
+  newCurrency: string | null;
+  actor: 'self' | 'admin';
+  actorId?: string | null;
+}): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.from('audit_events').insert({
+      user_id: event.userId,
+      event_type: 'reporting_currency_changed',
+      entity: 'user_profiles.preferred_currency',
+      entity_id: event.userId,
+      metadata: {
+        previous_currency: event.previousCurrency,
+        new_currency: event.newCurrency,
+        actor: event.actor,
+        actor_id: event.actorId ?? null,
+        // Stated explicitly in the record itself so the audit trail carries
+        // the guarantee, not just the code that produced it.
+        country_unchanged: true,
+      },
+    });
+    if (error) {
+      console.error(`audit_events insert failed for event_type=reporting_currency_changed: ${error.message}`);
+    }
+  } catch (err) {
+    console.error('recordReportingCurrencyAuditEvent failed:', err instanceof Error ? err.message : err);
+  }
 }
 
 export async function recordCountryAuditEvent(event: CountryAuditEvent): Promise<void> {
@@ -34,6 +94,8 @@ export async function recordCountryAuditEvent(event: CountryAuditEvent): Promise
         new_country: event.newCountry,
         actor: event.actor,
         actor_id: event.actorId ?? null,
+        experience_level: event.experienceLevel ?? null,
+        disclosure_version: event.disclosureVersion ?? null,
       },
     });
     // Audit logging must never take down the primary operation it describes

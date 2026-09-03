@@ -11,7 +11,7 @@ import { computeGoalsPagePayload, type GoalsPagePayload } from './goalsData';
 import type { DnaResult } from '@/lib/engines/financialDna';
 import { ageFromDateOfBirth, ageToAgeBand, normalizeEmploymentType, normalizeHouseholdType, deriveLifeStage, annualGrossIncomeToIncomeBand } from '@/lib/engines/twin/taxonomy';
 import type { AgeBand, EmploymentType, HouseholdTypeCode, IncomeBand, LifeStage } from '@/lib/engines/twin/taxonomy';
-import { getUserHomeCountry } from '@/lib/services/jurisdiction';
+import { getUserFullExperienceHomeCountry } from '@/lib/services/jurisdiction';
 
 export interface TwinRetirementRow {
   current_balance: number;
@@ -116,7 +116,16 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       // closed to null; never re-derived inline from profile?.country_of_residence
       // with a `?? 'AU'`-shaped fallback operator (the JA-D1 defect this
       // replaces).
-      getUserHomeCountry(userId, supabase),
+      //
+      // G3: narrowed to the FULL-experience variant. The Financial Twin
+      // compares a user against a country cohort, and cohorts exist for AU
+      // and IN only — annualGrossIncomeToIncomeBand() below still requires a
+      // genuine 'AU'|'IN'. A GENERIC-experience country (GB/US/SG/AE)
+      // therefore resolves to null and takes the SAME honest
+      // 'country_unresolved' exit an unset country takes, rather than being
+      // silently bucketed into the AU cohort. This is a narrowing only —
+      // behaviour for AU and IN users is byte-identical to before.
+      getUserFullExperienceHomeCountry(userId, supabase),
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
       // LR-FI-1: this register feeds expenseHousingMonthly (housing_cost_ratio)

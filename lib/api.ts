@@ -66,3 +66,38 @@ export async function requireCountryConfirmedUser() {
   if (block) return { user: null, unauthenticated: block };
   return { user, unauthenticated: null };
 }
+
+// G3 — Registration and Existing-User Alignment, spec section 10.
+//
+// Identical to requireCountryConfirmedUser() except that it also admits
+// GENERIC-experience (GB/US/SG/AE) users. It exists because G3 opens
+// registration to four generic countries while G4's application-wide
+// capability layer — the thing that will decide, per module, what a generic
+// user may do — has not been built. In that gap, the safe default had to be
+// "generic users are refused", and the safe default had to apply to all ~241
+// existing gated routes WITHOUT touching 241 files (where one missed file is
+// a real hole). So the default lives in the shared guard above, and this
+// function is the explicit, greppable opt-out.
+//
+// USE THIS ONLY for a surface that is genuinely jurisdiction-neutral and has
+// been reasoned about individually. As of G3 that is exactly:
+//   - the user's own cross-border relationship declarations (spec section 9 —
+//     a declaration, never a calculation)
+//   - the primary-country preview/confirm workflow (G1's own controlled
+//     country-change path, which a generic user must be able to run in order
+//     to correct a wrong country)
+// Everything else — every financial module, every domestic calculation,
+// SMSF, catalogue creation, reports, billing confirmation — deliberately
+// keeps requireCountryConfirmedUser() and therefore refuses generic users
+// with a truthful GENERIC_EXPERIENCE_RESTRICTED (403) until G4.
+export async function requireCountryConfirmedUserAllowingGeneric() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { user: null, unauthenticated: bad('unauthenticated', 401) };
+
+  const block = await countryConfirmationBlockResponse(supabase, user.id, { allowGenericExperience: true });
+  if (block) return { user: null, unauthenticated: block };
+  return { user, unauthenticated: null };
+}

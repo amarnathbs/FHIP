@@ -1,0 +1,14 @@
+{
+  "total": 384,
+  "au_confirmed": 5,
+  "in_confirmed": 1,
+  "generic_confirmed": 0,
+  "missing_country": 132,
+  "invalid_country": 0,
+  "currency_AUD": 150,
+  "currency_INR": 97,
+  "currency_other": 0,
+  "currency_null": 137,
+  "billing_confirmed": 0,
+  "generic_disclosure_rows": 0
+}

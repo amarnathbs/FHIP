@@ -9,6 +9,8 @@
 // can report whether a row genuinely existed and was deleted; the route
 // now returns 404 for an unknown/already-deleted id instead of a false 200.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// G3: the shared country gate now also reads the countries registry.
+import { countryRegistryFrom } from './support/countryRegistryFake';
 
 const mockGetUser = vi.fn();
 const mockServerFrom = vi.fn();
@@ -35,6 +37,8 @@ beforeEach(() => {
 describe('DELETE /api/admin/resources/related/[id] — zero-row contract', () => {
   it('an existing row deletes successfully -> 200', async () => {
     mockServerFrom.mockImplementation((table: string) => {
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry;
       if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
       if (table === 'resource_related_content') return { delete: () => ({ eq: () => ({ select: async () => ({ data: [{ id: 'rel-1' }], error: null }) }) }) };
       throw new Error(`unexpected table: ${table}`);
@@ -46,6 +50,8 @@ describe('DELETE /api/admin/resources/related/[id] — zero-row contract', () =>
 
   it('an unknown id (nothing matched) -> 404, not a false 200', async () => {
     mockServerFrom.mockImplementation((table: string) => {
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry;
       if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
       if (table === 'resource_related_content') return { delete: () => ({ eq: () => ({ select: async () => ({ data: [], error: null }) }) }) };
       throw new Error(`unexpected table: ${table}`);
@@ -58,6 +64,8 @@ describe('DELETE /api/admin/resources/related/[id] — zero-row contract', () =>
   it('repeated deletion of the same (now-gone) id -> 404 both times, never a duplicate false success', async () => {
     let callCount = 0;
     mockServerFrom.mockImplementation((table: string) => {
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry;
       if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
       if (table === 'resource_related_content') {
         return {
@@ -85,6 +93,8 @@ describe('DELETE /api/admin/resources/related/[id] — zero-row contract', () =>
 describe('DELETE /api/admin/resources/context/[id] — zero-row contract', () => {
   it('an existing row deletes successfully -> 200', async () => {
     mockServerFrom.mockImplementation((table: string) => {
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry;
       if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
       if (table === 'resource_context_links') return { delete: () => ({ eq: () => ({ select: async () => ({ data: [{ id: 'ctx-1' }], error: null }) }) }) };
       throw new Error(`unexpected table: ${table}`);
@@ -96,6 +106,8 @@ describe('DELETE /api/admin/resources/context/[id] — zero-row contract', () =>
 
   it('an unknown id -> 404, not a false 200', async () => {
     mockServerFrom.mockImplementation((table: string) => {
+      const registry = countryRegistryFrom(table);
+      if (registry) return registry;
       if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
       if (table === 'resource_context_links') return { delete: () => ({ eq: () => ({ select: async () => ({ data: [], error: null }) }) }) };
       throw new Error(`unexpected table: ${table}`);

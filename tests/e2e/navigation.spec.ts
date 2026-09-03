@@ -14,10 +14,27 @@ async function signUpAndOnboard(page: Page, email: string, password: string) {
   await expect(page).toHaveURL(/\/onboarding/);
   await page.getByLabel('Full name').fill('Nav Test User');
   await page.getByRole('button', { name: /continue/i }).click(); // profile -> household
+
+  // household_type is a REQUIRED field on the Household step (validateStep
+  // case 1) and always has been — this helper previously clicked straight
+  // past it, which cannot have advanced the wizard. Selecting it explicitly.
+  await page.locator('#household_type').selectOption('single');
   await page.getByRole('button', { name: /continue/i }).click(); // household -> countries
+
+  // G3: the Countries & Currency step no longer carries a pre-filled AU/AUD
+  // default and now blocks until both are chosen, so both must be selected.
+  await page.locator('#country_of_residence').selectOption('AU');
+  await page.locator('#preferred_currency').selectOption('AUD');
   await page.getByRole('button', { name: /continue/i }).click(); // countries -> goals
+
   await page.getByRole('button', { name: /continue/i }).click(); // goals -> review
   await page.getByRole('button', { name: /finish/i }).click();
+
+  // G3/MCC: onboarding ends at the compulsory confirmation screen. AU is a
+  // FULL-experience country, so it needs no coverage acknowledgement.
+  await expect(page).toHaveURL(/\/confirm-country/, { timeout: 45_000 });
+  await page.locator('#confirm-country-select').selectOption('AU');
+  await page.getByRole('button', { name: /confirm and continue/i }).click();
   // Dev-mode /dashboard renders have been observed taking 10-17s of pure
   // application-code time under load in this environment (Turbopack +
   // "Slow filesystem detected" warning) — well within the ballpark of the

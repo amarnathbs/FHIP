@@ -6,6 +6,8 @@
 // Standard §4 requires independent API-layer enforcement too. Each route
 // now also checks isResourceStaff() and returns 403 for a non-staff caller.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// G3: the shared country gate now also reads the countries registry.
+import { countryRegistryFrom } from './support/countryRegistryFake';
 
 const mockGetUser = vi.fn();
 const mockServerFrom = vi.fn();
@@ -26,6 +28,8 @@ beforeEach(() => {
 
 function mockRoles(opts: { admin?: boolean; roles?: { role: string; is_active: boolean }[] } = {}) {
   mockServerFrom.mockImplementation((table: string) => {
+    const registry = countryRegistryFrom(table);
+    if (registry) return registry;
     if (table === 'user_profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: CONFIRMED_PROFILE, error: null }) }) }) };
     if (table === 'admin_users') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.admin ? { user_id: 'user-under-test' } : null, error: null }) }) }) };
     if (table === 'resource_user_roles') return { select: () => ({ eq: () => ({ eq: async () => ({ data: opts.roles ?? [], error: null }) }) }) };

@@ -6,6 +6,8 @@ import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SelectWithOther, type SelectOption } from '@/components/ui/SelectWithOther';
 import { PENDING_GOAL_STORAGE_KEY } from '@/lib/constants';
+import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
+import type { CountryCode } from '@/lib/services/jurisdiction';
 
 const STEPS = ['Profile', 'Household', 'Countries & Currency', 'Goals', 'Review'] as const;
 
@@ -61,8 +63,13 @@ type FormState = {
   dependants_count: number;
   housing_tenure: string;
   residence_type: string;
-  country_of_residence: 'AU' | 'IN';
-  preferred_currency: 'AUD' | 'INR';
+  // G3: '' means "the user has not chosen yet". Previously this defaulted to
+  // 'AU', which pre-filled a real country the user had never selected — the
+  // exact "landing/platform default silently becomes a residence" pattern G3
+  // section 6.2 forbids. It is now genuinely blank until chosen, and step 2
+  // will not advance without a choice.
+  country_of_residence: CountryCode | '';
+  preferred_currency: 'AUD' | 'INR' | '';
   goal_name: string;
   goal_type: string;
   target_amount: number;
@@ -77,8 +84,8 @@ const INITIAL: FormState = {
   dependants_count: 0,
   housing_tenure: '',
   residence_type: '',
-  country_of_residence: 'AU',
-  preferred_currency: 'AUD',
+  country_of_residence: '',
+  preferred_currency: '',
   goal_name: '',
   goal_type: 'starter_emergency_fund',
   target_amount: 0,
@@ -88,9 +95,16 @@ const INITIAL: FormState = {
 // can advance, distinct from (and less strict than) the authoritative Zod
 // schemas (lib/validation/profile.ts, household.ts) the server still
 // enforces on final submit. Only fields worth blocking progress over are
-// listed here; Countries & Currency (step 2) and Goals (step 3) have no
-// entries because their fields either always carry a real default (country/
-// currency selects have no blank option) or are genuinely optional.
+// listed here; Goals (step 3) has no entries because its fields are
+// genuinely optional.
+//
+// G3: step 2 DOES now block. Country and currency used to be exempt on the
+// stated grounds that their selects "have no blank option" — i.e. they were
+// exempt precisely because they were pre-filled with AU/AUD the user had
+// never chosen. Both now start blank, so both must be chosen. This is the
+// client-side half of "explicit confirmation required" (scenarios G3-12/
+// G3-13); the authoritative half remains the separate, compulsory
+// /confirm-country step and the server-side Zod schemas.
 function validateStep(step: number, form: FormState): Record<string, string> {
   const errors: Record<string, string> = {};
   if (step === 0) {
@@ -98,6 +112,10 @@ function validateStep(step: number, form: FormState): Record<string, string> {
   }
   if (step === 1) {
     if (!form.household_type) errors.household_type = 'Please select a household type.';
+  }
+  if (step === 2) {
+    if (!form.country_of_residence) errors.country_of_residence = 'Please select your country of residence.';
+    if (!form.preferred_currency) errors.preferred_currency = 'Please select your reporting currency.';
   }
   return errors;
 }
@@ -322,29 +340,69 @@ export function OnboardingWizard() {
               <select
                 id="country_of_residence"
                 value={form.country_of_residence}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const next = e.target.value as CountryCode | '';
                   update({
-                    country_of_residence: e.target.value as 'AU' | 'IN',
-                    preferred_currency: e.target.value === 'IN' ? 'INR' : 'AUD',
-                  })
-                }
+                    country_of_residence: next,
+                    // G3 section 8.3 — currency INITIALISATION, not currency
+                    // inference. AU and IN each have a single certified
+                    // default, so pre-filling it for a brand-new profile is a
+                    // convenience the user can immediately override in the
+                    // control directly below.
+                    //
+                    // A GENERIC country has NO implied currency and is
+                    // deliberately left blank: "GB/US/SG/AE: require explicit
+                    // AUD or INR selection; do not guess." The old code did
+                    // `=== 'IN' ? 'INR' : 'AUD'`, which would have silently
+                    // handed every generic user AUD.
+                    preferred_currency:
+                      next === 'IN' ? 'INR' : next === 'AU' ? 'AUD' : '',
+                  });
+                }}
                 className="mt-1 w-full rounded border border-line px-3 py-2"
               >
-                <option value="AU">Australia</option>
-                <option value="IN">India</option>
+                <option value="">Select a country…</option>
+                {REGISTRATION_COUNTRY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                The country you currently live in. You will be asked to confirm this explicitly before you can
+                continue.
+              </p>
+              {fieldErrors.country_of_residence && (
+                <p role="alert" className="mt-1 text-xs text-risk">
+                  {fieldErrors.country_of_residence}
+                </p>
+              )}
             </div>
             <div>
-              <label htmlFor="preferred_currency" className="block text-sm text-gray-600">Preferred currency</label>
+              <label htmlFor="preferred_currency" className="block text-sm text-gray-600">Reporting currency</label>
               <select
                 id="preferred_currency"
                 value={form.preferred_currency}
                 onChange={(e) => update({ preferred_currency: e.target.value as 'AUD' | 'INR' })}
+                aria-describedby="preferred_currency_help"
                 className="mt-1 w-full rounded border border-line px-3 py-2"
               >
+                <option value="">Select a currency…</option>
                 <option value="AUD">AUD</option>
                 <option value="INR">INR</option>
               </select>
+              {/* G3 section 8: currency and country are independent, and the
+                  UI says so explicitly rather than leaving the user to infer
+                  it from the fact that one select changed the other. */}
+              <p id="preferred_currency_help" className="mt-1 text-xs text-gray-500">
+                The currency your totals are shown in. You can choose either currency whatever your country — it does
+                not change where you live or where anything is held.
+              </p>
+              {fieldErrors.preferred_currency && (
+                <p role="alert" className="mt-1 text-xs text-risk">
+                  {fieldErrors.preferred_currency}
+                </p>
+              )}
             </div>
           </div>
         </SectionCard>

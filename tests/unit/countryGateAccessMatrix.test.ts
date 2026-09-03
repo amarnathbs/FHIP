@@ -10,12 +10,21 @@ import path from 'node:path';
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 const USER_ID = 'user-under-test';
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: mockGetUser },
     from: mockFrom,
+    // G3-R5: POST /api/user/country/confirm no longer writes user_profiles
+    // itself — it delegates to the confirm_country_of_residence() RPC, which
+    // performs the write and its mandatory audit insert in one transaction.
+    // What this file asserts is unchanged (that the endpoint stays REACHABLE
+    // in every non-CONFIRMED state), so the RPC simply succeeds here; its own
+    // behaviour is certified against real PostgreSQL in
+    // scripts/db-rebuild-check/g3_registration_alignment_cert.mjs.
+    rpc: mockRpc,
   }),
 }));
 
@@ -29,6 +38,7 @@ vi.mock('@/lib/services/countryAudit', () => ({
   recordCountryAuditEvent: vi.fn(async () => undefined),
 }));
 
+import { __resetCountryRegistryCacheForTests } from '@/lib/services/countryGate';
 import { GET as stateGET } from '@/app/api/user/country/state/route';
 import { POST as confirmPOST } from '@/app/api/user/country/confirm/route';
 import { GET as incomeGET } from '@/app/api/income/route';
@@ -52,8 +62,29 @@ const STATES: Record<string, ProfileRow> = {
 // routes use (select().eq().maybeSingle()) and the update shape the confirm
 // route uses (select().eq().maybeSingle() for its pre-read, then
 // update().eq().select().single() for the write).
+// G3: the gate and the confirm/state routes additionally read the country
+// registry (`countries` + `country_capabilities`) to derive registration
+// eligibility and experience level server-side. Served here with the real
+// post-0127 registry contents so these tests exercise the same decisions
+// production makes.
+const G3_COUNTRY_ROWS = [
+  { country_code: 'AU', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'IN', experience_level: 'FULL', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'GB', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'US', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'SG', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+  { country_code: 'AE', experience_level: 'GENERIC', selectable: true, active: true, effective_from: '2020-01-01T00:00:00Z', effective_to: null },
+];
+const G3_CAPABILITY_ROWS = G3_COUNTRY_ROWS.map((c) => ({ country_code: c.country_code, capability: 'REGISTRATION', enabled: true }));
+
 function fakeFromFor(profile: ProfileRow) {
   return (table: string) => {
+    if (table === 'countries') {
+      return { select: async () => ({ data: G3_COUNTRY_ROWS, error: null }) };
+    }
+    if (table === 'country_capabilities') {
+      return { select: () => ({ eq: async () => ({ data: G3_CAPABILITY_ROWS, error: null }) }) };
+    }
     if (table !== 'user_profiles') throw new Error(`unexpected table in this test: ${table}`);
     return {
       select: () => ({
@@ -74,7 +105,21 @@ function fakeFromFor(profile: ProfileRow) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // G3: the registry snapshot is memoised behind a TTL — clear it so one
+  // test's fake registry can never leak into the next.
+  __resetCountryRegistryCacheForTests();
   mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+  mockRpc.mockImplementation(async (_fn: string, args: Record<string, unknown>) => ({
+    data: {
+      country_of_residence: args.p_country_code,
+      country_confirmed_at: '2026-09-03T00:00:00Z',
+      country_source: 'USER_CONFIRMED',
+      generic_disclosure_version: args.p_disclosure_version ?? null,
+      experience_level: 'FULL',
+      idempotent_replay: false,
+    },
+    error: null,
+  }));
 });
 
 describe('MC-13/MC-14 — narrowly-required pre-confirmation endpoints stay reachable in every non-CONFIRMED state', () => {

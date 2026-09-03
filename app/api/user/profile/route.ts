@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { profileSchema } from '@/lib/validation/profile';
 import { ok, bad } from '@/lib/api';
-import { recordCountryAuditEvent } from '@/lib/services/countryAudit';
+import { recordCountryAuditEvent, recordReportingCurrencyAuditEvent } from '@/lib/services/countryAudit';
 
 export async function GET() {
   const supabase = await createClient();
@@ -40,16 +40,31 @@ export async function PUT(req: Request) {
   // COUNTRY_UNCONFIRMED) and record the change in the existing audit trail.
   // This never touches, hides or reclassifies any existing financial record
   // (spec 1.3) — it only affects future access-gate evaluation.
+  //
+  // G3 section 8.4: the same pre-read also captures the previous reporting
+  // currency, so a currency change can be audited. The two are read together
+  // and audited SEPARATELY — changing currency never resets country
+  // confirmation, and changing country never rewrites currency.
   let countryChanged = false;
   let previousCountry: string | null = null;
-  if ('country_of_residence' in parsed.data) {
+  let currencyChanged = false;
+  let previousCurrency: string | null = null;
+  if ('country_of_residence' in parsed.data || 'preferred_currency' in parsed.data) {
     const { data: existing } = await supabase
       .from('user_profiles')
-      .select('country_of_residence, country_confirmed_at')
+      .select('country_of_residence, country_confirmed_at, preferred_currency')
       .eq('user_id', user.id)
       .maybeSingle();
     previousCountry = existing?.country_of_residence ?? null;
-    countryChanged = !!existing?.country_confirmed_at && existing.country_of_residence !== parsed.data.country_of_residence;
+    previousCurrency = existing?.preferred_currency ?? null;
+    countryChanged =
+      'country_of_residence' in parsed.data &&
+      !!existing?.country_confirmed_at &&
+      existing.country_of_residence !== parsed.data.country_of_residence;
+    currencyChanged =
+      'preferred_currency' in parsed.data &&
+      previousCurrency !== null &&
+      previousCurrency !== parsed.data.preferred_currency;
   }
 
   const updatePayload: Record<string, unknown> = { ...parsed.data, updated_at: new Date().toISOString() };
@@ -73,6 +88,15 @@ export async function PUT(req: Request) {
       eventType: 'country_change_pending_reconfirmation',
       previousCountry,
       newCountry: (parsed.data as { country_of_residence?: string }).country_of_residence ?? null,
+      actor: 'self',
+    });
+  }
+
+  if (currencyChanged) {
+    await recordReportingCurrencyAuditEvent({
+      userId: user.id,
+      previousCurrency,
+      newCurrency: (parsed.data as { preferred_currency?: string }).preferred_currency ?? null,
       actor: 'self',
     });
   }
