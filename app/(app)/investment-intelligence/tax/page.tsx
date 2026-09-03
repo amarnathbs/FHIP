@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { TaxIntelligenceClient } from '@/components/investment-intelligence/TaxIntelligenceClient';
 
 // R6-FINAL — minimal live UX for India Tax & Cost Intelligence (spec
@@ -26,6 +27,7 @@ export default async function TaxIntelligencePage() {
           a planning estimate only, not tax advice and not a filed-return figure — verify every number with a Chartered Accountant before relying on it.
         </p>
       </header>
+      <InvestmentIntelligenceSubNav />
       <TaxIntelligenceClient />
     </div>
   );

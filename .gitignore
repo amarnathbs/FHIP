@@ -54,6 +54,11 @@ scripts/.fdh1-*.json
 # regenerated per session, same pattern as .r7scratch above).
 .r8scratch/
 
+# II-PC2 live-DEV certification scratch: probe scripts, synthetic-fixture
+# builders and result dumps generated per-run — never committed (disposable,
+# regenerated per session, same pattern as .r7scratch/.r8scratch above).
+.pc2scratch/
+
 # Mandatory Country Confirmation (2026-08-29) — Gate B restricted cleanup
 # manifest. scripts/mcc_production_readonly_audit.mjs writes this OUTSIDE
 # the repo by default (see MCC_RESTRICTED_MANIFEST_DIR in that script); this

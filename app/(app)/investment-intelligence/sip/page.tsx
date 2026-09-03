@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { SipIntelligenceClient } from '@/components/investment-intelligence/SipIntelligenceClient';
 
 // R5 — SIP Intelligence (spec sections 98-100).
@@ -28,6 +29,7 @@ export default async function SipIntelligencePage() {
           benchmark. These figures describe what has already happened. They are not advice, and they are not a forecast.
         </p>
       </header>
+      <InvestmentIntelligenceSubNav />
       <SipIntelligenceClient />
     </div>
   );

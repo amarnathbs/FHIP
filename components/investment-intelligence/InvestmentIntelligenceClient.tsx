@@ -236,16 +236,23 @@ export function InvestmentIntelligenceClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Processing failed');
-      // Password is deliberately cleared from local state immediately
-      // after the request completes — the browser must not keep holding
-      // it in memory/state longer than needed for the one request.
-      setPasswordInputs((prev) => ({ ...prev, [id]: '' }));
       await loadDocuments();
       await loadSummary(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setProcessing(null);
+      // Password is deliberately cleared from local state as soon as the
+      // request completes — the browser must not keep holding it in
+      // memory/state longer than needed for the one request.
+      //
+      // II-PC2 (spec section 16): this clear used to sit on the success path,
+      // AFTER a `throw` on a non-ok response, so the one case where a document
+      // password most reliably lingered in client state was a WRONG-PASSWORD
+      // rejection — precisely when it is still a live secret. Moved into
+      // `finally` so it is cleared on every outcome. The trade-off (a user who
+      // mistypes retypes the password) is the correct one for a credential.
+      setPasswordInputs((prev) => ({ ...prev, [id]: '' }));
     }
   }
 
@@ -345,10 +352,26 @@ export function InvestmentIntelligenceClient() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600">PDF or CSV file</label>
+            {/* II-PC2 (spec section 15): this said "PDF or CSV file" and
+                accepted .csv. That was a false contract. The parser registry
+                (lib/services/investment-intelligence/parsers/registry.ts)
+                contains exactly two adapters — CAMS and KFintech — and both
+                identify a statement from PDF-extracted statement text. A CSV
+                uploaded here is read as UTF-8 and handed to those same two
+                parsers, which cannot recognise it, so it always terminates as
+                `unsupported` with a blocking reconciliation case. Offering it
+                as a supported format sent users down a path that could not
+                work. The backend's own validator still ACCEPTS text/csv
+                (storage.ts ALLOWED_MIME_TYPES is unchanged — spec section 15
+                forbids removing backend capability that another path may
+                use); only this workflow's user-facing claim is corrected. */}
+            <label htmlFor="ii-statement-file" className="block text-xs font-medium text-gray-600">
+              Statement file (PDF)
+            </label>
             <input
+              id="ii-statement-file"
               type="file"
-              accept=".pdf,.csv,application/pdf,text/csv"
+              accept=".pdf,application/pdf"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="mt-1 block text-sm"
             />
@@ -358,7 +381,12 @@ export function InvestmentIntelligenceClient() {
           </button>
         </form>
         <p className="mt-2 text-xs text-gray-500">
-          Only the statement bytes are uploaded here — nothing is parsed yet. R2 detects the source from the document itself; the dropdown above is a
+          Supported today: a CAMS or KFintech consolidated account statement as a digitally-generated <strong>PDF</strong>. Mutual fund CSV exports and
+          broker CSV files are not supported by this workflow and will be rejected as unrecognised. Scanned or photographed statements cannot be read
+          either — there is no OCR, and nothing is ever guessed from an unreadable document.
+        </p>
+        <p className="mt-2 text-xs text-gray-500">
+          Only the statement bytes are uploaded here — nothing is parsed yet. The source is detected from the document itself; the dropdown above is a
           hint, not a guarantee.
         </p>
       </section>

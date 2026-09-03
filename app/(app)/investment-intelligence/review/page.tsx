@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { ReviewCentreClient } from '@/components/investment-intelligence/ReviewCentreClient';
 
 // R9 — Investment Review Centre (spec sections 39, 53-59).
@@ -25,6 +26,7 @@ export default async function InvestmentReviewCentrePage() {
           not advice: it never tells you to buy, sell, or switch a specific investment.
         </p>
       </header>
+      <InvestmentIntelligenceSubNav />
       <ReviewCentreClient />
     </div>
   );
