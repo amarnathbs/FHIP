@@ -31,7 +31,11 @@ export function recomputeDerived(d: DashboardSummary): void {
   // Net income, not gross — matches dashboard.ts's own debtServiceRatio definition.
   d.debtServiceRatio = income > 0 ? d.debtMonthlyRepayments / income : null;
   const annualGrossIncome = d.grossMonthlyIncome * 12;
-  d.debtToIncome = annualGrossIncome > 0 ? d.totalLiabilities / annualGrossIncome : null;
+  // LR-FI-2 §1: household balance over household income, matching
+  // dashboard.ts's own debtToIncome definition. Re-deriving this from the
+  // unfiltered d.totalLiabilities (as it did before) would have silently
+  // restored the pre-fix, mixed-entity ratio on top of every What-If result.
+  d.debtToIncome = annualGrossIncome > 0 ? d.householdLiabilityBalance / annualGrossIncome : null;
   d.totalAssetsCombined = d.totalAssets + d.totalInvestments + d.totalRetirement;
   d.netWorth = d.totalAssetsCombined - d.totalLiabilities;
 }
@@ -50,7 +54,19 @@ export function applyScenario(base: DashboardSummary, type: ScenarioType): Dashb
       const proportion = d.totalLiabilities > 0 ? payoff / d.totalLiabilities : 0;
       d.totalLiabilities -= payoff;
       d.badDebt = Math.max(0, d.badDebt - d.badDebt * proportion);
-      d.debtMonthlyRepayments -= d.debtMonthlyRepayments * proportion;
+      // LR-FI-2 §1: "Pay off $10,000 of debt" is a HOUSEHOLD action, so the
+      // household's own balance and repayment must move by the household's
+      // own proportion. Scaling the (household-only, post-LR-FI-1)
+      // debtMonthlyRepayments by a proportion derived from the unfiltered
+      // total understated the scenario's DSR benefit for SMSF households —
+      // e.g. $10,000 off a $400,000 personal mortgage is 2.5% of the
+      // repayment, not the 1.3% implied by a $765,000 total. Byte-identical
+      // for any household with no SMSF rows, where the two bases are equal.
+      const householdPayoff = Math.min(payoff, d.householdLiabilityBalance);
+      const householdProportion = d.householdLiabilityBalance > 0 ? householdPayoff / d.householdLiabilityBalance : 0;
+      d.householdLiabilityBalance -= householdPayoff;
+      d.debtMonthlyRepayments -= d.debtMonthlyRepayments * householdProportion;
+      d.totalLiabilityMonthlyRepayments -= d.totalLiabilityMonthlyRepayments * proportion;
       break;
     }
     case 'build_emergency_fund': {

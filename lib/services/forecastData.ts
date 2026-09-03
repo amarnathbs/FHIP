@@ -403,7 +403,13 @@ async function buildCalculatorInput(
       shockedMonthlySurplus: shocked.monthlySurplus,
       shockDurationMonths: shockResult?.durationMonths ?? null,
       scenarioLabel: shockResult?.label ?? 'Baseline (no stress)',
-      monthlyLoanRepayment: dashboard.debtMonthlyRepayments,
+      // LR-FI-2 §6c: pairs with `openingLiabilities: dashboard.totalLiabilities`
+      // above. In resilienceCalculator this value feeds ONLY projectLoanMonth's
+      // amortisation of that whole balance — the household cash-flow leg is
+      // carried separately by baseline/shockedMonthlySurplus — so it must be
+      // on the whole-balance-sheet basis, not the household-only one. See the
+      // net-worth wiring below for the full defect writeup.
+      monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
       baselineNetWorthAtStart: dashboard.netWorth,
       baselineRetirementAtStart: dashboard.totalRetirement,
     };
@@ -826,7 +832,31 @@ async function buildCalculatorInput(
     monthlyAssetContribution: Math.max(0, dashboard.monthlySurplus),
     monthlyInvestmentContribution: dashboard.investmentAnnualContribution / 12,
     monthlyRetirementContribution: dashboard.retirementEmployerMonthlyContribution + dashboard.retirementPersonalMonthlyContribution,
-    monthlyLoanRepayment: dashboard.debtMonthlyRepayments,
+    // LR-FI-2 §6c — Old calculation -> defect -> corrected rule -> expected
+    // new result.
+    //   Old: `openingLiabilities: dashboard.totalLiabilities` (UNFILTERED,
+    //   SMSF included, correct per LR-FI-1 §28) amortised by
+    //   `dashboard.debtMonthlyRepayments` (HOUSEHOLD-ONLY since LR-FI-1).
+    //   Defect: projectLoanMonth computes
+    //   `principalReduction = repayment - interest`, so supplying a repayment
+    //   sized for part of the balance against the whole balance under-amortises
+    //   it — and once the household repayment falls below the whole balance's
+    //   monthly interest, principalReduction goes NEGATIVE and the projected
+    //   debt compounds upward forever. Worked example at the default 6%
+    //   blended rate: personal 400,000 @ 3,000/mo + SMSF 365,000 @ 2,000/mo.
+    //   Interest on 765,000 is 3,825/mo; supplying only the household's 3,000
+    //   gives 3,000 - 3,825 = -825/mo, so the Net Worth Forecast showed debt
+    //   growing and net worth eroding indefinitely for a household servicing
+    //   its loans normally. This was a live regression introduced by LR-FI-1,
+    //   not a pre-existing quirk.
+    //   Corrected rule: a wealth projection amortises a whole balance sheet
+    //   with a whole-balance-sheet repayment. `debtMonthlyRepayments` keeps
+    //   its household-only meaning everywhere it expresses household cash
+    //   flow (DSR, surplus, disposable income) and is NOT changed.
+    //   Expected new result: 5,000 - 3,825 = +1,175/mo, debt genuinely
+    //   reduces. Byte-identical for every household with no SMSF rows, where
+    //   totalLiabilityMonthlyRepayments === debtMonthlyRepayments.
+    monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
     assumptions,
     plannedEvents,
   };

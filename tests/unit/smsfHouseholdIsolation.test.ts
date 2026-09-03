@@ -284,8 +284,32 @@ describe('LR-FI-1 §5/§28 — SMSF economic value stays in household wealth', (
     expect(fixed.liabilityByType).toEqual(preFix.liabilityByType);
     expect(fixed.goodDebt).toBe(preFix.goodDebt);
     expect(fixed.badDebt).toBe(preFix.badDebt);
-    expect(fixed.debtToIncome).toBe(preFix.debtToIncome);
     expect(fixed.averageInterestRate).toBe(preFix.averageInterestRate);
+  });
+
+  // SUPERSEDED BY LR-FI-2 §1. `debtToIncome` was asserted unchanged in the
+  // list above when LR-FI-1 shipped, because LR-FI-1's scope was cash flow
+  // only and it deliberately deferred the balance-based ratio. The Product
+  // Owner then ruled that SMSF liabilities must not sit in the user's
+  // PERSONAL debt-to-income, so DTI is no longer a "balance-sheet total that
+  // must not move" — it is a household-scoped ratio that must move. The
+  // assertion is replaced here rather than deleted, so the coverage LR-FI-1
+  // had is inverted and kept rather than lost.
+  it('LR-FI-2 §1 — DTI is now household-scoped, while every wealth total above stays whole', () => {
+    const fixed = computeDashboard(withSmsf, 'AUD');
+    const preFix = computeDashboard(smsfRetaggedSelf, 'AUD');
+    // withSmsf's only liability IS the SMSF loan, so the household carries no
+    // debt at all and its personal DTI is 0.
+    expect(fixed.debtToIncome).toBe(0);
+    expect(fixed.householdLiabilityBalance).toBe(0);
+    // The pre-fix (retagged-personal) variant reproduces the old figure:
+    // 365,000 / (10,000 x 12) = 3.0416...
+    expect(preFix.debtToIncome).toBeCloseTo(365000 / 120000, 12);
+    expect(fixed.debtToIncome).not.toBe(preFix.debtToIncome);
+    // ...and the balance sheet itself is still identical across both, which
+    // is what LR-FI-1 §28 actually protects.
+    expect(fixed.totalLiabilities).toBe(preFix.totalLiabilities);
+    expect(fixed.netWorth).toBe(preFix.netWorth);
   });
 
   it('keeps SMSF-owned assets, investments and retirement balances whole (FI-08)', () => {
