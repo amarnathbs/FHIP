@@ -10,12 +10,21 @@ import path from 'node:path';
 
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
+const mockRpc = vi.fn();
 const USER_ID = 'user-under-test';
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: mockGetUser },
     from: mockFrom,
+    // G3-R5: POST /api/user/country/confirm no longer writes user_profiles
+    // itself — it delegates to the confirm_country_of_residence() RPC, which
+    // performs the write and its mandatory audit insert in one transaction.
+    // What this file asserts is unchanged (that the endpoint stays REACHABLE
+    // in every non-CONFIRMED state), so the RPC simply succeeds here; its own
+    // behaviour is certified against real PostgreSQL in
+    // scripts/db-rebuild-check/g3_registration_alignment_cert.mjs.
+    rpc: mockRpc,
   }),
 }));
 
@@ -100,6 +109,17 @@ beforeEach(() => {
   // test's fake registry can never leak into the next.
   __resetCountryRegistryCacheForTests();
   mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+  mockRpc.mockImplementation(async (_fn: string, args: Record<string, unknown>) => ({
+    data: {
+      country_of_residence: args.p_country_code,
+      country_confirmed_at: '2026-09-03T00:00:00Z',
+      country_source: 'USER_CONFIRMED',
+      generic_disclosure_version: args.p_disclosure_version ?? null,
+      experience_level: 'FULL',
+      idempotent_replay: false,
+    },
+    error: null,
+  }));
 });
 
 describe('MC-13/MC-14 — narrowly-required pre-confirmation endpoints stay reachable in every non-CONFIRMED state', () => {
