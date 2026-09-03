@@ -6,6 +6,7 @@ import { computeKeyInsights } from './reportInsights';
 import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
+import type { DashboardSummary, SnapshotRow } from './dashboard';
 
 export interface BuiltSection {
   sectionCode: SectionCode;
@@ -70,6 +71,33 @@ function previousSnapshotRow(source: ReportSourceData) {
   return snaps.length >= 2 ? snaps[snaps.length - 2] : null;
 }
 
+/**
+ * The prior period's Debt-to-Income, for the report's movement arrow.
+ *
+ * LR-FI-2 §1 (residual R6). `financial_snapshots` stores UNFILTERED
+ * `total_liabilities` (lib/services/dashboardData.ts writes
+ * `summary.totalLiabilities`) alongside household-only `monthly_income`
+ * (`summary.grossMonthlyIncome`), so the stored history carries exactly the
+ * mixed-entity basis that dashboard.ts's live debtToIncome no longer uses.
+ * Comparing a corrected current DTI against that previous figure would
+ * publish a fabricated "your debt improved" movement in a financial report —
+ * the improvement would be entirely an artefact of the two figures counting
+ * different entities.
+ *
+ * No stored column supports a household-scoped historical balance, and adding
+ * one is a schema change deliberately outside LR-FI-2's calculation-layer
+ * scope. So for the ONLY households where the two bases can diverge — those
+ * actually holding SMSF-owned liabilities — the honest answer is "not
+ * available" rather than a wrong number. Every other household, where
+ * householdLiabilityBalance === totalLiabilities by construction, is
+ * completely unaffected and keeps its movement arrow.
+ */
+export function previousDebtToIncome(d: DashboardSummary, prev: SnapshotRow | null): number | null {
+  if (!prev || prev.monthly_income <= 0) return null;
+  if (d.householdLiabilityBalance !== d.totalLiabilities) return null;
+  return prev.total_liabilities / (prev.monthly_income * 12);
+}
+
 function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean): BuiltSection {
   const d = source.dashboard;
   const prev = previousSnapshotRow(source);
@@ -105,7 +133,7 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
     format: 'percentage_point',
     goodDirection: 'up',
   });
-  const prevDebtToIncome = prev && prev.monthly_income > 0 ? prev.total_liabilities / (prev.monthly_income * 12) : null;
+  const prevDebtToIncome = previousDebtToIncome(d, prev);
   const debtToIncomeMovement = computeMetricMovement({
     label: 'Debt-to-income',
     current: d.debtToIncome,

@@ -357,6 +357,16 @@ export interface DashboardSummary {
   coreSurvivalMonthlyExpenses: number; // Level 1 subset of essential expenses (see CORE_SURVIVAL_EXPENSE_KEYS)
   lifestyleMonthlyExpenses: number;
   debtMonthlyRepayments: number;
+  // LR-FI-2 §6c. The same sum across ALL owners, SMSF included. This is NOT a
+  // household cash-flow figure and must never be used as one — it exists
+  // solely so a WEALTH projection that amortises the whole balance sheet
+  // (`totalLiabilities`) has a repayment on the same basis. Pairing the
+  // household-only `debtMonthlyRepayments` above with the unfiltered
+  // `totalLiabilities` made an SMSF household's Net Worth and Resilience
+  // forecasts show debt compounding upward forever (see the two forecast
+  // wirings in lib/services/forecastData.ts). Equal to debtMonthlyRepayments
+  // by construction for every household with no SMSF rows.
+  totalLiabilityMonthlyRepayments: number;
   totalMonthlyExpenses: number; // essential + lifestyle (excludes debt repayments, tracked separately)
   monthlySurplus: number;
   savingsRate: number | null;
@@ -379,6 +389,12 @@ export interface DashboardSummary {
   totalInvestments: number;
   totalRetirement: number;
   totalLiabilities: number;
+  // LR-FI-2 §1. Liability balances in HOUSEHOLD context only — the balance-side
+  // counterpart to debtMonthlyRepayments, and the basis for debtToIncome.
+  // `totalLiabilities` above stays whole because Net Worth must keep SMSF
+  // economic value (LR-FI-1 §5, §28); this figure exists so a ratio whose
+  // denominator is household-only income has a numerator on the same basis.
+  householdLiabilityBalance: number;
   netWorth: number;
   netWorthAllocation: AllocationSlice[];
   liabilityByType: { debtType: string; balance: number }[];
@@ -590,6 +606,13 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // Ratio. The SMSF loan's BALANCE is untouched and still reaches
   // totalLiabilities/netWorth below.
   const debtMonthlyRepayments = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
+  // LR-FI-2 §6c: the whole-balance-sheet repayment, for wealth-side
+  // amortisation only. Never enters monthlySurplus, DSR or any other
+  // household cash-flow figure — see the field's comment on DashboardSummary.
+  const totalLiabilityMonthlyRepayments = input.liabilities.reduce(
+    (sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0),
+    0
+  );
 
   const incomeForSurplus = netMonthlyIncome || grossMonthlyIncome;
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
@@ -635,6 +658,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
   const totalLiabilities = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
+  // LR-FI-2 §1 — the household-context balance total. Built from the SAME
+  // householdLiabilities array the cash-flow figures use, so there is one
+  // filter rule in this engine, not two.
+  const householdLiabilityBalance = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
 
   const allocationMap = new Map<AllocationBucket, number>();
@@ -682,7 +709,39 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const totalInterestWeighted = liabilitiesWithRate.reduce((sum, r) => sum + r.interest_rate! * r.balance, 0);
   const averageInterestRate = balanceWithRate > 0 ? totalInterestWeighted / balanceWithRate : null;
   const annualGrossIncome = grossMonthlyIncome * 12;
-  const debtToIncome = annualGrossIncome > 0 ? totalLiabilities / annualGrossIncome : null;
+  // LR-FI-2 §1 — Old calculation -> defect -> corrected rule -> expected new
+  // result.
+  //   Old: totalLiabilities / annualGrossIncome. LR-FI-1 made the DENOMINATOR
+  //   household-only (grossMonthlyIncome excludes SMSF income) but left the
+  //   NUMERATOR whole, so this ratio read
+  //     (personal debt + SMSF debt) / (personal income only)
+  //   — a figure spanning two economic entities on top and one underneath.
+  //   Defect: no definition of debt-to-income holds that shape. It must be
+  //   either both-entities/both-entities or personal/personal, and LR-FI-1
+  //   already certified the denominator as personal-only. LR-FI-1 therefore
+  //   made DTI actively WORSE for SMSF households rather than merely leaving
+  //   it unimproved: the denominator shrank while the numerator did not, so
+  //   an SMSF household now reported a HIGHER debt-to-income than before that
+  //   P0 fix. The economics agree with the arithmetic — an SMSF borrowing
+  //   arrangement is limited-recourse against the fund's asset, not personal
+  //   household debt. The Product Owner's ruling anticipated the exception (a
+  //   personally guaranteed obligation) and required it be EXPLICIT, never
+  //   inferred from shared ownership, so no inference mechanism is added here.
+  //   Corrected rule: divide the household-context balance by the
+  //   household-context income — the same discriminator, applied to both
+  //   sides of one expression.
+  //   Expected new result: personal 400,000 + SMSF 365,000 over 192,000 gross
+  //   went from 3.98x ("caution") to 2.08x ("good") — a real benchmark-band
+  //   flip, not a rounding change. $0 change for any household with no SMSF
+  //   rows, where householdLiabilityBalance === totalLiabilities.
+  // The GROSS basis is deliberately retained: DTI-on-gross is its own
+  // standing Product Owner decision and is not to be conflated with the
+  // separate, also-deliberate net basis of debtServiceRatio below.
+  // Net Worth, totalLiabilities, goodDebt/badDebt, liabilityByType,
+  // averageInterestRate, variableRateDebtRatio, creditUtilization and
+  // liabilitiesWithPayoff all deliberately keep reading the WHOLE register —
+  // they are wealth and debt-composition figures governed by LR-FI-1 §28.
+  const debtToIncome = annualGrossIncome > 0 ? householdLiabilityBalance / annualGrossIncome : null;
   // Net income, not gross — matches the report spec's own definition
   // ("percentage of net monthly income required to meet scheduled debt
   // repayments") and every other ratio in this file that already divides by
@@ -932,6 +991,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     coreSurvivalMonthlyExpenses,
     lifestyleMonthlyExpenses,
     debtMonthlyRepayments,
+    totalLiabilityMonthlyRepayments,
     totalMonthlyExpenses,
     monthlySurplus,
     savingsRate,
@@ -952,6 +1012,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     totalInvestments,
     totalRetirement,
     totalLiabilities,
+    householdLiabilityBalance,
     netWorth,
     netWorthAllocation,
     liabilityByType,
