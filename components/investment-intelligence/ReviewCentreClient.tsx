@@ -82,7 +82,14 @@ export function ReviewCentreClient() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex gap-2">
+        {/* II-PC2 responsive fix (spec sections 34, 54): this row of four
+            status chips had no flex-wrap, so at 320px it forced the whole
+            PAGE to scroll horizontally (measured 395px against a 320px
+            viewport). Pre-existing on origin/main — reproduced there with the
+            PC2 sub-navigation removed, so this is a genuine baseline defect
+            rather than one PC2 introduced. Wrapping is the minimal fix and
+            changes nothing above the breakpoint. */}
+        <div className="flex flex-wrap gap-2">
           {(['open', 'acknowledged', 'resolved', 'dismissed'] as const).map((s) => (
             <button
               key={s}

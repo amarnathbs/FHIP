@@ -209,10 +209,14 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
         return data ?? [];
       })(),
       (async () => {
+        // NOTE the column name: this table keys the fund by
+        // `fund_instrument_id`, NOT `instrument_id` like every other II table
+        // — it describes what a fund HOLDS, so the fund is the parent, and a
+        // future `instrument_id` here would mean the underlying security.
         const { data, error } = await supabase
           .from('ii_fund_holdings_snapshots')
-          .select('instrument_id')
-          .in('instrument_id', heldInstrumentIds)
+          .select('fund_instrument_id')
+          .in('fund_instrument_id', heldInstrumentIds)
           .limit(COVERAGE_PROBE_LIMIT);
         if (error) throw new Error(`ii_fund_holdings_snapshots: ${error.message}`);
         return data ?? [];
@@ -225,7 +229,7 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
     ).length;
     instrumentsWithNavCount = new Set(navRows.map((r) => r.instrument_id as string)).size;
     instrumentsWithBenchmarkCount = new Set(benchmarkRows.map((r) => r.instrument_id as string)).size;
-    instrumentsWithFundHoldingsCount = new Set(fundHoldingRows.map((r) => r.instrument_id as string)).size;
+    instrumentsWithFundHoldingsCount = new Set(fundHoldingRows.map((r) => r.fund_instrument_id as string)).size;
   }
 
   const signals: OverviewSignals = {
