@@ -17,9 +17,24 @@ test('new user completes onboarding and reaches dashboard', async ({ page }) => 
   await page.getByLabel('Full name').fill('Test User');
   await page.getByRole('button', { name: /continue/i }).click(); // profile -> household
   await page.getByRole('button', { name: /continue/i }).click(); // household -> countries
+
+  // G3: the Countries & Currency step no longer carries a pre-filled AU/AUD
+  // default — a country the user never chose is exactly what G3 section 6.2
+  // forbids — so this step now requires a genuine selection before it will
+  // advance. Previously this spec clicked straight through it.
+  await page.locator('#country_of_residence').selectOption('AU');
+  await page.locator('#preferred_currency').selectOption('AUD');
+
   await page.getByRole('button', { name: /continue/i }).click(); // countries -> goals
   await page.getByRole('button', { name: /continue/i }).click(); // goals -> review
   await page.getByRole('button', { name: /finish/i }).click();
+
+  // G3/MCC: onboarding now ends at the compulsory confirmation screen rather
+  // than the dashboard. Confirming an AU (FULL) residence needs no coverage
+  // acknowledgement, so this is a single explicit step.
+  await expect(page).toHaveURL(/\/confirm-country/);
+  await page.locator('#confirm-country-select').selectOption('AU');
+  await page.getByRole('button', { name: /confirm and continue/i }).click();
 
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText(/welcome/i)).toBeVisible();
