@@ -16,6 +16,11 @@ test('new user completes onboarding and reaches dashboard', async ({ page }) => 
 
   await page.getByLabel('Full name').fill('Test User');
   await page.getByRole('button', { name: /continue/i }).click(); // profile -> household
+
+  // household_type is a REQUIRED field on this step (validateStep case 1) and
+  // always has been — this spec previously clicked straight past it, which
+  // cannot have advanced the wizard.
+  await page.locator('#household_type').selectOption('single');
   await page.getByRole('button', { name: /continue/i }).click(); // household -> countries
 
   // G3: the Countries & Currency step no longer carries a pre-filled AU/AUD
