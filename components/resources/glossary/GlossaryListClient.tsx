@@ -1,18 +1,32 @@
 'use client';
 
 // R1.4 Glossary list — spec §25.
+//
+// Admin A0.2 Wave 5:
+//   §9  Every non-2xx outcome collapsed into the one red "We couldn't load
+//       Resources content. Try again." panel — a 403 offered a Retry that
+//       could never succeed, and a non-JSON edge response surfaced a raw
+//       `SyntaxError` to the operator. Outcomes are now classified once,
+//       centrally, and rendered as the state they actually are.
+//   §11 There was no result count, so filtering and paging changed the list
+//       with nothing announced; the loading skeleton had no specific label.
+//   §17 The page carried no Help affordance.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { ResourceStatusBadge, ResourceJurisdictionBadge } from '@/components/resources/admin/ResourceBadges';
 import { ResourcePagination } from '@/components/resources/admin/ResourcePagination';
-import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
+import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } from '@/components/resources/admin/ResourceStates';
+import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import type { GlossaryListItem } from '@/lib/resources/glossary/queries';
 
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
 export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [jurisdiction, setJurisdiction] = useState('all');
@@ -21,13 +35,13 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AdminFailure | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const qp = new URLSearchParams();
       if (search) qp.set('q', search);
@@ -35,13 +49,21 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
       if (jurisdiction !== 'all') qp.set('jurisdiction', jurisdiction);
       if (page > 1) qp.set('page', String(page));
       const res = await fetch(`/api/admin/resources/glossary?${qp.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "We couldn't load Glossary definitions. Try again.");
-      setItems(json.data.items);
-      setTotal(json.data.total);
-      setPageSize(json.data.pageSize);
+      const json = await readJsonSafely(res);
+      if (!res.ok) {
+        setFailure(failureFromResponse(res.status, json, 'the glossary'));
+        setItems([]);
+        setTotal(0);
+        return;
+      }
+      const data = json?.data as { items?: GlossaryListItem[]; total?: number; pageSize?: number } | undefined;
+      setItems(data?.items ?? []);
+      setTotal(data?.total ?? 0);
+      setPageSize(data?.pageSize ?? 25);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setFailure(failureFromThrown(e, 'the glossary'));
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -65,11 +87,13 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
           <p className="mt-1 text-sm text-muted">Concise financial definitions used across FHIP.</p>
         </div>
         {canCreate && (
-          <Link href="/admin/resources/glossary/new" className="rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+          <Link href="/admin/resources/glossary/new" className="inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
             New Glossary Definition
           </Link>
         )}
       </div>
+
+      <AdminTaskHelp taskId="ADM-12" />
 
       <div className="rounded-card border border-line bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -93,20 +117,28 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
           )}
         </div>
 
-        <div className="mt-4">
+        {/* §11 — the result count is announced, so filtering and paging are
+            perceivable without sight. Previously the list simply changed. */}
+        <p role="status" aria-live="polite" className="mt-3 text-xs text-muted">
+          {loading || failure ? '' : `${items.length} ${items.length === 1 ? 'definition' : 'definitions'} shown.`}
+        </p>
+
+        <div className="mt-2">
           {loading ? (
-            <ResourceLoadingSkeleton />
-          ) : error ? (
-            <ResourceErrorState message={error} onRetry={() => setReloadToken((t) => t + 1)} />
+            <ResourceLoadingSkeleton label="Loading glossary definitions" />
+          ) : failure ? (
+            <ResourceFailureState failure={failure} onRetry={() => setReloadToken((t) => t + 1)} />
           ) : items.length === 0 ? (
             <ResourceEmptyState
               title={hasFilters ? 'No definitions match these filters.' : 'No glossary definitions have been created yet.'}
               message={hasFilters ? 'Try adjusting or clearing your filters.' : 'Create your first glossary definition.'}
-              action={canCreate && !hasFilters ? { label: 'New Glossary Definition', onClick: () => (window.location.href = '/admin/resources/glossary/new') } : undefined}
+              action={canCreate && !hasFilters ? { label: 'New Glossary Definition', onClick: () => router.push('/admin/resources/glossary/new') } : undefined}
             />
           ) : (
             <>
-              <div className="hidden overflow-x-auto sm:block">
+              {/* `relative` — see ResourceContentTable for why this is
+                  load-bearing rather than cosmetic. */}
+              <div className="relative hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
@@ -135,7 +167,7 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
                         <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(g.updated_at)}</td>
                         <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{formatAdminDate(g.next_review_at)}</td>
                         <td className="py-2.5 pl-3 text-right">
-                          <Link href={`/admin/resources/glossary/${g.id}/edit`} className="text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${g.title}"`}>
+                          <Link href={`/admin/resources/glossary/${g.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${g.title}"`}>
                             Edit
                           </Link>
                         </td>
@@ -148,7 +180,8 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
               <ul className="space-y-2 sm:hidden">
                 {items.map((g) => (
                   <li key={g.id} className="rounded-card border border-line p-3">
-                    <Link href={`/admin/resources/glossary/${g.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                    {/* break-words — see ResourceContentTable (§12). */}
+                    <Link href={`/admin/resources/glossary/${g.id}/edit`} className="block break-words font-medium text-ink hover:text-trust hover:underline">
                       {g.title}
                     </Link>
                     <div className="mt-2 flex flex-wrap gap-1.5">
