@@ -73,12 +73,24 @@ async function expectNoHorizontalOverflow(page: Page, label: string) {
 
 test.afterAll(async () => {
   const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  for (const u of data?.users ?? []) {
-    if (createdEmails.includes(u.email ?? '')) {
-      await admin.from('cross_border_relationships').delete().eq('user_id', u.id);
-      await admin.auth.admin.deleteUser(u.id);
-    }
+  const mine = (data?.users ?? []).filter((u) => createdEmails.includes(u.email ?? ''));
+  const ids = mine.map((u) => u.id);
+
+  for (const u of mine) {
+    await admin.from('cross_border_relationships').delete().eq('user_id', u.id);
+    await admin.auth.admin.deleteUser(u.id);
   }
+
+  // audit_events.user_id is ON DELETE SET NULL but entity_id is a plain uuid
+  // with no FK, so a deleted account's id survives there. Left in place, these
+  // synthetic confirmations would be indistinguishable from genuine ones in a
+  // real audit trail — so they are removed by id, scoped to this run only.
+  if (ids.length) {
+    await admin.from('audit_events').delete().in('entity_id', ids);
+    const { data: leftAudit } = await admin.from('audit_events').select('id').in('entity_id', ids);
+    if ((leftAudit ?? []).length) throw new Error(`audit residue left behind: ${(leftAudit ?? []).length}`);
+  }
+
   const { data: after } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const left = (after?.users ?? []).filter((u) => (u.email ?? '').includes(`g3e2e.${RUN}`));
   if (left.length) throw new Error(`synthetic e2e identities left behind: ${left.length}`);

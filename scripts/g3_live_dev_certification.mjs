@@ -361,18 +361,40 @@ try {
     check(`zero synthetic rows remain in ${table}`, (data ?? []).length === 0, `(${(data ?? []).length})`);
   }
 
-  // audit_events.user_id is `on delete set null`, so confirmation events
-  // legitimately SURVIVE the account deletion as orphaned rows. §18 requires
-  // this to be identified honestly rather than claimed as zero.
-  const { data: orphanAudit } = await admin
+  // AUDIT RESIDUE — corrected treatment.
+  //
+  // audit_events.user_id is `on delete set null`, so a confirmation event
+  // survives its account's deletion. An earlier version of this script left
+  // those rows in place and described them as carrying no user identifier.
+  // That was WRONG on two counts, found by inspecting the rows rather than
+  // reasoning about them:
+  //
+  //   1. `entity_id` is a plain uuid column with no FK, so ON DELETE SET NULL
+  //      never touches it — the deleted account's id survives there, and in
+  //      metadata.actor_id too.
+  //   2. `written_by` names the writing FUNCTION, not the purpose. A genuine
+  //      user's confirmation produces an identical marker, and a genuine user
+  //      who later deleted their account would also leave user_id NULL — so
+  //      these rows are indistinguishable from real confirmations.
+  //
+  // Leaving them therefore pollutes a real audit trail with synthetic
+  // confirmations that cannot be told apart from genuine ones, which is worse
+  // for audit integrity than removing them. They are deleted here, by id,
+  // scoped strictly to the identities this run created.
+  const { data: myAudit } = await admin
     .from('audit_events')
-    .select('id, user_id, entity, event_type, metadata')
-    .eq('event_type', 'country_confirmed')
-    .is('user_id', null);
-  const mine = (orphanAudit ?? []).filter((r) => r.metadata?.written_by === 'confirm_country_of_residence');
-  console.log(`  INFO  immutable audit residue: ${mine.length} orphaned country_confirmed events (user_id set to NULL by the FK's ON DELETE SET NULL).`);
-  console.log('  INFO  These are deliberately retained, carry no user identifier, and are the audit trail G3-R5 requires to be unskippable.');
-  check('no synthetic audit row still carries a live user id', (orphanAudit ?? []).every((r) => r.user_id === null));
+    .select('id')
+    .in('entity_id', created.length ? created : ['00000000-0000-0000-0000-000000000000']);
+  const myAuditIds = (myAudit ?? []).map((r) => r.id);
+  if (myAuditIds.length) {
+    await admin.from('audit_events').delete().in('id', myAuditIds);
+  }
+  const { data: stillThere } = await admin
+    .from('audit_events')
+    .select('id')
+    .in('entity_id', created.length ? created : ['00000000-0000-0000-0000-000000000000']);
+  check('zero audit_events rows remain for any synthetic identity this run created',
+    (stillThere ?? []).length === 0, `(deleted ${myAuditIds.length}, remaining ${(stillThere ?? []).length})`);
 
   // Existing-user preservation, compared against the preflight baseline.
   const baselinePath = path.join(process.cwd(), 'test-artifacts', 'g3_dev_baseline.json');
