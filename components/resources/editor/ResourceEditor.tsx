@@ -14,6 +14,7 @@ import { BlockEditor } from './BlockEditor';
 import { MetadataSidebar, type MetadataFormState } from './MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from './WorkflowPanel';
 import { RevisionHistoryPanel } from './RevisionHistoryPanel';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { useUnsavedChangesGuard } from './useUnsavedChangesGuard';
 import { slugify } from '@/lib/resources/editor/slug';
@@ -97,8 +98,29 @@ export function ResourceEditor({
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  // Admin A0.2 Wave 5 (§28 "no misleading success remains"). Two linked
+  // defects lived in the save path:
+  //
+  //  1. `doSave` began with `if (savingRef.current) return;` — a save
+  //     requested while another was in flight was DROPPED silently, with no
+  //     retry and no signal. The debounced autosave and a manual save race
+  //     routinely, so this was reachable in normal use.
+  //  2. On success it unconditionally called `setDirty(false)` and showed
+  //     **Saved**, even when the operator had gone on typing while the
+  //     request was in flight. Combined with (1), the editor could sit
+  //     reading "Saved" with genuinely unsaved edits — the strongest form of
+  //     misleading success in Admin, and a real risk of losing an author's
+  //     work at the unsaved-changes guard.
+  //
+  // `queuedSaveRef` turns the dropped save into a queued one, and
+  // `changeSeqRef` records a monotonic edit counter so completion can tell
+  // whether the content changed while the request was in flight.
+  const queuedSaveRef = useRef(false);
+  const changeSeqRef = useRef(0);
+  const doSaveRef = useRef<((createVersion: boolean) => Promise<void>) | null>(null);
 
   function markDirty() {
+    changeSeqRef.current += 1;
     setDirty(true);
     setSaveState((s) => (s === 'error' ? s : 'dirty'));
   }
@@ -124,6 +146,9 @@ export function ResourceEditor({
       seo_description: meta.seoDescription || null,
       canonical_url: meta.canonicalUrl || null,
       is_indexable: meta.isIndexable,
+      // Wave 5: the Featured checkbox was rendered and editable but never
+      // sent — see EditorSavePatch in lib/resources/editor/types.ts.
+      is_featured: meta.isFeatured,
       primary_cta_id: meta.primaryCtaId || null,
       secondary_cta_id: meta.secondaryCtaId || null,
       content_id: initialPost.content_id,
@@ -160,8 +185,14 @@ export function ResourceEditor({
 
   const doSave = useCallback(
     async (createVersion: boolean) => {
-      if (savingRef.current) return;
+      if (savingRef.current) {
+        // Queue rather than drop: the caller's changes must still reach the
+        // server once the in-flight request finishes.
+        queuedSaveRef.current = true;
+        return;
+      }
       savingRef.current = true;
+      const seqAtStart = changeSeqRef.current;
       setSaveState('saving');
       setSaveError(null);
       try {
@@ -197,8 +228,16 @@ export function ResourceEditor({
         }
         setFieldErrors({});
         setLastUpdatedAt(json.data.updated_at);
-        setDirty(false);
-        setSaveState('saved');
+        // Only claim "Saved" if nothing changed while the request was in
+        // flight. If it did, the content on screen is genuinely NOT what was
+        // just persisted, so the editor stays dirty and queues another save.
+        if (changeSeqRef.current === seqAtStart) {
+          setDirty(false);
+          setSaveState('saved');
+        } else {
+          setSaveState('dirty');
+          queuedSaveRef.current = true;
+        }
         if (createVersion) {
           setChangeSummary('');
           fetch(`/api/admin/resources/content/${initialPost.id}/versions`)
@@ -211,10 +250,25 @@ export function ResourceEditor({
         setSaveError('Could not reach the server. Check your connection and try again.');
       } finally {
         savingRef.current = false;
+        // Drain the queue. Always a non-version save: a queued follow-up is
+        // catching the edits made during the previous request, not a second
+        // deliberate "record a revision" action.
+        if (queuedSaveRef.current) {
+          queuedSaveRef.current = false;
+          void doSaveRef.current?.(false);
+        }
       }
     },
     [buildPatch, buildSnapshot, changeSummary, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds]
   );
+
+  // Keeps the queue-drain above pointing at the current closure, so a
+  // follow-up save sends the LATEST content rather than a stale snapshot.
+  // Assigned in an effect, not during render — writing a ref during render
+  // is exactly what react-hooks/refs forbids.
+  useEffect(() => {
+    doSaveRef.current = doSave;
+  }, [doSave]);
 
   // Debounced autosave — never on the very first render, only after a real
   // change (spec §38: "debounced autosave after meaningful changes").
@@ -331,13 +385,23 @@ export function ResourceEditor({
             <ResourceComplianceBadge compliance={meta.complianceClassification} />
             <h1 className="truncate text-lg font-semibold text-ink">{title || 'Untitled'}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          {/* §12: the header cluster could not wrap, so at ~360px the
+              "Save failed / Your latest changes could not be saved. / Retry
+              Save" combination overflowed horizontally. */}
+          <div className="flex flex-wrap items-center gap-3">
             <SaveStatus state={saveState} onRetry={() => doSave(false)} />
-            <Link href={`/admin/resources/content/${initialPost.id}/preview`} className="rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
+            <Link href={`/admin/resources/content/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
               Preview
             </Link>
-            <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
-              Save Draft
+            {/* Admin A0.2 Wave 5 (§18): this button read "Save Draft" while
+                the three sibling editors that use the identical save path
+                read "Save", and the shared Revision History panel told every
+                one of them that "the first Save Draft will create version 1".
+                "Save Draft" is also inaccurate on published content, which
+                this same button saves without changing its status. All four
+                now use one label that describes what actually happens. */}
+            <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
+              {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -433,7 +497,7 @@ export function ResourceEditor({
             <label htmlFor="change-summary" className="block text-sm font-medium text-ink">
               Change Summary (optional)
             </label>
-            <p className="mt-0.5 text-xs text-muted">Recorded with your next Save Draft — e.g. &quot;Added retirement example and updated ATO references.&quot;</p>
+            <p className="mt-0.5 text-xs text-muted">Recorded with your next Save Changes — e.g. &quot;Added retirement example and updated ATO references.&quot;</p>
             <input
               id="change-summary"
               type="text"
@@ -463,6 +527,7 @@ export function ResourceEditor({
             canManageUsers={caps.canManage}
             canManageCtas={caps.canManage}
           />
+          <AdminTaskHelp taskId="ADM-09" />
           <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />
           <p className="text-xs text-muted">Content ID: {initialPost.content_id ?? 'Not assigned (set by import, not editable here).'}</p>

@@ -10,7 +10,7 @@
 // method, which trivially satisfies "keyboard users must not depend on
 // drag-and-drop").
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField, TextAreaField, SelectField } from './FormField';
 import {
@@ -211,6 +211,7 @@ function IconButton({ label, onClick, disabled }: { label: string; onClick: () =
 
 export function BlockEditor({ blocks, onChange }: { blocks: AnyBlock[]; onChange: (blocks: AnyBlock[]) => void }) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
 
   function updateAt(index: number, data: unknown) {
@@ -285,8 +286,28 @@ export function BlockEditor({ blocks, onChange }: { blocks: AnyBlock[]; onChange
         })}
       </ul>
 
-      <div>
-        <button type="button" onClick={() => setAddMenuOpen((v) => !v)} aria-expanded={addMenuOpen} aria-controls="add-block-menu" className="rounded-full border border-trust px-4 py-2 text-sm font-semibold text-trust hover:bg-trust/5">
+      {/* Admin A0.2 Wave 5 (§11): the disclosure declared aria-expanded and
+          aria-controls but had no way to close it from the keyboard other
+          than tabbing back to the trigger — Escape did nothing. Escape now
+          closes it and returns focus to the trigger, matching the Escape
+          behaviour the AppShell's own nav dropdowns and ConfirmDialog use. */}
+      <div
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && addMenuOpen) {
+            e.stopPropagation();
+            setAddMenuOpen(false);
+            addMenuTriggerRef.current?.focus();
+          }
+        }}
+      >
+        <button
+          ref={addMenuTriggerRef}
+          type="button"
+          onClick={() => setAddMenuOpen((v) => !v)}
+          aria-expanded={addMenuOpen}
+          aria-controls="add-block-menu"
+          className="min-h-11 rounded-full border border-trust px-4 py-2 text-sm font-semibold text-trust hover:bg-trust/5"
+        >
           + Add Block
         </button>
         {addMenuOpen && (

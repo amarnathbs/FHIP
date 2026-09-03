@@ -23,19 +23,27 @@ const STYLES: Record<SaveState, string> = {
   error: 'text-risk',
 };
 
+// Admin A0.2 Wave 5 (§8.2, §11, §12): the error state repeated the same
+// fact three times in three type sizes, the Retry control stayed enabled
+// while a retry was already in flight (so it could be double-submitted),
+// and the cluster could not wrap at narrow widths.
 export function SaveStatus({ state, onRetry }: { state: SaveState; onRetry?: () => void }) {
   return (
-    <div className="flex items-center gap-2 text-sm" aria-live="polite">
+    <div className="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite">
       <span className={`font-medium ${STYLES[state]}`}>{COPY[state]}</span>
-      {state === 'error' && (
-        <>
-          <span className="text-xs text-muted">Your latest changes could not be saved.</span>
-          {onRetry && (
-            <button type="button" onClick={onRetry} className="rounded-full border border-risk px-2.5 py-0.5 text-xs font-semibold text-risk hover:bg-risk/5">
-              Retry Save
-            </button>
-          )}
-        </>
+      {state === 'error' && onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="min-h-11 rounded-full border border-risk px-2.5 py-0.5 text-xs font-semibold text-risk hover:bg-risk/5"
+        >
+          Retry Save
+        </button>
+      )}
+      {state === 'saving' && onRetry && (
+        // While a save is in flight there is nothing to retry; showing a
+        // live Retry control here invited a second, racing request.
+        <span className="sr-only">Saving your changes.</span>
       )}
     </div>
   );

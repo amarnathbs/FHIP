@@ -127,6 +127,16 @@ export async function updateResourceDraft(supabase: SupabaseClient, postId: stri
       seo_description: patch.seo_description || null,
       canonical_url: patch.canonical_url || null,
       is_indexable: patch.is_indexable,
+      // Admin A0.2 Wave 5: previously omitted entirely, so the editors'
+      // Featured checkbox reported "Saved" and changed nothing. See
+      // EditorSavePatch's own comment in lib/resources/editor/types.ts for
+      // why this needs no grant or migration change.
+      //
+      // Written ONLY when the caller supplied it. A caller that omits the
+      // field (several scripts and tests do) leaves the stored value
+      // untouched, rather than having `false` invented on its behalf and
+      // silently un-featuring the content.
+      ...(patch.is_featured === undefined ? {} : { is_featured: patch.is_featured }),
       primary_cta_id: patch.primary_cta_id,
       secondary_cta_id: patch.secondary_cta_id,
       updated_by: params.userId,

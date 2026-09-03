@@ -25,7 +25,35 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: 'review_asc', label: 'Review Date' },
 ];
 
-const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
+const selectClass = 'min-h-11 rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
+
+// Admin A0.2 Wave 5 (§8.7 "filters with visible active state"): the only
+// signals that a list was filtered were the value showing inside each select
+// and the appearance of a Clear Filters button. Once the bar wrapped or
+// scrolled out of view — which it does at every width below `lg` — nothing
+// on screen said the results were narrowed, so an empty result read as "there
+// is nothing here" rather than "nothing matches what you asked for". This
+// builds a plain-language summary of exactly which filters are applied.
+function describeActiveFilters(value: FilterState, categories: RelatedRef[], showStatusFilter: boolean): string[] {
+  const parts: string[] = [];
+  if (value.search) parts.push(`matching “${value.search}”`);
+  if (showStatusFilter && value.status !== 'all') {
+    parts.push(`status ${STATUS_LABELS[value.status as keyof typeof STATUS_LABELS] ?? value.status}`);
+  }
+  if (value.contentType !== 'all') {
+    parts.push(`type ${CONTENT_TYPE_LABELS[value.contentType as keyof typeof CONTENT_TYPE_LABELS] ?? value.contentType}`);
+  }
+  if (value.jurisdiction !== 'all') {
+    parts.push(`jurisdiction ${JURISDICTION_LABELS[value.jurisdiction as keyof typeof JURISDICTION_LABELS] ?? value.jurisdiction}`);
+  }
+  if (value.compliance !== 'all') {
+    parts.push(`compliance ${COMPLIANCE_LABELS[value.compliance as keyof typeof COMPLIANCE_LABELS] ?? value.compliance}`);
+  }
+  if (value.categoryId !== 'all') {
+    parts.push(`category ${categories.find((c) => c.id === value.categoryId)?.name ?? 'selected'}`);
+  }
+  return parts;
+}
 
 export function ResourceFilters({
   value,
@@ -48,7 +76,10 @@ export function ResourceFilters({
     value.compliance !== 'all' ||
     value.categoryId !== 'all';
 
+  const activeParts = describeActiveFilters(value, categories, showStatusFilter);
+
   return (
+    <>
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative">
         <label htmlFor="resource-search" className="sr-only">
@@ -60,7 +91,7 @@ export function ResourceFilters({
           placeholder="Search content…"
           value={value.search}
           onChange={(e) => onChange({ search: e.target.value })}
-          className="w-56 rounded border border-line bg-white px-3 py-1.5 text-sm text-ink"
+          className="min-h-11 w-full max-w-56 rounded border border-line bg-white px-3 py-1.5 text-sm text-ink"
         />
       </div>
 
@@ -122,10 +153,17 @@ export function ResourceFilters({
       </select>
 
       {hasActiveFilters && (
-        <button type="button" onClick={onClear} className="text-sm font-semibold text-trust hover:underline">
+        <button type="button" onClick={onClear} className="min-h-11 text-sm font-semibold text-trust hover:underline">
           Clear Filters
         </button>
       )}
     </div>
+
+    {activeParts.length > 0 && (
+      <p className="mt-2 text-xs text-muted">
+        <span className="font-semibold text-ink">Filtered:</span> {activeParts.join(' · ')}
+      </p>
+    )}
+    </>
   );
 }

@@ -12,7 +12,10 @@ import Link from 'next/link';
 import { TextField, TextAreaField, SelectField, CheckboxField } from '@/components/resources/editor/FormField';
 import { BlockEditor } from '@/components/resources/editor/BlockEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { JURISDICTION_LABELS, JURISDICTION_VALUES } from '@/lib/resources/admin/labels';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
+import { actionFailureMessage, readJsonSafely } from '@/lib/resources/admin/resultState';
+import { CONTENT_TYPE_LABELS, JURISDICTION_LABELS, JURISDICTION_VALUES } from '@/lib/resources/admin/labels';
+import type { ResourceContentType } from '@/lib/resources/types';
 import { QUESTION_MAX_LENGTH, SHORT_ANSWER_MAX_LENGTH } from '@/lib/resources/faq/validation';
 import type { FaqRow, FaqLinkedPost } from '@/lib/resources/faq/types';
 import type { RelatedRef } from '@/lib/resources/admin/queries';
@@ -56,6 +59,9 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
   const [links, setLinks] = useState<FaqLinkedPost[]>(linkedPosts);
   const [deleteImpact, setDeleteImpact] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [unlinking, setUnlinking] = useState<string | null>(null);
+  const [unlinkNotice, setUnlinkNotice] = useState<string | null>(null);
+  const [pendingUnlink, setPendingUnlink] = useState<FaqLinkedPost | null>(null);
 
   async function save() {
     setSaving(true);
@@ -123,10 +129,30 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
     setLinks((prev) => [...prev, { post_id: postId, title, content_type: contentType, status: '', sort_order: prev.length }]);
   }
 
-  async function unlinkPost(postId: string) {
+  // Admin A0.2 Wave 5 (§9): this never inspected the response — a failed
+  // unlink removed the row from the screen anyway, so the FAQ silently kept
+  // appearing on a page the operator believed they had detached it from,
+  // until the next reload contradicted them. It now verifies the outcome
+  // and only updates the list when the server actually accepted it.
+  async function unlinkPost(postId: string, title: string) {
     if (!faq) return;
-    await fetch(`/api/admin/resources/faqs/${faq.id}/links?postId=${postId}`, { method: 'DELETE' });
-    setLinks((prev) => prev.filter((l) => l.post_id !== postId));
+    setError(null);
+    setUnlinking(postId);
+    try {
+      const res = await fetch(`/api/admin/resources/faqs/${faq.id}/links?postId=${postId}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 404) {
+        const json = await readJsonSafely(res);
+        setError(actionFailureMessage(res.status, json, 'unlink this FAQ'));
+        return;
+      }
+      setLinks((prev) => prev.filter((l) => l.post_id !== postId));
+      setSaved(false);
+      setUnlinkNotice(`This FAQ is no longer linked to "${title}".`);
+    } catch {
+      setError('Could not reach the server, so nothing was changed. Check your connection and try again.');
+    } finally {
+      setUnlinking(null);
+    }
   }
 
   async function confirmDelete() {
@@ -137,7 +163,9 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
       const json = await res.json();
       if (res.status === 409) {
         setDeleteImpact(null);
-        setError(json.error);
+        // Wave 5: this had no fallback, so a 409 whose body omitted `error`
+        // rendered an empty red box — a visible failure with no message.
+        setError(actionFailureMessage(409, json, 'delete this FAQ'));
         return;
       }
       if (!res.ok) throw new Error(json.error ?? 'Could not delete this FAQ.');
@@ -171,6 +199,24 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
         onConfirm={confirmDelete}
         onCancel={() => setDeleteImpact(null)}
       />
+      <ConfirmDialog
+        open={!!pendingUnlink}
+        title="Unlink this FAQ?"
+        message={
+          pendingUnlink
+            ? `This FAQ will stop appearing on "${pendingUnlink.title}". The FAQ itself is not deleted, and you can link it again at any time.`
+            : ''
+        }
+        confirmLabel="Unlink"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          const target = pendingUnlink;
+          setPendingUnlink(null);
+          if (target) void unlinkPost(target.post_id, target.title);
+        }}
+        onCancel={() => setPendingUnlink(null)}
+      />
 
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link href="/admin/resources" className="hover:text-trust hover:underline">
@@ -185,31 +231,40 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">{isNew ? 'New FAQ' : 'Edit FAQ'}</h1>
-        <div className="flex items-center gap-3">
-          {saved && (
-            <span role="status" className="text-sm font-medium text-positive">
-              Saved
-            </span>
-          )}
-          <button type="button" onClick={save} disabled={saving} className="rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Admin A0.2 Wave 5 (§9): `saved` was set on a successful save and
+              never cleared, so the word "Saved" stayed on screen while the
+              operator went on making further, unsaved edits — a standing
+              claim that the current state was committed when it was not.
+              It is now cleared the moment any field changes (see the
+              markChanged wrapper on every input below). */}
+          <span role="status" aria-live="polite" className="text-sm font-medium text-positive">
+            {saved ? 'Saved' : ''}
+          </span>
+          <button type="button" onClick={save} disabled={saving} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
+
+      <AdminTaskHelp taskId="ADM-14" />
 
       {error && (
         <p role="alert" className="rounded-compact border border-risk/30 bg-risk/5 p-3 text-sm text-risk">
           {error}
         </p>
       )}
+      <p role="status" aria-live="polite" className="text-sm text-muted">
+        {unlinkNotice ?? ''}
+      </p>
 
       <div className="rounded-card border border-line bg-white p-4 space-y-4">
-        <TextField label="Question" value={question} onChange={setQuestion} required maxLength={QUESTION_MAX_LENGTH} error={fieldErrors.question} />
-        <TextAreaField label="Short Answer" value={shortAnswer} onChange={setShortAnswer} required maxLength={SHORT_ANSWER_MAX_LENGTH} rows={4} hint="Must stand alone — avoid 'see above' or 'as explained earlier'. A FAQ may appear independently on several pages." error={fieldErrors.short_answer} />
+        <TextField label="Question" value={question} onChange={(v) => { setSaved(false); setQuestion(v); }} required maxLength={QUESTION_MAX_LENGTH} error={fieldErrors.question} />
+        <TextAreaField label="Short Answer" value={shortAnswer} onChange={(v) => { setSaved(false); setShortAnswer(v); }} required maxLength={SHORT_ANSWER_MAX_LENGTH} rows={4} hint="Must stand alone — avoid 'see above' or 'as explained earlier'. A FAQ may appear independently on several pages." error={fieldErrors.short_answer} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectField label="Jurisdiction" value={jurisdiction} onChange={setJurisdiction} options={JURISDICTION_VALUES.map((j) => ({ value: j, label: JURISDICTION_LABELS[j] }))} error={fieldErrors.jurisdiction} required />
-          <SelectField label="Category" value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} allowBlank blankLabel="None" />
+          <SelectField label="Jurisdiction" value={jurisdiction} onChange={(v) => { setSaved(false); setJurisdiction(v); }} options={JURISDICTION_VALUES.map((j) => ({ value: j, label: JURISDICTION_LABELS[j] }))} error={fieldErrors.jurisdiction} required />
+          <SelectField label="Category" value={categoryId} onChange={(v) => { setSaved(false); setCategoryId(v); }} options={categories.map((c) => ({ value: c.id, label: c.name }))} allowBlank blankLabel="None" />
         </div>
 
         <div>
@@ -218,7 +273,7 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
             <div className="flex flex-wrap gap-3">
               {COMPLIANCE_OPTIONS.map((opt) => (
                 <label key={opt.value} className="flex items-center gap-2 text-sm text-ink">
-                  <input type="radio" name="faq-compliance" checked={compliance === opt.value} onChange={() => setCompliance(opt.value)} className="h-4 w-4 text-trust focus:ring-trust" />
+                  <input type="radio" name="faq-compliance" checked={compliance === opt.value} onChange={() => { setSaved(false); setCompliance(opt.value); }} className="h-4 w-4 text-trust focus:ring-trust" />
                   {opt.label}
                 </label>
               ))}
@@ -226,13 +281,13 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
           </fieldset>
         </div>
 
-        <CheckboxField label="Active" checked={isActive} onChange={setIsActive} hint="Inactive FAQs are hidden from public surfaces but remain editable." />
+        <CheckboxField label="Active" checked={isActive} onChange={(v) => { setSaved(false); setIsActive(v); }} hint="Inactive FAQs are hidden from public surfaces but remain editable." />
       </div>
 
       <div className="rounded-card border border-line bg-white p-4">
         <h2 className="mb-1 text-sm font-semibold text-ink">Expanded Answer</h2>
         <p className="mb-3 text-xs text-muted">Optional structured detail beyond the Short Answer — plain English, avoid unexplained jargon.</p>
-        <BlockEditor blocks={answerBlocks} onChange={setAnswerBlocks} />
+        <BlockEditor blocks={answerBlocks} onChange={(b) => { setSaved(false); setAnswerBlocks(b); }} />
       </div>
 
       {!isNew && faq && (
@@ -243,12 +298,19 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
           ) : (
             <ul className="space-y-2">
               {links.map((l) => (
-                <li key={l.post_id} className="flex items-center justify-between gap-2 rounded-compact border border-line p-2 text-sm">
+                <li key={l.post_id} className="flex flex-wrap items-center justify-between gap-2 rounded-compact border border-line p-2 text-sm">
                   <span>
-                    {l.title} <span className="text-xs text-muted">({l.content_type})</span>
+                    {l.title}{' '}
+                    <span className="text-xs text-muted">({CONTENT_TYPE_LABELS[l.content_type as ResourceContentType] ?? l.content_type})</span>
                   </span>
-                  <button type="button" onClick={() => unlinkPost(l.post_id)} className="text-xs font-semibold text-risk hover:underline">
-                    Unlink
+                  <button
+                    type="button"
+                    disabled={unlinking === l.post_id}
+                    onClick={() => setPendingUnlink(l)}
+                    aria-label={`Unlink this FAQ from "${l.title}"`}
+                    className="min-h-11 text-xs font-semibold text-risk hover:underline disabled:opacity-50"
+                  >
+                    {unlinking === l.post_id ? 'Unlinking…' : 'Unlink'}
                   </button>
                 </li>
               ))}
@@ -265,8 +327,13 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
                   .filter((r) => !links.some((l) => l.post_id === r.id))
                   .map((r) => (
                     <li key={r.id}>
-                      <button type="button" onClick={() => linkPost(r.id, r.title, r.content_type)} className="text-sm text-trust hover:underline">
-                        + {r.title} <span className="text-xs text-muted">({r.content_type})</span>
+                      <button
+                        type="button"
+                        onClick={() => linkPost(r.id, r.title, r.content_type)}
+                        aria-label={`Link this FAQ to "${r.title}"`}
+                        className="min-h-11 text-sm text-trust hover:underline"
+                      >
+                        + {r.title} <span className="text-xs text-muted">({CONTENT_TYPE_LABELS[r.content_type as ResourceContentType] ?? r.content_type})</span>
                       </button>
                     </li>
                   ))}
@@ -277,8 +344,14 @@ export function FaqEditor({ faq, categories, linkedPosts }: { faq: FaqRow | null
           <div className="border-t border-line pt-3">
             <button
               type="button"
-              onClick={() => setDeleteImpact(links.length > 0 ? `This FAQ is linked to ${links.length} piece${links.length === 1 ? '' : 's'} of content. Consider marking it inactive instead of deleting it.` : 'This FAQ has no linked content and can be safely deleted.')}
-              className="text-sm font-semibold text-risk hover:underline"
+              onClick={() =>
+                setDeleteImpact(
+                  links.length > 0
+                    ? `"${question || 'This FAQ'}" is linked to ${links.length} piece${links.length === 1 ? '' : 's'} of content. Deleting it cannot be undone. Consider clearing the Active checkbox instead, which hides it from public pages while keeping it editable.`
+                    : `"${question || 'This FAQ'}" has no linked content and can be safely deleted. Deleting it cannot be undone.`
+                )
+              }
+              className="min-h-11 text-sm font-semibold text-risk hover:underline"
             >
               Delete FAQ
             </button>
