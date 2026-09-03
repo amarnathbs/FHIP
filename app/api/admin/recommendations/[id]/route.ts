@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { validateEditConditions } from '@/lib/services/recommendationEditValidation';
 
@@ -57,5 +57,5 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq('id', id)
     .select('*')
     .single();
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Recommendation deactivate') : ok(data);
 }

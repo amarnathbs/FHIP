@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
@@ -8,7 +8,7 @@ export const GET = adminRoute(async () => {
     .from('benchmark_datasets')
     .select('*, benchmark_sources(source_name, publisher, citation_text)')
     .order('created_at', { ascending: false });
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark datasets list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
@@ -23,5 +23,5 @@ export const POST = adminRoute(async (req: Request) => {
     .insert({ ...body, data_status: 'draft' })
     .select('*')
     .single();
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark dataset create') : ok(data);
 });

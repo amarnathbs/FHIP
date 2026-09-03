@@ -1,10 +1,16 @@
 import { toMonthly, type Frequency } from './money';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
 // ---------------------------------------------------------------------------
 
+// LR-FI-1: `owner` is optional on every row shape below so this engine keeps
+// compiling (and behaving identically) for any caller that has not yet added
+// the column to its SELECT — an absent owner is treated as household context.
+// It is declared only on the four registers that carry operating cash flow;
+// assets/investments/retirement are wealth-only and are never filtered here.
 export interface IncomeRow {
   source_name?: string | null;
   amount: number;
@@ -12,6 +18,7 @@ export interface IncomeRow {
   frequency: Frequency;
   master_item_key: string | null;
   employer_name?: string | null;
+  owner?: string | null;
 }
 export interface ExpenseRow {
   expense_name: string;
@@ -20,13 +27,23 @@ export interface ExpenseRow {
   is_essential: boolean;
   master_item_key?: string | null;
   expense_category?: string | null;
+  owner?: string | null;
 }
+// LR-FI-1: assets/investments/retirement_accounts carry the same `owner`
+// column as the other four registers (migration 0004), so it is declared here
+// too — but this engine DELIBERATELY never filters on it for these three.
+// They are pure wealth registers: an SMSF-owned asset, investment or
+// retirement balance must keep contributing to totalAssets/totalInvestments/
+// totalRetirement and therefore to Net Worth (spec §5, §28). Declaring the
+// field makes that decision explicit and lets tests assert it directly,
+// rather than leaving "why isn't this filtered?" to inference.
 export interface AssetRow {
   current_value: number;
   asset_class: string;
   master_item_key?: string | null;
   country_code?: string | null;
   currency_code?: string | null;
+  owner?: string | null;
 }
 export interface LiabilityRow {
   balance: number;
@@ -39,6 +56,7 @@ export interface LiabilityRow {
   credit_limit?: number | null;
   country_code?: string | null;
   currency_code?: string | null;
+  owner?: string | null;
 }
 export interface InvestmentRow {
   current_value: number;
@@ -49,6 +67,7 @@ export interface InvestmentRow {
   annual_contribution: number | null;
   institution?: string | null;
   currency_code?: string | null;
+  owner?: string | null; // see AssetRow — declared, deliberately never filtered
 }
 export interface RetirementRow {
   current_balance: number;
@@ -57,6 +76,7 @@ export interface RetirementRow {
   contribution_frequency: Frequency | null;
   country_code?: string | null;
   currency_code?: string | null;
+  owner?: string | null; // see AssetRow — declared, deliberately never filtered
 }
 export interface InsuranceRow {
   policy_name: string;
@@ -66,6 +86,7 @@ export interface InsuranceRow {
   cover_type: string;
   renewal_date: string | null;
   waiting_period_days?: number | null;
+  owner?: string | null;
 }
 export interface GoalRow {
   goal_name: string;
@@ -460,12 +481,33 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     if (!rowCurrency) return amount;
     return convertToReportingCurrency(amount, rowCurrency, currency, fxRateAudInr);
   }
-  const grossMonthlyIncome = sumMonthly(input.income, 'amount', 'frequency');
-  const netMonthlyIncome = input.income.reduce((sum, r) => {
+  // LR-FI-1 (P0 SMSF household financial isolation) — the single point where
+  // this engine separates the PERSONAL household's operating cash flow from
+  // an SMSF's own. Everything computed from these two arrays is household
+  // cash flow; everything computed from input.assets/input.investments/
+  // input.retirement, and from the *balances* on input.liabilities, is
+  // household wealth and deliberately still reads the unfiltered registers,
+  // so Net Worth is unchanged by this rule (spec §5, §28).
+  //
+  // Income: an SMSF's rental receipts, dividends, interest and distributions
+  // belong to the fund, not to the member's disposable income (spec §10,
+  // §14) — including them inflated gross/net income and therefore flattered
+  // the Savings Rate, DSR and every score derived from them.
+  const householdIncome = householdOperatingCashFlowRows(input.income);
+  // Expenses: SMSF audit/accounting/administration/property costs are fund
+  // operating costs, never household consumption (spec §4, §13).
+  const householdExpenses = householdOperatingCashFlowRows(input.expenses);
+  // Liabilities: the rows stay whole — only their monthly_repayment is
+  // household cash flow. An SMSF property loan keeps its balance in Net
+  // Worth while its instalment leaves household expenses (spec §12, §29).
+  const householdLiabilities = householdOperatingCashFlowRows(input.liabilities);
+
+  const grossMonthlyIncome = sumMonthly(householdIncome, 'amount', 'frequency');
+  const netMonthlyIncome = householdIncome.reduce((sum, r) => {
     const monthly = toMonthly(r.net_amount ?? r.amount, r.frequency);
     return sum + monthly;
   }, 0);
-  const passiveMonthlyIncome = input.income
+  const passiveMonthlyIncome = householdIncome
     .filter((r) => r.master_item_key && PASSIVE_INCOME_KEYS.has(r.master_item_key))
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
@@ -504,8 +546,12 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   //   tracked as Liabilities only with no matching Expense rows -> both
   //   still counted, unaffected. A lone "Car Loan Repayments" expense with
   //   zero car-type Liabilities on file is no longer silently excluded.
+  // LR-FI-1: built from HOUSEHOLD liabilities only. Before this fix an SMSF
+  // home-loan liability could suppress the household's own Mortgage expense
+  // row as a "double count", silently deleting a genuine personal outflow —
+  // the mirror image of the primary defect, and equally wrong.
   const liabilityItemsWithRepayment = new Set(
-    input.liabilities.filter((l) => (l.monthly_repayment ?? 0) > 0).map((l) => l.master_item_key ?? l.debt_type)
+    householdLiabilities.filter((l) => (l.monthly_repayment ?? 0) > 0).map((l) => l.master_item_key ?? l.debt_type)
   );
   function isDoubleCountedDebtRepaymentExpense(r: ExpenseRow): boolean {
     if (r.master_item_key) {
@@ -519,7 +565,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     // gated on at least one real liability repayment existing somewhere.
     return r.expense_category === 'debt_repayment' && liabilityItemsWithRepayment.size > 0;
   }
-  const nonDebtExpenses = input.expenses.filter((r) => !isDoubleCountedDebtRepaymentExpense(r));
+  const nonDebtExpenses = householdExpenses.filter((r) => !isDoubleCountedDebtRepaymentExpense(r));
   const essentialMonthlyExpenses = sumMonthly(
     nonDebtExpenses.filter((r) => r.is_essential),
     'amount',
@@ -539,7 +585,11 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // Same reporting-currency conversion as the balance totals above — a
   // foreign-currency liability's repayment must not be added raw into a
   // reporting-currency cash-flow figure (monthlySurplus, disposableIncome).
-  const debtMonthlyRepayments = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
+  // LR-FI-1 §12/§22: household liabilities only, so an SMSF loan instalment
+  // can never enter monthlySurplus, disposableIncome or the Debt Service
+  // Ratio. The SMSF loan's BALANCE is untouched and still reaches
+  // totalLiabilities/netWorth below.
+  const debtMonthlyRepayments = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
 
   const incomeForSurplus = netMonthlyIncome || grossMonthlyIncome;
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
@@ -548,23 +598,27 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const disposableIncome = operatingCashFlow - debtMonthlyRepayments;
   const totalOutflow = totalMonthlyExpenses + debtMonthlyRepayments;
   const cashFlowRatio = totalOutflow > 0 ? monthlySurplus / totalOutflow : null;
-  const topExpenses = input.expenses
+  // LR-FI-1: these are the user-facing "your top household expenses/income"
+  // lists and the concentration ratios computed off them — an SMSF row
+  // appearing here would both misstate the ratio and read as a personal
+  // commitment the household does not have.
+  const topExpenses = householdExpenses
     .map((e) => ({ name: e.expense_name, monthlyAmount: toMonthly(e.amount, e.frequency) }))
     .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
     .slice(0, 5);
-  const topIncome = input.income
+  const topIncome = householdIncome
     .map((r) => ({ name: r.source_name ?? r.employer_name ?? 'Income source', monthlyAmount: toMonthly(r.amount, r.frequency) }))
     .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
     .slice(0, 5);
-  const incomeSourceCount = input.income.length;
-  const incomeMonthlyAmounts = input.income.map((r) => toMonthly(r.amount, r.frequency));
+  const incomeSourceCount = householdIncome.length;
+  const incomeMonthlyAmounts = householdIncome.map((r) => toMonthly(r.amount, r.frequency));
   const largestIncomeSharePct =
     grossMonthlyIncome > 0 && incomeMonthlyAmounts.length > 0
       ? Math.max(...incomeMonthlyAmounts) / grossMonthlyIncome
       : null;
   const discretionaryRatio = incomeForSurplus > 0 ? lifestyleMonthlyExpenses / incomeForSurplus : null;
 
-  const activeIncomeRows = input.income.filter((r) => !r.master_item_key || !PASSIVE_INCOME_KEYS.has(r.master_item_key));
+  const activeIncomeRows = householdIncome.filter((r) => !r.master_item_key || !PASSIVE_INCOME_KEYS.has(r.master_item_key));
   const employerMap = new Map<string, number>();
   for (const r of activeIncomeRows) {
     if (!r.employer_name) continue;
@@ -707,12 +761,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       ? Array.from(institutionMap.values()).reduce((sum, v) => sum + (v / totalInvestments) ** 2, 0)
       : null;
 
-  const dividendMonthlyIncome = input.income
+  // LR-FI-1 §14: SMSF dividends and SMSF property rent are fund income, not
+  // household income — they must not appear as personal passive income.
+  const dividendMonthlyIncome = householdIncome
     .filter((r) => r.master_item_key === 'dividend_income')
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
   const dividendYield = totalInvestments > 0 ? (dividendMonthlyIncome * 12) / totalInvestments : null;
 
-  const rentalMonthlyIncome = input.income
+  const rentalMonthlyIncome = householdIncome
     .filter((r) => r.master_item_key === 'rental_income' || r.master_item_key === 'airbnb_income')
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
 
@@ -732,11 +788,19 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       : null;
   const retirementEmployerContributionRate = incomeForSurplus > 0 ? retirementEmployerMonthlyContribution / incomeForSurplus : null;
 
+  // LR-FI-1 §15: an SMSF-paid premium is a fund operating cost and must not
+  // read as household spending — but the POLICY's cover_amount is protection,
+  // not cash flow, and SMSF-held life/TPD cover genuinely protects the
+  // household. So the row still contributes its cover (feeding
+  // computeInsuranceAdequacy, the Health Score's and Resilience's Insurance &
+  // Protection components) while contributing $0 of premium. This asymmetry
+  // is the direct application of §4 (operating cash flow only) and §28 (no
+  // balance-sheet/protection change), not an oversight.
   const insuranceTypeMap = new Map<string, { coverAmount: number; annualPremium: number }>();
   for (const i of input.insurance) {
     const entry = insuranceTypeMap.get(i.cover_type) ?? { coverAmount: 0, annualPremium: 0 };
     entry.coverAmount += i.cover_amount;
-    entry.annualPremium += toMonthly(i.premium, i.premium_frequency) * 12;
+    if (isHouseholdOperatingCashFlow(i)) entry.annualPremium += toMonthly(i.premium, i.premium_frequency) * 12;
     insuranceTypeMap.set(i.cover_type, entry);
   }
   const insuranceByType = Array.from(insuranceTypeMap.entries()).map(([coverType, v]) => ({
@@ -930,8 +994,15 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     ratios,
     snapshots: input.snapshots,
     goals: input.goals,
-    hasIncome: input.income.length > 0,
-    hasExpenses: input.expenses.length > 0,
+    // LR-FI-1: the two cash-flow completeness flags follow the same household
+    // scope as the figures they gate — a household whose only income row is
+    // SMSF rent genuinely has no household income, and reporting hasIncome
+    // while grossMonthlyIncome is 0 would make every downstream engine score
+    // a zero-income household instead of honestly saying "add your income".
+    // hasAssets/hasLiabilities are wealth flags and stay on the full
+    // registers, so SMSF economic value keeps counting (§5, §28).
+    hasIncome: householdIncome.length > 0,
+    hasExpenses: householdExpenses.length > 0,
     hasAssets: input.assets.length > 0 || input.investments.length > 0 || input.retirement.length > 0,
     hasLiabilities: input.liabilities.length > 0,
   };

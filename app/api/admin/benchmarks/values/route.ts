@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async (req: Request) => {
@@ -13,7 +13,7 @@ export const GET = adminRoute(async (req: Request) => {
     .limit(200);
   if (datasetId) query = query.eq('dataset_id', datasetId);
   const { data, error } = await query;
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark values list') : ok(data);
 });
 
 // "Import" here means a direct structured insert (spec's admin import
@@ -30,5 +30,5 @@ export const POST = adminRoute(async (req: Request) => {
     }
   }
   const { data, error } = await adminClient().from('benchmark_values').insert(rows).select('*');
-  return error ? bad(error.message) : ok({ imported: data?.length ?? 0, rows: data });
+  return error ? safeDbError(error, 'Benchmark values import') : ok({ imported: data?.length ?? 0, rows: data });
 });

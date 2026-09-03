@@ -40,6 +40,76 @@ export function adminClient() {
   return createAdminClient();
 }
 
+// Admin A0.2 Wave 4 — Gate G6 (raw PostgREST error-message redaction).
+//
+// Every one of the 19 call sites this gate names shared the same defect:
+// `bad(error.message)`, which returns whatever string Postgres/PostgREST
+// produced — including table names, column names, constraint names and
+// function names — straight to the client, and (worse) collapses every
+// distinct failure mode (not-found, conflict, validation, transport) into
+// the same generic 400. This maps a Postgres/PostgREST error to one of the
+// canonical result states (spec §12.1) with a safe, stable, administrator-
+// facing message and machine-readable `code`, while the ORIGINAL error is
+// still logged server-side for real diagnosis.
+//
+// The response envelope is DELIBERATELY still `{ error: string, code }` —
+// not a nested `{ error: { code, message } }` shape — because every
+// existing Benchmarks-tab consumer reads `json.error` as a plain string
+// (`alert(json.error ?? 'Could not update source')`, confirmed by direct
+// read of components/admin/AdminBenchmarksClient.tsx) and would render
+// `[object Object]` if `error` became an object. `code` is purely additive.
+export type SafeErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION_FAILED' | 'DEPENDENCY_UNAVAILABLE' | 'INTERNAL_ERROR';
+
+interface PostgrestLikeError {
+  message?: string;
+  code?: string;
+}
+
+export function safeDbError(error: PostgrestLikeError | null | undefined, context: string): Response {
+  const code = error?.code ?? '';
+
+  // PostgREST's own "no rows / multiple rows" signal from .single() —
+  // the overwhelmingly common real-world cause is "no rows" (a genuine
+  // not-found); the rarer "multiple rows" case is itself a data anomaly
+  // that must not be disclosed to the client either way, so both resolve
+  // to the same safe 404.
+  if (code === 'PGRST116') {
+    return respond('The requested item was not found.', 'NOT_FOUND', 404);
+  }
+  if (code === '23505') {
+    // unique_violation
+    return respond('This already exists or conflicts with an existing record.', 'CONFLICT', 409);
+  }
+  if (code === '23503') {
+    // foreign_key_violation
+    return respond('This references a record that does not exist.', 'VALIDATION_FAILED', 422);
+  }
+  if (code === '23502' || code === '23514' || code === '22P02' || code === '22023') {
+    // not_null_violation / check_violation / invalid_text_representation /
+    // a scheduling-style validation raise (see lib/resources/workflow.ts's
+    // own precedent for 22023) — all genuine, fixable input problems.
+    return respond('The submitted data is invalid.', 'VALIDATION_FAILED', 422);
+  }
+  if (code.startsWith('08') || code === '57014' || code === '55000') {
+    // Connection-class (Class 08) errors, statement timeout, or object not
+    // in the prerequisite state (55000 — Wave 2's own deliberate choice for
+    // a stale/conflicting concurrent write, never 40001 — see the
+    // FHIP_A02_Wave2_Terminal_Report.md's own SQLSTATE discipline, not
+    // reopened here).
+    return respond('This service is temporarily unavailable. Please try again shortly.', 'DEPENDENCY_UNAVAILABLE', 503);
+  }
+
+  // Unexpected — never forward `error.message` itself (it can name an
+  // internal table, column, constraint or function). Full detail is
+  // logged server-side only, for real diagnosis.
+  console.error(`${context} — unexpected database error:`, error);
+  return respond('Something went wrong. Please try again.', 'INTERNAL_ERROR', 500);
+}
+
+function respond(message: string, code: SafeErrorCode, status: number): Response {
+  return Response.json({ error: message, code }, { status });
+}
+
 // Wraps an admin route handler so any thrown error (most notably
 // createAdminClient() throwing synchronously on a missing/misconfigured
 // env var, but also any other unexpected exception) becomes a normal JSON

@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { validateDatasetForActivation } from '@/lib/services/benchmarkGovernance';
 import { ok, bad } from '@/lib/api';
 
@@ -34,7 +34,7 @@ export const POST = adminRoute(async (_req: Request, { params }: { params: Promi
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return bad(error.message);
+  if (error) return safeDbError(error, 'Benchmark dataset activate');
 
   await supabase.from('benchmark_update_runs').insert({
     dataset_id: id,

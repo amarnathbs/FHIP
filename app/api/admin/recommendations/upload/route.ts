@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { parseCsv, splitList } from '@/lib/utils/csv';
 import { validateConditionsImport, buildImportPayload, MAX_CSV_BYTES } from '@/lib/services/recommendationsConditionsImport';
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
         validation_note: toNullable(r.validation_note),
       }));
       const { error } = await client.from('recommendation_template_placeholders').upsert(payload, { onConflict: 'placeholder' });
-      if (error) return bad(error.message);
+      if (error) return safeDbError(error, 'Recommendation placeholders upload');
       return ok({ upserted: payload.length });
     }
 
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
         admin_notes: toNullable(r.admin_notes),
       }));
       const { error } = await client.from('recommendation_calculation_methods').upsert(payload, { onConflict: 'calculation_method_code' });
-      if (error) return bad(error.message);
+      if (error) return safeDbError(error, 'Recommendation calculation-methods upload');
       return ok({ upserted: payload.length });
     }
 
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
         };
       });
       const { error } = await client.from('action_recommendation_master').upsert(payload, { onConflict: 'recommendation_code' });
-      if (error) return bad(error.message);
+      if (error) return safeDbError(error, 'Recommendation master upload');
       return ok({ upserted: payload.length });
     }
 
@@ -215,6 +215,10 @@ export async function POST(req: Request) {
 
     return bad(`Unknown fileType "${fileType}"`, 422);
   } catch (e) {
-    return bad(e instanceof Error ? e.message : 'Upload failed');
+    // Gate G6 (found beyond the originally-named 19 call sites, same
+    // class): an unexpected exception here (e.g. a CSV-parsing edge case)
+    // must not surface its raw message either.
+    console.error('Recommendation upload — unexpected error:', e);
+    return bad('Upload failed. Please check the file and try again.', 500);
   }
 }

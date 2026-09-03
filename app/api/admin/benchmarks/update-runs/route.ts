@@ -1,5 +1,5 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
-import { ok, bad } from '@/lib/api';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { ok } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
   const { forbidden } = await requireAdmin();
@@ -9,5 +9,5 @@ export const GET = adminRoute(async () => {
     .select('*, benchmark_sources(source_name), benchmark_datasets(dataset_name, version)')
     .order('created_at', { ascending: false })
     .limit(100);
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark update-runs list') : ok(data);
 });

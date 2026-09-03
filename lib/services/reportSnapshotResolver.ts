@@ -5,6 +5,7 @@ import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienc
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
+import { SMSF_OWNER } from '@/lib/engines/householdContext';
 import type { GoalsPagePayload } from '@/lib/services/goalsData';
 import { computeSectionEligibility, isEligibleForOfficialMonthlyReport, type EligibilityInput } from '@/lib/engines/reportEligibility';
 import { listTwinRuns, getTwinRunDetail, type StoredTwinDetail } from '@/lib/services/financialTwinService';
@@ -298,13 +299,22 @@ export async function resolveReportSourceData(
           .eq('is_active', true)
           .range(from, to)
       ),
-      fetchAllRows((from, to) => supabase.from('income_sources').select('source_name, employer_name, amount, frequency').eq('user_id', userId).eq('is_active', true).range(from, to)),
+      // LR-FI-1: the Premium Report's Appendices section states these tables
+      // "list every recorded item used in this report's calculations". Since
+      // computeDashboard() no longer reads SMSF-owned income/expense rows into
+      // any household figure this report shows, listing them here would
+      // misrepresent the reconciliation. Only these two registers are
+      // filtered — the liabilities/assets/investments/insurance appendices
+      // keep their SMSF rows, because those rows genuinely DO still feed the
+      // report's Net Worth and protection figures (§5, §28).
+      fetchAllRows((from, to) => supabase.from('income_sources').select('source_name, employer_name, amount, frequency').eq('user_id', userId).eq('is_active', true).neq('owner', SMSF_OWNER).range(from, to)),
       fetchAllRows((from, to) =>
         supabase
           .from('expense_items')
           .select('expense_name, amount, frequency, is_essential, expense_category')
           .eq('user_id', userId)
           .eq('is_active', true)
+          .neq('owner', SMSF_OWNER)
           .range(from, to)
       ),
       buildForecastReportData(userId, undefined, supabase).catch(() => null),

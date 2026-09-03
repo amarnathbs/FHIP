@@ -1,11 +1,11 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
   const { forbidden } = await requireAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient().from('benchmark_cohorts').select('*, benchmark_datasets(dataset_name)').order('cohort_tier').order('cohort_code');
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark cohorts list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
@@ -16,5 +16,5 @@ export const POST = adminRoute(async (req: Request) => {
     return bad('cohort_code, cohort_description and cohort_tier are required', 422);
   }
   const { data, error } = await adminClient().from('benchmark_cohorts').insert(body).select('*').single();
-  return error ? bad(error.message) : ok(data);
+  return error ? safeDbError(error, 'Benchmark cohort create') : ok(data);
 });

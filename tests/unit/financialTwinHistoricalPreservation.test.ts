@@ -45,6 +45,12 @@ function makeFakeClient(tables: Record<string, Row[]>) {
         filtered = filtered.filter((r) => r[col] === val);
         return builder;
       },
+      // LR-FI-1: loadTwinSourceData's expense_items read now chains
+      // .neq('owner', SMSF_OWNER). Real filtering semantics, not a no-op.
+      neq(col: string, val: unknown) {
+        filtered = filtered.filter((r) => r[col] !== val);
+        return builder;
+      },
       order() {
         return builder;
       },
