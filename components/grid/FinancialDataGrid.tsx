@@ -801,7 +801,13 @@ export function FinancialDataGrid({
                     {isIiPublished(row) && (
                       <div className="mt-1">
                         <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Imported via Investment Intelligence</span>
-                        <a href="/investment-intelligence" className="ml-2 text-[11px] text-blue-600 hover:underline">
+                        {/* II-PC2: retargeted from the workspace root to
+                            Statements & data. "Review" here means "inspect the
+                            position that produced this published row", which is
+                            the import/reconcile/publish surface — that surface
+                            moved off the root when the root became the
+                            workspace Overview. */}
+                        <a href="/investment-intelligence/data" className="ml-2 text-[11px] text-blue-600 hover:underline">
                           Review
                         </a>
                       </div>

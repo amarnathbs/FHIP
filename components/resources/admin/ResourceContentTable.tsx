@@ -14,7 +14,18 @@ export function ResourceContentTable({ items }: { items: ContentListItem[] }) {
   return (
     <>
       {/* Desktop / tablet table */}
-      <div className="hidden overflow-x-auto sm:block">
+      {/* Admin A0.2 Wave 5 (§12): `relative` is load-bearing, not cosmetic.
+          Tailwind's `sr-only` is `position:absolute`, so the visually-hidden
+          "Actions" heading inside this table resolved its containing block
+          against the DOCUMENT, not this scroll container — it was laid out
+          at its static position after the table's last column, roughly 220px
+          beyond the viewport, and `clip` does not remove it from the
+          scrollable overflow region. The result was a genuine page-level
+          horizontal scrollbar on every content queue at 320px and 1024px,
+          even though the table itself was scrolling correctly inside this
+          container. Making this element a positioning context keeps the
+          hidden text inside the container, where `overflow-x-auto` clips it. */}
+      <div className="relative hidden overflow-x-auto sm:block">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
@@ -72,10 +83,20 @@ export function ResourceContentTable({ items }: { items: ContentListItem[] }) {
       <ul className="space-y-2 sm:hidden">
         {items.map((item) => (
           <li key={item.id} className="rounded-card border border-line p-3">
-            <Link href={`/admin/resources/content/${item.id}`} className="font-medium text-ink hover:text-trust hover:underline" aria-label={`View "${item.title}"`}>
+            {/* Admin A0.2 Wave 5 (§12): titles are operator-entered and
+                routinely contain long unbroken tokens (import identifiers,
+                slugs, test markers). Without an explicit break these cannot
+                wrap, so a single title pushed the whole PAGE into horizontal
+                scroll at 320px — the one width where the card layout, not
+                the scrollable table, is what renders. */}
+            <Link
+              href={`/admin/resources/content/${item.id}`}
+              className="block break-words font-medium text-ink hover:text-trust hover:underline"
+              aria-label={`View "${item.title}"`}
+            >
               {item.title}
             </Link>
-            {item.content_id && <p className="text-xs text-muted">{item.content_id}</p>}
+            {item.content_id && <p className="break-words text-xs text-muted">{item.content_id}</p>}
             <div className="mt-2 flex flex-wrap gap-1.5">
               <ResourceStatusBadge status={item.status} />
               <ResourceComplianceBadge compliance={item.compliance_classification} />

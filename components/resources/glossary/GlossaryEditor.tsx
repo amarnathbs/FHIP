@@ -15,6 +15,7 @@ import { BlockEditor } from '@/components/resources/editor/BlockEditor';
 import { MetadataSidebar, type MetadataFormState } from '@/components/resources/editor/MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHistoryPanel';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from '@/components/resources/editor/SaveStatus';
 import { useUnsavedChangesGuard } from '@/components/resources/editor/useUnsavedChangesGuard';
 import { AliasesEditor } from '@/components/resources/specialist/AliasesEditor';
@@ -100,8 +101,15 @@ export function GlossaryEditor({
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   const similarCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Wave 5 (§28): queue a save requested during an in-flight one instead of
+  // dropping it, and only claim "Saved" if nothing changed while the request
+  // was in flight. See ResourceEditor for the full explanation.
+  const queuedSaveRef = useRef(false);
+  const changeSeqRef = useRef(0);
+  const doSaveRef = useRef<((createVersion: boolean) => Promise<void>) | null>(null);
 
   function markDirty() {
+    changeSeqRef.current += 1;
     setDirty(true);
     setSaveState((s) => (s === 'error' ? s : 'dirty'));
   }
@@ -154,6 +162,8 @@ export function GlossaryEditor({
       seo_description: meta.seoDescription || null,
       canonical_url: meta.canonicalUrl || null,
       is_indexable: meta.isIndexable,
+      // Wave 5: see EditorSavePatch in lib/resources/editor/types.ts.
+      is_featured: meta.isFeatured,
       primary_cta_id: meta.primaryCtaId || null,
       secondary_cta_id: meta.secondaryCtaId || null,
       content_id: initialPost.content_id,
@@ -191,8 +201,12 @@ export function GlossaryEditor({
 
   const doSave = useCallback(
     async (createVersion: boolean) => {
-      if (savingRef.current) return;
+      if (savingRef.current) {
+        queuedSaveRef.current = true;
+        return;
+      }
       savingRef.current = true;
+      const seqAtStart = changeSeqRef.current;
       setSaveState('saving');
       setSaveError(null);
       try {
@@ -230,8 +244,13 @@ export function GlossaryEditor({
         }
         setFieldErrors({});
         setLastUpdatedAt(json.data.updated_at);
-        setDirty(false);
-        setSaveState('saved');
+        if (changeSeqRef.current === seqAtStart) {
+          setDirty(false);
+          setSaveState('saved');
+        } else {
+          setSaveState('dirty');
+          queuedSaveRef.current = true;
+        }
         if (createVersion) {
           setChangeSummary('');
           fetch(`/api/admin/resources/glossary/${initialPost.id}/versions`)
@@ -244,10 +263,19 @@ export function GlossaryEditor({
         setSaveError('Could not reach the server. Check your connection and try again.');
       } finally {
         savingRef.current = false;
+        if (queuedSaveRef.current) {
+          queuedSaveRef.current = false;
+          void doSaveRef.current?.(false);
+        }
       }
     },
     [aliases, buildPatch, buildSnapshot, changeSummary, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds, relatedTermIds]
   );
+
+  // Assigned in an effect, not during render (react-hooks/refs).
+  useEffect(() => {
+    doSaveRef.current = doSave;
+  }, [doSave]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -334,13 +362,14 @@ export function GlossaryEditor({
             <ResourceComplianceBadge compliance={meta.complianceClassification} />
             <h1 className="truncate text-lg font-semibold text-ink">{title || 'Untitled'}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          {/* Wave 5 (§12, §18): wraps, and matches the shared save label. */}
+          <div className="flex flex-wrap items-center gap-3">
             <SaveStatus state={saveState} onRetry={() => doSave(false)} />
-            <Link href={`/admin/resources/glossary/${initialPost.id}/preview`} className="rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
+            <Link href={`/admin/resources/glossary/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
               Preview
             </Link>
-            <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
-              Save
+            <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
+              {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -403,6 +432,7 @@ export function GlossaryEditor({
             canManageCtas={caps.canManage}
             errors={{ ...fieldErrors, ...reviewCheck.errors }}
           />
+          <AdminTaskHelp taskId="ADM-12" />
           <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />
         </div>

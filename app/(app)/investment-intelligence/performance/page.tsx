@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { PerformanceClient } from '@/components/investment-intelligence/PerformanceClient';
 
 // R4 — Performance & Benchmark UX (spec sections 60-65).
@@ -24,6 +25,7 @@ export default async function InvestmentPerformancePage() {
           what has already happened. They are not advice, and they are not a forecast.
         </p>
       </header>
+      <InvestmentIntelligenceSubNav />
       <PerformanceClient />
     </div>
   );

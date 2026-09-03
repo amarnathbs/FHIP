@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { PortfolioXrayClient } from '@/components/investment-intelligence/PortfolioXrayClient';
 
 // R5 — Portfolio X-Ray (spec sections 98-99).
@@ -26,6 +27,7 @@ export default async function PortfolioXrayPage() {
           describes what your funds hold; it is not advice about what to buy, sell, or switch.
         </p>
       </header>
+      <InvestmentIntelligenceSubNav />
       <PortfolioXrayClient />
     </div>
   );

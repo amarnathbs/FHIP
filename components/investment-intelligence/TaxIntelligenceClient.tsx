@@ -200,9 +200,17 @@ export function TaxIntelligenceClient() {
           for equity-oriented funds (Sections 111A/112A apply identically to residents, NRIs, and HUFs for these figures); it changes only the estimate-basis
           label and disclaimers shown below.
         </p>
-        <div className="mt-3 flex items-center gap-3">
+        {/* II-PC2 responsive fix (spec sections 34, 54): the taxpayer-type
+            select plus its Apply button did not wrap, and the select's own
+            intrinsic width (its longest option is "Non-resident individual
+            (NRI)") pushed Apply past the viewport at 320px, forcing the whole
+            PAGE to scroll horizontally (measured 339px against 320px).
+            Pre-existing on origin/main — reproduced there with the PC2
+            sub-navigation removed. `min-w-0` lets the select shrink inside
+            the flex row instead of forcing its content width. */}
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <select
-            className="rounded border border-line bg-surface px-2 py-1 text-sm"
+            className="min-w-0 max-w-full rounded border border-line bg-surface px-2 py-1 text-sm"
             value={taxpayerType}
             onChange={(e) => setTaxpayerType(e.target.value)}
             data-testid="taxpayer-type-select"

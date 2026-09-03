@@ -220,6 +220,47 @@ export interface RoleMutationResult {
   error?: string;
 }
 
+// Admin A0.2 Wave 5 (§19 — the interface must not expose raw SQL errors,
+// internal schemas, table names or RPC names).
+//
+// Every failure branch below previously returned the Postgres/PostgREST
+// `error.message` verbatim. The roles API forwards this result's `error`
+// straight into a 422 body, and the Users & Roles screen renders that body
+// verbatim in a role="alert" paragraph — so an administrator could be shown
+// strings such as:
+//
+//   duplicate key value violates unique constraint "resource_user_roles_user_id_role_key"
+//   new row violates row-level security policy for table "resource_user_roles"
+//
+// which name a real table and a real constraint, mean nothing to an
+// operator, and tell them nothing about what to do next. This maps the same
+// failures onto stable, administrator-facing guidance while the original is
+// still logged server-side for diagnosis — the same discipline Wave 4
+// established for the Benchmarks/Recommendations routes in
+// lib/services/adminAuth.ts `safeDbError`, applied here to the one Resources
+// mutation path that also surfaces its message directly to a human.
+//
+// The deliberate, curated domain message (the final-Resource-Administrator
+// lockout guard) is NOT routed through this function — it is real operator
+// guidance, not a leaked engine string, and is returned unchanged.
+function safeRoleError(error: { message?: string; code?: string } | null | undefined, context: string): string {
+  console.error(`${context} — role mutation failed:`, error);
+  const code = error?.code ?? '';
+  if (code === '23505') {
+    return 'That role is already assigned to this person. Reload the page to see their current roles.';
+  }
+  if (code === '23503') {
+    return 'That person no longer has an FHIP account, so a role cannot be assigned to them.';
+  }
+  if (code === '42501' || code === 'PGRST301') {
+    return 'You do not have permission to change roles. Ask a Resource Administrator or Super Admin.';
+  }
+  if (code.startsWith('08') || code === '57014') {
+    return 'This service is temporarily unavailable. Try again shortly — nothing was changed.';
+  }
+  return 'This role change could not be completed, and nothing was changed. Try again; if it keeps happening, report it with the time you saw it.';
+}
+
 // spec §9/§27: assign a role to a real user. The caller (API route) has
 // already verified the actor is canManageResources() — this function does
 // not re-check that (it has no request context), it only performs the write
@@ -229,7 +270,7 @@ export interface RoleMutationResult {
 // service-role client only").
 export async function assignResourceRole(admin: SupabaseClient, params: { targetUserId: string; role: ResourceRole; actorUserId: string }): Promise<RoleMutationResult> {
   const { data: existing, error: findErr } = await admin.from('resource_user_roles').select('id, is_active').eq('user_id', params.targetUserId).eq('role', params.role).maybeSingle();
-  if (findErr) return { ok: false, error: findErr.message };
+  if (findErr) return { ok: false, error: safeRoleError(findErr, 'assignResourceRole: lookup') };
 
   const before = existing ? { is_active: existing.is_active } : null;
   if (existing) {
@@ -237,10 +278,10 @@ export async function assignResourceRole(admin: SupabaseClient, params: { target
       .from('resource_user_roles')
       .update({ is_active: true, assigned_by: params.actorUserId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', existing.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeRoleError(error, 'assignResourceRole: reactivate') };
   } else {
     const { error } = await admin.from('resource_user_roles').insert({ user_id: params.targetUserId, role: params.role, assigned_by: params.actorUserId, is_active: true });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeRoleError(error, 'assignResourceRole: insert') };
   }
 
   // spec §11-13: auto-provision the resource_authors identity row so the
@@ -280,7 +321,7 @@ export async function assignResourceRole(admin: SupabaseClient, params: { target
 export async function removeResourceRole(admin: SupabaseClient, params: { targetUserId: string; role: ResourceRole; actorUserId: string }): Promise<RoleMutationResult> {
   if (params.role === 'resource_admin') {
     const { data: activeAdmins, error } = await admin.from('resource_user_roles').select('user_id').eq('role', 'resource_admin').eq('is_active', true);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeRoleError(error, 'removeResourceRole: last-admin check') };
     const remaining = (activeAdmins ?? []).filter((r: { user_id: string }) => r.user_id !== params.targetUserId);
     if (remaining.length === 0) {
       return { ok: false, error: 'Cannot remove the final active Resource Administrator — this would lock every Resource Admin out of Resources administration. Assign resource_admin to another user first.' };
@@ -288,11 +329,11 @@ export async function removeResourceRole(admin: SupabaseClient, params: { target
   }
 
   const { data: existing, error: findErr } = await admin.from('resource_user_roles').select('id, is_active').eq('user_id', params.targetUserId).eq('role', params.role).maybeSingle();
-  if (findErr) return { ok: false, error: findErr.message };
+  if (findErr) return { ok: false, error: safeRoleError(findErr, 'removeResourceRole: lookup') };
   if (!existing || !existing.is_active) return { ok: true }; // idempotent no-op — nothing active to remove
 
   const { error } = await admin.from('resource_user_roles').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', existing.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeRoleError(error, 'removeResourceRole: deactivate') };
 
   await admin.from('resource_audit_log').insert({
     entity_type: 'resource_user_role',

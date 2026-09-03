@@ -16,7 +16,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ResourceFilters, type FilterState } from './ResourceFilters';
 import { ResourceContentTable } from './ResourceContentTable';
 import { ResourcePagination } from './ResourcePagination';
-import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceErrorState } from './ResourceStates';
+import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } from './ResourceStates';
+import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
+import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import type { ContentListItem, RelatedRef } from '@/lib/resources/admin/queries';
 import type { QueuePreset } from '@/lib/resources/admin/filters';
 
@@ -53,15 +55,27 @@ export function ResourceContentListClient({ queue, title, description }: { queue
   const [pageSize, setPageSize] = useState(25);
   const [categories, setCategories] = useState<RelatedRef[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<AdminFailure | null>(null);
+  const [categoriesUnavailable, setCategoriesUnavailable] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
+    // Admin A0.2 Wave 5 (§8.5): this swallowed every failure, and the
+    // category dropdown is rendered only when the list is non-empty — so a
+    // failed categories fetch made a whole filter silently vanish, with no
+    // way for the operator to tell it had ever existed. The failure is now
+    // recorded and disclosed beside the filters.
     fetch('/api/admin/resources/categories')
-      .then((r) => r.json())
-      .then((j) => setCategories(j.data ?? []))
-      .catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) {
+          setCategoriesUnavailable(true);
+          return;
+        }
+        const j = await readJsonSafely(r);
+        setCategories((j?.data as RelatedRef[]) ?? []);
+      })
+      .catch(() => setCategoriesUnavailable(true));
   }, []);
 
   const buildQuery = useCallback(
@@ -84,16 +98,24 @@ export function ResourceContentListClient({ queue, title, description }: { queue
   const load = useCallback(
     async (f: FilterState, p: number) => {
       setLoading(true);
-      setError(null);
+      setFailure(null);
       try {
         const res = await fetch(`/api/admin/resources/content?${buildQuery(f, p).toString()}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? 'Could not load Resources content.');
-        setItems(json.data.items);
-        setTotal(json.data.total);
-        setPageSize(json.data.pageSize);
+        const json = await readJsonSafely(res);
+        if (!res.ok) {
+          setFailure(failureFromResponse(res.status, json, 'Resources content'));
+          setItems([]);
+          setTotal(0);
+          return;
+        }
+        const data = json?.data as { items?: ContentListItem[]; total?: number; pageSize?: number } | undefined;
+        setItems(data?.items ?? []);
+        setTotal(data?.total ?? 0);
+        setPageSize(data?.pageSize ?? 25);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong');
+        setFailure(failureFromThrown(e, 'Resources content'));
+        setItems([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
@@ -144,21 +166,43 @@ export function ResourceContentListClient({ queue, title, description }: { queue
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">{title}</h1>
-        <p className="mt-1 text-sm text-muted">{description}</p>
+        <p className="mt-1 max-w-3xl text-sm text-muted">{description}</p>
       </div>
+
+      <AdminTaskHelp taskId={queue ? 'ADM-21' : 'ADM-08'} />
 
       <div className="rounded-card border border-line bg-white p-4">
         <ResourceFilters value={filters} categories={categories} showStatusFilter={!queue} onChange={handleFilterChange} onClear={handleClear} />
 
-        <div className="mt-4">
+        {categoriesUnavailable && (
+          <p role="status" className="mt-2 text-xs text-muted">
+            The category filter is unavailable right now, so it is not shown. Everything else on this page still works.
+          </p>
+        )}
+
+        {/* §11 — the result count is announced, so filtering and paging are
+            perceivable without sight. Previously the list simply changed. */}
+        <p role="status" aria-live="polite" className="mt-3 text-xs text-muted">
+          {loading || failure
+            ? ''
+            : total === 0
+              ? 'No results.'
+              : `${total} ${total === 1 ? 'item' : 'items'}${hasActiveFilters ? ' match these filters' : ''}.`}
+        </p>
+
+        <div className="mt-2">
           {loading ? (
-            <ResourceLoadingSkeleton />
-          ) : error ? (
-            <ResourceErrorState message={error} onRetry={() => setReloadToken((t) => t + 1)} />
+            <ResourceLoadingSkeleton label={`Loading ${title}`} />
+          ) : failure ? (
+            <ResourceFailureState failure={failure} onRetry={() => setReloadToken((t) => t + 1)} />
           ) : items.length === 0 ? (
             <ResourceEmptyState
               title={hasActiveFilters ? 'No content matches these filters.' : 'No Resources content yet.'}
-              message={hasActiveFilters ? 'Try adjusting or clearing your filters.' : 'Content created by Resources staff will appear here.'}
+              message={
+                hasActiveFilters
+                  ? 'Try adjusting or clearing your filters.'
+                  : 'Content you are allowed to see will appear here. If you expected content, your roles may not include access to it.'
+              }
               action={hasActiveFilters ? { label: 'Clear Filters', onClick: handleClear } : undefined}
             />
           ) : (
