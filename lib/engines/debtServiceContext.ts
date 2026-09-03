@@ -57,6 +57,30 @@
 // source-level assertion in tests/unit/lrFi2DebtServiceExactlyOnce.ts instead.
 // ---------------------------------------------------------------------------
 
+// PRODUCT OWNER RULING — the boundary of this module's job
+// --------------------------------------------------------
+// A free-text Custom Expense row ("+ Add Custom Item") carries
+// master_item_key=null and expense_category='other', so it holds NO structured
+// evidence of being debt service. Three standing rulings govern that:
+//
+//   PO-FI2-09  Do NOT add personal-loan or credit-card repayment items to the
+//              Expense catalogue. Debt repayments belong to Liabilities /
+//              debt service; adding them as ordinary Expenses would close a
+//              test gap by making the product model worse.
+//   PO-FI2-10  A custom entry remains a user-declared expense unless FHIP has
+//              EXPLICIT STRUCTURED evidence it is debt service. Inferring it
+//              from the description via substring or fuzzy matching is
+//              forbidden — "Personal loan advice fee" is a legitimate expense
+//              that name-matching would silently delete.
+//   PO-FI2-11  The future Unified Input UX supplies the structured route
+//              (Debt / Loan Payment -> Select Liability), after which this
+//              module gains a real signal to act on.
+//
+// So this file classifies STRUCTURED signals only — `master_item_key` and
+// `expense_category`. It never reads an expense's name, and a test asserts it
+// never will. The remaining custom-row case is a DEFERRED UX/SEMANTIC INPUT
+// GAP for LR-2/LR-3, not a financial-integrity defect.
+
 /**
  * Debt families, fine-grained enough that a repayment expense row can only
  * ever be matched against the RIGHT liability. Matching by family (rather

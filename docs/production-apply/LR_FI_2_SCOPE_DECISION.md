@@ -597,7 +597,36 @@ passing, each with a negative control.
 | 8 | DSR → required debt service once | **PASS** |
 | 9 | SMSF liability still out of personal DSR/DTI | **PASS** |
 
-### The one reachable case that remains open, and why no code can close it
+### Product Owner ruling on the remaining custom-row case — RESOLVED AS DEFERRED
+
+The case described below was escalated for a migration decision. **The
+migration was NOT authorised**, and the Product Owner ruled that adding
+repayment items to the Expense catalogue would close a test gap by making the
+long-term product model worse:
+
+| Ruling | Effect |
+|---|---|
+| **PO-FI2-09** | No `personal_loan_repayments` / `credit_card_repayment` Expense catalogue items. Debt repayments belong to Liabilities / debt service. |
+| **PO-FI2-10** | A free-text Custom Expense stays a user-declared expense unless FHIP has explicit **structured** evidence it is debt service. Substring/fuzzy matching on the description is forbidden. |
+| **PO-FI2-11** | The future Unified Input UX must provide a structured debt-repayment path linking the payment to an existing Liability. |
+
+**Status: DEFERRED UX/SEMANTIC INPUT GAP** — custom Expense entries have no
+structured debt-service identity and therefore cannot safely be
+auto-deduplicated. This is *different in kind* from the three missed liability
+families (`commercial_loan`, `mortgage_offset_facility`, `smsf_property_loan`),
+which were a genuine financial-integrity defect and are fixed in this branch.
+
+The ruling is now enforced in code, not just documented:
+`lib/engines/debtServiceContext.ts` classifies **structured signals only**
+(`master_item_key`, `expense_category`) and never reads an expense's name, and
+`tests/unit/lrFi2DebtServiceExactlyOnce.test.ts` carries a PO-FI2-10 guard that
+fails if `expense_name`, `toLowerCase()` or `RegExp` ever appears in that
+module — with "Personal loan advice fee" as the worked counter-example a
+name-matching shortcut would have deleted.
+
+The original analysis is retained below for the LR-2/LR-3 dispatch.
+
+### The one reachable case, and why no code can close it
 
 Row 2 has a sub-case that **no calculation-layer change can reach**, and it is
 pinned by a deliberately-passing test rather than left undocumented:
@@ -610,14 +639,19 @@ The row therefore carries **no signal whatsoever** that it is debt service.
 The existing `expense_category='debt_repayment'` fallback is real and works,
 but is reachable only via the API or direct PostgREST — not through the live UI.
 
-The only non-fragile fix is to **add the missing catalogue items** (e.g.
-`personal_loan_repayments`, `credit_card_repayment`), which the new
-family-keyed map would then pick up with a one-line addition each. That is a
-seed/data change requiring a migration, which this task's own terms forbid
-allocating without authorisation — so it is escalated rather than done.
+Two closures were considered. Adding the missing catalogue items was escalated
+and **rejected by PO-FI2-09** (it would push debt repayments further into the
+Expense model, the opposite of the intended direction). Name-matching the
+free-typed label was rejected here and then **prohibited by PO-FI2-10** — it
+would silently delete genuine expenses on a substring coincidence.
 
-The rejected alternative is name-matching the free-typed label, which would
-silently delete genuine expenses on a substring coincidence.
+The correct closure is structural and belongs to LR-2/LR-3 (PO-FI2-11): a
+"Debt / Loan Payment → Select Liability" route, and later a bank-import
+Upload → Analyse → Review → Accept → Apply flow that links a detected repayment
+to its Liability. Only then can FHIP distinguish principal, interest, fees,
+card purchases, card settlement and loan payment deterministically instead of
+guessing from text. Generic Mortgage/loan-repayment choices in Expense entry
+are expected to be deprecated once that flow is live, preserving history.
 
 ### Deliberately NOT changed, and why
 

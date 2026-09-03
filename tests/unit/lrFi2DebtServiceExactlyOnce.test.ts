@@ -76,15 +76,30 @@ describe('ROW 2 — Same personal-loan repayment ALSO represented as an Expense:
     expect(d.totalMonthlyExpenses).toBe(500); // never silently dropped
   });
 
-  // DISCLOSED STRUCTURAL GAP — see the report and debtServiceContext.ts's
-  // header. The live grid's "+ Add Custom Item" always writes
-  // master_item_key=null AND expense_category='other' (it exposes no category
-  // field), and the catalogue seeds no personal-loan repayment item. So a
-  // user who free-types "Personal loan repayment" as a custom row produces a
-  // row carrying NO signal that it is debt service. This test pins that
-  // reachable gap honestly rather than leaving it undocumented; closing it
-  // needs a catalogue addition, which is a data change awaiting authorisation.
-  it('KNOWN GAP — a grid custom row carries no debt-service signal and still double-counts', () => {
+  // DEFERRED UX/SEMANTIC INPUT GAP — ruled on by the Product Owner
+  // (PO-FI2-09/10/11), not a financial-integrity defect in this branch.
+  //
+  // The live grid's "+ Add Custom Item" writes master_item_key=null AND
+  // expense_category='other' (it exposes no category field), and the
+  // catalogue deliberately seeds no personal-loan or credit-card repayment
+  // item. A free-typed "Personal loan repayment" row therefore carries NO
+  // structured signal that it is debt service, and FHIP must NOT guess.
+  //
+  //   PO-FI2-09: do NOT add repayment items to the Expense catalogue —
+  //     debt repayments belong to Liabilities / debt service, and closing
+  //     this gap that way would make the product model worse.
+  //   PO-FI2-10: a custom entry stays a user-declared expense unless there
+  //     is explicit STRUCTURED evidence it is debt service. Substring or
+  //     fuzzy matching on the description is forbidden — "Personal loan
+  //     advice fee" is a legitimate expense that name-matching would delete.
+  //   PO-FI2-11: the Unified Input UX will provide a structured
+  //     debt-repayment path linking the payment to an existing Liability.
+  //
+  // So the behaviour below is the CORRECT behaviour under that ruling: with
+  // no structured evidence, the user's declared expense is honoured. This
+  // test pins it so the deferral stays visible and so any future attempt to
+  // "fix" it by name-inference fails loudly here first.
+  it('DEFERRED (PO-FI2-10) — a custom row with no structured debt-service evidence is honoured as declared', () => {
     const d = computeDashboard(
       {
         ...EMPTY,
@@ -94,9 +109,34 @@ describe('ROW 2 — Same personal-loan repayment ALSO represented as an Expense:
       },
       'AUD'
     );
+    // The declared expense stands, and the Liability's own debt service also
+    // stands. FHIP has no structured basis to merge them, and inventing one
+    // from the label is forbidden by PO-FI2-10.
     expect(d.totalMonthlyExpenses).toBe(500);
     expect(d.debtMonthlyRepayments).toBe(500);
-    expect(d.monthlySurplus).toBe(9000); // the double count, documented not hidden
+    expect(d.monthlySurplus).toBe(9000);
+  });
+
+  it('PO-FI2-10 GUARD — no name/description inference exists anywhere in the classification', () => {
+    // A legitimate expense whose label merely CONTAINS debt words must never
+    // be suppressed. If someone later adds substring matching, this fails.
+    const serviced = servicedDebtFamilies([
+      { debt_type: 'other', master_item_key: 'personal_loan', monthly_repayment: 500 },
+      { debt_type: 'other', master_item_key: 'credit_card', monthly_repayment: 800 },
+    ]);
+    for (const label of ['Personal loan advice fee', 'Personal loan repayment', 'Credit card payment', 'Mortgage broker fee']) {
+      // expense_name is not even part of the classification's input shape —
+      // isDuplicateDebtServiceExpense only ever reads master_item_key and
+      // expense_category. Passing the label through must change nothing.
+      expect(
+        isDuplicateDebtServiceExpense({ master_item_key: null, expense_category: 'other', expense_name: label } as never, serviced),
+        label
+      ).toBe(false);
+    }
+    const src = readFileSync(join(process.cwd(), 'lib/engines/debtServiceContext.ts'), 'utf8');
+    for (const forbidden of ['expense_name', 'toLowerCase()', 'RegExp']) {
+      expect(src, `debtServiceContext must not inspect ${forbidden}`).not.toContain(forbidden);
+    }
   });
 });
 
