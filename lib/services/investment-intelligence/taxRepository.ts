@@ -64,7 +64,12 @@ const ACQUISITION_TYPE_MAP: Record<string, AcquisitionKind> = {
 // rows, which are only ever populated for mutual-fund schemes, so a direct-
 // equity instrument naturally resolves to zero applicable exit-load
 // schedules without any special-casing here.
-const DISPOSAL_TYPES = new Set(['redemption', 'switch_out', 'sale']);
+// II-PC2: exported (previously module-private) so the workspace Overview can
+// ask "does this user have any disposal at all?" using EXACTLY the vocabulary
+// the tax engine itself consumes. The Overview must never re-derive or
+// re-guess this set — a second copy would drift and the Tax card would then
+// claim "no disposals" for transaction types R6 actually taxes.
+export const DISPOSAL_TYPES = new Set(['redemption', 'switch_out', 'sale']);
 
 export interface TaxDataset {
   userId: string;
