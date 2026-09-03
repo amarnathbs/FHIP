@@ -1,7 +1,17 @@
 # G3 — Registration and Existing-User Alignment
 
 Implementation and certification record. Branch `feature/g3-registration-existing-user-alignment`,
-based on `origin/main` at `02097d5`.
+originally based on `origin/main` at `02097d5`, since reconciled with `origin/main` at `bd45308`
+(Admin A0.2 Wave 4, II-PC1-F1 and II-PC1-F2, merged clean with zero conflicts).
+
+## 0. Where the evidence in this document comes from
+
+Every database result quoted here was produced against **a freshly rebuilt local PostgreSQL**
+(PGlite, all 123 migrations replayed in order), **not** against live DEV. No statement in this
+document should be read as "verified on DEV" — nothing has been run against DEV, because the
+migration has not been applied there and the credential-containment prerequisite is not satisfied
+(see the programme report). Application-layer results come from the Vitest suite. Where a claim is
+architectural rather than executed, it says so.
 
 ---
 
@@ -141,10 +151,33 @@ outputs are certified, because the registry says otherwise.
 `generic_disclosure_acknowledged_at`, `generic_disclosure_country`) plus an `audit_events` row.
 No new table, therefore no new RLS surface.
 
-**Enforcement:** `trg_enforce_generic_disclosure` (migration 0127) refuses to let
+**Enforcement — two layers.**
+
+*Outer (G3-R5 closure).* Confirmation is a controlled workflow. Only
+`confirm_country_of_residence()` (SECURITY DEFINER RPC) may set
+`country_confirmed_at`, `country_source` or any `generic_disclosure_*` column to a non-null
+value; `trg_enforce_controlled_confirmation_columns` rejects a direct write by any authenticated
+caller. The RPC writes the profile row **and** its `audit_events` record in **one transaction**,
+so a confirmed country with no audit trail — or a stored acknowledgement with no audit trail —
+is unreachable rather than merely discouraged.
+
+Exactly one direct transition is permitted: a pure **de-confirmation**, where all five columns go
+to NULL together. Revoking your own confirmation only ever removes access, and `PUT
+/api/user/profile` relies on it to force re-confirmation after a country change (MCC spec 5.7).
+
+*Inner (defence in depth).* `trg_enforce_generic_disclosure` independently refuses to let
 `country_confirmed_at` be set for a GENERIC country unless the same row carries a matching
 acknowledgement for that exact country. It applies to `service_role` too — there is no legitimate
-path that should confirm a generic residence without the disclosure.
+path, background job or administrative script included, that should confirm a generic residence
+without the disclosure. This is what still holds if the RPC itself were ever changed.
+
+### Why the outer guard exempts non-`authenticated` callers
+
+The threat is an authenticated browser/API client writing directly through PostgREST under RLS.
+Migrations, psql sessions, background jobs and `service_role` are already inside the trust
+boundary and are exempted explicitly — exactly as MCC's `enforce_country_confirmed()` and G1's
+`enforce_controlled_country_columns()` both do. In real Supabase, PostgREST always stamps a role
+claim on an end-user request, so the guard fires precisely where it must.
 
 ---
 
@@ -215,8 +248,38 @@ directly in `tests/unit/g3RegistrationAlignment.test.ts`.
 
 ```
 File:     supabase/migrations/0127_g3_registration_country_expansion.sql
-SHA-256:  D7A80F6A3DE2D276326F3FFD3B3C5735BFA797597C23E69EDD86A04354A3D836
-Size:     26109 bytes / 426 lines
+SHA-256:  D4E72FF7A6E1DEA1B0410580E1A2837A9CFAC34EC554B2E0620DBAA6610659EA
+Size:     36591 bytes / 613 lines
+```
+
+This is the POST-RECONCILIATION checksum, taken after merging `origin/main`
+(`bd45308`) and after the G3-R5 closure added section 9 (the
+`confirm_country_of_residence()` RPC and its controlled-column guard). It
+supersedes the two earlier checksums recorded during development.
+
+### MANDATORY PRE-APPLICATION CHECK
+
+Run this **before** applying `0127`. The migration adds a CHECK constraint
+restricting `user_profiles.preferred_currency` to AUD/INR. If any existing row
+holds something else the ALTER will fail — and that is the correct outcome.
+**Do not convert such a row.** Stop and report the counts; a non-AUD/INR
+reporting currency means real user data was written through a path this
+programme has not accounted for, and deciding what it should become is a
+Product Owner call, not a migration's.
+
+```sql
+-- Aggregate only. No identifiers.
+select preferred_currency, count(*) as n
+from user_profiles
+group by preferred_currency
+order by n desc;
+-- Expected: only 'AUD', 'INR' and possibly NULL.
+
+select count(*) as rows_that_would_block_the_constraint
+from user_profiles
+where preferred_currency is not null
+  and preferred_currency not in ('AUD', 'INR');
+-- MUST be 0. If it is not, STOP and report.
 ```
 
 Next free migration number verified as `0127` by `npm run check:migrations`
@@ -246,12 +309,13 @@ order by c.country_code;
 select public.is_country_registration_eligible('GB') as gb_may_register,   -- expect true
        public.is_country_registration_eligible('NZ') as nz_may_register;   -- expect false
 
--- The four new objects exist.
+-- The seven new functions exist.
 select proname from pg_proc
 where proname in ('is_country_registration_eligible','is_country_registration_confirmed',
                   'enforce_country_confirmed_registration','enforce_generic_disclosure_acknowledgement',
-                  'enforce_cross_border_country_is_foreign')
-order by proname;  -- expect 5 rows
+                  'enforce_cross_border_country_is_foreign','confirm_country_of_residence',
+                  'enforce_controlled_confirmation_columns')
+order by proname;  -- expect 7 rows
 
 -- The three new constraints exist.
 select conname from pg_constraint
@@ -259,6 +323,11 @@ where conname in ('countries_country_code_is_real_iso_check',
                   'user_profiles_generic_disclosure_complete_check',
                   'user_profiles_preferred_currency_supported_check')
 order by conname;  -- expect 3 rows
+
+-- The controlled-confirmation guard is armed (G3-R5).
+select tgname from pg_trigger
+where tgname in ('trg_enforce_controlled_confirmation_columns','trg_enforce_generic_disclosure')
+order by tgname;  -- expect 2 rows
 
 -- Existing users untouched (aggregate only, no identifiers).
 select count(*) filter (where country_of_residence='AU' and country_confirmed_at is not null) as au_confirmed,
