@@ -430,14 +430,9 @@ blocker for the items above; all are recorded for Product Owner decision.
   borrower and would require crossing the FDH-1 isolation boundary. Product
   decision; reverses a standing PO ruling.
 
-- **R2 — Debt-repayment de-duplication covers only two item types (Items 2/4).**
-  `DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS` (`dashboard.ts:306-309`) maps only
-  `mortgage` and `car_loan_repayments`. A manually-entered personal-loan or
-  credit-card repayment expense coexisting with the matching liability still
-  double-counts in surplus and DSR. Pre-existing, manual-entry path only,
-  unrelated to imports. Not extended here because suppressing a user's real
-  expense row is exactly the harm LR-FI-1 warned about and needs a PO ruling on
-  which item pairs are safe.
+- **R2 — Debt-repayment de-duplication covered only two item types.**
+  **REOPENED AND ADDRESSED by Product Owner direction — see the
+  "R2 closure" section below.**
 
 - **R3 — Two savings-shaped expense master items (Item 5).**
   `holiday_savings` (`supabase/seed_master_items.sql:72`) and
@@ -446,7 +441,13 @@ blocker for the items above; all are recorded for Product Owner decision.
   code special-cases them (grep across `lib/`, `app/`, `components/`: zero
   hits). Affects ordinary non-SMSF households; needs a PO ruling.
 
-- **R4 — Net-worth forecast contribution overlap (Item 5).**
+- **R4 — Net-worth forecast contribution overlap (Item 5). NOW TRACKED AS
+  LR-FI-3 — "Contribution, Savings & Net-Worth Forecast Exactly-Once
+  Integrity".** The Product Owner accepted this as correctly deferred and
+  registered it as its own track, to be dispatched separately after LR-FI-2
+  closes. It is **explicitly out of scope for this branch and is not fixed
+  here** — recorded, not silently dropped. Detail retained below for that
+  dispatch.
   `forecastData.ts:826-828` passes `monthlyAssetContribution =
   max(0, monthlySurplus)` *and* the investment and personal-retirement
   contributions. Because `monthlySurplus` never subtracts those contributions,
@@ -522,6 +523,114 @@ differed from C on DTI (4.17x "caution" vs 7.97x "risk" — a live benchmark-ban
 flip) while holding an identical balance sheet to C. The §6c defect was also
 reproduced on the live figures: the pre-fix pairing projects the debt balance
 *rising* over 12 months, the corrected pairing projects it falling.
+
+## R2 closure — debt service counted exactly once
+
+*Added on Product Owner direction after the first FULL PASS report, which
+reopened R2 as a required gate. The SMSF DTI and forecast corrections above are
+untouched by this section.*
+
+### Why the guard was family-specific (the required trace, done first)
+
+It was **not** an incomplete classification. `supabase/seed_master_items.sql`
+seeds exactly two expense-category items that denote a debt REPAYMENT:
+
+```
+('expense', 'mortgage',            'Mortgage',            10)
+('expense', 'car_loan_repayments', 'Car Loan Repayments', 460)
+```
+
+There is no `personal_loan_repayments`, no `credit_card_repayment`, and no
+education/business/tax equivalent. The old guard already covered **100% of the
+catalogue's repayment items**. It looked family-specific only because the
+*catalogue* is. Adding `personal_loan` or `credit_card` as keys of the
+expense→liability map would have mapped expense items no user can ever hold —
+exactly the "adding category strings blindly" the direction warned against.
+
+A keyword sweep of all 70 expense items confirms the only other debt-related
+ones are `loan_interest`, `credit_card_fees` and `bank_fees` — which are debt
+**cost**, not repayment, and must never be suppressed.
+
+### What was actually built
+
+`lib/engines/debtServiceContext.ts` — one canonical debt-service classification
+for the household layer, replacing three ad-hoc `Set`s previously spread across
+`dashboard.ts` and `twin/metricDerivation.ts`:
+
+- **`DebtFamily`** — nine families covering all 25 catalogued liability items.
+  Matching is now by family, so the guard can never let a car loan suppress a
+  mortgage expense, and *does* now match families the old two-`Set` guard
+  silently missed (`commercial_loan`, `mortgage_offset_facility`,
+  `smsf_property_loan`). Those previously double-counted a genuine "Mortgage"
+  expense row — a real fix, proven by test.
+- **`DebtServiceClass`** — `instalment` vs `revolving`, mirroring the Financial
+  Data Hub's Product-Owner-scrutinised FDH-10 economics (PURCHASE → expense,
+  PAYMENT → transfer, never expense).
+- **`DEBT_COST_EXPENSE_ITEMS`** — `loan_interest`, `credit_card_fees`,
+  `bank_fees` are checked FIRST and can never be suppressed, with a test
+  asserting they stay disjoint from the repayment map. This is a deliberate
+  trap-guard: `credit_card_fees` is the nearest-looking item a future
+  "extend the guard to credit cards" edit would reach for, and suppressing it
+  would delete a real expense.
+
+It is **mirrored, not imported**: `tests/unit/fdh1Isolation.test.ts` enforces a
+bidirectional boundary and scans `lib/`, `app/`, `components/` for the Hub's
+directory name as a plain substring. An import genuinely fails that certified
+test — as did merely *naming the path in a comment*, which the isolation suite
+caught during this work. Conformance is proven by source-level assertion.
+
+### The control table, executed
+
+`tests/unit/lrFi2DebtServiceExactlyOnce.test.ts` encodes the Product Owner's
+nine required scenarios verbatim as `describe` blocks. 21 assertions, all
+passing, each with a negative control.
+
+| # | Scenario | Status |
+|---|---|---|
+| 1 | Personal-loan repayment only → debt service once | **PASS** |
+| 2 | Same repayment also an Expense → no double count | **PASS** (declared rows); one reachable sub-case open, below |
+| 3 | Card purchases in Expenses + balance repayment | **PASS** — purchases identical with and without the card |
+| 4 | Credit-card interest → expense once | **PASS** |
+| 5 | Credit-card fee → expense once | **PASS** |
+| 6 | Card principal/balance repayment → not ordinary Expense | **PASS** |
+| 7 | Personal-loan interest/fee → expense once | **PASS** |
+| 8 | DSR → required debt service once | **PASS** |
+| 9 | SMSF liability still out of personal DSR/DTI | **PASS** |
+
+### The one reachable case that remains open, and why no code can close it
+
+Row 2 has a sub-case that **no calculation-layer change can reach**, and it is
+pinned by a deliberately-passing test rather than left undocumented:
+
+A user clicking **"+ Add Custom Item"** in the Expenses grid and typing
+"Personal loan repayment" produces a row with `master_item_key = null` **and**
+`expense_category = 'other'` — the grid exposes no category field
+(`lib/grid/configs.ts:36-41`), and the catalogue has no repayment item to tick.
+The row therefore carries **no signal whatsoever** that it is debt service.
+The existing `expense_category='debt_repayment'` fallback is real and works,
+but is reachable only via the API or direct PostgREST — not through the live UI.
+
+The only non-fragile fix is to **add the missing catalogue items** (e.g.
+`personal_loan_repayments`, `credit_card_repayment`), which the new
+family-keyed map would then pick up with a one-line addition each. That is a
+seed/data change requiring a migration, which this task's own terms forbid
+allocating without authorisation — so it is escalated rather than done.
+
+The rejected alternative is name-matching the free-typed label, which would
+silently delete genuine expenses on a substring coincidence.
+
+### Deliberately NOT changed, and why
+
+Excluding revolving-credit repayments from the household **cash-outflow** term
+(as distinct from the debt-service term) was considered and rejected for this
+branch. It would touch 15+ consumers — report narrative text, the cash-flow
+waterfall chart, `financial_snapshots`, Twin metrics, Resilience obligations,
+Health Score — reverse the standing "surplus includes debt repayment" ruling
+for one debt class, and, critically, **cannot separate a card's interest from
+its principal without the repayment decomposition this same direction accepted
+as staying unused**. Excluding the whole payment would drop genuine interest
+from expenses; including it counts principal twice. That trade-off is a product
+ruling, not an engineering choice, and is recorded for LR-FI-3's consideration.
 
 ## Scope guards observed
 

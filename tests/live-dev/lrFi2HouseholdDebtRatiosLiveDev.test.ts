@@ -168,25 +168,76 @@ async function insertAll(userId: string, opts: { smsf: 'none' | 'tagged' | 'reta
   await ins('liabilities', liabilities);
 }
 
+/**
+ * LR-FI-2 §R2 — a household servicing a personal loan AND a credit card, with
+ * (a) an explicitly declared duplicate expense row for the personal-loan
+ * repayment, and (b) genuine card purchases plus a genuine card fee.
+ * Written through the real registers so the exactly-once rule is proven
+ * against rows the product itself would store.
+ */
+async function insertDebtServiceHousehold(userId: string) {
+  const ins = async (table: string, rows: Record<string, unknown>[]) => {
+    const { error } = await admin.from(table).insert(rows);
+    if (error) throw new Error(`${table} insert failed: ${error.message}`);
+  };
+  await ins('income_sources', [salary(userId)]);
+  await ins('liabilities', [
+    {
+      user_id: userId, liability_name: 'Personal loan', balance: 20000, interest_rate: 12,
+      monthly_repayment: 500, debt_type: 'other', master_item_key: 'personal_loan',
+      currency_code: 'AUD', country_code: 'AU', owner: 'self', is_active: true,
+    },
+    {
+      user_id: userId, liability_name: 'Visa', balance: 4000, interest_rate: 20,
+      monthly_repayment: 800, debt_type: 'other', master_item_key: 'credit_card',
+      currency_code: 'AUD', country_code: 'AU', owner: 'self', is_active: true,
+    },
+  ]);
+  await ins('expense_items', [
+    // Declared duplicate of the personal-loan instalment — must be suppressed.
+    {
+      user_id: userId, expense_name: 'Personal loan repayment', amount: 500, frequency: 'monthly',
+      is_essential: true, expense_category: 'debt_repayment', currency_code: 'AUD',
+      owner: 'self', is_active: true,
+    },
+    // Genuine card purchases — must survive.
+    {
+      user_id: userId, expense_name: 'Groceries', amount: 600, frequency: 'monthly',
+      is_essential: true, master_item_key: 'groceries', expense_category: 'food',
+      currency_code: 'AUD', owner: 'self', is_active: true,
+    },
+    // Genuine card fee — must survive (debt COST, not a repayment).
+    {
+      user_id: userId, expense_name: 'Credit card fees', amount: 15, frequency: 'monthly',
+      is_essential: false, master_item_key: 'credit_card_fees', expense_category: 'other',
+      currency_code: 'AUD', owner: 'self', is_active: true,
+    },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 let A: DashboardSummary; // personal-only control
 let B: DashboardSummary; // personal + SMSF, correctly tagged  (the fix)
 let C: DashboardSummary; // same rows retagged personal        (pre-fix behaviour)
+let D: DashboardSummary; // §R2 debt-service exactly-once household
 
 beforeAll(async () => {
   // Sequential, not Promise.all — see the retry note in makeUser().
   const ua = await makeUser('a-personal');
   const ub = await makeUser('b-smsf');
   const uc = await makeUser('c-retagged');
+  const ud = await makeUser('d-debtservice');
   await insertAll(ua, { smsf: 'none' });
   await insertAll(ub, { smsf: 'tagged' });
   await insertAll(uc, { smsf: 'retagged' });
+  await insertDebtServiceHousehold(ud);
   A = await loadDashboard(ua, adminAsServerClient);
   B = await loadDashboard(ub, adminAsServerClient);
   C = await loadDashboard(uc, adminAsServerClient);
-}, 120000);
+  D = await loadDashboard(ud, adminAsServerClient);
+}, 180000);
 
 // Hand-derived from the inserted amounts. Gross 8,000/mo = 96,000/yr.
 const ANNUAL_GROSS = 96000;
@@ -261,6 +312,32 @@ describe('LR-FI-2 live DEV — §6c wealth-side amortisation on real rows', () =
     expect(project(B.debtMonthlyRepayments)).toBeGreaterThan(B.totalLiabilities);
     // Post-fix pairing: whole balance, whole repayment.
     expect(project(B.totalLiabilityMonthlyRepayments)).toBeLessThan(B.totalLiabilities);
+  });
+});
+
+describe('LR-FI-2 §R2 live DEV — debt service counted exactly once on real rows', () => {
+  it('suppresses the declared duplicate personal-loan repayment expense', () => {
+    // Expenses on file total 500 + 600 + 15. The 500 duplicates the personal
+    // loan's own instalment, so household expenses must be 615, not 1,115.
+    expect(D.totalMonthlyExpenses).toBe(615);
+  });
+
+  it('keeps the genuine card purchases and the genuine card FEE', () => {
+    const names = D.topExpenses.map((e) => e.name).sort();
+    expect(names).toContain('Groceries');
+    expect(names).toContain('Credit card fees');
+    expect(names).not.toContain('Personal loan repayment');
+  });
+
+  it('counts required debt service once across both families', () => {
+    expect(D.debtMonthlyRepayments).toBe(1300); // 500 personal + 800 card
+    expect(D.debtServiceRatio).toBeCloseTo(1300 / 8000, 10);
+  });
+
+  it('produces a surplus with no dollar counted twice (independent oracle)', () => {
+    // 8,000 net income - 615 expenses - 1,300 debt service = 6,085.
+    // The defective alternative (counting the duplicate) would be 5,585.
+    expect(D.monthlySurplus).toBe(6085);
   });
 });
 

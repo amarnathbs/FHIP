@@ -1,6 +1,7 @@
 import { toMonthly, type Frequency } from './money';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
+import { isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -285,28 +286,15 @@ function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): num
   return rows.reduce((sum, r) => sum + toMonthly(Number(r[amountField]), r[freqField] as Frequency), 0);
 }
 
-// ---------------------------------------------------------------------------
-// App Review spec §12-13 double-counting guard: a debt-repayment expense row
-// and the matching Liability's monthly_repayment represent the same cash
-// outflow. See the "Old calculation → defect → corrected rule → expected new
-// result" comment at nonDebtExpenses below for the full root-cause writeup;
-// these are just the classification tables it uses.
-//
-// Liability master items grouped by debt type, so a Car Loan on file never
-// suppresses an unrelated Mortgage expense line (or vice versa) — matching
-// by debt type, not "any liability exists at all". Spellings match this
-// file's existing GOOD_DEBT_MASTER_ITEMS / supabase/seed_master_items.sql.
-const MORTGAGE_TYPE_LIABILITY_ITEMS = new Set(['home_loan', 'investment_loan', 'construction_loan']);
-const AUTO_LOAN_TYPE_LIABILITY_ITEMS = new Set(['car_loan', 'motorcycle_loan', 'boat_loan']);
-
-// Maps a debt-repayment expense master item (lib/grid/configs.ts's
-// expenseGridConfig / supabase/seed_master_items.sql 'expense' category) to
-// the liability master items whose monthly_repayment already captures the
-// same repayment.
-const DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS: Record<string, Set<string>> = {
-  mortgage: MORTGAGE_TYPE_LIABILITY_ITEMS,
-  car_loan_repayments: AUTO_LOAN_TYPE_LIABILITY_ITEMS,
-};
+// App Review spec §12-13's double-counting guard — a debt-repayment expense
+// row and the matching Liability's monthly_repayment represent the same cash
+// outflow — now lives in lib/engines/debtServiceContext.ts (LR-FI-2 §R2),
+// which is the single canonical debt-service classification for the whole
+// household layer. The two ad-hoc Sets that used to sit here covered only the
+// mortgage and auto families; the canonical module covers all nine, so a
+// commercial/construction/offset-facility loan can no longer fail to match a
+// genuine "Mortgage" expense row. See that file's header for the root-cause
+// trace of why this guard was ever family-specific.
 
 // Standard loan amortisation: months to pay off a balance at a monthly rate
 // with a fixed monthly payment. Returns null if the payment never covers the
@@ -566,22 +554,15 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // home-loan liability could suppress the household's own Mortgage expense
   // row as a "double count", silently deleting a genuine personal outflow —
   // the mirror image of the primary defect, and equally wrong.
-  const liabilityItemsWithRepayment = new Set(
-    householdLiabilities.filter((l) => (l.monthly_repayment ?? 0) > 0).map((l) => l.master_item_key ?? l.debt_type)
-  );
-  function isDoubleCountedDebtRepaymentExpense(r: ExpenseRow): boolean {
-    if (r.master_item_key) {
-      const matchingLiabilityItems = DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS[r.master_item_key];
-      if (!matchingLiabilityItems) return false; // not a debt-repayment master item at all
-      for (const item of matchingLiabilityItems) if (liabilityItemsWithRepayment.has(item)) return true;
-      return false;
-    }
-    // No master item (custom row, or set directly via the API rather than
-    // the grid) — fall back to the original category-based rule, still
-    // gated on at least one real liability repayment existing somewhere.
-    return r.expense_category === 'debt_repayment' && liabilityItemsWithRepayment.size > 0;
-  }
-  const nonDebtExpenses = householdExpenses.filter((r) => !isDoubleCountedDebtRepaymentExpense(r));
+  // LR-FI-2 §R2: the family map and the matching rule now come from the
+  // canonical lib/engines/debtServiceContext.ts. Behaviour for the mortgage
+  // and auto families is preserved exactly; what changes is that the other
+  // seven families (personal, education, revolving, business, investment,
+  // tax, other) are now classified too, so a household servicing e.g. a
+  // commercial or construction loan, or a mortgage offset facility, finally
+  // matches its own "Mortgage" expense row instead of double-counting it.
+  const servicedFamilies = servicedDebtFamilies(householdLiabilities);
+  const nonDebtExpenses = householdExpenses.filter((r) => !isDuplicateDebtServiceExpense(r, servicedFamilies));
   const essentialMonthlyExpenses = sumMonthly(
     nonDebtExpenses.filter((r) => r.is_essential),
     'amount',
@@ -625,7 +606,16 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // lists and the concentration ratios computed off them — an SMSF row
   // appearing here would both misstate the ratio and read as a personal
   // commitment the household does not have.
-  const topExpenses = householdExpenses
+  // LR-FI-2 §R2: built from nonDebtExpenses, not householdExpenses. A row
+  // suppressed as a duplicate of a Liability's own repayment was still being
+  // listed here, so "your top expenses" showed a $500 "Personal loan
+  // repayment" that totalMonthlyExpenses deliberately excludes — the list did
+  // not reconcile with the total sitting beside it, and the same repayment
+  // read to the user as both an expense and a debt commitment. Found by the
+  // live-DEV §R2 fixture. Purely a display/ratio scope correction: no total,
+  // ratio input or score changes, since every consumer of the excluded row's
+  // amount already used nonDebtExpenses.
+  const topExpenses = nonDebtExpenses
     .map((e) => ({ name: e.expense_name, monthlyAmount: toMonthly(e.amount, e.frequency) }))
     .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
     .slice(0, 5);
