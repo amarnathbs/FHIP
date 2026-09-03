@@ -59,7 +59,13 @@ import {
   isDisclosureAcknowledgementValid,
   GENERIC_DISCLOSURE_VERSION,
 } from '@/lib/services/countryDisclosure';
-import { recordCountryAuditEvent } from '@/lib/services/countryAudit';
+// NOTE: this route deliberately no longer imports recordCountryAuditEvent.
+// The country_confirmed audit event is written inside the
+// confirm_country_of_residence() RPC, in the same transaction as the profile
+// write, so it cannot be skipped, cannot fail independently, and cannot be
+// forged by a client that bypasses this route. recordCountryAuditEvent()
+// remains in use by PUT /api/user/profile for the separate
+// country_change_pending_reconfirmation event.
 
 // A two-field closed schema. Note what is absent and can therefore never be
 // forged: experience_level, capabilities, country_confirmed_at,
@@ -116,90 +122,49 @@ export async function POST(req: Request) {
     return bad('GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED', 422);
   }
 
-  const { data: existing, error: readError } = await supabase
-    .from('user_profiles')
-    .select(
-      'country_of_residence, country_confirmed_at, country_source, generic_disclosure_version, generic_disclosure_country'
-    )
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (readError) return bad('OPERATIONAL_ERROR', 500);
-  if (!existing) return bad('PROFILE_INCOMPLETE', 403);
-
-  const previousCountry = existing.country_of_residence;
-
-  // --- G3 step 3: idempotent replay ---------------------------------------
-  // Same country, already confirmed, and (for a generic country) the stored
-  // acknowledgement already matches the current version for this same
-  // country. Nothing to change and nothing new to record — return the
-  // authoritative state and write NO audit event.
-  const alreadyConfirmedIdentically =
-    existing.country_confirmed_at != null &&
-    existing.country_of_residence === country &&
-    (experienceLevel !== 'GENERIC' ||
-      (existing.generic_disclosure_version === GENERIC_DISCLOSURE_VERSION &&
-        existing.generic_disclosure_country === country));
-
-  if (alreadyConfirmedIdentically) {
-    return ok({
-      country_of_residence: existing.country_of_residence,
-      country_confirmed_at: existing.country_confirmed_at,
-      country_source: existing.country_source,
-      experience_level: experienceLevel,
-      generic_disclosure_version: existing.generic_disclosure_version ?? null,
-      idempotent_replay: true,
-    });
-  }
-
-  const nowIso = new Date().toISOString();
-
-  // The disclosure columns are always written EXPLICITLY, in both directions.
-  // Confirming a FULL country clears any acknowledgement left over from a
-  // previous generic country — otherwise an AU user who had briefly been GB
-  // would keep a stale acknowledgement row that no longer describes anything
-  // true about their account.
-  const disclosureFields =
-    experienceLevel === 'GENERIC'
-      ? {
-          generic_disclosure_version: GENERIC_DISCLOSURE_VERSION,
-          generic_disclosure_acknowledged_at: nowIso,
-          generic_disclosure_country: country,
-        }
-      : {
-          generic_disclosure_version: null,
-          generic_disclosure_acknowledged_at: null,
-          generic_disclosure_country: null,
-        };
-
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .update({
-      country_of_residence: country,
-      country_confirmed_at: nowIso,
-      country_source: 'USER_CONFIRMED',
-      country_updated_at: nowIso,
-      updated_at: nowIso,
-      ...disclosureFields,
-    })
-    .eq('user_id', user.id)
-    .select('country_of_residence, country_confirmed_at, country_source, generic_disclosure_version')
-    .single();
-
-  // A failure here leaves the profile exactly as it was — the update is a
-  // single statement, so there is no partial-write state to unwind (spec
-  // section 14: "Failed confirmation does not partially update profile
-  // data"). No audit event is written either, because nothing happened.
-  if (error) return bad('OPERATIONAL_ERROR', 500);
-
-  await recordCountryAuditEvent({
-    userId: user.id,
-    eventType: 'country_confirmed',
-    previousCountry,
-    newCountry: country,
-    actor: 'self',
-    experienceLevel,
-    disclosureVersion: experienceLevel === 'GENERIC' ? GENERIC_DISCLOSURE_VERSION : null,
+  // --- G3 step 3: the controlled confirmation workflow --------------------
+  // The write itself is NOT performed here. It is delegated entirely to the
+  // confirm_country_of_residence() RPC (migration 0127), which is the only
+  // path permitted to set country_confirmed_at / country_source / the
+  // generic_disclosure_* columns to a non-null value — enforced by
+  // trg_enforce_controlled_confirmation_columns, so a client that skipped
+  // this route and PATCHed its own profile row directly through PostgREST is
+  // rejected by the database.
+  //
+  // Delegating also makes the audit event MANDATORY rather than best-effort.
+  // Previously the profile UPDATE and the audit insert were two separate
+  // statements on two different clients: if the audit insert failed, the
+  // confirmation still stood, silently unaudited. Inside the RPC both happen
+  // in ONE transaction, so a confirmed country with no audit record — or a
+  // stored acknowledgement with no audit record — cannot exist.
+  //
+  // Idempotent replay is likewise decided inside the RPC, against the row it
+  // is about to write, rather than against a separately-read snapshot that
+  // could have changed in between.
+  const { data: rpcResult, error } = await supabase.rpc('confirm_country_of_residence', {
+    p_country_code: country,
+    p_disclosure_version: experienceLevel === 'GENERIC' ? GENERIC_DISCLOSURE_VERSION : null,
   });
 
-  return ok({ ...data, experience_level: experienceLevel, idempotent_replay: false });
+  if (error) {
+    // The RPC raises its failures with stable, prefixed messages so this
+    // route can map them to the same error codes it has always returned,
+    // rather than leaking raw SQL text to the client.
+    const message = error.message ?? '';
+    if (message.includes('GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED')) {
+      return bad('GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED', 422);
+    }
+    if (message.includes('COUNTRY_REGISTRATION_NOT_PERMITTED')) {
+      return bad('COUNTRY_REGISTRATION_NOT_PERMITTED', 403);
+    }
+    if (message.includes('PROFILE_INCOMPLETE')) return bad('PROFILE_INCOMPLETE', 403);
+    if (message.includes('UNAUTHENTICATED')) return bad('unauthenticated', 401);
+    return bad('OPERATIONAL_ERROR', 500);
+  }
+
+  // A failed confirmation leaves the profile exactly as it was: the RPC's
+  // profile write and audit insert share one transaction, so either both
+  // happened or neither did (spec section 14: "Failed confirmation does not
+  // partially update profile data").
+  return ok(rpcResult);
 }

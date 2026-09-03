@@ -72,11 +72,32 @@ async function asTenant(uid, fn) {
   await db.exec(`set role authenticated;`);
   const seen = (await db.query(`select auth.uid()::text u`)).rows[0].u;
   if (seen !== uid) { console.log(`  FAIL  harness: auth.uid() is ${seen}, expected ${uid}`); fail++; }
-  try { return await fn(); } finally { await db.exec(`reset role;`); }
+  // Claims are session-scoped, so they must be cleared on exit or every
+  // subsequent top-level statement in this file keeps looking like this
+  // tenant — see asService() below for why that matters.
+  try {
+    return await fn();
+  } finally {
+    await db.exec(`reset role;`);
+    await db.query(`select set_config('request.jwt.claims', '', false)`);
+  }
 }
+// NOTE: this also sets the JWT *claims*, not just the Postgres role. The
+// shim's auth.role() reads `request.jwt.claims`, and asTenant() sets that at
+// SESSION scope — so a bare `set role service_role` would leave auth.role()
+// still reporting 'authenticated' from whichever tenant ran last, and every
+// guard that branches on auth.role() (MCC's, G1's, and G3's) would misfire.
+// Setting both keeps the harness faithful to production, where PostgREST
+// always stamps a matching role claim.
 async function asService(fn) {
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ role: 'service_role' })]);
   await db.exec(`set role service_role;`);
-  try { return await fn(); } finally { await db.exec(`reset role;`); }
+  try {
+    return await fn();
+  } finally {
+    await db.exec(`reset role;`);
+    await db.query(`select set_config('request.jwt.claims', '', false)`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,60 +215,207 @@ await asTenant(GB, async () => {
 // ===========================================================================
 console.log('\n--- 3. A GENERIC country cannot be confirmed without the disclosure ---');
 // ===========================================================================
+// TWO SEPARATE GUARDS, PROVEN SEPARATELY.
+//
+// For an AUTHENTICATED end user, the OUTER guard now fires first: since the
+// G3-R5 closure they cannot write these columns directly at all, whatever
+// values they choose (that is section 3b's subject).
+//
+// The disclosure trigger is the INNER guard, and it must be proven where it
+// is actually the operative one — against a writer that IS exempt from the
+// outer guard. service_role is exactly that writer, and is deliberately NOT
+// exempt from the disclosure rule: there is no legitimate path, background
+// job or administrative script included, that should confirm a generic
+// residence without the disclosure.
 await asTenant(GB, async () => {
-  // The forged-confirmation attack: a direct PostgREST-style write that skips
-  // the confirm route entirely.
-  await expectReject('forged GB confirmation with NO acknowledgement is rejected', () =>
+  await expectReject('an authenticated user cannot forge a GB confirmation directly (outer guard)', () =>
     db.exec(`update user_profiles set country_of_residence='GB', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${GB}'`),
+    'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+  );
+  // Ordinary profile fields the user genuinely owns are still theirs to set —
+  // the guard is surgical, not a blanket lock on the row.
+  await expectAccept('GB user may still set their own ordinary profile fields directly', () =>
+    db.exec(`update user_profiles set onboarding_completed=true, preferred_currency='AUD' where user_id='${GB}'`)
+  );
+  await expectAccept('GB confirms successfully through confirm_country_of_residence()', () =>
+    db.query(`select public.confirm_country_of_residence('GB', 'g3-generic-coverage-2026-09')`)
+  );
+});
+await asService(async () => {
+  await expectReject('even service_role cannot confirm a GENERIC country without the disclosure (inner guard)', () =>
+    db.exec(`update user_profiles set country_of_residence='US', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${US}'`),
     'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED'
   );
   // An acknowledgement recorded for a DIFFERENT country must not carry across.
-  await expectReject('an acknowledgement recorded for US cannot confirm GB', () =>
-    db.exec(`update user_profiles set country_of_residence='GB', country_confirmed_at=now(), country_source='USER_CONFIRMED',
+  await expectReject('an acknowledgement recorded for GB cannot confirm US', () =>
+    db.exec(`update user_profiles set country_of_residence='US', country_confirmed_at=now(), country_source='USER_CONFIRMED',
              generic_disclosure_version='g3-generic-coverage-2026-09', generic_disclosure_acknowledged_at=now(),
-             generic_disclosure_country='US' where user_id='${GB}'`),
+             generic_disclosure_country='GB' where user_id='${US}'`),
     'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED'
   );
   // A partial acknowledgement is not an acknowledgement.
   await expectReject('a timestamp with no version fails the completeness CHECK', () =>
-    db.exec(`update user_profiles set generic_disclosure_acknowledged_at=now() where user_id='${GB}'`),
+    db.exec(`update user_profiles set generic_disclosure_acknowledged_at=now() where user_id='${US}'`),
     'user_profiles_generic_disclosure_complete_check'
-  );
-  // The legitimate path.
-  await expectAccept('GB confirms successfully WITH a matching acknowledgement', () =>
-    db.exec(`update user_profiles set country_of_residence='GB', country_confirmed_at=now(), country_source='USER_CONFIRMED',
-             onboarding_completed=true, preferred_currency='AUD',
-             generic_disclosure_version='g3-generic-coverage-2026-09', generic_disclosure_acknowledged_at=now(),
-             generic_disclosure_country='GB' where user_id='${GB}'`)
-  );
-});
-// Service role is deliberately NOT exempt from this one.
-await asService(async () => {
-  await expectReject('even service_role cannot confirm a GENERIC country without the disclosure', () =>
-    db.exec(`update user_profiles set country_of_residence='US', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${US}'`),
-    'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED'
   );
 });
 
-// Set up the remaining generic users properly.
+// Set up SG and AE. US is deliberately LEFT UNCONFIRMED here, because
+// section 3b below uses it as the subject of the G3-R5 attack and must start
+// from a genuinely unconfirmed profile — a fixture that pre-confirmed it
+// would make those rejections meaningless.
+//
+// service_role is exempt from the controlled-workflow guard (it is inside the
+// trust boundary, exactly as MCC and G1 already treat it), so these fixture
+// writes model an administrative/back-office setup rather than an end user.
 await asService(async () => {
-  for (const [uid, code, ccy] of [[US, 'US', 'AUD'], [SG, 'SG', 'INR'], [AE, 'AE', 'AUD']]) {
+  for (const [uid, code, ccy] of [[SG, 'SG', 'INR'], [AE, 'AE', 'AUD']]) {
     await db.exec(`update user_profiles set country_of_residence='${code}', country_confirmed_at=now(),
       country_source='USER_CONFIRMED', onboarding_completed=true, preferred_currency='${ccy}',
       generic_disclosure_version='g3-generic-coverage-2026-09', generic_disclosure_acknowledged_at=now(),
       generic_disclosure_country='${code}' where user_id='${uid}';`);
   }
+  await db.exec(`update user_profiles set onboarding_completed=true, preferred_currency='AUD' where user_id='${US}';`);
 });
-{
-  const n = (await db.query(`select count(*)::int n from user_profiles where country_confirmed_at is not null and country_of_residence in ('GB','US','SG','AE')`)).rows[0].n;
-  check('all four GENERIC countries can now be confirmed (G3-05..G3-09)', n === 4, `(confirmed: ${n}/4)`);
-}
 // A FULL country needs no acknowledgement — the trigger must not over-reach.
+// Now performed through the RPC, which is the only end-user path (G3-R5).
 await asTenant(AU, async () => {
   await expectAccept('a FULL country still confirms with NO acknowledgement (no regression)', () =>
-    db.exec(`update user_profiles set country_confirmed_at=now() where user_id='${AU}'`)
+    db.query(`select public.confirm_country_of_residence('AU', null)`)
   );
 });
+
+// ===========================================================================
+console.log('\n--- 3b. G3-R5: confirmation is a controlled workflow ---');
+// ===========================================================================
+// The Product Owner required proof of ONE of these two properties. This
+// section proves BOTH: direct writes to the confirmation-owned columns are
+// rejected, AND the permitted path is atomically validated and writes the
+// mandatory audit event in the same transaction.
+{
+  const auditBefore = (await db.query(`select count(*)::int n from audit_events where event_type='country_confirmed'`)).rows[0].n;
+
+  // --- Property 1: direct writes rejected --------------------------------
+  await asTenant(US, async () => {
+    // THE EXACT ATTACK THE PO NAMED: set the acknowledgement AND confirm a
+    // GENERIC country together, in one direct authenticated request.
+    await expectReject('THE G3-R5 ATTACK: one direct request setting the acknowledgement AND confirming GENERIC is rejected', () =>
+      db.exec(`update user_profiles set country_of_residence='US', country_confirmed_at=now(), country_source='USER_CONFIRMED',
+               generic_disclosure_version='g3-generic-coverage-2026-09', generic_disclosure_acknowledged_at=now(),
+               generic_disclosure_country='US' where user_id='${US}'`),
+      'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+    );
+    await expectReject('a direct write of country_confirmed_at alone is rejected', () =>
+      db.exec(`update user_profiles set country_confirmed_at=now() where user_id='${US}'`),
+      'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+    );
+    await expectReject('a direct write of country_source alone is rejected', () =>
+      db.exec(`update user_profiles set country_source='ADMIN_CORRECTED' where user_id='${US}'`),
+      'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+    );
+    await expectReject('a direct write of the disclosure columns alone is rejected', () =>
+      db.exec(`update user_profiles set generic_disclosure_version='g3-generic-coverage-2026-09',
+               generic_disclosure_acknowledged_at=now(), generic_disclosure_country='US' where user_id='${US}'`),
+      'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+    );
+    // The forged-GUC bypass attempt. set_config is pg_catalog and is never a
+    // PostgREST endpoint, but prove the guard does not simply trust the name.
+    await expectReject('a client cannot pre-set the controlled-workflow GUC to bypass the guard', async () => {
+      await db.query(`select set_config('fhip.controlled_country_confirmation','on',true)`);
+      await db.exec(`update user_profiles set country_confirmed_at=now() where user_id='${US}'`);
+      await db.query(`select set_config('fhip.controlled_country_confirmation','',true)`);
+    });
+  });
+  // Nothing above may have left a mark.
+  {
+    const r = (await db.query(`select country_confirmed_at, generic_disclosure_version from user_profiles where user_id='${US}'`)).rows[0];
+    check('after five rejected attacks the US profile is still unconfirmed and unacknowledged',
+      r.country_confirmed_at === null && r.generic_disclosure_version === null);
+    const n = (await db.query(`select count(*)::int n from audit_events where event_type='country_confirmed'`)).rows[0].n;
+    check('the rejected attacks wrote no audit event', n === auditBefore, `(${auditBefore} -> ${n})`);
+  }
+
+  // --- Property 2: the permitted path is atomic and always audited -------
+  await asTenant(US, async () => {
+    await expectAccept('US confirms through the RPC', () =>
+      db.query(`select public.confirm_country_of_residence('US', 'g3-generic-coverage-2026-09')`)
+    );
+  });
+  {
+    const p = (await db.query(`
+      select country_of_residence, country_confirmed_at, country_source,
+             generic_disclosure_version, generic_disclosure_country
+      from user_profiles where user_id='${US}'`)).rows[0];
+    check('the RPC confirmed the country', p.country_of_residence.trim() === 'US' && p.country_confirmed_at !== null);
+    check('the RPC recorded a country-matched, versioned acknowledgement',
+      p.generic_disclosure_version === 'g3-generic-coverage-2026-09' && p.generic_disclosure_country.trim() === 'US');
+    check('the RPC stamped USER_CONFIRMED, never a client-chosen source', p.country_source === 'USER_CONFIRMED');
+
+    const ev = (await db.query(`
+      select metadata from audit_events
+      where user_id='${US}' and event_type='country_confirmed' order by created_at desc limit 1`)).rows;
+    check('the RPC wrote the mandatory audit event', ev.length === 1);
+    if (ev.length === 1) {
+      const m = ev[0].metadata;
+      check('the audit event carries the server-derived experience level', m.experience_level === 'GENERIC');
+      check('the audit event carries the acknowledged disclosure version', m.disclosure_version === 'g3-generic-coverage-2026-09');
+      check('the audit event names the RPC as its writer', m.written_by === 'confirm_country_of_residence');
+      check('the audit event records the new country', m.new_country === 'US');
+    }
+  }
+
+  // --- Idempotency through the RPC ---------------------------------------
+  {
+    const before = (await db.query(`select count(*)::int n from audit_events where user_id='${US}' and event_type='country_confirmed'`)).rows[0].n;
+    const stamp = (await db.query(`select country_confirmed_at from user_profiles where user_id='${US}'`)).rows[0].country_confirmed_at;
+    let replay;
+    await asTenant(US, async () => {
+      replay = (await db.query(`select public.confirm_country_of_residence('US','g3-generic-coverage-2026-09') as r`)).rows[0].r;
+    });
+    const after = (await db.query(`select count(*)::int n from audit_events where user_id='${US}' and event_type='country_confirmed'`)).rows[0].n;
+    const stampAfter = (await db.query(`select country_confirmed_at from user_profiles where user_id='${US}'`)).rows[0].country_confirmed_at;
+    check('a replayed confirmation reports itself as a replay', replay?.idempotent_replay === true);
+    check('a replayed confirmation writes NO second audit event (G3-25)', after === before, `(${before} -> ${after})`);
+    check('a replayed confirmation preserves the ORIGINAL confirmation timestamp', String(stamp) === String(stampAfter));
+  }
+
+  // --- The one permitted direct transition: de-confirmation --------------
+  await asTenant(AU, async () => {
+    await expectAccept('a pure de-confirmation (all five columns to NULL) is permitted directly — it only removes access', () =>
+      db.exec(`update user_profiles set country_confirmed_at=null, country_source=null,
+               generic_disclosure_version=null, generic_disclosure_acknowledged_at=null,
+               generic_disclosure_country=null where user_id='${AU}'`)
+    );
+    // ...and the user must then go back through the RPC to regain access.
+    await expectReject('after de-confirming, the user cannot re-confirm directly', () =>
+      db.exec(`update user_profiles set country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${AU}'`),
+      'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW'
+    );
+    await expectAccept('after de-confirming, the RPC restores confirmation', () =>
+      db.query(`select public.confirm_country_of_residence('AU', null)`)
+    );
+  });
+
+  // --- The RPC applies the same registry and disclosure rules ------------
+  await asTenant(SG, async () => {
+    await expectReject('the RPC refuses a GENERIC country with no disclosure version', () =>
+      db.query(`select public.confirm_country_of_residence('SG', null)`),
+      'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED'
+    );
+    await expectReject('the RPC refuses a country the registry does not offer', () =>
+      db.query(`select public.confirm_country_of_residence('NZ', null)`),
+      'COUNTRY_REGISTRATION_NOT_PERMITTED'
+    );
+    await expectReject("the RPC refuses 'GLOBAL' (char(2) makes it unrepresentable)", () =>
+      db.query(`select public.confirm_country_of_residence('GLOBAL', null)`)
+    );
+  });
+}
+
+{
+  const n = (await db.query(`select count(*)::int n from user_profiles where country_confirmed_at is not null and country_of_residence in ('GB','US','SG','AE')`)).rows[0].n;
+  check('all four GENERIC countries are now confirmed (G3-05..G3-09)', n === 4, `(confirmed: ${n}/4)`);
+}
 
 // ===========================================================================
 console.log('\n--- 4. The two-tier predicate split ---');

@@ -57,11 +57,30 @@ async function asTenant(uid, fn) {
   await db.exec(`set role authenticated;`);
   const seen = (await db.query(`select auth.uid()::text u`)).rows[0].u;
   if (seen !== uid) { console.log(`  FAIL  harness: auth.uid() is ${seen}, expected ${uid}`); fail++; }
-  try { return await fn(); } finally { await db.exec(`reset role;`); }
+  // G3 (2026-09-03): the claims must be CLEARED on exit, not just the
+  // Postgres role. set_config(..., false) is session-scoped, so leaving them
+  // set made auth.role() keep reporting 'authenticated' for every subsequent
+  // top-level db.exec() in this file — which is not what production looks
+  // like (PostgREST stamps a role per request) and which caused this harness
+  // to trip G3's new controlled-confirmation guard on a plain fixture write
+  // at line ~211. Clearing here keeps every guard that branches on
+  // auth.role() (MCC's, G1's and G3's) behaving as it does in production.
+  try {
+    return await fn();
+  } finally {
+    await db.exec(`reset role;`);
+    await db.query(`select set_config('request.jwt.claims', '', false)`);
+  }
 }
 async function asService(fn) {
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ role: 'service_role' })]);
   await db.exec(`set role service_role;`);
-  try { return await fn(); } finally { await db.exec(`reset role;`); }
+  try {
+    return await fn();
+  } finally {
+    await db.exec(`reset role;`);
+    await db.query(`select set_config('request.jwt.claims', '', false)`);
+  }
 }
 
 var pass = 0, fail = 0;

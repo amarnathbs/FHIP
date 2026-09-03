@@ -7,11 +7,15 @@
 // about the pure functions underneath.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetUser, mockFrom } = vi.hoisted(() => ({ mockGetUser: vi.fn(), mockFrom: vi.fn() }));
+const { mockGetUser, mockFrom, mockRpc } = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockFrom: vi.fn(),
+  mockRpc: vi.fn(),
+}));
 const USER_ID = 'g3-user';
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ auth: { getUser: mockGetUser }, from: mockFrom }),
+  createClient: async () => ({ auth: { getUser: mockGetUser }, from: mockFrom, rpc: mockRpc }),
 }));
 
 // vi.hoisted so the spy genuinely exists before the (hoisted) vi.mock factory
@@ -41,11 +45,21 @@ const COUNTRY_ROWS = [
 ];
 const CAPABILITY_ROWS = COUNTRY_ROWS.map((c) => ({ country_code: c.country_code, capability: 'REGISTRATION', enabled: true }));
 
-/** Captures the exact patch the route attempts to write. */
-let lastUpdatePatch: Record<string, unknown> | null = null;
+// G3-R5 closure: the route no longer writes user_profiles itself. It calls
+// the confirm_country_of_residence() RPC, which performs the validation, the
+// profile write and the mandatory audit insert in ONE transaction. So what
+// these tests capture is the RPC ARGUMENTS — and, just as importantly, that
+// the route never issues a user_profiles UPDATE at all.
+let lastRpc: { fn: string; args: Record<string, unknown> } | null = null;
+let updateAttempted = false;
 
-function harness(profile: Record<string, unknown> | null, opts: { capabilityRows?: typeof CAPABILITY_ROWS } = {}) {
-  lastUpdatePatch = null;
+function harness(
+  profile: Record<string, unknown> | null,
+  opts: { capabilityRows?: typeof CAPABILITY_ROWS; rpcError?: { message: string } } = {}
+) {
+  lastRpc = null;
+  updateAttempted = false;
+
   mockFrom.mockImplementation((table: string) => {
     if (table === 'countries') return { select: async () => ({ data: COUNTRY_ROWS, error: null }) };
     if (table === 'country_capabilities') {
@@ -53,12 +67,43 @@ function harness(profile: Record<string, unknown> | null, opts: { capabilityRows
     }
     return {
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: profile, error: null }) }) }),
-      update: (patch: Record<string, unknown>) => {
-        lastUpdatePatch = patch;
-        return {
-          eq: () => ({ select: () => ({ single: async () => ({ data: { ...profile, ...patch }, error: null }) }) }),
-        };
+      // Any call here is a failure of the G3-R5 design, not a success path.
+      update: () => {
+        updateAttempted = true;
+        return { eq: () => ({ select: () => ({ single: async () => ({ data: profile, error: null }) }) }) };
       },
+    };
+  });
+
+  mockRpc.mockImplementation(async (fn: string, args: Record<string, unknown>) => {
+    lastRpc = { fn, args };
+    if (opts.rpcError) return { data: null, error: opts.rpcError };
+
+    // Faithful stand-in for the real RPC's decisions, so the route's mapping
+    // of RPC outcomes to HTTP responses is what is actually under test here.
+    // The RPC's OWN behaviour is certified against real PostgreSQL in
+    // scripts/db-rebuild-check/g3_registration_alignment_cert.mjs.
+    const country = args.p_country_code as string;
+    const version = (args.p_disclosure_version as string | null) ?? null;
+    const level = COUNTRY_ROWS.find((c) => c.country_code === country)?.experience_level ?? null;
+    if (level === 'GENERIC' && !version) {
+      return { data: null, error: { message: 'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED: ...' } };
+    }
+    const replay =
+      profile?.country_confirmed_at != null &&
+      profile?.country_of_residence === country &&
+      (level !== 'GENERIC' ||
+        (profile?.generic_disclosure_version === version && profile?.generic_disclosure_country === country));
+    return {
+      data: {
+        country_of_residence: country,
+        country_confirmed_at: replay ? profile!.country_confirmed_at : '2026-09-03T00:00:00Z',
+        country_source: 'USER_CONFIRMED',
+        generic_disclosure_version: level === 'GENERIC' ? version : null,
+        experience_level: level,
+        idempotent_replay: replay,
+      },
+      error: null,
     };
   });
 }
@@ -80,45 +125,40 @@ describe('POST /api/user/country/confirm — server authority', () => {
     harness(UNCONFIRMED);
     const res = await post({ country_of_residence: 'AU' });
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.data.experience_level).toBe('FULL');
-    expect(lastUpdatePatch!.country_source).toBe('USER_CONFIRMED');
-    expect(lastUpdatePatch!.country_of_residence).toBe('AU');
+    expect((await res.json()).data.experience_level).toBe('FULL');
+    expect(lastRpc!.fn).toBe('confirm_country_of_residence');
+    expect(lastRpc!.args).toEqual({ p_country_code: 'AU', p_disclosure_version: null });
   });
 
-  it('refuses a GENERIC country with NO acknowledgement (422) and writes nothing', async () => {
+  it('refuses a GENERIC country with NO acknowledgement (422) before the RPC is ever called', async () => {
     harness(UNCONFIRMED);
     const res = await post({ country_of_residence: 'GB' });
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: 'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED' });
-    expect(lastUpdatePatch).toBeNull();
-    expect(recordCountryAuditEvent).not.toHaveBeenCalled();
+    expect(lastRpc).toBeNull();
   });
 
   it('refuses a GENERIC country with a STALE acknowledgement version', async () => {
     harness(UNCONFIRMED);
     const res = await post({ country_of_residence: 'GB', acknowledged_disclosure_version: 'g3-generic-coverage-2020-01' });
     expect(res.status).toBe(422);
-    expect(lastUpdatePatch).toBeNull();
+    expect(lastRpc).toBeNull();
   });
 
-  it('confirms a GENERIC country WITH the current acknowledgement and records all three disclosure fields', async () => {
+  it('passes the CURRENT disclosure version to the RPC for a GENERIC country', async () => {
     harness(UNCONFIRMED);
     const res = await post({ country_of_residence: 'GB', acknowledged_disclosure_version: GENERIC_DISCLOSURE_VERSION });
     expect(res.status).toBe(200);
     expect((await res.json()).data.experience_level).toBe('GENERIC');
-    expect(lastUpdatePatch!.generic_disclosure_version).toBe(GENERIC_DISCLOSURE_VERSION);
-    expect(lastUpdatePatch!.generic_disclosure_country).toBe('GB');
-    expect(lastUpdatePatch!.generic_disclosure_acknowledged_at).toBeTruthy();
+    expect(lastRpc!.args).toEqual({ p_country_code: 'GB', p_disclosure_version: GENERIC_DISCLOSURE_VERSION });
   });
 
-  it('CLEARS a stale disclosure when the user moves to a FULL country', async () => {
+  it('sends a null disclosure version for a FULL country, so any stale acknowledgement is cleared', async () => {
     harness({ ...UNCONFIRMED, country_of_residence: 'GB', country_confirmed_at: '2026-09-01T00:00:00Z', generic_disclosure_version: GENERIC_DISCLOSURE_VERSION, generic_disclosure_country: 'GB' });
     const res = await post({ country_of_residence: 'AU' });
     expect(res.status).toBe(200);
-    expect(lastUpdatePatch!.generic_disclosure_version).toBeNull();
-    expect(lastUpdatePatch!.generic_disclosure_acknowledged_at).toBeNull();
-    expect(lastUpdatePatch!.generic_disclosure_country).toBeNull();
+    expect(lastRpc!.args.p_disclosure_version).toBeNull();
+    expect((await res.json()).data.generic_disclosure_version).toBeNull();
   });
 
   it('rejects GLOBAL as invalid, never as a country (G3-10)', async () => {
@@ -126,7 +166,7 @@ describe('POST /api/user/country/confirm — server authority', () => {
     const res = await post({ country_of_residence: 'GLOBAL' });
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: 'COUNTRY_INVALID' });
-    expect(lastUpdatePatch).toBeNull();
+    expect(lastRpc).toBeNull();
   });
 
   it('rejects an unsupported-but-well-formed country (G3-11)', async () => {
@@ -134,7 +174,7 @@ describe('POST /api/user/country/confirm — server authority', () => {
     const res = await post({ country_of_residence: 'NZ' });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'COUNTRY_UNSUPPORTED' });
-    expect(lastUpdatePatch).toBeNull();
+    expect(lastRpc).toBeNull();
   });
 
   it('rejects a country the registry no longer permits registration for', async () => {
@@ -142,10 +182,10 @@ describe('POST /api/user/country/confirm — server authority', () => {
     const res = await post({ country_of_residence: 'GB', acknowledged_disclosure_version: GENERIC_DISCLOSURE_VERSION });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'COUNTRY_REGISTRATION_NOT_PERMITTED' });
-    expect(lastUpdatePatch).toBeNull();
+    expect(lastRpc).toBeNull();
   });
 
-  it('ignores any forged experience level or capability flag in the request body (G3-15)', async () => {
+  it('ignores any forged experience level, capability flag or authoritative field in the body (G3-15)', async () => {
     harness(UNCONFIRMED);
     const res = await post({
       country_of_residence: 'GB',
@@ -160,33 +200,62 @@ describe('POST /api/user/country/confirm — server authority', () => {
     });
     expect(res.status).toBe(200);
     expect((await res.json()).data.experience_level).toBe('GENERIC');
-    // The write must contain ONLY the fields this route owns.
-    expect(Object.keys(lastUpdatePatch!).sort()).toEqual([
-      'country_confirmed_at', 'country_of_residence', 'country_source', 'country_updated_at',
-      'generic_disclosure_acknowledged_at', 'generic_disclosure_country', 'generic_disclosure_version',
-      'updated_at',
-    ]);
-    expect(lastUpdatePatch!.country_source).toBe('USER_CONFIRMED'); // never the forged ADMIN_CORRECTED
-    expect(lastUpdatePatch!.country_confirmed_at).not.toBe('1999-01-01T00:00:00Z'); // always server time
-    expect(lastUpdatePatch).not.toHaveProperty('preferred_currency');
-    expect(lastUpdatePatch).not.toHaveProperty('billing_country');
-    expect(lastUpdatePatch).not.toHaveProperty('primary_country');
+    // The RPC receives EXACTLY two arguments. There is no parameter through
+    // which any forged field could travel, so none of them can reach the
+    // database at all.
+    expect(Object.keys(lastRpc!.args).sort()).toEqual(['p_country_code', 'p_disclosure_version']);
+    expect(lastRpc!.args.p_country_code).toBe('GB');
+  });
+
+  it('G3-R5: the route never writes user_profiles itself — the RPC owns the write', async () => {
+    harness(UNCONFIRMED);
+    await post({ country_of_residence: 'AU' });
+    expect(updateAttempted).toBe(false);
+  });
+
+  it('G3-R5: the route no longer writes the audit event either — the RPC does, in the same transaction', async () => {
+    harness(UNCONFIRMED);
+    await post({ country_of_residence: 'AU' });
+    expect(recordCountryAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('maps an RPC controlled-workflow rejection to an operational error rather than leaking SQL', async () => {
+    harness(UNCONFIRMED, { rpcError: { message: 'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW: direct update of country_confirmed_at ...' } });
+    const res = await post({ country_of_residence: 'AU' });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'OPERATIONAL_ERROR' });
+    expect(JSON.stringify(body)).not.toMatch(/update|trigger|column/i);
+  });
+
+  it('maps the RPC disclosure rejection to 422 (defence in depth if the route check were ever bypassed)', async () => {
+    harness(UNCONFIRMED, { rpcError: { message: 'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED: country GB ...' } });
+    const res = await post({ country_of_residence: 'AU' });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: 'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED' });
+  });
+
+  it('maps an RPC PROFILE_INCOMPLETE rejection to 403', async () => {
+    harness(null, { rpcError: { message: 'PROFILE_INCOMPLETE' } });
+    const res = await post({ country_of_residence: 'AU' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'PROFILE_INCOMPLETE' });
   });
 });
 
 describe('POST /api/user/country/confirm — idempotency (G3-25)', () => {
-  it('a repeated FULL confirmation is a no-op replay: no write, no second audit event', async () => {
+  it('a repeated FULL confirmation replays: original timestamp returned, no route-side write', async () => {
     harness({ ...UNCONFIRMED, country_of_residence: 'AU', country_confirmed_at: '2026-09-01T00:00:00Z', country_source: 'USER_CONFIRMED' });
     const res = await post({ country_of_residence: 'AU' });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.idempotent_replay).toBe(true);
-    expect(body.data.country_confirmed_at).toBe('2026-09-01T00:00:00Z'); // the ORIGINAL timestamp, not a new one
-    expect(lastUpdatePatch).toBeNull();
+    expect(body.data.country_confirmed_at).toBe('2026-09-01T00:00:00Z');
+    expect(updateAttempted).toBe(false);
     expect(recordCountryAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('a repeated GENERIC confirmation with the same acknowledgement is also a no-op replay', async () => {
+  it('a repeated GENERIC confirmation with the same acknowledgement also replays', async () => {
     harness({
       country_of_residence: 'GB',
       country_confirmed_at: '2026-09-01T00:00:00Z',
@@ -197,40 +266,25 @@ describe('POST /api/user/country/confirm — idempotency (G3-25)', () => {
     const res = await post({ country_of_residence: 'GB', acknowledged_disclosure_version: GENERIC_DISCLOSURE_VERSION });
     expect(res.status).toBe(200);
     expect((await res.json()).data.idempotent_replay).toBe(true);
-    expect(lastUpdatePatch).toBeNull();
-    expect(recordCountryAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('a GENERIC replay whose stored acknowledgement is for a DIFFERENT country is NOT treated as a replay', async () => {
+  it('a GENERIC replay whose stored acknowledgement names a DIFFERENT country is not a replay', async () => {
     harness({
       country_of_residence: 'GB',
       country_confirmed_at: '2026-09-01T00:00:00Z',
       country_source: 'USER_CONFIRMED',
       generic_disclosure_version: GENERIC_DISCLOSURE_VERSION,
-      generic_disclosure_country: 'US', // stale/mismatched
+      generic_disclosure_country: 'US',
     });
     const res = await post({ country_of_residence: 'GB', acknowledged_disclosure_version: GENERIC_DISCLOSURE_VERSION });
     expect(res.status).toBe(200);
     expect((await res.json()).data.idempotent_replay).toBe(false);
-    expect(lastUpdatePatch!.generic_disclosure_country).toBe('GB'); // repaired
-    expect(recordCountryAuditEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('a genuine country CHANGE is never treated as a replay and does write an audit event', async () => {
+  it('a genuine country CHANGE is never treated as a replay', async () => {
     harness({ ...UNCONFIRMED, country_of_residence: 'AU', country_confirmed_at: '2026-09-01T00:00:00Z', country_source: 'USER_CONFIRMED' });
     const res = await post({ country_of_residence: 'IN' });
     expect(res.status).toBe(200);
     expect((await res.json()).data.idempotent_replay).toBe(false);
-    expect(recordCountryAuditEvent).toHaveBeenCalledTimes(1);
-  });
-
-  it('records the derived experience level and disclosure version on the audit event', async () => {
-    harness(UNCONFIRMED);
-    await post({ country_of_residence: 'SG', acknowledged_disclosure_version: GENERIC_DISCLOSURE_VERSION });
-    expect(recordCountryAuditEvent).toHaveBeenCalledTimes(1);
-    const arg = recordCountryAuditEvent.mock.calls[0]![0];
-    expect(arg.experienceLevel).toBe('GENERIC');
-    expect(arg.disclosureVersion).toBe(GENERIC_DISCLOSURE_VERSION);
-    expect(arg.newCountry).toBe('SG');
   });
 });

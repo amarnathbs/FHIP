@@ -451,10 +451,216 @@ create trigger trg_enforce_cross_border_country_is_foreign
   for each row execute function public.enforce_cross_border_country_is_foreign();
 
 -- -----------------------------------------------------------------------------
--- 9. Grants
+-- 9. Confirmation becomes a controlled workflow (closes G3-R5)
 -- -----------------------------------------------------------------------------
--- The two new predicates are read-only and registry-scoped. They are exposed
--- to `authenticated` for parity with is_country_confirmed()'s established
+-- THE PROBLEM THIS CLOSES
+--
+-- Until now, country confirmation was written by the API route using the
+-- CALLER'S OWN Supabase client. user_profiles carries an owner RLS policy
+-- (auth.uid() = user_id), so an authenticated client could PATCH its own row
+-- directly through PostgREST and set country_of_residence,
+-- country_confirmed_at, country_source AND the three generic_disclosure_*
+-- columns together — obtaining a confirmed GENERIC residence carrying a
+-- self-asserted acknowledgement it had never been shown, and, critically,
+-- WITHOUT the audit event. Section 4's trigger forced an acknowledgement row
+-- to exist, but could not force it to be genuine or to be accompanied by an
+-- audit record, because a BEFORE trigger on user_profiles cannot see whether
+-- some other statement will write to audit_events.
+--
+-- Migration 0122 already solved the identical problem for primary/billing
+-- country: a SECURITY DEFINER RPC sets a transaction-local GUC immediately
+-- before its own UPDATE, and a trigger rejects any change to those columns
+-- that did not arrive that way. This section applies that same, already
+-- proven pattern to residence confirmation, and goes one step further by
+-- making the audit event part of the SAME TRANSACTION as the profile write —
+-- so a stored acknowledgement without its audit event is not merely
+-- discouraged, it is unreachable.
+--
+-- WHY THE GUARD EXEMPTS NON-'authenticated' CALLERS
+--
+-- The threat is an authenticated browser/API client writing directly through
+-- PostgREST under RLS. A migration, a psql session, a background job or a
+-- service-role caller is already inside the trust boundary and is exempted
+-- explicitly, exactly as MCC's enforce_country_confirmed() and G1's
+-- enforce_controlled_country_columns() both do. In real Supabase, PostgREST
+-- always stamps a role claim on an end-user request, so this fires precisely
+-- where it must.
+
+create or replace function public.confirm_country_of_residence(
+  p_country_code char(2),
+  p_disclosure_version text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_experience text;
+  v_existing user_profiles%rowtype;
+  v_now timestamptz := now();
+begin
+  if v_user is null then
+    raise exception 'UNAUTHENTICATED' using errcode = '42501';
+  end if;
+
+  -- Registry authority. Never a client-supplied experience level, and never
+  -- inferred from currency, locale, IP or a landing cookie -- none of which
+  -- this function even accepts as a parameter.
+  if not public.is_country_registration_eligible(p_country_code) then
+    raise exception 'COUNTRY_REGISTRATION_NOT_PERMITTED: % is not a country this release accepts registrations for', p_country_code
+      using errcode = '42501';
+  end if;
+
+  select c.experience_level into v_experience from countries c where c.country_code = p_country_code;
+
+  if v_experience = 'GENERIC' and coalesce(p_disclosure_version, '') = '' then
+    raise exception 'GENERIC_DISCLOSURE_ACKNOWLEDGEMENT_REQUIRED: country % has GENERIC experience level and cannot be confirmed without an explicit coverage-disclosure acknowledgement', p_country_code
+      using errcode = '42501';
+  end if;
+
+  select * into v_existing from user_profiles where user_id = v_user;
+  if not found then
+    raise exception 'PROFILE_INCOMPLETE' using errcode = '42501';
+  end if;
+
+  -- Idempotent replay (spec section 6.3, scenario G3-25). Same country,
+  -- already confirmed, and -- for a generic country -- the stored
+  -- acknowledgement already matches this version FOR THIS COUNTRY. Nothing
+  -- changes and NO second audit event is written.
+  if v_existing.country_confirmed_at is not null
+     and v_existing.country_of_residence = p_country_code
+     and (v_experience is distinct from 'GENERIC'
+          or (v_existing.generic_disclosure_version = p_disclosure_version
+              and v_existing.generic_disclosure_country = p_country_code))
+  then
+    return jsonb_build_object(
+      'country_of_residence', v_existing.country_of_residence,
+      'country_confirmed_at', v_existing.country_confirmed_at,
+      'country_source', v_existing.country_source,
+      'generic_disclosure_version', v_existing.generic_disclosure_version,
+      'experience_level', v_experience,
+      'idempotent_replay', true
+    );
+  end if;
+
+  -- Transaction-local (is_local = true), so it resets at transaction end and
+  -- can never leak into a later statement. Not reachable by an ordinary
+  -- PostgREST client: set_config() lives in pg_catalog and is never exposed
+  -- as an RPC endpoint (only functions in the exposed `public` schema are).
+  perform set_config('fhip.controlled_country_confirmation', 'on', true);
+
+  update user_profiles set
+    country_of_residence = p_country_code,
+    country_confirmed_at = v_now,
+    country_source = 'USER_CONFIRMED',
+    country_updated_at = v_now,
+    updated_at = v_now,
+    -- Confirming a FULL country CLEARS any acknowledgement left over from a
+    -- previous generic country, so no stale record survives that no longer
+    -- describes anything true about this account.
+    generic_disclosure_version = case when v_experience = 'GENERIC' then p_disclosure_version end,
+    generic_disclosure_acknowledged_at = case when v_experience = 'GENERIC' then v_now end,
+    generic_disclosure_country = case when v_experience = 'GENERIC' then p_country_code end
+  where user_id = v_user;
+
+  -- MANDATORY, and in the SAME TRANSACTION as the profile write. If this
+  -- insert fails for any reason the UPDATE above rolls back with it, so a
+  -- confirmed country carrying no audit record cannot exist. This is the
+  -- specific guarantee G3-R5 asked for.
+  insert into audit_events (user_id, event_type, entity, entity_id, metadata)
+  values (
+    v_user,
+    'country_confirmed',
+    'user_profiles.country_of_residence',
+    v_user,
+    jsonb_build_object(
+      'previous_country', v_existing.country_of_residence,
+      'new_country', p_country_code,
+      'actor', 'self',
+      'actor_id', v_user,
+      'experience_level', v_experience,
+      'disclosure_version', case when v_experience = 'GENERIC' then p_disclosure_version end,
+      'written_by', 'confirm_country_of_residence'
+    )
+  );
+
+  return jsonb_build_object(
+    'country_of_residence', p_country_code,
+    'country_confirmed_at', v_now,
+    'country_source', 'USER_CONFIRMED',
+    'generic_disclosure_version', case when v_experience = 'GENERIC' then p_disclosure_version end,
+    'experience_level', v_experience,
+    'idempotent_replay', false
+  );
+end;
+$$;
+
+comment on function public.confirm_country_of_residence(char, text) is
+  'G3 (closes G3-R5): the ONLY path by which an end user can set country_confirmed_at, country_source or the generic_disclosure_* columns to a non-null value. Validates the country against the live registry, derives the experience level server-side, requires a disclosure version for a GENERIC country, replays idempotently without a duplicate audit event, and writes the profile row AND its audit_events record in ONE transaction -- so a confirmed country with no audit trail, or a stored acknowledgement with no audit trail, is unreachable rather than merely discouraged. Mirrors migration 0122''s confirm_primary_country_change() pattern exactly.';
+
+create or replace function public.enforce_controlled_confirmation_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Only an authenticated PostgREST end user is in scope -- see this
+  -- section's header for why service_role, migrations, psql sessions and
+  -- background jobs are outside the threat boundary this closes.
+  if coalesce(auth.role(), '') <> 'authenticated' then
+    return new;
+  end if;
+
+  if (new.country_confirmed_at is distinct from old.country_confirmed_at)
+     or (new.country_source is distinct from old.country_source)
+     or (new.generic_disclosure_version is distinct from old.generic_disclosure_version)
+     or (new.generic_disclosure_acknowledged_at is distinct from old.generic_disclosure_acknowledged_at)
+     or (new.generic_disclosure_country is distinct from old.generic_disclosure_country)
+  then
+    if coalesce(current_setting('fhip.controlled_country_confirmation', true), '') = 'on' then
+      return new;
+    end if;
+
+    -- The one permitted direct transition: a pure DE-confirmation, where all
+    -- five columns go to NULL together. Revoking your own confirmation is
+    -- never an escalation -- it only removes access -- and PUT
+    -- /api/user/profile relies on exactly this when a user changes their
+    -- country, to force them back through the confirmation flow (MCC spec
+    -- 5.7). Anything else must go through the RPC.
+    if new.country_confirmed_at is null
+       and new.country_source is null
+       and new.generic_disclosure_version is null
+       and new.generic_disclosure_acknowledged_at is null
+       and new.generic_disclosure_country is null
+    then
+      return new;
+    end if;
+
+    raise exception 'COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW: direct update of country_confirmed_at/country_source/generic_disclosure_* is not permitted; use the confirm_country_of_residence() RPC'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.enforce_controlled_confirmation_columns() is
+  'G3 (closes G3-R5). RLS ownership alone is not sufficient for these columns: a user may freely edit their own ordinary profile fields, but must never be able to assert their own confirmation or their own coverage acknowledgement directly -- doing so would bypass the mandatory, same-transaction audit event that confirm_country_of_residence() writes. Permits exactly one direct transition, a pure de-confirmation to all-NULL, which only ever removes access. Structurally identical to migration 0122''s enforce_controlled_country_columns().';
+
+drop trigger if exists trg_enforce_controlled_confirmation_columns on user_profiles;
+create trigger trg_enforce_controlled_confirmation_columns
+  before update on user_profiles
+  for each row execute function public.enforce_controlled_confirmation_columns();
+
+-- -----------------------------------------------------------------------------
+-- 10. Grants
+-- -----------------------------------------------------------------------------
+-- The two predicates are read-only and registry-scoped. They are exposed to
+-- `authenticated` for parity with is_country_confirmed()'s established
 -- treatment; the trigger functions themselves are never called directly.
 grant execute on function public.is_country_registration_eligible(char) to authenticated, anon;
 grant execute on function public.is_country_registration_confirmed(uuid) to authenticated;
+grant execute on function public.confirm_country_of_residence(char, text) to authenticated;

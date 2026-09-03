@@ -673,7 +673,19 @@ describe('G3 migration 0127 — structural guarantees, read from the SQL', () =>
     }
   });
 
-  it('never writes to a financial table, an FX table, a report table or preferred_currency', () => {
+  // The distinction this test turns on: SQL inside a `$$ ... $$` function
+  // body is a DEFINITION of what will happen later, per user, when that
+  // function is called. SQL at the top level EXECUTES the moment the
+  // migration is applied. Only the latter can touch existing rows, and only
+  // the latter is what "this migration modifies no existing data" means.
+  //
+  // confirm_country_of_residence() legitimately contains
+  // `update user_profiles set ...` — that is its entire purpose — so the
+  // check strips every function body first and asserts against what actually
+  // runs at apply time.
+  const topLevelSql = sql.replace(/\$\$[\s\S]*?\$\$/g, '/* function body elided */');
+
+  it('executes no data-modifying statement against user data at apply time', () => {
     for (const forbidden of [
       /update\s+income_sources/i,
       /update\s+expense_items/i,
@@ -681,18 +693,91 @@ describe('G3 migration 0127 — structural guarantees, read from the SQL', () =>
       /update\s+liabilities/i,
       /update\s+investments/i,
       /update\s+retirement_accounts/i,
+      /update\s+insurance_policies/i,
+      /update\s+user_goals/i,
       /update\s+exchange_rates/i,
       /update\s+report_/i,
       /set\s+preferred_currency/i,
-      /update\s+user_profiles\s+set/i,
+      /update\s+user_profiles/i,
+      /delete\s+from\s+user_profiles/i,
     ]) {
-      expect(sql).not.toMatch(forbidden);
+      expect(topLevelSql).not.toMatch(forbidden);
     }
+  });
+
+  it('elides only function bodies, so the check above is not vacuous', () => {
+    // Negative control: the untouched SQL DOES contain the RPC's own update,
+    // proving the elision is what removed it rather than it never existing.
+    expect(sql).toMatch(/update\s+user_profiles\s+set/i);
+    expect(topLevelSql).toContain('/* function body elided */');
+    // ...and the apply-time statements that SHOULD be there still are.
+    expect(topLevelSql).toMatch(/insert\s+into\s+country_capabilities/i);
+    expect(topLevelSql).toMatch(/alter\s+table\s+user_profiles\s+add\s+column/i);
   });
 
   it('never backfills billing country', () => {
     expect(sql).not.toMatch(/set\s+billing_country/i);
     expect(sql).not.toMatch(/billing_country_confirmed_at\s*=/i);
+  });
+
+  // ---- G3-R5 closure -----------------------------------------------------
+  it('makes confirmation a controlled workflow owned by an RPC', () => {
+    expect(sql).toMatch(/create\s+or\s+replace\s+function\s+public\.confirm_country_of_residence/i);
+    expect(sql).toMatch(/create\s+or\s+replace\s+function\s+public\.enforce_controlled_confirmation_columns/i);
+    expect(sql).toMatch(/trg_enforce_controlled_confirmation_columns/);
+    expect(sql).toMatch(/COUNTRY_CONFIRMATION_REQUIRES_CONTROLLED_WORKFLOW/);
+  });
+
+  it('guards every confirmation-owned column, not just some of them', () => {
+    const guard = sql.slice(sql.indexOf('enforce_controlled_confirmation_columns()'), sql.indexOf('-- 10. Grants'));
+    expect(guard.length).toBeGreaterThan(200);
+    for (const col of [
+      'country_confirmed_at',
+      'country_source',
+      'generic_disclosure_version',
+      'generic_disclosure_acknowledged_at',
+      'generic_disclosure_country',
+    ]) {
+      expect(guard).toContain(`new.${col} is distinct from old.${col}`);
+    }
+  });
+
+  it('writes the audit event inside the RPC, so it cannot be skipped or fail independently', () => {
+    const rpc = sql.slice(sql.indexOf('function public.confirm_country_of_residence'), sql.indexOf('enforce_controlled_confirmation_columns'));
+    expect(rpc.length).toBeGreaterThan(500);
+    // One transaction: the profile UPDATE and the audit INSERT are both in
+    // the RPC body, with no COMMIT between them.
+    expect(rpc).toMatch(/update\s+user_profiles\s+set/i);
+    expect(rpc).toMatch(/insert\s+into\s+audit_events/i);
+    expect(rpc).not.toMatch(/\bcommit\b/i);
+    expect(rpc).toContain("'country_confirmed'");
+    expect(rpc).toContain('written_by');
+  });
+
+  it('the RPC never accepts a client-supplied experience level, source or timestamp', () => {
+    const signature = sql.slice(
+      sql.indexOf('function public.confirm_country_of_residence'),
+      sql.indexOf('returns jsonb')
+    );
+    // Exactly two parameters.
+    expect(signature).toContain('p_country_code');
+    expect(signature).toContain('p_disclosure_version');
+    for (const forbidden of ['p_experience_level', 'p_country_source', 'p_confirmed_at', 'p_capabilities']) {
+      expect(signature).not.toContain(forbidden);
+    }
+    // And the source is a hardcoded literal, never a parameter.
+    const rpc = sql.slice(sql.indexOf('function public.confirm_country_of_residence'), sql.indexOf('enforce_controlled_confirmation_columns'));
+    expect(rpc).toMatch(/country_source\s*=\s*'USER_CONFIRMED'/);
+  });
+
+  it('permits exactly one direct transition — a pure de-confirmation to all-NULL', () => {
+    const guard = sql.slice(sql.indexOf('enforce_controlled_confirmation_columns()'), sql.indexOf('-- 10. Grants'));
+    expect(guard).toContain('new.country_confirmed_at is null');
+    expect(guard).toContain('new.generic_disclosure_country is null');
+  });
+
+  it('grants the RPC to authenticated so the controlled path is actually reachable', () => {
+    expect(sql).toMatch(/grant\s+execute\s+on\s+function\s+public\.confirm_country_of_residence\(char,\s*text\)\s+to\s+authenticated/i);
   });
 
   it('preserves the MCC-14 account-deletion cascade exemption in the new trigger function', () => {
