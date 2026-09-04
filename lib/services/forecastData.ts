@@ -815,6 +815,47 @@ async function buildCalculatorInput(
 
   // net_worth (Phase 1's only other supported type)
   const dashboard = await loadDashboard(userId, supabase);
+  // LR-FI-3 (docs/production-apply/LR_FI_3_DISCOVERY_REPORT.md §8, closing
+  // LR-FI-2 Residual Finding R4) — Old calculation -> defect -> corrected
+  // rule -> expected new result.
+  //   Old: `monthlyAssetContribution: Math.max(0, dashboard.monthlySurplus)`
+  //   swept the WHOLE surplus into general assets, in addition to
+  //   `monthlyInvestmentContribution` and `monthlyRetirementContribution`
+  //   below growing their own buckets from the same household's investment/
+  //   personal-retirement contributions.
+  //   Defect: `dashboard.monthlySurplus` (dashboard.ts:599) is
+  //   `income - expenses - debt service` and never subtracts an investment
+  //   or personal-retirement contribution — both are funded from the same
+  //   net income already inside it, exactly the reasoning
+  //   healthScore.ts:202-207 already applies when it adds only the
+  //   EMPLOYER contribution rate on top of cashSavingsRate. So a household's
+  //   own SIP/personal-super dollars were credited to projected wealth
+  //   twice: once as still-uncommitted residual cash swept into assets, and
+  //   again as investment/retirement contribution principal. Worked
+  //   example (full arithmetic in the discovery report): $8,000 net income,
+  //   $6,000 expenses+debt service -> monthlySurplus = $2,000. A
+  //   $1,000/month investment contribution and a $500/month personal
+  //   retirement contribution (both already paid out of that $8,000, never
+  //   subtracted from the $2,000) were then swept in again in full, on top
+  //   of the full $2,000 — $1,500/month of invented wealth growth,
+  //   compounding every month of the forecast horizon.
+  //   Corrected rule: only the EMPLOYER portion of retirement contributions
+  //   is genuinely additive (never part of take-home pay, so never inside
+  //   monthlySurplus to begin with). Household-funded contributions
+  //   (personal retirement + investment) are subtracted from monthlySurplus
+  //   before the residual is swept into general assets, so each such
+  //   dollar is counted exactly once — as contribution principal in its own
+  //   bucket, not also as leftover cash in the assets bucket.
+  //   Expected new result: byte-identical for any household with no
+  //   investment/personal-retirement contributions, where
+  //   householdFundedMonthlyContribution === 0. Deliberately does NOT touch
+  //   monthlyInvestmentContribution/monthlyRetirementContribution (which
+  //   correctly keep growing their own buckets), openingLiabilities/
+  //   monthlyLoanRepayment (LR-FI-2 §6c, untouched), or any SMSF/DTI/DSR
+  //   classification (LR-FI-1/LR-FI-2, untouched) — this is a Net Worth
+  //   forecast input change only.
+  const householdFundedMonthlyContribution =
+    dashboard.investmentAnnualContribution / 12 + dashboard.retirementPersonalMonthlyContribution;
   const netWorthInput: NetWorthCalculatorInput = {
     baselineDate,
     months,
@@ -823,13 +864,7 @@ async function buildCalculatorInput(
     openingInvestments: dashboard.totalInvestments,
     openingRetirement: dashboard.totalRetirement,
     openingLiabilities: dashboard.totalLiabilities,
-    // Phase 1 simplification: retirement/investment account contributions
-    // grow those balances directly; any remaining monthly surplus is swept
-    // into general assets. Avoiding double-counting these against goal
-    // funding is a Phase 5 net-worth-reconciliation concern per spec 13.4 —
-    // the standalone goal/investment forecasts above are informational
-    // projections of those specific balances, not summed into net worth.
-    monthlyAssetContribution: Math.max(0, dashboard.monthlySurplus),
+    monthlyAssetContribution: Math.max(0, dashboard.monthlySurplus - householdFundedMonthlyContribution),
     monthlyInvestmentContribution: dashboard.investmentAnnualContribution / 12,
     monthlyRetirementContribution: dashboard.retirementEmployerMonthlyContribution + dashboard.retirementPersonalMonthlyContribution,
     // LR-FI-2 §6c — Old calculation -> defect -> corrected rule -> expected
