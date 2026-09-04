@@ -1,4 +1,5 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 import { buildDnaInput } from '@/lib/services/financialDnaData';
 import { classifyFinancialDna } from '@/lib/engines/financialDna';
 import { applyScenario, type ScenarioType } from '@/lib/engines/whatIf';
@@ -20,8 +21,8 @@ function summarise(result: ReturnType<typeof classifyFinancialDna>) {
 }
 
 export async function POST(req: Request) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('DNA', req);
+  if (!user) return blocked!;
   const body = await req.json().catch(() => null);
   const scenario = body?.scenario as ScenarioType | undefined;
   if (!scenario || !VALID_SCENARIOS.includes(scenario)) return bad('invalid scenario', 422);

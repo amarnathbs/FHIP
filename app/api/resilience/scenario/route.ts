@@ -1,4 +1,5 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
 import { buildResilienceInput } from '@/lib/services/resilienceData';
 import { computeResilience } from '@/lib/engines/resilience';
@@ -15,8 +16,8 @@ const VALID_SCENARIOS = Object.keys(STRESS_SCENARIO_LABELS) as StressScenarioTyp
 // A simulated result only — never persisted, mirroring the Module 4/5
 // what-if simulators (lib/engines/whatIf.ts).
 export async function POST(req: Request) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('RESILIENCE', req);
+  if (!user) return blocked!;
   const body = await req.json().catch(() => null);
   const scenario = body?.scenario as StressScenarioType | undefined;
   if (!scenario || !VALID_SCENARIOS.includes(scenario)) return bad('invalid scenario', 422);

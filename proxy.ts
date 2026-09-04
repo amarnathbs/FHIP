@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { loadCountryRegistrySnapshot } from '@/lib/services/countryGate';
+import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -85,7 +86,18 @@ export async function proxy(request: NextRequest) {
   //     tables, because countries.is_supported remains true for AU/IN only
   //     and MCC's is_country_confirmed() joins it (migrations 0104/0127).
   // A bypass of this middleware alone therefore exposes nothing.
-  const isGenericAllowedRoute = /^\/(global-setup|profile|confirm-country|onboarding)/.test(pathname);
+  // G4 (dispatch section 8): "remove the /global-setup redirect only for the
+  // exact enabled destinations". lib/services/appCapability.ts's manifest is
+  // the single source of truth for WHICH six modules are newly certified
+  // universal (Income, Expenses, Insurance, Scores, DNA, Resilience) — this
+  // regex is deliberately not a second, independent judgement about which
+  // modules are safe; it only widens the ALREADY-G3-APPROVED allowlist to
+  // match, and only while the flag is on. Flag off => byte-identical regex to
+  // the pre-G4 middleware (dispatch section 9).
+  const G4_NEWLY_ENABLED_ROUTE_PREFIXES = 'income|expenses|insurance|score|dna|resilience';
+  const isGenericAllowedRoute = isG4CapabilityLayerEnabled()
+    ? new RegExp(`^\\/(global-setup|profile|confirm-country|onboarding|${G4_NEWLY_ENABLED_ROUTE_PREFIXES})`).test(pathname)
+    : /^\/(global-setup|profile|confirm-country|onboarding)/.test(pathname);
   // The headless PDF renderer (lib/services/reportPdfRenderer.ts) hits the
   // report print view with no session at all, authorizing instead via a
   // short-lived, single-use render_token query param — this proxy only

@@ -15,6 +15,8 @@ import {
   NO_ADMIN_CAPABILITIES,
   type AdminCapabilities,
 } from '@/lib/admin/adminNav';
+import { isNavHrefVisible, parseNavDecisions, EMPTY_NAV_DECISIONS } from '@/lib/nav/appNavCapability';
+import type { CapabilityDecision } from '@/lib/services/appCapability';
 
 type NavLink = { type: 'link'; label: string; href: string };
 type NavDropdown = { type: 'dropdown'; id: string; label: string; items: { label: string; href: string }[] };
@@ -148,6 +150,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // malformed response leaves the nav in its denied state rather than
   // widening it.
   const [capabilities, setCapabilities] = useState<AdminCapabilities>(NO_ADMIN_CAPABILITIES);
+  // G4 — fail-closed default (mirrors capabilities above): every module
+  // starts with no decision, which isNavHrefVisible() treats as hidden,
+  // until /api/capabilities/nav resolves. A failed or malformed response
+  // leaves the nav in this same denied state rather than widening it.
+  const [navDecisions, setNavDecisions] = useState<Record<string, CapabilityDecision>>(EMPTY_NAV_DECISIONS);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting group only if the initial page load lands
@@ -201,6 +208,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/capabilities/nav')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled) setNavDecisions(parseNavDecisions(j));
+      })
+      .catch(() => {
+        if (!cancelled) setNavDecisions(EMPTY_NAV_DECISIONS);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Route changes always close the mobile drawer, regardless of what
   // triggered the navigation (nav link, browser back/forward, etc.).
   useEffect(() => {
@@ -233,6 +255,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <nav aria-label="Main" className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
         {NAV_GROUPS.map((group) => {
+          // G4 — capability-filtered nav (dispatch section 6): a link entry
+          // is dropped when its href is UNAVAILABLE; a dropdown entry keeps
+          // only its visible sub-items and is dropped entirely if none
+          // remain. AU/IN users see every item unchanged (their manifest
+          // decisions are ENABLED for everything they hold today); a
+          // GENERIC-experience user never sees a clickable item that would
+          // only return an opaque 403 (dispatch section 6's "never a
+          // clickable item that returns an opaque 403").
+          const visibleItems = group.items
+            .map((entry) =>
+              entry.type === 'dropdown'
+                ? { ...entry, items: entry.items.filter((i) => isNavHrefVisible(i.href, navDecisions)) }
+                : entry
+            )
+            .filter((entry) => (entry.type === 'link' ? isNavHrefVisible(entry.href, navDecisions) : entry.items.length > 0));
+          if (visibleItems.length === 0) return null;
+          group = { ...group, items: visibleItems };
+
           // Skip the group header when it would just repeat a single item's
           // own label right above it (the Forecasting group: header
           // "FORECASTING" directly above a dropdown button also labelled

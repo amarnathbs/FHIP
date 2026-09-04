@@ -1,4 +1,5 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 import { buildHealthScoreInput } from '@/lib/services/healthScoreData';
 import { computeHealthScore } from '@/lib/engines/healthScore';
 import { applyScenario, type ScenarioType } from '@/lib/engines/whatIf';
@@ -23,8 +24,8 @@ function summarise(input: Awaited<ReturnType<typeof buildHealthScoreInput>>, sco
 }
 
 export async function POST(req: Request) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('SCORES', req);
+  if (!user) return blocked!;
   const body = await req.json().catch(() => null);
   const scenario = body?.scenario as ScenarioType | undefined;
   if (!scenario || !VALID_SCENARIOS.includes(scenario)) return bad('invalid scenario', 422);
