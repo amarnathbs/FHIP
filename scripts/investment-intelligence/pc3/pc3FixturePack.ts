@@ -210,7 +210,7 @@ const Q06: Scenario = {
 // ==========================================================================
 // Q07 — transaction-rich: one of each currently-supported type
 // ==========================================================================
-const q07SchemeATxns = withRunningBalance(500, [
+const q07SchemeATxns = withRunningBalance(0, [
   { date: '2025-02-01', description: 'Purchase', expectedType: 'purchase', amount: 10000, units: 83.5, nav: 119.76, ref: 'PC3Q7-001', indianFormat: true },
   { date: '2025-02-05', description: 'SIP Purchase', expectedType: 'sip', amount: 5000, units: 41.75, nav: 119.76, ref: 'PC3Q7-002', indianFormat: true },
   { date: '2025-03-15', description: 'Redemption', expectedType: 'redemption', amount: 3000, units: 24.5, nav: 122.4, ref: 'PC3Q7-003', indianFormat: true },

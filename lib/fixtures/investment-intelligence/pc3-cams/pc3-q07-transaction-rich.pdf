@@ -10,7 +10,7 @@ endobj
 << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 2153 >>
+<< /Length 2149 >>
 stream
 BT
 /F1 9 Tf
@@ -45,21 +45,21 @@ BT
 0 -12 Td
 (Date          Description                              Amount\(Rs.\)      Units         NAV\(Rs.\)      Unit Balance) Tj
 0 -12 Td
-(01-Feb-2025   Purchase                              10,000.00  83.500  119.7600  583.500 [Ref: PC3Q7-001]) Tj
+(01-Feb-2025   Purchase                              10,000.00  83.500  119.7600  83.500 [Ref: PC3Q7-001]) Tj
 0 -12 Td
-(05-Feb-2025   SIP Purchase                          5,000.00  41.750  119.7600  625.250 [Ref: PC3Q7-002]) Tj
+(05-Feb-2025   SIP Purchase                          5,000.00  41.750  119.7600  125.250 [Ref: PC3Q7-002]) Tj
 0 -12 Td
-(15-Mar-2025   Redemption                            3,000.00  24.500  122.4000  600.750 [Ref: PC3Q7-003]) Tj
+(15-Mar-2025   Redemption                            3,000.00  24.500  122.4000  100.750 [Ref: PC3Q7-003]) Tj
 0 -12 Td
-(20-Apr-2025   IDCW Payout                           450.00  0.000  45.2000  600.750 [Ref: PC3Q7-004]) Tj
+(20-Apr-2025   IDCW Payout                           450.00  0.000  45.2000  100.750 [Ref: PC3Q7-004]) Tj
 0 -12 Td
-(20-May-2025   IDCW Reinvestment                     620.00  13.500  45.9300  614.250 [Ref: PC3Q7-005]) Tj
+(20-May-2025   IDCW Reinvestment                     620.00  13.500  45.9300  114.250 [Ref: PC3Q7-005]) Tj
 0 -12 Td
-(01-Jun-2025   Switch Out To SBI Bluechip Fund       12,000.00  89.660  133.8300  524.590 [Ref: PC3Q7-006]) Tj
+(01-Jun-2025   Switch Out To SBI Bluechip Fund       12,000.00  89.660  133.8300  24.590 [Ref: PC3Q7-006]) Tj
 0 -12 Td
 () Tj
 0 -12 Td
-(Closing Unit Balance as on 30-Jun-2025 : 524.590 Units   Valuation : Rs. 70767.19   NAV as on 30-Jun-2025 : Rs. 134.9000) Tj
+(Closing Unit Balance as on 30-Jun-2025 : 24.590 Units   Valuation : Rs. 3317.19   NAV as on 30-Jun-2025 : Rs. 134.9000) Tj
 0 -12 Td
 () Tj
 0 -12 Td
@@ -97,9 +97,9 @@ xref
 0000000064 00000 n 
 0000000121 00000 n 
 0000000247 00000 n 
-0000002452 00000 n 
+0000002448 00000 n 
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-2549
+2545
 %%EOF
