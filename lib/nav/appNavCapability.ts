@@ -87,6 +87,37 @@ export function parseNavDecisions(body: unknown): Record<string, CapabilityDecis
 }
 
 /**
+ * G4 closure item 2 (Product Owner, 2026-09-05): the CREATE-operation
+ * counterpart to parseNavDecisions() above, reading GET /api/capabilities/
+ * nav's `writeDecisions` field. Same fail-closed parse: any malformed value
+ * is simply absent from the result, and isModuleWriteAvailable() below
+ * treats an absent entry as "not writable" — an error or a not-yet-resolved
+ * fetch can only narrow what a page offers to edit, never widen it.
+ */
+export function parseWriteDecisions(body: unknown): Record<string, CapabilityDecision> {
+  const data = (body as { data?: { writeDecisions?: unknown } } | null | undefined)?.data?.writeDecisions;
+  const result: Record<string, CapabilityDecision> = {};
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return result;
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (typeof value === 'string' && VALID_DECISIONS.has(value)) {
+      result[key] = value as CapabilityDecision;
+    }
+  }
+  return result;
+}
+
+/**
+ * Is this module's CREATE/UPDATE affordance safe to offer in the UI? Only
+ * ENABLED counts — EXISTING_RECORD_ONLY permits reading history but never a
+ * live create/update control (mirrors requireModuleCapability's own
+ * SAFE_READ_METHODS rule), and an absent/unresolved decision fails closed to
+ * "not writable" rather than defaulting to a permissive control.
+ */
+export function isModuleWriteAvailable(moduleKey: string, writeDecisions: Record<string, CapabilityDecision>): boolean {
+  return writeDecisions[moduleKey] === 'ENABLED';
+}
+
+/**
  * Is this href shown in the nav at all?
  *
  * - An href with no ModuleKey mapping is always shown (nav visibility is UX

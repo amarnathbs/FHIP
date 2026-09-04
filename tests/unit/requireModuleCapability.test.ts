@@ -198,4 +198,62 @@ describe('requireModuleCapability — flag ON (G4 manifest-driven)', () => {
     const result = await requireModuleCapability('RETIREMENT', req('POST'));
     expect(result.blocked?.status).toBe(403);
   });
+
+  // G4 closure item 2 (Product Owner, 2026-09-05): the six modules are
+  // ENABLED for GENERIC at VIEW, but CREATE/UPDATE must stay UNAVAILABLE for
+  // GENERIC until G5 certifies write capture — never a raw DB 42501 offered
+  // through a live "Add"/"Edit" control that always fails.
+  it('a confirmed GENERIC (GB) user is refused CREATE (POST) on all six newly-certified-universal modules, with the dedicated reason code', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('POST'));
+      expect(result.blocked?.status, moduleKey).toBe(403);
+      expect(result.user, moduleKey).toBeNull();
+      const body = await result.blocked!.json();
+      expect(body.error, moduleKey).toBe('WRITE_NOT_CERTIFIED_FOR_GENERIC');
+    }
+  });
+
+  it('a confirmed GENERIC (GB) user is refused UPDATE (PATCH) on all six newly-certified-universal modules', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('PATCH'));
+      expect(result.blocked?.status, moduleKey).toBe(403);
+      const body = await result.blocked!.json();
+      expect(body.error, moduleKey).toBe('WRITE_NOT_CERTIFIED_FOR_GENERIC');
+    }
+  });
+
+  it('DELETE follows the VIEW decision (explicit manifest choice, not an implicit fallthrough) — still ENABLED for GENERIC on the six modules since there is nothing a GENERIC caller could ever validly hold to delete; the DB backstop remains the real enforcement layer for a forged direct DELETE', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('DELETE'));
+      expect(result.blocked, moduleKey).toBeNull();
+      expect(result.decision, moduleKey).toBe('ENABLED');
+    }
+  });
+
+  it('a confirmed AU (FULL) user is unaffected by the write policy — POST/PATCH/DELETE all stay ENABLED on the six modules (no regression)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'AU', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as const) {
+        const result = await requireModuleCapability(moduleKey, req(method));
+        expect(result.blocked, `${method} ${moduleKey}`).toBeNull();
+        expect(result.decision, `${method} ${moduleKey}`).toBe('ENABLED');
+      }
+    }
+  });
+
+  it('a domestic-only module (Retirement) that is already UNAVAILABLE for GENERIC at VIEW keeps its ORIGINAL reason for CREATE too — never overwritten with WRITE_NOT_CERTIFIED_FOR_GENERIC', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    const result = await requireModuleCapability('RETIREMENT', req('POST'));
+    expect(result.blocked?.status).toBe(403);
+    const body = await result.blocked!.json();
+    expect(body.error).toBe('CAPABILITY_NOT_ENABLED');
+  });
 });

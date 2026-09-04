@@ -24,7 +24,12 @@ function summarise(input: Awaited<ReturnType<typeof buildHealthScoreInput>>, sco
 }
 
 export async function POST(req: Request) {
-  const { user, blocked } = await requireModuleCapability('SCORES', req);
+  // G4 closure item 2: a simulation is never persisted (see summarise()
+  // below — it only ever returns an in-memory before/after projection), so
+  // this is classified VIEW rather than the POST-method default of CREATE —
+  // forcing it into the not-yet-certified write bucket would over-restrict a
+  // GENERIC user for no safety benefit.
+  const { user, blocked } = await requireModuleCapability('SCORES', req, { operation: 'VIEW' });
   if (!user) return blocked!;
   const body = await req.json().catch(() => null);
   const scenario = body?.scenario as ScenarioType | undefined;

@@ -16,7 +16,11 @@ const VALID_SCENARIOS = Object.keys(STRESS_SCENARIO_LABELS) as StressScenarioTyp
 // A simulated result only — never persisted, mirroring the Module 4/5
 // what-if simulators (lib/engines/whatIf.ts).
 export async function POST(req: Request) {
-  const { user, blocked } = await requireModuleCapability('RESILIENCE', req);
+  // G4 closure item 2: "A simulated result only — never persisted" (see this
+  // route's own comment above), so this is classified VIEW rather than the
+  // POST-method default of CREATE — forcing it into the not-yet-certified
+  // write bucket would over-restrict a GENERIC user for no safety benefit.
+  const { user, blocked } = await requireModuleCapability('RESILIENCE', req, { operation: 'VIEW' });
   if (!user) return blocked!;
   const body = await req.json().catch(() => null);
   const scenario = body?.scenario as StressScenarioType | undefined;

@@ -33,11 +33,14 @@ export async function GET() {
   // restores exact G3 containment behavior with no data changes either way".
   if (!isG4CapabilityLayerEnabled()) {
     const decisions = Object.fromEntries(MODULE_KEYS.map((key) => [key, 'ENABLED' as CapabilityDecision]));
-    return ok({ decisions });
+    // G4 closure item 2: writeDecisions mirrors decisions when the flag is
+    // off — no module has ever had a narrower write decision pre-G4.
+    return ok({ decisions, writeDecisions: decisions });
   }
 
   const context = await resolveCountryContext(user.id, supabase);
   const decisions: Record<string, CapabilityDecision> = {};
+  const writeDecisions: Record<string, CapabilityDecision> = {};
   for (const key of MODULE_KEYS) {
     // Nav visibility deliberately does not evaluate per-module
     // hasExistingRecords (would require one query per module on every nav
@@ -51,6 +54,16 @@ export async function GET() {
     // the distinction (requireModuleCapability) computes it itself, per
     // request, for the specific module that route protects.
     decisions[key] = resolveModuleCapability(key, context).decision;
+    // G4 closure item 2: a second, CREATE-operation decision set so a page's
+    // client-side UI can tell "I can view this module" apart from "I can
+    // also add/edit records here" — without this, a GENERIC user on one of
+    // the six universal modules would be shown a live create/update control
+    // that always ends in UNAVAILABLE (or, absent this resolver-level fix,
+    // the raw DB 42501 the untouched MCC/G1 backstop would otherwise be the
+    // only thing stopping). UPDATE has the identical policy to CREATE on
+    // every current manifest entry, so CREATE alone is sufficient to drive
+    // this UI signal.
+    writeDecisions[key] = resolveModuleCapability(key, context, { operation: 'CREATE' }).decision;
   }
-  return ok({ decisions });
+  return ok({ decisions, writeDecisions });
 }

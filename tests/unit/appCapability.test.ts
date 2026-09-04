@@ -81,6 +81,37 @@ describe('APP_CAPABILITY_MANIFEST completeness', () => {
       expect(APP_CAPABILITY_MANIFEST[key].key).toBe(key);
     }
   });
+
+  // G4 closure item 2 (Product Owner, 2026-09-05): "require an explicit
+  // capability-mapping entry for every opt-in" now extends to operations too
+  // — every manifest entry must state a real policy for CREATE/UPDATE/DELETE,
+  // not rely on an implicit default.
+  it('every manifest entry declares an explicit, valid operationPolicy for CREATE, UPDATE and DELETE', () => {
+    const VALID_POLICIES = new Set(['FOLLOWS_VIEW', 'UNAVAILABLE_FOR_GENERIC_WRITE']);
+    for (const key of MODULE_KEYS) {
+      const policy = APP_CAPABILITY_MANIFEST[key].operationPolicy;
+      expect(policy, key).toBeDefined();
+      for (const op of ['CREATE', 'UPDATE', 'DELETE'] as const) {
+        expect(VALID_POLICIES.has(policy[op]), `${key}.${op}`).toBe(true);
+      }
+    }
+  });
+
+  it('exactly the six G4-universal modules use UNAVAILABLE_FOR_GENERIC_WRITE for CREATE/UPDATE — every other module FOLLOWS_VIEW for every operation', () => {
+    const SIX = new Set(['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE']);
+    for (const key of MODULE_KEYS) {
+      const policy = APP_CAPABILITY_MANIFEST[key].operationPolicy;
+      if (SIX.has(key)) {
+        expect(policy.CREATE, key).toBe('UNAVAILABLE_FOR_GENERIC_WRITE');
+        expect(policy.UPDATE, key).toBe('UNAVAILABLE_FOR_GENERIC_WRITE');
+        expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
+      } else {
+        expect(policy.CREATE, key).toBe('FOLLOWS_VIEW');
+        expect(policy.UPDATE, key).toBe('FOLLOWS_VIEW');
+        expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
+      }
+    }
+  });
 });
 
 describe('resolveModuleCapability', () => {
@@ -224,6 +255,59 @@ describe('resolveModuleCapability', () => {
     for (const key of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as ModuleKey[]) {
       expect(resolveModuleCapability(key, genericContext).decision, key).toBe('ENABLED');
     }
+  });
+
+  // G4 closure item 2 (Product Owner, 2026-09-05): operation-aware decisions.
+  describe('operation-aware decisions', () => {
+    const genericSix = context({ primaryCountry: 'GB', experienceLevel: 'GENERIC', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true }) });
+    const fullSix = context({ primaryCountry: 'AU', experienceLevel: 'FULL', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true }) });
+    const SIX: ModuleKey[] = ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'];
+
+    it('defaults to the VIEW decision when no operation is passed (backward compatible)', () => {
+      for (const key of SIX) {
+        expect(resolveModuleCapability(key, genericSix).decision, key).toBe('ENABLED');
+      }
+    });
+
+    it('CREATE and UPDATE are UNAVAILABLE for GENERIC on all six modules, with the dedicated reason', () => {
+      for (const key of SIX) {
+        for (const operation of ['CREATE', 'UPDATE'] as const) {
+          const result = resolveModuleCapability(key, genericSix, { operation });
+          expect(result, `${key}.${operation}`).toEqual({ decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' });
+        }
+      }
+    });
+
+    it('DELETE follows VIEW (still ENABLED) for GENERIC on all six modules', () => {
+      for (const key of SIX) {
+        expect(resolveModuleCapability(key, genericSix, { operation: 'DELETE' }).decision, key).toBe('ENABLED');
+      }
+    });
+
+    it('CREATE/UPDATE/DELETE are all still ENABLED for a FULL (AU/IN) user on all six modules — no regression', () => {
+      for (const key of SIX) {
+        for (const operation of ['VIEW', 'CREATE', 'UPDATE', 'DELETE'] as const) {
+          expect(resolveModuleCapability(key, fullSix, { operation }).decision, `${key}.${operation}`).toBe('ENABLED');
+        }
+      }
+    });
+
+    it('a module already UNAVAILABLE at VIEW for GENERIC keeps its original reason for CREATE — never overwritten', () => {
+      const result = resolveModuleCapability(
+        'RETIREMENT',
+        context({ primaryCountry: 'GB', experienceLevel: 'GENERIC', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true }) }),
+        { operation: 'CREATE' }
+      );
+      expect(result).toEqual({ decision: 'UNAVAILABLE', reason: 'CAPABILITY_NOT_ENABLED' });
+    });
+
+    it('EXISTING_RECORD_ONLY at VIEW for GENERIC (existing rows, capability off) is forced UNAVAILABLE for CREATE/UPDATE on a six-module entry', () => {
+      const ctx = context({ primaryCountry: 'GB', experienceLevel: 'GENERIC', capabilities: emptyCapabilities() });
+      const viewResult = resolveModuleCapability('INCOME', ctx, { hasExistingRecords: true });
+      expect(viewResult.decision).toBe('EXISTING_RECORD_ONLY');
+      const createResult = resolveModuleCapability('INCOME', ctx, { hasExistingRecords: true, operation: 'CREATE' });
+      expect(createResult).toEqual({ decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' });
+    });
   });
 
   it('the modules with a confirmed real domestic assumption stay UNAVAILABLE for a GENERIC country', () => {

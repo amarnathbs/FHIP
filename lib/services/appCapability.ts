@@ -69,7 +69,82 @@ export type CapabilityUnavailableReason =
   | 'CAPABILITY_NOT_ENABLED'
   | 'MANIFEST_ENTRY_MISSING'
   | 'METHOD_NOT_PERMITTED_FOR_EXISTING_RECORD_ONLY'
+  // G4 closure item 2: a module can be VIEW-ENABLED (genuinely universal to
+  // read) while its write path has not yet been independently certified safe
+  // for a GENERIC user — see OperationPolicy below. Deliberately distinct
+  // from CAPABILITY_NOT_ENABLED (which means the module itself is off) so a
+  // client/log can tell "module unavailable" from "module readable, writes
+  // not yet certified" apart.
+  | 'WRITE_NOT_CERTIFIED_FOR_GENERIC'
   | 'NONE';
+
+// -----------------------------------------------------------------------------
+// G4 closure item 2 (Product Owner, 2026-09-05): the resolver must decide
+// PER OPERATION, not just per module. Before this, a module's single
+// ENABLED/EXISTING_RECORD_ONLY/UNAVAILABLE decision was read for every HTTP
+// method alike — which was safe in practice only because the untouched
+// MCC/G1 database backstop (migration 0105's trg_enforce_country_confirmed,
+// via is_country_confirmed()'s countries.is_supported check) rejects any
+// direct INSERT for a GENERIC (unsupported-country) user regardless of what
+// this resolver says. That is real defense-in-depth, but it means a GENERIC
+// user on a VIEW-ENABLED module could be shown a live "Add"/"Edit" control
+// that always ends in a raw 42501 on submit — the resolver's decision model,
+// not the database, was wrong.
+// -----------------------------------------------------------------------------
+export type CapabilityOperation = 'VIEW' | 'CREATE' | 'UPDATE' | 'DELETE';
+
+/**
+ * How an operation narrower than VIEW is decided, per manifest entry —
+ * dispatch: "an EXPLICIT classification in the manifest rather than an
+ * implicit fallthrough".
+ *
+ *  - FOLLOWS_VIEW: the operation's decision is identical to the module's
+ *    VIEW decision (today's implicit behaviour, now stated explicitly and
+ *    asserted by the manifest-completeness test). Correct for every module
+ *    whose VIEW decision is already UNAVAILABLE/EXISTING_RECORD_ONLY for a
+ *    GENERIC user — there is no separate write question left to ask — and
+ *    also correct for FULL (AU/IN) users on every module, since G5 write
+ *    certification is specifically a GENERIC-experience gap, not an AU/IN
+ *    regression to introduce.
+ *  - UNAVAILABLE_FOR_GENERIC_WRITE: forces UNAVAILABLE for this operation
+ *    when the resolved experience level is GENERIC, regardless of the VIEW
+ *    decision or capability truth. Reserved for the six modules G4 certified
+ *    universal-to-VIEW (Income/Expenses/Insurance/Scores/DNA/Resilience)
+ *    whose data-capture/validation has not been independently certified safe
+ *    for a GENERIC user — G5's job, not G4's. Never narrows a FULL user's
+ *    access (identical to FOLLOWS_VIEW there).
+ */
+export type OperationPolicy = 'FOLLOWS_VIEW' | 'UNAVAILABLE_FOR_GENERIC_WRITE';
+
+export interface ModuleOperationPolicy {
+  CREATE: OperationPolicy;
+  UPDATE: OperationPolicy;
+  DELETE: OperationPolicy;
+}
+
+// The one operation policy shared by every module with no certified
+// GENERIC-write distinction to make — i.e. every module except the six named
+// above. Named so the manifest states its choice explicitly per dispatch
+// section 8, rather than each of the 19 other entries repeating the same
+// three-line literal.
+const OPERATIONS_FOLLOW_VIEW: ModuleOperationPolicy = {
+  CREATE: 'FOLLOWS_VIEW',
+  UPDATE: 'FOLLOWS_VIEW',
+  DELETE: 'FOLLOWS_VIEW',
+};
+
+// The six G4-universal modules: reads are certified universal, but
+// create/update are NOT yet certified safe for a GENERIC user (G5's job).
+// DELETE follows VIEW — preserving today's actual rule (a GENERIC user is
+// structurally incapable of holding an existing row in any of these six
+// modules at all, per each entry's own note below, so there is nothing a
+// GENERIC caller could ever validly delete; the DB backstop remains the
+// enforcement layer of record for a forged direct DELETE regardless).
+const OPERATIONS_WRITE_NOT_YET_CERTIFIED: ModuleOperationPolicy = {
+  CREATE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
+  UPDATE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
+  DELETE: 'FOLLOWS_VIEW',
+};
 
 // The complete application-inventory module list (dispatch section 5). Every
 // authenticated page/API surface must map onto exactly one of these — the
@@ -120,6 +195,12 @@ export interface ModuleCapabilityRule {
    * with no meaningful "existing record" (Dashboard, Profile, Resources) set
    * this false. */
   supportsExistingRecordPreservation: boolean;
+  /** G4 closure item 2: explicit per-operation policy for CREATE/UPDATE/
+   * DELETE (VIEW always uses the module-level decision above). See
+   * OperationPolicy's own doc comment. Required on every entry — there is no
+   * implicit default — so a future module addition must consciously choose,
+   * and the manifest-completeness test can assert every entry has one. */
+  operationPolicy: ModuleOperationPolicy;
   /** Documentation only — which G0-JA-1/G3/G4 classification note this
    * module's treatment. Not read by any resolver logic. */
   note: string;
@@ -147,6 +228,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Income',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'No country_code/currency_code field on income_sources or its grid config. Two AU-only catalogue items (age_pension, family_tax_benefit) are already independently gated per-row by assertItemCreationAllowedForUser(), which fails closed for a GENERIC (null-country) caller — this module-level ENABLED decision does not bypass that existing per-item gate.',
   },
   EXPENSES: {
@@ -154,6 +236,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Expenses',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'No country_code/currency_code field anywhere in expenseGridConfig, validation, or its API routes. No catalogue-item jurisdiction gate exists or is needed (no AU/IN-restricted expense item found).',
   },
   INSURANCE: {
@@ -161,6 +244,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Insurance',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'No country_code/currency_code field anywhere in insuranceGridConfig, lib/validation/insurance.ts, or its API routes. No AU/IN literal found in page, config or routes.',
   },
   PROFILE: {
@@ -168,6 +252,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Profile & account management',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: false,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Already universal by design (G3): app/api/user/profile/route.ts uses plain requireUser(), no country gate at all. Reporting-currency choice and cross-border declarations are the sanctioned G3 generic surfaces.',
   },
   CROSS_BORDER: {
@@ -175,6 +260,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Cross-border relationship declarations',
     requiredCapability: 'CROSS_BORDER_RELATIONSHIPS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'G3-sanctioned generic surface (requireCountryConfirmedUserAllowingGeneric). A declaration only, never a calculation (dispatch section 4: CROSS_BORDER_RELATIONSHIPS permits declarations, not calculations) -- lib/api.ts header comment.',
   },
 
@@ -185,6 +271,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Dashboard',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: lib/services/dashboardData.ts hardcodes preferred_currency to (\'AUD\'|\'INR\') with an AUD fallback default, and getFxRateAudInr() bakes in a literal AU/IN FX-rate assumption (fallback 56) used in the summary hot path. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   ASSETS: {
@@ -192,6 +279,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Assets',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: country_code field hardcoded to lib/constants.ts COUNTRY_OPTIONS (AU/IN only), lib/validation/asset.ts enums country_code/currency_code to (\'AU\'|\'IN\')/(\'AUD\'|\'INR\'), and unlike Income/Liabilities, POST has NO assertItemCreationAllowedForUser call at all -- a real gap, not safe to open to GENERIC. Assigned to G5.',
   },
   LIABILITIES: {
@@ -199,6 +287,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Liabilities',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: country_code/currency_code fields hardcoded to AU/IN vocabulary in lib/validation/liability.ts and its grid config, and FinancialDataGrid.tsx\'s shared currency-mismatch copy literally branches "row.country_code === \'IN\' ? India\'s : Australia\'s" (treats any non-IN value, including a hypothetical generic-country row, as Australia\'s). Assigned to G5.',
   },
   GOALS: {
@@ -206,6 +295,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Goals',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: currency type/default hardcoded to (\'AUD\'|\'INR\') with an AUD fallback in three places (goals page, buildGoalForecastInputs, computeGoalsPagePayload), and lib/validation/goal.ts hardcodes country_code to [\'AU\',\'IN\']. Assigned to G5.',
   },
   INVESTMENTS: {
@@ -213,6 +303,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Investments',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: the single most explicit AU/IN split found in the app -- a dedicated AU-only broker-statement import panel/copy, and a hardcoded IN-only routing decision to /investment-intelligence. Assigned to G5.',
   },
   RETIREMENT: {
@@ -220,6 +311,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Retirement',
     requiredCapability: 'DOMESTIC_RETIREMENT',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: lib/services/retirementMemberData.ts:62 resolves countryCode via `profile?.country_of_residence === \'IN\' ? \'IN\' : \'AU\'` -- a "not IN becomes AU" fallback, a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users. requireCountryConfirmedUser() already refuses GENERIC before this function is ever called; this manifest entry keeps that true under the new resolver too.',
   },
   SMSF: {
@@ -227,6 +319,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'SMSF',
     requiredCapability: 'DOMESTIC_RETIREMENT',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'AU-only by design and by DB trigger (trg_retirement_accounts_smsf_au_gate, migration 0084) -- confirmed still present. Country_capabilities has DOMESTIC_RETIREMENT=true only for AU (IN is false -- no certified India retirement-product engine per migration 0122\'s own comment), so this manifest entry is also correctly UNAVAILABLE for IN under a strict capability read; IN\'s existing (non-SMSF) retirement-member tracking is unaffected since it is served by the RETIREMENT module entry above, not this one.',
   },
   INVESTMENT_INTELLIGENCE: {
@@ -234,6 +327,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Investment Intelligence (India)',
     requiredCapability: 'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'India-only by design across R1-R6 (CAS parsing, FIFO/grandfathering CGT engine) -- not evaluated for AU or GENERIC applicability at all; out of scope for any change here.',
   },
   FORECASTING: {
@@ -241,6 +335,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Forecasting',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Consumes Dashboard/Assets/Goals/Retirement data plus forecast_global_assumptions keyed by country_code (AU/IN) and DEFAULT_FX_RATE_AUD_INR (lib/forecast/crossBorderCalculator.ts) -- inherits the same non-universal assumptions as the modules it forecasts. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   SCORES: {
@@ -248,6 +343,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Scores (Health Score)',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'G4 evidence pass: lib/services/healthScoreData.ts, lib/engines/healthScore.ts and lib/engines/healthScoreEligibility.ts contain zero AU/IN/country/currency/retirement_age literals of their own -- BUT healthScoreData.ts:64 calls dashboardData.ts\'s loadDashboard(), which DOES carry the AUD-default/FX-rate-56 assumption (see the DASHBOARD entry below). This is provably inert for a GENERIC user specifically: the ~85-table MCC/G1 backstop (countries.is_supported false for every GENERIC country) makes it structurally impossible for a GENERIC user to hold ANY income/expense/asset/liability/investment/retirement row, so loadDashboard() always aggregates zero real rows for them regardless of the currency it assumes, and the FX-56 fallback is only reached when a foreign-currency row exists to convert -- which cannot happen. The score therefore renders an honest zero/no-data state for a GENERIC user, never a fabricated or misconverted figure. This reasoning does NOT extend to DASHBOARD itself, whose page also surfaces the raw currency/FX figures directly (not just a derived score), so Dashboard stays UNAVAILABLE.',
   },
   DNA: {
@@ -255,6 +351,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Financial DNA',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'G4 evidence pass: lib/services/financialDnaData.ts and lib/engines/financialDna.ts contain no country/currency hardcodes of their own, but financialDnaData.ts:83 calls dashboardData.ts\'s loadDashboard() the same way healthScoreData.ts does -- see the SCORES entry above for why this is provably inert (zero real rows possible) for a GENERIC user rather than a live defect.',
   },
   RESILIENCE: {
@@ -262,6 +359,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Financial Resilience',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
     note: 'G4 evidence pass: the historical currency-derived-country defect (G0-JA-1 Wave 1) is CONFIRMED FIXED -- lib/engines/resilienceStress.ts\'s applyCurrencyShock() no longer guesses AU/IN from currency; it resolves homeCountry via the canonical getUserHomeCountry() (jurisdiction.ts) with no `?? \'AU\'` fallback, and explicitly skips the home/foreign split (fails closed) rather than fabricating one for an unresolved country. resilienceData.ts:68 also calls dashboardData.ts\'s loadDashboard() -- see the SCORES entry above for why that is provably inert (zero real rows possible) for a GENERIC user.',
   },
   FINANCIAL_TWIN: {
@@ -269,6 +367,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Financial Twin / Benchmark',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Cohort-matching/benchmark engine historically AU-fallback-affected (G0-JA-1 Wave 1); not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   RECOMMENDATIONS: {
@@ -276,6 +375,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Recommendations',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Recommendation content library is pillar/band-triggered off the same underlying financial data; not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   REPORTS: {
@@ -283,6 +383,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Reports',
     requiredCapability: 'LOCALISED_REPORTS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'LOCALISED_REPORTS is true for AU/IN only (migration 0122) -- reports carry AU/IN-specific sections per that migration\'s own comment. Kept UNAVAILABLE for GENERIC.',
   },
   RESOURCES: {
@@ -290,6 +391,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Resources',
     requiredCapability: 'LOCALISED_RESOURCES',
     supportsExistingRecordPreservation: false,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'LOCALISED_RESOURCES is true for AU/IN only (migration 0122); the PUBLIC Resources site (app/(marketing)/resources/**) is unauthenticated and out of this authenticated-app scope regardless -- this entry covers only any authenticated in-app Resources surface, and G7 (Report/Resources localisation) is explicitly out of scope for G4.',
   },
   FINANCIAL_DATA_HUB: {
@@ -297,6 +399,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Financial Data Hub',
     requiredCapability: 'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
     supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'NOT universal: app/api/financial-data-hub/investment-statement/[documentId]/account-match/route.ts:47 hardcodes countryCode: \'AU\' -- a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users via this manifest entry (requireCountryConfirmedUser already refuses GENERIC before this route is ever reached).',
   },
   SUBSCRIPTION_PRICING: {
@@ -304,6 +407,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Subscription / pricing',
     requiredCapability: 'APPROVED_PRICING',
     supportsExistingRecordPreservation: false,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'APPROVED_PRICING/APPROVED_BILLING are false for every country including AU/IN (migration 0122 -- "no certified AU/IN billing or FX-expansion claim"). No live billing/checkout surface currently exists in the repo behind this manifest entry; kept UNAVAILABLE for every country until a billing surface is actually built and certified.',
   },
   AI_INSIGHTS: {
@@ -311,6 +415,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'AI Coach / Insights',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: false,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Module 11\'s standard-question/insight library is triggered off the same underlying financial data as Dashboard/Scores/Recommendations; not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5. G4 EVIDENCE-PASS FINDING (disclosed, NOT fixed here -- out of this task\'s authorised scope): 4 of its 5 API routes (standard-questions, standard-questions/[code]/resolve, contextual-explanations, contextual-explanations/resolve) resolve auth via lib/ai/household/resolveHouseholdContext.ts, which imports the PLAIN requireUser() (auth-only, no country-confirmation check) rather than requireCountryConfirmedUser() -- an authenticated-but-country-UNCONFIRMED user can reach them today. This predates G4 and is a Mandatory-Country-Confirmation completeness gap, not a G4 regression; flagged for separate remediation.',
   },
   ADMIN: {
@@ -318,6 +423,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Admin',
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: false,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
     note: 'Not a country-experience surface at all -- admin access is governed entirely by lib/services/adminAuth.ts\'s requireAdmin()/role model, independent of country. This manifest entry exists only so the route-manifest completeness test has a home for app/(app)/admin/**; it is never used to grant or deny admin access, and a non-admin GENERIC (or AU/IN) user is refused by requireAdmin() regardless of this entry\'s value.',
   },
 };
@@ -331,7 +437,8 @@ export interface ModuleCapabilityResult {
  * Pure decision function — never touches the network itself. Given an
  * already-resolved country context (from resolveCountryContext()) and
  * whether the caller already has active existing rows for this module,
- * returns the three-state decision.
+ * returns the three-state decision for the given operation (VIEW by
+ * default, preserving every pre-existing caller's behaviour unchanged).
  *
  * Fail-closed rules, in order:
  *   1. No manifest entry for this module -> UNAVAILABLE (dispatch section 8:
@@ -343,35 +450,57 @@ export interface ModuleCapabilityResult {
  *   3. The module's required capability is not enabled for the resolved
  *      primary country -> same two-way split as above.
  *   4. Otherwise ENABLED.
+ *
+ * That four-step result is the VIEW decision. For CREATE/UPDATE/DELETE
+ * (G4 closure item 2), the module's explicit operationPolicy is then
+ * applied: it can only ever NARROW an already-ENABLED/EXISTING_RECORD_ONLY
+ * VIEW decision down to UNAVAILABLE for a GENERIC-experience caller — it
+ * never widens a VIEW decision that was already UNAVAILABLE, and it never
+ * narrows a FULL (AU/IN) caller's access.
  */
 export function resolveModuleCapability(
   moduleKey: ModuleKey,
   context: ResolvedCountryContext,
-  options: { hasExistingRecords?: boolean } = {}
+  options: { hasExistingRecords?: boolean; operation?: CapabilityOperation } = {}
 ): ModuleCapabilityResult {
   const rule = APP_CAPABILITY_MANIFEST[moduleKey];
   if (!rule) return { decision: 'UNAVAILABLE', reason: 'MANIFEST_ENTRY_MISSING' };
 
   const hasExisting = options.hasExistingRecords === true && rule.supportsExistingRecordPreservation;
 
+  let viewResult: ModuleCapabilityResult;
   if (!context.primaryCountry) {
-    return hasExisting
+    viewResult = hasExisting
       ? { decision: 'EXISTING_RECORD_ONLY', reason: 'NO_PRIMARY_COUNTRY' }
       : { decision: 'UNAVAILABLE', reason: 'NO_PRIMARY_COUNTRY' };
-  }
-
-  if (context.experienceLevel === 'UNAVAILABLE') {
-    return hasExisting
+  } else if (context.experienceLevel === 'UNAVAILABLE') {
+    viewResult = hasExisting
       ? { decision: 'EXISTING_RECORD_ONLY', reason: 'EXPERIENCE_UNAVAILABLE' }
       : { decision: 'UNAVAILABLE', reason: 'EXPERIENCE_UNAVAILABLE' };
+  } else {
+    const enabled = context.capabilities[rule.requiredCapability] === true;
+    viewResult = enabled
+      ? { decision: 'ENABLED', reason: 'NONE' }
+      : hasExisting
+        ? { decision: 'EXISTING_RECORD_ONLY', reason: 'CAPABILITY_NOT_ENABLED' }
+        : { decision: 'UNAVAILABLE', reason: 'CAPABILITY_NOT_ENABLED' };
   }
 
-  const enabled = context.capabilities[rule.requiredCapability] === true;
-  if (enabled) return { decision: 'ENABLED', reason: 'NONE' };
+  const operation = options.operation ?? 'VIEW';
+  if (operation === 'VIEW') return viewResult;
 
-  return hasExisting
-    ? { decision: 'EXISTING_RECORD_ONLY', reason: 'CAPABILITY_NOT_ENABLED' }
-    : { decision: 'UNAVAILABLE', reason: 'CAPABILITY_NOT_ENABLED' };
+  // A VIEW decision that is already UNAVAILABLE can only ever stay
+  // UNAVAILABLE for a narrower operation — never re-labelled with the write
+  // specific reason below, so the original reason (e.g. CAPABILITY_NOT_ENABLED,
+  // EXPERIENCE_UNAVAILABLE) is preserved for anything that was blocked at the
+  // module level already.
+  if (viewResult.decision === 'UNAVAILABLE') return viewResult;
+
+  const policy = rule.operationPolicy[operation];
+  if (policy === 'UNAVAILABLE_FOR_GENERIC_WRITE' && context.experienceLevel === 'GENERIC') {
+    return { decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' };
+  }
+  return viewResult;
 }
 
 /** Stable, non-sensitive 403 per decision — never a raw DB error. Both
@@ -389,6 +518,32 @@ function capabilityBlockResponse(reason: CapabilityUnavailableReason): Response 
 const SAFE_READ_METHODS = new Set(['GET', 'HEAD']);
 
 /**
+ * G4 closure item 2: the default HTTP-method -> CapabilityOperation mapping
+ * used when a route doesn't pass an explicit `operation` override. This is
+ * ONLY a default, not a universal truth — several existing routes use POST
+ * for a non-persisting computation (e.g. app/api/health-score/simulate,
+ * app/api/intelligence/financial-dna/scenario, app/api/resilience/scenario
+ * all explicitly pass `{ operation: 'VIEW' }` because they never write to
+ * the database — forcing them into the CREATE bucket would over-restrict a
+ * GENERIC user for no safety benefit, the exact opposite of this item's
+ * intent). A route whose POST/PATCH/DELETE genuinely persists should rely on
+ * this default rather than pass an override.
+ */
+function defaultOperationForMethod(method: string): CapabilityOperation {
+  switch (method) {
+    case 'POST':
+      return 'CREATE';
+    case 'PATCH':
+    case 'PUT':
+      return 'UPDATE';
+    case 'DELETE':
+      return 'DELETE';
+    default:
+      return 'VIEW';
+  }
+}
+
+/**
  * The G4 route-level guard. Mirrors the existing requireCountryConfirmedUser()
  * / requireCountryConfirmedUserAllowingGeneric() call shape from lib/api.ts
  * (`{ user, unauthenticated }`) so a migrated route's call site changes
@@ -402,7 +557,12 @@ const SAFE_READ_METHODS = new Set(['GET', 'HEAD']);
 export async function requireModuleCapability(
   moduleKey: ModuleKey,
   request: Request,
-  options: { hasExistingRecords?: (supabase: SupabaseClient, userId: string) => Promise<boolean> } = {}
+  options: {
+    hasExistingRecords?: (supabase: SupabaseClient, userId: string) => Promise<boolean>;
+    /** Override the HTTP-method-based operation default — see
+     * defaultOperationForMethod()'s doc comment for when this is required. */
+    operation?: CapabilityOperation;
+  } = {}
 ): Promise<{ user: { id: string } | null; blocked: Response | null; decision: CapabilityDecision | null }> {
   const supabase = await createClient();
   const {
@@ -421,7 +581,8 @@ export async function requireModuleCapability(
 
   const context = await resolveCountryContext(user.id, supabase);
   const hasExistingRecords = options.hasExistingRecords ? await options.hasExistingRecords(supabase, user.id) : false;
-  const result = resolveModuleCapability(moduleKey, context, { hasExistingRecords });
+  const operation = options.operation ?? defaultOperationForMethod(request.method);
+  const result = resolveModuleCapability(moduleKey, context, { hasExistingRecords, operation });
 
   if (result.decision === 'UNAVAILABLE') {
     return { user: null, blocked: capabilityBlockResponse(result.reason), decision: result.decision };
