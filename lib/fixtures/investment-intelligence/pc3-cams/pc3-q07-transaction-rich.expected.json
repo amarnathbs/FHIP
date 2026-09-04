@@ -1,0 +1,123 @@
+{
+  "fixtureId": "pc3-q07-transaction-rich",
+  "title": "Q07 — every currently-supported transaction type: purchase, SIP purchase, redemption, dividend, reinvestment, switch-out/switch-in",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9307040000701",
+      "holderName": "ROHAN DESHPANDE",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 7,
+  "transactions": [
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q7-001"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q7-002"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "redemption",
+      "amount": "3000.00",
+      "units": "24.500",
+      "nav": "122.4000",
+      "sourceReference": "PC3Q7-003"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-04-20",
+      "canonicalType": "dividend",
+      "amount": "450.00",
+      "units": "0.000",
+      "nav": "45.2000",
+      "sourceReference": "PC3Q7-004"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-05-20",
+      "canonicalType": "reinvestment",
+      "amount": "620.00",
+      "units": "13.500",
+      "nav": "45.9300",
+      "sourceReference": "PC3Q7-005"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-06-01",
+      "canonicalType": "switch_out",
+      "amount": "12000.00",
+      "units": "89.660",
+      "nav": "133.8300",
+      "sourceReference": "PC3Q7-006"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-06-01",
+      "canonicalType": "switch_in",
+      "amount": "12000.00",
+      "units": "45.400",
+      "nav": "264.3200",
+      "sourceReference": "PC3Q7-007"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "524.590",
+      "value": "70767.19",
+      "nav": "134.9000"
+    },
+    {
+      "folioNumber": "9307040000701",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "45.400",
+      "value": "11990.14",
+      "nav": "264.1000"
+    }
+  ],
+  "notes": null
+}

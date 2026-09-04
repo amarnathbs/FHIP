@@ -196,8 +196,29 @@ export const camsParser: InvestmentDocumentParser = {
       // folio) pair to resolve to different `ii_accounts` rows, breaking
       // R11 cross-source matching for anything that (correctly) supplies a
       // real institution name, e.g. a manual-source fixture.
+      // II-PC3 finding (Q09 multi-page-continuation probe, 2026-09-04): an
+      // `AMC Name:` line did NOT reset `inTable`, only `Folio No:`/
+      // `Scheme Name:`/the closing-balance line did. Every scheme block
+      // begins with `AMC Name:` BEFORE its own `Scheme Name:` line (this
+      // file's own documented layout, top of file) — so any time a
+      // PRECEDING scheme's transaction table had not yet been closed by a
+      // `Closing Unit Balance` line when the next scheme's `AMC Name:` line
+      // is reached (a real continuation-page header reprint before its
+      // `Closing Unit Balance` line appears on the next page, OR a scheme
+      // whose statement omits a closing-balance line entirely, e.g. a
+      // fully-redeemed zero-balance holding some RTAs print without one),
+      // `inTable` was still `true` and the `AMC Name:` line itself was
+      // wrongly fed to `TXN_ROW_RE`, always failing it and raising a false
+      // `unparseable_transaction_row` error for a perfectly valid document.
+      // Reset here too, matching `Folio No:`/`Scheme Name:`'s existing
+      // pattern exactly — an `AMC Name:` line can never itself be a
+      // transaction row.
       const amc = extractLabelledField(line, 'AMC Name');
-      if (amc) lastKnownAmcName = amc;
+      if (amc) {
+        lastKnownAmcName = amc;
+        inTable = false;
+        continue;
+      }
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
         currentScheme = {

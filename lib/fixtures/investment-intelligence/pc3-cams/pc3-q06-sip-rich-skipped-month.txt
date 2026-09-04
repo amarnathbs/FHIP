@@ -1,0 +1,22 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 9306040000601
+PAN: PCQAL0006F
+Name: NANDINI RAO
+Holding Mode: SI
+
+AMC Name: Axis Mutual Fund
+Scheme Name: Axis Small Cap Fund - Growth (Direct Plan)
+ISIN: INF846K01EW2
+AMFI Code: 135944
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+05-Jan-2025   SIP Purchase                          5000.00  41.750  119.7600  41.750 [Ref: PC3Q6-001]
+05-Feb-2025   SIP Purchase                          5000.00  41.510  120.5000  83.260 [Ref: PC3Q6-002]
+05-Apr-2025   SIP Purchase                          5000.00  40.880  122.3000  124.140 [Ref: PC3Q6-003]
+05-May-2025   SIP Purchase                          5000.00  39.960  125.1000  164.100 [Ref: PC3Q6-004]
+05-Jun-2025   SIP Purchase                          5000.00  40.120  124.6300  204.220 [Ref: PC3Q6-005]
+
+Closing Unit Balance as on 30-Jun-2025 : 204.220 Units   Valuation : Rs. 25451.94   NAV as on 30-Jun-2025 : Rs. 124.6300

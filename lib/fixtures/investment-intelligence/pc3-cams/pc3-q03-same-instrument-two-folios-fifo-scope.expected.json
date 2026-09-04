@@ -1,0 +1,80 @@
+{
+  "fixtureId": "pc3-q03-same-instrument-two-folios-fifo-scope",
+  "title": "Q03 — same instrument in two folios (Folio A older/cheaper, Folio B newer, redemption from Folio B only) — F1 account-scoped FIFO probe",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2024-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9303040000301",
+      "holderName": "MEERA VISHWANATH",
+      "holdingModeRaw": "SI"
+    },
+    {
+      "folioNumber": "9303040000302",
+      "holderName": "MEERA VISHWANATH",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 3,
+  "transactions": [
+    {
+      "folioNumber": "9303040000301",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2024-01-10",
+      "canonicalType": "purchase",
+      "amount": "12000.00",
+      "units": "100.190",
+      "nav": "119.7700",
+      "sourceReference": "PC3Q3-OLD-001"
+    },
+    {
+      "folioNumber": "9303040000302",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-05-10",
+      "canonicalType": "purchase",
+      "amount": "20000.00",
+      "units": "148.940",
+      "nav": "134.2900",
+      "sourceReference": "PC3Q3-NEW-001"
+    },
+    {
+      "folioNumber": "9303040000302",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-06-10",
+      "canonicalType": "redemption",
+      "amount": "8000.00",
+      "units": "58.650",
+      "nav": "136.4000",
+      "sourceReference": "PC3Q3-NEW-002"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "9303040000301",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "100.190",
+      "value": "13124.89",
+      "nav": "131.0000"
+    },
+    {
+      "folioNumber": "9303040000302",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "90.290",
+      "value": "11827.99",
+      "nav": "131.0000"
+    }
+  ],
+  "notes": "Folio A (9303040000301) must retain its 100.19 units untouched by Folio B (9303040000302)'s redemption — zero cross-account contamination required."
+}

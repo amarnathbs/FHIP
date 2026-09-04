@@ -1,0 +1,68 @@
+{
+  "fixtureId": "pc3-q02-encrypted-duplicate-of-q01",
+  "title": "Q02 — password-protected duplicate of Q01",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9301040000101",
+      "holderName": "ARJUN KAPOOR",
+      "holdingModeRaw": "SI"
+    },
+    {
+      "folioNumber": "9301040000102",
+      "holderName": "ARJUN KAPOOR",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "9301040000101",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500",
+      "nav": "119.7605",
+      "sourceReference": "PC3Q1-001"
+    },
+    {
+      "folioNumber": "9301040000102",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "isin": "INF200K01UP0",
+      "amfiSchemeCode": "103504",
+      "transactionDateIso": "2025-02-10",
+      "canonicalType": "purchase",
+      "amount": "15000.00",
+      "units": "62.100",
+      "nav": "241.5500",
+      "sourceReference": "PC3Q1-002"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "9301040000101",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "83.500",
+      "value": "11264.15",
+      "nav": "134.9000"
+    },
+    {
+      "folioNumber": "9301040000102",
+      "scheme": "SBI Bluechip Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "62.100",
+      "value": "16400.61",
+      "nav": "264.1000"
+    }
+  ],
+  "notes": null
+}
