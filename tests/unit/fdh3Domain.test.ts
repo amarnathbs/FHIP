@@ -33,7 +33,12 @@ import {
   DOCUMENT_STATUS_TRANSITIONS,
   isAllowedDocumentTransition,
 } from '@/lib/financial-data-hub/domain/documentLifecycle';
-import { computePurgeDueDate, FDH_DOCUMENT_RETENTION_DAYS } from '@/lib/financial-data-hub/constants/retention';
+import {
+  computePurgeDueDate,
+  computePurgeDueDateMinutes,
+  FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES,
+  FDH_DOCUMENT_RETENTION_MINUTES,
+} from '@/lib/financial-data-hub/constants/retention';
 import { FDH_PROCESSING_STATUSES } from '@/lib/financial-data-hub/constants/enums';
 
 // A minimal, syntactically real (if tiny) synthetic PDF — not a scan of any
@@ -292,14 +297,27 @@ describe('FDH-3 widened document lifecycle (cancellation from pre-review stages)
   });
 });
 
-describe('FDH-3 retention configuration', () => {
-  it('every retention window is finite and positive — never indefinite', () => {
-    expect(FDH_DOCUMENT_RETENTION_DAYS.approved).toBeGreaterThan(0);
-    expect(FDH_DOCUMENT_RETENTION_DAYS.rejected_or_failed).toBeGreaterThan(0);
-    expect(FDH_DOCUMENT_RETENTION_DAYS.abandoned_days).toBeGreaterThan(0);
+describe('LR-1 retention configuration (supersedes the original FDH-3 multi-day grace window — strict raw-file deletion)', () => {
+  it('every retention window is finite, non-negative, and never exceeds the 60-minute hard backstop', () => {
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.approved).toBeGreaterThanOrEqual(0);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.rejected_or_failed).toBeGreaterThanOrEqual(0);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.abandoned_minutes).toBeGreaterThan(0);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.approved).toBeLessThanOrEqual(FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.rejected_or_failed).toBeLessThanOrEqual(FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.abandoned_minutes).toBeLessThanOrEqual(FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES);
   });
 
-  it('computes a due date the correct number of days ahead', () => {
+  it('approved and rejected/failed documents are scheduled for IMMEDIATE purge (strict deletion, not a multi-day evidence window)', () => {
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.approved).toBe(0);
+    expect(FDH_DOCUMENT_RETENTION_MINUTES.rejected_or_failed).toBe(0);
+  });
+
+  it('computes a due date the correct number of minutes ahead', () => {
+    expect(computePurgeDueDateMinutes('2026-01-01T00:00:00.000Z', 60)).toBe('2026-01-01T01:00:00.000Z');
+    expect(computePurgeDueDateMinutes('2026-01-01T00:00:00.000Z', 0)).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('the deprecated day-based helper still converts correctly for any historical caller', () => {
     expect(computePurgeDueDate('2026-01-01T00:00:00.000Z', 7)).toBe('2026-01-08T00:00:00.000Z');
   });
 });

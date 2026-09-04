@@ -13,6 +13,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { recordDocumentAuditEvent } from './auditLog';
+import { scheduleApprovedDocumentPurge } from './purge';
 import { runBulkAction, type BulkActionResult } from '../domain/approvalPolicy';
 import { computeApprovedFinancialSummary, FdhApprovedSummaryError } from '../domain/approvedSummary';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
@@ -298,6 +299,25 @@ export async function approveStatement(
     actorId: userId,
     metadata: { approval_version: approvedStatement.approval_version, approved_transaction_count: totals.approved_transaction_count },
   });
+
+  // LR-1 (Strict Raw-File Deletion): the Approved Financial Summary above and
+  // every underlying transaction/allocation is now durably written — the
+  // structured staging this statement's raw source document exists to
+  // produce. The raw file is no longer needed for anything, so its purge is
+  // scheduled immediately here, right after that staging write and before
+  // returning to the caller — never left to a multi-day "evidence" grace
+  // window. Uses the admin-client purge service (`services/purge.ts`), which
+  // independently verifies storage absence before ever marking the row
+  // purged; failure to schedule must not fail an otherwise-successful
+  // approval, since the LR-1 hard 60-minute backstop
+  // (`enforceRawFileHardBackstop`, run from the purge-sweep cron) will still
+  // catch this document regardless.
+  try {
+    await scheduleApprovedDocumentPurge(approvedStatement);
+  } catch {
+    // Deliberately swallowed — see comment above. Never surfaced to the user
+    // as an approval failure.
+  }
 
   return { statement: approvedStatement, blockedTransactionIds: [] };
 }
