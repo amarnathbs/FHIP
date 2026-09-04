@@ -432,11 +432,39 @@ export function deterministicLotId(lotKey: string): string {
  * produces the SAME row ids with the SAME field values (Section 43) —
  * `deterministicLotId` guarantees this without needing a DB-level unique
  * constraint this session cannot add.
+ *
+ * II-PC2-F1 FIX — `closed_at` PROVENANCE (found via a live-DEV read-side-
+ * mutation review, tests/live-dev/iiPc2F1ReadSideMutationLiveDev.test.ts
+ * §T5): every column here is a genuinely idempotent re-derivation from
+ * canonical inputs EXCEPT `closed_at`, which used to be re-stamped to
+ * `new Date().toISOString()` on every upsert of an already-closed lot —
+ * meaning simply re-opening `/tax/summary` (a GET) kept silently rewriting
+ * "when this lot closed" to "just now", forever, for as long as the lot
+ * stayed closed. Nothing in the app currently reads this column, so it was
+ * not an economically-visible defect, but it violates the provenance
+ * guarantee this whole review exists to check, and would mislead the first
+ * future feature (or direct DB/admin inspection) that does read it.
+ *
+ * FIX: read back any already-persisted `closed_at` for the lot ids in this
+ * batch FIRST, and reuse it verbatim when present — a lot is stamped with
+ * a real wall-clock closed_at exactly ONCE, at its first transition to
+ * closed, and never again. A lot closing for the first time in this run
+ * still gets `new Date().toISOString()`, same as before.
  */
 export async function persistTaxLots(userId: string, lots: readonly TaxLot[]): Promise<{ persisted: number; error: string | null }> {
   if (lots.length === 0) return { persisted: 0, error: null };
   try {
     const admin = createAdminClient();
+    const closingLotIds = lots.filter((l) => l.unitsRemaining <= 1e-6).map((l) => deterministicLotId(l.lotId));
+    const existingClosedAtById = new Map<string, string>();
+    if (closingLotIds.length > 0) {
+      const { data: existingRows, error: existingErr } = await admin.from('ii_tax_lots').select('id, closed_at').in('id', closingLotIds);
+      if (existingErr) return { persisted: 0, error: existingErr.message };
+      for (const row of existingRows ?? []) {
+        if (row.closed_at) existingClosedAtById.set(row.id as string, row.closed_at as string);
+      }
+    }
+    const nowIso = new Date().toISOString();
     const payload = lots.map((l) => {
       const sourceEventId = l.lotId.startsWith('lot:') ? l.lotId.slice(4) : l.lotId;
       // II-PC1-F1: the account now travels ON the lot (it is half of the
@@ -444,18 +472,22 @@ export async function persistTaxLots(userId: string, lots: readonly TaxLot[]): P
       // than re-derived from a side map keyed by transaction id. This
       // removes the possibility of the persisted `account_id` disagreeing
       // with the account the engine actually matched the lot under.
+      const id = deterministicLotId(l.lotId);
+      const isClosed = l.unitsRemaining <= 1e-6;
       return {
-        id: deterministicLotId(l.lotId),
+        id,
         user_id: userId,
         account_id: l.accountKey || null,
         instrument_id: l.instrumentKey,
         opening_transaction_id: sourceEventId,
-        status: l.unitsRemaining <= 1e-6 ? 'closed' : l.unitsRemaining < l.unitsAcquired ? 'partially_closed' : 'open',
+        status: isClosed ? 'closed' : l.unitsRemaining < l.unitsAcquired ? 'partially_closed' : 'open',
         acquisition_date: l.acquisitionDate,
         units_acquired: l.unitsAcquired,
         units_remaining: l.unitsRemaining,
         cost_per_unit: l.costPerUnit,
-        closed_at: l.unitsRemaining <= 1e-6 ? new Date().toISOString() : null,
+        // Stamped once, at first closure — never re-stamped on a later
+        // idempotent re-read of the same already-closed lot (see header).
+        closed_at: isClosed ? (existingClosedAtById.get(id) ?? nowIso) : null,
       };
     });
     const missingAccount = payload.filter((p) => !p.account_id);
