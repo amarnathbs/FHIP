@@ -167,7 +167,8 @@ begin
     where user_id = v_au;
   update public.user_profiles
     set onboarding_completed = true,
-        country_of_residence = 'GB', country_confirmed_at = now(), country_source = 'USER_CONFIRMED'
+        country_of_residence = 'GB', country_confirmed_at = now(), country_source = 'USER_CONFIRMED',
+        generic_disclosure_version = 'v1', generic_disclosure_acknowledged_at = now(), generic_disclosure_country = 'GB'
     where user_id = v_gb;
   update public.user_profiles
     set onboarding_completed = true,
