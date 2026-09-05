@@ -32,7 +32,9 @@ Each task carries the fields the A1 dispatch requires. For the 21 tasks already 
 | ADM-21 | Work a content queue (drafts/review/scheduled/published/review-due/archived) | Content-workflow staff | `canViewResourceWorkflow`/`isResourceStaff` | Read-only (queue view); mutation via ADM-09 | N/A | Internal | Operational | Wave 5 manual, complete |
 | ADM-10 | Schedule content for future publication | (n/a — not built) | (n/a) | (n/a) | (n/a) | Internal | **Not operational** — deferred to **A3.1** | Availability note only |
 
-## 2. Reference Data & Benchmarks (existing)
+## 2. Benchmarks & Reference Data (existing — canonical area: **Data Governance**, PO-2)
+
+Grouped here by domain for readability; per PO-2 (`A1_19`, `A1_06`), these three tasks share the **Data Governance** top-level nav area with the future FDH-governance tasks in §7 below — there is no separate "Reference Data & Benchmarks" nav area.
 
 | ID | Task | Eligible roles | Capability | Mutation authority | Audit | Privacy | Status | Manual |
 |---|---|---|---|---|---|---|---|---|
@@ -83,9 +85,9 @@ Per the brief, A1 does not implement any Module 11 screen. These 8 grouped tasks
 
 **Cross-cutting AI Admin finding, carried forward (not fixed by A1):** all 8 tasks above share one broad `requireAdmin()` gate rather than named, independently-testable capabilities (Standard §2 requires separately named capabilities even where roles currently coincide). This is a pre-existing deviation Module 11 itself introduced, not something FDH-13 or A1 caused; it is recorded here as a finding for Module 11's own roadmap, not remediated by this stage (§14 of the Standard — no hidden scope expansion).
 
-## 7. Financial Data Governance (future — FDH-13, design-only, not implemented)
+## 7. Data Governance — FDH Governance Tasks (future — FDH-13, design-only, not implemented; canonical area: **Data Governance**, PO-2, shared with §2's Benchmarks tasks)
 
-The full 85-requirement mapping is `A1_16_FDH13_TRACEABILITY_MATRIX.md` (and its companion CSV). These 11 canonical tasks are the operator-language summary of that matrix's ~36 distinct proposed capabilities. **None is implemented, none has a route, none has a role holder beyond "Super Admin (interim)."**
+The full 85-requirement mapping is `A1_16_FDH13_TRACEABILITY_MATRIX.md` (and its companion CSV). These 11 canonical tasks are the operator-language summary of that matrix's ~36 distinct proposed capabilities. **None is implemented, none has a route, none has a role holder beyond "Super Admin (interim)" — a temporary allocation, not a proposed permanent role; PO-1 (`A1_19`) has deferred the candidate-role decision named in each row below.**
 
 | ID | Task | Eligible roles (interim) | Capability | Mutation authority | Audit | Privacy | Future wave |
 |---|---|---|---|---|---|---|---|
@@ -101,7 +103,7 @@ The full 85-requirement mapping is `A1_16_FDH13_TRACEABILITY_MATRIX.md` (and its
 | ADM-39 | Exercise FDH break-glass raw-document access | **Reserved — no holder designed** | `canUseFdhBreakGlassAccess` | Time-boxed, auto-expiring | `AUDITED_COMPLETE`, immutable, cannot combine with any audit-editing capability | Raw uploaded documents | Wave F — hard PO boundary, not designed in this phase |
 | ADM-40 | Export FDH governance/audit evidence | Super Admin (interim); candidate: Data Governance Approver, pending REG-04 | `canExportFdhGovernanceData` | Server-side generated export | `AUDITED_COMPLETE` (who exported what) | Internal, stricter than view/approve per REG-04 | Wave B/G |
 
-## 8. Security, Privacy & Support (future, cross-cutting)
+## 8. Security & Support (future, cross-cutting; canonical area renamed from "Security, Privacy & Support" per PO-2)
 
 | ID | Task | Eligible roles | Capability | Mutation authority | Audit | Privacy | Future stage |
 |---|---|---|---|---|---|---|---|

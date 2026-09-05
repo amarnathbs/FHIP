@@ -1,5 +1,7 @@
 # A1.1 — Canonical Role Model and FDH-13 Role-Fit Assessment
 
+**PO-1 status: DEFERRED.** The Product Owner has not approved or rejected any of the three candidates in §2 — a decision is pending the exact role names, capability bundles, and A1's own per-candidate recommendation, all surfaced verbatim in §2 below (`A1_19` PO-1). **Until PO-1 resolves, this document's continued use of "Super Admin (interim)" throughout §1's table and §2's candidate analysis names a temporary allocation, never a proposed permanent role** — no capability currently resolving to Super Admin (interim) should be read as "settled to stay with Super Admin," only as "not yet moved to a role that does not exist yet."
+
 ## 1. The canonical role model, as implemented today
 
 Two mechanisms, confirmed by direct source read (Admin A0.2 Wave 6, re-confirmed for this stage):
@@ -32,7 +34,7 @@ Source: `FHIP_FDH13_Governance_Capability_Model.md` §3 (`D:/fhip-fdh13-admin-ba
 ### 2.1 `Data Governance Contributor`
 
 - **Would cover:** CAP-19 (`canViewFdhMasterData`), CAP-20 (`canProposeFdhMasterData`), CAP-21 (`canReviewFdhMasterData`), CAP-25 (`canViewFdhOperations`), possibly CAP-23 (`canManageFdhParsers`, pending REG-06).
-- **Tested against the 46-task catalogue:** touches only ADM-30, 31, 32, 34, 36 — all Financial Data Governance tasks, all currently unimplemented. No overlap with any Resources, Benchmarks, Recommendations, or AI Admin task. No conflict found with any existing role's charter.
+- **Tested against the 46-task catalogue:** touches only ADM-30, 31, 32, 34, 36 — all Data Governance area tasks (the FDH-governance portion, per PO-2's consolidation, `A1_06`), all currently unimplemented. No overlap with any Resources, Benchmarks, Recommendations, or AI Admin task. No conflict found with any existing role's charter.
 - **Reusability test (required before any new role, per the binding PO ruling):** the propose→review shape is structurally identical to Investment Intelligence's `ii_review_items.superseded_by_id` pattern and to a plausible future Benchmarks-catalogue revision workflow — genuinely domain-neutral, not an FDH-specific name in substance.
 - **Least-privilege test:** must never inherit Analyst's aggregate-analytics scope (different risk tier — raw reference-level detail vs. suppressed aggregate) or any Resources editorial capability.
 - **Recommendation: APPROVE-IN-PRINCIPLE, subject to Product Owner decision.** The role is domain-neutral, fills a genuine gap (no existing role safely covers "propose/review structured reference data without terminal approval authority"), and is not required for any Wave A precondition. **A1 does not create it** — flagged in `A1_19` (PO-1) for explicit approval before FDH-13 Wave B.

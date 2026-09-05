@@ -5,22 +5,26 @@
 
 **Per A02_WAVE6_FDH13_TRACEABILITY_MATRIX.md's own scope note, restated:** this reconciliation certifies FDH-13's *integration into the canonical Admin architecture*, not its implementation. No FDH-13 wave (A–G) has begun. No row's status is reopened, re-scored, or improved by this document.
 
+**Canonical Area values updated for PO-2 (both this document and the companion CSV):** "Financial Data Governance" → **Data Governance** (34 rows); "Security, Privacy & Support" → **Security & Support** (14 rows) — a pure rename to match `A1_06`'s PO-2-approved 8-area structure; no row's area *membership* changes, only the label. "Administration (Audit)" (12 rows) and "Analytics" (12 rows) are unchanged, already matching PO-2's naming.
+
+**Canonical role (interim) column status per PO-1:** every "Super Admin (interim)" and "candidate: Data Governance Contributor/Approver/Support Access Grantee" entry throughout §2 below names a **deferred** decision (`A1_19` PO-1) — none of the three candidate roles is approved, rejected, or created by this document or by A1. "Super Admin (interim)" remains explicitly a temporary allocation, not a settled permanent assignment, until PO-1 resolves.
+
 ## 1. Row totals (unchanged from the baseline, re-verified, not re-scored)
 
 | Canonical Area | FDH-13 origin domain(s) | Rows | Implemented | Partial | Missing | Conflicting | N/A |
 |---|---|--:|--:|--:|--:|--:|--:|
-| Financial Data Governance | Master-data (MD), Intelligence-candidate (IC), Parser/coverage (PC) | 34 | 10 | 12 | 12 | 0 | 0 |
+| Data Governance | Master-data (MD), Intelligence-candidate (IC), Parser/coverage (PC) | 34 | 10 | 12 | 12 | 0 | 0 |
 | Operations | Operational monitoring (OM) | 13 | 0 | 4 | 9 | 0 | 0 |
-| Security, Privacy & Support | Privacy/support access (PR) | 14 | 6 | 2 | 6 | 0 | 0 |
+| Security & Support | Privacy/support access (PR) | 14 | 6 | 2 | 6 | 0 | 0 |
 | Administration (Audit) | Audit/evidence (AE) | 12 | 0 | 5 | 7 | 0 | 0 |
 | Analytics | Analytics/reporting (AR) | 12 | 1 | 1 | 7 | 0 | 3 |
 | **Total** | | **85** | **17** | **24** | **41** | **0** | **3** |
 
-(Unchanged from the baseline's own 7-domain totals — MD 0/6/6, IC 5/3/3, PC 5/3/3 Implemented/Partial/Missing — re-grouped by canonical area rather than FDH-13's own domain scheme: 34-row Financial Data Governance = MD+IC+PC = 10 Implemented + 12 Partial + 12 Missing. Grand total 17/24/41/0/3 = 85, identical to the baseline and to Wave 6's own re-verification.)
+(Unchanged from the baseline's own 7-domain totals — MD 0/6/6, IC 5/3/3, PC 5/3/3 Implemented/Partial/Missing — re-grouped by canonical area rather than FDH-13's own domain scheme: 34-row Data Governance = MD+IC+PC = 10 Implemented + 12 Partial + 12 Missing. Grand total 17/24/41/0/3 = 85, identical to the baseline and to Wave 6's own re-verification.)
 
 ## 2. Per-area detail
 
-### Financial Data Governance (34 requirements)
+### Data Governance (34 requirements)
 
 | Req ID | Canonical Task | Capability | Role (interim) | Stage | Wave | Blocks closure |
 |---|---|---|---|---|---|---|
@@ -77,7 +81,7 @@
 | FDH13-OM-012 | Alert ownership is assigned per failure category | N/A (operational/organisational, not a software capability) | N/A - cross-cutting control, not a standing role grant | MISSING | Wave D/G | No |
 | FDH13-OM-013 | Failures are classified as user-correctable / parser defect / data-quality warning / in... | canViewFdhAnalytics | Analyst (+ Super Admin) | PARTIAL | Wave D | No |
 
-### Security, Privacy & Support (14 requirements)
+### Security & Support (14 requirements)
 
 | Req ID | Canonical Task | Capability | Role (interim) | Stage | Wave | Blocks closure |
 |---|---|---|---|---|---|---|
@@ -143,4 +147,4 @@
 
 ## 5. Rows blocking FDH-13 closure (`Blocks FDH-13 closure = Yes`), unaffected by A1
 
-20 rows carry this flag in the baseline (`MD-004,007,011,012`, `IC-004,006,009,010`, `PC-011`, `PR-004,007,008,009,011`, `AE-001,003,007,012`, `AR-011` — 18 shown in the per-area tables above plus `IC-010`/`AE-007` already counted). None depends on Recommendations, Benchmarks, or the Resources UX surface Admin A0.2 certified — confirmed independently by Wave 6, reconfirmed here by inspection of each flagged row's own Canonical Area (all fall in Financial Data Governance, Security-Privacy-Support, Administration-Audit, or Analytics — never Content/Recommendations/Reference-Data-Benchmarks).
+20 rows carry this flag in the baseline (`MD-004,007,011,012`, `IC-004,006,009,010`, `PC-011`, `PR-004,007,008,009,011`, `AE-001,003,007,012`, `AR-011` — 18 shown in the per-area tables above plus `IC-010`/`AE-007` already counted). None depends on Recommendations, Benchmarks, or the Resources UX surface Admin A0.2 certified — confirmed independently by Wave 6, reconfirmed here by inspection of each flagged row's own Canonical Area (all fall in Data Governance's FDH-governance rows specifically, Security & Support, Administration-Audit, or Analytics — never Content, Recommendations, or the Benchmarks/reference-data rows of Data Governance).

@@ -1,6 +1,6 @@
 # A1.2 — Admin Home Specification
 
-**Status:** Design only. No route, page, or query exists yet.
+**Status:** Design only. No route, page, or query exists yet. **PO-3: APPROVED** — the Product Owner has approved this document's model exactly as originally designed: a role-aware operational work queue, not a metrics dashboard (`A1_19` PO-3). This is not a revision; the model below already matched the ruling A1 hoped for, and PO-3 confirms it without changes to the design itself.
 
 ## 1. Principle
 
@@ -16,9 +16,9 @@ Admin Home is a **role-aware work queue**, not a dashboard of "interesting" numb
 | Recommendations pending activation | Super Admin | N drafted-but-inactive recommendations | None | Users don't receive them | `/admin/recommendations` (ADM-04) |
 | Benchmark sources pending approval | Super Admin | N sources awaiting Approve/Suspend/Reinstate | None | Reference data stays stale/unapproved | `/admin/benchmarks` (ADM-01) |
 | Benchmark datasets pending validation | Super Admin | N datasets not yet validated/activated | None | Platform-wide benchmark figures stay on the prior dataset | `/admin/benchmarks` (ADM-02) |
-| **Future** — FDH master-data proposals pending review/approval | Data Governance Contributor/Approver (or Super Admin interim) | N proposals in `admin_review` | None defined yet | Master data stays stale/uncorrected | `/admin/data-governance` (ADM-32/33), once Wave B ships |
-| **Future** — Failed FDH parser/ingestion runs | Super Admin, Data Governance Contributor | N failed runs in the last 24h | Real-time | Bank statement ingestion silently degrades for affected institutions | `/admin/data-governance/operations` (ADM-36), once Wave D ships |
-| **Future** — Stale reference data | Super Admin | Benchmarks/master-data not refreshed in N days | Configurable threshold | Users see outdated comparisons | Reference Data & Benchmarks / Financial Data Governance areas |
+| **Future** — FDH master-data proposals pending review/approval | Data Governance Contributor/Approver (or **Super Admin (interim)** — temporary allocation only, per PO-1's deferral, `A1_19`) | N proposals in `admin_review` | None defined yet | Master data stays stale/uncorrected | `/admin/data-governance` (ADM-32/33), once Wave B ships |
+| **Future** — Failed FDH parser/ingestion runs | **Super Admin (interim)** — temporary, PO-1 deferred, candidate: Data Governance Contributor | N failed runs in the last 24h | Real-time | Bank statement ingestion silently degrades for affected institutions | `/admin/data-governance/operations` (ADM-36), once Wave D ships |
+| **Future** — Stale reference data | Super Admin | Benchmarks/master-data not refreshed in N days | Configurable threshold | Users see outdated comparisons | Data Governance area (both the operational Benchmarks portion and the future FDH-governance portion, per PO-2's consolidation, `A1_06`) |
 | **Future** — Security/privacy alerts | Super Admin | N unresolved high/critical security events | Real-time for `critical` | Undetected privilege escalation or repeated-denial pattern | `/admin/security` (ADM-42), once A1.3/A4 ships |
 | **Future** — Active support-access grants nearing expiry | Super Admin, active grant holder | N grants expiring in the next hour | Time-boxed | Grantee loses access mid-task, or (worse) a grant silently over-runs if expiry fails | `/admin/security` (ADM-43), once A4 ships |
 
@@ -37,6 +37,8 @@ Home renders only the queues the caller's capabilities allow them to act on (uni
 
 Every queue source must distinguish `ok` (a real count, including zero), `unavailable` (the underlying feature doesn't exist yet or its data source is down), and an outright fetch failure (shown as an explicit error, never folded into a `0`). A queue source that errors must not take down the rest of Home — each queue tile fails independently.
 
-## 6. Open questions flagged for the Product Owner
+## 6. What PO-3 resolved, and what remains open
 
-See `A1_19` PO-3: exact queue thresholds (e.g. what counts as "stale"), whether Home replaces or supplements each domain's own existing dashboard-style landing page (`admin/resources/page.tsx`, `admin/benchmarks/page.tsx`), and alerting/paging behaviour for `critical` security events are all genuinely open, not resolved here.
+**Resolved by PO-3:** the Home model itself (role-aware operational work queue, not a metrics dashboard — approved as designed, §1 above) **and** the "does Home replace or supplement each domain's own dashboard" question — Home **supplements**, it never replaces or duplicates `admin/resources/page.tsx` or `admin/benchmarks/page.tsx`'s own dashboard-style landing pages (`A1_08` §8 records this explicitly for the Resources dashboard).
+
+**Still genuinely open, not resolved by PO-3 or anywhere else in A1:** exact queue thresholds (e.g. what counts as "stale"), and alerting/paging behaviour for `critical` security events. Both remain A2/A4 implementation-time decisions, not architecture questions this document can settle in the abstract.

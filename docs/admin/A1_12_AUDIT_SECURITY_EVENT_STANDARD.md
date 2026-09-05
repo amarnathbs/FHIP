@@ -1,5 +1,7 @@
 # A1.3 — Shared Audit and Security-Event Standard
 
+**PO-5: APPROVED as an interim tiered retention standard**, subject to later legal/privacy validation — see §2.4 for the design defaults now adopted. This resolves `REG-14`'s prior "no recommendation" status to a concrete, applicable-today set of periods; it does **not** resolve the underlying jurisdiction-review requirement (`A1_13` §3), which stays open and must complete before A4 production activation.
+
 ## 1. Current state (fragmented, confirmed by direct source read)
 
 | Table | Domain | Immutability | Read access |
@@ -35,6 +37,20 @@ Database-level guarantee (`REVOKE UPDATE, DELETE` explicit, not merely "nobody h
 | `ai_config_audit`/`ai_operational_events` | `ai` | Not schema-assessed in detail this stage — flagged for the future canonical-migration exercise |
 
 **No existing audit table is migrated, replaced, or altered in shape by A1.**
+
+### 2.4 Retention periods (PO-5, interim design defaults — marked "interim—legal/privacy validation required before A4 production activation")
+
+| Event class | Retention period | Applies to (examples) |
+|---|---|---|
+| Privilege, role, privacy, support-access, break-glass and high-risk governance events | **7 years** | Role grants/revocations (ADM-18/44), support-access grants (CAP-27/35/36), break-glass events (CAP-28), any `critical`-severity security event |
+| Content approval, publication, recommendation and master-data governance events | **7 years** | `transition_resource_post_status` audit rows, `admin_upsert_recommendation_atomic`/`admin_import_recommendation_conditions` audit rows, FDH master-data propose/review/approve events (ADM-31/32/33) |
+| Routine operational and processing events | **2 years** | Ingestion/parse-run events, queue-processing events, ordinary (non-privileged) content-workflow reads |
+| Low-level failed-authentication and diagnostic security events | **1 year**, unless escalated into an investigation | `AUTHZ_DENIED` (§5.1), validation failures, ordinary `422`/`500` events |
+| Security incidents or legal holds | **Retain until the hold is formally released** | Any event subject to an active investigation or legal hold, regardless of its own class's default period |
+
+**Binding conditions on every retention period above (restated from PO-5, verbatim in substance):** audit records must use minimised metadata and must not retain raw documents, secrets, or unnecessary financial figures — this is not a new rule (Standard §9/§7, `A1_12` §5.2's `safe_metadata` allow-list already required it) but PO-5 reconfirms it applies identically across every retention tier, not only the longest one.
+
+**What "interim" means here, precisely:** these periods are the design defaults A1.3's build-out (`A1_20` A4.1) should implement first. They are **not** a substitute for the AU Privacy Act/APP and India DPDP Act jurisdiction review `A1_13` §3 already requires — that review may later shorten, lengthen, or further split any of the five tiers above. No retention period in this table may be treated as final before that review completes and before A4's production activation gate, whichever is later.
 
 ## 3. The Wave 4 deferral on `resource_audit_log`/`resource_workflow_history` — carried forward exactly, not reopened
 

@@ -1,8 +1,12 @@
 # A1 — Terminal Report: Canonical Admin Architecture and Task-Based Information Architecture
 
-## Verdict: **CONDITIONAL PASS**
+## Verdict: **CONDITIONAL PASS**, closure addendum below
 
-The architecture is sound, internally consistent, and implementation-ready in bounded packages (`A1_20`). It is CONDITIONAL rather than FULL because 10 named decisions remain genuinely open for the Product Owner (`A1_19`) and several evidence-tier items are inherited, unresolved gaps from Admin A0.2 (`A1_18`) — exactly the CONDITIONAL PASS bar the dispatch itself defines: "the architecture is sound but named decisions/evidence remain open." **A2 may begin regardless** on every package whose entry gate does not depend on a PO-1 through PO-10 item (see `A1_20`'s own entry gates — A2's only blocking dependency is PO-2, a nav-label choice, not a security or privacy question).
+The architecture is sound, internally consistent, and implementation-ready in bounded packages (`A1_20`). It was CONDITIONAL rather than FULL because 10 named decisions remained genuinely open for the Product Owner (`A1_19`) and several evidence-tier items are inherited, unresolved gaps from Admin A0.2 (`A1_18`) — exactly the CONDITIONAL PASS bar the dispatch itself defines: "the architecture is sound but named decisions/evidence remain open." **A2 may begin regardless** on every package whose entry gate does not depend on a PO-1 through PO-10 item (see `A1_20`'s own entry gates — A2's only blocking dependencies were PO-2 and PO-3, both nav/Home-model choices, not security or privacy questions).
+
+### Closure addendum — all 10 PO items now ruled on
+
+The Product Owner has since ruled on all 10 items in `A1_19`. **9 of 10 are APPROVED** (PO-2 through PO-10, several with the Product Owner's own consolidation or additional protections beyond A1's original recommendation — most notably PO-2's 8-area structure, differing from A1's originally-proposed 9-area split). **PO-1 (the three domain-neutral roles) is DEFERRED**, not approved or rejected — the exact three role proposals, their capability bundles, and A1's own recommendation for each remain surfaced in `A1_03` §2 and `A1_19` PO-1 for the Product Owner's still-pending decision. Every approved ruling has been folded into the governing document (`A1_06` through `A1_20`, per `A1_19`'s own per-item "primary document(s) updated" list) — this is not a re-certification pass, only a documentation-consistency closure: no new code, route, migration, or role was created or changed to fold these rulings in, matching this stage's original documentation-only scope (§5 below, unchanged). **A2 is now unblocked on both its entry-gate dependencies (PO-2, PO-3) and may begin** — PO-1 remaining open does not block A2 (per `A1_20`'s own entry gates, restated in §4 below).
 
 ## 1. Accounting — every current artifact has a disposition
 
@@ -29,9 +33,9 @@ The architecture is sound, internally consistent, and implementation-ready in bo
 | Compliance Reviewer | Admin Home → Content (compliance queue) | Content | ADM-09 (compliance step),21 | ADM-10 | Create/edit content directly, publish, role assignment | Request Publisher/Resource Admin | ADM-09 manual |
 | Publisher | Admin Home → Content (publish queue) | Content | ADM-09 (publish step),21 | ADM-10 | Create/edit/compliance-approve, role assignment | Request Resource Admin | ADM-09 manual |
 | Resource Admin | Admin Home → Content + Analytics + Administration (Resources roles) | Content, Analytics, Administration | ADM-07 through 21 (all Resources tasks) | ADM-10, ADM-19 (shell) | Benchmarks, Recommendations, AI Admin, FDH, cross-domain audit/security | Request Super Admin | All Resources-area manuals |
-| Super Admin | Admin Home → everything | All 9 areas (Financial Data Governance renders only once Wave B ships something) | All 46 tasks except reserved-only (ADM-39) and Wave-F-gated (ADM-38) | ADM-10 until A3.1, ADM-19 until Analytics is real, ADM-30-40 until FDH-13 waves ship, ADM-41-46 until A1.3/A4 ship | ADM-39 (reserved, no holder designed for anyone) | N/A — top of the model | All manuals |
+| Super Admin | Admin Home → everything | All 8 areas, PO-2 structure (the Data Governance area's FDH-governance portion renders only once Wave B ships something; its Benchmarks portion is already operational) | All 46 tasks except reserved-only (ADM-39) and Wave-F-gated (ADM-38) | ADM-10 until A3.1, ADM-19 until Analytics is real, ADM-30-40 until FDH-13 waves ship, ADM-41-46 until A1.3/A4 ship | ADM-39 (reserved, no holder designed for anyone) | N/A — top of the model | All manuals |
 
-**No area renders empty for any row** (cross-checked against `A1_07` §2's matrix — every persona has at least one non-dash cell, and no top-level area has zero eligible personas across the whole table).
+**No area renders empty for any row** (cross-checked against `A1_07` §2's matrix, updated to the PO-2 8-area structure — every persona has at least one non-dash cell, and no top-level area has zero eligible personas across the whole table).
 
 ## 3. Verdict criteria, checked one by one
 
@@ -51,13 +55,15 @@ The architecture is sound, internally consistent, and implementation-ready in bo
 
 **Why CONDITIONAL and not FULL:** the dispatch's own rule is explicit — FULL requires every material decision "either resolved or explicitly flagged," which is met, but CONDITIONAL is the correct verdict whenever "named decisions/evidence remain open," which is also true here (10 PO items, plus A0.2's own inherited evidence-tier gap — no live-DEV browser session was available to this stage either, the same constraint Wave 6 disclosed). This is not a lower-quality outcome than FULL; it is the verdict the dispatch defines for exactly this situation.
 
-## 4. What A2 may do without waiting for any PO item
+## 4. What A2 may do without waiting for any PO item — now fully unblocked
 
-Per `A1_20`'s own entry gates: A2 depends only on PO-2 (final nav labels). Every other PO item (PO-1 roles, PO-4 RPC/service-role exception, PO-5 retention, PO-6 consent, PO-7 suppression thresholds, PO-10 role-access expansion) gates a **later** package (A3.3, A4, or a specific FDH-13 wave), not A2 itself. **A2 may begin regardless of PO-1/3/4/5/6/7/8/9/10's resolution timing**, provided PO-2 and PO-3 (Home model) are settled first.
+Per `A1_20`'s own entry gates: A2 depended only on PO-2 (final nav labels) and PO-3 (Home model). **Both are now APPROVED** (`A1_19`) — A2's entry gate is met. Every other PO item (PO-1 roles — still deferred — PO-4 RPC/service-role exception, PO-5 retention, PO-6 consent, PO-7 suppression thresholds, PO-10 role-access expansion) gates a **later** package (A3.3, A4, or a specific FDH-13 wave), not A2 itself, and PO-1's continued deferral does not block A2 either — A2 builds no role. **A2 may begin now.**
 
 ## 5. Confirmation of zero unauthorized implementation
 
 This stage's branch, `design/admin-a1-canonical-architecture`, forked from `origin/main` @ `21839a8` (confirmed identical to `HEAD` at Phase 0, `git rev-list --left-right --count HEAD...origin/main` → `0 0`). Every file this stage touched is under `docs/admin/A1_*` (21 new files) — no file under `app/`, `lib/`, `components/`, `supabase/migrations/`, or `scripts/` was created or edited. Verifiable directly: `git diff --stat 21839a8` on this branch shows only `docs/admin/A1_*.md` and `docs/admin/A1_16_FDH13_TRACEABILITY_MATRIX.csv`.
+
+**Closure-addendum pass (folding in the Product Owner's 10 rulings) held to the identical constraint:** every file this pass touched is likewise under `docs/admin/A1_*` — no file under `app/`, `lib/`, `components/`, `supabase/migrations/`, or `scripts/` was created or edited during this pass either. See the closure report accompanying this branch's push for the exact `git diff --stat` output and the reconciliation against `origin/main` performed before pushing.
 
 ## 6. Sources consulted (Phase 0 discovery, full list)
 
