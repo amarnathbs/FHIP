@@ -32,3 +32,52 @@ Every finding carried from Admin A0.2 Waves 1–6, reproduced from `A02_WAVE6_HA
 ## Reconciliation
 
 Every row in Wave 6's own Handover document (`A02_WAVE6_HANDOVER_TO_A1.md` §1–§8) appears above with an A1-stage disposition. Nothing is silently dropped. Items marked "Not addressed" are exactly the ones the brief's own scope boundary places outside A1 (UI copy/cosmetic decisions, one-off DB cleanups requiring live-DEV access, PO-only calls) — each still has its Wave 6 owner intact, and none is presented here as resolved when it is not.
+
+---
+
+## A0.2 Wave 6 evidence-tier closure (this pass, 2026-09-05)
+
+Per the Product Owner's explicit follow-up — three items, verbatim: (1) correct and rerun the Wave 2 certification harness against a fixed baseline SHA; (2) reconcile the full-suite arithmetic exactly, including passed/failed/skipped counts; (3) confirm the locations and commit SHA of all 10 required Wave 6 deliverables — this pass independently reproduced each rather than trusting Wave 6's own report text. The Product Owner's separate ruling that "the absence of repeat live-DEV browser testing may remain a disclosed evidence-tier limitation" is accepted as-is and was **not** re-attempted (§4 below).
+
+### 1. Wave 2 certification harness — correction independently re-run
+
+Wave 6's own report (`A02_WAVE6_CONSOLIDATED_CERTIFICATION_REPORT.md` §5; `A02_WAVE6_HANDOVER_TO_A1.md` §1, item W6-5) diagnosed and fixed a real harness bug: SECTION 7 of `scripts/admin_a02_wave2_certification.mjs` read a **moving** `origin/main` ref as its "pre-Wave-2" baseline, which silently stopped reproducing the pre-fix defect once `origin/main` absorbed Wave 2's own fix. Wave 6 pinned SECTION 7 to `1b40b0be0bbb6b7d67b611e08ca255e68562abf1` — independently confirmed by this pass to (a) exist as a real commit ("Merge Wave 0: permanent FHIP Admin Architecture Standard") and (b) match `A02_WAVE2_WORKFLOW_ORDERING_INTEGRITY_CERTIFICATION.md` §2's own recorded value of "`origin/main` at report time" — the correct, principled baseline choice, not an arbitrary pin.
+
+**This pass independently re-ran the corrected harness** (not merely read Wave 6's report) in the Wave 6 worktree (`D:/FHIP/.claude/worktrees/agent-a490a0668360b4385`, HEAD `d03d4dba41060382279ad0dcf2442bd48a68a556`, which carries the fix): `node scripts/admin_a02_wave2_certification.mjs` → **352 passed, 0 failed, exit 0**, reproduced fresh. SECTION 7's own output confirms the fix: `PASS baseline route sources readable from the fixed pre-Wave-2 SHA (1b40b0be0bbb6b7d67b611e08ca255e68562abf1)`, followed by all 7 pre-fix defect-signature checks passing.
+
+**Residual gap found this pass, not previously disclosed anywhere:** the fix exists only inside this unmerged Wave 6 worktree/branch. This pass independently discovered that **the Wave 2 implementation itself (`D:/fhip-a02-wave2`, branch `fix/admin-a02-wave2-workflow-ordering-integrity`, tip `80a2e4f36184b9a155c489826f13e26cb5d5291a`) has already been merged into `origin/main`**, at merge commit `6fdcf7e61e9fc7e6f514edb0d823ca395b7853dd` ("merge: Admin A0.2 Wave 2 — Workflow & Ordering Integrity — FULL PASS", 2026-08-31, author `amarnathbs`) — confirmed via `git merge-base --is-ancestor 6fdcf7e origin/main` → true, and migration `0116_admin_a02_wave2_related_reorder_and_scheduling_integrity.sql` present at `origin/main`'s current tip. **`origin/main`'s own copy of `scripts/admin_a02_wave2_certification.mjs` (inherited via that merge) still contains the original, unfixed SECTION 7** — `git show origin/main:scripts/admin_a02_wave2_certification.mjs` still reads a moving `origin/main` ref, confirmed directly. Wave 6's fix was never cherry-picked back into the canonical branch that actually shipped. **This is a genuine, still-open residual**, distinct from what Wave 6 itself reported as closed: the corrected harness is proven correct (352/352 against the intended fixed baseline) but that correction has not yet landed anywhere on `origin/main`. Recommended follow-up (outside A1's own documentation-only mandate to perform): a single-file, low-risk cherry-pick of Wave 6's SECTION 7 fix onto `origin/main` — test-harness only, no application-code change — flagged here for Product Owner authorisation.
+
+### 2. Full-suite arithmetic — independently re-run, not copied
+
+Wave 6's own report claimed, against its own `b4b4340` tree: Files 247 = 232 passed + 13 failed + 2 skipped; Tests 5871 = 5847 passed + 6 failed + 18 skipped — while separately disclosing that 5 further files hit a Vitest worker-start infrastructure timeout under shared-machine contention and were excluded from that count entirely.
+
+**This pass independently re-ran the full deterministic suite** (`npx vitest run`) in the same worktree, same commit (`d03d4dba41060382279ad0dcf2442bd48a68a556`), with no worker-start infrastructure failure this time: **Files: 252 = 239 passed + 11 failed + 2 skipped** (239+11+2=252, verified). **Tests: 5941 = 5920 passed + 3 failed + 18 skipped** (5920+3+18=5941, verified). The skipped count (18) matches Wave 6's own figure exactly, consistent with the same two deliberate live-DEV skip-guard files (`iiR4LiveIntegration.test.ts` [5 tests] + `resourcesR1_7DFinalLiveDev.test.ts` [13 tests]).
+
+**Reconciliation of the discrepancy (252 vs. 247 files; 5941 vs. 5871 tests):** the +5 files and +70 tests are exactly the 5 files Wave 6 itself disclosed as dropped by its own worker-start timeout (uncounted in either of its totals) — they ran cleanly, with no infrastructure failure, in this pass's rerun. Of this pass's 11 failed files: 9 crash at import for lack of live-DEV credentials (`resourcesAdminR1_2.test.ts`, `resourcesAdminRoleCtaHotfixLiveDev.test.ts`, `resourcesEditorR1_3.test.ts`, `resourcesDiscoveryR1_6LiveDev.test.ts`, `resourcesP0ContentR1_7CLiveDev.test.ts`, `resourcesPublicR1_5.test.ts`, `resourcesImportR1_7LiveDev.test.ts`, `resourcesR1_1.test.ts`, `resourcesR1_4LiveDev.test.ts` — 0 tests counted for any of the 9, matching Wave 6's own disclosed credential-absence pattern exactly); `aiResidualClosureFailClosed.test.ts` (2 of 18 failed: tests A1 and A4); `fdh11Isolation.test.ts` (1 of 11 failed: a 5-second timeout on "no engine, report or dashboard queries fdh_investment_statement_* directly"). That is 3 failed tests total, fewer than Wave 6's own 6 — consistent with Wave 6's own disclosure that "10 of the 11 [failed/timed-out tests] pass cleanly outside contention" and that only `aiResidualClosureFailClosed.test.ts` test A4 "remains flaky even alone": this pass's independent rerun reproduces exactly that pattern (A4 failed again here, unprompted). **Zero net Admin-attributable regression** — none of the 11 failing files touches the Admin surface (`app/api/admin`, `app/(app)/admin`, `lib/resources/permissions.ts`, `lib/services/adminAuth.ts`); every failure is a pre-existing, already-disclosed live-DEV-credential or shared-machine-contention condition, not a new defect.
+
+### 3. Wave 6 deliverables — locations and commit SHA confirmed
+
+All 10 required deliverables independently confirmed present via `git ls-tree -r --long`, at:
+
+**Worktree:** `D:/FHIP/.claude/worktrees/agent-a490a0668360b4385`
+**Branch:** `worktree-agent-a490a0668360b4385` (local only — not pushed to `origin`)
+**Commit:** `d03d4dba41060382279ad0dcf2442bd48a68a556` (one commit ahead of `2262808144f4749b72e0cf19edcd24e08137c803`, the original Wave 6 certification commit; `d03d4db` is a documentation-only follow-up correcting a self-referential SHA in the report's own text, per its own commit message — no deliverable content changed)
+
+| # | File | Blob SHA |
+|---|---|---|
+| 1 | `docs/admin/A02_WAVE6_ADMIN_SURFACE_INVENTORY.md` | `e1576b4395cc6cbf1dd0b15e409777a47582c40a` |
+| 2 | `docs/admin/A02_WAVE6_CONSOLIDATED_CERTIFICATION_REPORT.md` | `722a682dc82eeb3dae3f858a4f3a6a40cf4f8ee1` |
+| 3 | `docs/admin/A02_WAVE6_FDH13_TRACEABILITY_MATRIX.md` | `666635fb7f7ccd627e83039f269938b6ab2969d7` |
+| 4 | `docs/admin/A02_WAVE6_FLAT_AUTHORIZATION_REGISTER.md` | `671b3a14fba0d066b9b580841e53e3bbcd1bd6ce` |
+| 5 | `docs/admin/A02_WAVE6_HANDOVER_TO_A1.md` | `3b3e2224c8ba5aea8f32cb4d5e36745ddd237616` |
+| 6 | `docs/admin/A02_WAVE6_KNOWN_DEFERRALS_RESIDUAL_RISK_REGISTER.md` | `b43a558f57e9501d42a07f0000b9a61106401233` |
+| 7 | `docs/admin/A02_WAVE6_MUTATION_RPC_AUDIT_REGISTER.md` | `829924e06e17c2f9155f2174ba3845805a0316b7` |
+| 8 | `docs/admin/A02_WAVE6_TASK_MANUAL_INDEX.md` | `d361c73201c24b6817cc48b6da28e4075485bb5c` |
+| 9 | `docs/admin/A02_WAVE6_TEST_AND_LIVE_EVIDENCE_INDEX.md` | `9e07e38ac5b8426db1bb659a112d0bbacb9edcd2` |
+| 10 | `docs/admin/A02_WAVE6_WAVES1-5_TRACEABILITY_MATRIX.md` | `0fdb8066718a030b005419c65517fa4bced1c4de` |
+
+Not merged, not pushed to `origin/main` — the same status Wave 6 itself recorded; unchanged by this pass.
+
+### 4. Live-DEV browser recertification (Waves 3–5) — accepted, not attempted
+
+Per the Product Owner's explicit instruction, the absence of repeat live-DEV browser recertification remains a disclosed evidence-tier limitation and was **not** re-attempted in this pass: Waves 3–5 already supplied live evidence and no relevant Admin implementation has changed since (confirmed again by this pass — see Task B's `git diff --stat` finding of zero application-code drift since the last reconciliation). This item is closed by the Product Owner's own statement, not by new evidence, and is not reopened here.
