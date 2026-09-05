@@ -1,0 +1,106 @@
+{
+  "fixtureId": "pc3rv-q01-baseline-multi-amc-multi-folio",
+  "title": "Q01 real-variant baseline: multi-folio (implicit multi-AMC via distinct schemes), purchase+SIP+redemption, Stamp Duty + STT, multi-page",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950104000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    },
+    {
+      "folioNumber": "950104000002",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 6,
+  "transactions": [
+    {
+      "folioNumber": "950104000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500000",
+      "navRaw": "119.760500",
+      "sourceReference": "PCRV1-001"
+    },
+    {
+      "folioNumber": "950104000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "fee",
+      "amount": "50.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    },
+    {
+      "folioNumber": "950104000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.200000",
+      "navRaw": "121.360000",
+      "sourceReference": "PCRV1-003"
+    },
+    {
+      "folioNumber": "950104000002",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-02-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.500000",
+      "navRaw": "123.460000",
+      "sourceReference": "PCRV1-004"
+    },
+    {
+      "folioNumber": "950104000002",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-05-10",
+      "canonicalType": "redemption",
+      "amount": "3000.00",
+      "units": "20.100000",
+      "navRaw": "149.250000",
+      "sourceReference": "PCRV1-005"
+    },
+    {
+      "folioNumber": "950104000002",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-05-12",
+      "canonicalType": "tax",
+      "amount": "90.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "950104000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "units": "124.700",
+      "value": "16822.03"
+    },
+    {
+      "folioNumber": "950104000002",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "units": "20.400",
+      "value": "3044.70"
+    }
+  ],
+  "notes": null
+}

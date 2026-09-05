@@ -1,0 +1,55 @@
+{
+  "fixtureId": "pc3-q04b-month1-plus-2-cumulative",
+  "title": "Q04b — second monthly statement, cumulative Jan+Feb (Jan transaction repeated, Feb new)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-02-28",
+  "accounts": [
+    {
+      "folioNumber": "9304040000401",
+      "holderName": "KABIR SETH",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "9304040000401",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-01-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q4-001"
+    },
+    {
+      "folioNumber": "9304040000401",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.500",
+      "nav": "123.4600",
+      "sourceReference": "PC3Q4-002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "9304040000401",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-02-28",
+      "units": "82.250",
+      "value": "10190.78",
+      "nav": "123.9000"
+    }
+  ],
+  "notes": null
+}

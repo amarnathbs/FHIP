@@ -1,0 +1,238 @@
+{
+  "fixtureId": "pc3rv-q12-continuation-stress",
+  "title": "Q12 real-variant — continuation stress: 16-row transaction list spans a page break with zero header reprint, then a second folio/scheme/AMC begins, then closes",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-12-31",
+  "accounts": [
+    {
+      "folioNumber": "951204000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    },
+    {
+      "folioNumber": "951204000002",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 18,
+  "transactions": [
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-01-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.900000",
+      "navRaw": "120.700000",
+      "sourceReference": "PCRV12-001"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.800000",
+      "navRaw": "121.400000",
+      "sourceReference": "PCRV12-002"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-03-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.700000",
+      "navRaw": "122.100000",
+      "sourceReference": "PCRV12-003"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-04-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.600000",
+      "navRaw": "122.800000",
+      "sourceReference": "PCRV12-004"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-05-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.500000",
+      "navRaw": "123.500000",
+      "sourceReference": "PCRV12-005"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-06-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.400000",
+      "navRaw": "124.200000",
+      "sourceReference": "PCRV12-006"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-07-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.300000",
+      "navRaw": "124.900000",
+      "sourceReference": "PCRV12-007"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-07-04",
+      "canonicalType": "fee",
+      "amount": "35.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-08-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.200000",
+      "navRaw": "125.600000",
+      "sourceReference": "PCRV12-008"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-09-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.100000",
+      "navRaw": "126.300000",
+      "sourceReference": "PCRV12-009"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-10-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.000000",
+      "navRaw": "127.000000",
+      "sourceReference": "PCRV12-010"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-09-11",
+      "canonicalType": "tax",
+      "amount": "55.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-11-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.900000",
+      "navRaw": "127.700000",
+      "sourceReference": "PCRV12-011"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-12-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.800000",
+      "navRaw": "128.400000",
+      "sourceReference": "PCRV12-012"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-01-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.700000",
+      "navRaw": "129.100000",
+      "sourceReference": "PCRV12-013"
+    },
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.600000",
+      "navRaw": "129.800000",
+      "sourceReference": "PCRV12-014"
+    },
+    {
+      "folioNumber": "951204000002",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-08-01",
+      "canonicalType": "purchase",
+      "amount": "15000.00",
+      "units": "60.000000",
+      "navRaw": "250.000000",
+      "sourceReference": "PCRV12-EXTRA-001"
+    },
+    {
+      "folioNumber": "951204000002",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-08-15",
+      "canonicalType": "redemption",
+      "amount": "5000.00",
+      "units": "20.000000",
+      "navRaw": "250.000000",
+      "sourceReference": "PCRV12-EXTRA-002"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "951204000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "units": "549.500",
+      "value": "82425.00"
+    },
+    {
+      "folioNumber": "951204000002",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "units": "40.000",
+      "value": "10000.00"
+    }
+  ],
+  "notes": "Folio 1 (951204000001) carries 16 rows (14 economic + 2 fee/tax) split mid-table across the page break with zero header reprint. Folio 2 (951204000002) is a fully independent scheme/account — zero cross-scheme/cross-AMC contamination of units, balances, or transaction counts permitted between the two."
+}

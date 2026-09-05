@@ -1,0 +1,75 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1259 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CQAL-STMT-TRK-2026-CAMS-PC3RV-Q11-FEE-EVIDENCE) Tj
+0 -12 Td
+(Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Jan-2025 To 30-Jun-2025) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 951104000001) Tj
+0 -12 Td
+(PAN: PCRVQ0012F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Composite Growth Opportunities Fund - Growth \(Direct Plan\) - ISIN: INF701K01AA1\(Advisor: ARN10001\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(01-Feb-2025   10,000.00         119.7600     83.500     Purchase                              83.500 [Ref: PCRV11-001]) Tj
+0 -12 Td
+(03-Feb-2025   50.00***   Stamp Duty   ***) Tj
+0 -12 Td
+(10-Mar-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV11-003]) Tj
+0 -12 Td
+(11-Mar-2025   25.00***   Stamp Duty   ***) Tj
+0 -12 Td
+(11-Mar-2025   60.00***   STT   ***) Tj
+0 -12 Td
+(15-May-2025   4,000.00         144.9300     27.600     Redemption                            97.100 [Ref: PCRV11-006]) Tj
+0 -12 Td
+(16-May-2025   40.00***   STT   ***) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 97.100 Total Cost Value: Rs. 13,098.79) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001558 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1655
+%%EOF

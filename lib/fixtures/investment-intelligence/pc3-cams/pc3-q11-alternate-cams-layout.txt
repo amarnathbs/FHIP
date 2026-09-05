@@ -1,0 +1,29 @@
+CQAL-STMT-TRK-2026-CAMS-Q11V3
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 9311040001101
+PAN: PCQAL0011F
+
+Vishaal Composite Fund - Growth (Direct Plan) - ISIN: INF555K01AB1(Advisor: ARN00234) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Feb-2025   10,000.00        119.7605     83.500      Purchase                             83.500   [Ref: PC3Q11-001]
+05-Feb-2025   50.00            0.0000       0.000       Stamp Duty                           83.500   [Ref: PC3Q11-002]
+10-Feb-2025   120.00           0.0000       0.000       STT                                  83.500   [Ref: PC3Q11-003]
+15-Mar-2025   5,000.00         121.3600     41.200      SIP Purchase                         124.700  [Ref: PC3Q11-004]
+20-Apr-2025   5,000.00         123.4600     40.500      SIP Purchase                         165.200  [Ref: PC3Q11-005]
+25-May-2025   5,000.00         125.1000     39.960      SIP Purchase                         205.160  [Ref: PC3Q11-006]
+-- 1 of 2 --
+30-Jun-2025   5,000.00         124.6300     40.120      SIP Purchase                         245.280  [Ref: PC3Q11-007]
+
+Closing Unit Balance: 245.280 Total Cost Value: Rs. 30,000.00
+
+Folio No: 9311040001102
+PAN: PCQAL0012F
+
+Zenith Diversified Fund - Growth (Regular Plan) - ISIN: (Advisor: ARN00567) Registrar : CAMS
+
+No transactions during this statement period.
+
+Closing Unit Balance: 60.000 Total Cost Value: Rs. 6,000.00

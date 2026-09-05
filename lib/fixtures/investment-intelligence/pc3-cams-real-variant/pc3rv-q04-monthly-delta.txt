@@ -1,0 +1,28 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q04-MONTHLY-DELTA
+Consolidated Account Statement
+Statement Period : 01-Jan-2024 To 31-Jul-2025
+
+Folio No: 950104000001
+PAN: PCRVQ0001F
+
+Composite Growth Opportunities Fund - Growth (Direct Plan) - ISIN: INF701K01AA1(Advisor: ARN10001) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Feb-2025   10,000.00         119.7605     83.500     Purchase                              83.500 [Ref: PCRV1-001]
+05-Feb-2025   50.00***   Stamp Duty   ***
+15-Mar-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV1-003]
+15-Jul-2025   5,000.00         131.9300     37.900     SIP Purchase                          162.600 [Ref: PCRV4-NEW-001]
+
+Closing Unit Balance: 162.600 Total Cost Value: Rs. 21,934.74
+
+-- 1 of 2 --
+Folio No: 950304000001
+PAN: PCRVQ0003F
+
+Emerging Sectors Advantage Fund - Growth (Direct Plan) - ISIN: INF703K01CC3(Advisor: ARN10003) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+10-Jan-2024   12,000.00         119.7700     100.190     Purchase                              100.190 [Ref: PCRV3-OLD-001]
+20-Jun-2025   6,000.00         145.1000     41.360     Purchase                              141.550 [Ref: PCRV4-NEW-002]
+
+Closing Unit Balance: 141.550 Total Cost Value: Rs. 18,543.05
