@@ -1,6 +1,6 @@
 # A1.4 — Architecture Decision Register
 
-The 10 items A1 originally flagged, not decided, for the Product Owner. **All 10 have now been ruled on.** Each entry below records A1's original options/recommendation/risks (unchanged, for the record) plus the Product Owner's actual ruling and where it has been folded into the rest of the A1 document set.
+The 10 items A1 originally flagged, not decided, for the Product Owner. **All 10 have now been ruled on and resolved — none remains open.** Each entry below records A1's original options/recommendation/risks (unchanged, for the record) plus the Product Owner's actual ruling and where it has been folded into the rest of the A1 document set.
 
 ## PO-1 — The three proposed domain-neutral roles
 
@@ -8,7 +8,19 @@ The 10 items A1 originally flagged, not decided, for the Product Owner. **All 10
 **A1's original recommendation:** (c) — per `A1_03` §2's own per-candidate test. Contributor/Approver touch only unimplemented Financial-Data-Governance (now Data Governance) tasks and are reusable beyond FDH by the same reasoning already accepted for the propose/review/approve shape; Support Access Grantee's justification is strong but its capabilities (CAP-27/28) are not designed yet, so creating the role early would grant a role with nothing safe to hold.
 **Risks (as originally posed):** approving early (a) risks a role with an undesigned access surface sitting unused, inviting scope creep into "what else could this role do" without a fresh review; approving nothing (b) leaves Super Admin as a permanent single point of both authority and audit-attribution ambiguity for FDH governance, which is itself a Standard §5 least-privilege tension worth resolving eventually.
 
-**Product Owner ruling: DEFERRED — not approved, not rejected.** The Product Owner has not yet chosen between (a)/(b)/(c)/(d); a decision requires the exact three proposed role names, their capability bundles, and A1's own recommendation for each, surfaced in full (see the A1 closure report accompanying this register, and `A1_03` §2 directly — the three proposals are not reproduced a second time here to avoid drift between two copies of the same source text). **Until PO-1 is decided:** every A1 document continues to use the existing 7 canonical roles, with **"Super Admin (interim)" now explicitly marked temporary wherever it appears** — restated in `A1_03`, `A1_04`, `A1_09`, `A1_13`, `A1_16` (CSV and MD), and this register, so no document reads "Super Admin (interim)" as a permanent allocation while PO-1 remains open. No role is created by A1 or by this closure pass.
+**Product Owner ruling (RESOLVED — final; deferral is the resolution, not a still-pending state), verbatim:**
+
+> Do not approve or create any of the three proposed domain-neutral roles at A1. Defer all three. Use the existing canonical roles and capability-based authorization during A2. Reassess the candidates during A3/A4 only when real implemented tasks demonstrate that: existing roles cannot safely own the capability; a capability bundle alone is insufficient; separation of duties requires a distinct role; the role has sustainable operational ownership. "Super Admin (interim)" must remain temporary and cannot become permanent by default. This resolves PO-1. Once recorded in the Architecture Decision Register, A1 may be upgraded to FULL PASS.
+
+**Effect:** none of the three candidates (Data Governance Contributor, Data Governance Approver, Support Access Grantee) is approved or created at A1 or A2. Every affected capability continues to resolve to the existing 7 canonical roles — in practice, Super Admin (interim) for every FDH-13 governance capability not yet assignable elsewhere — under ordinary capability-based authorization, exactly as A1 already documented. This is option (b) from A1's original framing (§ above), not A1's own recommended (c) — the Product Owner explicitly chose the more conservative path.
+
+**Named reassessment criteria for A3/A4 (evidence-based, not calendar-based):** any of the three candidates may be reopened only when a real, implemented task demonstrates at least one of:
+1. an existing canonical role cannot safely own the capability (a genuine least-privilege or blast-radius conflict, not merely convenience);
+2. a capability bundle alone (without a role) is insufficient to express the needed authorization boundary;
+3. separation of duties requires a distinct role (not achievable via per-record enforcement, e.g. proposer≠approver, alone);
+4. the candidate role would have sustainable operational ownership (someone to actually hold and account for it, not a role created and left empty).
+
+**Binding constraint restated:** "Super Admin (interim)" must remain explicitly temporary and must never become a permanent allocation by default — this was already true throughout A1's document set (`A1_03`, `A1_04`, `A1_09`, `A1_13`, `A1_16` CSV and MD) and remains unchanged and unweakened by this ruling; the Product Owner's ruling reiterates it as a standing requirement, not a new one. No role is created by A1, by A2, or by this closure pass.
 
 ## PO-2 — Final nav labels/ordering
 
@@ -86,7 +98,7 @@ The 10 items A1 originally flagged, not decided, for the Product Owner. **All 10
 
 | Item | Ruling | Primary document(s) updated |
 |---|---|---|
-| PO-1 | **Deferred** — three role proposals not yet approved/rejected; "Super Admin (interim)" marked temporary everywhere | `A1_03`, `A1_04`, `A1_09`, `A1_13`, `A1_16` |
+| PO-1 | **Resolved — deferred (final).** All three role proposals deferred to A3/A4, reassessed only against 4 named evidence criteria; existing canonical roles + capability-based authorization used through A2; "Super Admin (interim)" marked temporary everywhere, cannot become permanent by default | `A1_03`, `A1_04`, `A1_09`, `A1_13`, `A1_16`, this register |
 | PO-2 | **Approved**, with consolidation (8 areas, not 9; Benchmarks folds into Data Governance) | `A1_06`, `A1_07`, `A1_08` |
 | PO-3 | **Approved** as designed — role-aware work queue, not a dashboard | `A1_09`, `A1_08` §8 |
 | PO-4 | **Approved** with documented service-role exception + RPC register | `A1_11` |
@@ -97,4 +109,6 @@ The 10 items A1 originally flagged, not decided, for the Product Owner. **All 10
 | PO-9 | **Approved** — no blanket retirement, compatibility + evidence-based process | `A1_08` |
 | PO-10 | **Approved** — no blanket expansion, per-capability approval required | `A1_04` |
 
-**A1 ruled on none of these — the Product Owner did.** This register records what was asked, what A1 recommended, and what was actually decided, so the reasoning trail is never lost even where the ruling differs from A1's own recommendation (PO-2, PO-6 both did).
+**A1 ruled on none of these — the Product Owner did.** This register records what was asked, what A1 recommended, and what was actually decided, so the reasoning trail is never lost even where the ruling differs from A1's own recommendation (PO-1, PO-2, PO-6 all did — PO-1 chose the more conservative option (b) over A1's recommended (c)).
+
+**All 10 items are now resolved.** With PO-1's deferral ruling recorded above, no item in this register remains open. Per the Product Owner's own words ("Once recorded in the Architecture Decision Register, A1 may be upgraded to FULL PASS"), A1's terminal verdict is upgraded accordingly — see `A1_21` §"Closure addendum".

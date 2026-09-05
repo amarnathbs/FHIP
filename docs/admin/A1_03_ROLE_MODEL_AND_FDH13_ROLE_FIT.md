@@ -1,6 +1,18 @@
 # A1.1 — Canonical Role Model and FDH-13 Role-Fit Assessment
 
-**PO-1 status: DEFERRED.** The Product Owner has not approved or rejected any of the three candidates in §2 — a decision is pending the exact role names, capability bundles, and A1's own per-candidate recommendation, all surfaced verbatim in §2 below (`A1_19` PO-1). **Until PO-1 resolves, this document's continued use of "Super Admin (interim)" throughout §1's table and §2's candidate analysis names a temporary allocation, never a proposed permanent role** — no capability currently resolving to Super Admin (interim) should be read as "settled to stay with Super Admin," only as "not yet moved to a role that does not exist yet."
+**PO-1 status: RESOLVED — the Product Owner has explicitly ruled to defer all three candidates in §2.** This is a closed decision, not a still-pending one: the Product Owner considered the exact role names, capability bundles, and A1's own per-candidate recommendation (§2 below) and ruled, verbatim (`A1_19` PO-1):
+
+> "Do not approve or create any of the three proposed domain-neutral roles at A1. Defer all three. Use the existing canonical roles and capability-based authorization during A2. Reassess the candidates during A3/A4 only when real implemented tasks demonstrate that: existing roles cannot safely own the capability; a capability bundle alone is insufficient; separation of duties requires a distinct role; the role has sustainable operational ownership. 'Super Admin (interim)' must remain temporary and cannot become permanent by default."
+
+None of the three candidates is approved, created, or rejected outright — they are deferred, with the decision itself now final. Every affected capability continues to resolve to the existing 7 canonical roles under ordinary capability-based authorization through A2. **This document's continued use of "Super Admin (interim)" throughout §1's table and §2's candidate analysis names a temporary allocation, never a proposed permanent role** — no capability currently resolving to Super Admin (interim) should be read as "settled to stay with Super Admin," only as "not yet moved to a role that does not exist yet," and it cannot become permanent by default per the Product Owner's explicit reiteration above.
+
+**A3/A4 reassessment criteria (named by the Product Owner — this is the evidence bar a future implementer must clear before reopening any of the three candidates):**
+1. an existing canonical role cannot safely own the capability;
+2. a capability bundle alone (without a role) is insufficient;
+3. separation of duties requires a distinct role;
+4. the role would have sustainable operational ownership.
+
+Reassessment happens only when a **real implemented task** demonstrates one of these — not speculatively, and not before A3/A4.
 
 ## 1. The canonical role model, as implemented today
 
@@ -61,13 +73,15 @@ Source: `FHIP_FDH13_Governance_Capability_Model.md` §3 (`D:/fhip-fdh13-admin-ba
 
 Every capability in the FDH-13 model resolves today via **Super Admin (interim)** — the same fallback every other currently-unassigned Admin capability in this codebase already uses (CAP-16 covers Benchmarks/Recommendations/AI Admin the same way). Creating any of the three candidates is a separate, later Product Owner decision (`REG-16`), never a prerequisite for FDH-13 Wave A, which builds only the capability-resolution and audit-sink foundation and touches no proposal-approval RPC at all.
 
-## 4. Summary table for the Product Owner
+## 4. Summary table — Product Owner ruling recorded
 
-| Candidate | Recommendation | Blocking anything now? | Owner decision |
+| Candidate | A1's recommendation | Blocking anything now? | Owner decision |
 |---|---|---|---|
-| Data Governance Contributor | Approve-in-principle | No | `A1_19` PO-1 |
-| Data Governance Approver | Approve-in-principle | No | `A1_19` PO-1 |
-| Support Access Grantee | Approve-the-shape, defer the grant mechanism to Wave F/A4 | No | `A1_19` PO-1 |
-| Operational Emergency Control (unnamed 4th) | Not recommended for creation now | No | Noted only |
+| Data Governance Contributor | Approve-in-principle | No | **Deferred to A3/A4** (`A1_19` PO-1, resolved) |
+| Data Governance Approver | Approve-in-principle | No | **Deferred to A3/A4** (`A1_19` PO-1, resolved) |
+| Support Access Grantee | Approve-the-shape, defer the grant mechanism to Wave F/A4 | No | **Deferred to A3/A4** (`A1_19` PO-1, resolved) |
+| Operational Emergency Control (unnamed 4th) | Not recommended for creation now | No | Noted only — not part of PO-1's ruling |
+
+All three PO-1 candidates carry the same disposition: not approved, not created, reassessed only during A3/A4 against the 4 named evidence criteria in the status banner at the top of this document. The Product Owner's ruling was more conservative than A1's own per-candidate recommendation (which favoured approving Contributor/Approver in principle now) — see `A1_19` PO-1 for the full verbatim ruling.
 
 **A1 creates none of these roles.** This document exists so Wave A (or A2, if the canonical role-assignment task ADM-44 lands first) inherits a reviewed recommendation rather than an invented one under implementation pressure.
