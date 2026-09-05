@@ -1,0 +1,84 @@
+{
+  "fixtureId": "pc3rv-q06-sip-rich-skipped-month",
+  "title": "Q06 real-variant — SIP-rich: Jan/Feb/Apr/May/Jun, March deliberately skipped",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950604000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 5,
+  "transactions": [
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-01-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750000",
+      "navRaw": "119.760000",
+      "sourceReference": "PCRV6-001"
+    },
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.510000",
+      "navRaw": "120.500000",
+      "sourceReference": "PCRV6-002"
+    },
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-04-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.880000",
+      "navRaw": "122.300000",
+      "sourceReference": "PCRV6-003"
+    },
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-05-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.960000",
+      "navRaw": "125.100000",
+      "sourceReference": "PCRV6-004"
+    },
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-06-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.120000",
+      "navRaw": "124.630000",
+      "sourceReference": "PCRV6-005"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "950604000001",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "units": "204.220",
+      "value": "25451.94"
+    }
+  ],
+  "notes": null
+}

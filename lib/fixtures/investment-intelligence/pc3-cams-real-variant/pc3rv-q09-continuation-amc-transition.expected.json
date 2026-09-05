@@ -1,0 +1,117 @@
+{
+  "fixtureId": "pc3rv-q09-continuation-amc-transition",
+  "title": "Q09 real-variant — transaction table spans a real PDF page break with ZERO header reprint, then a new folio/scheme (AMC transition) begins",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950904000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    },
+    {
+      "folioNumber": "950904000002",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 7,
+  "transactions": [
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-01-05",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500000",
+      "navRaw": "119.760000",
+      "sourceReference": "PCRV9-001"
+    },
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-01-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.200000",
+      "navRaw": "121.360000",
+      "sourceReference": "PCRV9-002"
+    },
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "fee",
+      "amount": "45.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    },
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.800000",
+      "navRaw": "125.630000",
+      "sourceReference": "PCRV9-004"
+    },
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-03-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "38.900000",
+      "navRaw": "128.530000",
+      "sourceReference": "PCRV9-005"
+    },
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-03-20",
+      "canonicalType": "redemption",
+      "amount": "3000.00",
+      "units": "22.900000",
+      "navRaw": "131.230000",
+      "sourceReference": "PCRV9-006"
+    },
+    {
+      "folioNumber": "950904000002",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "isin": "INF704K01DD4",
+      "transactionDateIso": "2025-04-10",
+      "canonicalType": "purchase",
+      "amount": "8000.00",
+      "units": "40.000000",
+      "navRaw": "200.000000",
+      "sourceReference": "PCRV9-007"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "950904000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "units": "180.500",
+      "value": "23645.50"
+    },
+    {
+      "folioNumber": "950904000002",
+      "scheme": "Balanced Horizon Fund - Growth (Regular Plan)",
+      "units": "40.000",
+      "value": "8000.00"
+    }
+  ],
+  "notes": "Page 1 ends mid-table (after the 4th row, including one Stamp Duty fee row) with no header/label reprint on page 2 — matching the real statement's own confirmed pagination behaviour. Page 2 continues the same table raw, then closes folio 1 and begins folio 2 (the AMC-transition case this grammar expresses — a new, unrelated scheme, never a nameable AMC label)."
+}

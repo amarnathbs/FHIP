@@ -1,0 +1,35 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2024 To 30-Jun-2025
+
+Folio No: 9303040000301
+PAN: PCQAL0003F
+Name: MEERA VISHWANATH
+Holding Mode: SI
+
+AMC Name: Axis Mutual Fund
+Scheme Name: Axis Small Cap Fund - Growth (Direct Plan)
+ISIN: INF846K01EW2
+AMFI Code: 135944
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Jan-2024   Purchase                              12,000.00  100.190  119.7700  100.190 [Ref: PC3Q3-OLD-001]
+
+Closing Unit Balance as on 30-Jun-2025 : 100.190 Units   Valuation : Rs. 13124.89   NAV as on 30-Jun-2025 : Rs. 131.0000
+
+Folio No: 9303040000302
+PAN: PCQAL0003F
+Name: MEERA VISHWANATH
+Holding Mode: SI
+
+AMC Name: Axis Mutual Fund
+Scheme Name: Axis Small Cap Fund - Growth (Direct Plan)
+ISIN: INF846K01EW2
+AMFI Code: 135944
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-May-2025   Purchase                              20,000.00  148.940  134.2900  148.940 [Ref: PC3Q3-NEW-001]
+10-Jun-2025   Redemption                            8,000.00  58.650  136.4000  90.290 [Ref: PC3Q3-NEW-002]
+
+Closing Unit Balance as on 30-Jun-2025 : 90.290 Units   Valuation : Rs. 11827.99   NAV as on 30-Jun-2025 : Rs. 131.0000

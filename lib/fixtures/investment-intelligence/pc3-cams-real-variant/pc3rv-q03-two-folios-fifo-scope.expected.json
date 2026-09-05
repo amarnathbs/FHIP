@@ -1,0 +1,73 @@
+{
+  "fixtureId": "pc3rv-q03-two-folios-fifo-scope",
+  "title": "Q03 real-variant — same instrument in two folios (Folio A older/cheaper, Folio B newer, redemption from Folio B only) — F1 probe",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2024-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950304000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    },
+    {
+      "folioNumber": "950304000002",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 3,
+  "transactions": [
+    {
+      "folioNumber": "950304000001",
+      "scheme": "Emerging Sectors Advantage Fund - Growth (Direct Plan)",
+      "isin": "INF703K01CC3",
+      "transactionDateIso": "2024-01-10",
+      "canonicalType": "purchase",
+      "amount": "12000.00",
+      "units": "100.190000",
+      "navRaw": "119.770000",
+      "sourceReference": "PCRV3-OLD-001"
+    },
+    {
+      "folioNumber": "950304000002",
+      "scheme": "Emerging Sectors Advantage Fund - Growth (Direct Plan)",
+      "isin": "INF703K01CC3",
+      "transactionDateIso": "2025-05-10",
+      "canonicalType": "purchase",
+      "amount": "20000.00",
+      "units": "148.940000",
+      "navRaw": "134.290000",
+      "sourceReference": "PCRV3-NEW-001"
+    },
+    {
+      "folioNumber": "950304000002",
+      "scheme": "Emerging Sectors Advantage Fund - Growth (Direct Plan)",
+      "isin": "INF703K01CC3",
+      "transactionDateIso": "2025-06-10",
+      "canonicalType": "redemption",
+      "amount": "8000.00",
+      "units": "58.650000",
+      "navRaw": "136.400000",
+      "sourceReference": "PCRV3-NEW-002"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "950304000001",
+      "scheme": "Emerging Sectors Advantage Fund - Growth (Direct Plan)",
+      "units": "100.190",
+      "value": "13124.89"
+    },
+    {
+      "folioNumber": "950304000002",
+      "scheme": "Emerging Sectors Advantage Fund - Growth (Direct Plan)",
+      "units": "90.290",
+      "value": "11827.99"
+    }
+  ],
+  "notes": "Folio A (950304000001) must retain its 100.19 units untouched by Folio B (950304000002)'s redemption — zero cross-account contamination required."
+}

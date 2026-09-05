@@ -1,0 +1,19 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q11-FEE-EVIDENCE
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 951104000001
+PAN: PCRVQ0012F
+
+Composite Growth Opportunities Fund - Growth (Direct Plan) - ISIN: INF701K01AA1(Advisor: ARN10001) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Feb-2025   10,000.00         119.7600     83.500     Purchase                              83.500 [Ref: PCRV11-001]
+03-Feb-2025   50.00***   Stamp Duty   ***
+10-Mar-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV11-003]
+11-Mar-2025   25.00***   Stamp Duty   ***
+11-Mar-2025   60.00***   STT   ***
+15-May-2025   4,000.00         144.9300     27.600     Redemption                            97.100 [Ref: PCRV11-006]
+16-May-2025   40.00***   STT   ***
+
+Closing Unit Balance: 97.100 Total Cost Value: Rs. 13,098.79

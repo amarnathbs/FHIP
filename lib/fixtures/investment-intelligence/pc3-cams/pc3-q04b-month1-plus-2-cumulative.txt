@@ -1,0 +1,19 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 28-Feb-2025
+
+Folio No: 9304040000401
+PAN: PCQAL0004F
+Name: KABIR SETH
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+10-Jan-2025   SIP Purchase                          5,000.00  41.750  119.7600  41.750 [Ref: PC3Q4-001]
+10-Feb-2025   SIP Purchase                          5,000.00  40.500  123.4600  82.250 [Ref: PC3Q4-002]
+
+Closing Unit Balance as on 28-Feb-2025 : 82.250 Units   Valuation : Rs. 10190.78   NAV as on 28-Feb-2025 : Rs. 123.9000

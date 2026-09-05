@@ -1,0 +1,17 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q06-SIP-RICH-SKIPPED-MONTH
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 950604000001
+PAN: PCRVQ0006F
+
+Balanced Horizon Fund - Growth (Regular Plan) - ISIN: INF704K01DD4(Advisor: ARN10004) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+05-Jan-2025   5,000.00         119.7600     41.750     SIP Purchase                          41.750 [Ref: PCRV6-001]
+05-Feb-2025   5,000.00         120.5000     41.510     SIP Purchase                          83.260 [Ref: PCRV6-002]
+05-Apr-2025   5,000.00         122.3000     40.880     SIP Purchase                          124.140 [Ref: PCRV6-003]
+05-May-2025   5,000.00         125.1000     39.960     SIP Purchase                          164.100 [Ref: PCRV6-004]
+05-Jun-2025   5,000.00         124.6300     40.120     SIP Purchase                          204.220 [Ref: PCRV6-005]
+
+Closing Unit Balance: 204.220 Total Cost Value: Rs. 25,451.94

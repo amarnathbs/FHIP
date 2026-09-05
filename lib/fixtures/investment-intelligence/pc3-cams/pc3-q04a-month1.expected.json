@@ -1,0 +1,43 @@
+{
+  "fixtureId": "pc3-q04a-month1",
+  "title": "Q04a — first monthly statement (Jan only)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-01-31",
+  "accounts": [
+    {
+      "folioNumber": "9304040000401",
+      "holderName": "KABIR SETH",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "9304040000401",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-01-10",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q4-001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "9304040000401",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-01-31",
+      "units": "41.750",
+      "value": "5051.75",
+      "nav": "121.0000"
+    }
+  ],
+  "notes": null
+}

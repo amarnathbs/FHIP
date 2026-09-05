@@ -1,0 +1,91 @@
+{
+  "fixtureId": "pc3-q06-sip-rich-skipped-month",
+  "title": "Q06 — SIP-rich: 5 monthly instalments Jan/Feb/Apr/May/Jun, March deliberately skipped and resumed April",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9306040000601",
+      "holderName": "NANDINI RAO",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 5,
+  "transactions": [
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-01-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q6-001"
+    },
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.510",
+      "nav": "120.5000",
+      "sourceReference": "PC3Q6-002"
+    },
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-04-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.880",
+      "nav": "122.3000",
+      "sourceReference": "PC3Q6-003"
+    },
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-05-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.960",
+      "nav": "125.1000",
+      "sourceReference": "PC3Q6-004"
+    },
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "isin": "INF846K01EW2",
+      "amfiSchemeCode": "135944",
+      "transactionDateIso": "2025-06-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.120",
+      "nav": "124.6300",
+      "sourceReference": "PC3Q6-005"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "9306040000601",
+      "scheme": "Axis Small Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "204.220",
+      "value": "25451.94",
+      "nav": "124.6300"
+    }
+  ],
+  "notes": "Exactly 5 SIP transactions expected (Jan,Feb,Apr,May,Jun) — a gap exists between Feb and Apr. Gap/series/XIRR DETECTION itself is an R5 analytical claim outside this DB-free pack's scope (no live DEV available) — this fixture proves the PARSER surfaces the correct raw signal (5 txns, correct dates, no phantom March row) that R5 would need."
+}

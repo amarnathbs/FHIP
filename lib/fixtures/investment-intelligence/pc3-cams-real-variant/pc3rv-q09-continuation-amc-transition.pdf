@@ -1,0 +1,106 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1013 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CQAL-STMT-TRK-2026-CAMS-PC3RV-Q09-CONTINUATION-AMC-TRANSITION) Tj
+0 -12 Td
+(Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Jan-2025 To 30-Jun-2025) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 950904000001) Tj
+0 -12 Td
+(PAN: PCRVQ0009F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Composite Growth Opportunities Fund - Growth \(Direct Plan\) - ISIN: INF701K01AA1\(Advisor: ARN10001\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(05-Jan-2025   10,000.00         119.7600     83.500     Purchase                              83.500 [Ref: PCRV9-001]) Tj
+0 -12 Td
+(20-Jan-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV9-002]) Tj
+0 -12 Td
+(05-Feb-2025   45.00***   Stamp Duty   ***) Tj
+0 -12 Td
+(20-Feb-2025   5,000.00         125.6300     39.800     SIP Purchase                          164.500 [Ref: PCRV9-004]) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /MediaBox [0 0 612 792] /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 957 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(05-Mar-2025   5,000.00         128.5300     38.900     SIP Purchase                          203.400 [Ref: PCRV9-005]) Tj
+0 -12 Td
+(20-Mar-2025   3,000.00         131.2300     22.900     Redemption                            180.500 [Ref: PCRV9-006]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 180.500 Total Cost Value: Rs. 23,645.50) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 950904000002) Tj
+0 -12 Td
+(PAN: PCRVQ0010F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Balanced Horizon Fund - Growth \(Regular Plan\) - ISIN: INF704K01DD4\(Advisor: ARN10004\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(10-Apr-2025   8,000.00         200.0000     40.000     Purchase                              40.000 [Ref: PCRV9-007]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 40.000 Total Cost Value: Rs. 8,000.00) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001318 00000 n 
+0000001444 00000 n 
+0000002452 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2549
+%%EOF
