@@ -130,7 +130,14 @@ function csvBytes(text) { return Buffer.from(text, 'utf8'); }
 
 async function uploadCsv(user, extra = {}) {
   const params = new URLSearchParams({ csv_kind: 'transaction', currency_code: extra.currency_code ?? 'AUD', institution_name: 'G5LiveCertBroker', ...extra });
-  const csv = ['Date,Type,Code,ISIN,Security Name,Quantity,Price,Amount', '10/03/2026,BUY,CBA,AU000000CBA7,Commonwealth Bank,10,110.00,1100.00'].join('\n');
+  // Header must include Brokerage (9 columns), and the date's DAY component
+  // must be > 12 (e.g. 20, not 10) so inferDateFormat can disambiguate
+  // DD/MM from MM/DD from a single sample row -- both confirmed against the
+  // real parser via scripts/fdh11_live_dev_certification.mjs's own working
+  // fixture ('20/03/2026'). Neither is a G5-D2 defect -- both are test-
+  // fixture format requirements of the pre-existing FDH-11 generic CSV
+  // extractor (lib/financial-data-hub/investment/csvExtraction.ts).
+  const csv = ['Date,Type,Code,ISIN,Security Name,Quantity,Price,Amount,Brokerage', '20/03/2026,BUY,CBA,AU000000CBA7,Commonwealth Bank,10,110.00,1100.00,19.95'].join('\n');
   return app(user, `/api/financial-data-hub/investment-statement/upload?${params.toString()}`, {
     method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: csvBytes(csv),
   });
