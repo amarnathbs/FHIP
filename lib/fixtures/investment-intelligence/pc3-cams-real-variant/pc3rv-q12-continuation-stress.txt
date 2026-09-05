@@ -1,0 +1,40 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q12-CONTINUATION-STRESS
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 31-Dec-2025
+
+Folio No: 951204000001
+PAN: PCRVQ0013F
+
+Diversified Value Builder Fund - Growth (Regular Plan) - ISIN: INF702K01BB2(Advisor: ARN10002) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+20-Jan-2025   5,000.00         120.7000     39.900     SIP Purchase                          39.900 [Ref: PCRV12-001]
+05-Feb-2025   5,000.00         121.4000     39.800     SIP Purchase                          79.700 [Ref: PCRV12-002]
+20-Mar-2025   5,000.00         122.1000     39.700     SIP Purchase                          119.400 [Ref: PCRV12-003]
+05-Apr-2025   5,000.00         122.8000     39.600     SIP Purchase                          159.000 [Ref: PCRV12-004]
+20-May-2025   5,000.00         123.5000     39.500     SIP Purchase                          198.500 [Ref: PCRV12-005]
+05-Jun-2025   5,000.00         124.2000     39.400     SIP Purchase                          237.900 [Ref: PCRV12-006]
+20-Jul-2025   5,000.00         124.9000     39.300     SIP Purchase                          277.200 [Ref: PCRV12-007]
+04-Jul-2025   35.00***   Stamp Duty   ***
+05-Aug-2025   5,000.00         125.6000     39.200     SIP Purchase                          316.400 [Ref: PCRV12-008]
+-- 1 of 2 --
+20-Sep-2025   5,000.00         126.3000     39.100     SIP Purchase                          355.500 [Ref: PCRV12-009]
+05-Oct-2025   5,000.00         127.0000     39.000     SIP Purchase                          394.500 [Ref: PCRV12-010]
+11-Sep-2025   55.00***   STT   ***
+20-Nov-2025   5,000.00         127.7000     38.900     SIP Purchase                          433.400 [Ref: PCRV12-011]
+05-Dec-2025   5,000.00         128.4000     38.800     SIP Purchase                          472.200 [Ref: PCRV12-012]
+20-Jan-2025   5,000.00         129.1000     38.700     SIP Purchase                          510.900 [Ref: PCRV12-013]
+05-Feb-2025   5,000.00         129.8000     38.600     SIP Purchase                          549.500 [Ref: PCRV12-014]
+
+Closing Unit Balance: 549.500 Total Cost Value: Rs. 82,425.00
+
+Folio No: 951204000002
+PAN: PCRVQ0014F
+
+Balanced Horizon Fund - Growth (Regular Plan) - ISIN: INF704K01DD4(Advisor: ARN10004) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Aug-2025   15,000.00         250.0000     60.000     Purchase                              60.000 [Ref: PCRV12-EXTRA-001]
+15-Aug-2025   5,000.00         250.0000     20.000     Redemption                            40.000 [Ref: PCRV12-EXTRA-002]
+
+Closing Unit Balance: 40.000 Total Cost Value: Rs. 10,000.00

@@ -1,14 +1,19 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { incomeSchema } from '@/lib/validation/income';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
 import { createClient } from '@/lib/supabase/server';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 
 const registry = makeRegistry('income_sources');
 
-export async function GET() {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+// G4: migrated onto the manifest-driven resolver (Income is UNIVERSAL_MODULES
+// -- see lib/services/appCapability.ts's manifest entry for the evidence
+// trail). While the G4 flag is off this behaves byte-identically to the
+// prior requireCountryConfirmedUser() gate (GENERIC refused, FULL admitted).
+export async function GET(request: Request) {
+  const { user, blocked } = await requireModuleCapability('INCOME', request);
+  if (!user) return blocked!;
   const { data, error } = await registry.list(user.id);
   return error ? bad(error.message) : ok(data);
 }
@@ -23,8 +28,8 @@ export async function GET() {
 // rejected because assertItemCreationAllowedForUser() re-resolves the
 // caller's own home country server-side and never trusts a client value.
 export async function POST(req: Request) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('INCOME', req);
+  if (!user) return blocked!;
   const parsed = incomeSchema.safeParse(await req.json());
   if (!parsed.success) return bad(parsed.error.message, 422);
 

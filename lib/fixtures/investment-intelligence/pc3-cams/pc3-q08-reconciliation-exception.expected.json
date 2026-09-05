@@ -1,0 +1,43 @@
+{
+  "fixtureId": "pc3-q08-reconciliation-exception",
+  "title": "Q08 — reconciliation exception: transaction-derived units (83.5) deliberately mismatch the stated closing balance (70.0)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9308040000801",
+      "holderName": "TANVI GHOSH",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "9308040000801",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500",
+      "nav": "119.7600",
+      "sourceReference": "PC3Q8-001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "9308040000801",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "70.000",
+      "value": "9443.00",
+      "nav": "134.9000"
+    }
+  ],
+  "notes": "Statement prints closing=70.0 units but the transaction history sums to 83.5 units — reconciliation MUST detect this variance, never silently certify."
+}

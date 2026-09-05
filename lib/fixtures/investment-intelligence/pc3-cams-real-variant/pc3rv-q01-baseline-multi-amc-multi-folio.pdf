@@ -1,0 +1,104 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 990 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CQAL-STMT-TRK-2026-CAMS-PC3RV-Q01-BASELINE-MULTI-AMC-MULTI-FOLIO) Tj
+0 -12 Td
+(Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Jan-2025 To 30-Jun-2025) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 950104000001) Tj
+0 -12 Td
+(PAN: PCRVQ0001F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Composite Growth Opportunities Fund - Growth \(Direct Plan\) - ISIN: INF701K01AA1\(Advisor: ARN10001\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(01-Feb-2025   10,000.00         119.7605     83.500     Purchase                              83.500 [Ref: PCRV1-001]) Tj
+0 -12 Td
+(05-Feb-2025   50.00***   Stamp Duty   ***) Tj
+0 -12 Td
+(15-Mar-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV1-003]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 124.700 Total Cost Value: Rs. 16,822.03) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /MediaBox [0 0 612 792] /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 776 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(Folio No: 950104000002) Tj
+0 -12 Td
+(PAN: PCRVQ0002F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Diversified Value Builder Fund - Growth \(Regular Plan\) - ISIN: INF702K01BB2\(Advisor: ARN10002\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(10-Feb-2025   5,000.00         123.4600     40.500     SIP Purchase                          40.500 [Ref: PCRV1-004]) Tj
+0 -12 Td
+(10-May-2025   3,000.00         149.2500     20.100     Redemption                            20.400 [Ref: PCRV1-005]) Tj
+0 -12 Td
+(12-May-2025   90.00***   STT   ***) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 20.400 Total Cost Value: Rs. 3,044.70) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001294 00000 n 
+0000001420 00000 n 
+0000002247 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2344
+%%EOF

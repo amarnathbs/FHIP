@@ -1,0 +1,40 @@
+{
+  "fixtureId": "pc3rv-q08-reconciliation-mismatch",
+  "title": "Q08 real-variant — reconciliation exception: transaction-derived units (83.5) deliberately mismatch stated closing (70.0)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950804000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "950804000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500000",
+      "navRaw": "119.760000",
+      "sourceReference": "PCRV8-001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "950804000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "units": "70.000",
+      "value": "9443.00"
+    }
+  ],
+  "notes": "Statement prints closing=70.0 units but transaction history sums to 83.5 units — reconciliation MUST detect this, never silently certify."
+}

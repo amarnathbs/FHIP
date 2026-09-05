@@ -3,8 +3,21 @@
 // call this instead of trusting any household/user id supplied by the
 // caller. It never accepts a client-supplied id as the scope — it derives
 // scope entirely from the authenticated session.
-
-import { requireUser } from '@/lib/api';
+//
+// Mandatory Country Confirmation fix (found during G4 review, 2026-09-04):
+// this used to call the plain, auth-only requireUser() instead of
+// requireCountryConfirmedUser(), which meant every one of the AI Coach/
+// Insights routes that resolve scope through here (standard-questions,
+// contextual-explanations, and the internal DEV/certification resolve and
+// context routes) enforced authentication but NOT the country-confirmation
+// gate that ~241 other routes enforce via lib/api.ts's requireUser() alias
+// pattern (see app/api/ai/entitlement/route.ts for the canonical example).
+// An authenticated-but-country-unconfirmed user could reach these routes
+// directly through the API layer even though the UI never exposes them
+// pre-confirmation (app/(app)/layout.tsx structurally blocks the pages).
+// Fixed here, at the single shared scope resolver, so all affected routes
+// are closed by one change rather than four-plus separate edits.
+import { requireCountryConfirmedUser } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 export interface AuthorisedScope {
@@ -22,7 +35,7 @@ export type ResolveScopeResult = { scope: AuthorisedScope; forbidden: null } | {
  * Security Tests: "cross-household URL tampering fails").
  */
 export async function resolveHouseholdContext(): Promise<ResolveScopeResult> {
-  const { user, unauthenticated } = await requireUser();
+  const { user, unauthenticated } = await requireCountryConfirmedUser();
   if (!user) return { scope: null, forbidden: unauthenticated! };
 
   const supabase = await createClient();

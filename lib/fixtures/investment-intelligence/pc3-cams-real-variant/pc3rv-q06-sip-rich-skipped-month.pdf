@@ -1,0 +1,71 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1307 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CQAL-STMT-TRK-2026-CAMS-PC3RV-Q06-SIP-RICH-SKIPPED-MONTH) Tj
+0 -12 Td
+(Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Jan-2025 To 30-Jun-2025) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 950604000001) Tj
+0 -12 Td
+(PAN: PCRVQ0006F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Balanced Horizon Fund - Growth \(Regular Plan\) - ISIN: INF704K01DD4\(Advisor: ARN10004\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(05-Jan-2025   5,000.00         119.7600     41.750     SIP Purchase                          41.750 [Ref: PCRV6-001]) Tj
+0 -12 Td
+(05-Feb-2025   5,000.00         120.5000     41.510     SIP Purchase                          83.260 [Ref: PCRV6-002]) Tj
+0 -12 Td
+(05-Apr-2025   5,000.00         122.3000     40.880     SIP Purchase                          124.140 [Ref: PCRV6-003]) Tj
+0 -12 Td
+(05-May-2025   5,000.00         125.1000     39.960     SIP Purchase                          164.100 [Ref: PCRV6-004]) Tj
+0 -12 Td
+(05-Jun-2025   5,000.00         124.6300     40.120     SIP Purchase                          204.220 [Ref: PCRV6-005]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 204.220 Total Cost Value: Rs. 25,451.94) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001606 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1703
+%%EOF

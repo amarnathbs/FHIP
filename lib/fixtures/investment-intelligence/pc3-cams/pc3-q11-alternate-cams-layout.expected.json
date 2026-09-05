@@ -1,0 +1,126 @@
+{
+  "fixtureId": "pc3-q11-alternate-cams-layout",
+  "title": "Q11 — II-PC3 Gate A alternate CAMS layout (real structural-incompatibility fix probe)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9311040001101",
+      "holderName": null,
+      "holdingModeRaw": null
+    },
+    {
+      "folioNumber": "9311040001102",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 7,
+  "transactions": [
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500000",
+      "navRaw": "119.760500",
+      "sourceReference": "PC3Q11-001"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "fee",
+      "amount": "50.00",
+      "units": "0.000000",
+      "navRaw": "0.000000",
+      "sourceReference": "PC3Q11-002"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-02-10",
+      "canonicalType": "tax",
+      "amount": "120.00",
+      "units": "0.000000",
+      "navRaw": "0.000000",
+      "sourceReference": "PC3Q11-003"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.200000",
+      "navRaw": "121.360000",
+      "sourceReference": "PC3Q11-004"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-04-20",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.500000",
+      "navRaw": "123.460000",
+      "sourceReference": "PC3Q11-005"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-05-25",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "39.960000",
+      "navRaw": "125.100000",
+      "sourceReference": "PC3Q11-006"
+    },
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "isin": "INF555K01AB1",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-06-30",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "40.120000",
+      "navRaw": "124.630000",
+      "sourceReference": "PC3Q11-007"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "9311040001101",
+      "scheme": "Vishaal Composite Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "245.280000",
+      "value": "30000.00"
+    },
+    {
+      "folioNumber": "9311040001102",
+      "scheme": "Zenith Diversified Fund - Growth (Regular Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "60.000000",
+      "value": "6000.00"
+    }
+  ],
+  "notes": "Folio B (9311040001102) has a \"no activity this period\" placeholder in place of a transaction table -- must parse as zero transactions for that scheme, never a parse error, while its closing holding (60.000 units, unaffected) is still captured via the alternate closing-balance grammar using the statement period end as the as-of date (this layout prints no per-line date at all on its closing line)."
+}

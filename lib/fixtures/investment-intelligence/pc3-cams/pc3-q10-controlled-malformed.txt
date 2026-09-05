@@ -1,0 +1,19 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 9310040001001
+PAN: PCQAL0010F
+Name: ISHAAN MALHOTRA
+Holding Mode: SI
+
+AMC Name: HDFC Mutual Fund
+Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)
+ISIN: INF179K01YW8
+AMFI Code: 118834
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+01-Feb-2025   Purchase                              N/A-CORRUPT  83.500  119.7600  83.500 [Ref: PC3Q10-001]
+01-Mar-2025   SIP Purchase                          5,000.00  41.200  121.3600  124.700 [Ref: PC3Q10-002]
+
+Closing Unit Balance as on 30-Jun-2025 : 124.700 Units   Valuation : Rs. 16822.03   NAV as on 30-Jun-2025 : Rs. 134.9000

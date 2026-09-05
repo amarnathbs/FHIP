@@ -149,7 +149,7 @@ describe('MC-04/06-09 contrast — the SAME 4 states correctly block a genuinely
   for (const [stateName, profile] of Object.entries(STATES)) {
     it(`GET /api/income is blocked while the caller is ${stateName} (proves the distinction above is real, not accidental)`, async () => {
       mockFrom.mockImplementation(fakeFromFor(profile));
-      const res = await incomeGET();
+      const res = await incomeGET(new Request('http://test/api/income'));
       expect(res.status).not.toBe(200);
       const body = await res.json();
       expect(['COUNTRY_CONFIRMATION_REQUIRED', 'COUNTRY_UNSUPPORTED', 'COUNTRY_INVALID']).toContain(body.error);
@@ -167,7 +167,7 @@ describe('MC-04/06-09 contrast — the SAME 4 states correctly block a genuinely
       }
       return base(table);
     });
-    const res = await incomeGET();
+    const res = await incomeGET(new Request('http://test/api/income'));
     expect(res.status).toBe(200);
   });
 });

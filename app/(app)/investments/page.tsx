@@ -55,7 +55,7 @@ export default function InvestmentsPage() {
 
       <hr className="border-gray-200" />
 
-      <FinancialDataGrid key={gridKey} config={investmentGridConfig} subNav={<InvestmentsSubNav />} />
+      <FinancialDataGrid key={gridKey} config={investmentGridConfig} subNav={<InvestmentsSubNav />} moduleKey="INVESTMENTS" />
     </div>
   );
 }

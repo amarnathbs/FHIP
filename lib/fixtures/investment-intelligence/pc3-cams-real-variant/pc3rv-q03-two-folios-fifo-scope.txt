@@ -1,0 +1,25 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q03-TWO-FOLIOS-FIFO-SCOPE
+Consolidated Account Statement
+Statement Period : 01-Jan-2024 To 30-Jun-2025
+
+Folio No: 950304000001
+PAN: PCRVQ0003F
+
+Emerging Sectors Advantage Fund - Growth (Direct Plan) - ISIN: INF703K01CC3(Advisor: ARN10003) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+10-Jan-2024   12,000.00         119.7700     100.190     Purchase                              100.190 [Ref: PCRV3-OLD-001]
+
+Closing Unit Balance: 100.190 Total Cost Value: Rs. 13,124.89
+
+-- 1 of 2 --
+Folio No: 950304000002
+PAN: PCRVQ0003F
+
+Emerging Sectors Advantage Fund - Growth (Direct Plan) - ISIN: INF703K01CC3(Advisor: ARN10003) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+10-May-2025   20,000.00         134.2900     148.940     Purchase                              148.940 [Ref: PCRV3-NEW-001]
+10-Jun-2025   8,000.00         136.4000     58.650     Redemption                            90.290 [Ref: PCRV3-NEW-002]
+
+Closing Unit Balance: 90.290 Total Cost Value: Rs. 11,827.99

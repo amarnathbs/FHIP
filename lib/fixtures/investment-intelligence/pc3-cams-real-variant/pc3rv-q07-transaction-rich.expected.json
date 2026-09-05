@@ -1,0 +1,123 @@
+{
+  "fixtureId": "pc3rv-q07-transaction-rich",
+  "title": "Q07 real-variant — every canonical transaction type + fee evidence, opening balance correctly zero throughout",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1_alt_layout",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "950704000001",
+      "holderName": null,
+      "holdingModeRaw": null
+    }
+  ],
+  "transactionCount": 8,
+  "transactions": [
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-01",
+      "canonicalType": "purchase",
+      "amount": "10000.00",
+      "units": "83.500000",
+      "navRaw": "119.760000",
+      "sourceReference": "PCRV7-001"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-03",
+      "canonicalType": "fee",
+      "amount": "50.00",
+      "units": "0.000000",
+      "navRaw": null,
+      "sourceReference": null
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-02-05",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.750000",
+      "navRaw": "119.760000",
+      "sourceReference": "PCRV7-002"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "redemption",
+      "amount": "3000.00",
+      "units": "24.500000",
+      "navRaw": "122.400000",
+      "sourceReference": "PCRV7-003"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-04-20",
+      "canonicalType": "dividend",
+      "amount": "450.00",
+      "units": "0.000000",
+      "navRaw": "45.200000",
+      "sourceReference": "PCRV7-004"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-05-20",
+      "canonicalType": "reinvestment",
+      "amount": "620.00",
+      "units": "13.500000",
+      "navRaw": "45.930000",
+      "sourceReference": "PCRV7-005"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "isin": "INF701K01AA1",
+      "transactionDateIso": "2025-06-01",
+      "canonicalType": "switch_out",
+      "amount": "12000.00",
+      "units": "89.660000",
+      "navRaw": "133.830000",
+      "sourceReference": "PCRV7-006"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "isin": "INF702K01BB2",
+      "transactionDateIso": "2025-06-01",
+      "canonicalType": "switch_in",
+      "amount": "12000.00",
+      "units": "45.400000",
+      "navRaw": "264.320000",
+      "sourceReference": "PCRV7-007"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Composite Growth Opportunities Fund - Growth (Direct Plan)",
+      "units": "24.590",
+      "value": "3317.19"
+    },
+    {
+      "folioNumber": "950704000001",
+      "scheme": "Diversified Value Builder Fund - Growth (Regular Plan)",
+      "units": "45.400",
+      "value": "11990.14"
+    }
+  ],
+  "notes": null
+}

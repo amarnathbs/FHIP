@@ -237,6 +237,26 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // own statement row; it performs no canonical mutation, which
       // `tests/unit/fdh12Isolation.test.ts` asserts mechanically.
       path.join(REPO_ROOT, 'lib', 'retirement-import-bridge', 'retirementAccountResolution.ts'),
+      // G4 (2026-09-04): two more files trip the identical naive-substring
+      // limitation this test's own header already documents, for the
+      // identical reason — verified by hand, same standard as the AppShell.tsx
+      // and incomeAdapter.ts precedents above:
+      //   - lib/nav/appNavCapability.ts's NAV_HREF_MODULE_MAP has one entry,
+      //     `'/financial-data-hub/activity': 'FINANCIAL_DATA_HUB'` — a plain
+      //     route-string key mapped to a ModuleKey enum value, not a
+      //     TypeScript `import`/`require` of any FDH module code (exactly
+      //     AppShell.tsx's own precedent, which this map was extracted to
+      //     work alongside).
+      //   - lib/services/appCapability.ts's APP_CAPABILITY_MANIFEST has one
+      //     prose `note` field documenting a G5-deferred defect at
+      //     app/api/financial-data-hub/investment-statement/[documentId]/
+      //     account-match/route.ts:47 — the literal substring appears only in
+      //     that explanatory string, not in any import.
+      // Neither file has any `from '@/lib/financial-data-hub...'` import.
+      // Approved as exactly these two files, not a directory, so a future
+      // file that starts genuinely importing FDH code would still be caught.
+      path.join(REPO_ROOT, 'lib', 'nav', 'appNavCapability.ts'),
+      path.join(REPO_ROOT, 'lib', 'services', 'appCapability.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

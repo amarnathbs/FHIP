@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { incomeGridConfig } from '@/lib/grid/configs';
 import { PayslipImportPanel } from '@/components/income/PayslipImportPanel';
+import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
 
 // Income tab layout (FDH-9 spec section 22): a header offering the two entry
 // points into Income — manual entry (the existing grid below, unchanged and
@@ -14,6 +15,12 @@ import { PayslipImportPanel } from '@/components/income/PayslipImportPanel';
 export default function IncomePage() {
   const [showImport, setShowImport] = useState(false);
   const [gridKey, setGridKey] = useState(0);
+  // G4 closure item 2: Payslip import creates income rows the same way the
+  // grid's own "Add" flow does, so it needs the identical write-availability
+  // gate — the grid guards its own internal controls, but this button lives
+  // outside the grid component entirely.
+  const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability('INCOME');
+  const importDisabled = writeResolved && !writeAvailable;
 
   return (
     <div className="space-y-6">
@@ -25,7 +32,9 @@ export default function IncomePage() {
             type="button"
             onClick={() => setShowImport((v) => !v)}
             aria-expanded={showImport}
-            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
+            disabled={importDisabled}
+            title={importDisabled ? "Importing isn't available for your country yet" : undefined}
+            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             Import from Payslip
           </button>
@@ -45,7 +54,7 @@ export default function IncomePage() {
 
       <hr className="border-gray-200" />
 
-      <FinancialDataGrid key={gridKey} config={incomeGridConfig} />
+      <FinancialDataGrid key={gridKey} config={incomeGridConfig} moduleKey="INCOME" />
     </div>
   );
 }

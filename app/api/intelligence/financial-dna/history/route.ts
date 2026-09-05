@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 
-export async function GET() {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+export async function GET(request: Request) {
+  const { user, blocked } = await requireModuleCapability('DNA', request);
+  if (!user) return blocked!;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('financial_dna_profiles')

@@ -677,10 +677,26 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   }
 
   // --- 7. Reconciliation + certification, per position ----------------------
+  // II-PC3 finding (Q10 controlled-malformed-fixture probe): `parsed.errors`
+  // (error-severity parser warnings, e.g. `unparseable_transaction_row` —
+  // a row that failed the CAMS/KFintech transaction-row grammar) was never
+  // fed into certification's own `parser_fatal_error` blocking code (see
+  // certification.ts, which HAS always defined and documented this exact
+  // blocker). The only prior safety net was reconciliation math happening
+  // to disagree with the statement's printed closing balance — not
+  // guaranteed (e.g. a dropped economically-neutral row, or one that
+  // happens not to move the position this particular parse run touches).
+  // A document with a genuine parse-time error must never be able to reach
+  // `certified`/`certified_with_warnings` on math alone; wiring the real,
+  // already-computed `parsed.errors` signal through closes that gap at
+  // its one call site with that information in scope (the manual
+  // `recertifyPosition` re-evaluation path below is unchanged/out of scope
+  // — it has no fresh parse to inspect).
+  const parserHasFatalError = parsed.errors.length > 0;
   for (const [key, instrumentId] of instrumentIdByKey) {
     void key;
     for (const [, accountId] of accountIdByFolioAmc) {
-      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, instrumentUnresolvedKeys.size > 0);
+      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, instrumentUnresolvedKeys.size > 0, parserHasFatalError);
     }
   }
 
@@ -855,7 +871,13 @@ export async function recertifyPosition(userId: string, accountId: string, instr
     .eq('source_document_id', sourceDocumentId);
   const anyInstrumentUnresolved = (instrumentCases ?? []).length > 0;
 
-  await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, anyInstrumentUnresolved);
+  // Unchanged/out of scope (II-PC3 finding, see the primary call site in
+  // processSourceDocument for the full rationale): this manual re-certify
+  // path has no fresh ParsedDocumentOutput to inspect, only already-
+  // persisted state, so it cannot know about a parse-time error without a
+  // separate lookup — deliberately not expanded here to keep the fix
+  // narrow to the one call site that actually has the signal.
+  await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, anyInstrumentUnresolved, false);
   return { ok: true, error: null };
 }
 
@@ -867,7 +889,8 @@ async function evaluatePositionAndCertify(
   sourceDocumentId: string,
   config: Awaited<ReturnType<typeof loadActiveReconciliationConfig>>,
   ownerUnresolved: boolean,
-  anyInstrumentUnresolved: boolean
+  anyInstrumentUnresolved: boolean,
+  parserHasFatalError: boolean
 ) {
   const { data: latestSnapshot } = await admin
     .from('ii_holding_snapshots')
@@ -948,7 +971,7 @@ async function evaluatePositionAndCertify(
 
   const certification = evaluateCertification({
     sourceDetected: true,
-    parserFatalError: false,
+    parserFatalError: parserHasFatalError,
     documentCorrupt: false,
     ownerUnresolved,
     instrumentUnresolved: anyInstrumentUnresolved,

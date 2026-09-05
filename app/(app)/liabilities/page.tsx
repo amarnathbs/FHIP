@@ -64,7 +64,7 @@ export default function LiabilitiesPage() {
 
       <hr className="border-gray-200" />
 
-      <FinancialDataGrid key={gridKey} config={liabilityGridConfig} />
+      <FinancialDataGrid key={gridKey} config={liabilityGridConfig} moduleKey="LIABILITIES" />
     </div>
   );
 }

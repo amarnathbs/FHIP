@@ -1,0 +1,89 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2026 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CQAL-STMT-TRK-2026-CAMS-PC3RV-Q07-TRANSACTION-RICH) Tj
+0 -12 Td
+(Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Jan-2025 To 30-Jun-2025) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 950704000001) Tj
+0 -12 Td
+(PAN: PCRVQ0007F) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Composite Growth Opportunities Fund - Growth \(Direct Plan\) - ISIN: INF701K01AA1\(Advisor: ARN10001\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(01-Feb-2025   10,000.00         119.7600     83.500     Purchase                              83.500 [Ref: PCRV7-001]) Tj
+0 -12 Td
+(03-Feb-2025   50.00***   Stamp Duty   ***) Tj
+0 -12 Td
+(05-Feb-2025   5,000.00         119.7600     41.750     SIP Purchase                          125.250 [Ref: PCRV7-002]) Tj
+0 -12 Td
+(15-Mar-2025   3,000.00         122.4000     24.500     Redemption                            100.750 [Ref: PCRV7-003]) Tj
+0 -12 Td
+(20-Apr-2025   450.00         45.2000     0.000     IDCW Payout                           100.750 [Ref: PCRV7-004]) Tj
+0 -12 Td
+(20-May-2025   620.00         45.9300     13.500     IDCW Reinvestment                     114.250 [Ref: PCRV7-005]) Tj
+0 -12 Td
+(01-Jun-2025   12,000.00         133.8300     89.660     Switch Out To Diversified Value Builder Fund      24.590 [Ref: PCRV7-006]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 24.590 Total Cost Value: Rs. 3,317.19) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Diversified Value Builder Fund - Growth \(Regular Plan\) - ISIN: INF702K01BB2\(Advisor: ARN10002\) Registrar : CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Amount           Price        Units       Transaction Type                    Unit Balance) Tj
+0 -12 Td
+(01-Jun-2025   12,000.00         264.3200     45.400     Switch In From Composite Growth Opportunities Fund      45.400 [Ref: PCRV7-007]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance: 45.400 Total Cost Value: Rs. 11,990.14) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002325 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2422
+%%EOF

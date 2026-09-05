@@ -1,0 +1,26 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q07-TRANSACTION-RICH
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 950704000001
+PAN: PCRVQ0007F
+
+Composite Growth Opportunities Fund - Growth (Direct Plan) - ISIN: INF701K01AA1(Advisor: ARN10001) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Feb-2025   10,000.00         119.7600     83.500     Purchase                              83.500 [Ref: PCRV7-001]
+03-Feb-2025   50.00***   Stamp Duty   ***
+05-Feb-2025   5,000.00         119.7600     41.750     SIP Purchase                          125.250 [Ref: PCRV7-002]
+15-Mar-2025   3,000.00         122.4000     24.500     Redemption                            100.750 [Ref: PCRV7-003]
+20-Apr-2025   450.00         45.2000     0.000     IDCW Payout                           100.750 [Ref: PCRV7-004]
+20-May-2025   620.00         45.9300     13.500     IDCW Reinvestment                     114.250 [Ref: PCRV7-005]
+01-Jun-2025   12,000.00         133.8300     89.660     Switch Out To Diversified Value Builder Fund      24.590 [Ref: PCRV7-006]
+
+Closing Unit Balance: 24.590 Total Cost Value: Rs. 3,317.19
+
+Diversified Value Builder Fund - Growth (Regular Plan) - ISIN: INF702K01BB2(Advisor: ARN10002) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Jun-2025   12,000.00         264.3200     45.400     Switch In From Composite Growth Opportunities Fund      45.400 [Ref: PCRV7-007]
+
+Closing Unit Balance: 45.400 Total Cost Value: Rs. 11,990.14

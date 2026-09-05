@@ -571,18 +571,36 @@ describe('G3 — the generic API opt-in is used by exactly the reasoned-about ro
     return out;
   }
 
-  it('only four route files opt out of the generic block, and they are the four G3 authorises', () => {
+  it('only six route files opt out of the generic block directly (requireCountryConfirmedUserAllowingGeneric) — the four G3 originally authorised, plus two G4 closure additions', () => {
     const routes = walk(join(process.cwd(), 'app', 'api'));
     const optedIn = routes
       .filter((f) => readFileSync(f, 'utf8').includes('requireCountryConfirmedUserAllowingGeneric'))
       .map((f) => f.replace(process.cwd(), '').replace(/\\/g, '/'))
       .sort();
 
+    // G4 closure item 4 (Product Owner, 2026-09-05, found via live browser
+    // certification): master-items and user/section-status are shared
+    // read-only infra every FinancialDataGrid instance depends on for its
+    // initial load — including the three newly-certified-universal grids
+    // (Income/Expenses/Insurance). Neither was migrated onto
+    // requireCountryConfirmedUserAllowingGeneric alongside its sibling
+    // /api/{resource} routes in G4's original pass, so a GENERIC user hit an
+    // unhandled GENERIC_EXPERIENCE_RESTRICTED runtime error on page load
+    // before ever reaching their own already-enabled module. Both additions
+    // are read-only (GET) and were re-verified against the same "no
+    // financial/report/admin/billing route opts in" guard immediately below
+    // — this only widens what a GENERIC user may READ from shared catalogue/
+    // status metadata, never a write. This is a deliberate, reasoned
+    // extension of G3's original allowlist, not drift — this test's job is
+    // to make the NEXT such addition require an equally deliberate edit
+    // here, not to freeze the list at G3's count forever.
     expect(optedIn).toEqual([
+      '/app/api/master-items/route.ts',
       '/app/api/user/cross-border-relationships/[id]/route.ts',
       '/app/api/user/cross-border-relationships/route.ts',
       '/app/api/user/primary-country/confirm/route.ts',
       '/app/api/user/primary-country/preview/route.ts',
+      '/app/api/user/section-status/route.ts',
     ]);
   });
 

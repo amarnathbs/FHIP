@@ -1,0 +1,43 @@
+{
+  "fixtureId": "pc3-q10-controlled-malformed",
+  "title": "Q10 — controlled malformed: first transaction row has a non-numeric Amount field (fails the TXN_ROW_RE grammar)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cas_statement",
+  "formatVersionDetected": "detailed_v1",
+  "statementPeriodStartIso": "2025-01-01",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    {
+      "folioNumber": "9310040001001",
+      "holderName": "ISHAAN MALHOTRA",
+      "holdingModeRaw": "SI"
+    }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "9310040001001",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "isin": "INF179K01YW8",
+      "amfiSchemeCode": "118834",
+      "transactionDateIso": "2025-03-01",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "41.200",
+      "nav": "121.3600",
+      "sourceReference": "PC3Q10-002"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    {
+      "folioNumber": "9310040001001",
+      "scheme": "HDFC Flexi Cap Fund - Growth (Direct Plan)",
+      "asOfDateIso": "2025-06-30",
+      "units": "124.700",
+      "value": "16822.03",
+      "nav": "134.9000"
+    }
+  ],
+  "notes": "Row 1 (PC3Q10-001) must be REJECTED with an unparseable_transaction_row error-severity warning, never silently dropped/coerced. Row 2 (PC3Q10-002) must still parse correctly. Expected transaction count for the ORACLE below therefore intentionally lists only the ONE surviving clean row."
+}
