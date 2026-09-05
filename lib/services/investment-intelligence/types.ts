@@ -61,7 +61,12 @@ export type IiTransactionStatus = 'parsed' | 'reconciled' | 'corrected' | 'rever
 
 // --- R2 additions (spec sections 8-34) ---
 
-export type IiParserCode = 'cams_detailed_v1' | 'kfintech_detailed_v1';
+// FS1 addition — 'cams_folio_details_v1': the CAMS-serviced INDIVIDUAL
+// FOLIO STATEMENT parser (camsFolioStatementParser.ts), a genuinely
+// different document type from the CAS/KFintech consolidated statements
+// the other two codes cover (dispatch section 1/5). `parser_code` is a
+// plain `text` column (migration 0040) — additive, no migration needed.
+export type IiParserCode = 'cams_detailed_v1' | 'kfintech_detailed_v1' | 'cams_folio_details_v1';
 
 export type IiParseRunStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
