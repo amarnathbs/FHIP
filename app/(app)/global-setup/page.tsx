@@ -18,6 +18,24 @@ import { createClient } from '@/lib/supabase/server';
 import { assertCountryConfirmedForUser, shouldRedirectToConfirmCountry } from '@/lib/services/countryGate';
 import { buildCoverageDisclosure, COUNTRY_LABELS } from '@/lib/services/countryDisclosure';
 import { isKnownCountry } from '@/lib/services/jurisdiction';
+import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
+
+// G4 — dispatch section 8: "remove the /global-setup redirect only for the
+// exact enabled destinations". Dashboard itself stays UNAVAILABLE for
+// GENERIC (see lib/services/appCapability.ts's manifest — dashboardData.ts
+// carries a real AUD/FX-rate assumption), so GENERIC users still land here
+// rather than on /dashboard. What changes behind the flag is this page's own
+// content: it now truthfully lists the modules G4 actually certified
+// universal, instead of only Profile. Flag off => byte-identical to the
+// pre-G4 page.
+const G4_ENABLED_LINKS: { label: string; href: string }[] = [
+  { label: 'Income', href: '/income' },
+  { label: 'Expenses', href: '/expenses' },
+  { label: 'Insurance', href: '/insurance' },
+  { label: 'Scores', href: '/score' },
+  { label: 'Financial DNA', href: '/dna' },
+  { label: 'Financial Resilience', href: '/resilience' },
+];
 
 export const dynamic = 'force-dynamic';
 
@@ -74,11 +92,20 @@ export default async function GlobalSetupPage() {
             to set your reporting currency (AUD or INR) and to declare any cross-border
             relationships.
           </li>
+          {isG4CapabilityLayerEnabled() &&
+            G4_ENABLED_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className="text-primary underline">
+                  {link.label}
+                </Link>
+              </li>
+            ))}
         </ul>
         <p className="mt-4 text-xs text-muted">
-          Financial modules are not open for your country yet. This is a deliberate limit, not an
-          error — we would rather show you nothing than show you an Australian or Indian calculation
-          that does not apply where you live.
+          Financial modules with a domestic (Australia/India-specific) assumption are not open for
+          your country yet. This is a deliberate limit, not an error — we would rather show you
+          nothing than show you an Australian or Indian calculation that does not apply where you
+          live.
         </p>
       </section>
     </main>

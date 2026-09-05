@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
+import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
+import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 
 export interface Commitment {
   id: string;
@@ -31,6 +33,15 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // G4 closure item 2 (Product Owner, 2026-09-05): /api/commitments already
+  // refuses a GENERIC caller cleanly at the app layer (it still uses the
+  // plain requireCountryConfirmedUser gate, never migrated to
+  // requireModuleCapability) — but item 4's own bar is broader than "not a
+  // raw DB error": a write control that is always going to fail on submit
+  // must not be offered live at all. Gated the same way as every other
+  // write surface on the six G4-universal modules.
+  const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability('RESILIENCE');
+  const writeUnavailable = writeResolved && !writeAvailable;
 
   async function addCommitment(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +82,13 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
       title="Future Financial Commitments"
       description="Known upcoming outflows (tax due, school fees, property settlement) — excluded from your accessible emergency reserves so the Emergency Fund score isn't overstated."
     >
+      {writeUnavailable && (
+        <LockedFeatureCard
+          title="Adding commitments isn't available for your country yet"
+          description="Recording future commitments hasn't been independently certified safe for your country yet — that's the next capability phase, not an error. Any existing commitments below remain visible."
+        />
+      )}
+
       <div className="space-y-2">
         {commitments.length === 0 ? (
           <p className="text-sm text-gray-500">No upcoming commitments recorded.</p>
@@ -88,7 +106,11 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-medium text-gray-900">{formatMoney(c.amount, currency)}</span>
-                  <button onClick={() => removeCommitment(c.id)} className="text-xs text-risk hover:underline">
+                  <button
+                    onClick={() => removeCommitment(c.id)}
+                    disabled={writeUnavailable}
+                    className="text-xs text-risk hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     Remove
                   </button>
                 </div>
@@ -97,6 +119,7 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
         )}
       </div>
 
+      <fieldset disabled={writeUnavailable} className="contents border-0 p-0 m-0">
       <form onSubmit={addCommitment} className="mt-4 grid grid-cols-1 gap-2 border-t pt-4 sm:grid-cols-5">
         <input
           type="text"
@@ -146,6 +169,7 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
           {saving ? 'Saving...' : 'Add commitment'}
         </button>
       </form>
+      </fieldset>
       {error && <p className="mt-2 text-sm text-risk">{error}</p>}
     </SectionCard>
   );

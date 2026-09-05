@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatDateShort } from '@/lib/engines/date';
+import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
+import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 
 interface CheckIns {
   goals_reviewed_at: string | null;
@@ -39,6 +41,12 @@ function isRecent(d: string | null): boolean {
 export function CheckInsPanel({ initial, currency }: { initial: Partial<CheckIns> | null; currency: 'AUD' | 'INR' }) {
   const [state, setState] = useState<Partial<CheckIns>>(initial ?? {});
   const [saving, setSaving] = useState(false);
+  // G4 closure item 2 (Product Owner, 2026-09-05): check-ins PUT-upserts to
+  // health_check_ins, a genuine write — Scores is VIEW-ENABLED for GENERIC
+  // but this write path isn't yet G5-certified, so the controls below must
+  // be disabled rather than offered live.
+  const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability('SCORES');
+  const writeUnavailable = writeResolved && !writeAvailable;
 
   async function save(patch: Partial<CheckIns>) {
     const next = { ...state, ...patch };
@@ -60,7 +68,14 @@ export function CheckInsPanel({ initial, currency }: { initial: Partial<CheckIns
       title="Financial Management Behaviour Check-In"
       description="These self-declared habits feed the Financial Management Behaviour component of your score."
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {writeUnavailable && (
+        <LockedFeatureCard
+          title="Check-ins aren't available for your country yet"
+          description="Recording these habits hasn't been independently certified safe for your country yet — that's the next capability phase, not an error."
+        />
+      )}
+      <fieldset disabled={writeUnavailable} className="contents border-0 p-0 m-0">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {REVIEW_FIELDS.map((f) => {
           const value = state[f.key] as string | null | undefined;
           const recent = isRecent(value ?? null);
@@ -93,6 +108,7 @@ export function CheckInsPanel({ initial, currency }: { initial: Partial<CheckIns
           </label>
         ))}
       </div>
+      </fieldset>
     </SectionCard>
   );
 }

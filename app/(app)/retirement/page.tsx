@@ -36,6 +36,7 @@ export default function RetirementPage() {
     <FinancialDataGrid
       key={gridKey}
       config={retirementGridConfig}
+      moduleKey="RETIREMENT"
       subNav={<InvestmentsSubNav />}
       beforeGrid={
         <>

@@ -14,6 +14,9 @@ import type { GridConfig } from '@/lib/grid/types';
 import { PropertyFinancingControl } from '@/components/property-liability/PropertyFinancingControl';
 import { isPropertyEligibleForLinking, isLiabilityEligibleForLinking } from '@/lib/validation/propertyLiabilityLink';
 import { GoalLinkControl } from '@/components/investments/GoalLinkControl';
+import type { ModuleKey } from '@/lib/services/appCapability';
+import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
+import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 
 interface MasterItem {
   item_key: string;
@@ -152,6 +155,7 @@ export function FinancialDataGrid({
   config,
   subNav,
   beforeGrid,
+  moduleKey,
 }: {
   config: GridConfig;
   subNav?: React.ReactNode;
@@ -159,7 +163,19 @@ export function FinancialDataGrid({
   // grid itself — used by the Retirement page's member-level "Retirement
   // Planning" section (spec s.6: "before retirement accounts/contributions").
   beforeGrid?: React.ReactNode;
+  // G4 closure item 2 (Product Owner, 2026-09-05): which capability module
+  // this grid instance belongs to, so it can ask whether a live create/edit
+  // control is safe to show right now (useModuleWriteAvailability()). Every
+  // page rendering this grid passes its own ModuleKey; for a module that is
+  // already wholesale UNAVAILABLE for a GENERIC user, the page itself never
+  // renders (the caller is redirected before reaching this component), so
+  // this only ever visibly narrows anything on the six G4-universal modules
+  // (Income/Expenses/Insurance) whose VIEW is open to GENERIC but whose
+  // write path is not yet G5-certified.
+  moduleKey: ModuleKey;
 }) {
+  const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability(moduleKey);
+  const writeUnavailable = writeResolved && !writeAvailable;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -649,6 +665,27 @@ export function FinancialDataGrid({
 
         {beforeGrid}
 
+        {writeUnavailable && (
+          <LockedFeatureCard
+            title="Adding and editing isn't available for your country yet"
+            description="You can view this module, but data capture here hasn't been independently certified safe for your country yet — that's the next capability phase, not an error. The fields below are read-only until then."
+          />
+        )}
+
+        {/* G4 closure item 2: everything below that can create, edit or
+            delete a row is wrapped in a single native <fieldset disabled>.
+            This is a genuine HTML mechanism (not a CSS effect) — it disables
+            every descendant input/select/textarea/button without this
+            component individually threading a `disabled` prop through the
+            dozens of per-row controls below, so a GENERIC user on a module
+            whose write path isn't yet certified (writeUnavailable) can never
+            reach a live control that would end in UNAVAILABLE (or, absent
+            this UI-level fix, the raw DB 42501 the MCC/G1 backstop is the
+            only other thing stopping). `display:contents` makes the fieldset
+            itself contribute no box/layout of its own. The search/filter
+            controls above are deliberately OUTSIDE this fieldset — they only
+            affect this component's own local view state, never a write. */}
+        <fieldset disabled={writeUnavailable} className="contents border-0 p-0 m-0">
         {config.notApplicable && (
           <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">
             <input
@@ -1098,6 +1135,7 @@ export function FinancialDataGrid({
         <button onClick={addCustomRow} className="text-sm font-medium text-trust hover:underline">
           + Add Custom Item
         </button>
+        </fieldset>
 
         <div className="grid grid-cols-2 gap-3 rounded-card border bg-gray-50 p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
           <div>
