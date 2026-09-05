@@ -312,7 +312,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_RETIREMENT',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
-    note: 'NOT universal: lib/services/retirementMemberData.ts:62 resolves countryCode via `profile?.country_of_residence === \'IN\' ? \'IN\' : \'AU\'` -- a "not IN becomes AU" fallback, a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users. requireCountryConfirmedUser() already refuses GENERIC before this function is ever called; this manifest entry keeps that true under the new resolver too.',
+    note: 'NOT universal for GENERIC (still domestic AU/IN calculation content -- retirement age assumptions, member tracking). G5-D1 FIXED (this pass): lib/services/retirementMemberData.ts used to resolve countryCode via `profile?.country_of_residence === \'IN\' ? \'IN\' : \'AU\'` -- a "not IN becomes AU" fallback that would have silently misclassified GB/US/SG/AE/missing/invalid values as Australia. It now reuses the canonical G1 toFullExperienceCountryOrNull() narrowing and fails closed (throws, never fabricates AU/IN) for anything else. requireCountryConfirmedUser() already refuses GENERIC before this function is ever called; the fix is defence-in-depth, and this manifest entry keeps GENERIC UNAVAILABLE here unchanged -- Retirement itself remains a G6+ candidate, not re-certified universal by this fix alone.',
   },
   SMSF: {
     key: 'SMSF',
@@ -400,7 +400,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
-    note: 'NOT universal: app/api/financial-data-hub/investment-statement/[documentId]/account-match/route.ts:47 hardcodes countryCode: \'AU\' -- a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users via this manifest entry (requireCountryConfirmedUser already refuses GENERIC before this route is ever reached).',
+    note: 'NOT universal for GENERIC (COUNTRY_SPECIFIC_CATALOGUE_ITEMS -- AU-only FDH-11 statement bridge alongside India-only Investment Intelligence). G5-D2 FIXED (this pass): app/api/financial-data-hub/investment-statement/[documentId]/account-match/route.ts and its paired upload/route.ts used to hardcode countryCode: \'AU\' unconditionally. Both now resolve the authoritative country server-side (getUserFullExperienceHomeCountry -- never client-supplied, never currency-derived) and fail closed with an explicit unavailable/manual-review response for any non-AU caller, so an IN user (who is NOT blocked by requireCountryConfirmedUser, only GENERIC is) can no longer have their statement silently matched/created as an Australian document. GENERIC users remain refused before either route is ever reached; this manifest entry\'s UNAVAILABLE-for-GENERIC decision is unchanged.',
   },
   SUBSCRIPTION_PRICING: {
     key: 'SUBSCRIPTION_PRICING',
