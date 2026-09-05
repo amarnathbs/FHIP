@@ -86,7 +86,27 @@ export interface ReconcilePositionResult {
 }
 
 export function reconcilePosition(input: ReconcilePositionInput): ReconcilePositionResult {
-  const canSumFromZero = input.historyCompleteness === 'complete_from_inception';
+  // FS1 fix (dispatch sections 4, 17, 28, 37): 'complete_from_known_opening_balance'
+  // means EXACTLY what its name says — an explicit, statement-printed opening
+  // position is known (an "Opening Balance" line), even though the FULL
+  // history since scheme inception is not. That known opening position is
+  // represented as an 'adjustment'-typed transaction carrying the printed
+  // units (camsFolioStatementParser.ts's OPENING_BALANCE_SOURCE_REFERENCE
+  // marker — never an acquisition/purchase, never consumed by R6's FIFO
+  // engine), so summing the transaction stream from a ZERO baseline is
+  // exactly as valid here as it is for 'complete_from_inception' — the
+  // "opening" contribution is already IN the transaction stream via that
+  // marker row. Before this fix, `hasExplicitOpeningBalanceTransaction` was
+  // hardcoded `false` everywhere it was called (documentProcessing.ts) and
+  // this branch was consequently DEAD for any real non-zero opening
+  // balance: a first-time import of a position with a genuine printed
+  // opening balance could never reconcile at all (`opening` stayed `null`
+  // forever), even though the statement itself supplied everything needed
+  // to prove it. This was never previously reachable/tested — no existing
+  // CAS fixture exercises a literal, non-zero "Opening Balance" line (see
+  // docs/investment-intelligence/II_FS1_CAMS_FOLIO_STRUCTURE.md) — so
+  // fixing it here cannot regress any certified CAS/KFintech behaviour.
+  const canSumFromZero = input.historyCompleteness === 'complete_from_inception' || input.historyCompleteness === 'complete_from_known_opening_balance';
   const opening = input.openingUnitsScaled ?? (canSumFromZero ? ZERO : null);
 
   if (opening === null) {

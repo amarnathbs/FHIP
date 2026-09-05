@@ -33,13 +33,42 @@ export interface ResolveAccountResult {
   error: string | null;
 }
 
+// FS1 fix (dispatch sections 12, 13, 34 — mandatory cross-source account
+// identity): planFolioAccountResolution() falls back to this exact
+// sentinel institution name whenever NO parser evidence names the AMC for
+// a folio (see that function's own `resolvedAmcNames = ... : ['Unknown
+// AMC']` fallback). camsFolioStatementParser.ts's individual-folio-
+// statement layout has no AMC-name-bearing field at all (disclosed in its
+// own file header), so EVERY folio-statement import reaches this sentinel
+// — and the CAS alt-layout (camsParser.ts) already reaches it too for the
+// same underlying reason (its own disclosed `amcName: ''` default). Before
+// this fix, the exact-match-only query below meant two documents for the
+// SAME real folio — one with a real institution name (e.g. a genuine CAS
+// import), one without (an AMC-blind import) — silently resolved to TWO
+// DIFFERENT ii_accounts rows, which is exactly the "same folio -> same
+// account_id" invariant dispatch section 12 makes mandatory. This was a
+// genuine, pre-existing latent gap (never triggered by any existing PC3
+// fixture, since none combines a real-AMC-name import with an
+// unknown-AMC import of the identical folio) that FS1's cross-source
+// overlap test (FS-Q07) is the first scenario to actually exercise.
+export const UNKNOWN_AMC_SENTINEL = 'Unknown AMC';
+
 /**
  * Find-or-create an ii_accounts row for a PARSED account record. Matching
  * order: (a) same user + institution + NORMALISED folio number, active
- * status; (b) if no folio was parsed, same user + institution with no
- * folio (rare — e.g. a demat account rather than an mf_folio). Never
- * creates a second account for a folio already on file (spec section 15:
- * "Do not create a new account for every uploaded statement.").
+ * status (exact match — preserves the existing, already-certified
+ * multi-AMC-same-folio-number safety guarantee whenever BOTH sides carry a
+ * real, known institution name); (b) FS1 fix: when either side's
+ * institution identity is the UNKNOWN_AMC_SENTINEL, folio number alone is
+ * the only economic identity evidence actually available, so this matches
+ * against any other active account for this user with the same normalised
+ * folio number, adopting/upgrading a prior unknown-AMC account once a real
+ * institution name becomes available rather than creating a duplicate
+ * (never touches a DIFFERENT real, known institution name — that remains
+ * two genuinely distinct accounts, per the certified same-folio-number-
+ * different-AMC negative control). Never creates a second account for a
+ * folio already on file (spec section 15: "Do not create a new account for
+ * every uploaded statement.").
  */
 export async function resolveOrCreateAccount(userId: string, input: ResolveAccountInput): Promise<ResolveAccountResult> {
   const admin = createAdminClient();
@@ -55,6 +84,38 @@ export async function resolveOrCreateAccount(userId: string, input: ResolveAccou
 
   const match = (candidates ?? []).find((c) => normaliseFolioNumber(c.folio_number as string | null) === normalisedFolio);
   if (match) return { accountId: match.id as string, created: false, error: null };
+
+  if (normalisedFolio) {
+    const { data: sameUserAccounts, error: sameUserErr } = await admin
+      .from('ii_accounts')
+      .select('id, folio_number, institution_name')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+    if (sameUserErr) return { accountId: null, created: false, error: sameUserErr.message };
+    const sameFolio = (sameUserAccounts ?? []).filter((c) => normaliseFolioNumber(c.folio_number as string | null) === normalisedFolio);
+
+    if (input.institutionName === UNKNOWN_AMC_SENTINEL) {
+      // This import itself has no real institution evidence. If exactly
+      // one existing account already carries this folio number (whatever
+      // ITS institution_name is — real or also-unknown), that is the same
+      // real folio; two-or-more or zero candidates fall through to the
+      // existing create-new path unchanged (an ambiguous multi-candidate
+      // state is never silently guessed between).
+      if (sameFolio.length === 1) return { accountId: sameFolio[0].id as string, created: false, error: null };
+    } else {
+      // This import DOES carry a real institution name. An existing
+      // account for this exact folio number that was previously created
+      // AMC-blind (sentinel) is adopted and upgraded to the now-known real
+      // institution name — never overwrites an existing DIFFERENT real
+      // institution name.
+      const unknownMatch = sameFolio.find((c) => c.institution_name === UNKNOWN_AMC_SENTINEL);
+      if (unknownMatch) {
+        const { error: updateErr } = await admin.from('ii_accounts').update({ institution_name: input.institutionName }).eq('id', unknownMatch.id as string);
+        if (updateErr) return { accountId: null, created: false, error: updateErr.message };
+        return { accountId: unknownMatch.id as string, created: false, error: null };
+      }
+    }
+  }
 
   const { data: created, error: insertErr } = await admin
     .from('ii_accounts')
