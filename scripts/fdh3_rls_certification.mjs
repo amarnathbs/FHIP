@@ -27,6 +27,13 @@ console.log(`fresh rebuild complete (${files.length} migrations)\n`);
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users(id,email) values ('${A}','a@t.test'),('${B}','b@t.test');`);
+// Mandatory Country Confirmation (migrations 0104/0105/0108, applied to DEV
+// well after FDH-3's own 0058) now gates writes to fdh_statement_uploads and
+// other tables via a trigger requiring a confirmed country — LR-1 does not
+// touch this, but this script's synthetic tenants must satisfy it the same
+// way a real user would (handle_new_user already created their user_profiles
+// row) for the FDH-3 seed below to succeed on today's full migration set.
+await db.exec(`update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id in ('${A}','${B}');`);
 
 var pass = 0, fail = 0;
 const check = (label, cond, detail = '') => { if (cond) { pass++; console.log(`  PASS  ${label} ${detail}`); } else { fail++; console.log(`  FAIL  ${label} ${detail}`); } };
@@ -155,6 +162,13 @@ await asServiceRole(async () => {
   const r1 = await q(`select processing_status from fdh_statement_uploads where id='${docA}'`);
   check('document A: created -> uploaded persisted', r1[0].processing_status === 'uploaded');
 
+  // A later, stricter DB-level transition trigger (added well after FDH-3's
+  // own 0058) now enforces the FULL document lifecycle chain at the database
+  // layer too, not just in application code — walk through every
+  // intermediate state rather than the old direct uploaded -> approved jump.
+  for (const step of ['validating', 'queued', 'processing', 'extracted', 'review_required', 'ready_for_approval']) {
+    await q(`update fdh_statement_uploads set processing_status='${step}' where id='${docA}'`);
+  }
   await q(`update fdh_statement_uploads set processing_status='approved', approved_at=now(), raw_document_storage_reference='${A}/${docA}/${docA}.bin' where id='${docA}'`);
   await q(`update fdh_statement_uploads set raw_document_purge_status='pending', raw_document_purge_due_at=now() where id='${docA}'`);
   await q(`update fdh_statement_uploads set raw_document_purge_status='in_progress' where id='${docA}'`);
