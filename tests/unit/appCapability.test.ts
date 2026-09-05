@@ -8,6 +8,7 @@ import {
 } from '@/lib/services/appCapability';
 import type { ResolvedCountryContext } from '@/lib/services/jurisdiction';
 import { __setG4CapabilityLayerFlagForTests, isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
+import { __setG5BGenericWriteFlagForTests } from '@/lib/services/g5bWriteFlag';
 
 function emptyCapabilities(overrides: Record<string, boolean> = {}): Record<string, boolean> {
   const base = Object.fromEntries(CAPABILITY_KEYS.map((k) => [k, false]));
@@ -87,7 +88,7 @@ describe('APP_CAPABILITY_MANIFEST completeness', () => {
   // — every manifest entry must state a real policy for CREATE/UPDATE/DELETE,
   // not rely on an implicit default.
   it('every manifest entry declares an explicit, valid operationPolicy for CREATE, UPDATE and DELETE', () => {
-    const VALID_POLICIES = new Set(['FOLLOWS_VIEW', 'UNAVAILABLE_FOR_GENERIC_WRITE']);
+    const VALID_POLICIES = new Set(['FOLLOWS_VIEW', 'UNAVAILABLE_FOR_GENERIC_WRITE', 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED']);
     for (const key of MODULE_KEYS) {
       const policy = APP_CAPABILITY_MANIFEST[key].operationPolicy;
       expect(policy, key).toBeDefined();
@@ -97,18 +98,63 @@ describe('APP_CAPABILITY_MANIFEST completeness', () => {
     }
   });
 
-  it('exactly the six G4-universal modules use UNAVAILABLE_FOR_GENERIC_WRITE for CREATE/UPDATE — every other module FOLLOWS_VIEW for every operation', () => {
-    const SIX = new Set(['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE']);
+  // G5B (Product Owner, 2026-09-05) split the original "six G4-universal
+  // modules" group in two: three (Scores/DNA/Resilience) remain hard
+  // UNAVAILABLE_FOR_GENERIC_WRITE (no write surface was ever certified for
+  // them — they are derived/computed modules); three (Income/Expenses/
+  // Insurance) were independently re-verified and now use
+  // FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED, which behaves identically to
+  // UNAVAILABLE_FOR_GENERIC_WRITE while the G5B flag is off (see the
+  // 'operation-aware decisions with the G5B flag' describe block below for
+  // the flag-on behaviour).
+  it('exactly three modules (Scores/DNA/Resilience) use UNAVAILABLE_FOR_GENERIC_WRITE, exactly three (Income/Expenses/Insurance) use FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED, and every other module FOLLOWS_VIEW for every operation', () => {
+    const HARD_UNAVAILABLE = new Set(['SCORES', 'DNA', 'RESILIENCE']);
+    const G5B_GATED = new Set(['INCOME', 'EXPENSES', 'INSURANCE']);
     for (const key of MODULE_KEYS) {
       const policy = APP_CAPABILITY_MANIFEST[key].operationPolicy;
-      if (SIX.has(key)) {
+      if (HARD_UNAVAILABLE.has(key)) {
         expect(policy.CREATE, key).toBe('UNAVAILABLE_FOR_GENERIC_WRITE');
         expect(policy.UPDATE, key).toBe('UNAVAILABLE_FOR_GENERIC_WRITE');
+        expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
+      } else if (G5B_GATED.has(key)) {
+        expect(policy.CREATE, key).toBe('FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED');
+        expect(policy.UPDATE, key).toBe('FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED');
         expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
       } else {
         expect(policy.CREATE, key).toBe('FOLLOWS_VIEW');
         expect(policy.UPDATE, key).toBe('FOLLOWS_VIEW');
         expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
+      }
+    }
+  });
+
+  it('every manifest entry declares a writeTables entry (structured, not prose) for CREATE/UPDATE/DELETE', () => {
+    for (const key of MODULE_KEYS) {
+      const rule = APP_CAPABILITY_MANIFEST[key];
+      expect(rule.writeTables, key).toBeDefined();
+      for (const op of ['CREATE', 'UPDATE', 'DELETE'] as const) {
+        expect(Array.isArray(rule.writeTables[op]), `${key}.${op}`).toBe(true);
+      }
+    }
+  });
+
+  it('only Income/Expenses/Insurance declare non-empty writeTables, and only for CREATE/UPDATE (never DELETE — "delete" is an UPDATE/archive)', () => {
+    const G5B_GATED = new Set(['INCOME', 'EXPENSES', 'INSURANCE']);
+    const expectedTable: Record<string, string> = {
+      INCOME: 'income_sources',
+      EXPENSES: 'expense_items',
+      INSURANCE: 'insurance_policies',
+    };
+    for (const key of MODULE_KEYS) {
+      const rule = APP_CAPABILITY_MANIFEST[key];
+      if (G5B_GATED.has(key)) {
+        expect(rule.writeTables.CREATE, key).toEqual([expectedTable[key]]);
+        expect(rule.writeTables.UPDATE, key).toEqual([expectedTable[key]]);
+        expect(rule.writeTables.DELETE, key).toEqual([]);
+      } else {
+        expect(rule.writeTables.CREATE, key).toEqual([]);
+        expect(rule.writeTables.UPDATE, key).toEqual([]);
+        expect(rule.writeTables.DELETE, key).toEqual([]);
       }
     }
   });
@@ -250,7 +296,7 @@ describe('resolveModuleCapability', () => {
     }
   });
 
-  it('the six modules G4 newly certifies universal are ENABLED for a GENERIC country', () => {
+  it('the six modules G4/G5B certify universal-to-VIEW are ENABLED for a GENERIC country', () => {
     const genericContext = context({ primaryCountry: 'GB', experienceLevel: 'GENERIC', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true, CROSS_BORDER_RELATIONSHIPS: true }) });
     for (const key of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as ModuleKey[]) {
       expect(resolveModuleCapability(key, genericContext).decision, key).toBe('ENABLED');
@@ -262,6 +308,16 @@ describe('resolveModuleCapability', () => {
     const genericSix = context({ primaryCountry: 'GB', experienceLevel: 'GENERIC', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true }) });
     const fullSix = context({ primaryCountry: 'AU', experienceLevel: 'FULL', capabilities: emptyCapabilities({ UNIVERSAL_MODULES: true }) });
     const SIX: ModuleKey[] = ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'];
+    // G5B (Product Owner, 2026-09-05) split this group: these three now
+    // depend on the G5B feature flag for CREATE/UPDATE (see the dedicated
+    // 'with the G5B flag' describe block below); the other three
+    // (Scores/DNA/Resilience) never do — see HARD_UNAVAILABLE below.
+    const G5B_GATED: ModuleKey[] = ['INCOME', 'EXPENSES', 'INSURANCE'];
+    const HARD_UNAVAILABLE: ModuleKey[] = ['SCORES', 'DNA', 'RESILIENCE'];
+
+    afterEach(() => {
+      __setG5BGenericWriteFlagForTests(undefined);
+    });
 
     it('defaults to the VIEW decision when no operation is passed (backward compatible)', () => {
       for (const key of SIX) {
@@ -269,8 +325,21 @@ describe('resolveModuleCapability', () => {
       }
     });
 
-    it('CREATE and UPDATE are UNAVAILABLE for GENERIC on all six modules, with the dedicated reason', () => {
-      for (const key of SIX) {
+    it('CREATE and UPDATE are UNAVAILABLE for GENERIC on Scores/DNA/Resilience regardless of the G5B flag, with the dedicated reason', () => {
+      for (const flagState of [false, true]) {
+        __setG5BGenericWriteFlagForTests(flagState);
+        for (const key of HARD_UNAVAILABLE) {
+          for (const operation of ['CREATE', 'UPDATE'] as const) {
+            const result = resolveModuleCapability(key, genericSix, { operation });
+            expect(result, `${key}.${operation} (flag=${flagState})`).toEqual({ decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' });
+          }
+        }
+      }
+    });
+
+    it('CREATE and UPDATE are UNAVAILABLE for GENERIC on Income/Expenses/Insurance while the G5B flag is OFF — byte-identical to pre-G5B behaviour', () => {
+      __setG5BGenericWriteFlagForTests(false);
+      for (const key of G5B_GATED) {
         for (const operation of ['CREATE', 'UPDATE'] as const) {
           const result = resolveModuleCapability(key, genericSix, { operation });
           expect(result, `${key}.${operation}`).toEqual({ decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' });
@@ -278,16 +347,32 @@ describe('resolveModuleCapability', () => {
       }
     });
 
-    it('DELETE follows VIEW (still ENABLED) for GENERIC on all six modules', () => {
-      for (const key of SIX) {
-        expect(resolveModuleCapability(key, genericSix, { operation: 'DELETE' }).decision, key).toBe('ENABLED');
+    it('CREATE and UPDATE become ENABLED for GENERIC on Income/Expenses/Insurance once the G5B flag is ON', () => {
+      __setG5BGenericWriteFlagForTests(true);
+      for (const key of G5B_GATED) {
+        for (const operation of ['CREATE', 'UPDATE'] as const) {
+          const result = resolveModuleCapability(key, genericSix, { operation });
+          expect(result, `${key}.${operation}`).toEqual({ decision: 'ENABLED', reason: 'NONE' });
+        }
       }
     });
 
-    it('CREATE/UPDATE/DELETE are all still ENABLED for a FULL (AU/IN) user on all six modules — no regression', () => {
-      for (const key of SIX) {
-        for (const operation of ['VIEW', 'CREATE', 'UPDATE', 'DELETE'] as const) {
-          expect(resolveModuleCapability(key, fullSix, { operation }).decision, `${key}.${operation}`).toBe('ENABLED');
+    it('DELETE follows VIEW (still ENABLED) for GENERIC on all six modules, regardless of the G5B flag', () => {
+      for (const flagState of [false, true]) {
+        __setG5BGenericWriteFlagForTests(flagState);
+        for (const key of SIX) {
+          expect(resolveModuleCapability(key, genericSix, { operation: 'DELETE' }).decision, `${key} (flag=${flagState})`).toBe('ENABLED');
+        }
+      }
+    });
+
+    it('CREATE/UPDATE/DELETE are all still ENABLED for a FULL (AU/IN) user on all six modules — no regression, regardless of the G5B flag', () => {
+      for (const flagState of [false, true]) {
+        __setG5BGenericWriteFlagForTests(flagState);
+        for (const key of SIX) {
+          for (const operation of ['VIEW', 'CREATE', 'UPDATE', 'DELETE'] as const) {
+            expect(resolveModuleCapability(key, fullSix, { operation }).decision, `${key}.${operation} (flag=${flagState})`).toBe('ENABLED');
+          }
         }
       }
     });
