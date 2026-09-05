@@ -1,0 +1,28 @@
+CQAL-STMT-TRK-2026-CAMS-PC3RV-Q01-BASELINE-MULTI-AMC-MULTI-FOLIO
+Consolidated Account Statement
+Statement Period : 01-Jan-2025 To 30-Jun-2025
+
+Folio No: 950104000001
+PAN: PCRVQ0001F
+
+Composite Growth Opportunities Fund - Growth (Direct Plan) - ISIN: INF701K01AA1(Advisor: ARN10001) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+01-Feb-2025   10,000.00         119.7605     83.500     Purchase                              83.500 [Ref: PCRV1-001]
+05-Feb-2025   50.00***   Stamp Duty   ***
+15-Mar-2025   5,000.00         121.3600     41.200     SIP Purchase                          124.700 [Ref: PCRV1-003]
+
+Closing Unit Balance: 124.700 Total Cost Value: Rs. 16,822.03
+
+-- 1 of 2 --
+Folio No: 950104000002
+PAN: PCRVQ0002F
+
+Diversified Value Builder Fund - Growth (Regular Plan) - ISIN: INF702K01BB2(Advisor: ARN10002) Registrar : CAMS
+
+Date          Amount           Price        Units       Transaction Type                    Unit Balance
+10-Feb-2025   5,000.00         123.4600     40.500     SIP Purchase                          40.500 [Ref: PCRV1-004]
+10-May-2025   3,000.00         149.2500     20.100     Redemption                            20.400 [Ref: PCRV1-005]
+12-May-2025   90.00***   STT   ***
+
+Closing Unit Balance: 20.400 Total Cost Value: Rs. 3,044.70

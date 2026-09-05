@@ -12,6 +12,19 @@ import { evaluateCertification } from '@/lib/services/investment-intelligence/ce
 import { DEFAULT_RECONCILIATION_CONFIG } from '@/lib/services/investment-intelligence/reconciliationConfig';
 import type { ParsedTransactionRecord } from '@/lib/services/investment-intelligence/parsers/types';
 
+// II-PC3-C1 designation: LEGACY_CAMS_GRAMMAR_REGRESSION.
+//
+// This pack was built against this codebase's pre-real-sample "detailed_v1"
+// CAMS grammar (docs/investment-intelligence/II_PC3_CAMS_STRUCTURAL_FINGERPRINT.md).
+// It is KEPT, UNMODIFIED, and still runs as regression — it proves the
+// original grammar is not broken — but it is no longer "the" qualification
+// pack. That role now belongs to REAL_CAMS_VARIANT_QUALIFICATION
+// (tests/unit/iiPc3RealVariantQualificationPack.test.ts, Q01-Q12), built
+// directly against a real CAMS statement's structural fingerprint
+// (docs/investment-intelligence/II_PC3_REAL_CAMS_VARIANT_FINGERPRINT.md).
+// See docs/investment-intelligence/II_PC3_REAL_CAMS_VARIANT_C1_CLOSURE.md
+// for the full closure account.
+//
 // II-PC3 — Real-CAMS Production Qualification Pack.
 //
 // This is the DB-FREE half of the qualification pack (Phase 2's golden

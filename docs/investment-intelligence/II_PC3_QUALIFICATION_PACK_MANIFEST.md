@@ -1,8 +1,8 @@
 # II-PC3 — Qualification Pack Manifest & Findings
 
-Status: Phases 1, 2, 3, 5 COMPLETE. Phase 4 (DB-free half AND live-hosted-DEV half / "Gate B") COMPLETE — see `II_PC3_LIVE_DEV_CAMPAIGN_STATUS.md` for the full Gate B account (2026-09-05, 12/12 live-DEV tests passed, 1 disclosed skip, zero residue).
+Status: **II-PC3-C1 CLOSURE COMPLETE, 2026-09-05 — VERDICT UPGRADED TO UNCONDITIONAL FULL PASS.** See `II_PC3_REAL_CAMS_VARIANT_FINGERPRINT.md` (the authoritative real-grammar spec) and `II_PC3_REAL_CAMS_VARIANT_C1_CLOSURE.md` (the full closure report: golden-fixture RED/GREEN account, the complete Q01-Q12 REAL_CAMS_VARIANT_QUALIFICATION pack, live-DEV results, regression, cleanup). This supersedes the CONDITIONAL PASS below, which is retained for history — Gate A's named blocker ("no real CAMS structural reference available") is now closed: a real, authorized genuine statement WAS supplied and used (safety-bounded per the closure report's own Phase 1 discipline), and the parser now genuinely supports both the original ("detailed_v1") and the real-world ("detailed_v1_alt_layout") CAMS grammars side by side. The original Q01-Q10 pack (built to the pre-real-sample grammar) is retained, unmodified, as **LEGACY_CAMS_GRAMMAR_REGRESSION** — it still proves the original grammar isn't broken, but is no longer "the" qualification pack; **REAL_CAMS_VARIANT_QUALIFICATION (Q01-Q12)**, built directly against the real statement's structural fingerprint, is now the primary pack.
 
-## Verdict: CONDITIONAL PASS (Gate B closed; Gate A remains the sole outstanding blocker)
+## Historical verdict (SUPERSEDED): CONDITIONAL PASS (Gate B closed; Gate A remains the sole outstanding blocker)
 
 One named blocker now caps this at CONDITIONAL PASS — the live-hosted-DEV blocker is CLOSED as of the II-PC3-C1 Gate B run:
 

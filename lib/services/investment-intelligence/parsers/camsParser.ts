@@ -134,6 +134,29 @@ const ALT_TXN_ROW_RE =
 const ALT_CLOSING_RE =
   /^Closing Unit Balance\s*:\s*(\(?-?[\d,]+\.\d+\)?)\s*(?:Units)?\s+Total Cost Value\s*:\s*(?:Rs\.?|₹)\s*(\(?-?[\d,]+\.\d+\)?)\s*$/i;
 
+// II-PC3-C1 real-variant fingerprint, section 8/9
+// (docs/investment-intelligence/II_PC3_REAL_CAMS_VARIANT_FINGERPRINT.md):
+// Stamp Duty / STT rows are a materially SHORTER, standalone row shape —
+// Date + Amount + a type label only. NO Price, Units, or trailing Unit
+// Balance field exists on this row at all, unlike ALT_TXN_ROW_RE's full
+// 6-field shape (confirmed by directly counting tokens against adjacent
+// full economic rows sharing the same date in the real statement — 5
+// tokens vs 10-11). The amount is sometimes immediately followed, with no
+// separating space, by a non-numeric footnote/disclosure-note marker
+// glyph, which `\S*` absorbs without treating it as part of the numeric
+// value. Tried only after ALT_TXN_ROW_RE fails, never instead of it, so
+// every other row shape is completely unaffected. STT itself was never
+// observed as a materialized row in the real sample inspected (it appears
+// exactly once, in disclosure/footer prose, not as transaction data) —
+// this pattern is deliberately written to also recognise STT, on the
+// disclosed INFERENCE (not direct observation) that a real STT row, if
+// one is ever materialized, shares Stamp Duty's row grammar, since both
+// are the same class of SEBI-mandated transaction-level charge described
+// with the same "deducted at the date of transaction" framing in that
+// statement's own footer text.
+const ALT_FEE_ROW_RE =
+  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\S*\s+(Stamp\s+Duty|Securities\s+Transaction\s+Tax|STT)\b.*$/i;
+
 // Finding #12: a fixed placeholder sentence in place of a transaction
 // table for a folio/scheme with zero activity this period. The exact real
 // wording was never captured (Gate A's own zero-real-value discipline) —
@@ -445,6 +468,40 @@ export const camsParser: InvestmentDocumentParser = {
         // grammar is completely unaffected.
         const am = ALT_TXN_ROW_RE.exec(line);
         if (!am) {
+          // II-PC3-C1 real-variant fingerprint section 8/9: a real Stamp
+          // Duty/STT row structurally lacks the Price/Units/Balance fields
+          // ALT_TXN_ROW_RE requires — attempted only after that full-row
+          // grammar fails, never instead of it.
+          const feeMatch = ALT_FEE_ROW_RE.exec(line);
+          if (feeMatch) {
+            const [, feeDateRaw, feeAmountRaw, feeTypeLabel] = feeMatch;
+            const feeDateParsed = parseStatementDate(feeDateRaw);
+            if (!feeDateParsed.ok) {
+              warnings.push({ code: 'unparseable_date', message: feeDateParsed.error, severity: 'error', lineHint: idx });
+              continue;
+            }
+            const feeAmountScaled = requireScaled(feeAmountRaw, warnings, 'unparseable_amount');
+            if (feeAmountScaled === null) continue;
+            const feeClassification = classifyTransactionType(feeTypeLabel.trim());
+            if (feeClassification.canonicalType === 'unclassified') {
+              warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${feeTypeLabel.trim()}"`, severity: 'warning', lineHint: idx });
+            }
+            transactions.push({
+              folioNumber: currentFolio,
+              scheme: currentScheme,
+              transactionDateIso: feeDateParsed.iso,
+              rawTransactionTypeText: feeTypeLabel.trim(),
+              canonicalType: feeClassification.canonicalType,
+              classificationConfidence: feeClassification.confidence,
+              amountScaled: feeAmountScaled,
+              unitsScaled: BigInt(0), // this row shape never carries units — a real, structural fact (fee/tax rows have no unit impact), never an unparsed/missing value
+              navScaled: null, // no Price field exists on this row shape at all — never fabricated as 0 or guessed
+              balanceUnitsAfterScaled: null, // this row shape prints no running balance — never carried forward/fabricated from a prior row
+              sourceReference: null,
+              sourceDescription: line.slice(0, 500),
+            });
+            continue;
+          }
           warnings.push({ code: 'unparseable_transaction_row', message: `Could not parse transaction row: "${line}"`, severity: 'error', lineHint: idx });
           continue;
         }
