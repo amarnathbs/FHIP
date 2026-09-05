@@ -1,0 +1,43 @@
+{
+  "fixtureId": "fs1-q04-opening-balance-plus-sip",
+  "title": "FS-Q04 — Opening Balance is NOT a purchase; visible-period SIP is the only real economic transaction; closing units reconcile (100 + 50 = 150)",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-01-31",
+  "statementPeriodEndIso": "2025-01-31",
+  "accounts": [
+    { "folioNumber": "5559876/54", "holderName": "Synthetic Test Holder Four", "holdingModeRaw": null }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    {
+      "folioNumber": "5559876/54",
+      "scheme": "Synthetic Midcap Opportunities Fund - Direct Plan - Growth",
+      "isin": "INF999C03003",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-01-01",
+      "canonicalType": "adjustment",
+      "amount": "0.00",
+      "units": "100.000",
+      "nav": null,
+      "sourceReference": "OPENING_BALANCE"
+    },
+    {
+      "folioNumber": "5559876/54",
+      "scheme": "Synthetic Midcap Opportunities Fund - Direct Plan - Growth",
+      "isin": "INF999C03003",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-01-15",
+      "canonicalType": "sip",
+      "amount": "2000.00",
+      "units": "50.000",
+      "nav": "40.0000",
+      "sourceReference": "FS1Q04SIP001"
+    }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    { "folioNumber": "5559876/54", "scheme": "Synthetic Midcap Opportunities Fund - Direct Plan - Growth", "asOfDateIso": "2025-01-31", "units": "150.000", "value": "6300.00", "nav": "42.0000" }
+  ]
+}

@@ -1,0 +1,32 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5553333/45
+Name : Synthetic Test Holder Three
+Statement Date : 30-Jun-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Growth Champion Fund - Direct Plan - Growth   3000.00   100.000000   30-Jun-2025   32.0000   3200.00
+
+SIP REGISTRATION
+Scheme                                                 From Date     To Date       Frequency   SIP Date   Amount      Debit Bank              Distributor
+Synthetic Growth Champion Fund - Direct Plan - Growth   01-Jan-2025   01-Jan-2030   Monthly     5          1000.00     Synthetic Test Bank     DIRECT
+Synthetic Growth Champion Fund - Direct Plan - Growth   01-Jul-2020   01-Jul-2025   Monthly     15         500.00      Synthetic Test Bank     DIRECT
+
+MULTIPLE BANK DETAILS
+Synthetic Test Bank - XXXXXXXX0003 - SYNB0000003
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Growth Champion Fund - Direct Plan - Growth ISIN CODE : INF999E05005
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+05-Jun-2025   Systematic Investment - Purchase   1000.00   30.0000   30.0000   33.333000   100.000000 [Ref: FS1Q03SIP001]
+
+FINANCIAL TRANSACTION FORM
+
+Scheme Name: _______________  Folio No: _______________
+Purchase [ ]  Redemption [ ]  Switch [ ]
+
+TERMS AND CONDITIONS
+
+SIP mandates registered above remain valid until the To Date shown or until cancelled by the investor, whichever is earlier.

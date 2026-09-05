@@ -1,0 +1,20 @@
+{
+  "fixtureId": "fs1-q11-form-terms-contamination",
+  "title": "FS-Q11 — one real transaction, followed by a heavy Financial Transaction Form + Terms and Conditions block full of transaction-shaped words/dates/percentages; zero false transactions extracted from either",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-09-30",
+  "statementPeriodEndIso": "2025-09-30",
+  "accounts": [
+    { "folioNumber": "5554445/56", "holderName": "Synthetic Test Holder Eleven", "holdingModeRaw": null }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    { "folioNumber": "5554445/56", "scheme": "Synthetic Frontier Equity Fund - Direct Plan - Growth", "isin": "INF999F06006", "amfiSchemeCode": null, "transactionDateIso": "2025-09-02", "canonicalType": "purchase", "amount": "3000.00", "units": "100.000", "nav": "30.0000", "sourceReference": "FS1Q11P001" }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    { "folioNumber": "5554445/56", "scheme": "Synthetic Frontier Equity Fund - Direct Plan - Growth", "asOfDateIso": "2025-09-30", "units": "100.000", "value": "3300.00", "nav": "33.0000" }
+  ]
+}

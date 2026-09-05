@@ -1,0 +1,15 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5555556/67
+Name : Synthetic Test Holder Twelve
+Statement Date : 31-Oct-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Corrupted Row Fund - Direct Plan - Growth   1000.00   100.000000   31-Oct-2025   10.0000   1000.00
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Corrupted Row Fund - Direct Plan - Growth ISIN CODE : INF999G07007
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+05-Oct-2025   Purchase                          ABC.NOT_A_NUMBER   10.0000   10.0000   100.000000   100.000000 [Ref: FS1Q12P001]

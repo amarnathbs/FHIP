@@ -1,0 +1,19 @@
+{
+  "fixtureId": "fs1-q10-zero-balance-fully-redeemed",
+  "title": "FS-Q10 — full redemption to zero balance; no ghost positive holding; scheme absent from Summary of Holdings once fully redeemed",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-05-31",
+  "statementPeriodEndIso": "2025-05-31",
+  "accounts": [
+    { "folioNumber": "5553334/45", "holderName": "Synthetic Test Holder Ten", "holdingModeRaw": null }
+  ],
+  "transactionCount": 2,
+  "transactions": [
+    { "folioNumber": "5553334/45", "scheme": "Synthetic Small Cap Fund - Direct Plan - Growth", "isin": "INF999E05005", "amfiSchemeCode": null, "transactionDateIso": "2025-05-01", "canonicalType": "purchase", "amount": "5000.00", "units": "200.000", "nav": "25.0000", "sourceReference": "FS1Q10P001" },
+    { "folioNumber": "5553334/45", "scheme": "Synthetic Small Cap Fund - Direct Plan - Growth", "isin": "INF999E05005", "amfiSchemeCode": null, "transactionDateIso": "2025-05-15", "canonicalType": "redemption", "amount": "5100.00", "units": "200.000", "nav": "25.5000", "sourceReference": "FS1Q10R001" }
+  ],
+  "holdingCount": 0,
+  "holdings": []
+}

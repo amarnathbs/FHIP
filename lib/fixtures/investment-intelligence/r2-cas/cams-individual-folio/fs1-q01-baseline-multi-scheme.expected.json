@@ -1,0 +1,32 @@
+{
+  "fixtureId": "fs1-q01-baseline-multi-scheme",
+  "title": "FS-Q01 — one folio, two schemes, one visible-period transaction, one scheme with no current-period activity",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-03-31",
+  "statementPeriodEndIso": "2025-03-31",
+  "accounts": [
+    { "folioNumber": "5551234/78", "holderName": "Synthetic Test Holder One", "holdingModeRaw": null }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    {
+      "folioNumber": "5551234/78",
+      "scheme": "Synthetic Bluechip Growth Fund - Direct Plan - Growth",
+      "isin": "INF999A01001",
+      "amfiSchemeCode": null,
+      "transactionDateIso": "2025-03-15",
+      "canonicalType": "sip",
+      "amount": "5000.00",
+      "units": "100.000",
+      "nav": "50.0000",
+      "sourceReference": "FS1Q01SIP001"
+    }
+  ],
+  "holdingCount": 2,
+  "holdings": [
+    { "folioNumber": "5551234/78", "scheme": "Synthetic Bluechip Growth Fund - Direct Plan - Growth", "asOfDateIso": "2025-03-31", "units": "100.000", "value": "5200.00", "nav": "52.0000" },
+    { "folioNumber": "5551234/78", "scheme": "Synthetic Value Fund - Regular Plan - Growth", "asOfDateIso": "2025-03-31", "units": "200.000", "value": "6000.00", "nav": "30.0000" }
+  ]
+}
