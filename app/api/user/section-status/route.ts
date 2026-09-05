@@ -4,7 +4,7 @@
 // section's confirmation. Auth-scoped via the request-bound Supabase client
 // (RLS enforces the "own rows only" boundary — no service-role client here).
 import { createClient } from '@/lib/supabase/server';
-import { ok, bad, requireCountryConfirmedUser as requireUser } from '@/lib/api';
+import { ok, bad, requireCountryConfirmedUser as requireUser, requireCountryConfirmedUserAllowingGeneric } from '@/lib/api';
 import { setSectionConfirmation } from '@/lib/services/financialSectionStatusData';
 import { ALL_SECTIONS, type FinancialSection, type ExplicitSectionConfirmation } from '@/lib/engines/financialSectionStatus';
 
@@ -14,8 +14,22 @@ const VALID_SECTIONS = new Set<string>(ALL_SECTIONS);
 // original zero/not-applicable confirmations.
 const VALID_CONFIRMATIONS = new Set<string>(['reviewed_zero', 'not_applicable', 'reviewed_with_data']);
 
+// G4 closure item 4 (Product Owner, 2026-09-05, found via live browser
+// certification): FinancialDataGrid.tsx's load() calls this GET for every
+// config.reviewSection module — including the three newly-certified-
+// universal grids (Income/Expenses/Insurance) — and this used to require
+// the STRICT requireCountryConfirmedUser() gate, producing a visible 403
+// console error on every page load for a GENERIC user even though it was
+// harmlessly caught (`.catch(() => [])`) and never broke the page. Reading
+// this is always safe for GENERIC: RLS already scopes the query to the
+// caller's own rows, and a GENERIC user structurally cannot hold any
+// section-status row of their own yet regardless (empty result either way).
+// PUT (the actual write) deliberately keeps the strict gate — item 2's
+// write-certification boundary — the "mark reviewed" button that would call
+// it is also unreachable in practice (it only renders once `included.length
+// > 0`, and a GENERIC user cannot have an included/active row).
 export async function GET() {
-  const { user, unauthenticated } = await requireUser();
+  const { user, unauthenticated } = await requireCountryConfirmedUserAllowingGeneric();
   if (unauthenticated) return unauthenticated;
 
   const supabase = await createClient();
