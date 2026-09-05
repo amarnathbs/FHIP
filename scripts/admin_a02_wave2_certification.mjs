@@ -895,20 +895,42 @@ async function main() {
     // only route that checked anything checked a client-supplied value that
     // was never persisted or compared.
     //
-    // Read directly from the pre-Wave-2 sources at origin/main so the claim
+    // Read directly from a FIXED, historical pre-Wave-2 commit so the claim
     // is measured from the shipped code, not from memory.
+    //
+    // Admin A0.2 Wave 6 correction (Product Owner review): this section
+    // originally read `origin/main` — a MOVING ref — as its "pre-fix"
+    // baseline. That was correct only for as long as origin/main had not yet
+    // absorbed Wave 2's own fix; once Wave 2 merged (and has stayed merged
+    // ever since), `git show origin/main:<path>` silently started reading
+    // the ALREADY-FIXED route files instead of the pre-fix ones, and every
+    // "DEFECT CONFIRMED" check below began failing not because the defect
+    // reappeared, but because the script was no longer looking at the past.
+    // Pinned instead to `1b40b0be0bbb6b7d67b611e08ca255e68562abf1` — the
+    // exact `origin/main` SHA the original Wave 2 certification report
+    // itself recorded as "origin/main at report time" (docs/admin/
+    // A02_WAVE2_WORKFLOW_ORDERING_INTEGRITY_CERTIFICATION.md §2), i.e. the
+    // real commit immediately BEFORE Wave 2's own branch merged. Verified
+    // directly before relying on it: at this SHA, `glossary`/`money-updates`/
+    // `videos` genuinely have no scheduling check at all, and `content`
+    // genuinely reads the old client-supplied, never-persisted
+    // `body?.scheduledAt` — i.e. this SHA truly is the pre-fix state the
+    // checks below assert, not merely a plausible guess. This commit is
+    // immutable (a SHA, not a branch tip), so this section cannot go stale
+    // again the way the `origin/main` version did.
+    const PRE_WAVE2_BASELINE_SHA = '1b40b0be0bbb6b7d67b611e08ca255e68562abf1';
     const { execSync } = await import('node:child_process');
     const routeOf = (t) => `app/api/admin/resources/${t}/[id]/workflow/route.ts`;
     const readBase = (p) => {
       try {
-        return execSync(`git show origin/main:"${p}"`, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        return execSync(`git show ${PRE_WAVE2_BASELINE_SHA}:"${p}"`, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
       } catch {
         return null;
       }
     };
     const baseline = Object.fromEntries(['content', 'glossary', 'money-updates', 'videos'].map((t) => [t, readBase(routeOf(t))]));
     const available = Object.values(baseline).every((v) => v !== null);
-    check('baseline route sources readable from origin/main', available);
+    check(`baseline route sources readable from the fixed pre-Wave-2 SHA (${PRE_WAVE2_BASELINE_SHA})`, available);
     if (available) {
       check('DEFECT CONFIRMED: only the CONTENT route had any scheduling check at all', /scheduledAt/.test(baseline.content));
       for (const t of ['glossary', 'money-updates', 'videos']) {
