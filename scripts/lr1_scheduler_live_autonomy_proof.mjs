@@ -171,10 +171,26 @@ async function main() {
 
   const csvPath = path.join(repoRoot, 'tests', 'fixtures', 'r7-bank-csv', 'au_cba_debit_credit.csv');
   const bytes = fs.readFileSync(csvPath);
-  const uploadRes = await app(user, '/api/financial-data-hub/bank-csv/upload?filename=lr1-scheduler-proof.csv', {
-    method: 'POST', headers: { 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes,
-  });
-  const docId = uploadRes.json?.documentId ?? uploadRes.json?.id;
+  // country_code and currency_code are REQUIRED by bankCsvUploadMetadataSchema
+  // (lib/financial-data-hub/validation/bankCsv.ts) — required since this
+  // route's very first commit (473ca73, R7). This script predates being run
+  // even once and omitted them, which is what produced the 422 "Required"
+  // this fix addresses (see LR-1 diagnosis table). AU/AUD matches the fixture
+  // CSV (au_cba_debit_credit.csv) and the synthetic user's own confirmed
+  // country, exactly like every other AU fixture in this suite.
+  const uploadRes = await app(
+    user,
+    '/api/financial-data-hub/bank-csv/upload?filename=lr1-scheduler-proof.csv&country_code=AU&currency_code=AUD',
+    { method: 'POST', headers: { 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes },
+  );
+  // Route wraps its payload in `{ data: ... }` (lib/api.ts's `ok()`) and
+  // returns snake_case `document_id` (see route.ts) — matching the access
+  // pattern already used correctly by scripts/lr1_live_dev_certification.mjs.
+  // This script's original `uploadRes.json?.documentId ?? uploadRes.json?.id`
+  // never matched either shape and was a second, independent bug alongside
+  // the missing country_code/currency_code query params (see LR-1 diagnosis
+  // table) — it would have left docId undefined even once the 422 was fixed.
+  const docId = uploadRes.json?.data?.document_id;
   if (uploadRes.status >= 300 || !docId) {
     console.error(`FAIL — upload did not succeed (status=${uploadRes.status}): ${uploadRes.text.slice(0, 500)}`);
     process.exit(1);
