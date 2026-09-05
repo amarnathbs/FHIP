@@ -338,6 +338,112 @@ function buildQ09(): { pages: string[][]; expected: ReturnType<typeof buildExpec
 }
 
 // ==========================================================================
+// Q11 — II-PC3 Gate A alternate CAMS layout (real-parser-incompatibility
+// fix probe). Built entirely from the ABSTRACT STRUCTURAL FACTS recorded
+// in docs/investment-intelligence/II_PC3_GATE_A_REAL_STRUCTURAL_COMPARISON.md
+// -- invented names, invented PAN-shaped-but-fake identifiers, invented
+// folio numbers, invented amounts. NOTHING here is copied or derived from
+// the real statement Gate A inspected; only the document's SHAPE
+// (label vocabulary, line grammar, column order) is reproduced, matching
+// the discipline that document itself was built under (zero real values).
+//
+// Reproduces, structurally, every property Gate A found DIFFERS or
+// UNMODELLED against the certified "detailed_v1" grammar:
+//   (1) title fragments on separate, non-adjacent lines (a tracking/
+//       version-stamp line containing "CAMS" only as a substring, then a
+//       separate standalone "Consolidated Account Statement" line);
+//   (2) investor block using only Folio No:/PAN: -- no Name:/Holding Mode:;
+//   (3) no "AMC Name:" label anywhere (out of scope for this fix -- see
+//       II_PC3_GATE_A_REAL_STRUCTURAL_COMPARISON.md's "still open" section);
+//   (5) scheme/ISIN/advisor-code/registrar folded onto ONE free-text line,
+//       with no "Scheme Name:"/"AMFI Code:" labels (the parenthetical is a
+//       distributor "Advisor" code, never an AMFI scheme code);
+//   (6) transaction table column order Date/Amount/Price/Units/
+//       Transaction-type, no separate Description column;
+//   (7) two real transaction-cost categories (stamp duty, STT) exercised
+//       as actual transaction rows;
+//   (9) "Closing Unit Balance: X Total Cost Value: Y" -- no "as on"/
+//       "Valuation"/"NAV as on" clause;
+//   (10) zero header reprint at a real page boundary, mid-table;
+//   (12) a "no activity this period" placeholder folio.
+function buildQ11(): { pages: string[][]; expected: Record<string, unknown> } {
+  const folioA = '9311040001101';
+  const folioB = '9311040001102';
+  const schemeALine = 'Vishaal Composite Fund - Growth (Direct Plan) - ISIN: INF555K01AB1(Advisor: ARN00234) Registrar : CAMS';
+  const schemeBLine = 'Zenith Diversified Fund - Growth (Regular Plan) - ISIN: (Advisor: ARN00567) Registrar : CAMS';
+  const altHeaderLine = 'Date          Amount           Price        Units       Transaction Type                    Unit Balance';
+
+  const page1 = [
+    'CQAL-STMT-TRK-2026-CAMS-Q11V3', // tracking/version-stamp line -- "CAMS" only as a substring of a longer code, never the standalone word adjacent to the title
+    'Consolidated Account Statement', // separate line -- no "CAMS" immediately precedes this anywhere in the document
+    'Statement Period : 01-Jan-2025 To 30-Jun-2025',
+    '',
+    `Folio No: ${folioA}`,
+    `PAN: ${pan(11)}`, // no Name:/Holding Mode: lines -- genuinely absent in this layout
+    '',
+    schemeALine,
+    '',
+    altHeaderLine,
+    '01-Feb-2025   10,000.00        119.7605     83.500      Purchase                             83.500   [Ref: PC3Q11-001]',
+    '05-Feb-2025   50.00            0.0000       0.000       Stamp Duty                           83.500   [Ref: PC3Q11-002]',
+    '10-Feb-2025   120.00           0.0000       0.000       STT                                  83.500   [Ref: PC3Q11-003]',
+    '15-Mar-2025   5,000.00         121.3600     41.200      SIP Purchase                         124.700  [Ref: PC3Q11-004]',
+    '20-Apr-2025   5,000.00         123.4600     40.500      SIP Purchase                         165.200  [Ref: PC3Q11-005]',
+    '25-May-2025   5,000.00         125.1000     39.960      SIP Purchase                         205.160  [Ref: PC3Q11-006]',
+  ];
+  // Page 2: the transaction table continues RAW across the page break --
+  // zero header/label reprint of any kind (Gate A row 10's finding is the
+  // OPPOSITE of Q09's verbatim-reprint assumption, not a variant of it).
+  const page2 = [
+    '30-Jun-2025   5,000.00         124.6300     40.120      SIP Purchase                         245.280  [Ref: PC3Q11-007]',
+    '',
+    'Closing Unit Balance: 245.280 Total Cost Value: Rs. 30,000.00',
+    '',
+    `Folio No: ${folioB}`,
+    `PAN: ${pan(12)}`,
+    '',
+    schemeBLine,
+    '',
+    'No transactions during this statement period.',
+    '',
+    'Closing Unit Balance: 60.000 Total Cost Value: Rs. 6,000.00',
+  ];
+
+  const expected = {
+    fixtureId: 'pc3-q11-alternate-cams-layout',
+    title: 'Q11 — II-PC3 Gate A alternate CAMS layout (real structural-incompatibility fix probe)',
+    sourceKey: 'cams',
+    documentTypeDetected: 'cas_statement',
+    formatVersionDetected: 'detailed_v1_alt_layout',
+    statementPeriodStartIso: '2025-01-01',
+    statementPeriodEndIso: '2025-06-30',
+    accounts: [
+      { folioNumber: folioA, holderName: null, holdingModeRaw: null },
+      { folioNumber: folioB, holderName: null, holdingModeRaw: null },
+    ],
+    transactionCount: 7,
+    transactions: [
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-02-01', canonicalType: 'purchase', amount: '10000.00', units: '83.500000', navRaw: '119.760500', sourceReference: 'PC3Q11-001' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-02-05', canonicalType: 'fee', amount: '50.00', units: '0.000000', navRaw: '0.000000', sourceReference: 'PC3Q11-002' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-02-10', canonicalType: 'tax', amount: '120.00', units: '0.000000', navRaw: '0.000000', sourceReference: 'PC3Q11-003' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-03-15', canonicalType: 'sip', amount: '5000.00', units: '41.200000', navRaw: '121.360000', sourceReference: 'PC3Q11-004' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-04-20', canonicalType: 'sip', amount: '5000.00', units: '40.500000', navRaw: '123.460000', sourceReference: 'PC3Q11-005' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-05-25', canonicalType: 'sip', amount: '5000.00', units: '39.960000', navRaw: '125.100000', sourceReference: 'PC3Q11-006' },
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', isin: 'INF555K01AB1', amfiSchemeCode: null, transactionDateIso: '2025-06-30', canonicalType: 'sip', amount: '5000.00', units: '40.120000', navRaw: '124.630000', sourceReference: 'PC3Q11-007' },
+    ],
+    holdingCount: 2,
+    holdings: [
+      { folioNumber: folioA, scheme: 'Vishaal Composite Fund - Growth (Direct Plan)', asOfDateIso: '2025-06-30', units: '245.280000', value: '30000.00' },
+      { folioNumber: folioB, scheme: 'Zenith Diversified Fund - Growth (Regular Plan)', asOfDateIso: '2025-06-30', units: '60.000000', value: '6000.00' },
+    ],
+    notes:
+      'Folio B (9311040001102) has a "no activity this period" placeholder in place of a transaction table -- must parse as zero transactions for that scheme, never a parse error, while its closing holding (60.000 units, unaffected) is still captured via the alternate closing-balance grammar using the statement period end as the as-of date (this layout prints no per-line date at all on its closing line).',
+  };
+
+  return { pages: [page1, page2], expected };
+}
+
+// ==========================================================================
 // Write everything
 // ==========================================================================
 mkdirSync(OUT_DIR, { recursive: true });
@@ -396,6 +502,17 @@ writeTextAndPdfFixture(Q10, { corruptFirstAmount: true, oracleTransactionCountOv
   writeFileSync(join(OUT_DIR, 'pc3-q09-multi-page-continuation.pdf'), pdf);
   writeFileSync(join(OUT_DIR, 'pc3-q09-multi-page-continuation.expected.json'), JSON.stringify(expected, null, 2) + '\n', 'utf8');
   console.log('wrote pc3-q09-multi-page-continuation (.txt, .pdf [2 real PDF pages], .expected.json)');
+}
+
+// Q11 — bespoke 2-page build, alternate CAMS layout (II-PC3 Gate A fix probe)
+{
+  const { pages, expected } = buildQ11();
+  const text = pages.map((p) => p.join('\n')).join('\n-- 1 of 2 --\n');
+  writeFileSync(join(OUT_DIR, 'pc3-q11-alternate-cams-layout.txt'), text, 'utf8');
+  const pdf = buildMinimalTextPdf(pages);
+  writeFileSync(join(OUT_DIR, 'pc3-q11-alternate-cams-layout.pdf'), pdf);
+  writeFileSync(join(OUT_DIR, 'pc3-q11-alternate-cams-layout.expected.json'), JSON.stringify(expected, null, 2) + '\n', 'utf8');
+  console.log('wrote pc3-q11-alternate-cams-layout (.txt, .pdf [2 real PDF pages, alternate grammar], .expected.json)');
 }
 
 console.log('\nQ05 = exact reimport of Q01 (pc3-q01-baseline-multi-folio-multi-amc.pdf uploaded twice) — no separate fixture file needed.');
