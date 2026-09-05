@@ -56,3 +56,122 @@ Everything the original LR-1 dispatch explicitly scoped in Phase 4 was run
 successfully; nothing was skipped or worked around. Production certification
 (Phase 5) remains explicitly out of scope until this branch is reviewed and
 merged, per this session's established sequencing for every track.
+
+## Janitor Scheduler Cadence — Worst-Case Raw-File Lifetime
+
+**Route audited:** `app/api/financial-data-hub/documents/cron/purge-sweep/route.ts`
+(POST, `x-cron-secret`-gated, no user session — confirmed by reading the file directly).
+
+**Finding: no scheduler invokes this route anywhere in this codebase's
+deployment configuration.** Evidence, exhaustively:
+
+- `amplify.yml` (repo root) is a plain Next.js build spec — `preBuild`/`build`
+  phases only (Playwright deps, env-var propagation into `.env.production`,
+  `npm run build`). It contains no `EventBridge`, no scheduled-invocation
+  hook of any kind, and cannot express one — Amplify Hosting build settings
+  are not a task scheduler.
+- No `.github/workflows/` directory exists in this repository at all (`find
+  .github/workflows -type f` returns nothing), so there is no GitHub Actions
+  `schedule:` trigger to check.
+- No `vercel.json` (or equivalent) exists — this project deploys via Amplify,
+  not Vercel.
+- No `pg_cron`/`cron.schedule(...)` reference to `purge-sweep` exists
+  anywhere under `supabase/` (`grep -rn "cron.schedule(" supabase/` returns
+  exactly **one** match in the whole codebase, in two files):
+  - `supabase/migrations/0010_module9_reports.sql:225` — job name
+    `monthly-report-generation`, cadence `'0 1 1 * *'` (01:00 on the 1st of
+    every month), target `http://localhost:3000/api/reports/cron/monthly-generate`.
+  - `supabase/production_bootstrap_part02.sql:634` — the same job, mirrored
+    into the production bootstrap script.
+  - Neither file, nor any other migration (`0046` through `0112`, every file
+    matching `*purge*` was checked), contains a `cron.schedule` call for
+    `purge-sweep`.
+- `lib/financial-data-hub/services/purge.ts`'s own header (the module the
+  route calls into) documents the invocation contract explicitly and does
+  **not** claim a scheduler exists: it says the route "reus[es] the same
+  `x-cron-secret` / `CRON_SECRET` pattern as
+  `app/api/reports/cron/monthly-generate`" for **auth**, not that it inherits
+  that route's `pg_cron` registration. The route's own header (added this
+  branch) says it is "invoked by an external scheduler (or manually for DEV
+  verification)" — written as a requirement/assumption the route depends on,
+  not as a statement that such a scheduler has actually been configured.
+
+**Established mechanism in this project, confirmed by precedent:** the ONE
+real scheduled job in the entire codebase — `monthly-report-generation` for
+the reports cron — is registered via Supabase's `pg_cron` + `pg_net`
+extensions inside a SQL migration (`cron.schedule(name, cron_expression, $$
+select net.http_post(url := ..., headers := ..., body := ...) $$)`), not via
+any AWS-console/EventBridge configuration and not via GitHub Actions. That
+migration's own comment discloses a second real gap even for the one job
+that IS registered: the hardcoded target URL is `http://localhost:3000/...`,
+which Supabase's hosted Postgres cannot reach from outside — i.e. even the
+reports cron's `pg_net` call is not confirmed to successfully reach a real
+deployed instance today, though that is a separate, pre-existing issue
+outside LR-1's scope and is not re-litigated here. No equivalent migration —
+correct URL or not — exists for `purge-sweep` at all.
+
+**Calculated worst-case raw-file lifetime:** with
+`FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES = 60`
+(`lib/financial-data-hub/constants/retention.ts`) and **no periodic caller of
+any kind**, the worst case is not "60 minutes" and is not `60 + N` for any
+finite `N` — it is **effectively UNBOUNDED**. A document that becomes stale
+1 second after the last manual/ad-hoc invocation of `purge-sweep` (e.g. the
+Phase 4 certification script, or a developer's `curl`) sits with its raw
+object physically present in Storage indefinitely, until the next time some
+human or process happens to call the route again. The 60-minute constant
+describes only when a document becomes *eligible* for purge, not when it
+will actually *be* purged.
+
+**Verdict on the P1 (dormant janitor):** the code-level defect — no live
+caller existed at all, not even a manual one — that FDH-3 originally shipped
+with is closed by this branch: `approveStatement` now calls
+`scheduleImmediateDocumentPurge` synchronously in the request path (approval
+itself causes an immediate purge attempt, independent of any external
+scheduler), and the `purge-sweep` route is a real, fail-closed, working
+endpoint that Phase 4 proved does everything it claims when invoked. **But
+the janitor as a *periodic background sweep* remains dormant**: nothing in
+this repository's deployment configuration calls it on any cadence. This is
+not a code defect — there is nothing further for a code change in this
+branch to fix — it is an **external-infrastructure-activation gap** the
+Product Owner must close outside of what any agent or this codebase can do
+(no AWS/Amplify console access exists in this environment, matching every
+other track this session).
+
+**Precise specification for what must be configured externally:**
+
+1. **Mechanism** (matching this project's own established pattern): a
+   `pg_cron` + `pg_net` job in a new Supabase migration, structurally
+   identical to `0010_module9_reports.sql`'s `monthly-report-generation`
+   job — `cron.schedule('fdh-raw-file-purge-sweep', '<cron expression>', $$
+   select net.http_post(url := '<APP_BASE_URL>/api/financial-data-hub/documents/cron/purge-sweep',
+   headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', '<CRON_SECRET>'),
+   body := '{}'::jsonb) $$)`. `<APP_BASE_URL>` must be the real, publicly
+   reachable production origin, not `localhost` — the same defect already
+   disclosed in the reports-cron migration must not be repeated here.
+   (Alternatively, an AWS EventBridge Scheduler rule POSTing to the same
+   route with the same header would work equivalently, but `pg_cron`/`pg_net`
+   is what this codebase already uses and requires no new AWS wiring.)
+2. **Required interval to achieve a genuine ≤60-minute worst case:** the
+   worst case is `threshold + N` where `N` is the cron interval, so
+   `threshold + N ≤ 60` requires `N ≤ 0` while the threshold stays at 60 —
+   i.e. **no positive interval can hit a true ≤60-minute bound without also
+   lowering the 60-minute threshold itself.** Two concrete options, stated
+   exactly:
+   - **Keep the 60-minute threshold, accept a slightly larger real-world
+     bound:** every 5 minutes (`*/5 * * * *`) gives a worst case of
+     **~65 minutes**; every 10 minutes gives **~70 minutes**; every 15
+     minutes gives **~75 minutes**. None of these is "≤60 minutes" — they
+     are the closest practical approximations given a nonzero polling
+     interval.
+   - **Achieve a genuine ≤60-minute guarantee by lowering the threshold to
+     match the chosen interval:** e.g. run every 5 minutes AND lower
+     `FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES` to 55 (55 + 5 = 60 exactly), or
+     run every 10 minutes AND lower the threshold to 50 (50 + 10 = 60). This
+     is the only way to make "≤60 minutes" a true statement about the
+     deployed system rather than about the constant's name alone.
+3. **This is an operational activation item, not a code defect**, and is
+   called out here rather than fixed in this branch because fixing it would
+   require either AWS/Amplify console access this environment does not have,
+   or a Product Owner decision on which of the two options in point 2 (looser
+   bound vs. lower threshold) is acceptable — both are policy calls, not
+   engineering ones.
