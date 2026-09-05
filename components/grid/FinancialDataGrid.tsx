@@ -174,8 +174,19 @@ export function FinancialDataGrid({
   // write path is not yet G5-certified.
   moduleKey: ModuleKey;
 }) {
-  const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability(moduleKey);
+  const { available: writeAvailable, resolved: writeResolved, deleteAvailable } = useModuleWriteAvailability(moduleKey);
   const writeUnavailable = writeResolved && !writeAvailable;
+  // G5B Phase 2 (2026-09-06): CREATE/UPDATE and DELETE can now genuinely
+  // diverge for a GENERIC caller (Income/Expenses/Insurance allow the former
+  // but not the latter — see appCapability.ts's OPERATIONS_G5B_WRITE_CERTIFIED
+  // comment). `removeUnavailable` gates ONLY the two things that ultimately
+  // archive a row via handleToggleInclude()'s DELETE call (the checkbox's
+  // uncheck path and the "Remove"/"Remove item" buttons below) — every other
+  // control stays governed by the broader `writeUnavailable` fieldset. Before
+  // G5B this is always identical to `writeUnavailable` (CREATE and DELETE
+  // share a policy on every other module), so this is a no-op everywhere
+  // else: the fieldset's own `disabled` already covers those rows' controls.
+  const removeUnavailable = writeResolved && !deleteAvailable;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -817,8 +828,14 @@ export function FinancialDataGrid({
                     <input
                       type="checkbox"
                       checked={row.included}
-                      disabled={isIiPublished(row)}
-                      title={isIiPublished(row) ? 'Imported via Investment Intelligence — use Unpublish there to remove it from net worth.' : undefined}
+                      disabled={isIiPublished(row) || (row.included && removeUnavailable)}
+                      title={
+                        isIiPublished(row)
+                          ? 'Imported via Investment Intelligence — use Unpublish there to remove it from net worth.'
+                          : row.included && removeUnavailable
+                            ? "Removing isn't available for your country yet"
+                            : undefined
+                      }
                       onChange={(e) => handleToggleInclude(row, e.target.checked)}
                     />
                   </td>
@@ -965,7 +982,12 @@ export function FinancialDataGrid({
                   )}
                   <td className="px-3 py-2">
                     {row.is_custom && (
-                      <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">
+                      <button
+                        onClick={() => handleToggleInclude(row, false)}
+                        disabled={removeUnavailable}
+                        title={removeUnavailable ? "Removing isn't available for your country yet" : undefined}
+                        className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                      >
                         Remove
                       </button>
                     )}
@@ -985,6 +1007,8 @@ export function FinancialDataGrid({
                   <input
                     type="checkbox"
                     checked={row.included}
+                    disabled={row.included && removeUnavailable}
+                    title={row.included && removeUnavailable ? "Removing isn't available for your country yet" : undefined}
                     onChange={(e) => handleToggleInclude(row, e.target.checked)}
                   />
                   {row.is_custom ? (
@@ -1122,7 +1146,12 @@ export function FinancialDataGrid({
                     </div>
                   )}
                   {row.is_custom && (
-                    <button onClick={() => handleToggleInclude(row, false)} className="text-xs text-risk">
+                    <button
+                      onClick={() => handleToggleInclude(row, false)}
+                      disabled={removeUnavailable}
+                      title={removeUnavailable ? "Removing isn't available for your country yet" : undefined}
+                      className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       Remove item
                     </button>
                   )}

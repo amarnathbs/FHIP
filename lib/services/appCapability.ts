@@ -169,16 +169,29 @@ const OPERATIONS_WRITE_NOT_YET_CERTIFIED: ModuleOperationPolicy = {
 // Income/Expenses/Insurance. CREATE/UPDATE are gated by the G5B feature flag
 // (see FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED's own doc comment above) rather
 // than hard-UNAVAILABLE, so flipping the flag on (only after migration 0129
-// is applied+verified in DEV) is the ONE change needed to expose them. DELETE
-// stays FOLLOWS_VIEW, unchanged from before G5B and unaffected by the flag —
-// the database manifest denies literal DELETE on all three tables (no real
-// delete path exists; the product's "delete" is an UPDATE/archive, already
-// covered by the UPDATE cell above), so there is nothing this operation
-// needs to newly permit at the app layer either.
+// is applied+verified in DEV) is the ONE change needed to expose them.
+//
+// DELETE — Phase 2 correction (2026-09-06), NOT FOLLOWS_VIEW: this app's
+// "delete" is never a literal SQL DELETE (see lib/services/registry.ts's
+// archive() — it issues `UPDATE ... SET is_active = false`), so migration
+// 0129's DELETE-only denial for these three tables does NOT stop it: once
+// the G5B flag is on, the DB manifest legitimately allows GENERIC UPDATE on
+// income_sources/expense_items/insurance_policies, and an archive call IS an
+// UPDATE. FOLLOWS_VIEW would resolve ENABLED here (Income/Expenses/Insurance
+// are VIEW-ENABLED for GENERIC), which would let a GENERIC user archive
+// (functionally delete) their own row through the existing checkbox-uncheck
+// and "Remove" affordances in components/grid/FinancialDataGrid.tsx — the
+// opposite of this phase's explicit "Delete: Unavailable" decision (dispatch
+// section 4) and its required negative control ("a GENERIC user cannot
+// delete it"). UNAVAILABLE_FOR_GENERIC_WRITE closes this at the same
+// server-authoritative layer requireModuleCapability() already guards CREATE/
+// UPDATE with, independent of (and in addition to) any UI-level control
+// hiding — never narrows a FULL (AU/IN) caller, whose DELETE decision
+// continues to follow VIEW exactly as before this change.
 const OPERATIONS_G5B_WRITE_CERTIFIED: ModuleOperationPolicy = {
   CREATE: 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED',
   UPDATE: 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED',
-  DELETE: 'FOLLOWS_VIEW',
+  DELETE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
 };
 
 // The complete application-inventory module list (dispatch section 5). Every

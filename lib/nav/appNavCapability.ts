@@ -118,6 +118,38 @@ export function isModuleWriteAvailable(moduleKey: string, writeDecisions: Record
 }
 
 /**
+ * G5B Phase 2 (2026-09-06) — the DELETE-operation counterpart to
+ * parseWriteDecisions() above, reading GET /api/capabilities/nav's
+ * `deleteDecisions` field. Same fail-closed parse: an unrecognised value is
+ * simply absent, and isModuleDeleteAvailable() below treats an absent entry
+ * as "not deletable".
+ */
+export function parseDeleteDecisions(body: unknown): Record<string, CapabilityDecision> {
+  const data = (body as { data?: { deleteDecisions?: unknown } } | null | undefined)?.data?.deleteDecisions;
+  const result: Record<string, CapabilityDecision> = {};
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return result;
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (typeof value === 'string' && VALID_DECISIONS.has(value)) {
+      result[key] = value as CapabilityDecision;
+    }
+  }
+  return result;
+}
+
+/**
+ * Is this module's row-removal affordance ("Remove" button, or unchecking an
+ * included catalogue row — both ultimately archive via an UPDATE, see
+ * lib/services/registry.ts's archive()) safe to offer in the UI? Only ENABLED
+ * counts, and an absent/unresolved decision fails closed to "not deletable" —
+ * same convention as isModuleWriteAvailable(), kept as a genuinely separate
+ * function (not an alias) because CREATE/UPDATE and DELETE decisions can now
+ * diverge for a given module (Income/Expenses/Insurance under G5B).
+ */
+export function isModuleDeleteAvailable(moduleKey: string, deleteDecisions: Record<string, CapabilityDecision>): boolean {
+  return deleteDecisions[moduleKey] === 'ENABLED';
+}
+
+/**
  * Is this href shown in the nav at all?
  *
  * - An href with no ModuleKey mapping is always shown (nav visibility is UX

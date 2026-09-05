@@ -119,7 +119,12 @@ describe('APP_CAPABILITY_MANIFEST completeness', () => {
       } else if (G5B_GATED.has(key)) {
         expect(policy.CREATE, key).toBe('FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED');
         expect(policy.UPDATE, key).toBe('FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED');
-        expect(policy.DELETE, key).toBe('FOLLOWS_VIEW');
+        // G5B Phase 2 (2026-09-06): unlike every other group, DELETE here is
+        // NOT FOLLOWS_VIEW — see appCapability.ts's OPERATIONS_G5B_WRITE_
+        // CERTIFIED comment for why "delete" (an UPDATE/archive, never a
+        // literal SQL DELETE) needed its own explicit denial once CREATE/
+        // UPDATE became grantable.
+        expect(policy.DELETE, key).toBe('UNAVAILABLE_FOR_GENERIC_WRITE');
       } else {
         expect(policy.CREATE, key).toBe('FOLLOWS_VIEW');
         expect(policy.UPDATE, key).toBe('FOLLOWS_VIEW');
@@ -357,11 +362,28 @@ describe('resolveModuleCapability', () => {
       }
     });
 
-    it('DELETE follows VIEW (still ENABLED) for GENERIC on all six modules, regardless of the G5B flag', () => {
+    it('DELETE follows VIEW (still ENABLED) for GENERIC on Scores/DNA/Resilience, regardless of the G5B flag (unaffected by G5B — no write surface was ever certified for them at any operation)', () => {
       for (const flagState of [false, true]) {
         __setG5BGenericWriteFlagForTests(flagState);
-        for (const key of SIX) {
+        for (const key of HARD_UNAVAILABLE) {
           expect(resolveModuleCapability(key, genericSix, { operation: 'DELETE' }).decision, `${key} (flag=${flagState})`).toBe('ENABLED');
+        }
+      }
+    });
+
+    // G5B Phase 2 (2026-09-06): Income/Expenses/Insurance's "delete" is
+    // implemented as an UPDATE (archive), so once the G5B flag makes UPDATE
+    // grantable, DELETE can no longer be left as FOLLOWS_VIEW without
+    // silently granting the exact thing this phase's decision table calls
+    // "Unavailable" — see appCapability.ts's OPERATIONS_G5B_WRITE_CERTIFIED
+    // comment. This must stay UNAVAILABLE for GENERIC regardless of the flag
+    // (unlike CREATE/UPDATE, it was never meant to be flag-gated open).
+    it('DELETE stays UNAVAILABLE for GENERIC on Income/Expenses/Insurance regardless of the G5B flag — "delete" is an UPDATE/archive, so it must not follow the now-grantable UPDATE decision', () => {
+      for (const flagState of [false, true]) {
+        __setG5BGenericWriteFlagForTests(flagState);
+        for (const key of G5B_GATED) {
+          const result = resolveModuleCapability(key, genericSix, { operation: 'DELETE' });
+          expect(result, `${key} (flag=${flagState})`).toEqual({ decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' });
         }
       }
     });
