@@ -12,14 +12,31 @@
  * then deleted — independently verified absent, not merely "requested".
  *
  * `FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES` is the hard, absolute backstop
- * (LR-1 spec: "if none exists, implement a 60-minute maximum raw-file
- * lifetime from receipt"). No branch below may exceed it, and
+ * (LR-1 spec: originally "if none exists, implement a 60-minute maximum
+ * raw-file lifetime from receipt"). No branch below may exceed it, and
  * `services/purge.ts#enforceRawFileHardBackstop()` force-schedules a purge
  * for ANY document whose raw object has outlived it regardless of
  * processing_status — a safety net that does not depend on every ingestion
  * pipeline remembering to call the per-branch scheduling functions below.
+ *
+ * LR-1 SCHEDULER CLOSURE (PO decision, 2026-09-05): lowered from 60 to 50
+ * minutes so that, paired with the janitor's 5-minute `pg_cron` cadence
+ * (see the `lr1_document_purge_sweep_scheduler` migration), the true
+ * worst-case raw-file lifetime is threshold + interval = 50 + 5 = 55
+ * minutes — a genuine, provable bound, not merely the constant's name.
+ * Verified safe before this change: every supported ingestion pipeline
+ * (bank-csv, bank-pdf, payslip, investment-statement, retirement-statement,
+ * liability-statement) is a single synchronous HTTP request/response with
+ * no retry/backoff/queue loop, bounded input size (<=10-20MB, CSV
+ * `CSV_MAX_ROWS` = 50,000 rows) and no pipeline-internal sleep of any kind —
+ * none can legitimately approach even a small fraction of 50 minutes
+ * end-to-end. Long-lived post-processing states (`review_required`,
+ * `ready_for_approval`) do not need the raw file at all (the app works from
+ * durable structured staging only — see `services/purge.ts`'s header), so
+ * forcing a purge on those at 50 minutes does not risk an in-flight
+ * operation.
  */
-export const FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES = 60;
+export const FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES = 50;
 
 /**
  * Per-branch scheduling, in MINUTES after the triggering event before a raw
