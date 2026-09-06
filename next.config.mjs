@@ -14,6 +14,14 @@ const nextConfig = {
   // packages (same pattern Next.js itself recommends for sharp, canvas,
   // etc.).
   //
+  // *** That comment above describes the DEV/Turbopack half of this bug
+  // only. It turned out NOT to also cover PRODUCTION (Amplify/Lambda) --
+  // confirmed live 2026-09-06 when a genuine production upload hit the
+  // exact same "Cannot find module '.../pdf.worker.mjs'" error despite
+  // this serverExternalPackages entry already being in place. The two
+  // environments fail via different mechanisms and need different fixes;
+  // see outputFileTracingIncludes below for the production half. ***
+  //
   // Second, deeper layer of the same class of bug (found live in
   // production 2026-09-06): pdfjs-dist calls into @napi-rs/canvas (its own
   // optional dependency, used as a DOMMatrix/canvas/Path2D/ImageData
@@ -44,14 +52,26 @@ const nextConfig = {
   // platform-specific optional dependency (@napi-rs/canvas-linux-x64-gnu
   // for Amplify's runtime, @napi-rs/canvas-win32-x64-msvc locally, etc.)
   // -- same pattern as @next/swc-* -- so the glob below covers the whole
-  // @napi-rs/canvas* family, not just the base package, and applies to
-  // every API route (the two known callers today are Investment
-  // Intelligence's document processing and Financial Data Hub's bank-PDF
-  // processing; scoping this broadly means a future PDF-processing route
-  // doesn't silently reintroduce the same gap).
+  // @napi-rs/canvas* family, not just the base package.
+  //
+  // Third layer, same root cause, found within minutes of fixing the
+  // second (production, 2026-09-06): pdf.mjs itself sets
+  //   GlobalWorkerOptions.workerSrc ||= "./pdf.worker.mjs"
+  // -- a plain runtime string, not a static import -- and Node then loads
+  // that path directly (pdf-parse runs pdf.js in Node's "fake worker"
+  // mode: no real worker_threads, just importing the worker script as a
+  // module in-process). Being a computed path, @vercel/nft can't see it
+  // either, so the outputFileTracingIncludes fix has to cover pdfjs-dist
+  // as a whole -- not just @napi-rs/canvas -- rather than chasing each
+  // individual dynamically-loaded file one production incident at a time.
+  //
+  // All of the above applies to every API route (the two known callers
+  // today are Investment Intelligence's document processing and Financial
+  // Data Hub's bank-PDF processing; scoping this broadly means a future
+  // PDF-processing route doesn't silently reintroduce the same gap).
   serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
-    '/api/**/*': ['./node_modules/@napi-rs/canvas*/**/*'],
+    '/api/**/*': ['./node_modules/@napi-rs/canvas*/**/*', './node_modules/pdfjs-dist/**/*'],
   },
 };
 
