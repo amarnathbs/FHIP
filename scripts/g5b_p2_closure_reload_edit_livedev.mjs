@@ -178,9 +178,14 @@ console.log(`  Created: GENERIC-GB=${genericGB.id} AU=${au.id} IN=${inUser.id}`)
 // Real master_item_key per category — read live so this never hardcodes a
 // catalogue label that could drift.
 async function firstMasterItemKey(category) {
-  const r = await svc('GET', `master_items?category=eq.${category}&select=item_key&order=sort_order.asc&limit=1`);
+  // NOTE (G5B final verification pass, 2026-09-06): the real table is
+  // `master_financial_items`, not `master_items` — confirmed live against
+  // DEV (PostgREST 404 + "Perhaps you meant 'public.master_financial_items'"
+  // on the original name). Fixed here per this task's governance addendum
+  // ("fix it only if you find it genuinely broken").
+  const r = await svc('GET', `master_financial_items?category=eq.${category}&select=item_key&order=sort_order.asc&limit=1`);
   const key = Array.isArray(r.body) ? r.body[0]?.item_key : undefined;
-  if (!key) throw new Error(`No master_items row found for category=${category}`);
+  if (!key) throw new Error(`No master_financial_items row found for category=${category}`);
   return key;
 }
 const incomeMasterKey = await firstMasterItemKey('income');
@@ -194,6 +199,7 @@ const MODULES = [
     nullableOptionalFields: ['net_amount', 'employer_name', 'notes'],
     changeField: 'amount', changeValue: 1234, valueColumn: 'amount',
     invalidEdit: { net_amount: -1 },
+    requiredField: 'source_name', invalidCreateOverride: { amount: -5 },
   },
   {
     key: 'EXPENSES', table: 'expense_items', api: 'expenses', masterKey: expenseMasterKey,
@@ -201,6 +207,7 @@ const MODULES = [
     nullableOptionalFields: ['notes'],
     changeField: 'amount', changeValue: 321, valueColumn: 'amount',
     invalidEdit: { amount: -1 },
+    requiredField: 'expense_name', invalidCreateOverride: { amount: -5 },
   },
   {
     key: 'INSURANCE', table: 'insurance_policies', api: 'insurance', masterKey: insuranceMasterKey,
@@ -208,8 +215,31 @@ const MODULES = [
     nullableOptionalFields: ['renewal_date', 'waiting_period_days', 'benefit_period', 'provider', 'notes'],
     changeField: 'premium', changeValue: 75, valueColumn: 'premium',
     invalidEdit: { waiting_period_days: -5 },
+    requiredField: 'policy_name', invalidCreateOverride: { premium: -5 },
   },
 ];
+
+// Required-field / malformed-value strictness on CREATE (G5B final
+// verification, item 7): proves the G5B write-enablement work did NOT loosen
+// schema validation for GENERIC users — a required field's absence and a
+// genuinely malformed value are both still rejected (422), and no row is
+// persisted for either attempt.
+async function requiredFieldStrictnessScenario(label, user, m) {
+  const currency = user.currency;
+  const before = await countOwned(m.table, user.id);
+
+  const missingRequired = m.minimalPayload(currency, null);
+  delete missingRequired[m.requiredField];
+  const missingRes = await app(user, `/api/${m.api}`, { method: 'POST', body: JSON.stringify(missingRequired) });
+  check(`${label} ${m.key}: CREATE missing required field '${m.requiredField}' is rejected (422)`, missingRes.status === 422, `status=${missingRes.status} body=${JSON.stringify(missingRes.json).slice(0, 200)}`);
+
+  const malformed = { ...m.minimalPayload(currency, null), ...m.invalidCreateOverride };
+  const malformedRes = await app(user, `/api/${m.api}`, { method: 'POST', body: JSON.stringify(malformed) });
+  check(`${label} ${m.key}: CREATE with malformed value ${JSON.stringify(m.invalidCreateOverride)} is rejected (422)`, malformedRes.status === 422, `status=${malformedRes.status} body=${JSON.stringify(malformedRes.json).slice(0, 200)}`);
+
+  const after = await countOwned(m.table, user.id);
+  check(`${label} ${m.key}: neither rejected CREATE attempt persisted a row`, after === before, `before=${before} after=${after}`);
+}
 
 async function reloadEditScenario(label, user, m) {
   // 1) CREATE via the real API (custom row — no master_item_key — so the
@@ -280,6 +310,13 @@ for (const [label, user] of [['GENERIC', genericGB], ['AU', au], ['IN', inUser]]
     console.log(`\n--- ${label} x ${m.key} ---`);
     const id = await reloadEditScenario(label, user, m);
     rowIdsByUser[label][m.key] = id;
+  }
+}
+
+console.log('\n=== Required-field / malformed-value strictness on CREATE: GENERIC / AU / IN x Income / Expenses / Insurance ===');
+for (const [label, user] of [['GENERIC', genericGB], ['AU', au], ['IN', inUser]]) {
+  for (const m of MODULES) {
+    await requiredFieldStrictnessScenario(label, user, m);
   }
 }
 
