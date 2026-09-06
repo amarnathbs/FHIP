@@ -399,7 +399,7 @@ export function InvestmentIntelligenceClient() {
         </form>
         <p className="mt-2 text-xs text-gray-500">
           Supported today, as a digitally-generated <strong>PDF</strong>: a CAMS or KFintech consolidated account statement, or a supported CAMS-serviced
-          individual Folio Statement ("Folio Details" statement). This is not every AMC statement or every CAMS folio-style document — only the
+          individual Folio Statement (&ldquo;Folio Details&rdquo; statement). This is not every AMC statement or every CAMS folio-style document — only the
           structural variants above are certified. Mutual fund CSV exports and broker CSV files are not supported by this workflow and will be rejected
           as unrecognised. Scanned or photographed statements cannot be read either — there is no OCR, and nothing is ever guessed from an unreadable
           document.
