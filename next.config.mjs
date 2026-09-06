@@ -65,13 +65,37 @@ const nextConfig = {
   // as a whole -- not just @napi-rs/canvas -- rather than chasing each
   // individual dynamically-loaded file one production incident at a time.
   //
-  // All of the above applies to every API route (the two known callers
-  // today are Investment Intelligence's document processing and Financial
-  // Data Hub's bank-PDF processing; scoping this broadly means a future
-  // PDF-processing route doesn't silently reintroduce the same gap).
+  // First deploy attempt at this fix (2026-09-06, deployments 125/126)
+  // used '/api/**/*' as the include key -- every API route, not just the
+  // ones that need it -- and both deploys failed with a silent, logless
+  // "Deploy cancelled" right after a fully successful `next build`. That
+  // pattern (build succeeds, packaging/deploy step aborts with no error
+  // text) is the signature of an oversized deployment artifact, not a
+  // code defect: pdfjs-dist + @napi-rs/canvas together are ~70MB, and
+  // applying that to every one of this app's ~100+ API routes multiplies
+  // out fast. Scoped down to just the two routes that actually import
+  // pdfExtraction.ts/textExtraction.ts below -- narrower is strictly
+  // safer here, and a route that newly needs PDF extraction needs an
+  // entry added anyway (the whole point of scoping is that "silently
+  // works everywhere" was the thing that broke the deploy).
+  // Next.js matches these keys against each route with picomatch, which
+  // treats a bare [id]/[documentId] as a glob CHARACTER CLASS (one
+  // literal 'i' or 'd'), not the literal dynamic-segment text -- so an
+  // unescaped bracket key silently matches nothing at all (confirmed:
+  // this exact mistake was tried first and produced zero traced files
+  // for either target route, with no error -- just quietly no-op'd).
+  // The brackets must be escaped so picomatch treats them as literal
+  // characters.
   serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
-    '/api/**/*': ['./node_modules/@napi-rs/canvas*/**/*', './node_modules/pdfjs-dist/**/*'],
+    '/api/investment-intelligence/source-documents/\\[id\\]/process': [
+      './node_modules/@napi-rs/canvas*/**/*',
+      './node_modules/pdfjs-dist/**/*',
+    ],
+    '/api/financial-data-hub/bank-pdf/\\[documentId\\]/process': [
+      './node_modules/@napi-rs/canvas*/**/*',
+      './node_modules/pdfjs-dist/**/*',
+    ],
   },
 };
 
