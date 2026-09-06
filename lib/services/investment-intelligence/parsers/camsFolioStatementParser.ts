@@ -106,7 +106,15 @@ const STATEMENT_DATE_LABEL_RE = /^\s*Statement Date\s*:/im;
 const CAS_TITLE_RE = /CAMS\s+Consolidated\s+Account\s+Statement|Statement Period\s*:/i;
 
 const SECTION_HEADING_RE = {
-  summaryOfHoldings: /^\s*SUMMARY OF HOLDINGS\s*$/i,
+  // II-FS1-C1 (real-artifact closure): the real document's heading is not
+  // always alone on its line -- it can carry a trailing "Statement Date :
+  // <date>" clause on the same line (same label STATEMENT_DATE_LABEL_RE
+  // already recognises standalone elsewhere in this file). The trailing
+  // clause is optional and its date is not captured/used here (the
+  // per-row NAV-as-of date already carries that information) -- this only
+  // widens which line counts as the heading, it does not change what the
+  // section boundary means.
+  summaryOfHoldings: /^\s*SUMMARY OF HOLDINGS(?:\s+Statement Date\s*:\s*\d{1,2}-[A-Za-z]{3}-\d{4})?\s*$/i,
   sipRegistration: /^\s*SIP REGISTRATION\s*$/i,
   multipleBankDetails: /^\s*MULTIPLE BANK DETAILS\s*$/i,
   financialTransactions: /^\s*FINANCIAL TRANSACTIONS\s*$/i,
@@ -469,6 +477,27 @@ export const camsFolioStatementParser: InvestmentDocumentParser = {
       // A closing/no-activity/footer line for this scheme's table, or
       // genuinely unparseable row — never silently dropped.
       if (/^(Closing|Total|No transactions?)/i.test(line)) continue;
+      // II-FS1-C1 (real-artifact closure): every real row grammar this
+      // parser recognises (OPENING_BALANCE_ROW_RE, FULL_TXN_ROW_RE,
+      // FEE_ROW_RE) requires the line to START with a date. A line that
+      // does not even begin with a date-shaped token cannot structurally
+      // be a transaction row this parser failed to recognise -- it is
+      // necessarily something else (a wrapped/multi-line column-header
+      // fragment, a "Gross Amount"/"Remarks" disclosure line following a
+      // fee row, per-scheme investor/compliance metadata, a wrapped
+      // closing-total value, or a page-footer/continuation-notice/
+      // timestamp artifact -- all genuinely observed, in exactly this
+      // order, in the real document this parser is certified against).
+      // Escalating those to a hard parse ERROR was a false positive, not a
+      // defect in the source data. A line that DOES start with a date but
+      // still fails every row grammar remains a genuine error (e.g. FS1's
+      // own FS-Q12 malformed-field negative control) -- this change never
+      // widens what counts as a successfully parsed row, only what counts
+      // as worth erroring about.
+      if (!/^\d{1,2}-[A-Za-z]{3}-\d{4}\b/.test(line)) {
+        warnings.push({ code: 'skipped_non_transaction_line', message: `Skipped a non-data line inside the transaction section (does not begin with a date): "${line.slice(0, 200)}"`, severity: 'info', lineHint: idx });
+        continue;
+      }
       warnings.push({ code: 'unparseable_transaction_row', message: `Could not parse transaction row: "${line}"`, severity: 'error', lineHint: idx });
     }
     return { transactions, warnings };
@@ -506,6 +535,27 @@ export const camsFolioStatementParser: InvestmentDocumentParser = {
       const m = HOLDING_ROW_RE.exec(line);
       if (!m) {
         if (line.length === 0) continue;
+        // A grand-total/closing footer line for the whole section -- same
+        // convention parseTransactions() already uses for its own closing
+        // rows.
+        if (/^Total\b/i.test(line)) continue;
+        // II-FS1-C1 (real-artifact closure): a genuine holding row this
+        // regex failed to recognise would still end in a bare decimal
+        // number (Market Value) or contain a NAV-as-of date -- both
+        // structural facts of HOLDING_ROW_RE's own required tail. A line
+        // with neither signal cannot be a holding row this parser is
+        // failing to read; it is column-header text wrapped across
+        // multiple physical lines, or footer/footnote/asset-allocation-
+        // percentage prose following the section's own Total row -- all
+        // genuinely observed, in exactly this order, in the real document
+        // this parser is certified against. A line ending in "%" (e.g. an
+        // asset-allocation percentage) does not count as ending in a bare
+        // decimal for this purpose.
+        const looksLikeDataRow = /\d{1,2}-[A-Za-z]{3}-\d{4}/.test(line) || /[\d,]+\.\d+\s*$/.test(line);
+        if (!looksLikeDataRow) {
+          warnings.push({ code: 'skipped_non_holding_line', message: `Skipped a non-data line inside the Summary of Holdings section: "${line.slice(0, 200)}"`, severity: 'info', lineHint: idx });
+          continue;
+        }
         warnings.push({ code: 'unparseable_holding_row', message: `Could not parse Summary of Holdings row: "${line}"`, severity: 'error', lineHint: idx });
         continue;
       }
