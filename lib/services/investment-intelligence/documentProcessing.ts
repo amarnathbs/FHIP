@@ -47,6 +47,7 @@ import { randomUUID } from 'crypto';
 import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
+import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -908,10 +909,10 @@ async function evaluatePositionAndCertify(
   // wrong certification verdict. A long-running daily/weekly SIP in one scheme
   // passes 1000 transactions. `transaction_date` repeats, so `id` supplies the
   // unique tie-breaker.
-  const allTxns = await fetchAllRows<{ transaction_type: string; units: number; transaction_date: string }>(() =>
+  const allTxns = await fetchAllRows<{ transaction_type: string; units: number; transaction_date: string; source_reference: string | null }>(() =>
     admin
       .from('ii_transactions')
-      .select('transaction_type, units, transaction_date')
+      .select('transaction_type, units, transaction_date, source_reference')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
       .lte('transaction_date', latestSnapshot.as_of_date as string)
@@ -939,11 +940,26 @@ async function evaluatePositionAndCertify(
       return { canonicalType: t.transaction_type as ReconciliationTransactionInput['canonicalType'], unitsScaled: parsedUnits && parsedUnits.ok ? parsedUnits.scaled : null };
     });
 
+  // FS1 fix (dispatch sections 4, 17, 28): this was previously hardcoded
+  // `false` unconditionally, meaning `determineHistoryCompleteness` could
+  // never return 'complete_from_known_opening_balance' for ANY document —
+  // a genuine printed "Opening Balance" line (camsFolioStatementParser.ts's
+  // OPENING_BALANCE_SOURCE_REFERENCE marker, an 'adjustment'-typed
+  // transaction that is never a purchase/acquisition — see that file's
+  // header comment) is detected here across this position's FULL
+  // transaction history to date, not just the current reconciliation
+  // window, so a position that had a known opening balance established at
+  // its very first import keeps reporting that honestly on every later
+  // reimport/recertify too, rather than reverting to a misleading
+  // 'complete_from_inception' just because the marker row itself predates
+  // the current window's filter.
+  const hasExplicitOpeningBalanceTransaction = (allTxns ?? []).some((t) => t.source_reference === OPENING_BALANCE_SOURCE_REFERENCE);
+
   const historyCompleteness = determineHistoryCompleteness({
-    hasExplicitOpeningBalanceTransaction: false,
+    hasExplicitOpeningBalanceTransaction,
     hasAnyTransactionHistory: txnInputs.length > 0,
     hasClosingHoldingSnapshot: true,
-    statementCoversFromInception: !earlierSnapshot && txnInputs.length > 0,
+    statementCoversFromInception: !earlierSnapshot && txnInputs.length > 0 && !hasExplicitOpeningBalanceTransaction,
   });
 
   const statementClosingParsed = parseExactDecimal(String(latestSnapshot.units));

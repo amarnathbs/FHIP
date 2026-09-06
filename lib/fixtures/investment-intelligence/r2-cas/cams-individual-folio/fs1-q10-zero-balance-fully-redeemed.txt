@@ -1,0 +1,15 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5553334/45
+Name : Synthetic Test Holder Ten
+Statement Date : 31-May-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Small Cap Fund - Direct Plan - Growth ISIN CODE : INF999E05005
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+01-May-2025   Purchase                          5000.00   25.0000   25.0000   200.000000   200.000000 [Ref: FS1Q10P001]
+15-May-2025   Redemption                        5100.00   25.5000   25.5000   200.000000   0.000000 [Ref: FS1Q10R001]

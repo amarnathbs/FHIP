@@ -1,0 +1,54 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5551234/78
+Name : Synthetic Test Holder One
+Address : 12 Synthetic Street, Test City
+Mobile : 9000000001
+Email : synthetic.holder1@fs1-fixture.test
+Second Holder :
+Third Holder :
+
+Bank : Synthetic Test Bank
+Branch : Synthetic Branch
+Bank A/c. : XXXXXXXX0001
+Account Type : Savings
+IFSC : SYNB0000001
+Payment Mode : NEFT
+Mode of Holding : Single
+Tax Status : Individual
+Nominee : Y
+Distributor/RIA : DIRECT
+
+Statement Date : 31-Mar-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Bluechip Growth Fund - Direct Plan - Growth   5000.00   100.000000   31-Mar-2025   52.0000   5200.00
+Synthetic Value Fund - Regular Plan - Growth   5500.00   200.000000   31-Mar-2025   30.0000   6000.00
+
+MULTIPLE BANK DETAILS
+Synthetic Test Bank - XXXXXXXX0001 - SYNB0000001
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Bluechip Growth Fund - Direct Plan - Growth ISIN CODE : INF999A01001
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+15-Mar-2025   Systematic Investment - Purchase   5000.00   50.0000   50.0000   100.000000   100.000000 [Ref: FS1Q01SIP001]
+
+Synthetic Value Fund - Regular Plan - Growth ISIN CODE : INF999B02002
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+No transactions during this statement period.
+
+FINANCIAL TRANSACTION FORM
+
+Scheme Name: _______________  Folio No: _______________
+Purchase [ ]  Redemption [ ]  Switch [ ]
+Amount: _______________  Units: _______________  Date: _______________
+
+TERMS AND CONDITIONS
+
+This statement is issued on a best-effort basis. An exit load of 1% may apply if units are
+redeemed within 365 days of Purchase or Systematic Investment. Redemption requests are
+processed at the applicable NAV. Switch transactions between schemes may attract Stamp Duty
+and Securities Transaction Tax (STT) as applicable under prevailing regulations, typically
+0.005% for delivery-based transactions, reviewed periodically (e.g. 01-Apr-2020 circular).

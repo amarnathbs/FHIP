@@ -4,9 +4,19 @@
 
 import { camsParser } from './camsParser';
 import { kfintechParser } from './kfintechParser';
+import { camsFolioStatementParser } from './camsFolioStatementParser';
 import type { InvestmentDocumentParser, ParsedDocumentOutput, ParsedWarning, SourceDetectionResult } from './types';
 
-export const PARSER_REGISTRY: InvestmentDocumentParser[] = [camsParser, kfintechParser];
+// FS1 addition: camsFolioStatementParser (CAMS-serviced individual Folio
+// Details statement — a different document type from the CAS/KFintech
+// consolidated statements above, dispatch section 5). Registration alone
+// does not weaken CAS/KFintech certification — detectSource() below always
+// compares EVERY registered parser's own independent confidence and picks
+// the highest, so a genuine CAS/KFintech document, which this new parser's
+// own canHandle() is deliberately designed to score low/zero against (see
+// its file-header comment and the CAS_TITLE_RE dampening), is unaffected
+// (dispatch section 86, FS1-T02/T03).
+export const PARSER_REGISTRY: InvestmentDocumentParser[] = [camsParser, kfintechParser, camsFolioStatementParser];
 
 export const SOURCE_DETECTION_CONFIDENCE_THRESHOLD = 0.5;
 
