@@ -86,15 +86,42 @@ const nextConfig = {
   // for either target route, with no error -- just quietly no-op'd).
   // The brackets must be escaped so picomatch treats them as literal
   // characters.
+  // That fix (deployment 127) then hit Amplify's own hard build-output
+  // size cap: "The size of the build output (246769854) exceeds the max
+  // allowed size of 230686720 bytes" -- 246MB vs a ~220MB ceiling, over by
+  // ~15MB. `./node_modules/pdfjs-dist/**/*` pulls in the ENTIRE package
+  // (~36MB) -- the non-legacy build/ directory (13MB, unused: this app
+  // only imports legacy/build/pdf.mjs), types/ (521K, build-time only),
+  // cmaps/ (1.4MB, non-Latin font support, irrelevant to plain text
+  // extraction) and web/ (1.4MB, browser UI, never runs server-side) --
+  // when the actual runtime need is exactly one 2MB file:
+  // legacy/build/pdf.worker.mjs (the same path named in the error above).
+  // @napi-rs/canvas's own footprint (~26-36MB, almost entirely its native
+  // Skia binary) is not similarly trimmable -- that binary IS the
+  // dependency -- so the saving has to come from pdfjs-dist, and trimming
+  // ~34MB off a ~15MB overage leaves real margin rather than landing
+  // exactly on the line.
+  // Next.js's tracer pulls a traced file's sibling .map source map in
+  // automatically even when only the .mjs itself is named above --
+  // pdf.worker.mjs.map adds another 5.1MB, pure debug-symbol weight with
+  // no runtime purpose in a Lambda that will never open dev tools against
+  // it. An outputFileTracingExcludes entry for it was tried and dropped:
+  // it did not visibly take effect in local verification (Windows
+  // path-separator handling in the matcher is the suspect, unconfirmed
+  // either way against Amplify's actual Linux build), and the ~34MB
+  // already saved by trimming the include above leaves ample margin
+  // (~29MB net) against the ~15MB overage even carrying this extra 5MB,
+  // so shipping an unverified exclude wasn't worth the risk of a fourth
+  // failed deploy over an unproven mechanism.
   serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
     '/api/investment-intelligence/source-documents/\\[id\\]/process': [
       './node_modules/@napi-rs/canvas*/**/*',
-      './node_modules/pdfjs-dist/**/*',
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
     '/api/financial-data-hub/bank-pdf/\\[documentId\\]/process': [
       './node_modules/@napi-rs/canvas*/**/*',
-      './node_modules/pdfjs-dist/**/*',
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
   },
 };
