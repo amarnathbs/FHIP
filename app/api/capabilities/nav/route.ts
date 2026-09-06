@@ -35,12 +35,15 @@ export async function GET() {
     const decisions = Object.fromEntries(MODULE_KEYS.map((key) => [key, 'ENABLED' as CapabilityDecision]));
     // G4 closure item 2: writeDecisions mirrors decisions when the flag is
     // off — no module has ever had a narrower write decision pre-G4.
-    return ok({ decisions, writeDecisions: decisions });
+    // G5B Phase 2: deleteDecisions mirrors it too — the flag-off path has
+    // never had a narrower delete decision either.
+    return ok({ decisions, writeDecisions: decisions, deleteDecisions: decisions });
   }
 
   const context = await resolveCountryContext(user.id, supabase);
   const decisions: Record<string, CapabilityDecision> = {};
   const writeDecisions: Record<string, CapabilityDecision> = {};
+  const deleteDecisions: Record<string, CapabilityDecision> = {};
   for (const key of MODULE_KEYS) {
     // Nav visibility deliberately does not evaluate per-module
     // hasExistingRecords (would require one query per module on every nav
@@ -64,6 +67,16 @@ export async function GET() {
     // every current manifest entry, so CREATE alone is sufficient to drive
     // this UI signal.
     writeDecisions[key] = resolveModuleCapability(key, context, { operation: 'CREATE' }).decision;
+    // G5B Phase 2 (2026-09-06): a THIRD decision set, DELETE-operation, so a
+    // page can tell "I can create/edit here" apart from "I can also remove a
+    // row here" — the two now genuinely diverge for Income/Expenses/
+    // Insurance under a GENERIC context once the G5B flag is on (their
+    // CREATE/UPDATE policy is FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED, but DELETE
+    // is UNAVAILABLE_FOR_GENERIC_WRITE — see appCapability.ts's
+    // OPERATIONS_G5B_WRITE_CERTIFIED comment for why). Every other module's
+    // DELETE decision is unaffected: it is identical to today's writeDecisions
+    // value for them, since their CREATE and DELETE policies still match.
+    deleteDecisions[key] = resolveModuleCapability(key, context, { operation: 'DELETE' }).decision;
   }
-  return ok({ decisions, writeDecisions });
+  return ok({ decisions, writeDecisions, deleteDecisions });
 }

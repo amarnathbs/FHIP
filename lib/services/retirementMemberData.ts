@@ -1,6 +1,7 @@
 import type { SupabaseServerClient } from './dashboardData';
 import { ageFromDateOfBirth, normalizeHouseholdType } from '@/lib/engines/twin/taxonomy';
 import type { MemberType } from '@/lib/validation/retirementMember';
+import { isKnownCountry, toFullExperienceCountryOrNull, type CountryCode } from '@/lib/services/jurisdiction';
 
 export interface RetirementMemberRow {
   id: string;
@@ -59,7 +60,27 @@ export async function loadRetirementPlanningContext(userId: string, supabase: Su
   const household = householdRes.data;
   const members = (membersRes.data ?? []) as RetirementMemberRow[];
 
-  const countryCode: 'AU' | 'IN' = profile?.country_of_residence === 'IN' ? 'IN' : 'AU';
+  // G5-D1 fix: this used to be `country_of_residence === 'IN' ? 'IN' : 'AU'`,
+  // which silently converted GB/US/SG/AE, a missing profile or any invalid
+  // value into Australia. Reuses the canonical G1 narrowing
+  // (toFullExperienceCountryOrNull, lib/services/jurisdiction.ts) — the same
+  // function every other domestic-only call site now uses — instead of a
+  // second, locally invented "not IN means AU" fallback. A GENERIC-experience
+  // country (or an unresolved one) narrows to `null`, which fails closed
+  // below rather than being treated as AU. In practice this route
+  // (app/api/retirement/members/route.ts) already refuses GENERIC callers via
+  // requireCountryConfirmedUser() before this function ever runs; this is
+  // defence-in-depth for any future caller that forgets that gate.
+  const residenceCountry: CountryCode | null = isKnownCountry(profile?.country_of_residence)
+    ? profile.country_of_residence
+    : null;
+  const countryCode = toFullExperienceCountryOrNull(residenceCountry);
+  if (!countryCode) {
+    // Missing/unsupported/GENERIC country -> fail closed. Never fabricate an
+    // AU or IN retirement context, and never return a zeroed-out one either
+    // (dispatch: "do not return zero where the result is unavailable").
+    throw new Error('Retirement planning is not available for your confirmed country yet.');
+  }
   const selfCurrentAge = profile?.date_of_birth ? ageFromDateOfBirth(profile.date_of_birth) : null;
 
   const householdTypeCode = normalizeHouseholdType(household?.household_type ?? null, household?.dependants_count ?? 0);

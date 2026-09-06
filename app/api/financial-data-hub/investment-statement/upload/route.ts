@@ -1,4 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
+import { createClient } from '@/lib/supabase/server';
+import { getUserFullExperienceHomeCountry } from '@/lib/services/jurisdiction';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import { FDH_MAX_FILE_SIZE_BYTES } from '@/lib/financial-data-hub/domain/fileValidation';
 import {
@@ -25,6 +27,27 @@ export async function POST(req: Request) {
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Statement uploads are not currently enabled in this environment.', 403);
+  }
+
+  // G5-D2 (related entry point): this whole FDH-11 CSV-statement pipeline is
+  // AU-only by design end-to-end (uploadAndProcessAuInvestmentStatement
+  // hardcodes country_code:'AU' on the upload session, and the paired
+  // account-match route hardcoded countryCode:'AU' when matching/creating
+  // ii_accounts). requireCountryConfirmedUser() admits any FULL-experience
+  // country (AU or IN), not only AU, so without this explicit, authoritative
+  // (never client-supplied, never currency-derived) check an IN user's own
+  // statement could be silently created and matched as an Australian
+  // document/account. India statements are certified only through the
+  // separate CAS-based Investment Intelligence import (R1-R6) — not this
+  // route — so a non-AU authoritative country fails closed here with an
+  // honest reason rather than proceeding under the wrong country.
+  const supabase = await createClient();
+  const homeCountry = await getUserFullExperienceHomeCountry(user.id, supabase);
+  if (homeCountry !== 'AU') {
+    return bad(
+      'This statement upload is only available for accounts confirmed in Australia. India brokerage/mutual-fund statements use the CAS-based Investment Intelligence import instead.',
+      403
+    );
   }
 
   const url = new URL(req.url);

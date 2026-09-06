@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
+import { getUserFullExperienceHomeCountry } from '@/lib/services/jurisdiction';
 import { getAuInvestmentStatementIdForDocument } from '@/lib/financial-data-hub/services/investmentStatementProcessingService';
 import { resolveAndPersistAuStatementAccount, confirmNewAuStatementAccount } from '@/lib/investment-import-bridge/auAccountResolution';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
@@ -19,13 +20,36 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
 
+  const supabase = await createClient();
+
+  // G5-D2 fix: this endpoint used to hardcode countryCode: 'AU' on every
+  // call, regardless of who was calling it. requireCountryConfirmedUser()
+  // admits any FULL-experience country (AU or IN), so an IN user's own
+  // statement could previously be matched/created against the AU-only
+  // `ii_accounts` catalogue via lib/investment-import-bridge/
+  // auAccountResolution.ts (itself deliberately AU-only by design — see its
+  // own file header). Resolve the authoritative country server-side (never
+  // trusted from the request body, never inferred from the statement's
+  // currency_code) and fail closed with an explicit, honest
+  // unavailable/manual-review response for anyone but AU, rather than
+  // silently applying or creating a record under the wrong country. India
+  // statements are certified only through the separate CAS-based Investment
+  // Intelligence import (R1-R6), not this AU-only bridge.
+  const homeCountry = await getUserFullExperienceHomeCountry(user.id, supabase);
+  if (homeCountry !== 'AU') {
+    return bad(
+      'Automatic account matching for this statement type is only available for accounts confirmed in Australia. Please use manual review, or the CAS-based Investment Intelligence import for India statements.',
+      403,
+      'ACCOUNT_MATCH_UNAVAILABLE_FOR_COUNTRY'
+    );
+  }
+
   const statementId = await getAuInvestmentStatementIdForDocument(user.id, documentId);
   if (!statementId) return bad('No statement evidence has been extracted from this document yet.', 404);
 
   const body = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) return bad(body.error.issues[0]?.message ?? 'Invalid request', 422);
 
-  const supabase = await createClient();
   const { data: statement } = await supabase.from('fdh_investment_statements').select('institution_name, masked_account_identifier').eq('id', statementId).eq('user_id', user.id).maybeSingle();
 
   if (body.data.action === 'confirm_new') {
@@ -44,7 +68,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     maskedAccountIdentifier: statement?.masked_account_identifier ?? null,
     accountType: body.data.account_type,
     currencyCode: body.data.currency_code,
-    countryCode: 'AU',
+    // Resolved server-side above and proven === 'AU' before this point is
+    // ever reached (never a request-provided or currency-derived value).
+    countryCode: homeCountry,
   });
   if (result.error) return bad(result.error, 500);
 
