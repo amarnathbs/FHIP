@@ -300,6 +300,51 @@ function requireScaled(raw: string, warnings: ParsedWarning[], code: string): bi
   return parsed.scaled;
 }
 
+// PC4 section 7/11 finding (2026-09-07, real user statement): classifying
+// only the explicitly-worded rejection/reversal line as 'reversal' (the
+// earlier transactionTypeMapping.ts fix) leaves its PAIRED purchase line
+// still classified 'sip'/'purchase' — still counted in full toward "Total
+// Contributed" even though zero net units and zero net cash actually
+// moved for that instalment. Confirmed live: of 36 monthly SIP attempts
+// for one real fund, 35 were purchase+rejection pairs (net zero, only one
+// manual bank-transfer purchase with no matching reversal was genuine) —
+// after only the rejection-line fix, the displayed total dropped from
+// ~71,000 to ~35,000 (35 x 1,000, the unpaired purchase sides), still
+// wrong. PC4 section 7 requires reusing certified cashflow classification
+// rather than summing blindly, and section 11 forbids guessing recurring-
+// contribution figures — this closes the gap with a DETERMINISTIC,
+// mechanically-provable rule, never a guess from description text alone:
+// a reversal transaction's own running Unit Balance (printed by the
+// statement itself) exactly restores the balance to what it was BEFORE
+// the immediately preceding transaction. When the preceding transaction
+// is a same-date, same-folio, same-scheme, exact-negated-amount purchase-
+// family transaction, that pairing is structurally proven by the
+// statement's own numbers, not inferred from wording — so the paired
+// purchase is reclassified to 'reversal' too. A transaction with no such
+// pairing (no matching reversal, or a balance that doesn't cancel exactly)
+// is left completely untouched, per the same never-guess discipline.
+function reclassifyReversedPurchasePairs(transactions: ParsedTransactionRecord[]): void {
+  for (let i = 1; i < transactions.length; i++) {
+    const reversal = transactions[i];
+    if (reversal.canonicalType !== 'reversal') continue;
+    const prior = transactions[i - 1];
+    if (prior.canonicalType === 'reversal') continue; // already correctly classified — nothing to fix
+    if (prior.transactionDateIso !== reversal.transactionDateIso) continue;
+    if (prior.folioNumber !== reversal.folioNumber) continue;
+    if (prior.scheme.normalisedSchemeName !== reversal.scheme.normalisedSchemeName) continue;
+    if (prior.unitsScaled === null || reversal.unitsScaled === null) continue;
+    if (prior.unitsScaled !== -reversal.unitsScaled) continue; // exact unit negation
+    if (prior.amountScaled !== -reversal.amountScaled) continue; // exact amount negation
+    if (reversal.balanceUnitsAfterScaled === null) continue;
+    const balanceBeforePrior = i >= 2 && transactions[i - 2].scheme.normalisedSchemeName === prior.scheme.normalisedSchemeName && transactions[i - 2].folioNumber === prior.folioNumber
+      ? transactions[i - 2].balanceUnitsAfterScaled
+      : BigInt(0); // first transaction for this scheme/folio — pre-purchase balance is genuinely zero, never guessed otherwise
+    if (balanceBeforePrior === null) continue;
+    if (reversal.balanceUnitsAfterScaled !== balanceBeforePrior) continue; // reversal must fully restore the pre-purchase balance, not just cancel units in isolation
+    transactions[i - 1] = { ...prior, canonicalType: 'reversal', classificationConfidence: 1 };
+  }
+}
+
 export const camsParser: InvestmentDocumentParser = {
   parserCode: CAMS_PARSER_CODE,
   parserVersion: CAMS_PARSER_VERSION,
@@ -726,6 +771,7 @@ export const camsParser: InvestmentDocumentParser = {
         });
       }
     }
+    reclassifyReversedPurchasePairs(transactions);
     return { transactions, warnings };
   },
 
