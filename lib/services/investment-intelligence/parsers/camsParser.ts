@@ -360,6 +360,33 @@ export const camsParser: InvestmentDocumentParser = {
         break;
       }
     }
+    // Post-Gate-A production finding #4 (2026-09-07): a real "since
+    // inception" CAS request (spanning the account's entire history, not a
+    // fixed period) prints its date range WITHOUT the "Statement Period :"
+    // label at all — just a bare "01-Jan-1990 To 06-Sep-2026" line,
+    // reprinted as a per-page tracking stamp alongside the version-stamp
+    // line ("CAMSCASWS-<...> Version:V3.5 Live-<...>"), never labelled
+    // anywhere in the real document. Without this fallback,
+    // statementPeriodEndIso stayed null for the entire document, which
+    // ALT_CLOSING_RE's holdings extraction depends on as its as-of-date
+    // fallback (that grammar's closing-balance line carries no date of its
+    // own) — so even after fixing ALT_CLOSING_RE's currency-marker bug,
+    // holdings_found stayed 0 for every single scheme in the real
+    // document, since every match hit the "no statement period end
+    // available" guard instead. The leading date (a sentinel placeholder —
+    // "01-Jan-1990" here — never a genuine informative start date for a
+    // since-inception request) is deliberately NOT used as periodStart;
+    // only the end date is what this fallback actually needs.
+    if (!periodEnd) {
+      for (const line of lines) {
+        const m = /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+To\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s*$/.exec(line.trim());
+        if (m) {
+          const e = parseStatementDate(m[2]);
+          if (e.ok) periodEnd = e.iso;
+          break;
+        }
+      }
+    }
     const detection = this.canHandle(text);
     return {
       sourceKey: 'cams',
