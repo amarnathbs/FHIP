@@ -199,8 +199,41 @@ const ALT_TXN_ROW_RE =
 // Finding #9: "Closing Unit Balance: X Total Cost Value: Y" — no "as on"/
 // "Valuation"/"NAV as on" clause anywhere, and critically, NO DATE at all
 // (unlike CLOSING_RE, which always captures an explicit as-of date).
+//
+// Post-Gate-A production finding (2026-09-07, real CAS document): the
+// "Rs."/"₹" currency marker before the Total Cost Value amount was
+// required (non-optional) in this regex, but real RTA output for this
+// layout prints the amount with NO currency marker at all —
+// "Total Cost Value: 93,000.00", not "Total Cost Value: Rs. 93,000.00".
+// Every existing synthetic fixture (pc3-q11-alternate-cams-layout,
+// pc3-golden-real-variant) happened to include "Rs.", so this was never
+// exercised against the real format and the regex silently matched ZERO
+// closing-balance lines in the real document — `parseHoldings()` pushed
+// no holdings for any of its 8 schemes (holdings_found: 0 despite
+// schemes_found: 8, transactions_found: 300), and in `parseTransactions`
+// the same failed match meant `inTable` never reset, so both the
+// closing-balance line and the next scheme's AMC-name line were wrongly
+// fed to the transaction-row grammar as spurious `unparseable_transaction_row`
+// errors. The currency marker is now optional (still matched when
+// present, so the existing "Rs."-bearing fixtures keep passing).
 const ALT_CLOSING_RE =
-  /^Closing Unit Balance\s*:\s*(\(?-?[\d,]+\.\d+\)?)\s*(?:Units)?\s+Total Cost Value\s*:\s*(?:Rs\.?|₹)\s*(\(?-?[\d,]+\.\d+\)?)\s*$/i;
+  /^Closing Unit Balance\s*:\s*(\(?-?[\d,]+\.\d+\)?)\s*(?:Units)?\s+Total Cost Value\s*:\s*(?:(?:Rs\.?|₹)\s*)?(\(?-?[\d,]+\.\d+\)?)\s*$/i;
+
+// Post-Gate-A production finding #2 (2026-09-07, same real CAS document as
+// the ALT_CLOSING_RE fix above): the AMC/fund-house name also appears as a
+// bare, unlabelled line with no "AMC Name:" prefix at all — just the fund
+// house's own name immediately followed by the literal words "Mutual
+// Fund" ("HDFC Mutual Fund", "SBI Mutual Fund", "Nippon India Mutual
+// Fund", ...), always positioned directly after the PRECEDING scheme's
+// closing-balance line and directly before the NEXT scheme's PAN/KYC
+// line. Never documented in either the "detailed_v1" or
+// "detailed_v1_alt_layout" grammars above — a third real-world header
+// shape. Without recognising it, `lastKnownAmcName` stays stale at the
+// previous scheme's AMC for every scheme that follows one of these bare
+// headers, silently misattributing fund-house identity — not caught by
+// transaction/holdings counts, since scheme detection and closing-balance
+// parsing both succeed regardless; only `scheme.amcName` is wrong.
+const BARE_AMC_NAME_RE = /^[A-Z][A-Za-z&.'-]*(?:\s+[A-Za-z&.'-]+){0,4}\s+Mutual\s+Fund$/;
 
 // II-PC3-C1 real-variant fingerprint, section 8/9
 // (docs/investment-intelligence/II_PC3_REAL_CAMS_VARIANT_FINGERPRINT.md):
@@ -411,6 +444,11 @@ export const camsParser: InvestmentDocumentParser = {
       const amc = extractLabelledField(line, 'AMC Name');
       if (amc) {
         lastKnownAmcName = amc;
+        inTable = false;
+        continue;
+      }
+      if (BARE_AMC_NAME_RE.test(line)) {
+        lastKnownAmcName = line;
         inTable = false;
         continue;
       }
@@ -656,6 +694,7 @@ export const camsParser: InvestmentDocumentParser = {
       // real institution name, e.g. a manual-source fixture.
       const amc = extractLabelledField(line, 'AMC Name');
       if (amc) lastKnownAmcName = amc;
+      else if (BARE_AMC_NAME_RE.test(line)) lastKnownAmcName = line;
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
         currentScheme = {
