@@ -378,6 +378,13 @@ function scheme(overrides: Partial<SchemeDataset> & { instrumentId: string; curr
       { date: d('2021-01-31'), amount: -1000 },
       { date: d('2022-12-31'), amount: 1200 },
     ],
+    // Default fixture has no switch_in/switch_out, so externalCashFlows is
+    // identical to cashFlows -- tests that specifically exercise the PC4
+    // section 9 switch-exclusion behaviour override this explicitly.
+    externalCashFlows: [
+      { date: d('2021-01-31'), amount: -1000 },
+      { date: d('2022-12-31'), amount: 1200 },
+    ],
     currentValue: 1200,
     currentValueDate: d('2022-12-31'),
     navSeries: navs,
@@ -432,6 +439,128 @@ describe('SVC-ORCH-002: history-completeness gate flows end to end', () => {
   it('allows it for complete_from_inception', () => {
     const rs = runAnalytics(dataset([scheme({ instrumentId: 'a', currencyCode: 'INR' })]));
     expect(rs.schemes[0].investorXirr.status).toBe('CALCULATED');
+  });
+});
+
+// PC4 section 6 finding (2026-09-07): SchemeDataset.currentValueDate was
+// already computed by analyticsRepository (the scheme's own real
+// valuation date) but analyseScheme() never surfaced it on the returned
+// SchemeAnalytics -- every scheme-level metric (XIRR, current value)
+// rendered with no way to tell it apart from today's date, and in a
+// multi-statement portfolio different schemes can genuinely have
+// different valuation dates.
+describe('SVC-ORCH-008: each scheme discloses its OWN valuation date, not just the portfolio-level one', () => {
+  it('surfaces currentValueDate as an ISO string matching the input SchemeDataset', () => {
+    const rs = runAnalytics(dataset([scheme({ instrumentId: 'a', currencyCode: 'INR', currentValueDate: d('2022-12-31') })]));
+    expect(rs.schemes[0].currentValueDate).toBe('2022-12-31');
+  });
+
+  it('two schemes with genuinely different valuation dates each report their own, not the portfolio one', () => {
+    const rs = runAnalytics(
+      dataset([
+        scheme({ instrumentId: 'a', currencyCode: 'INR', currentValueDate: d('2022-12-31') }),
+        scheme({ instrumentId: 'b', currencyCode: 'INR', currentValueDate: d('2022-06-30') }),
+      ])
+    );
+    const byId = new Map(rs.schemes.map((s) => [s.instrumentId, s.currentValueDate]));
+    expect(byId.get('a')).toBe('2022-12-31');
+    expect(byId.get('b')).toBe('2022-06-30');
+    expect(byId.get('a')).not.toBe(byId.get('b'));
+  });
+});
+
+describe('SVC-ORCH-009: portfolio XIRR excludes internal switches even across a settlement-date lag', () => {
+  // Regression test for a real defect: an initial fix attempt netted
+  // switch_in/switch_out by matching DATE alone, which only works when
+  // both legs settle on the exact same day. A real switch's two legs
+  // routinely settle a day or more apart (or differ by a fee/STT
+  // deduction), so date-based netting still leaks a phantom external cash
+  // flow into the household's portfolio XIRR. The actual fix excludes
+  // switches by TRANSACTION TYPE at the source (SchemeDataset.
+  // externalCashFlows), so the switch's dates are irrelevant -- this test
+  // proves that by putting the two legs on DIFFERENT dates and asserting
+  // the result is identical to a portfolio where the switch never
+  // happened at all.
+  function withSwitch(): AnalyticsDataset {
+    // Scheme A: invests 1000, switches 400 OUT on 2021-06-01, ends at 700.
+    const a = scheme({
+      instrumentId: 'a',
+      currencyCode: 'INR',
+      cashFlows: [
+        { date: d('2021-01-01'), amount: -1000 },
+        { date: d('2021-06-01'), amount: 400 }, // switch_out leg
+        { date: d('2022-12-31'), amount: 700 },
+      ],
+      externalCashFlows: [
+        { date: d('2021-01-01'), amount: -1000 },
+        { date: d('2022-12-31'), amount: 700 },
+      ],
+      currentValue: 700,
+      currentValueDate: d('2022-12-31'),
+    });
+    // Scheme B: receives the switch 2 DAYS LATER (settlement lag), ends at 450.
+    const b = scheme({
+      instrumentId: 'b',
+      currencyCode: 'INR',
+      cashFlows: [
+        { date: d('2021-06-03'), amount: -400 }, // switch_in leg, lagged date
+        { date: d('2022-12-31'), amount: 450 },
+      ],
+      externalCashFlows: [{ date: d('2022-12-31'), amount: 450 }],
+      currentValue: 450,
+      currentValueDate: d('2022-12-31'),
+    });
+    return dataset([a, b]);
+  }
+
+  function withoutSwitch(): AnalyticsDataset {
+    // Same net economics (invest 1000, end at 700+450=1150), but modelled
+    // as if the internal transfer never happened -- no switch legs at all.
+    const a = scheme({
+      instrumentId: 'a',
+      currencyCode: 'INR',
+      cashFlows: [
+        { date: d('2021-01-01'), amount: -1000 },
+        { date: d('2022-12-31'), amount: 700 },
+      ],
+      externalCashFlows: [
+        { date: d('2021-01-01'), amount: -1000 },
+        { date: d('2022-12-31'), amount: 700 },
+      ],
+      currentValue: 700,
+      currentValueDate: d('2022-12-31'),
+    });
+    const b = scheme({
+      instrumentId: 'b',
+      currencyCode: 'INR',
+      cashFlows: [{ date: d('2022-12-31'), amount: 450 }],
+      externalCashFlows: [{ date: d('2022-12-31'), amount: 450 }],
+      currentValue: 450,
+      currentValueDate: d('2022-12-31'),
+    });
+    return dataset([a, b]);
+  }
+
+  it('produces the same portfolioXirr whether or not a lagged internal switch occurred', () => {
+    const withRs = runAnalytics(withSwitch()).portfolios[0];
+    const withoutRs = runAnalytics(withoutSwitch()).portfolios[0];
+    expect(withRs.portfolioXirr.status).toBe('CALCULATED');
+    expect(withoutRs.portfolioXirr.status).toBe('CALCULATED');
+    expect(withRs.portfolioXirr.value!.rate).toBeCloseTo(withoutRs.portfolioXirr.value!.rate, 10);
+  });
+
+  it('a genuine same-day external contribution alongside the switch is still counted', () => {
+    // Guards against an over-broad fix that accidentally drops ALL flows on
+    // dates a switch also touches. Scheme A gets a real, non-switch top-up
+    // on the SAME day as its switch_out leg -- it must still reach the
+    // portfolio's investorCashFlows.
+    const ds = withSwitch();
+    const a = ds.schemes.find((s) => s.instrumentId === 'a')!;
+    a.cashFlows = [...a.cashFlows, { date: d('2021-06-01'), amount: -50 }];
+    a.externalCashFlows = [...a.externalCashFlows, { date: d('2021-06-01'), amount: -50 }];
+    const withExtra = runAnalytics(ds).portfolios[0];
+    const baseline = runAnalytics(withSwitch()).portfolios[0];
+    expect(withExtra.portfolioXirr.value!.rate).not.toBeCloseTo(baseline.portfolioXirr.value!.rate, 6);
   });
 });
 

@@ -95,6 +95,11 @@ interface SchemeBlock {
   instrumentId: string;
   instrumentName: string;
   currencyCode: string;
+  // PC4 section 6: this scheme's own valuation date, distinct from the
+  // portfolio-level asOfDate shown once at the top of the page -- a
+  // multi-statement portfolio can genuinely have schemes valued as of
+  // different dates.
+  currentValueDate: string;
   investorXirr: Outcome<{ rate: number }>;
   navReturns: Record<string, Outcome<{ pointToPoint?: number; cagr?: number }>>;
   activeReturn: Outcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
@@ -612,6 +617,13 @@ function SchemeTable({ schemes }: { schemes: SchemeBlock[] }) {
                 <tr key={s.instrumentId} className="border-b border-line align-top">
                   <td className="py-3 pr-4 font-medium text-ink">
                     {s.instrumentName}
+                    {/* PC4 section 6: every metric on this row (XIRR, active
+                        return) is derived from this scheme's own current
+                        value — disclosed here so it is never mistaken for
+                        today's live value, and so a genuinely stale scheme
+                        is visible even though the portfolio-level date at
+                        the top of the page may be more recent. */}
+                    <p className="mt-0.5 text-xs font-normal text-muted">Value as of {fmtDate(s.currentValueDate)}</p>
                     {isOpen && <SchemeDetail s={s} />}
                   </td>
                   <td className="py-3 pr-4 text-muted">{s.currencyCode}</td>
