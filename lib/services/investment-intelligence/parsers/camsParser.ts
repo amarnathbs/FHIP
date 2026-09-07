@@ -235,6 +235,29 @@ const ALT_CLOSING_RE =
 // parsing both succeed regardless; only `scheme.amcName` is wrong.
 const BARE_AMC_NAME_RE = /^[A-Z][A-Za-z&.'-]*(?:\s+[A-Za-z&.'-]+){0,4}\s+Mutual\s+Fund$/;
 
+// Post-Gate-A production finding #3 (2026-09-07): a bare-AMC-shaped line
+// ("<Name> Mutual Fund") is genuinely ambiguous on its own — it can be
+// EITHER (a) line 1 of a 2-line wrapped scheme header, when the scheme's
+// own name happens to end in the words "Mutual Fund" and the "- ISIN:
+// ...Registrar : ..." clause wraps to the next physical line, OR (b) a
+// completely standalone AMC/fund-house context line sitting immediately
+// before an UNRELATED, independently-complete scheme header.
+//
+// Naively always trying the wrap match first (my first fix for finding #3
+// itself) breaks case (b): matchAcrossLines' non-greedy ALT_SCHEME_LINE_RE
+// group has no way to know the bare-AMC line isn't part of the sentence,
+// so it happily merges "<AMC name>" + "<the NEXT, wholly separate scheme's
+// own complete header>" into one garbage combined name — confirmed by this
+// fix's own regression test failing after the naive reordering. The
+// discriminator: a bare-AMC line is only NEEDED to complete a wrap if the
+// line(s) after it do NOT already stand alone as a complete,
+// independently-resolvable scheme header. If they do, the bare-AMC line
+// was never a wrap fragment at all.
+function bareAmcLineIsWrapStart(lines: string[], idx: number): boolean {
+  if (!BARE_AMC_NAME_RE.test(lines[idx].trim())) return true; // not bare-AMC-shaped at all — no conflict, always eligible to be tried as a wrap start
+  return matchAcrossLines(lines, idx + 1, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader) === null;
+}
+
 // II-PC3-C1 real-variant fingerprint, section 8/9
 // (docs/investment-intelligence/II_PC3_REAL_CAMS_VARIANT_FINGERPRINT.md):
 // Stamp Duty / STT rows are a materially SHORTER, standalone row shape —
@@ -447,11 +470,6 @@ export const camsParser: InvestmentDocumentParser = {
         inTable = false;
         continue;
       }
-      if (BARE_AMC_NAME_RE.test(line)) {
-        lastKnownAmcName = line;
-        inTable = false;
-        continue;
-      }
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
         currentScheme = {
@@ -475,7 +493,30 @@ export const camsParser: InvestmentDocumentParser = {
       // output contract has no matching column for — see the file-header
       // comment's "deliberately out of scope" note for `amcName` for the
       // same disclosed-gap discipline applied to this parenthetical.
-      const altSchemeMatch = matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader);
+      //
+      // Real production incident, 2026-09-07: this wrap-match attempt must
+      // run BEFORE the BARE_AMC_NAME_RE check below, not after. A bare
+      // "<Name> Mutual Fund" line is sometimes itself line 1 of a 2-line
+      // wrapped scheme header (line 2 carrying "<scheme> - ISIN: ...
+      // Registrar : ..."), which matchAcrossLines can only detect by
+      // starting its scan AT this line. My first version of the bare-AMC
+      // fix put BARE_AMC_NAME_RE's `continue` first, so it always won that
+      // race, swallowing line 1 as a plain AMC-name reset before
+      // matchAcrossLines ever got a chance to try it as a wrap start —
+      // causing matchAcrossLines to instead start fresh at line 2 alone,
+      // which extracted an incomplete/different raw scheme name than the
+      // correct 2-line join. On reprocess, that different normalised name
+      // failed resolveScheme()'s exact-match step 4 against the
+      // already-existing (correctly-named) instrument, creating a brand
+      // new duplicate ii_instruments row and silently forking that fund's
+      // transaction history across two instrument ids — confirmed live via
+      // direct comparison of two parse runs against the same document.
+      // bareAmcLineIsWrapStart() (see its own comment, above BARE_AMC_NAME_RE)
+      // guards the OTHER direction of this same conflict: a bare-AMC line
+      // that is genuinely standalone, immediately followed by a wholly
+      // separate, already-complete scheme header, must NOT be merged into
+      // that header's name.
+      const altSchemeMatch = bareAmcLineIsWrapStart(lines, idx) ? matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader) : null;
       if (altSchemeMatch) {
         const altScheme = altSchemeMatch.match;
         const rawName = altScheme[1].trim();
@@ -491,6 +532,13 @@ export const camsParser: InvestmentDocumentParser = {
         };
         inTable = false;
         idx += altSchemeMatch.linesConsumed - 1;
+        continue;
+      }
+      // Only a line that did NOT start a genuine wrapped scheme header
+      // above is treated as a plain, standalone AMC-name context line.
+      if (BARE_AMC_NAME_RE.test(line)) {
+        lastKnownAmcName = line;
+        inTable = false;
         continue;
       }
       {
@@ -693,8 +741,10 @@ export const camsParser: InvestmentDocumentParser = {
       // R11 cross-source matching for anything that (correctly) supplies a
       // real institution name, e.g. a manual-source fixture.
       const amc = extractLabelledField(line, 'AMC Name');
-      if (amc) lastKnownAmcName = amc;
-      else if (BARE_AMC_NAME_RE.test(line)) lastKnownAmcName = line;
+      if (amc) {
+        lastKnownAmcName = amc;
+        continue;
+      }
       const schemeName = extractLabelledField(line, 'Scheme Name');
       if (schemeName !== null) {
         currentScheme = {
@@ -709,8 +759,12 @@ export const camsParser: InvestmentDocumentParser = {
         continue;
       }
       // II-PC3 Gate A finding #5 (see the matching block in
-      // parseTransactions for the full rationale).
-      const altSchemeMatch = matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader);
+      // parseTransactions for the full rationale). bareAmcLineIsWrapStart()
+      // (see its own comment, above BARE_AMC_NAME_RE) decides whether this
+      // attempt is even eligible to consume a bare-AMC-shaped starting
+      // line — keeps this function's scheme identity consistent with
+      // parseTransactions' for the exact same document.
+      const altSchemeMatch = bareAmcLineIsWrapStart(lines, idx) ? matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader) : null;
       if (altSchemeMatch) {
         const altScheme = altSchemeMatch.match;
         const rawName = altScheme[1].trim();
@@ -725,6 +779,10 @@ export const camsParser: InvestmentDocumentParser = {
           amfiSchemeCode: null,
         };
         idx += altSchemeMatch.linesConsumed - 1;
+        continue;
+      }
+      if (BARE_AMC_NAME_RE.test(line)) {
+        lastKnownAmcName = line;
         continue;
       }
       {
