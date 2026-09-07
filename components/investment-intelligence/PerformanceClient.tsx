@@ -309,7 +309,17 @@ function PortfolioSection({
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* PC4 section 13: these two rows were previously one undifferentiated
+          grid. TWRR/XIRR need only this portfolio's own valuation and
+          cashflow history -- always computable once statements are in.
+          Blended benchmark return and active return additionally require an
+          external market-index series mapped to every holding, which is
+          reference data this household's own statements can never supply.
+          Grouped under separate sub-headings so a genuinely-unavailable
+          benchmark figure reads as "this needs data we don't have yet", not
+          as parity with a metric that should always be there. */}
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">From your own statements</p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
         <MetricValue
           label="Time-weighted return (TWRR)"
           outcome={p.portfolioTwrr as never}
@@ -320,6 +330,14 @@ function PortfolioSection({
           outcome={p.portfolioXirr as never}
           render={(v: never) => pct((v as { rate: number }).rate)}
         />
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted">
+        TWRR measures how the underlying investments performed, independent of when you added or withdrew money. XIRR measures your own outcome,
+        including the effect of your contribution timing. The two answer different questions and are not interchangeable.
+      </p>
+
+      <p className="mt-6 text-xs font-medium uppercase tracking-wide text-muted">Compared against a market benchmark</p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
         <MetricValue
           label="Blended benchmark return"
           outcome={p.blendedBenchmarkReturn as never}
@@ -331,10 +349,9 @@ function PortfolioSection({
           render={(v: never) => pct((v as { activeReturn: number }).activeReturn)}
         />
       </div>
-
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        TWRR measures how the underlying investments performed, independent of when you added or withdrew money. XIRR measures your own outcome,
-        including the effect of your contribution timing. The two answer different questions and are not interchangeable.
+        These figures need a market index mapped to every holding, with its own return history for the period. Where that mapping or history is
+        incomplete, the comparison is withheld rather than calculated against partial coverage.
       </p>
 
       <PerformanceVsBenchmarkChart p={p} />
@@ -419,13 +436,31 @@ function RiskPanel({ p }: { p: PortfolioBlock }) {
   return (
     <div className="mt-6">
       <h3 className="mb-3 text-sm font-medium text-ink">Risk and risk-adjusted measures</h3>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+      {/* PC4 section 13: volatility through Sortino need only this
+          portfolio's own valuation history (Sharpe/Sortino also need a
+          risk-free reference rate, which is versioned country data FHIP
+          already carries, not a market index). Beta through capture ratios
+          structurally require a benchmark return series matched to every
+          holding -- the same external dependency as the return comparisons
+          above. Split so the two categories aren't presented as equally
+          available. */}
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">From your own valuation history</p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricValue label="Volatility (annualised)" outcome={r.volatility as never} render={(v: never) => pct((v as { annualisedVolatility: number }).annualisedVolatility)} />
         <MetricValue label="Downside deviation" outcome={r.downsideDeviation as never} render={(v: never) => pct((v as { annualisedDownsideDeviation: number }).annualisedDownsideDeviation)} />
         <MetricValue label="Maximum drawdown" outcome={r.maxDrawdown as never} render={(v: never) => pct((v as { maxDrawdown: number }).maxDrawdown)} />
         <MetricValue label="Calmar ratio" outcome={r.calmarRatio as never} render={(v: never) => num((v as { calmar: number }).calmar)} />
         <MetricValue label="Sharpe ratio" outcome={r.sharpeRatio as never} render={(v: never) => num((v as { sharpe: number }).sharpe)} />
         <MetricValue label="Sortino ratio" outcome={r.sortinoRatio as never} render={(v: never) => num((v as { sortino: number }).sortino)} />
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted">
+        Sharpe and Sortino compare returns against a risk-free rate drawn from versioned reference data. Where that rate is not available for this
+        country and period, the figure is withheld rather than calculated against an assumed rate.
+      </p>
+
+      <p className="mt-6 text-xs font-medium uppercase tracking-wide text-muted">Compared against a market benchmark</p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricValue label="Beta vs benchmark" outcome={r.beta as never} render={(v: never) => num((v as { beta: number }).beta)} />
         <MetricValue label="Alpha (annualised)" outcome={r.alpha as never} render={(v: never) => pct((v as { alphaAnnualised: number }).alphaAnnualised)} />
         <MetricValue label="Tracking error" outcome={r.trackingError as never} render={(v: never) => pct((v as { trackingError: number }).trackingError)} />
@@ -448,8 +483,8 @@ function RiskPanel({ p }: { p: PortfolioBlock }) {
         />
       </div>
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        Sharpe, Sortino and alpha compare returns against a risk-free rate drawn from versioned reference data. Where that rate is not available for
-        this country and period, the figure is withheld rather than calculated against an assumed rate.
+        These all need a market index mapped to every holding, with its own return history for the period. Where that mapping or history is
+        incomplete, the figures are withheld rather than calculated against partial coverage.
       </p>
     </div>
   );
