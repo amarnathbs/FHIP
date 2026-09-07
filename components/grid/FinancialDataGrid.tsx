@@ -151,6 +151,34 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 type ZeroAnswer = 'yes' | 'no' | 'unsure' | null;
 
+// LR-2 (2026-09-07): singular item labels for the Add/Edit form's heading
+// and the "+ Add ..." button, keyed by category rather than naively
+// stripping a trailing "s" off config.title (found live: that broke on
+// "Liabilities" -> "Liabilitie"). Income/Insurance stay as their own mass
+// noun ("Add Income", not "Add Incom"); Investment/Retirement use a plain
+// "an item" since neither reads naturally as "Add Investment"/"Add
+// Retirement" for a single holding.
+const SINGULAR_ITEM_LABEL: Record<GridConfig['category'], string> = {
+  income: 'Income',
+  expense: 'Expense',
+  asset: 'Asset',
+  liability: 'Liability',
+  investment: 'an item',
+  retirement: 'an item',
+  insurance: 'an item',
+};
+
+// LR-2 (2026-09-07): the shared grid's interaction model changed from
+// "every catalogue item is always an inline-editable table row" to a
+// form-first pattern: status/confirmation controls -> Add action -> one
+// manual Add/Edit form -> saved records listed read-only below -> clicking
+// a saved record loads it back into the form. This file keeps every
+// existing business rule (race-safe save, currency/country hard-block,
+// property/goal linking, II-published protection, SMSF exclusion, per-row
+// field visibility, write-availability gating, section-status completion)
+// completely unchanged — only the rendering/interaction layer changed, and
+// the component's public props are identical, so no page that renders
+// <FinancialDataGrid ... /> needed to change.
 export function FinancialDataGrid({
   config,
   subNav,
@@ -165,31 +193,18 @@ export function FinancialDataGrid({
   beforeGrid?: React.ReactNode;
   // G4 closure item 2 (Product Owner, 2026-09-05): which capability module
   // this grid instance belongs to, so it can ask whether a live create/edit
-  // control is safe to show right now (useModuleWriteAvailability()). Every
-  // page rendering this grid passes its own ModuleKey; for a module that is
-  // already wholesale UNAVAILABLE for a GENERIC user, the page itself never
-  // renders (the caller is redirected before reaching this component), so
-  // this only ever visibly narrows anything on the six G4-universal modules
-  // (Income/Expenses/Insurance) whose VIEW is open to GENERIC but whose
-  // write path is not yet G5-certified.
+  // control is safe to show right now (useModuleWriteAvailability()).
   moduleKey: ModuleKey;
 }) {
   const { available: writeAvailable, resolved: writeResolved, deleteAvailable } = useModuleWriteAvailability(moduleKey);
   const writeUnavailable = writeResolved && !writeAvailable;
   // G5B Phase 2 (2026-09-06): CREATE/UPDATE and DELETE can now genuinely
-  // diverge for a GENERIC caller (Income/Expenses/Insurance allow the former
-  // but not the latter — see appCapability.ts's OPERATIONS_G5B_WRITE_CERTIFIED
-  // comment). `removeUnavailable` gates ONLY the two things that ultimately
-  // archive a row via handleToggleInclude()'s DELETE call (the checkbox's
-  // uncheck path and the "Remove"/"Remove item" buttons below) — every other
-  // control stays governed by the broader `writeUnavailable` fieldset. Before
-  // G5B this is always identical to `writeUnavailable` (CREATE and DELETE
-  // share a policy on every other module), so this is a no-op everywhere
-  // else: the fieldset's own `disabled` already covers those rows' controls.
+  // diverge for a GENERIC caller — see appCapability.ts's
+  // OPERATIONS_G5B_WRITE_CERTIFIED comment. `removeUnavailable` gates ONLY
+  // the Remove action in the saved-records list below.
   const removeUnavailable = writeResolved && !deleteAvailable;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [search, setSearch] = useState('');
-  const [hideEmpty, setHideEmpty] = useState(false);
   const [defaultCurrency, setDefaultCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [notApplicable, setNotApplicable] = useState(false);
   // Phase 0C: explicit Yes/No(/Not sure) confirmation for Liabilities and
@@ -200,25 +215,34 @@ export function FinancialDataGrid({
   // confirmation — one row existing is only 'in_progress', not
   // 'reviewed_with_data', until this is explicitly set. Reversible.
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const rowsRef = useRef<Row[] | null>(null);
   rowsRef.current = rows;
-  // App Review spec §4.3 (Persistence defect) — see runSave below for the
-  // full root-cause writeup. saveInFlight prevents two overlapping network
-  // requests for the same row from ever racing each other out of order;
-  // saveDirty remembers that another edit landed while a request was in
-  // flight, so it's retried immediately with the latest state the moment
-  // the in-flight request resolves, instead of relying on the user
-  // coincidentally making another edit later.
+  // App Review spec §4.3 (Persistence defect) — see saveRowNow below. Kept
+  // from the pre-LR-2 grid's race-safety discipline, adapted for the new
+  // explicit-Save model: saveInFlight is a defensive guard against a
+  // reentrant call for the same row (the form's Save button is itself
+  // disabled while `saving` is true, so this should never actually trigger
+  // in practice — it exists so a future caller can't accidentally
+  // reintroduce the double-submit race the old per-keystroke autosave once
+  // had). A failed save auto-retries a bounded number of times rather than
+  // being silently dropped (AC-06 — exactly-once writes, not zero writes).
   const saveInFlight = useRef<Record<string, boolean>>({});
-  const saveDirty = useRef<Record<string, boolean>>({});
-  // Bounds automatic retries so a persistent failure (e.g. a validation
-  // error that will never succeed) can't loop forever hammering the API —
-  // reset to 0 by every genuine user edit (scheduleSave), so a fresh edit
-  // always gets fresh retry budget regardless of an earlier row's history.
   const saveRetryCount = useRef<Record<string, number>>({});
   const MAX_AUTO_RETRIES = 3;
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
+
+  // --- Form-first state (LR-2) -------------------------------------------
+  // `draft` holds the row currently being composed/edited in the top form.
+  // It is intentionally NOT part of `rows` until Save succeeds — Cancel
+  // simply discards it (NEG-03: cancel retains stale values), and nothing
+  // downstream (totals, saved-record list, other modules) ever sees an
+  // uncommitted draft.
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null); // null while adding a brand-new item
+  const [draft, setDraft] = useState<Row | null>(null);
+  const [pickedKey, setPickedKey] = useState<string>(''); // '' = nothing picked yet, 'custom' = custom item, else a catalogue row's key
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,70 +335,17 @@ export function FinancialDataGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.resource, config.category]);
 
-  function updateRow(key: string, patch: Partial<Row>) {
-    setRows((prev) => (prev ? prev.map((r) => (r.key === key ? { ...r, ...patch } : r)) : prev));
-  }
-
-  function scheduleSave(key: string) {
-    saveRetryCount.current[key] = 0; // a genuine new edit always gets a fresh retry budget
-    clearTimeout(saveTimers.current[key]);
-    saveTimers.current[key] = setTimeout(() => void runSave(key), 600);
-  }
-
-  // App Review spec §4.3 (Persistence defect) — root cause and fix.
-  //
-  // Old calculation → defect → corrected rule → expected new result:
-  //   Old: each debounced edit called saveRow(key) directly. Two real,
-  //   independently reproducible defects followed from that:
-  //     (1) Debounce race / out-of-order response: if a user edited a row,
-  //     the network was slow, and they edited it again before the first
-  //     request resolved, a SECOND overlapping request could fire (a fresh
-  //     600ms timer, unrelated to the first request's in-flight promise).
-  //     Nothing enforced response ORDER — if the second (newer) request's
-  //     response happened to arrive before the first (older, stale) one,
-  //     the older request still completed afterwards and upserted its
-  //     stale values last, silently reverting the newer edit in the
-  //     database.
-  //     (2) Silent failure with no retry: saveRow's catch block was empty
-  //     apart from a comment admitting "the next edit retries the save" —
-  //     i.e. any transient failure (network blip, momentary auth/session
-  //     hiccup) was swallowed with no error shown to the user and no
-  //     automatic retry. The edit LOOKED saved (the input kept showing the
-  //     typed value, no error indicator existed) but silently wasn't, until
-  //     the user happened to touch the row again — exactly the reported
-  //     "doesn't persist unless they untick/navigate away and return/
-  //     reselect/re-enter" symptom, self-documented by the old comment's
-  //     own admission.
-  //   Defect: no per-row in-flight tracking (so requests could overlap and
-  //   race), and no automatic retry or visible error state on failure.
-  //   Corrected rule: at most one save request in flight per row at a time
-  //   (saveInFlight); an edit that arrives while a save is already in
-  //   flight is queued (saveDirty) and re-sent — with the LATEST row state,
-  //   not the stale state from when it was queued — the instant the
-  //   in-flight request resolves, guaranteeing strict per-row request order
-  //   and that the last write always reflects the last edit. A failed
-  //   request is surfaced via saveErrors (rendered per-row below) and
-  //   automatically retried a bounded number of times, rather than
-  //   silently discarded.
-  //   Expected new result: create -> save -> edit -> save -> refresh
-  //   browser -> still updated -> sign out -> sign in -> still updated,
-  //   with no dependency on the user coincidentally re-touching the row.
-  async function runSave(key: string) {
+  // Race-safe save for a single, fully-formed row — reused by the form's
+  // explicit Save button. Takes the row directly (rather than looking it up
+  // from `rows`/`rowsRef`) so it never depends on a render having completed
+  // between committing the draft and saving it.
+  async function saveRowNow(row: Row): Promise<{ ok: true; saved: SavedRecord } | { ok: false; error: string }> {
+    const key = row.key;
     if (saveInFlight.current[key]) {
-      saveDirty.current[key] = true;
-      return;
+      // Defensive only — see the comment on saveInFlight above. Refuses the
+      // reentrant call rather than silently dropping or misordering it.
+      return { ok: false, error: 'A save for this item is already in progress.' };
     }
-    // Reads the current row from a ref (kept in sync below), not via a
-    // setRows() functional updater — React 18 Strict Mode intentionally
-    // double-invokes updater functions in dev to catch impure updaters, and
-    // firing fetchJson() from inside one would POST twice and create a
-    // duplicate row (there's no master_item_key to upsert against for
-    // custom rows, so a second POST is a second insert, not a no-op).
-    const row = rowsRef.current?.find((r) => r.key === key);
-    // Recomputed from the ref (not the memoized `duplicates` from render
-    // scope) so a save fired after the 600ms debounce always checks against
-    // the latest row names, not a stale snapshot from when scheduleSave() was called.
-    if (!row || !isRowSaveable(row, config, findDuplicateCustomNames(rowsRef.current ?? []))) return;
 
     const body: Record<string, unknown> = { owner: row.owner, currency_code: row.currency_code };
     // Only ever included when true. currency_override is a real DB column
@@ -399,59 +370,71 @@ export function FinancialDataGrid({
     const method = usePatch ? 'PATCH' : 'POST';
 
     saveInFlight.current[key] = true;
-    saveDirty.current[key] = false;
     try {
       const saved = await fetchJson<SavedRecord>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      updateRow(key, { id: saved.id });
+      saveRetryCount.current[key] = 0;
       setSaveErrors((prev) => {
         if (!(key in prev)) return prev;
         const next = { ...prev };
         delete next[key];
         return next;
       });
+      applySavedRow(row, saved);
+      return { ok: true, saved };
     } catch (err) {
       const attempt = (saveRetryCount.current[key] ?? 0) + 1;
       saveRetryCount.current[key] = attempt;
       const willAutoRetry = attempt <= MAX_AUTO_RETRIES;
-      setSaveErrors((prev) => ({
-        ...prev,
-        [key]: err instanceof Error
-          ? `${err.message}${willAutoRetry ? ' — retrying…' : ' — edit the field again to retry.'}`
+      const message =
+        err instanceof Error
+          ? `${err.message}${willAutoRetry ? ' — retrying…' : ' — try Save again.'}`
           : willAutoRetry
             ? 'Could not save this change — retrying…'
-            : 'Could not save this change — edit the field again to retry.',
-      }));
-      // Auto-retry a bounded number of times (with a short backoff) so a
-      // transient failure recovers on its own without the user needing to
-      // notice and coincidentally re-edit the row. A persistent failure
-      // (e.g. a validation error that will never succeed) stops retrying
-      // automatically after MAX_AUTO_RETRIES rather than looping forever —
-      // the visible error and a genuine new edit (which resets the retry
-      // budget in scheduleSave) are the recovery path from there.
+            : 'Could not save this change — try Save again.';
+      setSaveErrors((prev) => ({ ...prev, [key]: message }));
       if (willAutoRetry) {
+        // A transient failure (network blip) retries on its own with the
+        // SAME row that failed, rather than being silently dropped — the
+        // caller (handleFormSave) has already returned by this point, so a
+        // retry that later succeeds must independently reconcile `rows`
+        // and the form (applySavedRow below), not rely on the original
+        // caller still being around to do it.
         setTimeout(() => {
-          saveDirty.current[key] = true;
-          if (!saveInFlight.current[key]) void runSave(key);
+          if (!saveInFlight.current[key]) void saveRowNow(row);
         }, 800 * attempt);
       }
+      return { ok: false, error: message };
     } finally {
       saveInFlight.current[key] = false;
-      if (saveDirty.current[key]) {
-        saveDirty.current[key] = false;
-        void runSave(key); // a newer edit is waiting — retry immediately, in order
-      }
     }
+  }
+
+  // Reconciles a successful save into `rows`, and — if the form is still
+  // open on this exact row (true for the normal explicit-Save path; also
+  // reachable from a background auto-retry that succeeds after the
+  // original call already returned) — closes it. Never touches `rows` for
+  // a row the user has since navigated away from or already removed.
+  function applySavedRow(row: Row, saved: SavedRecord) {
+    const finalRow: Row = { ...row, id: saved.id || row.id };
+    setRows((prev) => {
+      if (!prev) return [finalRow];
+      const exists = prev.some((r) => r.key === finalRow.key);
+      return exists ? prev.map((r) => (r.key === finalRow.key ? finalRow : r)) : [...prev, finalRow];
+    });
+    setDraft((prevDraft) => {
+      if (prevDraft?.key !== finalRow.key) return prevDraft;
+      closeForm();
+      return null;
+    });
   }
 
   async function handleToggleInclude(row: Row, included: boolean) {
     updateRow(row.key, { included });
     if (!included) {
-      clearTimeout(saveTimers.current[row.key]);
-      saveDirty.current[row.key] = false; // don't let a queued retry resurrect a row the user just removed
       setSaveErrors((prev) => {
         if (!(row.key in prev)) return prev;
         const next = { ...prev };
@@ -469,23 +452,8 @@ export function FinancialDataGrid({
     }
   }
 
-  // App Review spec §11 (Currency and Country — Critical Financial Defect):
-  // Country is the source of truth for currency, not the other way around —
-  // auto-set currency to the new country's expected currency every time
-  // Country changes, and reset any standing override rather than silently
-  // carrying a stale one across countries (that silent-carry-over across an
-  // unrelated Country change was part of the original bug). The user can
-  // always immediately re-check the override if the new country/currency
-  // combination is still a genuine mismatch for this holding.
-  function handleFieldChange(key: string, field: string, value: unknown) {
-    const patch: Partial<Row> = { [field]: value } as Partial<Row>;
-    if (field === 'country_code') {
-      const expected = expectedCurrencyForCountry(value as string);
-      patch.currency_override = false;
-      if (expected) patch.currency_code = expected;
-    }
-    updateRow(key, patch);
-    scheduleSave(key);
+  function updateRow(key: string, patch: Partial<Row>) {
+    setRows((prev) => (prev ? prev.map((r) => (r.key === key ? { ...r, ...patch } : r)) : prev));
   }
 
   async function handleNotApplicableToggle(checked: boolean) {
@@ -558,13 +526,52 @@ export function FinancialDataGrid({
     }).catch(() => setReviewConfirmed(previous)); // best effort; revert if the save failed
   }
 
-  function addCustomRow() {
-    customRowCounter += 1;
-    const key = `custom-new-${customRowCounter}`;
-    setRows((prev) => [
-      ...(prev ?? []),
-      {
-        key,
+  // --- Form-first handlers (LR-2) -----------------------------------------
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditingKey(null);
+    setDraft(null);
+    setPickedKey('');
+    setFormError(null);
+  }
+
+  // NEG-01/blank row reappearing has no equivalent in the new model — a
+  // catalogue item only ever shows editable fields once explicitly picked
+  // in the Add form, never as an always-visible blank row.
+  function openAddForm() {
+    closeForm();
+    setFormOpen(true);
+  }
+
+  // NEG-02 (edit creates duplicate instead of update): editing always
+  // reuses the row's own existing key/id — the same POST-upsert-by-
+  // master_item_key or PATCH-by-id routing in saveRowNow that already
+  // applied before LR-2, never a fresh insert.
+  // NEG-05 (owner reset on edit): the draft is a full copy of the existing
+  // row (`{ ...row }`), so owner/every other field starts exactly as saved.
+  function openEditForm(row: Row) {
+    setFormOpen(true);
+    setEditingKey(row.key);
+    setPickedKey(row.is_custom ? 'custom' : row.key);
+    setDraft({ ...row, included: true });
+    setFormError(null);
+  }
+
+  // NEG-03 (cancel retains stale values): `draft` is never written into
+  // `rows` until Save succeeds, so discarding it here is a true cancel —
+  // nothing was ever visible to totals, the saved list, or another module.
+  function handleFormCancel() {
+    closeForm();
+  }
+
+  function handlePickCatalogItem(key: string) {
+    setPickedKey(key);
+    setFormError(null);
+    if (key === 'custom') {
+      customRowCounter += 1;
+      setDraft({
+        key: `custom-new-${customRowCounter}`,
         id: null,
         master_item_key: null,
         is_custom: true,
@@ -572,24 +579,80 @@ export function FinancialDataGrid({
         included: true,
         owner: 'self',
         currency_code: defaultCurrency,
+        currency_override: false,
         expanded: true,
         ...fieldDefaults(config),
-      },
-    ]);
+      });
+    } else if (key) {
+      const catalogRow = (rows ?? []).find((r) => r.key === key);
+      setDraft(catalogRow ? { ...catalogRow, included: true } : null);
+    } else {
+      setDraft(null);
+    }
   }
 
-  const duplicates = useMemo(() => findDuplicateCustomNames(rows ?? []), [rows]);
-
-  const visibleRows = useMemo(() => {
-    if (!rows) return [];
-    return rows.filter((r) => {
-      if (hideEmpty && !r.included) return false;
-      if (search && !r.item_label.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
+  // App Review spec §11 (Currency and Country — Critical Financial Defect):
+  // Country is the source of truth for currency, not the other way around —
+  // auto-set currency to the new country's expected currency every time
+  // Country changes, and reset any standing override rather than silently
+  // carrying a stale one across countries.
+  function updateDraftField(field: string, value: unknown) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const patch: Partial<Row> = { [field]: value } as Partial<Row>;
+      if (field === 'country_code') {
+        const expected = expectedCurrencyForCountry(value as string);
+        patch.currency_override = false;
+        if (expected) patch.currency_code = expected;
+      }
+      return { ...prev, ...patch };
     });
-  }, [rows, hideEmpty, search]);
+  }
+
+  // NEG-04 (frequency annualised twice): the form writes `draft[frequencyField]`
+  // exactly once per change and the saved value is read back verbatim on
+  // reload/edit — nothing in this file multiplies or re-derives an annual
+  // figure from an already-annualised one; toMonthly()/annualisation only
+  // ever happens once, in the read-only totals footer below.
+  async function handleFormSave() {
+    if (!draft) return;
+    const otherRows = (rows ?? []).filter((r) => r.key !== draft.key);
+    const dupCheck = findDuplicateCustomNames([...otherRows, draft]);
+    if (draft.is_custom && !draft.item_label.trim()) {
+      setFormError('Enter a name for this item.');
+      return;
+    }
+    if (!isRowSaveable(draft, config, dupCheck)) {
+      setFormError(
+        dupCheck.has(draft.item_label.trim().toLowerCase())
+          ? 'This name is already used for another item — choose a different name.'
+          : currencyMismatchBlocked(draft)
+            ? `Doesn't match the expected currency for this country — fix it or confirm it's intentionally different.`
+            : 'Fill in the required fields before saving.'
+      );
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    const result = await saveRowNow(draft);
+    setSaving(false);
+    // On success, saveRowNow's own applySavedRow() has already updated
+    // `rows` and closed the form. On failure the error is already surfaced
+    // via saveErrors and the form stays open with the draft intact.
+    void result;
+  }
+
+  async function handleRemove(row: Row) {
+    await handleToggleInclude(row, false);
+  }
 
   const included = useMemo(() => (rows ?? []).filter((r) => r.included), [rows]);
+  const visibleIncluded = useMemo(
+    () => included.filter((r) => !search || r.item_label.toLowerCase().includes(search.toLowerCase())),
+    [included, search]
+  );
+  // Catalogue items not yet added — the Add form's picker choices.
+  const availableCatalogItems = useMemo(() => (rows ?? []).filter((r) => !r.is_custom && !r.included), [rows]);
 
   const total = included.reduce((sum, r) => {
     const value = Number(r[config.valueField] ?? 0);
@@ -608,11 +671,9 @@ export function FinancialDataGrid({
   // App Review spec §7 — see the "Old calculation → defect → corrected
   // rule → expected new result" writeup on computeSectionCompletionPercent
   // itself (lib/engines/financialSectionStatus.ts) for the full root-cause
-  // analysis. Completion now measures data sufficiency (has the household
+  // analysis. Completion measures data sufficiency (has the household
   // confirmed this section, or at minimum entered something with no
-  // required fields left blank) rather than what fraction of the entire
-  // catalogue is ticked — the old masterItemCount/includedMasterCount
-  // catalogue-coverage math never reached 100% for a real user.
+  // required fields left blank), not catalogue coverage.
   const explicitConfirmation: ExplicitSectionConfirmation | null =
     config.notApplicable && notApplicable
       ? 'not_applicable'
@@ -628,17 +689,6 @@ export function FinancialDataGrid({
     missingRequiredCount,
   });
 
-  // Duplicate custom names are a hard-blocking error (isRowSaveable rejects
-  // them, so nothing gets persisted while the name collides) — kept in a
-  // separate map from the soft warnings below so it can be styled and worded
-  // distinctly ("this name is taken" vs. "double-check this value").
-  const errorsByRow = new Map<string, string>();
-  for (const r of included) {
-    if (r.is_custom && duplicates.has(r.item_label.trim().toLowerCase())) {
-      errorsByRow.set(r.key, 'This name is already used for another item — choose a different name to save it.');
-    }
-  }
-
   const warningsByRow = new Map<string, string[]>();
   for (const r of included) {
     const warnings = validateRow(config.category, r, config.valueField);
@@ -646,15 +696,14 @@ export function FinancialDataGrid({
   }
   const totalWarnings = Array.from(warningsByRow.values()).reduce((s, w) => s + w.length, 0);
 
-  // App Review spec §11: country/currency mismatch is a hard block (see
-  // isRowSaveable), with an explicit override carve-out. The set below
-  // drives the checkbox+warning UI and stays populated even once
-  // overridden, so the checkbox (and the ability to un-check it) remains
-  // visible.
-  const currencyMismatchRows = new Set<string>();
-  for (const r of included) {
-    if (currencyMismatch(r)) currencyMismatchRows.add(r.key);
-  }
+  // Live validation for the row currently open in the form.
+  const draftDuplicateNames = draft
+    ? findDuplicateCustomNames([...(rows ?? []).filter((r) => r.key !== draft.key), draft])
+    : new Set<string>();
+  const draftHasDuplicateName = Boolean(draft?.is_custom && draftDuplicateNames.has(draft.item_label.trim().toLowerCase()));
+  const draftCurrencyMismatch = draft ? currencyMismatch(draft) : false;
+  const draftCurrencyMismatchBlocked = draft ? currencyMismatchBlocked(draft) : false;
+  const draftWarnings = draft ? validateRow(config.category, draft, config.valueField) : [];
 
   if (!rows) {
     return (
@@ -684,204 +733,183 @@ export function FinancialDataGrid({
         )}
 
         {/* G4 closure item 2: everything below that can create, edit or
-            delete a row is wrapped in a single native <fieldset disabled>.
-            This is a genuine HTML mechanism (not a CSS effect) — it disables
-            every descendant input/select/textarea/button without this
-            component individually threading a `disabled` prop through the
-            dozens of per-row controls below, so a GENERIC user on a module
-            whose write path isn't yet certified (writeUnavailable) can never
-            reach a live control that would end in UNAVAILABLE (or, absent
-            this UI-level fix, the raw DB 42501 the MCC/G1 backstop is the
-            only other thing stopping). `display:contents` makes the fieldset
-            itself contribute no box/layout of its own. The search/filter
-            controls above are deliberately OUTSIDE this fieldset — they only
-            affect this component's own local view state, never a write. */}
+            delete a row is wrapped in a single native <fieldset disabled>
+            — a genuine HTML mechanism, not a CSS effect. Read-only display
+            (the status text, the saved-records list itself) stays outside
+            it so a write-unavailable user can still see their own data. */}
         <fieldset disabled={writeUnavailable} className="contents border-0 p-0 m-0">
-        {config.notApplicable && (
-          <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={notApplicable}
-              onChange={(e) => handleNotApplicableToggle(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium text-ink">{config.notApplicable.label}</span>
-              <span className="block text-xs text-muted">
-                This excludes {config.title} from your Financial Health Score instead of counting it as missing data.
+          {config.notApplicable && (
+            <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={notApplicable}
+                onChange={(e) => handleNotApplicableToggle(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-ink">{config.notApplicable.label}</span>
+                <span className="block text-xs text-muted">
+                  {`This excludes ${config.title} from your Financial Health Score instead of counting it as missing data.`}
+                </span>
               </span>
-            </span>
-          </label>
-        )}
+            </label>
+          )}
 
-        {config.zeroConfirmation && (
-          <fieldset className="rounded-card border border-line bg-white p-3 text-sm">
-            <legend className="px-1 font-medium text-ink">{config.zeroConfirmation.question}</legend>
-            <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`zero-confirmation-${config.category}`}
-                  checked={zeroAnswer === 'yes'}
-                  onChange={() => handleZeroAnswer('yes')}
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`zero-confirmation-${config.category}`}
-                  checked={zeroAnswer === 'no'}
-                  onChange={() => handleZeroAnswer('no')}
-                />
-                {config.zeroConfirmation.noLabel}
-              </label>
-              {config.zeroConfirmation.includeUnsure && (
+          {config.zeroConfirmation && (
+            <fieldset className="rounded-card border border-line bg-white p-3 text-sm">
+              <legend className="px-1 font-medium text-ink">{config.zeroConfirmation.question}</legend>
+              <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
                     name={`zero-confirmation-${config.category}`}
-                    checked={zeroAnswer === 'unsure'}
-                    onChange={() => handleZeroAnswer('unsure')}
+                    checked={zeroAnswer === 'yes'}
+                    onChange={() => handleZeroAnswer('yes')}
                   />
-                  Not sure / review later
+                  Yes
                 </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`zero-confirmation-${config.category}`}
+                    checked={zeroAnswer === 'no'}
+                    onChange={() => handleZeroAnswer('no')}
+                  />
+                  {config.zeroConfirmation.noLabel}
+                </label>
+                {config.zeroConfirmation.includeUnsure && (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={`zero-confirmation-${config.category}`}
+                      checked={zeroAnswer === 'unsure'}
+                      onChange={() => handleZeroAnswer('unsure')}
+                    />
+                    Not sure / review later
+                  </label>
+                )}
+              </div>
+              {zeroAnswer === 'no' && (
+                <p className="mt-2 text-xs text-muted">
+                  Recorded — this counts as a confirmed answer in your Financial Health Score, not missing data.
+                </p>
+              )}
+            </fieldset>
+          )}
+
+          {/* Phase 0C.1: completion confirmation for positive-data sections.
+              Only shown once there's something to review, and hidden once a
+              zero-confirmation ("No, I have none of this") already resolves
+              the section — there's nothing left to mark complete. */}
+          {config.reviewSection && included.length > 0 && zeroAnswer !== 'no' && !notApplicable && (
+            <div className="rounded-card border border-line bg-white p-3 text-sm">
+              {reviewConfirmed ? (
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-ink">{`✓ Reviewed — you've confirmed ${config.title} is complete.`}</span>
+                  <button onClick={() => handleReviewConfirm(false)} className="text-xs text-trust hover:underline">
+                    Still adding more? Mark as in progress
+                  </button>
+                </p>
+              ) : (
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted">
+                    This section counts as still in progress until you confirm it&apos;s complete — that affects your Financial
+                    Health Score confidence.
+                  </span>
+                  <button
+                    onClick={() => handleReviewConfirm(true)}
+                    className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                  >
+                    I&apos;ve added everything relevant to me
+                  </button>
+                </p>
               )}
             </div>
-            {zeroAnswer === 'no' && (
-              <p className="mt-2 text-xs text-muted">
-                Recorded — this counts as a confirmed answer in your Financial Health Score, not missing data.
-              </p>
-            )}
-          </fieldset>
-        )}
+          )}
 
-        {/* Phase 0C.1: completion confirmation for positive-data sections.
-            Only shown once there's something to review, and hidden once a
-            zero-confirmation ("No, I have none of this") already resolves
-            the section — there's nothing left to mark complete. */}
-        {config.reviewSection && included.length > 0 && zeroAnswer !== 'no' && !notApplicable && (
-          <div className="rounded-card border border-line bg-white p-3 text-sm">
-            {reviewConfirmed ? (
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-ink">✓ Reviewed — you've confirmed {config.title} is complete.</span>
-                <button onClick={() => handleReviewConfirm(false)} className="text-xs text-trust hover:underline">
-                  Still adding more? Mark as in progress
-                </button>
-              </p>
-            ) : (
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="text-muted">
-                  This section counts as still in progress until you confirm it's complete — that affects your Financial
-                  Health Score confidence.
-                </span>
-                <button
-                  onClick={() => handleReviewConfirm(true)}
-                  className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white hover:opacity-90"
-                >
-                  I've added everything relevant to me
-                </button>
-              </p>
-            )}
-          </div>
-        )}
+          {/* Add action — opens the form below. No "Import" CTA: WP-01
+              discovery confirmed no real import backend exists for any of
+              these 7 modules today (NEG-07: never point a button at a
+              nonexistent route), so none is shown until one genuinely does. */}
+          {!formOpen && (
+            <button
+              onClick={openAddForm}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              {`+ Add ${SINGULAR_ITEM_LABEL[config.category]}`}
+            </button>
+          )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="text"
-            placeholder="Search items..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-56 rounded border px-3 py-2 text-sm"
-          />
-          <label className="flex items-center gap-2 text-sm text-gray-600">
-            <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
-            Hide empty rows
-          </label>
-        </div>
+          {/* --- The manual Add/Edit form --------------------------------- */}
+          {formOpen && (
+            <div className="rounded-card border border-line bg-white p-4">
+              <h2 className="text-sm font-semibold text-ink">
+                {editingKey === null ? `Add ${SINGULAR_ITEM_LABEL[config.category]}` : `Edit ${draft?.item_label || SINGULAR_ITEM_LABEL[config.category]}`}
+              </h2>
 
-        {/* Desktop table */}
-        <div className="hidden overflow-x-auto rounded-card border bg-white md:block">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
-              <tr>
-                <th className="w-10 px-3 py-2"></th>
-                <th className="px-3 py-2">Item</th>
-                <th className="px-3 py-2">Owner</th>
-                {config.fields.map((f) => (
-                  <th key={f.name} className="px-3 py-2">
-                    {f.label}
-                  </th>
-                ))}
-                <th className="px-3 py-2">Currency</th>
-                {config.propertyLinkSide && (
-                  <th className="px-3 py-2">{config.propertyLinkSide === 'property' ? 'Financing' : 'Related Property'}</th>
-                )}
-                {config.goalLinkable && <th className="px-3 py-2">Goals</th>}
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => (
-                <tr key={row.key} className={`border-b last:border-0 ${!row.included ? 'text-muted' : ''}`}>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={row.included}
-                      disabled={isIiPublished(row) || (row.included && removeUnavailable)}
-                      title={
-                        isIiPublished(row)
-                          ? 'Imported via Investment Intelligence — use Unpublish there to remove it from net worth.'
-                          : row.included && removeUnavailable
-                            ? "Removing isn't available for your country yet"
-                            : undefined
-                      }
-                      onChange={(e) => handleToggleInclude(row, e.target.checked)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    {row.is_custom ? (
+              {editingKey === null && (
+                <div className="mt-3">
+                  <label className="block text-xs text-muted">What are you adding?</label>
+                  <select
+                    value={pickedKey}
+                    onChange={(e) => handlePickCatalogItem(e.target.value)}
+                    className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-sm sm:w-auto"
+                    autoFocus
+                  >
+                    <option value="">Choose an item…</option>
+                    {availableCatalogItems.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.item_label}
+                      </option>
+                    ))}
+                    <option value="custom">Custom item…</option>
+                  </select>
+                </div>
+              )}
+
+              {draft && (
+                <div className="mt-4 space-y-3">
+                  {isIiPublished(draft) && (
+                    <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
+                      <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
+                        Imported via Investment Intelligence
+                      </span>{' '}
+                      Some fields are locked here — use{' '}
+                      <a href="/investment-intelligence/data" className="underline">
+                        Unpublish
+                      </a>{' '}
+                      there to remove it from net worth.
+                    </div>
+                  )}
+
+                  {draft.is_custom ? (
+                    <div>
+                      <label className="block text-xs text-muted">Name</label>
                       <input
                         type="text"
-                        value={row.item_label}
-                        disabled={!row.included}
-                        placeholder="Custom item name"
-                        onChange={(e) => handleFieldChange(row.key, 'item_label', e.target.value)}
-                        className={`w-full rounded border px-2 py-1 disabled:bg-gray-50 ${errorsByRow.has(row.key) ? 'border-risk' : ''}`}
+                        value={draft.item_label}
+                        placeholder="Item name"
+                        onChange={(e) => updateDraftField('item_label', e.target.value)}
+                        className={`mt-1 w-full max-w-sm rounded border px-3 py-2 text-sm sm:w-auto ${draftHasDuplicateName ? 'border-risk' : ''}`}
                       />
-                    ) : (
-                      row.item_label
-                    )}
-                    {isIiPublished(row) && (
-                      <div className="mt-1">
-                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">Imported via Investment Intelligence</span>
-                        {/* II-PC2: retargeted from the workspace root to
-                            Statements & data. "Review" here means "inspect the
-                            position that produced this published row", which is
-                            the import/reconcile/publish surface — that surface
-                            moved off the root when the root became the
-                            workspace Overview. */}
-                        <a href="/investment-intelligence/data" className="ml-2 text-[11px] text-blue-600 hover:underline">
-                          Review
-                        </a>
-                      </div>
-                    )}
-                    {errorsByRow.has(row.key) && (
-                      <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
-                    )}
-                    {warningsByRow.has(row.key) && (
-                      <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
-                    )}
-                    {saveErrors[row.key] && (
-                      <p className="mt-1 text-xs text-risk">⚠ {saveErrors[row.key]}</p>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
+                      {draftHasDuplicateName && (
+                        <p className="mt-1 text-xs text-risk">This name is already used for another item — choose a different name.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs text-muted">Item</label>
+                      <p className="text-sm font-medium text-ink">{draft.item_label}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs text-muted">Owner</label>
                     <select
-                      value={row.owner}
-                      disabled={!row.included || isIiPublished(row)}
-                      onChange={(e) => handleFieldChange(row.key, 'owner', e.target.value)}
-                      className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                      value={draft.owner}
+                      disabled={isIiPublished(draft)}
+                      onChange={(e) => updateDraftField('owner', e.target.value)}
+                      className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
                     >
                       {OWNER_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
@@ -889,27 +917,30 @@ export function FinancialDataGrid({
                         </option>
                       ))}
                     </select>
-                  </td>
-                  {config.fields.map((f) =>
-                    !isFieldApplicableForRow(row, f.name, config) ? (
-                      <td key={f.name} className="px-3 py-2 text-xs text-muted" title="Not applicable for this item type">
-                        n/a
-                      </td>
-                    ) : (
-                      <td key={f.name} className="px-3 py-2">
+                  </div>
+
+                  {config.fields
+                    .filter((f) => isFieldApplicableForRow(draft, f.name, config))
+                    .map((f) => (
+                      <div key={f.name}>
+                        <label className="block text-xs text-muted">
+                          {f.label}
+                          {f.required && <span className="text-risk"> *</span>}
+                        </label>
                         {f.type === 'checkbox' ? (
                           <input
                             type="checkbox"
-                            checked={Boolean(row[f.name] ?? false)}
-                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
+                            checked={Boolean(draft[f.name] ?? false)}
+                            disabled={isFieldLockedForRow(draft, f.name)}
+                            onChange={(e) => updateDraftField(f.name, e.target.checked)}
+                            className="mt-1"
                           />
                         ) : f.type === 'select' ? (
                           <select
-                            value={String(row[f.name] ?? '')}
-                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                            onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                            className="w-32 rounded border px-2 py-1 disabled:bg-gray-50"
+                            value={String(draft[f.name] ?? '')}
+                            disabled={isFieldLockedForRow(draft, f.name)}
+                            onChange={(e) => updateDraftField(f.name, e.target.value)}
+                            className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
                           >
                             <option value="">-</option>
                             {f.options?.map((o) => (
@@ -922,210 +953,51 @@ export function FinancialDataGrid({
                           <input
                             type={f.type}
                             step={f.step}
-                            value={String(row[f.name] ?? '')}
-                            disabled={!row.included || isFieldLockedForRow(row, f.name)}
-                            onChange={(e) =>
-                              handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                            }
-                            className="w-28 rounded border px-2 py-1 disabled:bg-gray-50"
+                            value={String(draft[f.name] ?? '')}
+                            disabled={isFieldLockedForRow(draft, f.name)}
+                            onChange={(e) => updateDraftField(f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)}
+                            className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
                           />
                         )}
-                      </td>
-                    )
-                  )}
-                  <td className="px-3 py-2">
-                    <select
-                      value={row.currency_code}
-                      disabled={!row.included || isIiPublished(row)}
-                      onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className={`w-20 rounded border px-2 py-1 disabled:bg-gray-50 ${
-                        currencyMismatchBlocked(row) ? 'border-risk' : ''
-                      }`}
-                    >
-                      <option value="AUD">AUD</option>
-                      <option value="INR">INR</option>
-                    </select>
-                    {currencyMismatchRows.has(row.key) && (
-                      <div className="mt-1 w-44">
-                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
-                          {currencyMismatchBlocked(row)
-                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
-                            : 'Confirmed as an intentionally different currency.'}
-                        </p>
-                        <label className="mt-1 flex items-center gap-1 text-xs text-muted">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(row.currency_override)}
-                            disabled={!row.included}
-                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
-                          />
-                          This holding is genuinely in a different currency
-                        </label>
                       </div>
-                    )}
-                  </td>
-                  {config.propertyLinkSide && (
-                    <td className="px-3 py-2">
-                      {showsPropertyLinkControl(config, row) && (
-                        <PropertyFinancingControl
-                          side={config.propertyLinkSide}
-                          propertyKind={config.propertyLinkSide === 'property' ? (config.category === 'asset' ? 'asset' : 'investment') : undefined}
-                          propertyId={config.propertyLinkSide === 'property' ? row.id! : undefined}
-                          liabilityId={config.propertyLinkSide === 'liability' ? row.id! : undefined}
-                          masterItemKey={row.master_item_key}
-                        />
-                      )}
-                    </td>
-                  )}
-                  {config.goalLinkable && (
-                    <td className="px-3 py-2">{row.id && row.included && <GoalLinkControl investmentId={row.id} />}</td>
-                  )}
-                  <td className="px-3 py-2">
-                    {row.is_custom && (
-                      <button
-                        onClick={() => handleToggleInclude(row, false)}
-                        disabled={removeUnavailable}
-                        title={removeUnavailable ? "Removing isn't available for your country yet" : undefined}
-                        className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    ))}
 
-        {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
-          {visibleRows.map((row) => (
-            <div key={row.key} className="rounded-card border bg-white p-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-ink">
-                  <input
-                    type="checkbox"
-                    checked={row.included}
-                    disabled={row.included && removeUnavailable}
-                    title={row.included && removeUnavailable ? "Removing isn't available for your country yet" : undefined}
-                    onChange={(e) => handleToggleInclude(row, e.target.checked)}
-                  />
-                  {row.is_custom ? (
-                    <input
-                      type="text"
-                      value={row.item_label}
-                      disabled={!row.included}
-                      placeholder="Custom item name"
-                      onChange={(e) => handleFieldChange(row.key, 'item_label', e.target.value)}
-                      className={`rounded border px-2 py-1 disabled:bg-gray-50 ${errorsByRow.has(row.key) ? 'border-risk' : ''}`}
-                    />
-                  ) : (
-                    row.item_label
-                  )}
-                </label>
-                {row.included && (
-                  <button
-                    onClick={() => updateRow(row.key, { expanded: !row.expanded })}
-                    className="text-xs text-trust"
-                  >
-                    {row.expanded ? 'Collapse' : 'Expand'}
-                  </button>
-                )}
-              </div>
-              {errorsByRow.has(row.key) && (
-                <p className="mt-1 text-xs text-risk">{errorsByRow.get(row.key)}</p>
-              )}
-              {warningsByRow.has(row.key) && (
-                <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
-              )}
-              {saveErrors[row.key] && (
-                <p className="mt-1 text-xs text-risk">⚠ {saveErrors[row.key]}</p>
-              )}
-              {row.included && row.expanded && (
-                <div className="mt-3 space-y-2">
-                  <div>
-                    <label className="block text-xs text-muted">Owner</label>
-                    <select
-                      value={row.owner}
-                      onChange={(e) => handleFieldChange(row.key, 'owner', e.target.value)}
-                      className="w-full rounded border px-2 py-1"
-                    >
-                      {OWNER_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {config.fields
-                    .filter((f) => isFieldApplicableForRow(row, f.name, config))
-                    .map((f) => (
-                    <div key={f.name}>
-                      <label className="block text-xs text-muted">{f.label}</label>
-                      {f.type === 'checkbox' ? (
-                        <input
-                          type="checkbox"
-                          checked={Boolean(row[f.name] ?? false)}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.checked)}
-                        />
-                      ) : f.type === 'select' ? (
-                        <select
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) => handleFieldChange(row.key, f.name, e.target.value)}
-                          className="w-full rounded border px-2 py-1"
-                        >
-                          <option value="">-</option>
-                          {f.options?.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={f.type}
-                          step={f.step}
-                          value={String(row[f.name] ?? '')}
-                          onChange={(e) =>
-                            handleFieldChange(row.key, f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)
-                          }
-                          className="w-full rounded border px-2 py-1"
-                        />
-                      )}
-                    </div>
-                  ))}
                   <div>
                     <label className="block text-xs text-muted">Currency</label>
                     <select
-                      value={row.currency_code}
-                      onChange={(e) => handleFieldChange(row.key, 'currency_code', e.target.value)}
-                      className={`w-full rounded border px-2 py-1 ${
-                        currencyMismatchBlocked(row) ? 'border-risk' : ''
+                      value={draft.currency_code}
+                      disabled={isIiPublished(draft)}
+                      onChange={(e) => updateDraftField('currency_code', e.target.value)}
+                      className={`mt-1 w-full max-w-[8rem] rounded border px-3 py-2 text-sm disabled:bg-gray-50 ${
+                        draftCurrencyMismatchBlocked ? 'border-risk' : ''
                       }`}
                     >
                       <option value="AUD">AUD</option>
                       <option value="INR">INR</option>
                     </select>
-                    {currencyMismatchRows.has(row.key) && (
-                      <div className="mt-1">
-                        <p className={`text-xs ${currencyMismatchBlocked(row) ? 'text-risk' : 'text-muted'}`}>
-                          {currencyMismatchBlocked(row)
-                            ? `Doesn't match ${row.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(row.country_code)}) — won't save until fixed or confirmed.`
+                    {draftCurrencyMismatch && (
+                      <div className="mt-1 max-w-sm">
+                        <p className={`text-xs ${draftCurrencyMismatchBlocked ? 'text-risk' : 'text-muted'}`}>
+                          {draftCurrencyMismatchBlocked
+                            ? `Doesn't match ${draft.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(draft.country_code)}) — won't save until fixed or confirmed.`
                             : 'Confirmed as an intentionally different currency.'}
                         </p>
                         <label className="mt-1 flex items-center gap-1 text-xs text-muted">
                           <input
                             type="checkbox"
-                            checked={Boolean(row.currency_override)}
-                            onChange={(e) => handleFieldChange(row.key, 'currency_override', e.target.checked)}
+                            checked={Boolean(draft.currency_override)}
+                            onChange={(e) => updateDraftField('currency_override', e.target.checked)}
                           />
                           This holding is genuinely in a different currency
                         </label>
                       </div>
                     )}
                   </div>
-                  {config.propertyLinkSide && showsPropertyLinkControl(config, row) && (
+
+                  {/* Property/goal linking only makes sense once a row is
+                      actually saved (has a real id) — shown in Edit mode
+                      only, matching showsPropertyLinkControl's own gate. */}
+                  {config.propertyLinkSide && editingKey !== null && showsPropertyLinkControl(config, draft) && (
                     <div>
                       <label className="block text-xs text-muted">
                         {config.propertyLinkSide === 'property' ? 'Financing' : 'Related Property'}
@@ -1133,37 +1005,173 @@ export function FinancialDataGrid({
                       <PropertyFinancingControl
                         side={config.propertyLinkSide}
                         propertyKind={config.propertyLinkSide === 'property' ? (config.category === 'asset' ? 'asset' : 'investment') : undefined}
-                        propertyId={config.propertyLinkSide === 'property' ? row.id! : undefined}
-                        liabilityId={config.propertyLinkSide === 'liability' ? row.id! : undefined}
-                        masterItemKey={row.master_item_key}
+                        propertyId={config.propertyLinkSide === 'property' ? draft.id! : undefined}
+                        liabilityId={config.propertyLinkSide === 'liability' ? draft.id! : undefined}
+                        masterItemKey={draft.master_item_key}
                       />
                     </div>
                   )}
-                  {config.goalLinkable && row.id && (
+                  {config.goalLinkable && editingKey !== null && draft.id && (
                     <div>
                       <label className="block text-xs text-muted">Goals</label>
-                      <GoalLinkControl investmentId={row.id} />
+                      <GoalLinkControl investmentId={draft.id} />
                     </div>
                   )}
-                  {row.is_custom && (
-                    <button
-                      onClick={() => handleToggleInclude(row, false)}
-                      disabled={removeUnavailable}
-                      title={removeUnavailable ? "Removing isn't available for your country yet" : undefined}
-                      className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Remove item
-                    </button>
+
+                  {draftWarnings.length > 0 && (
+                    <p className="text-xs text-caution">{draftWarnings.join('; ')}</p>
                   )}
+                  {formError && <p className="text-xs text-risk">{formError}</p>}
+                  {saveErrors[draft.key] && <p className="text-xs text-risk">⚠ {saveErrors[draft.key]}</p>}
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      onClick={handleFormSave}
+                      disabled={saving}
+                      className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button onClick={handleFormCancel} className="text-sm text-muted hover:underline">
+                      Cancel
+                    </button>
+                    {editingKey !== null && (
+                      <button
+                        onClick={() => handleRemove(draft).then(closeForm)}
+                        disabled={removeUnavailable}
+                        title={removeUnavailable ? "Removing isn't available for your country yet" : undefined}
+                        className="ml-auto text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
-        </div>
+          )}
 
-        <button onClick={addCustomRow} className="text-sm font-medium text-trust hover:underline">
-          + Add Custom Item
-        </button>
+          {/* --- Saved records list ---------------------------------------- */}
+          {included.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                placeholder="Search your saved items..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-56 rounded border px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto rounded-card border bg-white md:block">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+                <tr>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Owner</th>
+                  <th className="px-3 py-2">{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
+                  <th className="px-3 py-2">Currency</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleIncluded.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                      {included.length === 0 ? `No ${config.title.toLowerCase()} added yet — use "+ Add" above to get started.` : 'No items match your search.'}
+                    </td>
+                  </tr>
+                )}
+                {visibleIncluded.map((row) => (
+                  <tr key={row.key} className="border-b last:border-0">
+                    <td className="px-3 py-2">
+                      {row.item_label}
+                      {isIiPublished(row) && (
+                        <span className="ml-2 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                          Imported via Investment Intelligence
+                        </span>
+                      )}
+                      {warningsByRow.has(row.key) && (
+                        <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{OWNER_OPTIONS.find((o) => o.value === row.owner)?.label ?? row.owner}</td>
+                    <td className="px-3 py-2">{formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
+                    <td className="px-3 py-2">{row.currency_code}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleRemove(row)}
+                        disabled={isIiPublished(row) || removeUnavailable}
+                        title={
+                          isIiPublished(row)
+                            ? 'Use Unpublish in Investment Intelligence to remove it from net worth.'
+                            : removeUnavailable
+                              ? "Removing isn't available for your country yet"
+                              : undefined
+                        }
+                        className="ml-3 text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 md:hidden">
+            {included.length === 0 && (
+              <p className="rounded-card border bg-white p-3 text-center text-sm text-muted">
+                {`No ${config.title.toLowerCase()} added yet — use "+ Add" above to get started.`}
+              </p>
+            )}
+            {visibleIncluded.map((row) => (
+              <div key={row.key} className="rounded-card border bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-ink">{row.item_label}</p>
+                    <p className="text-xs text-muted">
+                      {OWNER_OPTIONS.find((o) => o.value === row.owner)?.label ?? row.owner} · {formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
+                    </p>
+                    {isIiPublished(row) && (
+                      <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        Imported via Investment Intelligence
+                      </span>
+                    )}
+                    {warningsByRow.has(row.key) && (
+                      <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleRemove(row)}
+                      disabled={isIiPublished(row) || removeUnavailable}
+                      title={
+                        isIiPublished(row)
+                          ? 'Use Unpublish in Investment Intelligence to remove it from net worth.'
+                          : removeUnavailable
+                            ? "Removing isn't available for your country yet"
+                            : undefined
+                      }
+                      className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </fieldset>
 
         <div className="grid grid-cols-2 gap-3 rounded-card border bg-gray-50 p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">

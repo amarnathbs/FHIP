@@ -75,6 +75,14 @@ export interface GoalPayload {
   targetDate: string | null;
   targetDateFlexibility: string;
   currentAmount: number;
+  // LR-2 WP-10: the raw user_goals.current_amount ledger column, BEFORE
+  // liveLinkedFundingValue is added on top (see toGoalRecord's comment).
+  // `currentAmount` above is the combined, display-only figure and must
+  // never be sent back to the server as an edit — doing so would silently
+  // fold the live linked-investment value into the manual ledger on every
+  // save, permanently inflating it. Editing this goal's manual progress
+  // must read and write this field specifically.
+  manualCurrentAmount: number;
   plannedContributionAmount: number;
   contributionFrequency: string;
   allocatedMonthlyContribution: number;
@@ -477,6 +485,7 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
       // already computed into for the forecast above; read it back rather
       // than recomputing the raw column here so the two can never drift.
       currentAmount: goalRecord.currentAmount,
+      manualCurrentAmount: Number(row.current_amount ?? 0),
       plannedContributionAmount: Number(row.planned_contribution_amount ?? 0),
       contributionFrequency: row.contribution_frequency as string,
       // Sum of active funding sources' own recurring contribution, allocated
@@ -687,6 +696,7 @@ export async function loadGoalDetail(userId: string, goalId: string): Promise<Go
     // inputs.goalRecord.currentAmount already includes the live linked-
     // funding value on top of the raw ledger column — see toGoalRecord.
     currentAmount: inputs.goalRecord.currentAmount,
+    manualCurrentAmount: Number(row.current_amount ?? 0),
     plannedContributionAmount: Number(row.planned_contribution_amount ?? 0),
     contributionFrequency: row.contribution_frequency,
     allocatedMonthlyContribution: inputs.allocatedMonthlyContribution,

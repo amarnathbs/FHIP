@@ -9,6 +9,7 @@ import { FundingSourceList } from '@/components/goals/FundingSourceList';
 import { ContributionHistory } from '@/components/goals/ContributionHistory';
 import { MilestoneTracker } from '@/components/goals/MilestoneTracker';
 import { GoalWhatIfSimulator } from '@/components/goals/GoalWhatIfSimulator';
+import { GoalEditPanel } from '@/components/goals/GoalEditPanel';
 
 export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,13 +33,27 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
           <Link href="/goals" className="text-xs text-muted hover:underline">
             ← Back to Goals
           </Link>
-          <div className="mt-2 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-trust">{goal.goalName}</h1>
-              <p className="text-muted">
-                {goal.goalType.replace(/_/g, ' ')} · {goal.countryCode ?? '—'} · {goal.currencyCode} · Priority {goal.userPriority}/5
-              </p>
-            </div>
+          <div className="mt-2">
+            <GoalEditPanel
+              goalId={goal.id}
+              goalTypeLabel={goal.goalType.replace(/_/g, ' ')}
+              countryLabel={goal.countryCode ?? '—'}
+              currency={goal.currencyCode}
+              initial={{
+                goalName: goal.goalName,
+                description: goal.description,
+                targetAmount: goal.targetAmount,
+                targetDate: goal.targetDate,
+                targetDateFlexibility: goal.targetDateFlexibility,
+                manualCurrentAmount: goal.manualCurrentAmount,
+                plannedContributionAmount: goal.plannedContributionAmount,
+                contributionFrequency: goal.contributionFrequency,
+                annualContributionGrowthPct: goal.annualContributionGrowthPct,
+                userPriority: goal.userPriority,
+                importanceType: goal.importanceType,
+                inflationAdjusted: goal.inflationAdjusted,
+              }}
+            />
           </div>
         </div>
 
