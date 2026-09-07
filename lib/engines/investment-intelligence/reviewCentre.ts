@@ -207,6 +207,14 @@ export interface ReconciliationCaseInput {
   subjectId: string;
   discrepancyType: string;
   openedAt: string;
+  // PC4 section 19: carried through into the review item's own evidence so
+  // the UI can offer a genuine "Review statement" deep link for a case type
+  // that actually has a self-service resolution path (e.g.
+  // document_password_required -> Statements & data), rather than only
+  // Acknowledge/Dismiss, which never resolve the underlying issue. Null
+  // for a case with no source document (there currently are none, but the
+  // field is honest about the possibility rather than assumed non-null).
+  sourceDocumentId: string | null;
 }
 export function detectOpenReconciliationCases(userId: string, cases: ReconciliationCaseInput[], asOfDate: string, rule: RuleConfig): ReviewItemCandidate[] {
   return cases.map((c) => ({
@@ -216,7 +224,7 @@ export function detectOpenReconciliationCases(userId: string, cases: Reconciliat
     complianceClassification: rule.complianceClassification,
     title: 'Unresolved portfolio reconciliation case',
     description: `A ${c.discrepancyType.replace(/_/g, ' ')} reconciliation case on this ${c.subjectType.replace('_', ' ')} is still open.`,
-    evidence: { caseId: c.id, subjectType: c.subjectType, subjectId: c.subjectId, discrepancyType: c.discrepancyType, openedAt: c.openedAt },
+    evidence: { caseId: c.id, subjectType: c.subjectType, subjectId: c.subjectId, discrepancyType: c.discrepancyType, openedAt: c.openedAt, sourceDocumentId: c.sourceDocumentId },
     sourceModule: 'ii_data_quality' as IiReviewSourceModule,
     sourceRecordId: c.id,
     sourceRecordVersion: null,
