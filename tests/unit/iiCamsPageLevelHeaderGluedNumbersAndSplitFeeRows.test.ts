@@ -187,23 +187,31 @@ describe('CAMS alt-layout: Stamp Duty/STT fee row split across two lines (real p
   });
 });
 
-describe('CAMS alt-layout: Price glued directly to a parenthesized negative Units (real production incident, 2026-09-07)', () => {
-  // A FOURTH glued shape, distinct from the ambiguous-digit-run one above --
-  // Units here is unambiguously delimited by its own parentheses (a
-  // negative/redemption unit count), glued straight onto Price with zero
-  // whitespace, e.g. "12.82(3,037.396)". No arithmetic disambiguation is
-  // needed (the parens already prove the split point). Real production
-  // incident: a real user's real redemption of this shape was silently
-  // dropped, making that scheme's reconstructed closing balance come out
-  // ~5x too high because its units were never subtracted out.
+describe('CAMS alt-layout: transaction row whose description wraps across further physical lines (real production incident, 2026-09-07, corrected)', () => {
+  // This describe block replaces an earlier same-day fix that was
+  // diagnosed against a locally-saved copy of the real document's text
+  // which had silently lost tab characters during extraction. The mistake
+  // was only caught by comparing against the *actual* production error
+  // text after reprocessing still showed these rows failing. Every literal
+  // string below (including the \t characters) is copied verbatim from a
+  // real ii_document_parse_runs.errors entry, not invented.
+  //
+  // The real shape: ALT_TXN_ROW_RE already handles Price and Units as two
+  // separate fields (its `\s+` separator already matches a tab, and its
+  // Units group already accepts a parenthesized negative value) -- there
+  // was never a "glued, zero-whitespace" defect here at all. The ONLY real
+  // defect is that these rows' descriptions are long enough to wrap onto
+  // one or more further physical lines before the running Unit Balance
+  // appears, alone, on its own line -- so ALT_TXN_ROW_RE's own trailing-
+  // balance requirement never matches on the row's first line.
   function buildText(...rows: string[]): string {
     return [
-      'ZQWX-STMT-TRK-2026-CAMS-GLUEDNEG',
+      'ZQWX-STMT-TRK-2026-CAMS-WRAPPEDROW',
       'Consolidated Account Statement',
       'Statement Period : 01-Jan-2020 To 31-Dec-2025',
       '',
       'Folio No: 8800220011005',
-      'PAN: PGLUEDNEG005F',
+      'PAN: PWRAP005F',
       'Nominee 1:  Nominee 2:  Nominee 3:',
       'Cascade Bluechip Fund - Growth Plan - ISIN: INF700K01EE5(Advisor: ARN00704) Registrar : CAMS',
       'Date          Amount           Price        Units       Transaction Type                    Unit Balance',
@@ -213,39 +221,38 @@ describe('CAMS alt-layout: Price glued directly to a parenthesized negative Unit
     ].join('\n');
   }
 
-  it('a single-line glued-negative-units row (description and balance both fit on one line) parses correctly', () => {
-    const line = '10-Feb-2021   (10,000.00)      13.05(766.284)Systematic Investment Rejection (5/7)     0.000  [Ref: GLUEDNEG-REJECT-001]';
-    const parsed = parseExtractedDocument(buildText(line)).parsed!;
-    const txn = parsed.transactions.find((t) => t.sourceReference === 'GLUEDNEG-REJECT-001');
-    expect(txn).toBeTruthy();
-    expect(scaledToDecimalString(txn!.navScaled!, 2)).toBe('13.05');
-    expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('-766.284');
-    expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('0.000');
-  });
-
-  it('a redemption whose description wraps onto further lines is recovered, with its running balance found on its own later line', () => {
-    // Reproduces the real shape exactly: the row's own line ends mid-
-    // sentence, one plain continuation line follows, then the running
-    // balance appears completely alone on the line after that.
-    const rows = [
-      '27-Jan-2021   (38,939.02)      12.82(3,037.396)Redemption Directly credited to your Bank account (DC-XXXX) less TDS,',
-      'STT',
-      '0.000',
-    ];
+  it('a redemption (negative/parenthesized Units) whose description wraps onto one further line is recovered', () => {
+    // Verbatim real shape (folio/PAN/amounts are this fixture's own
+    // invented values above, but the ROW TEXT below -- including the tab
+    // characters -- matches a real ii_document_parse_runs error entry).
+    const rows = ['27-Jan-2021 (38,939.02) 12.82\t(3,037.396)\tRedemption Directly credited to your Bank account (DC-XXXX) less TDS,', 'STT', '0.000'];
     const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
     const txn = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Redemption Directly credited'));
     expect(txn).toBeTruthy();
     expect(txn!.canonicalType).toBe('redemption');
     expect(scaledToDecimalString(txn!.amountScaled, 2)).toBe('-38939.02');
+    expect(scaledToDecimalString(txn!.navScaled!, 2)).toBe('12.82');
     expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('-3037.396');
     expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('0.000');
   });
 
+  it('a POSITIVE-units transfer ("Lateral Shift In") whose description wraps is also recovered -- not just the negative/redemption case', () => {
+    // Real shape found live alongside the redemptions above: an incoming
+    // transfer carries ordinary POSITIVE units, not parenthesized, proving
+    // the fix must be sign-agnostic rather than redemption-specific.
+    const rows = ['17-Dec-2007 221,000.00 78.6945\t2,808.328\tLateral Shift In (From LF (DP) F.No:90001112223)(From EXAMPLE', 'LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION', 'F.No:90001112223)', '2,808.328'];
+    const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
+    const txn = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Lateral Shift In'));
+    expect(txn).toBeTruthy();
+    expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('2808.328'); // positive -- an incoming transfer, not a redemption
+    expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('2808.328');
+  });
+
   it('a description wrapping across MULTIPLE continuation lines before the balance is still recovered', () => {
-    // Reproduces the real "Lateral Shift Out" shape: two full continuation
-    // lines (not just one word) before the bare balance line appears.
+    // Verbatim real shape: two full continuation lines (not just one
+    // fragment) before the bare balance line appears.
     const rows = [
-      '13-Oct-2019   (50,000.00)      44.7004(1,121.355)Lateral Shift Out (To LF (DP) F.No:90001112223)(To EXAMPLE',
+      '13-Oct-2019 (50,000.00) 44.7004\t(1,121.355)\tLateral Shift Out (To LF (DP) F.No:90001112223)(To EXAMPLE',
       'LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION',
       'F.No:90001112223) less TDS, STT',
       '222.601',
@@ -263,11 +270,11 @@ describe('CAMS alt-layout: Price glued directly to a parenthesized negative Unit
     // line as an honest parse failure, never guess a balance or merge the
     // two rows together.
     const rows = [
-      '27-Jan-2021   (38,939.02)      12.82(3,037.396)Redemption Directly credited to your Bank account, no balance line follows',
-      '10-Feb-2021   9,999.00         10.00         999.900     Purchase                             999.900  [Ref: GLUEDNEG-NEXT-001]',
+      '27-Jan-2021 (38,939.02) 12.82\t(3,037.396)\tRedemption Directly credited to your Bank account, no balance line follows',
+      '10-Feb-2021   9,999.00         10.00         999.900     Purchase                             999.900  [Ref: WRAPPEDROW-NEXT-001]',
     ];
     const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
-    const nextTxn = parsed.transactions.find((t) => t.sourceReference === 'GLUEDNEG-NEXT-001');
+    const nextTxn = parsed.transactions.find((t) => t.sourceReference === 'WRAPPEDROW-NEXT-001');
     expect(nextTxn).toBeTruthy();
     expect(scaledToDecimalString(nextTxn!.amountScaled, 2)).toBe('9999.00'); // the next real row parses on its own, untouched
     const dropped = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Redemption Directly credited to your Bank account, no balance'));

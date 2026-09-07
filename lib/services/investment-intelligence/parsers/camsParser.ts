@@ -259,31 +259,36 @@ function splitGluedPriceAndUnits(glued: string, amountAbs: number): { priceRaw: 
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-// Real production defect (2026-09-07, real 19-page since-inception CAS): a
-// THIRD glued shape, distinct from ALT_TXN_ROW_GLUED_RE above — here Units
-// is NOT an ambiguous run of concatenated digits; it is unambiguously
-// delimited by its own parentheses (a negative/redemption unit count),
-// just glued directly onto Price with zero separating whitespace, e.g.
-// "12.82(3,037.396)". No arithmetic disambiguation is needed at all (the
-// parens already prove exactly where the split is) — only a regex that
-// permits zero whitespace before an opening paren, which none of the
-// existing grammars do. Confirmed live: this exact shape recurs 60+ times
-// in one real statement, across several schemes' redemptions, SIP
-// rejections/reversals, and inter-scheme "Lateral Shift Out" transfers —
+// CORRECTED, 2026-09-07 (superseding an earlier same-day fix that was
+// diagnosed against a locally-saved copy of the real document's text which
+// turned out to have silently lost the tab characters below -- caught only
+// once compared against the *actual* production error text after
+// reprocessing, which still showed the row failing after the earlier fix
+// shipped). The real production text is
+// "12.82\t(3,037.396)\tRedemption ..." -- Price and Units are separated by
+// an actual TAB character, not glued with zero whitespace at all.
+// ALT_TXN_ROW_RE's own `\s+` between fields already matches a tab, and its
+// Units group `(\(?-?[\d,]+\.\d+\)?)` already accepts a parenthesized
+// negative value -- there was never a "glued" defect in this shape to
+// begin with. The ONLY real defect is that these specific rows'
+// descriptions are long enough to wrap onto one or more further physical
+// lines before the running Unit Balance finally appears (always alone on
+// its own line once it does), so ALT_TXN_ROW_RE's own trailing-balance
+// requirement never matches on the row's own first line. This general,
+// sign-agnostic wrapped-start variant reuses ALT_TXN_ROW_RE's exact field
+// structure (never a bespoke "glued" pattern) with only the trailing
+// balance/Ref anchor removed. Confirmed live: recurs 60+ times in one real
+// statement, across several schemes' redemptions, SIP rejections/
+// reversals, and inter-scheme "Lateral Shift In"/"Lateral Shift Out"
+// transfers (both signs -- a shift IN carries ordinary positive units) —
 // among them the real redemption whose silent loss was making one
 // scheme's reconstructed unit balance come out ~5x too high (its units
 // were never subtracted, because the whole row was dropped as an honest
-// but wrong unparseable_transaction_row).
-const ALT_TXN_ROW_GLUED_NEG_UNITS_RE =
-  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+([\d,]+\.\d+)(\([\d,]+\.\d+\))(.+?)\s+(\(?-?[\d,]+\.\d+\)?)(?:\s+\[Ref:\s*([^\]]+)\])?\s*$/;
-
-// The same shape, but for a row whose description is long enough to wrap
-// onto one or more further physical lines before the running Unit Balance
-// finally appears — always alone on its own line once it does. No balance
-// is expected on THIS line, so none is captured here; the caller consumes
-// continuation lines looking for it (see BARE_BALANCE_LINE_RE below).
-const ALT_TXN_ROW_GLUED_NEG_UNITS_WRAPPED_START_RE =
-  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+([\d,]+\.\d+)(\([\d,]+\.\d+\))(.+)$/;
+// but wrong unparseable_transaction_row). No balance is expected on THIS
+// line, so none is captured here; the caller consumes continuation lines
+// looking for it (see BARE_BALANCE_LINE_RE below).
+const ALT_TXN_ROW_WRAPPED_START_RE =
+  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+(\(?-?[\d,]+\.\d+\)?)\s+(\(?-?[\d,]+\.\d+\)?)(.+)$/;
 
 // A bare running-balance line with nothing else on it — the unambiguous
 // terminator for the wrapped-description continuation above. Never
@@ -949,77 +954,71 @@ export const camsParser: InvestmentDocumentParser = {
             // single out exactly one candidate split -- fall through to the
             // honest unparseable_transaction_row below rather than guess.
           }
-          // See ALT_TXN_ROW_GLUED_NEG_UNITS_RE's own comment above -- a
-          // separate glued shape (parenthesized negative Units glued
-          // directly to Price, no ambiguity to resolve) attempted only
-          // after every whitespace-delimited and digit-run-glued grammar
-          // above has already failed.
-          const gluedNegMatch = ALT_TXN_ROW_GLUED_NEG_UNITS_RE.exec(line);
-          const gluedNegWrappedMatch = gluedNegMatch ? null : ALT_TXN_ROW_GLUED_NEG_UNITS_WRAPPED_START_RE.exec(line);
-          if (gluedNegMatch || gluedNegWrappedMatch) {
-            const [, gnDateRaw, gnAmountRaw, gnPriceRaw, gnUnitsParenRaw, gnDescRawFirst] = (gluedNegMatch ?? gluedNegWrappedMatch)!;
-            let gnDescRaw = gnDescRawFirst;
-            let gnBalanceRaw: string | null = gluedNegMatch ? gluedNegMatch[6] : null;
-            const gnRef: string | undefined = gluedNegMatch ? gluedNegMatch[7] : undefined;
-            let resolved = Boolean(gluedNegMatch);
-            if (!resolved) {
-              // Description wraps onto further physical lines -- consume
-              // plain continuation text until the running balance finally
-              // appears alone on its own line. Bounded, and stops the
-              // instant a candidate line looks like the start of a real
-              // new transaction row, so a genuine later row can never be
-              // swallowed as if it were just more description text.
-              const MAX_CONTINUATION_LINES = 5;
-              let consumedCount = 0;
-              let lookaheadIdx = idx + 1;
-              while (lookaheadIdx < lines.length && consumedCount < MAX_CONTINUATION_LINES) {
-                const candidate = lines[lookaheadIdx].trim();
-                if (/^\d{1,2}-[A-Za-z]{3}-\d{4}/.test(candidate)) break;
-                if (BARE_BALANCE_LINE_RE.test(candidate)) {
-                  gnBalanceRaw = candidate;
-                  idx = lookaheadIdx; // consume every continuation line, including this balance line
-                  resolved = true;
-                  break;
-                }
-                gnDescRaw = `${gnDescRaw} ${candidate}`;
-                lookaheadIdx += 1;
-                consumedCount += 1;
+          // See ALT_TXN_ROW_WRAPPED_START_RE's own comment above -- attempted
+          // only after ALT_TXN_ROW_RE (which requires a trailing balance on
+          // the SAME line) has already failed. Every real occurrence found
+          // wraps its description across further physical lines, so this
+          // regex never itself captures a balance -- the lookahead below
+          // always has to go find one.
+          const wrappedMatch = ALT_TXN_ROW_WRAPPED_START_RE.exec(line);
+          if (wrappedMatch) {
+            const [, wDateRaw, wAmountRaw, wPriceRaw, wUnitsRaw, wDescRawFirst] = wrappedMatch;
+            let wDescRaw = wDescRawFirst;
+            let wBalanceRaw: string | null = null;
+            // Consume plain continuation text until the running balance
+            // finally appears alone on its own line. Bounded, and stops the
+            // instant a candidate line looks like the start of a real new
+            // transaction row, so a genuine later row can never be
+            // swallowed as if it were just more description text.
+            const MAX_CONTINUATION_LINES = 5;
+            let consumedCount = 0;
+            let lookaheadIdx = idx + 1;
+            while (lookaheadIdx < lines.length && consumedCount < MAX_CONTINUATION_LINES) {
+              const candidate = lines[lookaheadIdx].trim();
+              if (/^\d{1,2}-[A-Za-z]{3}-\d{4}/.test(candidate)) break;
+              if (BARE_BALANCE_LINE_RE.test(candidate)) {
+                wBalanceRaw = candidate;
+                idx = lookaheadIdx; // consume every continuation line, including this balance line
+                break;
               }
+              wDescRaw = `${wDescRaw} ${candidate}`;
+              lookaheadIdx += 1;
+              consumedCount += 1;
             }
-            if (resolved && gnBalanceRaw !== null) {
-              const gnDateParsed = parseStatementDate(gnDateRaw);
-              if (!gnDateParsed.ok) {
-                warnings.push({ code: 'unparseable_date', message: gnDateParsed.error, severity: 'error', lineHint: idx });
+            if (wBalanceRaw !== null) {
+              const wDateParsed = parseStatementDate(wDateRaw);
+              if (!wDateParsed.ok) {
+                warnings.push({ code: 'unparseable_date', message: wDateParsed.error, severity: 'error', lineHint: idx });
                 continue;
               }
-              const gnAmountScaled = requireScaled(gnAmountRaw, warnings, 'unparseable_amount');
-              const gnUnitsScaled = requireScaled(gnUnitsParenRaw, warnings, 'unparseable_units');
-              const gnNavScaled = requireScaled(gnPriceRaw, warnings, 'unparseable_nav');
-              const gnBalanceScaled = requireScaled(gnBalanceRaw, warnings, 'unparseable_balance');
-              if (gnAmountScaled !== null) {
-                const gnClassification = classifyTransactionType(gnDescRaw.trim());
-                if (gnClassification.canonicalType === 'unclassified') {
-                  warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${gnDescRaw.trim()}"`, severity: 'warning', lineHint: idx });
+              const wAmountScaled = requireScaled(wAmountRaw, warnings, 'unparseable_amount');
+              const wUnitsScaled = requireScaled(wUnitsRaw, warnings, 'unparseable_units');
+              const wNavScaled = requireScaled(wPriceRaw, warnings, 'unparseable_nav');
+              const wBalanceScaled = requireScaled(wBalanceRaw, warnings, 'unparseable_balance');
+              if (wAmountScaled !== null) {
+                const wClassification = classifyTransactionType(wDescRaw.trim());
+                if (wClassification.canonicalType === 'unclassified') {
+                  warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${wDescRaw.trim()}"`, severity: 'warning', lineHint: idx });
                 }
                 transactions.push({
                   folioNumber: currentFolio,
                   scheme: currentScheme,
-                  transactionDateIso: gnDateParsed.iso,
-                  rawTransactionTypeText: gnDescRaw.trim(),
-                  canonicalType: gnClassification.canonicalType,
-                  classificationConfidence: gnClassification.confidence,
-                  amountScaled: gnAmountScaled,
-                  unitsScaled: gnUnitsScaled,
-                  navScaled: gnNavScaled,
-                  balanceUnitsAfterScaled: gnBalanceScaled,
-                  sourceReference: gnRef ? gnRef.trim() : null,
-                  sourceDescription: gnDescRaw.slice(0, 500),
+                  transactionDateIso: wDateParsed.iso,
+                  rawTransactionTypeText: wDescRaw.trim(),
+                  canonicalType: wClassification.canonicalType,
+                  classificationConfidence: wClassification.confidence,
+                  amountScaled: wAmountScaled,
+                  unitsScaled: wUnitsScaled,
+                  navScaled: wNavScaled,
+                  balanceUnitsAfterScaled: wBalanceScaled,
+                  sourceReference: null,
+                  sourceDescription: wDescRaw.slice(0, 500),
                 });
                 continue;
               }
             }
-            // Matched the glued shape but never found its balance within
-            // the bounded lookahead -- fall through to the honest
+            // Matched the wrapped-start shape but never found its balance
+            // within the bounded lookahead -- fall through to the honest
             // unparseable_transaction_row below rather than guess.
           }
           // II-PC3-C1 real-variant fingerprint section 8/9: a real Stamp
