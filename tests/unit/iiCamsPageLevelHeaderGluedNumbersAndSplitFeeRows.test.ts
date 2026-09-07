@@ -186,3 +186,93 @@ describe('CAMS alt-layout: Stamp Duty/STT fee row split across two lines (real p
     expect(labelErrors).toHaveLength(0);
   });
 });
+
+describe('CAMS alt-layout: Price glued directly to a parenthesized negative Units (real production incident, 2026-09-07)', () => {
+  // A FOURTH glued shape, distinct from the ambiguous-digit-run one above --
+  // Units here is unambiguously delimited by its own parentheses (a
+  // negative/redemption unit count), glued straight onto Price with zero
+  // whitespace, e.g. "12.82(3,037.396)". No arithmetic disambiguation is
+  // needed (the parens already prove the split point). Real production
+  // incident: a real user's real redemption of this shape was silently
+  // dropped, making that scheme's reconstructed closing balance come out
+  // ~5x too high because its units were never subtracted out.
+  function buildText(...rows: string[]): string {
+    return [
+      'ZQWX-STMT-TRK-2026-CAMS-GLUEDNEG',
+      'Consolidated Account Statement',
+      'Statement Period : 01-Jan-2020 To 31-Dec-2025',
+      '',
+      'Folio No: 8800220011005',
+      'PAN: PGLUEDNEG005F',
+      'Nominee 1:  Nominee 2:  Nominee 3:',
+      'Cascade Bluechip Fund - Growth Plan - ISIN: INF700K01EE5(Advisor: ARN00704) Registrar : CAMS',
+      'Date          Amount           Price        Units       Transaction Type                    Unit Balance',
+      ' Opening Unit Balance: 3037.396',
+      ...rows,
+      'Closing Unit Balance: 0.000 Total Cost Value: Rs. 0.00',
+    ].join('\n');
+  }
+
+  it('a single-line glued-negative-units row (description and balance both fit on one line) parses correctly', () => {
+    const line = '10-Feb-2021   (10,000.00)      13.05(766.284)Systematic Investment Rejection (5/7)     0.000  [Ref: GLUEDNEG-REJECT-001]';
+    const parsed = parseExtractedDocument(buildText(line)).parsed!;
+    const txn = parsed.transactions.find((t) => t.sourceReference === 'GLUEDNEG-REJECT-001');
+    expect(txn).toBeTruthy();
+    expect(scaledToDecimalString(txn!.navScaled!, 2)).toBe('13.05');
+    expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('-766.284');
+    expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('0.000');
+  });
+
+  it('a redemption whose description wraps onto further lines is recovered, with its running balance found on its own later line', () => {
+    // Reproduces the real shape exactly: the row's own line ends mid-
+    // sentence, one plain continuation line follows, then the running
+    // balance appears completely alone on the line after that.
+    const rows = [
+      '27-Jan-2021   (38,939.02)      12.82(3,037.396)Redemption Directly credited to your Bank account (DC-XXXX) less TDS,',
+      'STT',
+      '0.000',
+    ];
+    const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
+    const txn = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Redemption Directly credited'));
+    expect(txn).toBeTruthy();
+    expect(txn!.canonicalType).toBe('redemption');
+    expect(scaledToDecimalString(txn!.amountScaled, 2)).toBe('-38939.02');
+    expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('-3037.396');
+    expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('0.000');
+  });
+
+  it('a description wrapping across MULTIPLE continuation lines before the balance is still recovered', () => {
+    // Reproduces the real "Lateral Shift Out" shape: two full continuation
+    // lines (not just one word) before the bare balance line appears.
+    const rows = [
+      '13-Oct-2019   (50,000.00)      44.7004(1,121.355)Lateral Shift Out (To LF (DP) F.No:90001112223)(To EXAMPLE',
+      'LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION',
+      'F.No:90001112223) less TDS, STT',
+      '222.601',
+    ];
+    const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
+    const txn = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Lateral Shift Out'));
+    expect(txn).toBeTruthy();
+    expect(scaledToDecimalString(txn!.unitsScaled!, 3)).toBe('-1121.355');
+    expect(scaledToDecimalString(txn!.balanceUnitsAfterScaled!, 3)).toBe('222.601');
+  });
+
+  it('never swallows a genuine following transaction row as if it were description continuation', () => {
+    // No bare-balance-only line ever appears before a real new dated row --
+    // the lookahead must stop at that dated row and report the original
+    // line as an honest parse failure, never guess a balance or merge the
+    // two rows together.
+    const rows = [
+      '27-Jan-2021   (38,939.02)      12.82(3,037.396)Redemption Directly credited to your Bank account, no balance line follows',
+      '10-Feb-2021   9,999.00         10.00         999.900     Purchase                             999.900  [Ref: GLUEDNEG-NEXT-001]',
+    ];
+    const parsed = parseExtractedDocument(buildText(...rows)).parsed!;
+    const nextTxn = parsed.transactions.find((t) => t.sourceReference === 'GLUEDNEG-NEXT-001');
+    expect(nextTxn).toBeTruthy();
+    expect(scaledToDecimalString(nextTxn!.amountScaled, 2)).toBe('9999.00'); // the next real row parses on its own, untouched
+    const dropped = parsed.transactions.find((t) => t.rawTransactionTypeText.startsWith('Redemption Directly credited to your Bank account, no balance'));
+    expect(dropped).toBeUndefined();
+    const errors = parsed.errors.filter((e) => e.code === 'unparseable_transaction_row');
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

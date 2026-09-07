@@ -259,6 +259,38 @@ function splitGluedPriceAndUnits(glued: string, amountAbs: number): { priceRaw: 
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+// Real production defect (2026-09-07, real 19-page since-inception CAS): a
+// THIRD glued shape, distinct from ALT_TXN_ROW_GLUED_RE above — here Units
+// is NOT an ambiguous run of concatenated digits; it is unambiguously
+// delimited by its own parentheses (a negative/redemption unit count),
+// just glued directly onto Price with zero separating whitespace, e.g.
+// "12.82(3,037.396)". No arithmetic disambiguation is needed at all (the
+// parens already prove exactly where the split is) — only a regex that
+// permits zero whitespace before an opening paren, which none of the
+// existing grammars do. Confirmed live: this exact shape recurs 60+ times
+// in one real statement, across several schemes' redemptions, SIP
+// rejections/reversals, and inter-scheme "Lateral Shift Out" transfers —
+// among them the real redemption whose silent loss was making one
+// scheme's reconstructed unit balance come out ~5x too high (its units
+// were never subtracted, because the whole row was dropped as an honest
+// but wrong unparseable_transaction_row).
+const ALT_TXN_ROW_GLUED_NEG_UNITS_RE =
+  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+([\d,]+\.\d+)(\([\d,]+\.\d+\))(.+?)\s+(\(?-?[\d,]+\.\d+\)?)(?:\s+\[Ref:\s*([^\]]+)\])?\s*$/;
+
+// The same shape, but for a row whose description is long enough to wrap
+// onto one or more further physical lines before the running Unit Balance
+// finally appears — always alone on its own line once it does. No balance
+// is expected on THIS line, so none is captured here; the caller consumes
+// continuation lines looking for it (see BARE_BALANCE_LINE_RE below).
+const ALT_TXN_ROW_GLUED_NEG_UNITS_WRAPPED_START_RE =
+  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+([\d,]+\.\d+)(\([\d,]+\.\d+\))(.+)$/;
+
+// A bare running-balance line with nothing else on it — the unambiguous
+// terminator for the wrapped-description continuation above. Never
+// confused with a real transaction row (which always starts with a date)
+// or a labelled fee row (which always carries its own label text).
+const BARE_BALANCE_LINE_RE = /^\(?-?[\d,]+\.\d+\)?$/;
+
 // Finding #9: "Closing Unit Balance: X Total Cost Value: Y" — no "as on"/
 // "Valuation"/"NAV as on" clause anywhere, and critically, NO DATE at all
 // (unlike CLOSING_RE, which always captures an explicit as-of date).
@@ -916,6 +948,79 @@ export const camsParser: InvestmentDocumentParser = {
             // Glued blob shape matched but the arithmetic proof did not
             // single out exactly one candidate split -- fall through to the
             // honest unparseable_transaction_row below rather than guess.
+          }
+          // See ALT_TXN_ROW_GLUED_NEG_UNITS_RE's own comment above -- a
+          // separate glued shape (parenthesized negative Units glued
+          // directly to Price, no ambiguity to resolve) attempted only
+          // after every whitespace-delimited and digit-run-glued grammar
+          // above has already failed.
+          const gluedNegMatch = ALT_TXN_ROW_GLUED_NEG_UNITS_RE.exec(line);
+          const gluedNegWrappedMatch = gluedNegMatch ? null : ALT_TXN_ROW_GLUED_NEG_UNITS_WRAPPED_START_RE.exec(line);
+          if (gluedNegMatch || gluedNegWrappedMatch) {
+            const [, gnDateRaw, gnAmountRaw, gnPriceRaw, gnUnitsParenRaw, gnDescRawFirst] = (gluedNegMatch ?? gluedNegWrappedMatch)!;
+            let gnDescRaw = gnDescRawFirst;
+            let gnBalanceRaw: string | null = gluedNegMatch ? gluedNegMatch[6] : null;
+            const gnRef: string | undefined = gluedNegMatch ? gluedNegMatch[7] : undefined;
+            let resolved = Boolean(gluedNegMatch);
+            if (!resolved) {
+              // Description wraps onto further physical lines -- consume
+              // plain continuation text until the running balance finally
+              // appears alone on its own line. Bounded, and stops the
+              // instant a candidate line looks like the start of a real
+              // new transaction row, so a genuine later row can never be
+              // swallowed as if it were just more description text.
+              const MAX_CONTINUATION_LINES = 5;
+              let consumedCount = 0;
+              let lookaheadIdx = idx + 1;
+              while (lookaheadIdx < lines.length && consumedCount < MAX_CONTINUATION_LINES) {
+                const candidate = lines[lookaheadIdx].trim();
+                if (/^\d{1,2}-[A-Za-z]{3}-\d{4}/.test(candidate)) break;
+                if (BARE_BALANCE_LINE_RE.test(candidate)) {
+                  gnBalanceRaw = candidate;
+                  idx = lookaheadIdx; // consume every continuation line, including this balance line
+                  resolved = true;
+                  break;
+                }
+                gnDescRaw = `${gnDescRaw} ${candidate}`;
+                lookaheadIdx += 1;
+                consumedCount += 1;
+              }
+            }
+            if (resolved && gnBalanceRaw !== null) {
+              const gnDateParsed = parseStatementDate(gnDateRaw);
+              if (!gnDateParsed.ok) {
+                warnings.push({ code: 'unparseable_date', message: gnDateParsed.error, severity: 'error', lineHint: idx });
+                continue;
+              }
+              const gnAmountScaled = requireScaled(gnAmountRaw, warnings, 'unparseable_amount');
+              const gnUnitsScaled = requireScaled(gnUnitsParenRaw, warnings, 'unparseable_units');
+              const gnNavScaled = requireScaled(gnPriceRaw, warnings, 'unparseable_nav');
+              const gnBalanceScaled = requireScaled(gnBalanceRaw, warnings, 'unparseable_balance');
+              if (gnAmountScaled !== null) {
+                const gnClassification = classifyTransactionType(gnDescRaw.trim());
+                if (gnClassification.canonicalType === 'unclassified') {
+                  warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${gnDescRaw.trim()}"`, severity: 'warning', lineHint: idx });
+                }
+                transactions.push({
+                  folioNumber: currentFolio,
+                  scheme: currentScheme,
+                  transactionDateIso: gnDateParsed.iso,
+                  rawTransactionTypeText: gnDescRaw.trim(),
+                  canonicalType: gnClassification.canonicalType,
+                  classificationConfidence: gnClassification.confidence,
+                  amountScaled: gnAmountScaled,
+                  unitsScaled: gnUnitsScaled,
+                  navScaled: gnNavScaled,
+                  balanceUnitsAfterScaled: gnBalanceScaled,
+                  sourceReference: gnRef ? gnRef.trim() : null,
+                  sourceDescription: gnDescRaw.slice(0, 500),
+                });
+                continue;
+              }
+            }
+            // Matched the glued shape but never found its balance within
+            // the bounded lookahead -- fall through to the honest
+            // unparseable_transaction_row below rather than guess.
           }
           // II-PC3-C1 real-variant fingerprint section 8/9: a real Stamp
           // Duty/STT row structurally lacks the Price/Units/Balance fields
