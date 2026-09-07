@@ -60,10 +60,10 @@ const CARD_META: Record<AnalysisCard['key'], { title: string; description: strin
     cta: 'View recurring investments',
   },
   xray: {
-    title: 'Fund holdings',
+    title: 'Underlying fund holdings',
     description: 'See the underlying securities and overlap inside your mutual funds.',
     href: '/investment-intelligence/xray',
-    cta: 'View fund holdings',
+    cta: 'View underlying fund holdings',
   },
   tax: {
     title: 'Tax & cost',
