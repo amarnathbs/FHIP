@@ -83,6 +83,7 @@ import { splitLines, normaliseSchemeName, detectPlanType, detectOptionType, extr
 import { parseExactDecimal } from '../decimal';
 import { parseStatementDate } from '../dateNormalisation';
 import { classifyTransactionType } from '../transactionTypeMapping';
+import type { IiTransactionType } from '../types';
 
 export const CAMS_PARSER_CODE = 'cams_detailed_v1' as const;
 export const CAMS_PARSER_VERSION = '1.0.0';
@@ -470,6 +471,52 @@ function reclassifyReversedPurchasePairs(transactions: ParsedTransactionRecord[]
     if (balanceBeforePrior === null) continue;
     if (reversal.balanceUnitsAfterScaled !== balanceBeforePrior) continue; // reversal must fully restore the pre-purchase balance, not just cancel units in isolation
     transactions[i - 1] = { ...prior, canonicalType: 'reversal', classificationConfidence: 1 };
+  }
+}
+
+// Real production incident, 2026-09-07 (found during PC4's reconciliation
+// gate review): a real CAMS statement records a failed SIP-registration
+// retry under the SAME wording as a normal instalment -- no "Rejection"/
+// "Reversed" keyword anywhere (e.g. "Systematic Purchase (Continuous
+// Offer)Registration Record is not available - Instalment No 1", "...
+// Payment not received from investor banker - Instalment No 2"), so
+// classifyTransactionType() has no keyword to catch it by -- and chasing
+// every possible CAMS rejection-reason phrase is exactly the whack-a-mole
+// its own comments already warn against (see the "Systematic Investment
+// Rejection" incident above). The statement DOES still print these rows
+// with a genuine negative (parenthesized) Units value, which structurally
+// proves the row is a cancellation: a true purchase/SIP/switch-in/etc. can
+// never subtract units by definition. reconciliation.ts's DIRECTION_TABLE
+// forces an inflow-typed row's contribution to abs(units) regardless of
+// the parsed sign (correct for the overwhelmingly common case where a
+// source prints unsigned magnitudes and relies on the type name alone for
+// direction) -- for these self-contradictory rows that silently flips the
+// sign back to positive, double-counting a failed retry as a genuine
+// extra contribution. Caught via exact arithmetic: Kotak Mid Cap Fund's
+// reconciliation variance moved from +111.505 to +223.010 units once the
+// wrapped-row fix above started recovering these previously-dropped rows
+// at all; the phantom excess (2 x 37.956 + 2 x 36.713 units counted
+// instead of the true net 0 + 36.713) accounts for the entire +111.505
+// delta.
+//
+// Fixed here, per-row, rather than by weakening reconciliation.ts's
+// DIRECTION_TABLE: the sign/type contradiction is a property of these
+// specific rows, not a general reconciliation-engine change -- widening
+// the fix there would silently change behaviour for every instrument and
+// every source (including KFintech), unproven and out of this fix's
+// scope. Unlike reclassifyReversedPurchasePairs() above, this needs no
+// negation-pair partner and no balance-restoration proof: the sign alone,
+// on a type that is inflow-only by the canonical taxonomy's own
+// definition (spec section 19), is unambiguous.
+const INFLOW_ONLY_TRANSACTION_TYPES = new Set<IiTransactionType>([
+  'purchase', 'sip', 'switch_in', 'stp_in', 'transfer_in', 'reinvestment', 'bonus',
+]);
+function reclassifyNegativeSignedInflowRows(transactions: ParsedTransactionRecord[]): void {
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (!INFLOW_ONLY_TRANSACTION_TYPES.has(t.canonicalType)) continue;
+    if (t.unitsScaled === null || t.unitsScaled >= BigInt(0)) continue; // only the structurally-impossible case
+    transactions[i] = { ...t, canonicalType: 'reversal', classificationConfidence: 1 };
   }
 }
 
@@ -1096,6 +1143,7 @@ export const camsParser: InvestmentDocumentParser = {
         });
       }
     }
+    reclassifyNegativeSignedInflowRows(transactions);
     reclassifyReversedPurchasePairs(transactions);
     return { transactions, warnings };
   },
