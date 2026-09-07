@@ -189,12 +189,75 @@ function canContinueSchemeHeader(line: string): boolean {
 // Date/Amount/Price/Units/Transaction-type, no separate Description column.
 const ALT_TXN_HEADER_RE = /^Date\s+Amount\s+Price\s*Units?\s*Transaction/i;
 
+// See this regex's own use-site comment (search OPENING_BALANCE_RE below)
+// for the real production defect this closes: the column-header line
+// isn't reliably reprinted before every scheme's rows, but this line is.
+const OPENING_BALANCE_RE = /^Opening Unit Balance\s*:\s*(\(?-?[\d,]+\.\d+\)?)\s*$/i;
+
 // Finding #6: alternate transaction-row grammar matching the header above.
 // "Price" occupies this layout's NAV-equivalent slot; the trailing numeric
 // field is this layout's running Unit Balance (Gate A's literal header
 // extraction showed a truncated "...Unit" column after "Transaction").
 const ALT_TXN_ROW_RE =
   /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+(\(?-?[\d,]+\.\d+\)?)\s+(\(?-?[\d,]+\.\d+\)?)\s+(.+?)\s+(\(?-?[\d,]+\.\d+\)?)(?:\s+\[Ref:\s*([^\]]+)\])?\s*$/;
+
+// Real production defect (2026-09-07, real 19-page since-inception CAS):
+// pdf-parse's column-gap heuristic sometimes omits the space between this
+// layout's Price and Units columns when the source PDF's rendered gap is
+// too narrow, producing a single glued numeric run with no separator at
+// all -- e.g. a real Price of 12.51 and Units of 799.361 extracted as the
+// literal text "12.51799.361". ALT_TXN_ROW_RE requires whitespace between
+// every field, so every row shaped like this failed to match at all,
+// silently dropping the row (or, once `currentScheme` context was lost,
+// an entire scheme's transaction table) rather than raising a warning.
+// Confirmed live: 9 of a real user's 17 schemes had ZERO transactions
+// parsed despite parseHoldings() correctly identifying all 17 (proving
+// the scheme-block boundaries themselves were never the problem).
+//
+// Same table header, only the middle Price+Units run is captured as ONE
+// glued blob (exactly two decimal points, matching two concatenated
+// numbers) rather than as two separately-delimited groups.
+const ALT_TXN_ROW_GLUED_RE =
+  /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s+(\(?-?[\d,]+(?:\.[\d,]+){2}\)?)(.+?)\s+(\(?-?[\d,]+\.\d+\)?)(?:\s+\[Ref:\s*([^\]]+)\])?\s*$/;
+
+// A glued "12.51799.361" blob has multiple syntactically-valid two-number
+// splits (e.g. "12.5179"/"9.361" parses just as cleanly as "12.51"/
+// "799.361") -- picking the wrong one would silently record a wrong price
+// AND a wrong unit count, which is worse for a financial application than
+// an honest parse failure. This disambiguates the same way
+// reclassifyReversedPurchasePairs() proves its own pairing: from a fact
+// the statement itself already prints, never a guess. A genuine (price,
+// units) pair must multiply back to this row's own printed Amount, within
+// the statement's own rounding tolerance -- every candidate split is
+// tried, and the split is accepted ONLY when EXACTLY ONE candidate
+// satisfies that check. Zero or multiple passing candidates is reported
+// as an honest unparseable_transaction_row, never a guess.
+function splitGluedPriceAndUnits(glued: string, amountAbs: number): { priceRaw: string; unitsRaw: string } | null {
+  const cleaned = glued.replace(/^\(|\)$/g, '');
+  const dotPositions: number[] = [];
+  for (let i = 0; i < cleaned.length; i++) if (cleaned[i] === '.') dotPositions.push(i);
+  if (dotPositions.length !== 2) return null; // not this defect's shape at all
+  const [firstDot, secondDot] = dotPositions;
+  const intPart = cleaned.slice(0, firstDot);
+  const middle = cleaned.slice(firstDot + 1, secondDot); // price's frac digits + units' int digits, concatenated
+  const fracPart = cleaned.slice(secondDot + 1);
+  if (!/^\d+$/.test(intPart) || !/^\d+$/.test(fracPart) || middle.length < 2) return null;
+
+  const candidates: { priceRaw: string; unitsRaw: string }[] = [];
+  for (let k = 1; k < middle.length; k++) {
+    const priceFrac = middle.slice(0, k); // never comma-grouped -- it's a fractional part
+    const unitsInt = middle.slice(k); // may legitimately carry thousands commas
+    if (!/^\d+$/.test(priceFrac) || !/^[\d,]+$/.test(unitsInt)) continue;
+    const price = Number(priceFrac.length ? `${intPart}.${priceFrac}` : intPart);
+    const units = Number(`${unitsInt.replace(/,/g, '')}.${fracPart}`);
+    if (!Number.isFinite(price) || !Number.isFinite(units) || price <= 0 || units <= 0) continue;
+    const tolerance = Math.max(0.02, amountAbs * 0.005); // statement rounds Amount/Price/Units independently
+    if (Math.abs(price * units - amountAbs) <= tolerance) {
+      candidates.push({ priceRaw: `${intPart}.${priceFrac}`, unitsRaw: `${unitsInt}.${fracPart}` });
+    }
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
 
 // Finding #9: "Closing Unit Balance: X Total Cost Value: Y" — no "as on"/
 // "Valuation"/"NAV as on" clause anywhere, and critically, NO DATE at all
@@ -295,6 +358,19 @@ function bareAmcLineIsWrapStart(lines: string[], idx: number): boolean {
 // statement's own footer text.
 const ALT_FEE_ROW_RE =
   /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\S*\s+(Stamp\s+Duty|Securities\s+Transaction\s+Tax|STT)\b.*$/i;
+
+// Real production defect (2026-09-07): the SAME real document also prints
+// most (not all) Stamp Duty/STT rows split across TWO lines instead of
+// ALT_FEE_ROW_RE's one -- "<date> <amount>" alone on one line, immediately
+// followed by "*** Stamp Duty ***"/"*** STT Paid ***" alone on the next.
+// This was the single largest source of missed transactions in the real
+// 19-page statement this closes, once the inTable/glued-number defects
+// above were fixed (roughly 400 of ~450 remaining missed rows). The
+// date+amount line's own regex requires end-of-line right after the
+// amount, so it can never accidentally match a genuine full transaction
+// row (which always has more fields following the amount).
+const ALT_FEE_ROW_SPLIT_DATE_AMOUNT_RE = /^(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\(?-?[\d,]+\.\d+\)?)\s*$/;
+const ALT_FEE_ROW_LABEL_ONLY_RE = /^\*+\s*(Stamp\s+Duty|Securities\s+Transaction\s+Tax|STT(?:\s+Paid)?)\s*\*+\s*$/i;
 
 // Finding #12: a fixed placeholder sentence in place of a transaction
 // table for a folio/scheme with zero activity this period. The exact real
@@ -655,6 +731,34 @@ export const camsParser: InvestmentDocumentParser = {
         inTable = true;
         continue;
       }
+      // Real production defect (2026-09-07, real 19-page since-inception
+      // CAS): the "Date Amount Price..."/"Date Description Amount..."
+      // column-header line is NOT reliably reprinted before every scheme's
+      // own transaction rows -- in a real multi-scheme statement it can be
+      // a PAGE-level artifact, printed once at the top of a page and never
+      // again for schemes whose blocks begin further down that same page.
+      // Every AMC-Name/Scheme-Name/Folio-No line between that one header
+      // reprint and a later scheme's actual rows resets `inTable = false`
+      // (correctly, in the normal per-scheme-header case), and nothing
+      // was re-enabling it for that later scheme -- silently dropping its
+      // entire transaction table with no warning at all (inTable was
+      // simply false, so the row-parsing branch below was never reached).
+      // Confirmed live: 9 of a real user's 17 schemes had ZERO
+      // transactions parsed this way; a 10th (Franklin India Mid Cap) kept
+      // exactly the ONE row that happened to follow a page-break's
+      // incidental header reprint mid-scheme, out of 14 real rows.
+      // "Opening Unit Balance: <units>" is a genuinely per-scheme
+      // structural marker -- every CAMS scheme block (both layout
+      // variants) opens its own transaction section with exactly this
+      // line, immediately before its first row. Treating it as ALSO
+      // turning `inTable` on is safe and backward compatible: in a
+      // document where the header line DOES immediately precede it
+      // (the common case this file's other fixtures already cover), this
+      // is a harmless redundant re-set of an already-true flag.
+      if (OPENING_BALANCE_RE.test(line)) {
+        inTable = true;
+        continue;
+      }
       // II-PC3 Gate A finding #12: a "no activity this period" placeholder
       // — this scheme genuinely has zero transactions, never a parse
       // error. (Already a structural no-op today since no header line
@@ -679,6 +783,54 @@ export const camsParser: InvestmentDocumentParser = {
         continue;
       }
       if (inTable && line.length > 0 && currentScheme) {
+        // Real production defect (2026-09-07): ALT_FEE_ROW_RE already
+        // handles a Stamp Duty/STT row printed on ONE line ("<date>
+        // <amount>*** Stamp Duty ***"), but the SAME real document prints
+        // most of these rows split across TWO separate lines instead --
+        // "<date> <amount>" alone, then "*** Stamp Duty ***" alone on the
+        // very next line. This was overwhelmingly the single largest
+        // source of missed transactions once the inTable/glued-number
+        // fixes above landed (roughly 400 of ~450 remaining missed rows
+        // across the whole document, one warning each for the date/amount
+        // line and the label line). Checked first, before TXN_ROW_RE, since
+        // neither a genuine full transaction row nor a same-line fee row
+        // can match ALT_FEE_ROW_SPLIT_DATE_AMOUNT_RE (it requires the line
+        // to end immediately after the amount, with nothing else on it).
+        const splitFeeDateAmount = ALT_FEE_ROW_SPLIT_DATE_AMOUNT_RE.exec(line);
+        const nextLine = idx + 1 < lines.length ? lines[idx + 1].trim() : '';
+        const splitFeeLabel = splitFeeDateAmount ? ALT_FEE_ROW_LABEL_ONLY_RE.exec(nextLine) : null;
+        if (splitFeeDateAmount && splitFeeLabel) {
+          const [, sfDateRaw, sfAmountRaw] = splitFeeDateAmount;
+          const sfLabel = splitFeeLabel[1];
+          const sfDateParsed = parseStatementDate(sfDateRaw);
+          if (!sfDateParsed.ok) {
+            warnings.push({ code: 'unparseable_date', message: sfDateParsed.error, severity: 'error', lineHint: idx });
+            idx += 1; // still consume the label line -- it carries no data of its own
+            continue;
+          }
+          const sfAmountScaled = requireScaled(sfAmountRaw, warnings, 'unparseable_amount');
+          idx += 1; // consume the label line, it's part of this same row
+          if (sfAmountScaled === null) continue;
+          const sfClassification = classifyTransactionType(sfLabel.trim());
+          if (sfClassification.canonicalType === 'unclassified') {
+            warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${sfLabel.trim()}"`, severity: 'warning', lineHint: idx });
+          }
+          transactions.push({
+            folioNumber: currentFolio,
+            scheme: currentScheme,
+            transactionDateIso: sfDateParsed.iso,
+            rawTransactionTypeText: sfLabel.trim(),
+            canonicalType: sfClassification.canonicalType,
+            classificationConfidence: sfClassification.confidence,
+            amountScaled: sfAmountScaled,
+            unitsScaled: BigInt(0), // this row shape never carries units — a real, structural fact (fee/tax rows have no unit impact), never an unparsed/missing value
+            navScaled: null, // no Price field exists on this row shape at all — never fabricated as 0 or guessed
+            balanceUnitsAfterScaled: null, // this row shape prints no running balance — never carried forward/fabricated from a prior row
+            sourceReference: null,
+            sourceDescription: `${line} ${nextLine}`.slice(0, 500),
+          });
+          continue;
+        }
         const m = TXN_ROW_RE.exec(line);
         if (m) {
           const [, dateRaw, descRaw, amountRaw, unitsRaw, navRaw, balanceRaw, ref] = m;
@@ -719,6 +871,52 @@ export const camsParser: InvestmentDocumentParser = {
         // grammar is completely unaffected.
         const am = ALT_TXN_ROW_RE.exec(line);
         if (!am) {
+          // Real production defect (2026-09-07, see ALT_TXN_ROW_GLUED_RE's
+          // own comment): attempted only after the normal, unambiguous
+          // whitespace-delimited grammar fails, never instead of it -- the
+          // vast majority of rows in a real document DO have the space and
+          // must keep matching ALT_TXN_ROW_RE exactly as before.
+          const gluedMatch = ALT_TXN_ROW_GLUED_RE.exec(line);
+          if (gluedMatch) {
+            const [, gDateRaw, gAmountRaw, gGluedBlob, gDescRaw, gBalanceRaw, gRef] = gluedMatch;
+            const gDateParsed = parseStatementDate(gDateRaw);
+            if (!gDateParsed.ok) {
+              warnings.push({ code: 'unparseable_date', message: gDateParsed.error, severity: 'error', lineHint: idx });
+              continue;
+            }
+            const amountAbs = Math.abs(Number(gAmountRaw.replace(/[(),]/g, '')));
+            const split = Number.isFinite(amountAbs) ? splitGluedPriceAndUnits(gGluedBlob, amountAbs) : null;
+            if (split) {
+              const gAmountScaled = requireScaled(gAmountRaw, warnings, 'unparseable_amount');
+              const gUnitsScaled = requireScaled(split.unitsRaw, warnings, 'unparseable_units');
+              const gNavScaled = requireScaled(split.priceRaw, warnings, 'unparseable_nav');
+              const gBalanceScaled = requireScaled(gBalanceRaw, warnings, 'unparseable_balance');
+              if (gAmountScaled !== null) {
+                const gClassification = classifyTransactionType(gDescRaw.trim());
+                if (gClassification.canonicalType === 'unclassified') {
+                  warnings.push({ code: 'unclassified_transaction', message: `Unrecognised transaction description: "${gDescRaw.trim()}"`, severity: 'warning', lineHint: idx });
+                }
+                transactions.push({
+                  folioNumber: currentFolio,
+                  scheme: currentScheme,
+                  transactionDateIso: gDateParsed.iso,
+                  rawTransactionTypeText: gDescRaw.trim(),
+                  canonicalType: gClassification.canonicalType,
+                  classificationConfidence: gClassification.confidence,
+                  amountScaled: gAmountScaled,
+                  unitsScaled: gUnitsScaled,
+                  navScaled: gNavScaled,
+                  balanceUnitsAfterScaled: gBalanceScaled,
+                  sourceReference: gRef ? gRef.trim() : null,
+                  sourceDescription: line.slice(0, 500),
+                });
+                continue;
+              }
+            }
+            // Glued blob shape matched but the arithmetic proof did not
+            // single out exactly one candidate split -- fall through to the
+            // honest unparseable_transaction_row below rather than guess.
+          }
           // II-PC3-C1 real-variant fingerprint section 8/9: a real Stamp
           // Duty/STT row structurally lacks the Price/Units/Balance fields
           // ALT_TXN_ROW_RE requires — attempted only after that full-row
