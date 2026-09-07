@@ -219,6 +219,21 @@ const ALT_TXN_ROW_RE =
 const ALT_CLOSING_RE =
   /^Closing Unit Balance\s*:\s*(\(?-?[\d,]+\.\d+\)?)\s*(?:Units)?\s+Total Cost Value\s*:\s*(?:(?:Rs\.?|₹)\s*)?(\(?-?[\d,]+\.\d+\)?)\s*$/i;
 
+// PC4 section 3/5 finding (2026-09-07): the alt layout DOES print a real
+// per-scheme NAV and market value — corrected from an earlier, wrong
+// assumption in this file's history that it never does. It is a SEPARATE
+// footer line from ALT_CLOSING_RE's "Closing Unit Balance ... Total Cost
+// Value" line, not part of it — real example (as extracted by pdf-parse,
+// one line): "NAV on 04-Sep-2026: INR 2,845.5584 Market Value on
+// 04-Sep-2026: INR 38,682.52". Before this fix it was silently discarded
+// as an `unparseable_transaction_row` warning in both parseTransactions
+// and parseHoldings, dropping real, valuable per-scheme valuation data
+// that genuinely exists in the source document. NAV and market-value
+// dates are captured independently since nothing guarantees they are
+// always identical, though they usually are.
+const ALT_NAV_MARKET_VALUE_RE =
+  /^NAV on (\d{1,2}-[A-Za-z]{3}-\d{4})\s*:\s*(?:INR|Rs\.?|₹)\s*([\d,]+\.\d+)\s+Market Value on (\d{1,2}-[A-Za-z]{3}-\d{4})\s*:\s*(?:INR|Rs\.?|₹)\s*([\d,]+\.\d+)\s*$/i;
+
 // Post-Gate-A production finding #2 (2026-09-07, same real CAS document as
 // the ALT_CLOSING_RE fix above): the AMC/fund-house name also appears as a
 // bare, unlabelled line with no "AMC Name:" prefix at all — just the fund
@@ -655,6 +670,14 @@ export const camsParser: InvestmentDocumentParser = {
         inTable = false;
         continue;
       }
+      // The NAV/market-value footer line (see ALT_NAV_MARKET_VALUE_RE's own
+      // comment) carries no transaction data — this is a transactions-side
+      // no-op purely to stop it being wrongly fed to the transaction-row
+      // grammar as a spurious unparseable_transaction_row error. Actual
+      // extraction happens in parseHoldings().
+      if (ALT_NAV_MARKET_VALUE_RE.test(line)) {
+        continue;
+      }
       if (inTable && line.length > 0 && currentScheme) {
         const m = TXN_ROW_RE.exec(line);
         if (m) {
@@ -789,6 +812,15 @@ export const camsParser: InvestmentDocumentParser = {
     let currentFolio: string | null = accounts[0]?.folioNumber ?? null;
     let currentScheme: ParsedInstrumentRecord | null = null;
     let lastKnownAmcName = '';
+    // PC4 section 3/5: real per-scheme NAV/market-value from the
+    // ALT_NAV_MARKET_VALUE_RE footer line, held until the SAME scheme's
+    // subsequent "Closing Unit Balance" line is reached (the two are
+    // always separate lines, closing-balance a few lines after). Cleared
+    // on consumption and on every new scheme header, so a stray NAV line
+    // with no following closing line for that scheme (or a scheme with no
+    // NAV line at all) never leaks its value into a different scheme's
+    // holding.
+    let pendingAltNavMarketValue: { navScaled: bigint; valueScaled: bigint; asOfDateIso: string } | null = null;
 
     for (let idx = 0; idx < lines.length; idx++) {
       const line = lines[idx].trim();
@@ -829,6 +861,7 @@ export const camsParser: InvestmentDocumentParser = {
           isin: null,
           amfiSchemeCode: null,
         };
+        pendingAltNavMarketValue = null; // a new scheme starts — any unconsumed NAV/value belonged to the PREVIOUS scheme and must never leak forward
         continue;
       }
       // II-PC3 Gate A finding #5 (see the matching block in
@@ -851,6 +884,7 @@ export const camsParser: InvestmentDocumentParser = {
           isin: isinValue && isinValue.length > 0 ? isinValue : null,
           amfiSchemeCode: null,
         };
+        pendingAltNavMarketValue = null; // same reasoning as the labelled-scheme-name branch above
         idx += altSchemeMatch.linesConsumed - 1;
         continue;
       }
@@ -874,6 +908,28 @@ export const camsParser: InvestmentDocumentParser = {
             continue;
           }
         }
+      }
+      // PC4 section 3/5 finding (see ALT_NAV_MARKET_VALUE_RE's own comment):
+      // captured here, ahead of the scheme's own "Closing Unit Balance"
+      // line (which always follows a few lines later), and held in
+      // `pendingAltNavMarketValue` until that line is reached.
+      const navMarketMatch = ALT_NAV_MARKET_VALUE_RE.exec(line);
+      if (navMarketMatch && currentScheme) {
+        const [, navDateRaw, navRaw, valueDateRaw, valueRaw] = navMarketMatch;
+        const navScaled = requireScaled(navRaw, warnings, 'unparseable_closing_nav');
+        const valueScaled = requireScaled(valueRaw, warnings, 'unparseable_closing_value');
+        // The market-value date is what a "value as of" holding record
+        // should carry (it is the valuation date), not the NAV date --
+        // real-world evidence shows they are normally identical, but the
+        // market-value date is the semantically correct one to prefer if
+        // they ever differ, since it is literally the date the printed
+        // value is valid as of.
+        const asOf = parseStatementDate(valueDateRaw);
+        void navDateRaw;
+        if (navScaled !== null && valueScaled !== null && asOf.ok) {
+          pendingAltNavMarketValue = { navScaled, valueScaled, asOfDateIso: asOf.iso };
+        }
+        continue;
       }
       const m = CLOSING_RE.exec(line);
       if (m && currentScheme) {
@@ -906,12 +962,33 @@ export const camsParser: InvestmentDocumentParser = {
       const altClosing = ALT_CLOSING_RE.exec(line);
       if (altClosing && currentScheme) {
         const [, unitsRaw, valueRaw] = altClosing;
+        const unitsScaled = requireScaled(unitsRaw, warnings, 'unparseable_closing_units');
+        if (unitsScaled === null) {
+          pendingAltNavMarketValue = null;
+          continue;
+        }
+        // PC4 section 3/5 finding: when a real NAV/market-value line was
+        // found for this scheme (ALT_NAV_MARKET_VALUE_RE, above), it takes
+        // priority over both this line's own Total Cost Value (a genuinely
+        // different, less useful figure — see that regex's own comment)
+        // and the statement-period-end fallback date, since it is the
+        // scheme's own real, printed valuation.
+        if (pendingAltNavMarketValue) {
+          holdings.push({
+            folioNumber: currentFolio,
+            scheme: currentScheme,
+            asOfDateIso: pendingAltNavMarketValue.asOfDateIso,
+            unitsScaled,
+            valueScaled: pendingAltNavMarketValue.valueScaled,
+            navScaled: pendingAltNavMarketValue.navScaled,
+          });
+          pendingAltNavMarketValue = null;
+          continue;
+        }
         if (!altClosingFallbackAsOfIso) {
           warnings.push({ code: 'unparseable_closing_date', message: 'Alternate-layout closing balance line has no explicit date, and the statement period end could not be determined either.', severity: 'error', lineHint: idx });
           continue;
         }
-        const unitsScaled = requireScaled(unitsRaw, warnings, 'unparseable_closing_units');
-        if (unitsScaled === null) continue;
         const valueScaled = valueRaw ? requireScaled(valueRaw, warnings, 'unparseable_closing_value') : null;
         holdings.push({
           folioNumber: currentFolio,
@@ -919,7 +996,7 @@ export const camsParser: InvestmentDocumentParser = {
           asOfDateIso: altClosingFallbackAsOfIso,
           unitsScaled,
           valueScaled,
-          navScaled: null, // no "NAV as on" clause exists in this layout (Gate A finding #9)
+          navScaled: null, // no ALT_NAV_MARKET_VALUE_RE line was found for this scheme -- genuinely absent, never guessed (Gate A finding #9's original fallback path)
         });
       }
     }
