@@ -1,120 +1,178 @@
 # II-PC4 — Controlled Production End-to-End Certification: Status Report
 
-**As of:** 2026-09-07
-**Prepared after:** a real, controlled production pilot — the Product Owner's own two real CAMS consolidated account statements (17 real mutual fund schemes, one since-inception statement spanning 1990–2026, one recent-period statement), uploaded and processed end-to-end through the live production app at app.financialhealthplatform.com.
+**Verdict: II-PC4 — CONDITIONAL PASS.** Not terminal. Two blockers remain open (Section 5), plus three residual variances not yet investigated (Section 6) and an explicit PO decision still needed (Section 10).
 
-This is not a synthetic-fixture report. Every defect below was found by decrypting and locally re-running the actual production parser against the PO's real statement text, or by reading the actual production code path a real failure occurred on, and every fix was verified against that same real document before being shipped.
+**As of:** 2026-09-07 (continuation pass — updates the same-day report below with a second round of real defects found, fixed, and live-verified against the PO's own production data)
+
+**Prepared after:** a real, controlled production pilot — the Product Owner's own real CAMS consolidated account statement (17 real mutual fund schemes, since-inception, 1990–2026), uploaded and reprocessed repeatedly through the live production app at app.financialhealthplatform.com.
+
+This is not a synthetic-fixture report. Every defect below was found by reading the actual production code path a real failure occurred on, or by hand-verifying arithmetic against the PO's own real transaction data (pasted via read-only SQL, run by the PO in their own Supabase SQL editor). Every fix was live-verified against a fresh reprocess of the real document before being reported as working.
 
 ---
 
 ## 1. Where PC4 stands right now
 
-**The real pilot has now gone further than originally scoped.** PC4 set out to validate the existing pipeline end-to-end against real production traffic. What actually happened is that the real pilot document exposed **six previously-unknown, real production defects** — three in the CAMS parser, two in the document-processing orchestrator, and one in the transaction-write path — all of which are now found, fixed, tested, and deployed to `main`. Beyond that, the pilot also **conclusively separated genuine defects from genuine, honestly-disclosed feature gaps** that were never in scope to begin with (Section 8 below).
+Since the same-day report this file replaces, two more real defects were found and fixed — both in the reconciliation/classification path, both confirmed live:
 
-**Net result today:** the PO's real 17-scheme portfolio now reconciles and displays correctly end-to-end — 17/17 schemes, 953/953 real transactions recovered, 17/17 holding snapshots, verified independently via direct SQL four separate times and confirmed by the PO's own Overview screen (₹806,724 reconstructed value, 17 positions, 17 schemes, 12 folios).
+- **Nippon India Power & Infra Fund is now perfectly reconciled** (variance 0.000, within tolerance) — was showing an impossible **negative** reconstructed balance (-1,332.692 units against a real 12.781) before today's fix.
+- **Kotak Mid Cap Fund's variance halved** (+223.010 → +111.505 units) from a second, independent fix — confirmed real and working, but a genuine residual remains, root cause not yet found.
+
+**Current reconciliation state, live-verified moments ago: 12 of 17 schemes perfectly reconciled (variance = 0.000), 5 still flagged.** This is explicitly **not** the same claim as "17/17 schemes present" — a scheme having 964 transactions and a holding snapshot proves data was captured, not that it's arithmetically correct. Both facts are now true and are reported separately, per the PO's own correction to the previous version of this report.
+
+A separate, real transient-infrastructure incident (three consecutive reprocess hangs) was investigated in depth and **ruled out as caused by today's code** — see Section 7.
 
 ---
 
-## 2. Real production defects found and fixed this pilot
+## 2. Real production defects found and fixed (cumulative list)
 
-All committed and pushed to `main`; Amplify auto-deployed each one.
+All committed and pushed directly to `main`; Amplify auto-deployed each one.
 
 | # | Defect | Root cause | Fix | Commit |
 |---|---|---|---|---|
-| 1 | Page-level column header not reprinted per scheme | The alt-layout CAMS grammar's column header prints once per PDF page, not once per scheme block. A second scheme on the same page never re-triggered `inTable = true`, silently dropping its entire transaction table. | Also treat "Opening Unit Balance: `<units>`" (a genuinely per-scheme marker) as turning `inTable` on. | `c22ea75` |
-| 2 | Price+Units columns glued with no separator (ambiguous digit run) | pdf-parse's column-gap heuristic sometimes omits the space between Price and Units, e.g. `12.51799.361`. Multiple digit-run splits are syntactically valid. | Accept a split only when it's the *unique* candidate whose `price × units ≈ amount` (the statement's own printed amount), never a guess. | `c22ea75` |
-| 3 | Stamp Duty/STT fee rows split across two physical lines | `<date> <amount>` on one line, `*** Stamp Duty ***`/`*** STT Paid ***` on the next. Single largest source of missed transactions (~792 warnings). | Recognise the two-line pair and consume both lines as one fee transaction. | `c22ea75` |
-| 4 | `ii_holding_snapshots` upsert failures were completely silent | The upsert's error was never checked or logged anywhere. | Log the real Postgres error (message + code) on failure so a future failure is diagnosable instead of invisible. | `1ab6d40` |
-| 5 | A parse run interrupted by a server timeout was stuck `running` forever, permanently blocking the document | The one-active-run-at-a-time guard checked only run status, never run age. A killed function left the DB row `running` with no way to ever retry. | A `queued`/`running` run older than 10 minutes is now auto-marked `failed` and superseded, instead of wedging the document forever. | `a978382` |
-| 6 | Server timeout on large real documents (root cause of #5) | The transaction-write loop made 2–3 sequential DB round trips **per transaction** — for a real ~950-transaction statement, ~2,000–2,800 sequential round trips, comfortably exceeding any serverless execution budget regardless of parsing time. | Bulk-prefetch existing fingerprints once; batch new transaction + source-link inserts into a handful of chunked bulk inserts instead of one row at a time; preserve the R11 cross-source-candidate cache's same-import ordering guarantee entirely in memory. | `8519148` |
-| 7 | Price glued directly to a parenthesized **negative** Units value — a fourth, distinct glued shape (`12.82(3,037.396)`) | None of the existing grammars permitted zero whitespace before an opening parenthesis. This is unambiguous (the parens already prove the split point) but was never matched at all. Recurs 60+ times in one real statement across redemptions, SIP rejections/reversals, and inter-scheme "Lateral Shift Out" transfers. Confirmed to be the cause of Axis Large Cap's unit balance coming out ~5× too high (a real 3,037.396-unit redemption was silently dropped). | New regex for the single-line case; a bounded continuation-line lookahead (capped, and it stops the instant a candidate line looks like a new dated transaction row) recovers the cases where the description wraps onto further physical lines before the running balance appears. | `b514e7c` |
+| 1 | Page-level column header not reprinted per scheme | The alt-layout CAMS grammar's column header prints once per PDF page, not once per scheme block. | Also treat "Opening Unit Balance: `<units>`" as turning `inTable` on. | `c22ea75` |
+| 2 | Price+Units columns glued with no separator | pdf-parse's column-gap heuristic sometimes omits the space between Price and Units. | Accept a split only when it's the *unique* candidate whose `price × units ≈ amount`. | `c22ea75` |
+| 3 | Stamp Duty/STT fee rows split across two physical lines | `<date> <amount>` on one line, `*** Stamp Duty ***` on the next. | Recognise the two-line pair, consume both as one fee transaction. | `c22ea75` |
+| 4 | `ii_holding_snapshots` upsert failures were completely silent | The upsert's error was never checked or logged. | Log the real Postgres error on failure. | `1ab6d40` |
+| 5 | A parse run interrupted by a server timeout was stuck `running` forever | The one-active-run guard checked only status, never age. | A `queued`/`running` run older than 10 minutes is auto-marked `failed` and superseded. | `a978382` |
+| 6 | Server timeout on large real documents (root cause of #5) | ~2,000–2,800 sequential DB round trips for a ~950-transaction statement. | Bulk-prefetch fingerprints; batch transaction + source-link inserts into chunked bulk inserts. | `8519148` |
+| 7a | ~~Price glued directly to a parenthesized negative Units value~~ — **superseded, was diagnosed wrong** | `b514e7c` was built and tested against a **locally-saved copy of the real statement text that had silently lost its tab characters** during an earlier extraction pass. Every synthetic test reproduced a "zero-whitespace glue" shape that never occurs in real production text (which is tab-separated: `12.82\t(3,037.396)\t...`). Caught only by comparing the shipped fix's own live rerun against the *actual* production error text, which still showed the same Axis redemption failing. | Superseded same-day by `77c059e` (row 7b). | `b514e7c` (do not use as reference) |
+| 7b | The real defect: wrapped-row descriptions | These rows' descriptions wrap across 1+ further physical lines before the running Unit Balance appears alone on its own line — `ALT_TXN_ROW_RE`'s own trailing-balance requirement never matches the row's own first line. `ALT_TXN_ROW_RE`'s existing `\s+` separator and paren-tolerant Units group were already correct; there was never a "glued" defect. Recurs 60+ times in one real statement, across redemptions, SIP rejections, and inter-scheme "Lateral Shift In/Out" transfers (both signs). | New `ALT_TXN_ROW_WRAPPED_START_RE`, reusing `ALT_TXN_ROW_RE`'s own field structure with only the trailing-balance anchor removed, plus a bounded (max 5 lines) continuation lookahead that stops immediately if a candidate line looks like a new dated transaction row. | `77c059e` |
+| 8 | Lateral Shift In/Out misclassified as `dividend` | "Lateral Shift In/Out" narratives name the **source** scheme's plan variant in parentheses (e.g. "...NIPPON INDIA LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION..."), which can contain the substring "IDCW" for an unrelated fund. The classifier's `dividend` rule matched that substring anywhere in the description, misclassifying a real inter-scheme unit transfer as a dividend. `reconciliation.ts`'s `DIRECTION_TABLE` correctly excludes true dividends from the unit-replay sum — for these misclassified transfers, that silently dropped real unit impact, producing an **impossible negative** reconstructed balance for Nippon India Power & Infra Fund. Proven via exact arithmetic: real transaction sum = 12.781 units (matches the statement exactly); stored value was -1,332.692, differing from 12.781 by exactly the sum of the three misclassified transactions' units. | New `lateral_shift` classification rule, checked before `dividend`, mapping to `transfer` (passthrough, sign-as-parsed) — not `switch_in`/`switch_out`, since those feed R6's tax-lot engine, which expects cost-basis data this parser doesn't attach; `transfer` is in neither of R6's acquisition/disposal maps, so this fix is reconciliation-only. | `02b3754` |
+| 9 | Negative-signed inflow rows with no reversal keyword | A real CAMS statement records a failed SIP-registration retry under the SAME wording as a normal instalment — no "Rejection"/"Reversed" keyword at all (e.g. "...Registration Record is not available - Instalment No 1", "...Payment not received from investor banker - Instalment No 2/3"). The statement still prints these with a genuine negative (parenthesized) Units value — structurally proving cancellation, since a true purchase/SIP/switch-in can never subtract units. `reconciliation.ts`'s `DIRECTION_TABLE` forces an inflow type's contribution to `abs(units)` regardless of parsed sign, silently flipping these back to positive and double-counting a failed retry as a real contribution. Found via Kotak Mid Cap Fund's variance moving the wrong way (+111.505 → +223.010) after defect #7b started recovering these rows at all. | New `reclassifyNegativeSignedInflowRows` pass in the CAMS parser: any inflow-only-typed row with negative parsed units is reclassified to `reversal`, per-row, no pairing partner required. Composes correctly with the existing pairing pass. Scoped to the parser, not the shared `DIRECTION_TABLE` — doesn't change behaviour for any other instrument or source (KFintech included). | `e946557` |
 
-**Prior to this session**, the same real-pilot arc had already found and fixed (for context, not re-verified today): Amplify build/bundle issues with `pdfjs-dist`/`@napi-rs/canvas`, a Nippon SIP-rejection double-counting bug, CAMS alt-layout scheme-header multi-line wrap, bare-AMC-name causing duplicate-instrument creation, status-corruption/swallowed-errors around the Reprocess flow, `holdings_found: 0` from a since-inception statement-period fallback bug, reversed purchase/rejection pair reclassification, and real per-scheme NAV/market-value extraction. See `git log --oneline` on this branch for the full chain (commits `9d71bde` through `092d77e`).
+**Live-verified result of #8 and #9, this session, via a fresh reprocess of the real document:** Nippon India moved from variance -1,345.473 to **0.000** (perfect). Kotak Mid Cap moved from +223.010 to **+111.505** (halved, residual not yet explained).
 
-All 12 relevant existing unit-test files plus 4 new tests for defect #7 pass (112+ tests). `tsc --noEmit` clean at every step. Full repo unit suite: 6,169 passed (pre-existing, unrelated live-DEV-env and one AI-certification test flake only).
-
----
-
-## 3. Live verification performed today (not simulated)
-
-Every one of these was run directly against the PO's real production data via read-only SQL, independently, more than once, across multiple reprocessing cycles:
-
-- **Instrument resolution**: all 17 real schemes (matched by ISIN against the PO's own ground-truth spreadsheet) have a corresponding `ii_instruments` row, each with real transactions.
-- **Transaction recovery**: 953 of ~1,006 real transactions recovered (94.7%) locally before the fix shipped; the live production reprocess after shipping reports `transactions_found: 953` for both of two successful runs.
-- **Holdings**: `holdings_found: 17` — all 17 schemes have a positive-unit current holding snapshot (previously all zero, root-caused and fixed as defect #4 above, though the fix was a diagnostic-visibility fix rather than a confirmed root cause; the underlying issue appears to have resolved once the parser correctly extracted all 17 schemes' data).
-- **Duplicate check**: ICICI Prudential Dividend Yield Fund (which the source statement documents undergoing a scheme rename mid-history) resolves to exactly **one** instrument row, not two — ruled out as a cause of an apparent scheme-count discrepancy (see Section 6).
-- **Overview screen**: PO-confirmed live screenshot shows 17 positions, 17 schemes/securities, 12 folios, ₹806,724 reconstructed value — matching the database exactly.
+All relevant unit-test files pass (6,182 in the full suite; the only failures are pre-existing, unrelated live-DEV-env-dependent tests and one pre-existing AI-certification flake, both present before today's changes too). `tsc --noEmit` clean at every step. Production build (`npm run build`) compiles clean.
 
 ---
 
-## 4. Outstanding reconciliation variance — needs one more verification pass
+## 3. Source-row accounting — closed (PO's Gate 4/5)
 
-Before defect #7 shipped, six of the seventeen positions showed a genuine unit-count mismatch between the transaction-reconstructed closing balance and the statement's own printed closing balance:
+Full accounting of the 251 residual warning rows from the post-defect-#7b reprocess (964 transactions recovered):
 
-| Scheme | Reconstructed (pre-fix) | Statement's own | Gap |
-|---|---|---|---|
-| Axis Large Cap | 3,471.43 | 590.652 | **~2,880 units** |
-| Nippon India Power & Infra | 188.198 | 12.781 | ~175 units |
-| Kotak Mid Cap | 578.746 | 467.241 | ~112 units |
-| UTI MNC | 40.173 | 53.105 | ~13 units |
-| Franklin Mid Cap | 9.137 | 13.594 | ~4.5 units |
-| SBI Contra | 275.430 | 278.108 | ~2.7 units |
+| Category | Count |
+|---|---|
+| Boilerplate (headers, footers, page furniture) | 77 |
+| Non-economic lifecycle markers (e.g. "Address Updated from KRA Data", blank amount/units) | 84 |
+| Regulatory footnotes | 90 |
+| **Total** | **251** |
 
-Defect #7's fix directly addresses the Axis Large Cap redemption (confirmed the exact real row was being dropped) and very likely several of the others, since the same glued-negative-units shape recurs across multiple schemes' redemptions and transfers in this statement. **This has not yet been re-verified against a fresh reprocess** — the PO's most recent reprocess after the fix shipped confirmed the scheme/transaction/holding *counts* (17/953/17) but the `ii_portfolio_truth_status.unit_variance_within_tolerance` check has not been re-run. That's the next concrete verification step before all 17 positions can be considered fully reconciled and eligible to certify/publish.
+**Zero unexplained economic omissions.** This satisfies the PO's explicit requirement that every one of the ~1,006 raw source rows be accounted for, not just the ones that happened to parse cleanly.
 
 ---
 
-## 5. Section-by-section status against the original 48-section spec
+## 4. Reconciliation status — 12/17 within tolerance (live-verified just now)
 
-Only sections with a confirmed status from this pilot are listed; unlisted sections have not been specifically re-verified in this arc.
+| instrument_id | Scheme (where known) | Reconciled | Statement | Variance | Within tolerance |
+|---|---|---|---|---|---|
+| `85f2043f` | Nippon India Power & Infra Fund | 12.781 | 12.781 | **0.000** | ✅ (was -1,345.473 before today) |
+| `9a923d57` | Kotak Mid Cap Fund | 578.746 | 467.241 | **+111.505** | ❌ (was +223.010 before today — halved, not resolved) |
+| `45773ec3` | Axis Large Cap Fund | 434.034 | 590.652 | **-156.618** | ❌ unchanged — see Section 5 |
+| `948fb23a` | (not yet identified by name) | 40.173 | 53.105 | -12.932 | ❌ not yet examined |
+| `385feb70` | (not yet identified by name) | 9.137 | 13.594 | -4.457 | ❌ not yet examined |
+| `76c30cb9` | (not yet identified by name) | 275.430 | 278.108 | -2.678 | ❌ not yet examined |
+| *(11 other instruments)* | — | — | — | 0.000 | ✅ |
 
-| Section | Topic | Status |
+**12 of 17 positions are now genuinely, arithmetically reconciled — not just "present."** The PO's own explicit correction to the prior version of this report stands: 17/17 holding snapshots present was never sufficient evidence of reconciliation, and is not being claimed as such here.
+
+---
+
+## 5. Two blockers still open (why this is CONDITIONAL, not FULL, PASS)
+
+**Blocker 1 — Axis Large Cap Fund, -156.618 units, real candidate cause found but not confirmed enough to fix.**
+
+Hand-summing all 24 of Axis's real transactions against the reconciliation engine's actual rules gives 434.034 units against the statement's own printed closing balance of 590.652 — exactly matching the live `-156.618` figure, confirming the hand arithmetic is sound.
+
+One clear culprit identified: the first rejected SIP installment (2014-02-10) —
+```
+reversal  -766.284  "...Rejection (5/7)   0.000"   ← statement's own balance UNCHANGED (0 → 0)
+sip       +766.284  "...(5/7)            766.284"  ← the real, successful retry
+```
+The statement's own balance proves the rejection had **zero real effect**, yet `reversal → passthrough` takes its `-766.284` at face value, wrongly cancelling the real `+766.284` that followed.
+
+**Why no fix has shipped for this yet:** the same check applied to the next two rejection pairs (2014-03-10, 2014-04-10) did not cleanly confirm the same pattern against their own printed balances — either a different mechanism is at play there, or same-day transactions are not ordered the way a date-sorted SQL query implies (the reconciliation engine replays them in true parse order, which a `SELECT ... ORDER BY transaction_date` does not guarantee for same-day rows). Shipping a fix on an assumption that couldn't be fully verified would repeat exactly the mistake `b514e7c` already made once this session (see defect #7a) — so none was written.
+
+**Blocker 2 — Kotak Mid Cap Fund, +111.505 units, root cause not yet located.**
+
+Defect #9's fix cut this variance exactly in half (+223.010 → +111.505), proving the fix is real, but a residual remains. Critically: **Kotak's pre-2022 transaction history has never actually been examined.** Every query this session that was meant to check it hit a SQL-client copy/paste truncation issue and repeatedly returned the same 2013–2016 rows that turned out to belong to Axis, not Kotak (see the "dead end" in Section 8). The +111.505 residual could sit entirely in a part of Kotak's real data nobody has looked at yet.
+
+---
+
+## 6. Three further residual variances — not yet investigated at all
+
+`948fb23a` (-12.932), `385feb70` (-4.457), and `76c30cb9` (-2.678) have not been examined this session. Their instrument names haven't even been looked up yet. No hypothesis exists for any of them.
+
+---
+
+## 7. A transient infrastructure incident — investigated, ruled out as a code defect
+
+After defects #8 and #9 shipped, three consecutive reprocess attempts hung indefinitely at `transactions_found: 0`, each eventually auto-failed by the stale-run rescue (defect #5) after ~20 minutes. This was taken seriously as a possible regression:
+
+- Re-read both new functions line by line: both are bounded, single-pass, pure-JS loops with no I/O, no recursion, and no risk of infinite loop or pathological regex backtracking.
+- `npm run build` (the actual production build, not just `tsc --noEmit`) compiles clean.
+- Checked `pg_stat_activity` on the real database during the hang — no stuck or long-running query, ruling out a DB-level lock.
+- Read the entire post-parse orchestration pipeline (`documentProcessing.ts`), including the per-transaction loop, the batched-insert flush, and the certification loop (`evaluatePositionAndCertify`, called once per instrument×account pair) — found no unbounded or newly-introduced quadratic cost from either fix.
+- A differential test (processing a different, second document) returned "already being processed" — traced to both parse-run rows sharing the *identical* `storage_path`, revealing the second document's "Process" button was actually hitting the first document's run (a separate, pre-existing frontend issue, not investigated further as out of scope here).
+- **The very next reprocess attempt, with no code changes, succeeded cleanly** — 26 seconds, 964 transactions, matching every prior successful run's timing exactly.
+
+**Conclusion: not caused by today's code.** Most likely a transient Amplify/Supabase-side stall coinciding with today's deploys. Flagging this explicitly rather than silently moving on, since three real hangs in a row is not nothing — if it recurs, the next step would be pulling actual Amplify/CloudWatch function logs (not accessible from here).
+
+---
+
+## 8. Dead ends worth recording (so they aren't re-chased)
+
+- **"15 vs 17 schemes"** (from the prior report) — a SIP-pattern classification metric, not a scheme count. Not a defect.
+- **"All other tabs showing nothing"** (from the prior report) — the honest behaviour of a well-designed app refusing to fabricate data it doesn't have (NAV history, fund holdings, reconciliation workflow — see Section 9). Not a defect.
+- **"Kotak's transaction data" was actually Axis's, for most of this session.** The very first query combining both schemes with `OR` never selected `instrument_name`, so there was no way to tell which scheme each returned row belonged to — it was assumed to be "Kotak" and never verified. Direct instrument-ID-scoped queries eventually proved: the combined result was simply the union of two genuinely different, real schemes' histories (Axis 2013–2016, Kotak 2022–2026), sorted alphabetically by name — not a data-duplication bug. The original attribution for defect #9's evidence (Kotak) was, in the end, correct; the confusion cost significant back-and-forth but surfaced no new defect.
+
+---
+
+## 9. Confirmed pre-existing gaps — not PC4 defects, mapped to additive future scope
+
+Per the PO's explicit direction: these three gaps map into **additive** scope on PC5/PC6/PC7 — they do **not** replace or redefine whatever those phases were already scoped to cover.
+
+| Gap | Evidence | Maps to (additive) |
 |---|---|---|
-| 1 | Market-data (NAV/price history) population | **Confirmed NOT done** — see Section 8 below. Not a defect; explicitly scoped out at R1 (migration `0033`'s own comment: "No AMFI NAV feed populated by R1 (non-goal)"). |
-| 3/5 | Per-scheme NAV/market-value extraction | Fixed earlier this pilot (`6e646be`). |
-| 7/11 | Reversed purchase/rejection pair reclassification | Fixed earlier this pilot (`8e55321`). |
-| 9 | Portfolio XIRR internal-transfer exclusion | **Fixed and tested** (`640e041`) — internal switches excluded from portfolio-level XIRR even across a settlement-date lag; genuine same-day contributions still counted (regression-tested). |
-| 11/12 | (unspecified in available context) | Verified already correct via discovery agent; no fix needed. |
-| 13 | Statement-only vs benchmark-dependent metric separation | **Fixed** (`dd52476`) — Performance page now clearly separates "From your own statements" metrics from "Compared against a market benchmark" metrics, each with its own explanatory copy. |
-| 14/15/16 | Fund holdings label rename + empty/detail state verification | Fixed earlier this pilot (`f671861`). |
-| 17/19 | Owner-mismatch gate + Review Centre wording | Fixed/verified earlier this pilot (`471c1a2`). |
-| 20 | Document delete/reupload capability | **Confirmed absent, documented** per the spec's own "just document it" instruction — see `docs/investment-intelligence/II_PC4_SECTION20_DOCUMENT_LIFECYCLE_LIMITATION.md` (`dd52476`). |
-| 47/48 | Terminal verdict + final report | **Not yet issued** — pending the reconciliation-variance re-verification (Section 4) and the PO's decision on Section 7 below. |
+| NAV/price history (`ii_prices_nav`) — zero rows, no ingestion code | Migration `0033`'s own comment: *"No AMFI NAV feed populated by R1 (non-goal)"* | **PC6** — NAV/benchmark/risk-free data |
+| Fund holdings disclosures (`ii_fund_holdings_snapshots`) — zero rows, no ingestion code | Migration `0044`'s own comment: *"write-restricted to trusted server/admin processes"* | **PC7** — underlying MF holdings / X-Ray |
+| Owner/reconciliation resolution workflow — Review Centre can link back to the source statement but not to the specific offending transaction(s) | Code's own PC4-section-19 comment: no self-service resolution workflow beyond Acknowledge/Dismiss | **PC5** — owner/reconciliation resolution workflow |
 
 ---
 
-## 6. A dead end worth recording (so it isn't re-chased)
+## 10. Open decision needed from the PO: the reduced synthetic pack
 
-Mid-pilot, the PO reported seeing only "15 of 17" schemes on the Recurring Investments tab, and separately reported "all other tabs showing nothing." Both were investigated at length and **traced to non-defects**:
+Per the PO's own direction, a **reduced** synthetic P01–P10 pack is recommended — not the full original pack, and not skipped entirely — scoped specifically to the invariants this real pilot cannot prove on its own:
 
-- **"15 recurring series identified, 3 grouping(s) not clearly recurring"** is a correct SIP-pattern classification metric (which contribution patterns look like a genuine periodic SIP vs. a one-off/irregular purchase series) — not a scheme count at all. All 17 schemes' underlying data is present; this tab further categorizes contribution *patterns* within it, and 15+3 was never meant to sum to 17 in the first place.
-- **"All other tabs showing nothing"** is the honest, correct behaviour of a well-designed app refusing to fabricate a number it has no real data for — see Section 8.
+- Wrong-password atomicity
+- Exact reimport (idempotency)
+- Same-instrument, two-folio F1 (FIFO scope)
+- CAS ↔ Folio-statement overlap, in both import orders
+- A deliberate negative-reconciliation case (prove the system correctly flags a real mismatch, not just correctly clears real matches)
+- Controlled net-worth-counted-once invariant
+- Cleanup to zero residue, independently verified
 
-Four independent database checks (ISIN join, transaction grouping, holding-snapshot positive-unit count, and the parse run's own summary counters) all agreed on 17 schemes throughout; there was never a data-completeness gap once defect #7 shipped.
-
----
-
-## 7. Open decision needed from the PO
-
-The original PC4 spec called for a synthetic qualification pack (P01–P10) before/alongside the real pilot (PC4-A), separate from this real-document pilot (PC4-B). Given how much real-world coverage this pilot has now delivered — a genuinely messy, real 19-page statement with page-spanning tables, glued columns, split fee rows, scheme renames, multi-line-wrapped redemptions, and inter-scheme transfers, none of which a hand-written synthetic fixture would likely have anticipated — **the PO needs to decide**: run the synthetic P01–P10 pack as originally planned for additional structured coverage, or treat this real-world result (now that all found defects are fixed) as sufficient grounds for a terminal PC4 verdict.
-
----
-
-## 8. Confirmed pre-existing gaps — not PC4 defects, need their own decision
-
-Three genuinely separate, sizeable pieces of work were surfaced by the pilot, each already covered by its own honest "not available" UI state rather than fabricated data. None of these are things PC4 broke or was ever scoped to fix:
-
-1. **NAV/price history** (`ii_prices_nav`) — zero rows for any instrument, for any user. No ingestion code exists anywhere in the app. Migration `0033`'s own comment: *"No AMFI NAV feed populated by R1 (non-goal) — this is the shape a future release ingests into."* Blocks: Performance returns, Tax & cost, Recurring Investments' per-series value/return figures.
-2. **Fund holdings disclosures** (`ii_fund_holdings_snapshots`) — same situation; migration comment: *"write-restricted to trusted server/admin processes"*, no ingestion code exists. Blocks: Underlying fund holdings / X-Ray look-through exposure and fund-overlap detection.
-3. **Owner/reconciliation resolution workflow** — the Review Centre correctly surfaces open reconciliation cases (currently 50, all Medium severity, for this PO's account) but can only deep-link back to the raw source statement, not to the specific offending transaction(s), because — per the code's own PC4-section-19 comment — no self-service resolution workflow exists yet beyond Acknowledge/Dismiss.
-
-Recommendation: treat these three as a separate backlog, prioritized and scoped independently of PC4's terminal verdict, since none of them are things this pilot broke — they're pre-existing, honestly-disclosed absences the pilot happened to bring into clear focus.
+This has not yet been scoped into concrete test cases or executed. Awaiting PO go-ahead before building it.
 
 ---
 
-## 9. Recommended next steps, in order
+## 11. The PO's 8-step closure gate — current status
 
-1. Re-run the reconciliation-variance check (Section 4) against a fresh reprocess to confirm how many of the six flagged schemes are now within tolerance after defect #7.
-2. Get the PO's decision on Section 7 (synthetic pack vs. real-pilot-sufficient).
-3. Issue the Section 47/48 terminal verdict and final PC4 report.
-4. Separately, get the PO's prioritization on the three Section 8 gaps (NAV history, fund holdings disclosures, reconciliation workflow) as their own backlog items.
+1. ~~Fresh reprocess after the corrected wrapped-row fix~~ — **done** (964 transactions, 251 warnings).
+2. ~~Re-query all 17 schemes' reconciliation status~~ — **done, twice more this session**, most recently after defects #8/#9.
+3. ~~Produce a 17-row reconciliation table~~ — **done** (Section 4).
+4. ~~Produce a source-row accounting matrix for all residual warnings~~ — **done** (Section 3, 251/251, zero unexplained).
+5. ~~Require unexplained economic rows = 0~~ — **satisfied**.
+6. Run the reduced synthetic P01–P10 pack — **not started**, awaiting PO go-ahead (Section 10).
+7. Independently verify synthetic cleanup = 0 residue — **not started** (depends on #6).
+8. Issue the Section 47/48 terminal verdict — **not issued.** Blocked on: the two open blockers (Section 5), the three unexamined residual variances (Section 6), and steps 6/7 above.
+
+---
+
+## 12. Recommended next steps, in order
+
+1. Look up the three unexamined instruments' names and pull their real transaction data (`948fb23a`, `385feb70`, `76c30cb9`) — currently zero hypothesis for any of them.
+2. Pull Kotak Mid Cap Fund's genuine, complete, untruncated transaction history (use a CSV export or a date-chunked query to avoid the SQL-client truncation issue seen repeatedly this session) to find the real cause of its +111.505 residual.
+3. For Axis, get the transactions' true physical/parse order (not a date-sorted SQL re-query) before attempting a fix for the standalone-rejection hypothesis in Section 5 — do not ship on the current partial evidence.
+4. Once all 17 positions are within tolerance (or a scheme's residual is explained as a genuine pre-existing data gap rather than a bug), get the PO's decision on Section 10 (reduced synthetic pack).
+5. Issue the Section 47/48 terminal verdict only once steps 1–4 are complete, per the PO's own explicit instruction that "17/17 present" is never sufficient evidence on its own.
+6. Separately, get the PO's prioritization on the three Section 9 gaps (NAV history, fund holdings disclosures, reconciliation workflow) as PC5/PC6/PC7 backlog items.
