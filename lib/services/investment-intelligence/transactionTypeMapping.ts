@@ -37,7 +37,21 @@ const RULES: Rule[] = [
   // the reversal fact is the more important classification signal
   // (spec section 39/40's CAMS/KFIN adversarial rule-precedence test case
   // exercises exactly this ordering).
-  { code: 'reversal', test: /\breversal\b|\breversed\b|\brejected\b.*\bunits?\b/i, type: 'reversal' },
+  //
+  // Real production incident, 2026-09-07: a real CAMS statement's actual
+  // wording for a failed SIP instalment is "Systematic Investment
+  // Rejection" -- word-form "Rejection", not "rejected", and with no
+  // co-occurring "units" mention anywhere (the old `\brejected\b.*\bunits?\b`
+  // clause required both and matched neither). Because this rule failed,
+  // classification fell through to 'sip_purchase' below, which matches
+  // ANY description containing the substring "systematic investment" --
+  // so every rejected/bounced SIP instalment for the affected fund was
+  // counted as a genuine contribution, inflating "Total Contributed" from
+  // a real 1,000 to a wrong 71,000 (71 rejected instalments, only 1 ever
+  // actually went through). `\brejected\b`/`\brejection\b` are now matched
+  // standalone, with no required co-occurring word, since real RTA wording
+  // for a bounced/failed instalment never needs one to be unambiguous.
+  { code: 'reversal', test: /\breversal\b|\breversed\b|\brejected\b|\brejection\b/i, type: 'reversal' },
   { code: 'switch_in', test: /switch.*\bin\b/i, type: 'switch_in' },
   { code: 'switch_out', test: /switch.*\bout\b/i, type: 'switch_out' },
   { code: 'dividend_reinvestment', test: /(idcw|dividend).*(reinvest)/i, type: 'reinvestment' },

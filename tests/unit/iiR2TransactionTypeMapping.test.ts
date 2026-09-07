@@ -68,4 +68,19 @@ describe('classifyTransactionType (spec section 19 — canonical transaction tax
   it('exact known keyword match always returns confidence 1', () => {
     expect(classifyTransactionType('Purchase').confidence).toBe(1);
   });
+
+  // Real production incident, 2026-09-07: a real CAMS statement's actual
+  // wording for a failed SIP instalment is "Systematic Investment
+  // Rejection" (word-form "Rejection", not "rejected", never co-occurring
+  // with "units") -- this fell through to 'sip_purchase' (which matches
+  // the substring "systematic investment") and counted every rejected
+  // instalment as a genuine contribution, inflating "Total Contributed"
+  // from a real 1,000 to a wrong 71,000 for one real fund.
+  it('classifies "Systematic Investment Rejection" as reversal, not sip (real production incident, 2026-09-07)', () => {
+    expect(classifyTransactionType('Systematic Investment Rejection').canonicalType).toBe('reversal');
+  });
+
+  it('classifies bare "Rejected" (no co-occurring "units" mention) as reversal', () => {
+    expect(classifyTransactionType('SIP Instalment Rejected').canonicalType).toBe('reversal');
+  });
 });

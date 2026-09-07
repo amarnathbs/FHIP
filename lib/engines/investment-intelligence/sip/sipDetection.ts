@@ -109,6 +109,17 @@ export function buildSeriesKey(accountId: string, instrumentId: string, discrimi
 export function isSourceConfirmedSip(txn: SipCandidateTransaction): boolean {
   if (txn.transactionType === 'sip') return true;
   const d = (txn.sourceDescription ?? '').toUpperCase();
+  // Real production incident, 2026-09-07: a rejected/reversed instalment's
+  // own narrative ("Systematic Investment Rejection") still contains the
+  // substring "SYSTEMATIC INVESTMENT", so this check alone would keep
+  // pulling it into the series as a confirmed contribution even after
+  // transactionTypeMapping.ts's 'reversal' rule is fixed to correctly
+  // reclassify `txn.transactionType` away from 'sip' -- this is a
+  // genuinely separate, independent source-evidence check with its own
+  // bug, not fixed by that classification change alone. A description
+  // asserting reversal/rejection is never confirmed contribution evidence,
+  // regardless of what else it mentions.
+  if (/\bREVERSAL\b|\bREVERSED\b|\bREJECTED\b|\bREJECTION\b/.test(d)) return false;
   // Deliberately narrow: the description must name a systematic plan, not
   // merely contain the letters "sip" inside another word.
   return /\bSIP\b/.test(d) || /SYSTEMATIC\s+INVESTMENT/.test(d);
