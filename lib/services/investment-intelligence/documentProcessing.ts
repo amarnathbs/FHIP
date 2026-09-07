@@ -120,6 +120,42 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const { data: doc, error: docErr } = await admin.from('ii_source_documents').select('*').eq('id', sourceDocumentId).eq('user_id', userId).maybeSingle();
   if (docErr || !doc) return { ok: false, status: 'not_found', parseRunId: null, error: 'Source document not found.' };
 
+  // Computed unconditionally (not just when `!input.forceReparse`) so it
+  // can also guard every failure path below: once a genuine SUCCEEDED run
+  // exists for this document, no subsequent failed attempt -- however it
+  // was triggered -- is allowed to downgrade ii_source_documents.status
+  // away from 'parsed' and hide/misreport already-valid extracted data.
+  // Found live 2026-09-06: a Reprocess click (forceReparse=true) that hit
+  // PasswordException (no password sent) called handleExtractionFailure,
+  // which unconditionally overwrote status back to 'password_required'
+  // even though the document had already succeeded moments earlier --
+  // every subsequent call then either showed the wrong status (this same
+  // idempotency check, before its own fix above) or, for a call that DID
+  // force reparse again, would have looked like a second real failure of
+  // an already-working document.
+  const { data: priorSucceededRun } = await admin
+    .from('ii_document_parse_runs')
+    .select('*')
+    .eq('source_document_id', sourceDocumentId)
+    .eq('run_status', 'succeeded')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Every failure path below was, before this fix, writing straight to
+  // ii_source_documents.status unconditionally. This wrapper is the single
+  // place that decides whether such a write is actually safe: once
+  // priorSucceededRun is set, a fresh failed attempt (password rejected,
+  // corrupt file, unsupported format, whatever) still gets recorded in
+  // full on ii_document_parse_runs / ii_reconciliation_cases for audit and
+  // is still reported truthfully to THIS caller via the returned `status`/
+  // `error`, but the document's own persisted status is left alone rather
+  // than being dragged backwards out of 'parsed'.
+  const updateDocumentStatusUnlessSucceeded = async (fields: Record<string, unknown>) => {
+    if (priorSucceededRun) return;
+    await admin.from('ii_source_documents').update(fields).eq('id', sourceDocumentId);
+  };
+
   // Idempotency: at most one active run at a time (DB constraint
   // enforces this too; checked here first for a clean error message).
   const { data: activeRun } = await admin
@@ -133,18 +169,30 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // Idempotency: a prior SUCCEEDED run with the same parser code/version
   // is not silently re-run unless forced (spec section 52).
   if (!input.forceReparse) {
-    const { data: priorSucceeded } = await admin
-      .from('ii_document_parse_runs')
-      .select('*')
-      .eq('source_document_id', sourceDocumentId)
-      .eq('run_status', 'succeeded')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const priorSucceeded = priorSucceededRun;
     if (priorSucceeded) {
+      // Self-healing repair, found live 2026-09-06: a LATER failed run
+      // (e.g. a Reprocess attempt made without a password) unconditionally
+      // overwrote ii_source_documents.status via handleExtractionFailure
+      // and the other failure paths below, even though this earlier
+      // succeeded run's data was still sitting intact in the database.
+      // Returning `doc.status` here then meant every subsequent call
+      // reported a stale, misleading status (and, since this branch
+      // returns before ever touching `input.password`, silently never
+      // even checked a freshly supplied password) -- to the user this
+      // looked exactly like "my correct password stopped being accepted."
+      // The status this branch reports must be derived from the fact that
+      // a succeeded run genuinely exists, never from the mutable column,
+      // and since we now know that column is wrong, it is corrected here
+      // too rather than left to keep confusing every other reader of it
+      // (other UI tabs, future calls) until some unrelated future write
+      // happens to fix it by accident.
+      if (doc.status !== 'parsed') {
+        await admin.from('ii_source_documents').update({ status: 'parsed', parse_error: null }).eq('id', sourceDocumentId);
+      }
       return {
         ok: true,
-        status: doc.status as string,
+        status: 'parsed',
         parseRunId: priorSucceeded.id as string,
         summary: {
           sourceDetected: priorSucceeded.source_detected as string | null,
@@ -184,7 +232,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const { bytes, error: dlErr } = await downloadSourceDocumentObject(doc.storage_path as string);
   if (dlErr || !bytes) {
     await failRun(admin, parseRunId, 'Could not retrieve the stored document.');
-    await admin.from('ii_source_documents').update({ status: 'parse_failed', parse_error: 'storage_download_failed' }).eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'storage_download_failed' });
     return { ok: false, status: 'parse_failed', parseRunId, error: 'Could not retrieve the stored document.' };
   }
 
@@ -193,7 +241,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   if (doc.mime_type === 'application/pdf') {
     const extraction = await extractPdfText(bytes, input.password);
     if (!extraction.ok) {
-      return handleExtractionFailure(admin, userId, sourceDocumentId, parseRunId, extraction.kind, extraction.error);
+      return handleExtractionFailure(admin, userId, sourceDocumentId, parseRunId, extraction.kind, extraction.error, Boolean(priorSucceededRun));
     }
     text = extraction.text;
     extractionMethod = 'pdf_text_native';
@@ -215,15 +263,12 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   if (!detection.parser || !parsed) {
     const status = detection.detection.confidence > 0 ? 'reconciliation_required' : 'unsupported';
-    await admin
-      .from('ii_source_documents')
-      .update({
-        status,
-        source_detected: detection.detection.sourceKey,
-        source_confidence: detection.detection.confidence,
-        extraction_method: extractionMethod,
-      })
-      .eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({
+      status,
+      source_detected: detection.detection.sourceKey,
+      source_confidence: detection.detection.confidence,
+      extraction_method: extractionMethod,
+    });
     const caseId = await openReconciliationCase(userId, {
       subjectType: 'account',
       subjectId: sourceDocumentId, // no account exists yet — the document itself is the subject
@@ -248,10 +293,13 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   const validation = detection.parser.validateParsedOutput(parsed);
   if (!validation.ok) {
-    await admin
-      .from('ii_source_documents')
-      .update({ status: 'parse_failed', parse_error: validation.errors.join('; '), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, extraction_method: extractionMethod })
-      .eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({
+      status: 'parse_failed',
+      parse_error: validation.errors.join('; '),
+      source_detected: detection.detection.sourceKey,
+      source_confidence: detection.detection.confidence,
+      extraction_method: extractionMethod,
+    });
     const caseId = await openReconciliationCase(userId, {
       subjectType: 'account',
       subjectId: sourceDocumentId,
@@ -782,7 +830,8 @@ async function handleExtractionFailure(
   sourceDocumentId: string,
   parseRunId: string,
   kind: 'password_required' | 'wrong_password' | 'corrupt' | 'insufficient_text' | 'unknown_error',
-  errorMessage: string
+  errorMessage: string,
+  preserveDocumentStatus = false
 ): Promise<ProcessSourceDocumentResult> {
   const statusByKind: Record<typeof kind, string> = {
     password_required: 'password_required',
@@ -799,7 +848,19 @@ async function handleExtractionFailure(
     unknown_error: 'document_corrupt',
   };
   const status = statusByKind[kind];
-  await admin.from('ii_source_documents').update({ status, parse_error: null }).eq('id', sourceDocumentId); // NEVER store errorMessage verbatim if it could echo a password — it never does (see pdfExtraction.ts messages), but parse_error is left null here defensively for the password-shaped statuses
+  // `preserveDocumentStatus` (true when a genuinely SUCCEEDED run already
+  // exists for this document) protects against exactly the regression
+  // found live 2026-09-06: a Reprocess/re-supply attempt that fails must
+  // still be reported truthfully to THIS caller (via the returned
+  // `status`/`error` below) and recorded on ii_document_parse_runs for
+  // audit, but must never drag the document's own persisted status
+  // backwards out of 'parsed' -- doing so previously hid already-valid
+  // extracted data from every other reader of ii_source_documents.status
+  // and, via the idempotency shortcut above, silently stopped even
+  // CHECKING a freshly supplied correct password on every call after.
+  if (!preserveDocumentStatus) {
+    await admin.from('ii_source_documents').update({ status, parse_error: null }).eq('id', sourceDocumentId); // NEVER store errorMessage verbatim if it could echo a password — it never does (see pdfExtraction.ts messages), but parse_error is left null here defensively for the password-shaped statuses
+  }
   await admin
     .from('ii_document_parse_runs')
     .update({

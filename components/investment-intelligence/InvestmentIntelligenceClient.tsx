@@ -252,7 +252,18 @@ export function InvestmentIntelligenceClient() {
         body: JSON.stringify({ password: passwordInputs[id] || undefined, forceReparse }),
       });
       const json = await res.json();
+      // This route always answers HTTP 200 (see lib/api.ts's `ok()` helper)
+      // even when processing itself failed -- the semantic outcome lives in
+      // `json.data.ok`, not the HTTP status. Checking only `res.ok` (as this
+      // used to) meant every real processing failure -- wrong/missing
+      // password, a corrupt PDF, an unsupported format -- was silently
+      // swallowed: loadDocuments()/loadSummary() still ran, the document
+      // list re-rendered whatever status the server left behind, and the
+      // user never saw why. Found live 2026-09-06 when a password
+      // resubmission attempt produced no error banner at all despite
+      // having actually failed server-side.
       if (!res.ok) throw new Error(json.error ?? 'Processing failed');
+      if (json.data && json.data.ok === false) throw new Error(json.data.error ?? 'Processing failed');
       await loadDocuments();
       await loadSummary(id);
     } catch (e) {
@@ -426,7 +437,19 @@ export function InvestmentIntelligenceClient() {
                 </button>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={doc.status} />
-                  {doc.status === 'password_required' && (
+                  {/* The password box is shown for 'parsed' documents too (not just
+                      'password_required') so Reprocess can carry a password for an
+                      encrypted file. Before this, Reprocess always called
+                      handleProcess(id, true) with no way to supply one -- for any
+                      password-protected document that had already succeeded once,
+                      clicking Reprocess was GUARANTEED to fail immediately (no
+                      password sent), which then corrupted the document's own
+                      status via handleExtractionFailure (see documentProcessing.ts
+                      for the full incident writeup) even though the earlier
+                      successful extraction's data was untouched in the database.
+                      Left blank, it behaves exactly as before for a document that
+                      was never password-protected. */}
+                  {(doc.status === 'password_required' || doc.status === 'parsed') && (
                     <input
                       type="password"
                       placeholder="Document password"
@@ -445,8 +468,23 @@ export function InvestmentIntelligenceClient() {
                     </button>
                   )}
                   {doc.status === 'parsed' && (
-                    <button onClick={() => handleProcess(doc.id, true)} disabled={processing === doc.id} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                      Reprocess
+                    <button
+                      onClick={() => {
+                        // A document that already succeeded is, by design, meant to
+                        // be processed once -- Reprocess is for the rare deliberate
+                        // case (a parser fix ships, or something looks wrong), not
+                        // a casual click. This confirmation is the guard against
+                        // exactly the accidental click that caused the 2026-09-06
+                        // incident, now that the password box above also makes a
+                        // genuine reprocess of a protected file actually work.
+                        if (window.confirm('This statement has already been processed successfully. Reprocess it anyway?')) {
+                          handleProcess(doc.id, true);
+                        }
+                      }}
+                      disabled={processing === doc.id}
+                      className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      {processing === doc.id ? 'Processing…' : 'Reprocess'}
                     </button>
                   )}
                 </div>
