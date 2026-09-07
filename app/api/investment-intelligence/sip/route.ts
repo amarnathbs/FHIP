@@ -90,8 +90,21 @@ export async function GET(request: Request) {
       presentableCount: result.presentableCount,
       // Only presentable series are returned as SIP series. Ambiguous
       // groupings are reported as a count, never dressed up as a SIP.
+      //
+      // Real user finding, 2026-09-07: detectSipSeries() (sipDetection.ts)
+      // orders its output by "accountId:instrumentId" — internal ids, with
+      // no relation to fund name — since that's the natural grouping key
+      // for detection itself. Nothing downstream ever re-sorted for
+      // display, so the "Recurring investments" list rendered in that
+      // arbitrary internal order rather than alphabetically by fund name.
+      // Sorted here, at the point the response is actually shaped for the
+      // UI, rather than changing detectSipSeries()'s own grouping order
+      // (which several other call sites may depend on staying
+      // identity-key-based). Falls back to instrumentId for the rare row
+      // with no resolved name, so ordering stays deterministic either way.
       series: result.analytics
         .filter((a) => a.presentable)
+        .sort((a, b) => (a.instrumentName ?? a.series.instrumentId).localeCompare(b.instrumentName ?? b.series.instrumentId))
         .map((a) => ({
           seriesKey: a.series.seriesKey,
           instrumentId: a.series.instrumentId,
