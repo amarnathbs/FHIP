@@ -83,4 +83,30 @@ describe('classifyTransactionType (spec section 19 — canonical transaction tax
   it('classifies bare "Rejected" (no co-occurring "units" mention) as reversal', () => {
     expect(classifyTransactionType('SIP Instalment Rejected').canonicalType).toBe('reversal');
   });
+
+  // Real production incident, 2026-09-07: "Lateral Shift In/Out" narratives
+  // name the SOURCE scheme's plan variant in parentheses, which can contain
+  // the substring "IDCW" for an unrelated fund -- this must NOT fall
+  // through to 'dividend' (which reconciliation.ts excludes from the
+  // units-replay sum), or the transaction's real unit impact silently
+  // disappears from reconciliation.
+  it('classifies "Lateral Shift In" naming an IDCW-plan source scheme as transfer, not dividend (real production incident, 2026-09-07)', () => {
+    const r = classifyTransactionType(
+      'Lateral Shift In (From LF (DP) F.No:49055742255)(From NIPPON INDIA LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION F.No:49055742255)'
+    );
+    expect(r.canonicalType).toBe('transfer');
+    expect(r.matchedRuleCode).toBe('lateral_shift');
+  });
+
+  it('classifies "Lateral Shift Out" naming an IDCW-plan destination scheme as transfer, not dividend', () => {
+    const r = classifyTransactionType(
+      'Lateral Shift Out (To LF (DP) F.No:49055742255)(To NIPPON INDIA LIQUID FUND - RETAIL OPTION - WEEKLY IDCW OPTION F.No:49055742255) less TDS, STT'
+    );
+    expect(r.canonicalType).toBe('transfer');
+    expect(r.matchedRuleCode).toBe('lateral_shift');
+  });
+
+  it('still classifies a genuine dividend payout as dividend (lateral-shift rule does not over-match)', () => {
+    expect(classifyTransactionType('IDCW Payout').canonicalType).toBe('dividend');
+  });
 });

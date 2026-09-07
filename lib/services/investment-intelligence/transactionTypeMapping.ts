@@ -54,6 +54,32 @@ const RULES: Rule[] = [
   { code: 'reversal', test: /\breversal\b|\breversed\b|\brejected\b|\brejection\b/i, type: 'reversal' },
   { code: 'switch_in', test: /switch.*\bin\b/i, type: 'switch_in' },
   { code: 'switch_out', test: /switch.*\bout\b/i, type: 'switch_out' },
+  // Real production incident, 2026-09-07: a real CAMS statement's actual
+  // wording for an inter-scheme unit movement is "Lateral Shift In/Out"
+  // (a CAMS/RTA-specific synonym for a switch, e.g. "Lateral Shift In
+  // (From LF (DP) F.No:...)(From NIPPON INDIA LIQUID FUND - RETAIL OPTION -
+  // WEEKLY IDCW OPTION F.No:...)"). Before this rule existed, this fell
+  // through to the 'dividend' rule below because the description happens
+  // to name the SOURCE scheme's plan variant, which contains the substring
+  // "IDCW" -- a false match on an unrelated fund name, not an actual
+  // dividend on this transaction. Because reconciliation.ts's
+  // DIRECTION_TABLE correctly excludes true 'dividend' rows from the
+  // units-replay sum (cash_only), this silently dropped these transactions'
+  // real unit impact from reconciliation, producing an impossible negative
+  // reconstructed closing balance for the receiving scheme.
+  //
+  // Classified here as 'transfer' (passthrough — sign taken as parsed),
+  // NOT 'switch_in'/'switch_out': a lateral shift is economically a switch
+  // and may carry real capital-gains consequences, but 'switch_in'/
+  // 'switch_out' feed R6's tax-lot/FIFO engine (taxRepository.ts's
+  // ACQUISITION_TYPE_MAP/DISPOSAL_TYPES) which expects same-transaction
+  // scheme-level cost-basis data this parser does not currently attach.
+  // 'transfer' is in neither map, so this fix is reconciliation-only and
+  // does not change R6's tax treatment (these rows were already excluded
+  // from both maps under the old 'dividend' type) -- whether lateral
+  // shifts should ALSO be tax-lot-tracked is a separate, disclosed gap for
+  // a future PC5/PC6/PC7-scoped decision, not silently folded into this fix.
+  { code: 'lateral_shift', test: /lateral shift/i, type: 'transfer' },
   { code: 'dividend_reinvestment', test: /(idcw|dividend).*(reinvest)/i, type: 'reinvestment' },
   { code: 'reinvestment_generic', test: /\breinvest(ment)?\b/i, type: 'reinvestment' },
   { code: 'dividend', test: /\bidcw\b|\bdividend\b/i, type: 'dividend' },
