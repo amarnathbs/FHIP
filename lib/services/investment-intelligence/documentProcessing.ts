@@ -703,7 +703,18 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
     if (!accountId || !instrumentId) continue;
 
-    await admin
+    // Real production defect (2026-09-07): this upsert's result was never
+    // checked. A real user's account had ZERO ii_holding_snapshots rows
+    // despite 309 genuinely-inserted transactions and every one of that
+    // document's 17 holdings resolving BOTH accountId and instrumentId
+    // correctly (independently reproduced locally) -- meaning every one of
+    // these upserts was failing at the database level, completely
+    // invisibly, for a reason this diagnostic did not previously surface
+    // anywhere. Capturing and auditing the error here does not itself fix
+    // the underlying cause (not yet identified), but turns a silent,
+    // undiagnosable failure into a visible, diagnosable one on the very
+    // next reprocess attempt.
+    const { error: snapshotError } = await admin
       .from('ii_holding_snapshots')
       .upsert(
         {
@@ -723,6 +734,24 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         },
         { onConflict: 'account_id,instrument_id,as_of_date', ignoreDuplicates: true }
       );
+    if (snapshotError) {
+      // Not routed through emitAuditEvent(): IiAuditEventTypeR9 is a closed,
+      // deliberately curated vocabulary (no generic "system error" member,
+      // and adding one is a migration-level change out of scope for this
+      // diagnostic) -- console.error is visible in the server's own
+      // function logs without borrowing an existing event type for
+      // something it doesn't actually mean.
+      console.error('[investment-intelligence] ii_holding_snapshots upsert failed', {
+        userId,
+        accountId,
+        instrumentId,
+        sourceDocumentId,
+        asOfDateIso: h.asOfDateIso,
+        errorMessage: snapshotError.message,
+        errorCode: snapshotError.code ?? null,
+        parseRunId,
+      });
+    }
   }
 
   // --- 7. Reconciliation + certification, per position ----------------------
