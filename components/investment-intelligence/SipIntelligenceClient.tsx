@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { fmtDate } from './dateDisplay';
 
 // R5 — SIP Intelligence UX (spec sections 98-100).
 //
@@ -178,7 +179,7 @@ export function SipIntelligenceClient() {
       {/* As-of date is always displayed and never silently "today". */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted" data-testid="sip-as-of">
         <span>
-          Analysis as at <strong className="text-ink">{data.asOfDate}</strong>
+          Analysis as at <strong className="text-ink">{fmtDate(data.asOfDate)}</strong>
         </span>
         <span>
           {data.presentableCount} recurring series identified{(data.ambiguous?.length ?? 0) > 0 ? `, ${data.ambiguous!.length} grouping(s) not clearly recurring` : ''}
@@ -210,7 +211,7 @@ export function SipIntelligenceClient() {
                   <ConfidenceBadge confidence={s.confidence} />
                   <ActivityBadge status={s.activity.status} />
                   <span className="text-xs text-muted">
-                    {s.cadence.toLowerCase().replace('_', ' ')} · {s.contributionCount} contributions · {s.firstContributionDate} to {s.latestContributionDate}
+                    {s.cadence.toLowerCase().replace('_', ' ')} · {s.contributionCount} contributions · {fmtDate(s.firstContributionDate)} to {fmtDate(s.latestContributionDate)}
                   </span>
                 </div>
               </div>
@@ -288,7 +289,7 @@ export function SipIntelligenceClient() {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={s.contributions.map((c) => ({ date: c.date, amount: c.amount }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} tickFormatter={fmtDate} />
                         <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip formatter={(v: number) => fmtMoney(v, s.currencyCode)} />
                         <Bar dataKey="amount" fill={PALETTE.contribution} name="Contribution" isAnimationActive={false} />
@@ -360,7 +361,7 @@ export function SipIntelligenceClient() {
                     <ul className="mt-3 space-y-1 text-xs text-slate-700">
                       {s.consistency.gaps!.map((g, i) => (
                         <li key={i}>
-                          No contribution recorded between {g.fromDate} and {g.toDate} ({g.days} days).
+                          No contribution recorded between {fmtDate(g.fromDate)} and {fmtDate(g.toDate)} ({g.days} days).
                         </li>
                       ))}
                     </ul>
@@ -373,7 +374,7 @@ export function SipIntelligenceClient() {
                   <ul className="mt-2 space-y-1">
                     <li>Contributions are treated as money out; redemptions, distributions received, and the closing value as money in.</li>
                     <li>
-                      The closing value uses the NAV published on {s.navDateUsed ?? 'the latest available date'}
+                      The closing value uses the NAV published on {s.navDateUsed ? fmtDate(s.navDateUsed) : 'the latest available date'}
                       {s.navAtAsOf !== null ? ` (${s.navAtAsOf})` : ''}.
                     </li>
                     <li>

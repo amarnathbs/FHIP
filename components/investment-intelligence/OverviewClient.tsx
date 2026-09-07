@@ -10,6 +10,7 @@ import {
   type NextStep,
 } from '@/lib/investment-intelligence/analysisAvailability';
 import { II_RELATED_DESTINATIONS } from '@/lib/investment-intelligence/workspaceNav';
+import { fmtDate } from './dateDisplay';
 
 // II-PC2 — the Investment Intelligence workspace Overview (spec sections 10,
 // 12, 29, 64).
@@ -224,9 +225,9 @@ export function OverviewClient() {
                 label="What you hold"
                 value={portfolio.instrumentClasses.length ? portfolio.instrumentClasses.map((c) => CLASS_LABEL[c] ?? c).join(', ') : '—'}
               />
-              <Stat label="Valued as at" value={portfolio.latestAsOfDate ?? 'Not available'} sub={
+              <Stat label="Valued as at" value={portfolio.latestAsOfDate ? fmtDate(portfolio.latestAsOfDate) : 'Not available'} sub={
                 portfolio.oldestAsOfDate && portfolio.oldestAsOfDate !== portfolio.latestAsOfDate
-                  ? `oldest position as at ${portfolio.oldestAsOfDate}`
+                  ? `oldest position as at ${fmtDate(portfolio.oldestAsOfDate)}`
                   : undefined
               } />
             </div>

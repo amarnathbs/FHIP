@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useState } from 'react';
+import { fmtDate } from './dateDisplay';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
 //
@@ -271,8 +272,8 @@ export function TaxIntelligenceClient() {
                   <Fragment key={i}>
                     <tr className={d.note ? 'border-b-0' : 'border-b border-line/50'} data-testid="disposal-row">
                       <td className="py-1 pr-2">{d.instrumentName}</td>
-                      <td className="py-1 pr-2">{d.acquisitionDate}</td>
-                      <td className="py-1 pr-2">{d.disposalDate}</td>
+                      <td className="py-1 pr-2">{fmtDate(d.acquisitionDate)}</td>
+                      <td className="py-1 pr-2">{fmtDate(d.disposalDate)}</td>
                       <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
                       <td className="py-1 pr-2 uppercase">{d.gainType}</td>
                       <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
@@ -313,7 +314,7 @@ export function TaxIntelligenceClient() {
                 {lots.map((l) => (
                   <tr key={l.lotId} className="border-b border-line/50" data-testid="lot-row">
                     <td className="py-1 pr-2">{l.instrumentName}</td>
-                    <td className="py-1 pr-2">{l.acquisitionDate}</td>
+                    <td className="py-1 pr-2">{fmtDate(l.acquisitionDate)}</td>
                     <td className="py-1 pr-2 text-right">{l.unitsAcquired.toFixed(3)}</td>
                     <td className="py-1 pr-2 text-right">{l.unitsRemaining.toFixed(3)}</td>
                     <td className="py-1 pr-2">{l.status.replace('_', ' ')}</td>

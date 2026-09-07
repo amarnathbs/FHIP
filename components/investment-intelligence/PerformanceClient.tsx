@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { fmtDate } from './dateDisplay';
 
 // R4 — Performance UX (spec sections 60-65).
 //
@@ -298,7 +299,7 @@ function PortfolioSection({
           Portfolio performance — {p.currencyCode}
         </h2>
         <p className="mt-1 text-sm text-muted">
-          {p.schemeCount} {p.schemeCount === 1 ? 'holding' : 'holdings'} · {money(p.totalValue, p.currencyCode)} · {periodStart} to {asOfDate}. All
+          {p.schemeCount} {p.schemeCount === 1 ? 'holding' : 'holdings'} · {money(p.totalValue, p.currencyCode)} · {fmtDate(periodStart)} to {fmtDate(asOfDate)}. All
           figures are shown in {p.currencyCode}, the currency these investments are actually held in.
         </p>
       </header>
@@ -363,7 +364,7 @@ function PerformanceVsBenchmarkChart({ p }: { p: PortfolioBlock }) {
       </p>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={data}>
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={fmtDate} />
           <YAxis tick={{ fontSize: 11 }} width={50} domain={['auto', 'auto']} />
           <Tooltip formatter={(v: number) => num(v, 1)} />
           <Legend />
@@ -398,7 +399,7 @@ function DrawdownChart({ p }: { p: PortfolioBlock }) {
       </p>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data}>
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={fmtDate} />
           <YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={(v: number) => pct(v, 0)} />
           <Tooltip formatter={(v: number) => pct(v)} />
           <Area type="monotone" dataKey="drawdown" stroke={PALETTE.drawdown} fill={PALETTE.drawdown} fillOpacity={0.15} isAnimationActive={false} />
@@ -526,7 +527,7 @@ function CalculationDetails({
         <div>
           <p className="font-medium text-ink">Period and data</p>
           <p>
-            {periodStart} to {asOfDate}, using {p.risk.frequency} observations ({p.risk.periodsPerYear} periods per year for annualisation).
+            {fmtDate(periodStart)} to {fmtDate(asOfDate)}, using {p.risk.frequency} observations ({p.risk.periodsPerYear} periods per year for annualisation).
           </p>
         </div>
         <div>
