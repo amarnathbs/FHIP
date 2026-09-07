@@ -79,7 +79,7 @@ import type {
   SourceDetectionResult,
   ValidationOutcome,
 } from './types';
-import { splitLines, normaliseSchemeName, detectPlanType, detectOptionType, extractLabelledField, maskPan, redactPanFromLine } from './textUtils';
+import { splitLines, normaliseSchemeName, detectPlanType, detectOptionType, extractLabelledField, maskPan, redactPanFromLine, matchAcrossLines } from './textUtils';
 import { parseExactDecimal } from '../decimal';
 import { parseStatementDate } from '../dateNormalisation';
 import { classifyTransactionType } from '../transactionTypeMapping';
@@ -114,8 +114,76 @@ const ALT_REGISTRAR_RE = /Registrar\s*:\s*CAMS\b/i;
 // ARN) code — NOT an AMFI scheme code, genuinely absent in this layout —
 // folded onto one free-text line together with the registrar, e.g.:
 //   "<scheme name incl. plan/option> - ISIN: <isin-or-blank>(Advisor: <code>) Registrar : CAMS"
+//
+// Post-Gate-A production finding (2026-09-06, a genuine real consolidated
+// statement -- NOT one of the Gate-A comparison doc's own numbered
+// findings above; this surfaced later, from a different real document,
+// during live production incident triage):
+// - The registrar on this line is not always CAMS -- a single CAS spans
+//   both India RTAs (CAMS and KFintech both service schemes on one
+//   statement), so KFINTECH is matched here too, not just CAMS.
+// - This whole header routinely wraps across two or even three physical
+//   lines depending on where the PDF's page/column layout happens to
+//   break it (never at a fixed point -- one real example split a scheme
+//   name and its own hyphen apart: "...(Non" / "-Demat)..."; another
+//   split "Registrar :" from its own registrar name: ".../...Registrar
+//   :" / "KFINTECH"). This regex still only matches a single already-
+//   joined logical line -- callers must run it through
+//   textUtils.ts's matchAcrossLines() rather than exec() it directly
+//   against one physical line, or every wrapped header on a real
+//   document like this one is silently missed (found live: this was
+//   exactly why a real statement's holdings and some of its transactions'
+//   scheme attribution came back empty/wrong despite parsing "succeeding"
+//   overall).
 const ALT_SCHEME_LINE_RE =
-  /^(.+?)\s*-\s*ISIN\s*:\s*([A-Z0-9]*)\s*\(\s*Advisor\s*:\s*([^)]*)\)\s*Registrar\s*:\s*CAMS\s*$/i;
+  /^(.+?)\s*-\s*ISIN\s*:\s*([A-Z0-9]*)\s*\(\s*Advisor\s*:\s*([^)]*)\)\s*Registrar\s*:\s*(?:CAMS|KFINTECH)\s*$/i;
+
+// Guards matchAcrossLines()'s lookahead for ALT_SCHEME_LINE_RE specifically:
+// a continuation line (or valid starting line -- see matchAcrossLines()'s
+// own doc comment for why both ends need this) is anything non-blank that
+// is NOT itself one of this layout's other genuinely distinct line
+// shapes. Deliberately does NOT exclude "Registrar : ..." -- that phrase
+// is part of the scheme header itself (sometimes its own trailing
+// continuation line, e.g. a registrar name wrapping alone onto the next
+// line), never a separate field in this layout.
+//
+// Two real regressions, both caught by this codebase's own existing
+// suite before ever shipping, shaped this list:
+// 1. A same-shaped-but-permissive default guard (matchAcrossLines()'s own
+//    fallback, meant for other future callers) treated "Registrar : CAMS"
+//    as a stopper too, since it reads exactly like *any* "Label: value"
+//    line in isolation -- fixed by listing only the specific OTHER field
+//    labels this layout actually uses, not a generic "any Label:" shape.
+// 2. Excluding only those labelled fields still let a genuine transaction
+//    row ("01-Jun-2025 ... Switch Out ... [Ref: ...]") get treated as a
+//    valid 3-line scheme-header start when the very next real scheme's
+//    header happened to fall within the lookahead window -- the
+//    transaction row and its scheme's own "Closing Unit Balance: ..."
+//    line silently vanished into the captured (wrong) scheme name, with
+//    NO warning raised (the match "succeeded"), while the transaction
+//    itself was never recorded at all. Transaction rows and closing-
+//    balance lines are now excluded explicitly, the same way the
+//    labelled fields already were.
+function canContinueSchemeHeader(line: string): boolean {
+  const t = line.trim();
+  if (t.length === 0) return false;
+  // A transaction row always starts with a date; a closing-balance line
+  // (both grammars) and the transaction-table header row are fixed,
+  // recognisable prefixes. None of these is ever a genuine fragment of a
+  // wrapped free-text scheme header.
+  if (/^\d{1,2}-[A-Za-z]{3}-\d{4}\b/.test(t)) return false;
+  if (/^Closing Unit Balance\b/i.test(t)) return false;
+  if (/^Date\s+(Description|Amount)\b/i.test(t)) return false;
+  if (/^No transactions during this statement period\.?$/i.test(t)) return false;
+  return (
+    extractLabelledField(t, 'Folio No') === null &&
+    extractLabelledField(t, 'PAN') === null &&
+    extractLabelledField(t, 'Name') === null &&
+    extractLabelledField(t, 'Holding Mode') === null &&
+    extractLabelledField(t, 'AMC Name') === null &&
+    extractLabelledField(t, 'Scheme Name') === null
+  );
+}
 
 // Finding #6: alternate transaction-table header — column order
 // Date/Amount/Price/Units/Transaction-type, no separate Description column.
@@ -369,8 +437,9 @@ export const camsParser: InvestmentDocumentParser = {
       // output contract has no matching column for — see the file-header
       // comment's "deliberately out of scope" note for `amcName` for the
       // same disclosed-gap discipline applied to this parenthetical.
-      const altScheme = ALT_SCHEME_LINE_RE.exec(line);
-      if (altScheme) {
+      const altSchemeMatch = matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader);
+      if (altSchemeMatch) {
+        const altScheme = altSchemeMatch.match;
         const rawName = altScheme[1].trim();
         const isinValue = altScheme[2];
         currentScheme = {
@@ -383,6 +452,7 @@ export const camsParser: InvestmentDocumentParser = {
           amfiSchemeCode: null,
         };
         inTable = false;
+        idx += altSchemeMatch.linesConsumed - 1;
         continue;
       }
       {
@@ -601,8 +671,9 @@ export const camsParser: InvestmentDocumentParser = {
       }
       // II-PC3 Gate A finding #5 (see the matching block in
       // parseTransactions for the full rationale).
-      const altScheme = ALT_SCHEME_LINE_RE.exec(line);
-      if (altScheme) {
+      const altSchemeMatch = matchAcrossLines(lines, idx, ALT_SCHEME_LINE_RE, 3, canContinueSchemeHeader);
+      if (altSchemeMatch) {
+        const altScheme = altSchemeMatch.match;
         const rawName = altScheme[1].trim();
         const isinValue = altScheme[2];
         currentScheme = {
@@ -614,6 +685,7 @@ export const camsParser: InvestmentDocumentParser = {
           isin: isinValue && isinValue.length > 0 ? isinValue : null,
           amfiSchemeCode: null,
         };
+        idx += altSchemeMatch.linesConsumed - 1;
         continue;
       }
       {
