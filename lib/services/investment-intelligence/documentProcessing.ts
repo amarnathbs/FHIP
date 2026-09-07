@@ -569,6 +569,32 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     return mapped;
   }
 
+  // Perf fix (2026-09-07): this loop used to make 2-3 sequential DB round
+  // trips PER transaction (a fingerprint-dedup lookup, the insert itself,
+  // then the source-link insert) -- for a real ~950-transaction CAMS
+  // statement that is roughly 2,000-2,800 sequential network round trips,
+  // which reliably exceeded the serverless function's execution budget and
+  // left the parse run permanently stuck 'running' (found live 2026-09-07;
+  // see the stale-run rescue in the idempotency check above). Same-document
+  // fingerprint dedup is now one bulk prefetch instead of one query per
+  // transaction, and every genuinely-new transaction's actual writes are
+  // batched into a handful of bulk inserts after the loop instead of one
+  // round trip per row. The R11 cross-source cache below is updated
+  // in-memory as each new transaction is decided (instead of invalidated to
+  // force a re-fetch), so a later transaction in this same import still
+  // sees an earlier one as a candidate -- the exact invariant the original
+  // cache-invalidation comment described -- without any extra DB round trip.
+  const relevantAccountIds = Array.from(new Set(accountIdByFolioAmc.values()));
+  const existingFingerprints = new Map<string, string>(); // `${accountId}:${fingerprint}` -> existing transaction id
+  if (relevantAccountIds.length > 0) {
+    const existingRows = await fetchAllRows<{ id: string; account_id: string; transaction_fingerprint: string }>(() =>
+      admin.from('ii_transactions').select('id, account_id, transaction_fingerprint').eq('user_id', userId).in('account_id', relevantAccountIds)
+    );
+    for (const row of existingRows) existingFingerprints.set(`${row.account_id}:${row.transaction_fingerprint}`, row.id);
+  }
+  const pendingTransactionInserts: Record<string, unknown>[] = [];
+  const pendingSourceLinkInserts: Record<string, unknown>[] = [];
+
   for (const t of parsed.transactions) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
     const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
@@ -586,10 +612,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceReference: t.sourceReference,
     });
 
-    const { data: existingTxn } = await admin.from('ii_transactions').select('id').eq('account_id', accountId).eq('transaction_fingerprint', fingerprint).maybeSingle();
-    if (existingTxn) {
+    const existingTxnId = existingFingerprints.get(`${accountId}:${fingerprint}`);
+    if (existingTxnId) {
       await admin.from('ii_transaction_source_links').upsert(
-        { user_id: userId, transaction_id: existingTxn.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false },
+        { user_id: userId, transaction_id: existingTxnId, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false },
         { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true }
       );
       duplicateTransactionsLinked++;
@@ -690,40 +716,96 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       if (caseId) reconciliationCasesOpened++;
     }
 
-    const { data: createdTxn, error: txnErr } = await admin
-      .from('ii_transactions')
-      .insert({
-        user_id: userId,
-        account_id: accountId,
-        instrument_id: instrumentId,
-        source_document_id: sourceDocumentId,
-        currency_code: currencyCode,
-        // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
-        // inserted (never discarded — spec section 29) but excluded from
-        // R4/R5/R6 analytical aggregation via 'review_required' until a
-        // human resolves the linked ii_reconciliation_cases row, using the
-        // exact same exclusion mechanism R4/R5/R6 already apply to
-        // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
-        // taxRepository.ts's "usable" filters).
-        status: crossSourceReviewRequired ? 'review_required' : 'parsed',
-        transaction_type: t.canonicalType,
-        transaction_date: t.transactionDateIso,
-        units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
-        price_per_unit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
-        gross_amount: scaledToDecimalString(t.amountScaled, 2),
-        source_reference: t.sourceReference,
-        parse_run_id: parseRunId,
-        parser_code: parsed.parserCode,
-        parser_version_used: parsed.parserVersion,
-        source_description: t.sourceDescription,
-        confidence: t.classificationConfidence,
-        transaction_fingerprint: fingerprint,
-      })
-      .select('id')
-      .single();
-    if (createdTxn && !txnErr) {
-      await admin.from('ii_transaction_source_links').insert({ user_id: userId, transaction_id: createdTxn.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
-      crossSourcePositionCache.delete(`${accountId}:${instrumentId}`); // invalidate — a later transaction in this SAME import against this SAME position must see this row as a candidate too
+    // Staged in memory, not written yet -- flushed as bulk inserts below,
+    // once per this whole document instead of once per transaction. The id
+    // is generated client-side (a plain uuid-default column accepts an
+    // explicit value on insert) so the transaction row and its source-link
+    // row can both be staged now without waiting on a round trip for the
+    // DB-generated id, and so this same transaction can immediately become
+    // a same-import cross-source candidate for a later row below.
+    const newTransactionId = randomUUID();
+    pendingTransactionInserts.push({
+      id: newTransactionId,
+      user_id: userId,
+      account_id: accountId,
+      instrument_id: instrumentId,
+      source_document_id: sourceDocumentId,
+      currency_code: currencyCode,
+      // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
+      // inserted (never discarded — spec section 29) but excluded from
+      // R4/R5/R6 analytical aggregation via 'review_required' until a
+      // human resolves the linked ii_reconciliation_cases row, using the
+      // exact same exclusion mechanism R4/R5/R6 already apply to
+      // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
+      // taxRepository.ts's "usable" filters).
+      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+      transaction_type: t.canonicalType,
+      transaction_date: t.transactionDateIso,
+      units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+      price_per_unit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
+      gross_amount: scaledToDecimalString(t.amountScaled, 2),
+      source_reference: t.sourceReference,
+      parse_run_id: parseRunId,
+      parser_code: parsed.parserCode,
+      parser_version_used: parsed.parserVersion,
+      source_description: t.sourceDescription,
+      confidence: t.classificationConfidence,
+      transaction_fingerprint: fingerprint,
+    });
+    pendingSourceLinkInserts.push({ user_id: userId, transaction_id: newTransactionId, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+    existingFingerprints.set(`${accountId}:${fingerprint}`, newTransactionId); // guards a within-this-same-import fingerprint collision too, not only a pre-existing one
+
+    // In-memory equivalent of the old cache invalidation: append this
+    // transaction as a candidate directly, rather than deleting the cache
+    // entry to force a fresh DB re-fetch (which would also just miss this
+    // still-unwritten row anyway).
+    crossSourcePositionCache.get(`${accountId}:${instrumentId}`)?.push({
+      id: newTransactionId,
+      sourceKey: '',
+      sourceDocumentId,
+      accountId,
+      instrumentId,
+      transactionDate: t.transactionDateIso,
+      transactionType: t.canonicalType,
+      grossAmount: scaledToDecimalString(t.amountScaled, 2),
+      units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+      sourceReference: t.sourceReference,
+      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+    });
+  }
+
+  // Flush the batched writes -- a handful of round trips total instead of
+  // one (or two) per transaction. Chunked, and each transaction chunk's
+  // matching link chunk is written immediately after it (not all
+  // transactions then all links), so a failure partway through still
+  // leaves only one small chunk's worth of transactions momentarily
+  // without their source link, same risk class the original one-row-at-a-
+  // time code already carried between its own insert and its own very
+  // next line.
+  const BATCH_CHUNK_SIZE = 500;
+  for (let i = 0; i < pendingTransactionInserts.length; i += BATCH_CHUNK_SIZE) {
+    const txnChunk = pendingTransactionInserts.slice(i, i + BATCH_CHUNK_SIZE);
+    const linkChunk = pendingSourceLinkInserts.slice(i, i + BATCH_CHUNK_SIZE);
+    const { error: batchTxnError } = await admin.from('ii_transactions').insert(txnChunk);
+    if (batchTxnError) {
+      // Reported the same way every other failure path in this function
+      // is (failRun + updateDocumentStatusUnlessSucceeded + a real return
+      // value) rather than thrown -- nothing wraps this function in a
+      // try/catch, so an uncaught throw here would crash the request with
+      // no response body instead of the client's own toast/error message,
+      // reproducing the exact "Unexpected end of JSON input" symptom this
+      // whole fix exists to eliminate, just from a new cause.
+      const message = `Batched transaction insert failed (rows ${i}-${i + txnChunk.length}): ${batchTxnError.message}`;
+      await failRun(admin, parseRunId, message);
+      await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
+      return { ok: false, status: 'parse_failed', parseRunId, error: message };
+    }
+    const { error: batchLinkError } = await admin.from('ii_transaction_source_links').insert(linkChunk);
+    if (batchLinkError) {
+      const message = `Batched transaction-source-link insert failed (rows ${i}-${i + linkChunk.length}): ${batchLinkError.message}`;
+      await failRun(admin, parseRunId, message);
+      await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
+      return { ok: false, status: 'parse_failed', parseRunId, error: message };
     }
   }
 
