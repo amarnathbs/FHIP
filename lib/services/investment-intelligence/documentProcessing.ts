@@ -158,13 +158,43 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   // Idempotency: at most one active run at a time (DB constraint
   // enforces this too; checked here first for a clean error message).
+  //
+  // STALE-RUN RESCUE, found live 2026-09-07: the serverless function
+  // running this pipeline has a platform execution-time ceiling. A large
+  // real-world CAMS statement (many schemes/transactions) can exceed that
+  // ceiling; when the platform kills the function mid-run, nothing here
+  // ever gets a chance to mark the row 'failed' -- it is left 'running'
+  // forever, and the client that made the request sees a truncated/empty
+  // HTTP response ("Unexpected end of JSON input"), not a clean error.
+  // Before this fix, every subsequent Process/Reprocess click on that same
+  // document hit the block below and returned "already being processed"
+  // permanently -- there was no way to ever try again except manual SQL.
+  // A run that's still genuinely in flight is never older than a few
+  // minutes; anything older than STALE_RUN_MS is treated as abandoned by
+  // its own process and auto-failed here so a fresh attempt can proceed.
+  const STALE_RUN_MS = 10 * 60 * 1000; // 10 minutes
   const { data: activeRun } = await admin
     .from('ii_document_parse_runs')
-    .select('id')
+    .select('id, started_at')
     .eq('source_document_id', sourceDocumentId)
     .in('run_status', ['queued', 'running'])
     .maybeSingle();
-  if (activeRun) return { ok: false, status: doc.status as string, parseRunId: activeRun.id as string, error: 'This document is already being processed.' };
+  if (activeRun) {
+    const startedAt = new Date(activeRun.started_at as string).getTime();
+    const ageMs = Date.now() - startedAt;
+    if (ageMs < STALE_RUN_MS) {
+      return { ok: false, status: doc.status as string, parseRunId: activeRun.id as string, error: 'This document is already being processed.' };
+    }
+    await admin
+      .from('ii_document_parse_runs')
+      .update({
+        run_status: 'failed',
+        completed_at: new Date().toISOString(),
+        errors: [{ code: 'stale_run_abandoned', message: `Previous processing attempt did not complete within ${Math.round(STALE_RUN_MS / 60000)} minutes (likely a server timeout on a large document) and was auto-marked failed so this document could be retried.`, severity: 'error' }],
+      })
+      .eq('id', activeRun.id);
+    // Fall through and start a fresh run below -- do NOT return here.
+  }
 
   // Idempotency: a prior SUCCEEDED run with the same parser code/version
   // is not silently re-run unless forced (spec section 52).
