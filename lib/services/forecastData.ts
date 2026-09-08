@@ -19,6 +19,7 @@ import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { convertToReportingCurrency } from '@/lib/engines/fx';
 import { computeAllocatedMonthlyContribution, type AllocatedContributionInvestment, type AllocatedContributionRetirementAccount } from '@/lib/services/goalFundingAllocation';
+import { accountsEligibleForHouseholdContributionForecast } from '@/lib/engines/forecast/smsfContributionGuard';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -483,10 +484,10 @@ async function buildCalculatorInput(
   }
 
   if (forecastType === 'retirement') {
-    const [accountsResult, dobResult, retirementMembersResult] = await Promise.all([
+    const [accountsResult, dobResult, retirementMembersResult, smsfFundsResult] = await Promise.all([
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
+        .select('id, current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).single(),
@@ -494,8 +495,16 @@ async function buildCalculatorInput(
       // retirement ages, used to split this forecast per member when they
       // genuinely differ (see the split block below).
       supabase.from('retirement_members').select('id, member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true),
+      // LR-6 (WP-07): the ids of this household's own SMSF-fund-linked
+      // retirement_accounts rows. NOT the same signal as `owner` above —
+      // smsf_create_fund()'s p_owner is constrained to self/spouse/joint, so
+      // a fund's own retirement_accounts row is never owner='smsf'
+      // (lib/engines/householdContext.ts's own header explains this
+      // precisely). retirement_account_id is the only correct discriminator.
+      supabase.from('smsf_funds').select('retirement_account_id').eq('user_id', userId).eq('is_active', true),
     ]);
     if (accountsResult.error) throw new Error(accountsResult.error.message);
+    if (smsfFundsResult.error) throw new Error(smsfFundsResult.error.message);
     const accounts = accountsResult.data ?? [];
     // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding: this used
     // to sum each account's current_balance/contributions raw, regardless of
@@ -522,7 +531,20 @@ async function buildCalculatorInput(
       quarterly: 1 / 3,
       annually: 1 / 12,
     };
-    const monthlyContribution = accounts.reduce((sum, a) => {
+    // LR-6 (WP-07, NEG-06 "forecast contaminates household") — SMSF-fund-
+    // linked accounts stay IN currentBalance above (SMSF wealth genuinely
+    // belongs in the household's retirement net worth), but must never
+    // contribute to this household FORECAST's contribution component. Before
+    // this fix nothing filtered them here at all: the only reason no live
+    // numeric leak existed yet was that smsf_create_fund() has never written
+    // employer_contribution/personal_contribution on a fund's account row —
+    // an incidental NULL, not a structural guard. LR-6's own contribution-
+    // reconciliation view (lib/engines/smsf/smsfContributions.ts) now reads
+    // those same two columns for the first time, so this guard closes the
+    // latent gap discovery flagged before it can ever be realised.
+    const smsfLinkedAccountIds = new Set((smsfFundsResult.data ?? []).map((f) => f.retirement_account_id));
+    const contributionEligibleAccounts = accountsEligibleForHouseholdContributionForecast(accounts, smsfLinkedAccountIds);
+    const monthlyContribution = contributionEligibleAccounts.reduce((sum, a) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
       const convertedContribution = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
       return sum + convertedContribution * factor;
