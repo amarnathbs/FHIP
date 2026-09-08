@@ -7,6 +7,7 @@ import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
 import type { CountryCode } from '@/lib/services/jurisdiction';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { CrossBorderRelationshipsPanel } from '@/components/profile/CrossBorderRelationshipsPanel';
+import { CloseAccountPanel } from '@/components/profile/CloseAccountPanel';
 
 // App Review tier-2 fix pass (2026-08-28 branch reconciliation), Fix 1 —
 // Profile Page. Ported from app/(app)/profile/page.tsx on
@@ -336,6 +337,10 @@ export default function ProfilePage() {
         <p className="mt-2 text-xs text-muted">
           We'll send a verification link to the new address — your sign-in email only changes once you confirm it.
         </p>
+      </SectionCard>
+
+      <SectionCard title="Close account" description="Permanently delete your FHIP account and data.">
+        <CloseAccountPanel />
       </SectionCard>
     </div>
   );

@@ -801,8 +801,8 @@ export default function PreviewLandingPage({ countryContext = null }: LandingPag
             <ul>
               <li><a href="/privacy">Privacy</a></li>
               <li><a href="/terms">Terms</a></li>
-              <li><a href="#">Disclaimer</a></li>
-              <li><a href="#">Accessibility</a></li>
+              <li><a href="/disclaimer">Disclaimer</a></li>
+              <li><a href="/accessibility">Accessibility</a></li>
             </ul>
           </div>
         </div>

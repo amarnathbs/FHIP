@@ -73,20 +73,52 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           Once you have reviewed and approved the information extracted from a document, the underlying raw
-          file is scheduled for deletion according to FHIP&apos;s retention policy — it is not kept
-          indefinitely. We retain only the structured financial data, and the minimal provenance details
-          needed for your financial profile and for audit purposes, after the raw document has been deleted.
-          If a document upload fails or is rejected (for example because the file type isn&apos;t supported),
-          it is deleted promptly rather than retained. This deletion follows a short processing/retry window
-          rather than happening the instant you click approve.
+          file is marked for deletion under FHIP&apos;s retention policy rather than kept indefinitely — FHIP
+          does not offer an ongoing document viewer or evidence vault for uploaded statements. We retain only
+          the structured financial data, and the minimal provenance details needed for your financial profile
+          and for audit purposes, once the raw document has been deleted. If a document upload fails or is
+          rejected (for example because the file type isn&apos;t supported), it is likewise marked for prompt
+          deletion rather than retained. This deletion runs on a scheduled process rather than the instant you
+          click approve, and — like any scheduled process — is not instantaneous; we do not claim raw files are
+          deleted the moment they become eligible.
         </p>
       </section>
 
       <section className="mt-8 space-y-3">
-        <h2 className="text-xl font-semibold">Data control</h2>
+        <h2 className="text-xl font-semibold">AI-assisted features</h2>
         <p>
-          You can review, update, or remove information in your account at any time. Connected data sources
-          show their origin and last-refresh status so you always know how current a figure is.
+          Some FHIP features (for example insights and explanations shown alongside your results) are generated
+          using an AI provider that processes the relevant portion of your financial data to produce that
+          specific feature&apos;s output. We do not control, and do not make guarantees about, an AI
+          provider&apos;s own internal retention or deletion practices for data it processes on our behalf; we
+          select providers and configure requests to avoid unnecessary retention where the provider supports
+          that. We do not use your financial data to train a public or third-party AI model.
+        </p>
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-xl font-semibold">Cookies</h2>
+        <p>
+          FHIP uses only the cookies necessary to keep you signed in and to remember basic preferences (for
+          example your selected reporting currency). We do not currently use advertising or third-party
+          tracking cookies.
+        </p>
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-xl font-semibold">Data control and account closure</h2>
+        <p>
+          You can review, update, or remove individual pieces of information in your account at any time.
+          Connected data sources show their origin and last-refresh status so you always know how current a
+          figure is.
+        </p>
+        <p>
+          You can also request closure of your entire FHIP account and deletion of your data from your Profile
+          page. Requesting closure does not delete anything instantly — an authorised reviewer processes each
+          request before deletion is carried out, and you can cancel your request at any time before that
+          happens. Once carried out, deletion removes your account and the financial/content data associated
+          with it; a small number of non-identifying operational records may be retained where FHIP&apos;s own
+          audit design requires it (see the Terms page for related detail).
         </p>
       </section>
 

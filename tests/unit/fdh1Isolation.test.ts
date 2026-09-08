@@ -285,6 +285,16 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // identical in kind to AppShell.tsx's own precedent). It never imports
       // anything from `lib/financial-data-hub`.
       path.join(REPO_ROOT, 'app', '(app)', 'reports', 'page.tsx'),
+      // LR-9 (2026-09-08): lib/services/accountDeletionStorage.ts trips the
+      // identical naive-substring limitation the precedents above document,
+      // for the identical reason: it names "lib/financial-data-hub/services/
+      // storage.ts" in a comment explaining why it deliberately does NOT
+      // import that file (the same "keeps its own isolation-safe copy"
+      // precedent lib/import-bridge/adapters/incomeAdapter.ts already
+      // established) — the bucket-name constant it needs is kept as an
+      // independent literal instead. It never imports anything from
+      // `lib/financial-data-hub`.
+      path.join(REPO_ROOT, 'lib', 'services', 'accountDeletionStorage.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

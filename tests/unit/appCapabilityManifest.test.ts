@@ -101,7 +101,12 @@ const API_FOLDER_ALIASES: Record<string, string> = { ai: 'ai-insights' };
 //     and CROSS_BORDER entries and lib/api.ts's own guard choices; the folder
 //     itself spans more than one ModuleKey so isn't force-mapped to just one.
 //   - capabilities: this task's OWN new /api/capabilities/nav endpoint.
+//   - account: LR-9's account-closure request routes (app/api/account/close),
+//     reached from the Profile page (already covered by the PROFILE
+//     ModuleKey), not itself a distinct nav destination — same reasoning as
+//     the "user" folder immediately above.
 const API_FOLDER_INFRA_ALLOWLIST = new Set([
+  'account',
   'benchmarks',
   'commitments',
   'contact',
