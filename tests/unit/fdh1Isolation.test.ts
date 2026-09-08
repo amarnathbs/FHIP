@@ -277,6 +277,14 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // directory.
       path.join(REPO_ROOT, 'components', 'expenses', 'BankStatementImportPanel.tsx'),
       path.join(REPO_ROOT, 'app', '(app)', 'expenses', 'page.tsx'),
+      // LR-8 (2026-09-08): app/(app)/reports/page.tsx's new "Other Reports &
+      // Outputs" section trips the identical naive-substring limitation the
+      // precedents above document, for the identical reason: it renders a
+      // plain `<Link href="/financial-data-hub/activity">` pointing at the
+      // Financial Activity analytics page (a route string, not an import,
+      // identical in kind to AppShell.tsx's own precedent). It never imports
+      // anything from `lib/financial-data-hub`.
+      path.join(REPO_ROOT, 'app', '(app)', 'reports', 'page.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

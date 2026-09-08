@@ -83,6 +83,44 @@ export default async function ReportsPage() {
         <SectionCard title="Export Centre" description="Report exports (PDF, CSV) require a premium plan. In-app viewing and browser printing are available to everyone.">
           <p className="text-sm text-muted">Open a report to request an export or print it.</p>
         </SectionCard>
+
+        {/* LR-8 WP-02/03/04/06 — Reports Hub consolidation. Interactive
+            Forecasting and the Financial Activity analytics/review workspace
+            deliberately stay where they already live (their own top-level
+            nav entries) — this section makes their GENERATED outputs
+            discoverable from Reports without moving or duplicating either
+            module, matching the phase's own lock: "do not move interactive
+            Forecasting into Reports" / "operational transaction review
+            remains under Expenses". */}
+        <SectionCard title="Other Reports & Outputs" description="Generated outputs that live in their own modules — opened here, not duplicated here.">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <ReportOutputCard
+              href="/financial-data-hub/activity"
+              title="Financial Activity"
+              description="Approved income and spending activity, trends and category breakdowns from your connected/imported transactions."
+            />
+            <ReportOutputCard
+              href="/forecast/report"
+              title="Consolidated Forecasting Report"
+              description="A single printable roll-up of every Forecasting module — Net Worth, Retirement, Goals, Debt and more."
+            />
+            <ReportOutputCard
+              href="/forecast/variance"
+              title="Forecast Variance"
+              description="How your actual position compares with what was forecast, by category, as of your last comparison date."
+            />
+          </div>
+        </SectionCard>
       </div>
+  );
+}
+
+function ReportOutputCard({ href, title, description }: { href: string; title: string; description: string }) {
+  return (
+    <Link href={href} className="block rounded-card border p-4 hover:border-trust">
+      <p className="font-medium text-ink">{title}</p>
+      <p className="mt-1 text-xs text-muted">{description}</p>
+      <span className="mt-3 inline-block text-xs font-medium text-trust">Open →</span>
+    </Link>
   );
 }
