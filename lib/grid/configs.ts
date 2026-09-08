@@ -212,6 +212,10 @@ export const insuranceGridConfig: GridConfig = {
     noLabel: "No, I don't currently hold personal insurance",
     includeUnsure: true,
   },
+  // LR-7 WP-03: SMSF-paid insurance only makes sense for an AU household —
+  // see the type's own doc comment (lib/grid/types.ts) for why this is
+  // scoped to Insurance only, not every register that offers 'smsf'.
+  restrictedOwnerValues: [{ value: 'smsf', requiredCountry: 'AU' }],
   fields: [
     { name: 'provider', label: 'Provider', type: 'text' },
     { name: 'cover_amount', label: 'Cover Amount', type: 'number', step: '0.01', required: true },

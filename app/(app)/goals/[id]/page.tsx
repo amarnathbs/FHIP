@@ -10,6 +10,7 @@ import { ContributionHistory } from '@/components/goals/ContributionHistory';
 import { MilestoneTracker } from '@/components/goals/MilestoneTracker';
 import { GoalWhatIfSimulator } from '@/components/goals/GoalWhatIfSimulator';
 import { GoalEditPanel } from '@/components/goals/GoalEditPanel';
+import { GoalLifecycleControls } from '@/components/goals/GoalLifecycleControls';
 
 export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,6 +56,9 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
               }}
             />
           </div>
+          <div className="mt-4">
+            <GoalLifecycleControls goalId={goal.id} status={goal.status} />
+          </div>
         </div>
 
         <SectionCard title="Progress & Forecast">
@@ -65,6 +69,20 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
           <div className="mt-1 h-3 w-full rounded-full bg-gray-100">
             <div className="h-3 rounded-full bg-trust" style={{ width: `${displayProgress}%` }} />
           </div>
+          {/* LR-7 WP-09/WP-10 — goal.currentAmount is manualCurrentAmount plus
+              the live value of any linked investment/asset/retirement funding
+              source (goalFundingAllocation.ts's computeLiveLinkedFundingValue,
+              added on top by design). Presented honestly and separately here,
+              matching GoalCard.tsx's own breakdown, rather than only ever
+              showing the blended total. */}
+          {Math.round((goal.currentAmount - goal.manualCurrentAmount) * 100) / 100 !== 0 && (
+            <p className="mt-1 text-xs text-muted">
+              {`${formatMoney(goal.manualCurrentAmount, currency)} manually tracked + ${formatMoney(
+                Math.round((goal.currentAmount - goal.manualCurrentAmount) * 100) / 100,
+                currency
+              )} from linked investments`}
+            </p>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Progress" value={`${displayProgress.toFixed(0)}%`} />
             <Stat label="Funding gap" value={formatMoney(base.fundingGapAtTargetDate ?? 0, currency)} />

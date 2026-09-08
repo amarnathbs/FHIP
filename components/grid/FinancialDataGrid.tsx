@@ -243,6 +243,11 @@ export function FinancialDataGrid({
   const [pickedKey, setPickedKey] = useState<string>(''); // '' = nothing picked yet, 'custom' = custom item, else a catalogue row's key
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // LR-7 WP-03 — owner values this household's country doesn't support
+  // (config.restrictedOwnerValues), computed once the profile loads below.
+  // Empty for every grid that doesn't declare a restriction (every grid but
+  // Insurance today) — zero behaviour change for them.
+  const [hiddenOwnerValues, setHiddenOwnerValues] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -255,6 +260,7 @@ export function FinancialDataGrid({
           not_applicable_investments?: boolean;
           not_applicable_retirement?: boolean;
           not_applicable_insurance?: boolean;
+          country_of_residence?: 'AU' | 'IN' | null;
         }>('/api/user/profile').catch(() => null),
         config.reviewSection
           ? fetchJson<{ section: string; status: string }[]>('/api/user/section-status').catch(() => [])
@@ -263,6 +269,20 @@ export function FinancialDataGrid({
       if (cancelled) return;
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
+
+      // LR-7 WP-03 — see GridConfig.restrictedOwnerValues' own doc comment.
+      // A household whose country isn't yet known/confirmed keeps every
+      // owner value available (fail-open on ambiguity, not fail-closed on
+      // an already-existing selection) rather than guessing.
+      if (config.restrictedOwnerValues?.length) {
+        const householdCountry = profile?.country_of_residence ?? null;
+        const hidden = new Set(
+          config.restrictedOwnerValues
+            .filter((r) => householdCountry !== null && r.requiredCountry !== householdCountry)
+            .map((r) => r.value)
+        );
+        setHiddenOwnerValues(hidden);
+      }
 
       // SMSF-UI: strip out any master_item_key this grid must never edit
       // directly (see GridConfig.excludeMasterItemKeys comment) from both
@@ -911,7 +931,7 @@ export function FinancialDataGrid({
                       onChange={(e) => updateDraftField('owner', e.target.value)}
                       className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
                     >
-                      {OWNER_OPTIONS.map((o) => (
+                      {OWNER_OPTIONS.filter((o) => o.value === draft.owner || !hiddenOwnerValues.has(o.value)).map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>

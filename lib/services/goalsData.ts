@@ -274,7 +274,12 @@ function toGoalRecord(row: Record<string, unknown>, allocatedMonthlyContribution
 // collide), used to recompute a percentage-based funding source's live
 // contribution rather than trusting the stale
 // creation-time snapshot in goal_funding_sources.allocated_amount.
-async function loadLinkedContributionSources(
+// LR-7 WP-11 — exported so forecastData.ts's persisted-run goal forecast can
+// reuse this exact fetch rather than a second, drifting copy (it already
+// duplicated this file's toGoalRecord()/computeAllocatedMonthlyContribution
+// logic in a comment-tracked way; this closes the gap between the two by
+// sharing the one function instead of hand-mirroring it).
+export async function loadLinkedContributionSources(
   userId: string,
   fundingSourcesByGoal: Map<string, GoalFundingSourceRow[]>,
   client: SupabaseServerClient
