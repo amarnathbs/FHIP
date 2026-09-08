@@ -10,8 +10,8 @@
 
 - **Base:** `origin/main` at the SHA carrying LR-2 through LR-5 (verified via `git fetch origin main` before starting; LR-5's report and commit `4a1c542` were the last phase in ancestry).
 - **Branch:** `merge-napi-canvas-into-main` (existing worktree branch, continuous with LR-2–LR-5, per the pack's own "keep the branch narrow, don't fork for every phase" allowance already established by every prior LR-N phase this session).
-- **Feature commit:** this phase's commit (see below), plus this report's own commit.
-- **Merge/deploy:** not yet pushed at the time this report was written — see push status note at the end of this document once completed.
+- **Feature commit:** `d737a63` (includes this report).
+- **Merge/deploy:** pushed fast-forward to `main` as `4a1c542..d737a63` (verified `origin/main` equalled `HEAD~1` exactly before pushing — no drift, no merge commit needed). Amplify auto-deploys `main` on push, as with every prior LR-N phase; no separate migration/production-DB step was needed since this phase adds no schema.
 
 ## 3. Production/Database/Configuration State
 
@@ -122,7 +122,7 @@ All of the following was exercised against the real hosted DEV Supabase project,
 
 ## 13. Production Certification
 
-Not applicable to claim yet in this report: nothing in this phase has been pushed to `main`/deployed at the time of writing. No migration exists to apply. Once pushed, Amplify will auto-deploy `main` as with every prior phase — this section will be updated with the deployed SHA once that push is verified fast-forward-safe.
+Pushed to `main` at `d737a63`; Amplify auto-deploys on push, as with every prior phase. No migration exists to apply, so there is no separate DEV→production database step to sequence this time (unlike LR-3). This report does not claim a post-deploy production user-journey re-verification was performed after the push — the live-DEV verification in §12 was run against the same hosted DEV Supabase project every prior phase this session has used, before the push, not against production. Per this pack's own AC-15/AC-16 wording ("do not describe a phase as production certified if deployment... is unknown"), the honest status is: code-level, database-level (N/A — no schema change) and this phase's own DEV-journey gates are PASS; a bounded *production* journey oracle was not separately run this phase.
 
 ## 14. Deferred Findings
 
@@ -152,8 +152,8 @@ Not applicable to claim yet in this report: nothing in this phase has been pushe
 | AC-12 Observability | N/A — no background job introduced |
 | AC-13 Performance | PASS — each report is a small, bounded set of queries (income/expense/loan/contribution/reconciliation), no N+1 |
 | AC-14 Feature gating | N/A — no feature flag |
-| AC-15 Production deployment | N/A — not yet pushed |
-| AC-16 Production oracle | N/A — not yet pushed |
+| AC-15 Production deployment | PASS — pushed `d737a63` to `main`; Amplify auto-deploys on push (not independently re-confirmed live post-deploy this report) |
+| AC-16 Production oracle | N/A this phase — no schema/canonical-write change exists to exercise in production; §12's live-DEV journey is the applicable oracle |
 | AC-17 Cleanup | PASS with one disclosed exception (§14) |
 | AC-18 Deferred findings | PASS — see §14, all named with owner/severity |
 
