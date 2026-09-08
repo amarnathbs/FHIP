@@ -18,6 +18,9 @@ export const expenseSchema = z.object({
   owner: z.enum(OWNER_VALUES).default('self'),
   is_essential: z.boolean().default(false),
   master_item_key: z.string().nullable().optional(),
+  // LR-3: explicit opt-out once this row's real spending is tracked via an
+  // approved bank-statement import instead — see migration 0131.
+  superseded_by_bank_import: z.boolean().default(false),
   notes: z.string().nullable().optional(),
 });
 

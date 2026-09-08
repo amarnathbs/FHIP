@@ -7,6 +7,29 @@ function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
 
+// LR-3: exclusive upper bound for "this calendar month" — the first day of
+// NEXT month, so `transaction_date >= monthStart() and < nextMonthStart()`
+// selects the current month regardless of how many days it has.
+function nextMonthStart(date = new Date()): string {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+}
+
+// LR-3: economic_transaction_type values (supabase/migrations/0047_fdh_
+// transactions_and_classification.sql) that represent real household
+// expense outflow for Monthly Surplus purposes. Deliberately excludes
+// 'debt_principal' (tracked separately from ordinary expenses, matching how
+// dashboard.ts already excludes Liability repayments from
+// totalMonthlyExpenses), 'transfer' (never a real expense — FDH-10's own
+// certified economics: a credit-card PAYMENT settling already-recorded
+// purchases is a transfer, not a second expense), 'investment'/
+// 'asset_purchase'/'asset_sale' (wealth movement, not consumption),
+// 'cash_withdrawal' (what the cash was actually spent on is unknown — never
+// guessed), and 'refund'/'unknown' (handled separately below / excluded
+// until classified).
+const BANK_EXPENSE_TRANSACTION_TYPES = ['expense', 'fee', 'debt_interest', 'tax'] as const;
+const BANK_REFUND_TRANSACTION_TYPE = 'refund';
+const BANK_INCOME_TRANSACTION_TYPES = ['income'] as const;
+
 // Deliberately a small dedicated lookup, not the full forecasting
 // resolveAssumptions() tier stack (scenario -> profile -> country -> global)
 // — the dashboard's currency-conversion need is "the current global FX rate",
@@ -83,16 +106,29 @@ export async function getLatestSnapshotAsOf(userId: string, targetDate: string, 
 export async function loadDashboard(userId: string, client?: SupabaseServerClient): Promise<DashboardSummary> {
   const supabase = client ?? (await createClient());
 
-  const [profile, income, expenses, assets, liabilities, investments, retirement, insurance, goals, snapshots, fxRateAudInr] =
-    await Promise.all([
+  const [
+    profile,
+    income,
+    expenses,
+    assets,
+    liabilities,
+    investments,
+    retirement,
+    insurance,
+    goals,
+    snapshots,
+    fxRateAudInr,
+    bankExpenseTransactions,
+    bankIncomeTransactions,
+  ] = await Promise.all([
       supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
       fetchAllRows((from, to) =>
-        supabase.from('income_sources').select('source_name, amount, net_amount, frequency, master_item_key, employer_name, owner').eq('user_id', userId).eq('is_active', true).range(from, to)
+        supabase.from('income_sources').select('source_name, amount, net_amount, frequency, master_item_key, employer_name, owner, superseded_by_bank_import').eq('user_id', userId).eq('is_active', true).range(from, to)
       ),
       fetchAllRows((from, to) =>
         supabase
           .from('expense_items')
-          .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner')
+          .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner, superseded_by_bank_import')
           .eq('user_id', userId)
           .eq('is_active', true)
           .range(from, to)
@@ -148,9 +184,64 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
         .order('snapshot_month', { ascending: true })
         .limit(12),
       getFxRateAudInr(supabase),
+      // LR-3: approved bank-statement transactions for the current calendar
+      // month only — see BANK_EXPENSE_TRANSACTION_TYPES' own comment for
+      // exactly which economic_transaction_type values count as expense
+      // outflow. A plain Supabase table query, RLS-scoped like every other
+      // fetch above; not a TypeScript import of any Financial Data Hub
+      // module code (tests/unit/fdh1Isolation.test.ts's isolation guarantee
+      // is about module imports, not about this dashboard reading the same
+      // RLS-scoped table that pipeline itself writes to — the same
+      // relationship lib/engines/debtServiceContext.ts already has with
+      // FDH-10's economics, mirrored rather than imported).
+      fetchAllRows((from, to) =>
+        supabase
+          .from('fdh_transactions')
+          .select('amount_original, currency_original')
+          .eq('user_id', userId)
+          .eq('approval_status', 'approved')
+          .in('economic_transaction_type', [...BANK_EXPENSE_TRANSACTION_TYPES])
+          .gte('transaction_date', monthStart())
+          .lt('transaction_date', nextMonthStart())
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('fdh_transactions')
+          .select('amount_original, currency_original')
+          .eq('user_id', userId)
+          .eq('approval_status', 'approved')
+          .in('economic_transaction_type', [...BANK_INCOME_TRANSACTION_TYPES])
+          .gte('transaction_date', monthStart())
+          .lt('transaction_date', nextMonthStart())
+          .range(from, to)
+      ),
     ]);
 
   const currency = (profile.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
+
+  // LR-3: a refund is a NEGATIVE contribution to expense outflow (it gives
+  // money back for a purchase already counted as an expense elsewhere this
+  // same month, or in a prior month if the original purchase predates this
+  // window — either way, refunding it should reduce, not add to, this
+  // month's net outflow). Fetched and combined here, not inside dashboard.ts,
+  // so that engine's own contract stays "just sum what you're given" for
+  // every array, matching every other DashboardInput array's contract.
+  const refunds = await fetchAllRows<{ amount_original: number; currency_original: string | null }>((from, to) =>
+    supabase
+      .from('fdh_transactions')
+      .select('amount_original, currency_original')
+      .eq('user_id', userId)
+      .eq('approval_status', 'approved')
+      .eq('economic_transaction_type', BANK_REFUND_TRANSACTION_TYPE)
+      .gte('transaction_date', monthStart())
+      .lt('transaction_date', nextMonthStart())
+      .range(from, to)
+  );
+  const bankExpenseTransactionsNet = [
+    ...bankExpenseTransactions,
+    ...refunds.map((r) => ({ ...r, amount_original: -r.amount_original })),
+  ];
 
   const summary = computeDashboard(
     {
@@ -163,6 +254,8 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       insurance,
       goals,
       snapshots: snapshots.data ?? [],
+      bankExpenseTransactions: bankExpenseTransactionsNet,
+      bankIncomeTransactions,
     },
     currency,
     fxRateAudInr

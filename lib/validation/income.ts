@@ -28,6 +28,9 @@ export const incomeSchema = z.object({
   is_taxable: z.boolean().default(true),
   employer_name: z.string().nullable().optional(),
   master_item_key: z.string().nullable().optional(),
+  // LR-3: explicit opt-out once this row's real income is tracked via an
+  // approved bank/payslip import instead — see migration 0131.
+  superseded_by_bank_import: z.boolean().default(false),
   notes: z.string().nullable().optional(),
 });
 

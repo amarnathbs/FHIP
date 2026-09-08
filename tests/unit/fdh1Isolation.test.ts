@@ -257,6 +257,26 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // file that starts genuinely importing FDH code would still be caught.
       path.join(REPO_ROOT, 'lib', 'nav', 'appNavCapability.ts'),
       path.join(REPO_ROOT, 'lib', 'services', 'appCapability.ts'),
+      // LR-3 (2026-09-08): components/expenses/BankStatementImportPanel.tsx
+      // trips the identical naive-substring limitation the FDH-9/FDH-10/
+      // FDH-11/FDH-12 exceptions above document, for the identical reason —
+      // verified by hand, same standard: it is the Expenses-tab bank-
+      // statement-import UI (mirrors PayslipImportPanel.tsx's own precedent
+      // exactly — a new phase living behind an existing tab, not a new
+      // top-level destination). It never imports anything from
+      // `lib/financial-data-hub`; every reference is a `fetch()` call to a
+      // public `/api/financial-data-hub/...` route string, or a plain `<a
+      // href="/financial-data-hub/review">` link (a route string, not an
+      // import, identical in kind to AppShell.tsx's own precedent above).
+      // Its one call site, app/(app)/expenses/page.tsx, is named alongside
+      // it for the same reason app/(app)/income/page.tsx is not listed here
+      // at all — income/page.tsx never names the literal substring itself,
+      // only PayslipImportPanel.tsx does; expenses/page.tsx's JSX comment
+      // explaining this same architecture happens to also contain the
+      // substring, so both files are approved as exactly these two, not a
+      // directory.
+      path.join(REPO_ROOT, 'components', 'expenses', 'BankStatementImportPanel.tsx'),
+      path.join(REPO_ROOT, 'app', '(app)', 'expenses', 'page.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
