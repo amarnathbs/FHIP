@@ -4,14 +4,14 @@
 
 ## 1. LR-9 Terminal Verdict
 
-**CONDITIONAL PASS — every built work package UNCONDITIONAL FULL PASS on the request/review/queue side, live-DEV proven; the actual irreversible deletion-execution path is proven by thorough mocked/unit testing only, deliberately not exercised live this phase — see §12 for why, a disclosed scope boundary, not a gap glossed over.** Legal-page truth fixes (WP-01/02/03/04/05) and the account-closure request → Admin queue workflow (WP-06/07/08/09/10/11) are both genuinely new capability this codebase had zero prior implementation of (confirmed by discovery and by this codebase's own pre-existing test, `countryGateAccessMatrix.test.ts`'s MC-15, which asserted no account-deletion route existed at all). Migration `0132` applied to DEV and live-verified; **not yet applied to production** — see §13.
+**CONDITIONAL PASS — every built work package UNCONDITIONAL FULL PASS on the request/review/queue side, live-verified on both DEV and production; the actual irreversible deletion-execution path is proven by thorough mocked/unit testing only, deliberately not exercised live this phase — see §12 for why, a disclosed scope boundary, not a gap glossed over.** Legal-page truth fixes (WP-01/02/03/04/05) and the account-closure request → Admin queue workflow (WP-06/07/08/09/10/11) are both genuinely new capability this codebase had zero prior implementation of (confirmed by discovery and by this codebase's own pre-existing test, `countryGateAccessMatrix.test.ts`'s MC-15, which asserted no account-deletion route existed at all). Migration `0132` applied to DEV and production, both independently re-verified — see §12/§13.
 
 ## 2. Git / Deployment Lineage
 
 - **Base:** `origin/main` at `339d3d8` (LR-8's commit — verified via fresh `git fetch origin main`; LR-8 confirmed in ancestry).
 - **Branch:** `merge-napi-canvas-into-main` (continuous with LR-2–LR-8).
-- **Feature commit:** this phase's commit (see below), including this report.
-- **Merge/deploy:** to be pushed fast-forward to `main` only after this report is finalised — see §13 for the production-migration sequencing this requires (same discipline established in LR-3).
+- **Feature commit:** `c878618`.
+- **Merge/deploy:** pushed fast-forward to `main` as `339d3d8..c878618` (verified `origin/main` equalled `HEAD~1` exactly before pushing). Amplify auto-deploys `main` on push, as with every prior LR-N phase — see §13 for the production-migration application this now requires, requested immediately per this programme's own established sequencing (first exercised in LR-3).
 
 ## 3. Production/Database/Configuration State
 
@@ -160,7 +160,7 @@ Migration `0132` applied to DEV and confirmed clean by the user directly ("run o
 
 ## 13. Production Certification
 
-**Not yet applied to production.** Per this programme's own established sequencing (first exercised in LR-3, where a required column was pushed to `main` — which auto-deploys via Amplify — only after DEV confirmation, with production migration application requested immediately after push): this report's push to `main` will be held until DEV live-verification (§12) is complete, then pushed, then production migration application will be requested from the user immediately (since the push is already headed to production via Amplify auto-deploy). This section will be updated once that is confirmed.
+**Migration `0132` applied to production and confirmed by the user** ("0132 applied in production"), independently re-verified via a read-only anon-key schema check (same method as `scripts/smsf_production_readonly_schema_check.mjs`): `account_deletion_requests` exists, `admin_users.can_manage_account_deletions` exists, and `is_account_deletion_admin(uuid)` is live and returns `false` for a nonexistent user (correct fail-closed logic, not merely existence). No production behaviour change results from this migration alone — the new capability requires an explicit `admin_users` grant nobody has been given yet, and the request/queue routes are additive, not altering any existing route's behaviour.
 
 ## 14. Deferred Findings
 
@@ -179,7 +179,7 @@ Migration `0132` applied to DEV and confirmed clean by the user directly ("run o
 | AC-01 Repository lineage | PASS — fetched `origin/main`, LR-8 confirmed in ancestry |
 | AC-02 Route reachability | PASS — Close Account and the request/cancel flow live-verified; Admin queue reachable by direct URL, capability-gated at every layer (deny side live-verified, allow side test-verified — §12) |
 | AC-03 API contract | PASS — live-verified request/409/cancel response shapes; admin routes verified via typed mocked tests |
-| AC-04 Database truth | PASS (DEV) — migration applied and confirmed clean by the user; production PASS pending (§13) |
+| AC-04 Database truth | PASS — migration applied and confirmed on both DEV and production, independently re-verified live on production via read-only schema check (§13) |
 | AC-05 RLS/ownership | PASS — RLS policies written per the Standard's §4 database layer; live-verified via the real idempotency constraint firing (409) and the real capability-denial 403; the allow-side RLS grant path is test-verified only (§12/§14) |
 | AC-06 Exactly-once writes | PASS — partial unique index (not app-level-only) for request idempotency; claim-then-execute pattern for the destructive route |
 | AC-07 Reload durability | PASS — pending status confirmed to persist across a fresh page load |
@@ -190,11 +190,11 @@ Migration `0132` applied to DEV and confirmed clean by the user directly ("run o
 | AC-12 Observability | PASS — `account_deletion_requests` itself is the audit trail for this capability (processed_by/processed_at/failure_reason) |
 | AC-13 Performance | PASS — the admin queue's identity lookup is bounded to the rows actually returned, not a full-table scan |
 | AC-14 Feature gating | PASS — capability fail-closed live-verified at the API layer (mocked tests) and by construction at DB/page layers |
-| AC-15 Production deployment | N/A — not yet pushed (§13) |
-| AC-16 Production oracle | N/A — not yet pushed (§13) |
+| AC-15 Production deployment | PASS — pushed `c878618`; migration `0132` applied to production and independently re-verified (§13) |
+| AC-16 Production oracle | PASS — read-only production RPC call to `is_account_deletion_admin` confirmed correct fail-closed logic, not merely schema presence |
 | AC-17 Cleanup | PASS — the one live-created test request was cancelled and independently re-queried as `cancelled`, zero active rows remain (§12) |
 | AC-18 Deferred findings | PASS — see §14, all named with owner/severity |
 
 ## 16. Next-Phase Readiness
 
-**Yes, once production migration application (§13) is confirmed.** DEV verification and cleanup are complete (§12); the one disclosed gap (§14 — admin-queue allow-side live check) does not block LR-10, which introduces no dependency on this phase's account-deletion capability. LR-10 (AU/India/Global Payment Operationalisation) may proceed once this report's push and the production migration confirmation below are both complete.
+**Yes.** DEV and production verification and cleanup are both complete (§12/§13); the one disclosed gap (§14 — admin-queue allow-side live check) does not block LR-10, which introduces no dependency on this phase's account-deletion capability. LR-10 (AU/India/Global Payment Operationalisation) may proceed.
