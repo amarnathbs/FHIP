@@ -105,8 +105,19 @@ const API_FOLDER_ALIASES: Record<string, string> = { ai: 'ai-insights' };
 //     reached from the Profile page (already covered by the PROFILE
 //     ModuleKey), not itself a distinct nav destination — same reasoning as
 //     the "user" folder immediately above.
+//   - payments: LR-10's checkout/webhook/status/invoices routes
+//     (app/api/payments/**), surfaced from the Profile page's own Billing
+//     panel — same "not itself a distinct nav destination" reasoning as
+//     "account"/"user" above. Deliberately NOT mapped to the
+//     SUBSCRIPTION_PRICING ModuleKey: that entry belongs to the separate G4/
+//     G5 country-capability gating system (APPROVED_PRICING, still false for
+//     every country including AU/IN pending a PO decision to flip it), which
+//     LR-10 does not touch or depend on — real checkout eligibility here is
+//     decided entirely by lib/services/billingAuthority.ts's own confirmed-
+//     billing-country check, not by this manifest.
 const API_FOLDER_INFRA_ALLOWLIST = new Set([
   'account',
+  'payments',
   'benchmarks',
   'commitments',
   'contact',
