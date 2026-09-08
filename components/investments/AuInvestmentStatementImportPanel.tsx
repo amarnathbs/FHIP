@@ -360,7 +360,29 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
           <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
             {applyResult ? `${applyResult.applied_count} item(s) applied to your Investment Intelligence portfolio.` : 'Applied.'}
           </p>
-          <button type="button" onClick={onClose} className="rounded border border-gray-300 px-3 py-1 text-sm">Done</button>
+          {/* LR-4 (2026-09-08): found during the import-capability audit —
+              "Apply" here lands in Investment Intelligence's own evidence
+              tables, not directly in the current-holding value this
+              Investments tab (and your Net Worth/Dashboard) actually
+              display. Reaching those requires one more explicit step —
+              reviewing and publishing the position in Investment
+              Intelligence — which nothing here previously told the user
+              about or linked to, so an applied statement could silently
+              never show up anywhere the user was looking. This link closes
+              that gap without touching Investment Intelligence itself. */}
+          <p className="text-sm text-muted">
+            This is evidence, not yet a current holding value. To have it count toward your Investments and Net Worth,
+            review and publish it in Investment Intelligence.
+          </p>
+          <div className="flex gap-3">
+            <a
+              href="/investment-intelligence/data"
+              className="rounded bg-trust px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Review and publish
+            </a>
+            <button type="button" onClick={onClose} className="rounded border border-gray-300 px-3 py-1 text-sm">Done</button>
+          </div>
         </div>
       )}
     </div>
