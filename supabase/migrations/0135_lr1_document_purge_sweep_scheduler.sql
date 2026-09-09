@@ -87,7 +87,36 @@
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
-create extension if not exists supabase_vault cascade;
+
+-- supabase_vault is a genuine Supabase Cloud extension (present on both DEV
+-- and production hosted Postgres) but is NOT available under PGlite, the
+-- ephemeral in-memory Postgres this repo's own ai_insight_pack_* test suite
+-- (tests/unit/aiInsightPack20HouseholdE2E.test.ts and its siblings) uses to
+-- rebuild the ENTIRE migration chain from scratch for each certification
+-- run — discovered when merging this migration into the LR-2..LR-12
+-- programme's own ledger caused those tests to fail with "extension
+-- 'supabase_vault' is not available" the moment 0135 entered a fresh-chain
+-- rebuild for the first time. Unlike pg_cron/pg_net (which PGlite already
+-- tolerates -- migration 0010 has created them since long before this file
+-- existed, with no PGlite test ever failing on them), supabase_vault has no
+-- such precedent anywhere in this ledger. Wrapped in an exception-swallowing
+-- DO block so a real Supabase Cloud apply (DEV/production) still creates the
+-- extension exactly as before (the exception handler only triggers on an
+-- actual error), while a PGlite fresh-chain rebuild degrades gracefully
+-- instead of aborting the whole chain. Nothing later in this migration
+-- actually calls a vault.* function at APPLY time (the vault.create_secret()
+-- call in this file's own header comment above is a manual, human-run
+-- step; the vault.decrypted_secrets reference at line ~115 below is a
+-- string handed to cron.schedule(), only evaluated when the cron job
+-- itself fires, never at migration-apply time) — so this guard has nothing
+-- else to protect.
+do $$
+begin
+  create extension if not exists supabase_vault cascade;
+exception
+  when others then
+    raise notice 'supabase_vault extension unavailable in this environment (expected under PGlite fresh-chain tests) -- unaffected on real Supabase Cloud DEV/production, where the extension is genuinely available.';
+end $$;
 
 select cron.unschedule('lr1-document-purge-sweep')
 where exists (select 1 from cron.job where jobname = 'lr1-document-purge-sweep');
