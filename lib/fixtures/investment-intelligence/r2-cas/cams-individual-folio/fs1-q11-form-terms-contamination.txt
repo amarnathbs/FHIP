@@ -1,0 +1,39 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5554445/56
+Name : Synthetic Test Holder Eleven
+Statement Date : 30-Sep-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Frontier Equity Fund - Direct Plan - Growth   3000.00   100.000000   30-Sep-2025   33.0000   3300.00
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Frontier Equity Fund - Direct Plan - Growth ISIN CODE : INF999F06006
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+02-Sep-2025   Purchase                          3000.00   30.0000   30.0000   100.000000   100.000000 [Ref: FS1Q11P001]
+
+FINANCIAL TRANSACTION FORM
+
+MUTUAL FUND TRANSACTION / APPLICATION FORM
+
+Scheme Name : _______________________________   Folio No : _______________
+Transaction Type (tick one):  Purchase [ ]   Redemption [ ]   Switch [ ]   Systematic Investment [ ]
+Amount (Rs.) : _______________   Units : _______________   Date : _______________
+Second applicant Redemption authorisation date: 01-Jan-2026   Switch effective date: 15-Jan-2026
+Bank : _______________   Account No. : _______________   IFSC : _______________
+
+TERMS AND CONDITIONS
+
+1. An exit load of 1.00% applies if units are redeemed within 365 days of the date of Purchase
+   or Systematic Investment allotment.
+2. No exit load applies on units redeemed after 01-Jan-2020 that were originally allotted via a
+   Switch In from another scheme of the same AMC prior to 01-Jan-2019.
+3. Stamp Duty at 0.005% and applicable Securities Transaction Tax (STT) are levied on every
+   Purchase and Systematic Investment transaction with effect from 01-Jul-2020, and on every
+   Redemption and Switch Out transaction, per the Finance Act.
+4. Dividend / IDCW Reinvestment transactions are processed at the ex-dividend NAV declared on
+   the record date; no separate Amount or Units figure applies to a mandate that was never
+   actually exercised during this statement period.
+5. This is a computer-generated statement dated 30-Sep-2025 and does not require a signature.

@@ -38,5 +38,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ exportI
     .eq('id', exportId);
   await admin.from('report_access_events').insert({ report_id: data.report_id, user_id: user.id, event_type: 'downloaded' });
 
-  return Response.redirect(signed.signedUrl, 302);
+  // LR-8 WP-07/NEG-07 — Response.redirect() sets only Location/status; a
+  // per-user financial-report redirect must never be cached by a shared/
+  // intermediate cache (the signed URL itself already expires in 60s, but
+  // the redirect response pointing at it should not be retained either).
+  return new Response(null, { status: 302, headers: { Location: signed.signedUrl, 'Cache-Control': 'private, no-store' } });
 }

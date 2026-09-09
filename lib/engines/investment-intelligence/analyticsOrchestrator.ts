@@ -37,6 +37,17 @@ export interface SchemeDataset {
   optionType: string | null;
   hasDistributionAdjustment: boolean;
   cashFlows: CashFlow[];
+  // PC4 section 9 finding (2026-09-07): the same economic flows as
+  // cashFlows, EXCLUDING switch_in/switch_out -- a switch is always a
+  // transfer between two schemes in the SAME household portfolio, never
+  // new money entering or leaving the household. cashFlows (above) keeps
+  // switches in for SCHEME-level XIRR, which correctly treats a switch as
+  // external to that one fund; this list is what PORTFOLIO-level
+  // aggregation (analyticsOrchestrator.ts's analysePortfolioCurrency)
+  // must use instead, so a settlement-date lag or fee/STT differential
+  // between a switch's two legs can never leak a phantom external cash
+  // flow into the household's own return.
+  externalCashFlows: CashFlow[];
   currentValue: number;
   currentValueDate: Date;
   navSeries: SeriesPoint[];
@@ -64,6 +75,15 @@ export interface SchemeAnalytics {
   instrumentId: string;
   instrumentName: string;
   currencyCode: string;
+  // PC4 section 6 finding (2026-09-07): this scheme's own current-value
+  // date was already computed (SchemeDataset.currentValueDate) but never
+  // surfaced past this function -- every UI metric derived from it
+  // (current value, XIRR terminal value) rendered with no way for a user
+  // to tell it apart from today's date, and in a multi-statement
+  // portfolio different schemes can genuinely have different valuation
+  // dates (one statement fresher than another). ISO date string, matching
+  // the top-level asOfDate/periodStart convention.
+  currentValueDate: string;
   investorXirr: CalculationOutcome<{ rate: number }>;
   navReturns: Record<string, CalculationOutcome<{ pointToPoint?: number; cagr?: number }>>;
   activeReturn: CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
@@ -177,6 +197,7 @@ function analyseScheme(s: SchemeDataset, ds: AnalyticsDataset): SchemeAnalytics 
     instrumentId: s.instrumentId,
     instrumentName: s.instrumentName,
     currencyCode: s.currencyCode,
+    currentValueDate: iso(s.currentValueDate),
     investorXirr,
     navReturns,
     activeReturn,
@@ -246,18 +267,51 @@ function analysePortfolioCurrency(
 
   // External flows = investor cash flows, sign-flipped to the portfolio's
   // perspective (investor outflow to buy = money INTO the portfolio).
+  //
+  // PC4 section 9 finding (2026-09-07): portfolioTwrr/portfolioXirr used to
+  // be fed the RAW, un-netted concatenation of every scheme's own
+  // cashFlows. A switch between two schemes in the SAME household is a
+  // scheme-level outflow (switch_in, OUTFLOW_TYPES) paired with a
+  // scheme-level inflow (switch_out, INFLOW_TYPES) elsewhere in the
+  // portfolio -- correct at the single-scheme level
+  // (analyticsRepository.ts), but at the PORTFOLIO level no real money
+  // entered or left the household at all.
+  //
+  // An initial fix attempt netted switch pairs by matching DATE alone
+  // (same-date, opposite-sign amounts cancel). That's insufficient: a real
+  // switch's two legs routinely settle a day or more apart, or differ by a
+  // fee/STT deduction on one leg -- neither of which nets to exactly zero
+  // by date, so a phantom external cash flow would still leak through.
+  //
+  // The actual fix excludes switch_in/switch_out at the SOURCE, by
+  // transaction TYPE, before the cash flow ever reaches this function:
+  // analyticsRepository.ts builds each scheme's externalCashFlows as a
+  // parallel list to cashFlows with internal transfers already removed.
+  // The two maps below are still keyed by date only to (a) combine
+  // multiple schemes' flows that land on the same real day and (b) drop
+  // the terminal current-value flow, which is a valuation, not a flow --
+  // not to cancel switch pairs, which no longer reach this point at all.
+  // Both maps are built from externalCashFlows (switch_in/switch_out already
+  // excluded at the source in analyticsRepository.ts), not the raw cashFlows
+  // used for scheme-level analytics -- this is what actually fixes the
+  // settlement-date-lag case: exclusion happens by transaction TYPE, not by
+  // hoping two dates coincidentally match.
   const flowMap = new Map<number, number>();
-  const investorCashFlows: CashFlow[] = [];
+  const netInvestorFlowMap = new Map<number, number>();
   for (const s of group) {
-    for (const cf of s.cashFlows) {
-      investorCashFlows.push(cf);
+    for (const cf of s.externalCashFlows) {
       flowMap.set(cf.date.getTime(), (flowMap.get(cf.date.getTime()) ?? 0) + -cf.amount);
+      netInvestorFlowMap.set(cf.date.getTime(), (netInvestorFlowMap.get(cf.date.getTime()) ?? 0) + cf.amount);
     }
   }
   // The terminal current-value flow is a valuation, not an external flow.
   const terminal = dates.length ? dates[dates.length - 1].getTime() : 0;
   flowMap.delete(terminal);
   const externalFlows: ExternalFlow[] = [...flowMap.entries()]
+    .filter(([, amount]) => amount !== 0)
+    .map(([t, amount]) => ({ date: new Date(t), amount }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const investorCashFlows: CashFlow[] = [...netInvestorFlowMap.entries()]
     .filter(([, amount]) => amount !== 0)
     .map(([t, amount]) => ({ date: new Date(t), amount }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());

@@ -1,0 +1,40 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5559876/54
+Name : Synthetic Test Holder Four
+Address : 4 Synthetic Avenue, Test City
+Mobile : 9000000004
+Email : synthetic.holder4@fs1-fixture.test
+
+Bank : Synthetic Test Bank
+Branch : Synthetic Branch
+Bank A/c. : XXXXXXXX0004
+Account Type : Savings
+IFSC : SYNB0000004
+Payment Mode : NEFT
+Mode of Holding : Single
+Tax Status : Individual
+Nominee : Y
+Distributor/RIA : DIRECT
+
+Statement Date : 31-Jan-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Midcap Opportunities Fund - Direct Plan - Growth   7000.00   150.000000   31-Jan-2025   42.0000   6300.00
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Midcap Opportunities Fund - Direct Plan - Growth ISIN CODE : INF999C03003
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+01-Jan-2025   Opening Balance                                                        100.000000
+15-Jan-2025   Systematic Investment - Purchase   2000.00   40.0000   40.0000   50.000000   150.000000 [Ref: FS1Q04SIP001]
+
+FINANCIAL TRANSACTION FORM
+
+Scheme Name: _______________  Folio No: _______________
+Purchase [ ]  Redemption [ ]  Switch [ ]
+
+TERMS AND CONDITIONS
+
+An exit load may apply if units are redeemed within 365 days of Purchase.

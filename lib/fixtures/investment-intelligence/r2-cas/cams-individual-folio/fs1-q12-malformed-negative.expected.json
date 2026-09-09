@@ -1,0 +1,9 @@
+{
+  "fixtureId": "fs1-q12-malformed-negative",
+  "title": "FS-Q12 — valid folio-statement fingerprint (detected), but a required transaction-row field is malformed; structured parse error, zero fabricated transactions, certification must be blocked upstream by parsed.errors.length > 0",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "expectFatalParseError": true,
+  "transactionCount": 0
+}

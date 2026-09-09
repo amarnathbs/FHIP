@@ -18,7 +18,9 @@ import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib
 import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { convertToReportingCurrency } from '@/lib/engines/fx';
-import { computeAllocatedMonthlyContribution, type AllocatedContributionInvestment, type AllocatedContributionRetirementAccount } from '@/lib/services/goalFundingAllocation';
+import { computeAllocatedMonthlyContribution, computeLiveLinkedFundingValue } from '@/lib/services/goalFundingAllocation';
+import { loadLinkedContributionSources, type GoalFundingSourceRow } from '@/lib/services/goalsData';
+import { accountsEligibleForHouseholdContributionForecast } from '@/lib/engines/forecast/smsfContributionGuard';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -483,10 +485,10 @@ async function buildCalculatorInput(
   }
 
   if (forecastType === 'retirement') {
-    const [accountsResult, dobResult, retirementMembersResult] = await Promise.all([
+    const [accountsResult, dobResult, retirementMembersResult, smsfFundsResult] = await Promise.all([
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
+        .select('id, current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
         .eq('user_id', userId)
         .eq('is_active', true),
       supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).single(),
@@ -494,8 +496,16 @@ async function buildCalculatorInput(
       // retirement ages, used to split this forecast per member when they
       // genuinely differ (see the split block below).
       supabase.from('retirement_members').select('id, member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true),
+      // LR-6 (WP-07): the ids of this household's own SMSF-fund-linked
+      // retirement_accounts rows. NOT the same signal as `owner` above —
+      // smsf_create_fund()'s p_owner is constrained to self/spouse/joint, so
+      // a fund's own retirement_accounts row is never owner='smsf'
+      // (lib/engines/householdContext.ts's own header explains this
+      // precisely). retirement_account_id is the only correct discriminator.
+      supabase.from('smsf_funds').select('retirement_account_id').eq('user_id', userId).eq('is_active', true),
     ]);
     if (accountsResult.error) throw new Error(accountsResult.error.message);
+    if (smsfFundsResult.error) throw new Error(smsfFundsResult.error.message);
     const accounts = accountsResult.data ?? [];
     // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding: this used
     // to sum each account's current_balance/contributions raw, regardless of
@@ -522,7 +532,20 @@ async function buildCalculatorInput(
       quarterly: 1 / 3,
       annually: 1 / 12,
     };
-    const monthlyContribution = accounts.reduce((sum, a) => {
+    // LR-6 (WP-07, NEG-06 "forecast contaminates household") — SMSF-fund-
+    // linked accounts stay IN currentBalance above (SMSF wealth genuinely
+    // belongs in the household's retirement net worth), but must never
+    // contribute to this household FORECAST's contribution component. Before
+    // this fix nothing filtered them here at all: the only reason no live
+    // numeric leak existed yet was that smsf_create_fund() has never written
+    // employer_contribution/personal_contribution on a fund's account row —
+    // an incidental NULL, not a structural guard. LR-6's own contribution-
+    // reconciliation view (lib/engines/smsf/smsfContributions.ts) now reads
+    // those same two columns for the first time, so this guard closes the
+    // latent gap discovery flagged before it can ever be realised.
+    const smsfLinkedAccountIds = new Set((smsfFundsResult.data ?? []).map((f) => f.retirement_account_id));
+    const contributionEligibleAccounts = accountsEligibleForHouseholdContributionForecast(accounts, smsfLinkedAccountIds);
+    const monthlyContribution = contributionEligibleAccounts.reduce((sum, a) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
       const convertedContribution = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
       return sum + convertedContribution * factor;
@@ -693,9 +716,23 @@ async function buildCalculatorInput(
     // even selected here before (planned_contribution_amount was treated as
     // already-monthly regardless of its actual frequency), and funding
     // sources' allocated share of a linked investment/retirement account's
-    // own contribution was never added — same bug/fix as
-    // goalsData.ts's toGoalRecord()/computeGoalsPagePayload(), mirrored here
-    // for this persisted-run code path.
+    // own contribution was never added.
+    //
+    // LR-7 WP-11 (2026-09-08) — this branch's `currentAmount` used the raw
+    // user_goals.current_amount ledger alone, while goalsData.ts's
+    // toGoalRecord()/computeGoalsPagePayload() (the Goal detail/list page)
+    // has, since the Education/Children Investment -> Goal Linkage release,
+    // ADDED computeLiveLinkedFundingValue() on top of that same ledger for
+    // display. That is a deliberate, spec-mandated design (see
+    // goalFundingAllocation.ts's own header), not a bug to revert — the bug
+    // was that THIS branch never picked it up, so a goal funded partly by a
+    // linked investment/asset/retirement balance showed a lower starting
+    // balance (and therefore a later projected completion date / higher
+    // required contribution) here than the same goal's own detail page.
+    // Fixed by reusing goalsData.ts's own loadLinkedContributionSources()
+    // and computeLiveLinkedFundingValue() directly rather than a third,
+    // hand-mirrored copy — the two surfaces can now only drift if the
+    // shared function itself changes.
     const { data: goals, error } = await supabase
       .from('user_goals')
       .select('id, goal_name, current_amount, target_amount, target_date, currency_code, planned_contribution_amount, contribution_frequency')
@@ -704,66 +741,40 @@ async function buildCalculatorInput(
     if (error) throw new Error(error.message);
     const goalIds = (goals ?? []).map((g) => g.id as string);
 
-    const fundingSourcesByGoal = new Map<string, { source_type: string; linked_investment_id: string | null; linked_retirement_id: string | null; allocation_percentage: number | null }[]>();
+    const fundingSourcesByGoal = new Map<string, GoalFundingSourceRow[]>();
     if (goalIds.length > 0) {
       const { data: sources } = await supabase
         .from('goal_funding_sources')
-        .select('goal_id, source_type, linked_investment_id, linked_retirement_id, allocation_percentage')
+        .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true)
         .in('goal_id', goalIds);
       for (const s of sources ?? []) {
-        const list = fundingSourcesByGoal.get(s.goal_id as string) ?? [];
-        list.push(s);
-        fundingSourcesByGoal.set(s.goal_id as string, list);
+        const goalId = s.goal_id as string;
+        const list = fundingSourcesByGoal.get(goalId) ?? [];
+        list.push(s as unknown as GoalFundingSourceRow);
+        fundingSourcesByGoal.set(goalId, list);
       }
     }
-    const investmentIds = new Set<string>();
-    const retirementIds = new Set<string>();
-    for (const list of fundingSourcesByGoal.values()) {
-      for (const s of list) {
-        if (s.source_type === 'investment' && s.linked_investment_id) investmentIds.add(s.linked_investment_id);
-        if (s.source_type === 'retirement' && s.linked_retirement_id) retirementIds.add(s.linked_retirement_id);
-      }
-    }
-    const investmentsById = new Map<string, AllocatedContributionInvestment>();
-    const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
-    // is_active=true filter: same fix/class as goalsData.ts's
-    // loadLinkedContributionSources() — without it, a funding source whose
-    // linked investment/retirement account has since been archived keeps
-    // contributing its stale annual/employer/personal contribution to this
-    // forecast's monthlyContribution forever.
-    if (investmentIds.size > 0) {
-      const { data } = await supabase
-        .from('investments')
-        .select('id, annual_contribution')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .in('id', Array.from(investmentIds));
-      for (const row of data ?? []) investmentsById.set(row.id, { annualContribution: row.annual_contribution ?? null });
-    }
-    if (retirementIds.size > 0) {
-      const { data } = await supabase
-        .from('retirement_accounts')
-        .select('id, employer_contribution, personal_contribution, contribution_frequency')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .in('id', Array.from(retirementIds));
-      for (const row of data ?? [])
-        retirementAccountsById.set(row.id, {
-          employerContribution: row.employer_contribution ?? null,
-          personalContribution: row.personal_contribution ?? null,
-          contributionFrequency: row.contribution_frequency ?? null,
-        });
-    }
+    // is_active=true filter (inside the shared helper): same fix/class as
+    // goalsData.ts's own use of it — without it, a funding source whose
+    // linked asset/investment/retirement account has since been archived
+    // keeps contributing its stale value/contribution to this forecast
+    // forever.
+    const { investmentsById, retirementAccountsById, currentValueById } = await loadLinkedContributionSources(
+      userId,
+      fundingSourcesByGoal,
+      supabase
+    );
 
     const input: GoalCalculatorInput = {
       baselineDate,
       months,
       assumptions,
       goals: (goals ?? []).map((g) => {
+        const thisGoalFundingSources = fundingSourcesByGoal.get(g.id as string) ?? [];
         const allocated = computeAllocatedMonthlyContribution(
-          (fundingSourcesByGoal.get(g.id as string) ?? []).map((s) => ({
+          thisGoalFundingSources.map((s) => ({
             sourceType: s.source_type,
             linkedInvestmentId: s.linked_investment_id,
             linkedRetirementId: s.linked_retirement_id,
@@ -772,10 +783,21 @@ async function buildCalculatorInput(
           investmentsById,
           retirementAccountsById
         );
+        const liveLinkedFundingValue = computeLiveLinkedFundingValue(
+          thisGoalFundingSources.map((s) => ({
+            sourceType: s.source_type,
+            linkedAssetId: s.linked_asset_id,
+            linkedInvestmentId: s.linked_investment_id,
+            linkedRetirementId: s.linked_retirement_id,
+            allocationPercentage: s.allocation_percentage,
+            allocatedAmount: s.allocated_amount,
+          })),
+          currentValueById
+        );
         return {
           id: g.id,
           name: g.goal_name,
-          currentAmount: g.current_amount ?? 0,
+          currentAmount: (g.current_amount ?? 0) + liveLinkedFundingValue,
           targetAmount: g.target_amount,
           targetDate: g.target_date,
           monthlyContribution: toMonthly(g.planned_contribution_amount ?? 0, (g.contribution_frequency as Frequency) ?? 'monthly') + allocated,
@@ -1385,8 +1407,43 @@ async function getCurrentActualValue(
     return { actual: dashboard.totalLiabilities, target: 0 };
   }
   if (category === 'goal') {
-    const { data: goals } = await supabase.from('user_goals').select('current_amount, target_amount').eq('user_id', userId).eq('status', 'active');
-    const actual = (goals ?? []).reduce((sum, g) => sum + (g.current_amount ?? 0), 0);
+    // LR-7 WP-11 — same fix as buildCalculatorInput's 'goal' branch above:
+    // include each goal's live linked-investment/asset/retirement funding
+    // value, matching the Goal detail page's own established figure, so
+    // this variance tracker's "actual" position isn't understated relative
+    // to what the user already sees for the same goals.
+    const { data: goals } = await supabase.from('user_goals').select('id, current_amount, target_amount').eq('user_id', userId).eq('status', 'active');
+    const goalIds = (goals ?? []).map((g) => g.id as string);
+    const fundingSourcesByGoal = new Map<string, GoalFundingSourceRow[]>();
+    if (goalIds.length > 0) {
+      const { data: sources } = await supabase
+        .from('goal_funding_sources')
+        .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .in('goal_id', goalIds);
+      for (const s of sources ?? []) {
+        const goalId = s.goal_id as string;
+        const list = fundingSourcesByGoal.get(goalId) ?? [];
+        list.push(s as unknown as GoalFundingSourceRow);
+        fundingSourcesByGoal.set(goalId, list);
+      }
+    }
+    const { currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
+    const actual = (goals ?? []).reduce((sum, g) => {
+      const liveLinkedFundingValue = computeLiveLinkedFundingValue(
+        (fundingSourcesByGoal.get(g.id as string) ?? []).map((s) => ({
+          sourceType: s.source_type,
+          linkedAssetId: s.linked_asset_id,
+          linkedInvestmentId: s.linked_investment_id,
+          linkedRetirementId: s.linked_retirement_id,
+          allocationPercentage: s.allocation_percentage,
+          allocatedAmount: s.allocated_amount,
+        })),
+        currentValueById
+      );
+      return sum + (g.current_amount ?? 0) + liveLinkedFundingValue;
+    }, 0);
     const target = (goals ?? []).reduce((sum, g) => sum + (g.target_amount ?? 0), 0);
     return { actual, target };
   }

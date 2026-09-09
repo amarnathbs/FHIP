@@ -1,0 +1,21 @@
+FOLIO DETAILS
+
+FOLIO NUMBER : 5551112/23
+Name : Synthetic Test Holder Eight
+Statement Date : 30-Apr-2025
+
+SUMMARY OF HOLDINGS
+Scheme Name          Cost of Investment    Unit Balance    NAV Date       NAV        Market Value
+Synthetic Largecap Value Fund - Regular Plan - Growth   10800.00   460.000000   30-Apr-2025   24.0000   11040.00
+
+FINANCIAL TRANSACTIONS
+
+Synthetic Largecap Value Fund - Regular Plan - Growth ISIN CODE : INF999D04004
+DATE          TRANSACTION TYPE                Amount        NAV         PRICE       UNITS         BALANCE UNITS
+05-Apr-2025   Purchase                          10000.00   20.0000   20.0000   500.000000   500.000000 [Ref: FS1Q08P001]
+10-Apr-2025   Systematic Investment - Purchase   2100.00   21.0000   21.0000   100.000000   600.000000 [Ref: FS1Q08S001]
+15-Apr-2025   Switch In From Synthetic Other Fund   1100.00   22.0000   22.0000   50.000000   650.000000 [Ref: FS1Q08SW001]
+20-Apr-2025   Redemption                        4600.00   23.0000   23.0000   200.000000   450.000000 [Ref: FS1Q08R001]
+22-Apr-2025   IDCW Reinvestment                  235.00   23.5000   23.5000   10.000000   460.000000 [Ref: FS1Q08DR001]
+25-Apr-2025   Stamp Duty Charges Levied   15.00
+26-Apr-2025   STT Charges Levied   8.00

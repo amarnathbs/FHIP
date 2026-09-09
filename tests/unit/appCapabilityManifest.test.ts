@@ -27,6 +27,7 @@ const PAGE_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   admin: 'ADMIN',
   'ai-insights': 'AI_INSIGHTS',
   assets: 'ASSETS',
+  companies: 'BUSINESS_ENTITIES',
   dashboard: 'DASHBOARD',
   dna: 'DNA',
   expenses: 'EXPENSES',
@@ -54,6 +55,7 @@ const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup']);
 const API_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   'ai-insights': 'AI_INSIGHTS', // (folder is actually named "ai" — see alias below)
   assets: 'ASSETS',
+  'business-entities': 'BUSINESS_ENTITIES',
   dashboard: 'DASHBOARD',
   expenses: 'EXPENSES',
   'financial-data-hub': 'FINANCIAL_DATA_HUB',
@@ -101,7 +103,23 @@ const API_FOLDER_ALIASES: Record<string, string> = { ai: 'ai-insights' };
 //     and CROSS_BORDER entries and lib/api.ts's own guard choices; the folder
 //     itself spans more than one ModuleKey so isn't force-mapped to just one.
 //   - capabilities: this task's OWN new /api/capabilities/nav endpoint.
+//   - account: LR-9's account-closure request routes (app/api/account/close),
+//     reached from the Profile page (already covered by the PROFILE
+//     ModuleKey), not itself a distinct nav destination — same reasoning as
+//     the "user" folder immediately above.
+//   - payments: LR-10's checkout/webhook/status/invoices routes
+//     (app/api/payments/**), surfaced from the Profile page's own Billing
+//     panel — same "not itself a distinct nav destination" reasoning as
+//     "account"/"user" above. Deliberately NOT mapped to the
+//     SUBSCRIPTION_PRICING ModuleKey: that entry belongs to the separate G4/
+//     G5 country-capability gating system (APPROVED_PRICING, still false for
+//     every country including AU/IN pending a PO decision to flip it), which
+//     LR-10 does not touch or depend on — real checkout eligibility here is
+//     decided entirely by lib/services/billingAuthority.ts's own confirmed-
+//     billing-country check, not by this manifest.
 const API_FOLDER_INFRA_ALLOWLIST = new Set([
+  'account',
+  'payments',
   'benchmarks',
   'commitments',
   'contact',

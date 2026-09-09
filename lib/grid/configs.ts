@@ -19,6 +19,11 @@ export const incomeGridConfig: GridConfig = {
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
     { name: 'is_taxable', label: 'Taxable', type: 'checkbox', defaultValue: true },
     { name: 'employer_name', label: 'Employer', type: 'text' },
+    // LR-3: explicit, user-declared opt-out so this row stops counting once
+    // its real income is instead tracked via an approved bank-statement/
+    // payslip feed — see migration 0131's header comment for the full
+    // double-count rationale. Never inferred, never defaulted true.
+    { name: 'superseded_by_bank_import', label: 'Tracked via bank/payslip import instead', type: 'checkbox' },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
 };
@@ -37,6 +42,11 @@ export const expenseGridConfig: GridConfig = {
     { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
     { name: 'is_essential', label: 'Essential', type: 'checkbox' },
+    // LR-3: explicit, user-declared opt-out so this row stops counting once
+    // its real spending is instead tracked via an approved bank-statement
+    // feed — see migration 0131's header comment for the full double-count
+    // rationale. Never inferred, never defaulted true.
+    { name: 'superseded_by_bank_import', label: 'Tracked via bank import instead', type: 'checkbox' },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
 };
@@ -202,6 +212,10 @@ export const insuranceGridConfig: GridConfig = {
     noLabel: "No, I don't currently hold personal insurance",
     includeUnsure: true,
   },
+  // LR-7 WP-03: SMSF-paid insurance only makes sense for an AU household —
+  // see the type's own doc comment (lib/grid/types.ts) for why this is
+  // scoped to Insurance only, not every register that offers 'smsf'.
+  restrictedOwnerValues: [{ value: 'smsf', requiredCountry: 'AU' }],
   fields: [
     { name: 'provider', label: 'Provider', type: 'text' },
     { name: 'cover_amount', label: 'Cover Amount', type: 'number', step: '0.01', required: true },

@@ -2,6 +2,18 @@ import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
 
+// A real-world CAMS consolidated statement with many schemes/transactions
+// (found live 2026-09-07: a 17-scheme, ~1000-row statement) can take longer
+// to parse+write than the platform's default function timeout, which kills
+// the request mid-run with no chance to return a clean error -- the client
+// sees a truncated/empty body ("Unexpected end of JSON input") and the
+// parse run is left permanently 'running' (see the stale-run rescue in
+// documentProcessing.ts). Raise the ceiling here; on platforms that don't
+// honor this (some Amplify Hosting compute tiers), the stale-run rescue is
+// still the backstop that keeps a timeout from permanently wedging a
+// document.
+export const maxDuration = 300;
+
 // R2 — "process source document" / "supply temporary PDF password" (spec
 // section 51), combined into one endpoint since a password is only ever
 // relevant to a processing attempt, never stored beyond this request

@@ -17,9 +17,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 // Contributions are an append-only log; a confirmed (non-planned) entry also
-// moves the goal's current_amount, which is the single source of truth the
-// forecast engine reads (funding sources are informational/double-counting
-// checks only, not summed on top of this).
+// moves the goal's current_amount, the manual/confirmed-contribution ledger.
+//
+// LR-7 (2026-09-08): this comment previously claimed current_amount was "the
+// single source of truth the forecast engine reads (funding sources are
+// informational/double-counting checks only, not summed on top of this)" --
+// that was accurate before the Education/Children Investment -> Goal
+// Linkage release, and is stale now. Today, a goal's DISPLAYED progress
+// (Goal detail/list page via goalsData.ts, and the household forecast via
+// forecastData.ts, both as of this phase) is current_amount PLUS the live
+// value of any active investment/asset/retirement-linked funding source
+// (computeLiveLinkedFundingValue(), goalFundingAllocation.ts) -- genuinely
+// additive by design, not a double-counting check. checkFundingAllocation()
+// is the actual double-counting guard, and it only prevents the SAME linked
+// balance being over-allocated ACROSS goals; it does not (and cannot)
+// detect a user manually re-entering, in current_amount, money that is also
+// sitting in a linked account -- see the LR-7 phase report for the
+// provenance-honesty UI this drives.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();

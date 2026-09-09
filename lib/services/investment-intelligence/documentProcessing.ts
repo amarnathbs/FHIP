@@ -47,6 +47,7 @@ import { randomUUID } from 'crypto';
 import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
+import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -119,31 +120,109 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const { data: doc, error: docErr } = await admin.from('ii_source_documents').select('*').eq('id', sourceDocumentId).eq('user_id', userId).maybeSingle();
   if (docErr || !doc) return { ok: false, status: 'not_found', parseRunId: null, error: 'Source document not found.' };
 
+  // Computed unconditionally (not just when `!input.forceReparse`) so it
+  // can also guard every failure path below: once a genuine SUCCEEDED run
+  // exists for this document, no subsequent failed attempt -- however it
+  // was triggered -- is allowed to downgrade ii_source_documents.status
+  // away from 'parsed' and hide/misreport already-valid extracted data.
+  // Found live 2026-09-06: a Reprocess click (forceReparse=true) that hit
+  // PasswordException (no password sent) called handleExtractionFailure,
+  // which unconditionally overwrote status back to 'password_required'
+  // even though the document had already succeeded moments earlier --
+  // every subsequent call then either showed the wrong status (this same
+  // idempotency check, before its own fix above) or, for a call that DID
+  // force reparse again, would have looked like a second real failure of
+  // an already-working document.
+  const { data: priorSucceededRun } = await admin
+    .from('ii_document_parse_runs')
+    .select('*')
+    .eq('source_document_id', sourceDocumentId)
+    .eq('run_status', 'succeeded')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Every failure path below was, before this fix, writing straight to
+  // ii_source_documents.status unconditionally. This wrapper is the single
+  // place that decides whether such a write is actually safe: once
+  // priorSucceededRun is set, a fresh failed attempt (password rejected,
+  // corrupt file, unsupported format, whatever) still gets recorded in
+  // full on ii_document_parse_runs / ii_reconciliation_cases for audit and
+  // is still reported truthfully to THIS caller via the returned `status`/
+  // `error`, but the document's own persisted status is left alone rather
+  // than being dragged backwards out of 'parsed'.
+  const updateDocumentStatusUnlessSucceeded = async (fields: Record<string, unknown>) => {
+    if (priorSucceededRun) return;
+    await admin.from('ii_source_documents').update(fields).eq('id', sourceDocumentId);
+  };
+
   // Idempotency: at most one active run at a time (DB constraint
   // enforces this too; checked here first for a clean error message).
+  //
+  // STALE-RUN RESCUE, found live 2026-09-07: the serverless function
+  // running this pipeline has a platform execution-time ceiling. A large
+  // real-world CAMS statement (many schemes/transactions) can exceed that
+  // ceiling; when the platform kills the function mid-run, nothing here
+  // ever gets a chance to mark the row 'failed' -- it is left 'running'
+  // forever, and the client that made the request sees a truncated/empty
+  // HTTP response ("Unexpected end of JSON input"), not a clean error.
+  // Before this fix, every subsequent Process/Reprocess click on that same
+  // document hit the block below and returned "already being processed"
+  // permanently -- there was no way to ever try again except manual SQL.
+  // A run that's still genuinely in flight is never older than a few
+  // minutes; anything older than STALE_RUN_MS is treated as abandoned by
+  // its own process and auto-failed here so a fresh attempt can proceed.
+  const STALE_RUN_MS = 10 * 60 * 1000; // 10 minutes
   const { data: activeRun } = await admin
     .from('ii_document_parse_runs')
-    .select('id')
+    .select('id, started_at')
     .eq('source_document_id', sourceDocumentId)
     .in('run_status', ['queued', 'running'])
     .maybeSingle();
-  if (activeRun) return { ok: false, status: doc.status as string, parseRunId: activeRun.id as string, error: 'This document is already being processed.' };
+  if (activeRun) {
+    const startedAt = new Date(activeRun.started_at as string).getTime();
+    const ageMs = Date.now() - startedAt;
+    if (ageMs < STALE_RUN_MS) {
+      return { ok: false, status: doc.status as string, parseRunId: activeRun.id as string, error: 'This document is already being processed.' };
+    }
+    await admin
+      .from('ii_document_parse_runs')
+      .update({
+        run_status: 'failed',
+        completed_at: new Date().toISOString(),
+        errors: [{ code: 'stale_run_abandoned', message: `Previous processing attempt did not complete within ${Math.round(STALE_RUN_MS / 60000)} minutes (likely a server timeout on a large document) and was auto-marked failed so this document could be retried.`, severity: 'error' }],
+      })
+      .eq('id', activeRun.id);
+    // Fall through and start a fresh run below -- do NOT return here.
+  }
 
   // Idempotency: a prior SUCCEEDED run with the same parser code/version
   // is not silently re-run unless forced (spec section 52).
   if (!input.forceReparse) {
-    const { data: priorSucceeded } = await admin
-      .from('ii_document_parse_runs')
-      .select('*')
-      .eq('source_document_id', sourceDocumentId)
-      .eq('run_status', 'succeeded')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const priorSucceeded = priorSucceededRun;
     if (priorSucceeded) {
+      // Self-healing repair, found live 2026-09-06: a LATER failed run
+      // (e.g. a Reprocess attempt made without a password) unconditionally
+      // overwrote ii_source_documents.status via handleExtractionFailure
+      // and the other failure paths below, even though this earlier
+      // succeeded run's data was still sitting intact in the database.
+      // Returning `doc.status` here then meant every subsequent call
+      // reported a stale, misleading status (and, since this branch
+      // returns before ever touching `input.password`, silently never
+      // even checked a freshly supplied password) -- to the user this
+      // looked exactly like "my correct password stopped being accepted."
+      // The status this branch reports must be derived from the fact that
+      // a succeeded run genuinely exists, never from the mutable column,
+      // and since we now know that column is wrong, it is corrected here
+      // too rather than left to keep confusing every other reader of it
+      // (other UI tabs, future calls) until some unrelated future write
+      // happens to fix it by accident.
+      if (doc.status !== 'parsed') {
+        await admin.from('ii_source_documents').update({ status: 'parsed', parse_error: null }).eq('id', sourceDocumentId);
+      }
       return {
         ok: true,
-        status: doc.status as string,
+        status: 'parsed',
         parseRunId: priorSucceeded.id as string,
         summary: {
           sourceDetected: priorSucceeded.source_detected as string | null,
@@ -183,7 +262,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const { bytes, error: dlErr } = await downloadSourceDocumentObject(doc.storage_path as string);
   if (dlErr || !bytes) {
     await failRun(admin, parseRunId, 'Could not retrieve the stored document.');
-    await admin.from('ii_source_documents').update({ status: 'parse_failed', parse_error: 'storage_download_failed' }).eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'storage_download_failed' });
     return { ok: false, status: 'parse_failed', parseRunId, error: 'Could not retrieve the stored document.' };
   }
 
@@ -192,7 +271,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   if (doc.mime_type === 'application/pdf') {
     const extraction = await extractPdfText(bytes, input.password);
     if (!extraction.ok) {
-      return handleExtractionFailure(admin, userId, sourceDocumentId, parseRunId, extraction.kind, extraction.error);
+      return handleExtractionFailure(admin, userId, sourceDocumentId, parseRunId, extraction.kind, extraction.error, Boolean(priorSucceededRun));
     }
     text = extraction.text;
     extractionMethod = 'pdf_text_native';
@@ -214,15 +293,12 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   if (!detection.parser || !parsed) {
     const status = detection.detection.confidence > 0 ? 'reconciliation_required' : 'unsupported';
-    await admin
-      .from('ii_source_documents')
-      .update({
-        status,
-        source_detected: detection.detection.sourceKey,
-        source_confidence: detection.detection.confidence,
-        extraction_method: extractionMethod,
-      })
-      .eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({
+      status,
+      source_detected: detection.detection.sourceKey,
+      source_confidence: detection.detection.confidence,
+      extraction_method: extractionMethod,
+    });
     const caseId = await openReconciliationCase(userId, {
       subjectType: 'account',
       subjectId: sourceDocumentId, // no account exists yet — the document itself is the subject
@@ -247,10 +323,13 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   const validation = detection.parser.validateParsedOutput(parsed);
   if (!validation.ok) {
-    await admin
-      .from('ii_source_documents')
-      .update({ status: 'parse_failed', parse_error: validation.errors.join('; '), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, extraction_method: extractionMethod })
-      .eq('id', sourceDocumentId);
+    await updateDocumentStatusUnlessSucceeded({
+      status: 'parse_failed',
+      parse_error: validation.errors.join('; '),
+      source_detected: detection.detection.sourceKey,
+      source_confidence: detection.detection.confidence,
+      extraction_method: extractionMethod,
+    });
     const caseId = await openReconciliationCase(userId, {
       subjectType: 'account',
       subjectId: sourceDocumentId,
@@ -490,6 +569,32 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     return mapped;
   }
 
+  // Perf fix (2026-09-07): this loop used to make 2-3 sequential DB round
+  // trips PER transaction (a fingerprint-dedup lookup, the insert itself,
+  // then the source-link insert) -- for a real ~950-transaction CAMS
+  // statement that is roughly 2,000-2,800 sequential network round trips,
+  // which reliably exceeded the serverless function's execution budget and
+  // left the parse run permanently stuck 'running' (found live 2026-09-07;
+  // see the stale-run rescue in the idempotency check above). Same-document
+  // fingerprint dedup is now one bulk prefetch instead of one query per
+  // transaction, and every genuinely-new transaction's actual writes are
+  // batched into a handful of bulk inserts after the loop instead of one
+  // round trip per row. The R11 cross-source cache below is updated
+  // in-memory as each new transaction is decided (instead of invalidated to
+  // force a re-fetch), so a later transaction in this same import still
+  // sees an earlier one as a candidate -- the exact invariant the original
+  // cache-invalidation comment described -- without any extra DB round trip.
+  const relevantAccountIds = Array.from(new Set(accountIdByFolioAmc.values()));
+  const existingFingerprints = new Map<string, string>(); // `${accountId}:${fingerprint}` -> existing transaction id
+  if (relevantAccountIds.length > 0) {
+    const existingRows = await fetchAllRows<{ id: string; account_id: string; transaction_fingerprint: string }>(() =>
+      admin.from('ii_transactions').select('id, account_id, transaction_fingerprint').eq('user_id', userId).in('account_id', relevantAccountIds)
+    );
+    for (const row of existingRows) existingFingerprints.set(`${row.account_id}:${row.transaction_fingerprint}`, row.id);
+  }
+  const pendingTransactionInserts: Record<string, unknown>[] = [];
+  const pendingSourceLinkInserts: Record<string, unknown>[] = [];
+
   for (const t of parsed.transactions) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
     const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
@@ -507,10 +612,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceReference: t.sourceReference,
     });
 
-    const { data: existingTxn } = await admin.from('ii_transactions').select('id').eq('account_id', accountId).eq('transaction_fingerprint', fingerprint).maybeSingle();
-    if (existingTxn) {
+    const existingTxnId = existingFingerprints.get(`${accountId}:${fingerprint}`);
+    if (existingTxnId) {
       await admin.from('ii_transaction_source_links').upsert(
-        { user_id: userId, transaction_id: existingTxn.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false },
+        { user_id: userId, transaction_id: existingTxnId, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false },
         { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true }
       );
       duplicateTransactionsLinked++;
@@ -611,40 +716,96 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       if (caseId) reconciliationCasesOpened++;
     }
 
-    const { data: createdTxn, error: txnErr } = await admin
-      .from('ii_transactions')
-      .insert({
-        user_id: userId,
-        account_id: accountId,
-        instrument_id: instrumentId,
-        source_document_id: sourceDocumentId,
-        currency_code: currencyCode,
-        // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
-        // inserted (never discarded — spec section 29) but excluded from
-        // R4/R5/R6 analytical aggregation via 'review_required' until a
-        // human resolves the linked ii_reconciliation_cases row, using the
-        // exact same exclusion mechanism R4/R5/R6 already apply to
-        // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
-        // taxRepository.ts's "usable" filters).
-        status: crossSourceReviewRequired ? 'review_required' : 'parsed',
-        transaction_type: t.canonicalType,
-        transaction_date: t.transactionDateIso,
-        units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
-        price_per_unit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
-        gross_amount: scaledToDecimalString(t.amountScaled, 2),
-        source_reference: t.sourceReference,
-        parse_run_id: parseRunId,
-        parser_code: parsed.parserCode,
-        parser_version_used: parsed.parserVersion,
-        source_description: t.sourceDescription,
-        confidence: t.classificationConfidence,
-        transaction_fingerprint: fingerprint,
-      })
-      .select('id')
-      .single();
-    if (createdTxn && !txnErr) {
-      await admin.from('ii_transaction_source_links').insert({ user_id: userId, transaction_id: createdTxn.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
-      crossSourcePositionCache.delete(`${accountId}:${instrumentId}`); // invalidate — a later transaction in this SAME import against this SAME position must see this row as a candidate too
+    // Staged in memory, not written yet -- flushed as bulk inserts below,
+    // once per this whole document instead of once per transaction. The id
+    // is generated client-side (a plain uuid-default column accepts an
+    // explicit value on insert) so the transaction row and its source-link
+    // row can both be staged now without waiting on a round trip for the
+    // DB-generated id, and so this same transaction can immediately become
+    // a same-import cross-source candidate for a later row below.
+    const newTransactionId = randomUUID();
+    pendingTransactionInserts.push({
+      id: newTransactionId,
+      user_id: userId,
+      account_id: accountId,
+      instrument_id: instrumentId,
+      source_document_id: sourceDocumentId,
+      currency_code: currencyCode,
+      // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
+      // inserted (never discarded — spec section 29) but excluded from
+      // R4/R5/R6 analytical aggregation via 'review_required' until a
+      // human resolves the linked ii_reconciliation_cases row, using the
+      // exact same exclusion mechanism R4/R5/R6 already apply to
+      // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
+      // taxRepository.ts's "usable" filters).
+      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+      transaction_type: t.canonicalType,
+      transaction_date: t.transactionDateIso,
+      units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+      price_per_unit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
+      gross_amount: scaledToDecimalString(t.amountScaled, 2),
+      source_reference: t.sourceReference,
+      parse_run_id: parseRunId,
+      parser_code: parsed.parserCode,
+      parser_version_used: parsed.parserVersion,
+      source_description: t.sourceDescription,
+      confidence: t.classificationConfidence,
+      transaction_fingerprint: fingerprint,
+    });
+    pendingSourceLinkInserts.push({ user_id: userId, transaction_id: newTransactionId, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+    existingFingerprints.set(`${accountId}:${fingerprint}`, newTransactionId); // guards a within-this-same-import fingerprint collision too, not only a pre-existing one
+
+    // In-memory equivalent of the old cache invalidation: append this
+    // transaction as a candidate directly, rather than deleting the cache
+    // entry to force a fresh DB re-fetch (which would also just miss this
+    // still-unwritten row anyway).
+    crossSourcePositionCache.get(`${accountId}:${instrumentId}`)?.push({
+      id: newTransactionId,
+      sourceKey: '',
+      sourceDocumentId,
+      accountId,
+      instrumentId,
+      transactionDate: t.transactionDateIso,
+      transactionType: t.canonicalType,
+      grossAmount: scaledToDecimalString(t.amountScaled, 2),
+      units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+      sourceReference: t.sourceReference,
+      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+    });
+  }
+
+  // Flush the batched writes -- a handful of round trips total instead of
+  // one (or two) per transaction. Chunked, and each transaction chunk's
+  // matching link chunk is written immediately after it (not all
+  // transactions then all links), so a failure partway through still
+  // leaves only one small chunk's worth of transactions momentarily
+  // without their source link, same risk class the original one-row-at-a-
+  // time code already carried between its own insert and its own very
+  // next line.
+  const BATCH_CHUNK_SIZE = 500;
+  for (let i = 0; i < pendingTransactionInserts.length; i += BATCH_CHUNK_SIZE) {
+    const txnChunk = pendingTransactionInserts.slice(i, i + BATCH_CHUNK_SIZE);
+    const linkChunk = pendingSourceLinkInserts.slice(i, i + BATCH_CHUNK_SIZE);
+    const { error: batchTxnError } = await admin.from('ii_transactions').insert(txnChunk);
+    if (batchTxnError) {
+      // Reported the same way every other failure path in this function
+      // is (failRun + updateDocumentStatusUnlessSucceeded + a real return
+      // value) rather than thrown -- nothing wraps this function in a
+      // try/catch, so an uncaught throw here would crash the request with
+      // no response body instead of the client's own toast/error message,
+      // reproducing the exact "Unexpected end of JSON input" symptom this
+      // whole fix exists to eliminate, just from a new cause.
+      const message = `Batched transaction insert failed (rows ${i}-${i + txnChunk.length}): ${batchTxnError.message}`;
+      await failRun(admin, parseRunId, message);
+      await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
+      return { ok: false, status: 'parse_failed', parseRunId, error: message };
+    }
+    const { error: batchLinkError } = await admin.from('ii_transaction_source_links').insert(linkChunk);
+    if (batchLinkError) {
+      const message = `Batched transaction-source-link insert failed (rows ${i}-${i + linkChunk.length}): ${batchLinkError.message}`;
+      await failRun(admin, parseRunId, message);
+      await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
+      return { ok: false, status: 'parse_failed', parseRunId, error: message };
     }
   }
 
@@ -654,7 +815,18 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
     if (!accountId || !instrumentId) continue;
 
-    await admin
+    // Real production defect (2026-09-07): this upsert's result was never
+    // checked. A real user's account had ZERO ii_holding_snapshots rows
+    // despite 309 genuinely-inserted transactions and every one of that
+    // document's 17 holdings resolving BOTH accountId and instrumentId
+    // correctly (independently reproduced locally) -- meaning every one of
+    // these upserts was failing at the database level, completely
+    // invisibly, for a reason this diagnostic did not previously surface
+    // anywhere. Capturing and auditing the error here does not itself fix
+    // the underlying cause (not yet identified), but turns a silent,
+    // undiagnosable failure into a visible, diagnosable one on the very
+    // next reprocess attempt.
+    const { error: snapshotError } = await admin
       .from('ii_holding_snapshots')
       .upsert(
         {
@@ -674,6 +846,24 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         },
         { onConflict: 'account_id,instrument_id,as_of_date', ignoreDuplicates: true }
       );
+    if (snapshotError) {
+      // Not routed through emitAuditEvent(): IiAuditEventTypeR9 is a closed,
+      // deliberately curated vocabulary (no generic "system error" member,
+      // and adding one is a migration-level change out of scope for this
+      // diagnostic) -- console.error is visible in the server's own
+      // function logs without borrowing an existing event type for
+      // something it doesn't actually mean.
+      console.error('[investment-intelligence] ii_holding_snapshots upsert failed', {
+        userId,
+        accountId,
+        instrumentId,
+        sourceDocumentId,
+        asOfDateIso: h.asOfDateIso,
+        errorMessage: snapshotError.message,
+        errorCode: snapshotError.code ?? null,
+        parseRunId,
+      });
+    }
   }
 
   // --- 7. Reconciliation + certification, per position ----------------------
@@ -781,7 +971,8 @@ async function handleExtractionFailure(
   sourceDocumentId: string,
   parseRunId: string,
   kind: 'password_required' | 'wrong_password' | 'corrupt' | 'insufficient_text' | 'unknown_error',
-  errorMessage: string
+  errorMessage: string,
+  preserveDocumentStatus = false
 ): Promise<ProcessSourceDocumentResult> {
   const statusByKind: Record<typeof kind, string> = {
     password_required: 'password_required',
@@ -798,7 +989,19 @@ async function handleExtractionFailure(
     unknown_error: 'document_corrupt',
   };
   const status = statusByKind[kind];
-  await admin.from('ii_source_documents').update({ status, parse_error: null }).eq('id', sourceDocumentId); // NEVER store errorMessage verbatim if it could echo a password — it never does (see pdfExtraction.ts messages), but parse_error is left null here defensively for the password-shaped statuses
+  // `preserveDocumentStatus` (true when a genuinely SUCCEEDED run already
+  // exists for this document) protects against exactly the regression
+  // found live 2026-09-06: a Reprocess/re-supply attempt that fails must
+  // still be reported truthfully to THIS caller (via the returned
+  // `status`/`error` below) and recorded on ii_document_parse_runs for
+  // audit, but must never drag the document's own persisted status
+  // backwards out of 'parsed' -- doing so previously hid already-valid
+  // extracted data from every other reader of ii_source_documents.status
+  // and, via the idempotency shortcut above, silently stopped even
+  // CHECKING a freshly supplied correct password on every call after.
+  if (!preserveDocumentStatus) {
+    await admin.from('ii_source_documents').update({ status, parse_error: null }).eq('id', sourceDocumentId); // NEVER store errorMessage verbatim if it could echo a password — it never does (see pdfExtraction.ts messages), but parse_error is left null here defensively for the password-shaped statuses
+  }
   await admin
     .from('ii_document_parse_runs')
     .update({
@@ -908,10 +1111,10 @@ async function evaluatePositionAndCertify(
   // wrong certification verdict. A long-running daily/weekly SIP in one scheme
   // passes 1000 transactions. `transaction_date` repeats, so `id` supplies the
   // unique tie-breaker.
-  const allTxns = await fetchAllRows<{ transaction_type: string; units: number; transaction_date: string }>(() =>
+  const allTxns = await fetchAllRows<{ transaction_type: string; units: number; transaction_date: string; source_reference: string | null }>(() =>
     admin
       .from('ii_transactions')
-      .select('transaction_type, units, transaction_date')
+      .select('transaction_type, units, transaction_date, source_reference')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
       .lte('transaction_date', latestSnapshot.as_of_date as string)
@@ -939,11 +1142,26 @@ async function evaluatePositionAndCertify(
       return { canonicalType: t.transaction_type as ReconciliationTransactionInput['canonicalType'], unitsScaled: parsedUnits && parsedUnits.ok ? parsedUnits.scaled : null };
     });
 
+  // FS1 fix (dispatch sections 4, 17, 28): this was previously hardcoded
+  // `false` unconditionally, meaning `determineHistoryCompleteness` could
+  // never return 'complete_from_known_opening_balance' for ANY document —
+  // a genuine printed "Opening Balance" line (camsFolioStatementParser.ts's
+  // OPENING_BALANCE_SOURCE_REFERENCE marker, an 'adjustment'-typed
+  // transaction that is never a purchase/acquisition — see that file's
+  // header comment) is detected here across this position's FULL
+  // transaction history to date, not just the current reconciliation
+  // window, so a position that had a known opening balance established at
+  // its very first import keeps reporting that honestly on every later
+  // reimport/recertify too, rather than reverting to a misleading
+  // 'complete_from_inception' just because the marker row itself predates
+  // the current window's filter.
+  const hasExplicitOpeningBalanceTransaction = (allTxns ?? []).some((t) => t.source_reference === OPENING_BALANCE_SOURCE_REFERENCE);
+
   const historyCompleteness = determineHistoryCompleteness({
-    hasExplicitOpeningBalanceTransaction: false,
+    hasExplicitOpeningBalanceTransaction,
     hasAnyTransactionHistory: txnInputs.length > 0,
     hasClosingHoldingSnapshot: true,
-    statementCoversFromInception: !earlierSnapshot && txnInputs.length > 0,
+    statementCoversFromInception: !earlierSnapshot && txnInputs.length > 0 && !hasExplicitOpeningBalanceTransaction,
   });
 
   const statementClosingParsed = parseExactDecimal(String(latestSnapshot.units));

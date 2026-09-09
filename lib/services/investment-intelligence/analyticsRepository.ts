@@ -31,6 +31,19 @@ import { fetchAllRows } from './pagination';
 const OUTFLOW_TYPES = new Set(['purchase', 'sip', 'switch_in', 'reinvestment', 'fee', 'tax']);
 /** Transaction types that represent money returning to the investor. */
 const INFLOW_TYPES = new Set(['redemption', 'switch_out', 'dividend']);
+// PC4 section 9 finding (2026-09-07): switch_in/switch_out are genuinely
+// external to the SINGLE SCHEME they touch (new money entering/leaving
+// that specific fund) -- correct for scheme-level cashFlows above, which
+// scheme-level XIRR needs. But a switch is ALWAYS a transfer between two
+// schemes in the SAME household portfolio; no real money enters or
+// leaves the household at all. Used to build each scheme's separate
+// externalCashFlows list (below), which the PORTFOLIO-level engine
+// (analyticsOrchestrator.ts) uses instead of cashFlows for portfolioXirr/
+// portfolioTwrr -- excluding switches entirely at the source is what
+// correctly handles a settlement-date lag or fee/STT differential
+// between a switch's two legs, which a same-date netting approach alone
+// cannot catch.
+const PORTFOLIO_INTERNAL_TRANSFER_TYPES = new Set(['switch_in', 'switch_out']);
 
 export interface LoadWarning {
   scope: string;
@@ -266,11 +279,21 @@ export async function loadAnalyticsDataset(
     const snaps = (snapRows ?? []).filter((s) => s.instrument_id === instrumentId);
 
     const cashFlows: CashFlow[] = [];
+    const externalCashFlows: CashFlow[] = [];
     for (const t of txs) {
       const amount = Number(t.gross_amount);
       const type = t.transaction_type as string;
-      if (OUTFLOW_TYPES.has(type)) cashFlows.push({ date: toDate(t.transaction_date as string), amount: -Math.abs(amount) });
-      else if (INFLOW_TYPES.has(type)) cashFlows.push({ date: toDate(t.transaction_date as string), amount: Math.abs(amount) });
+      const date = toDate(t.transaction_date as string);
+      const isInternalTransfer = PORTFOLIO_INTERNAL_TRANSFER_TYPES.has(type);
+      if (OUTFLOW_TYPES.has(type)) {
+        const flow: CashFlow = { date, amount: -Math.abs(amount) };
+        cashFlows.push(flow);
+        if (!isInternalTransfer) externalCashFlows.push(flow);
+      } else if (INFLOW_TYPES.has(type)) {
+        const flow: CashFlow = { date, amount: Math.abs(amount) };
+        cashFlows.push(flow);
+        if (!isInternalTransfer) externalCashFlows.push(flow);
+      }
       // 'transfer', 'merger', 'adjustment' are unit-movement events with no
       // investor cash impact; deliberately excluded rather than guessed at.
     }
@@ -281,8 +304,15 @@ export async function loadAnalyticsDataset(
     const currentValueDate = latest?.date ?? asOfDate;
 
     // Terminal synthetic flow: the position's current value, positive.
-    if (currentValue > 0) cashFlows.push({ date: currentValueDate, amount: currentValue });
+    // Needed by both scheme-level and portfolio-level calculations, so it
+    // goes into both lists.
+    if (currentValue > 0) {
+      const terminalFlow: CashFlow = { date: currentValueDate, amount: currentValue };
+      cashFlows.push(terminalFlow);
+      externalCashFlows.push(terminalFlow);
+    }
     cashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    externalCashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
     if (cashFlows.length && (!earliest || cashFlows[0].date < earliest)) earliest = cashFlows[0].date;
 
     schemes.push({
@@ -294,6 +324,7 @@ export async function loadAnalyticsDataset(
       optionType: null, // populated when R2 scheme-option metadata is available
       hasDistributionAdjustment: false,
       cashFlows,
+      externalCashFlows,
       currentValue,
       currentValueDate,
       navSeries: navByInstrument.get(instrumentId) ?? [],

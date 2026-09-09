@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
 // spec's suggested layout: Overview (severity counts) + a filterable list.
@@ -120,36 +121,60 @@ export function ReviewCentreClient() {
       {!loading && !error && bySeverity.length === 0 && <p className="text-sm text-muted">No {statusFilter} review items right now.</p>}
 
       <ul className="space-y-3">
-        {bySeverity.map((item) => (
-          <li key={item.id} className="rounded-lg border p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${item.severity === 'high' ? 'bg-red-100 text-red-800' : item.severity === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>
-                    {SEVERITY_LABEL[item.severity]}
-                  </span>
-                  <span className="text-xs uppercase tracking-wide text-muted">{item.review_type.replace('_', ' ')}</span>
-                  <span className="text-xs text-muted">· {item.compliance_classification}</span>
+        {bySeverity.map((item) => {
+          // PC4 section 19: neither Acknowledge nor Dismiss resolves the
+          // underlying reconciliation issue — they only change this review
+          // item's own bookkeeping status. A person reading only the button
+          // labels has no way to know that, so this must say so explicitly
+          // rather than implying either action fixes anything. Where a
+          // genuine self-service resolution path exists (a source document
+          // is on file), a real deep link is offered instead of leaving the
+          // person with only Acknowledge/Dismiss.
+          const discrepancyType = typeof item.evidence?.discrepancyType === 'string' ? item.evidence.discrepancyType : null;
+          const sourceDocumentId = typeof item.evidence?.sourceDocumentId === 'string' ? item.evidence.sourceDocumentId : null;
+          const hasNoResolver = discrepancyType === 'owner_unmatched';
+          return (
+            <li key={item.id} className="rounded-lg border p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${item.severity === 'high' ? 'bg-red-100 text-red-800' : item.severity === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>
+                      {SEVERITY_LABEL[item.severity]}
+                    </span>
+                    <span className="text-xs uppercase tracking-wide text-muted">{item.review_type.replace('_', ' ')}</span>
+                    <span className="text-xs text-muted">· {item.compliance_classification}</span>
+                  </div>
+                  <h3 className="mt-1 font-medium text-ink">{item.title}</h3>
+                  <p className="mt-1 text-sm text-muted">{item.description}</p>
+                  <p className="mt-2 text-xs text-muted">
+                    Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
+                  </p>
+                  {statusFilter === 'open' && sourceDocumentId && (
+                    <Link href="/investment-intelligence/data" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
+                      Review statement
+                    </Link>
+                  )}
+                  {statusFilter === 'open' && hasNoResolver && (
+                    <p className="mt-2 text-xs text-amber-800">This issue requires owner/reconciliation functionality that is not yet available.</p>
+                  )}
                 </div>
-                <h3 className="mt-1 font-medium text-ink">{item.title}</h3>
-                <p className="mt-1 text-sm text-muted">{item.description}</p>
-                <p className="mt-2 text-xs text-muted">
-                  Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
-                </p>
+                {statusFilter === 'open' && (
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <div className="flex gap-2">
+                      <button onClick={() => act(item.id, 'acknowledge')} className="rounded-md border px-2 py-1 text-xs text-muted">
+                        Acknowledge
+                      </button>
+                      <button onClick={() => act(item.id, 'dismiss')} className="rounded-md border px-2 py-1 text-xs text-muted">
+                        Dismiss
+                      </button>
+                    </div>
+                    <p className="max-w-[14rem] text-right text-[11px] text-muted">Records that you&apos;ve seen this — it does not resolve the underlying issue.</p>
+                  </div>
+                )}
               </div>
-              {statusFilter === 'open' && (
-                <div className="flex shrink-0 gap-2">
-                  <button onClick={() => act(item.id, 'acknowledge')} className="rounded-md border px-2 py-1 text-xs text-muted">
-                    Acknowledge
-                  </button>
-                  <button onClick={() => act(item.id, 'dismiss')} className="rounded-md border px-2 py-1 text-xs text-muted">
-                    Dismiss
-                  </button>
-                </div>
-              )}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -1,0 +1,18 @@
+{
+  "fixtureId": "fs1-q09-summary-only-no-transaction",
+  "title": "FS-Q09 — scheme appears only in Summary of Holdings, zero visible-period transactions; current holding still imported, nothing fabricated",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-06-30",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    { "folioNumber": "5552223/34", "holderName": "Synthetic Test Holder Nine", "holdingModeRaw": null }
+  ],
+  "transactionCount": 0,
+  "transactions": [],
+  "holdingCount": 1,
+  "holdings": [
+    { "folioNumber": "5552223/34", "scheme": "Synthetic Balanced Advantage Fund - Direct Plan - Growth", "asOfDateIso": "2025-06-30", "units": "300.000", "value": "4500.00", "nav": "15.0000" }
+  ]
+}

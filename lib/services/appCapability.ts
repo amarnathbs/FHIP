@@ -32,6 +32,7 @@ import {
 } from '@/lib/services/jurisdiction';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
+import { isG5BGenericWriteEnabled } from '@/lib/services/g5bWriteFlag';
 
 // The exact G1 registry vocabulary (migration 0122) — re-exported as a type
 // here rather than redefined, so this file and jurisdiction.ts/countryGate.ts
@@ -108,13 +109,27 @@ export type CapabilityOperation = 'VIEW' | 'CREATE' | 'UPDATE' | 'DELETE';
  *    regression to introduce.
  *  - UNAVAILABLE_FOR_GENERIC_WRITE: forces UNAVAILABLE for this operation
  *    when the resolved experience level is GENERIC, regardless of the VIEW
- *    decision or capability truth. Reserved for the six modules G4 certified
- *    universal-to-VIEW (Income/Expenses/Insurance/Scores/DNA/Resilience)
- *    whose data-capture/validation has not been independently certified safe
- *    for a GENERIC user — G5's job, not G4's. Never narrows a FULL user's
- *    access (identical to FOLLOWS_VIEW there).
+ *    decision or capability truth. Reserved for the three modules whose
+ *    data-capture/validation has NOT been independently certified safe for a
+ *    GENERIC user (Scores/DNA/Resilience — see the SCORES/DNA/RESILIENCE
+ *    manifest entries' own notes for why these three remain moot rather than
+ *    certified). Never narrows a FULL user's access (identical to
+ *    FOLLOWS_VIEW there).
+ *  - FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED: G5B (Product Owner, 2026-09-05).
+ *    Reserved for exactly the three modules G5B independently re-certified
+ *    as having a real, safe, database-backed GENERIC write surface —
+ *    Income/Expenses/Insurance (see each entry's own note for the
+ *    per-operation evidence trail, and supabase/migrations/0129's own header
+ *    for the full 9-cell justification). Behaves EXACTLY like
+ *    UNAVAILABLE_FOR_GENERIC_WRITE for a GENERIC user while the G5B feature
+ *    flag (lib/services/g5bWriteFlag.ts) is off — byte-identical to today,
+ *    by construction and by test (tests/unit/appCapability.test.ts) — and
+ *    like FOLLOWS_VIEW once the flag is on (which must only ever happen
+ *    after the Product Owner has applied and live-verified migration 0129 in
+ *    DEV). Never narrows a FULL user's access, exactly like the other two
+ *    policies.
  */
-export type OperationPolicy = 'FOLLOWS_VIEW' | 'UNAVAILABLE_FOR_GENERIC_WRITE';
+export type OperationPolicy = 'FOLLOWS_VIEW' | 'UNAVAILABLE_FOR_GENERIC_WRITE' | 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED';
 
 export interface ModuleOperationPolicy {
   CREATE: OperationPolicy;
@@ -133,17 +148,50 @@ const OPERATIONS_FOLLOW_VIEW: ModuleOperationPolicy = {
   DELETE: 'FOLLOWS_VIEW',
 };
 
-// The six G4-universal modules: reads are certified universal, but
-// create/update are NOT yet certified safe for a GENERIC user (G5's job).
-// DELETE follows VIEW — preserving today's actual rule (a GENERIC user is
-// structurally incapable of holding an existing row in any of these six
-// modules at all, per each entry's own note below, so there is nothing a
-// GENERIC caller could ever validly delete; the DB backstop remains the
-// enforcement layer of record for a forged direct DELETE regardless).
+// The three modules G4 certified universal-to-VIEW but did NOT certify
+// universal-to-WRITE, and which G5B has NOT since re-certified either
+// (Scores/DNA/Resilience — derived/computed modules with no direct
+// user-facing create/edit form; see each entry's own note for why "nothing a
+// GENERIC caller could ever validly write" is a reasoned conclusion, not an
+// assumption). DELETE follows VIEW — preserving today's actual rule (a
+// GENERIC user is structurally incapable of holding an existing row in any
+// of these three modules at all, so there is nothing a GENERIC caller could
+// ever validly delete; the DB backstop remains the enforcement layer of
+// record for a forged direct DELETE regardless).
 const OPERATIONS_WRITE_NOT_YET_CERTIFIED: ModuleOperationPolicy = {
   CREATE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
   UPDATE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
   DELETE: 'FOLLOWS_VIEW',
+};
+
+// G5B (Product Owner, 2026-09-05): the three modules independently
+// re-verified to have a real, safe, database-backed GENERIC write surface —
+// Income/Expenses/Insurance. CREATE/UPDATE are gated by the G5B feature flag
+// (see FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED's own doc comment above) rather
+// than hard-UNAVAILABLE, so flipping the flag on (only after migration 0129
+// is applied+verified in DEV) is the ONE change needed to expose them.
+//
+// DELETE — Phase 2 correction (2026-09-06), NOT FOLLOWS_VIEW: this app's
+// "delete" is never a literal SQL DELETE (see lib/services/registry.ts's
+// archive() — it issues `UPDATE ... SET is_active = false`), so migration
+// 0129's DELETE-only denial for these three tables does NOT stop it: once
+// the G5B flag is on, the DB manifest legitimately allows GENERIC UPDATE on
+// income_sources/expense_items/insurance_policies, and an archive call IS an
+// UPDATE. FOLLOWS_VIEW would resolve ENABLED here (Income/Expenses/Insurance
+// are VIEW-ENABLED for GENERIC), which would let a GENERIC user archive
+// (functionally delete) their own row through the existing checkbox-uncheck
+// and "Remove" affordances in components/grid/FinancialDataGrid.tsx — the
+// opposite of this phase's explicit "Delete: Unavailable" decision (dispatch
+// section 4) and its required negative control ("a GENERIC user cannot
+// delete it"). UNAVAILABLE_FOR_GENERIC_WRITE closes this at the same
+// server-authoritative layer requireModuleCapability() already guards CREATE/
+// UPDATE with, independent of (and in addition to) any UI-level control
+// hiding — never narrows a FULL (AU/IN) caller, whose DELETE decision
+// continues to follow VIEW exactly as before this change.
+const OPERATIONS_G5B_WRITE_CERTIFIED: ModuleOperationPolicy = {
+  CREATE: 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED',
+  UPDATE: 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED',
+  DELETE: 'UNAVAILABLE_FOR_GENERIC_WRITE',
 };
 
 // The complete application-inventory module list (dispatch section 5). Every
@@ -170,6 +218,7 @@ export const MODULE_KEYS = [
   'FINANCIAL_DATA_HUB',
   'RETIREMENT',
   'SMSF',
+  'BUSINESS_ENTITIES',
   'INVESTMENT_INTELLIGENCE',
   'CROSS_BORDER',
   'PROFILE',
@@ -201,10 +250,24 @@ export interface ModuleCapabilityRule {
    * implicit default — so a future module addition must consciously choose,
    * and the manifest-completeness test can assert every entry has one. */
   operationPolicy: ModuleOperationPolicy;
+  /** G5B drift-proofing (item 4): a STRUCTURED (not prose) list of the
+   * database table(s) each write operation actually persists to, when that
+   * operation's policy can ever resolve ENABLED for a GENERIC user. Required
+   * on every entry (empty arrays where a module has no direct-write table of
+   * its own, e.g. Dashboard/Scores/Admin) so a drift test can mechanically
+   * compare this list against the DB-side mcc_generic_write_capabilities
+   * manifest instead of relying on this file's prose note staying in sync by
+   * hand — see tests/unit/g5bWriteManifestDrift.test.ts and
+   * lib/services/g5bWriteManifest.ts's own header for the comparison this
+   * powers, and for which half of that comparison can run before migration
+   * 0129 is applied vs. only in Phase 2 against live DEV. */
+  writeTables: { CREATE: readonly string[]; UPDATE: readonly string[]; DELETE: readonly string[] };
   /** Documentation only — which G0-JA-1/G3/G4 classification note this
    * module's treatment. Not read by any resolver logic. */
   note: string;
 }
+
+const NO_WRITE_TABLES = { CREATE: [], UPDATE: [], DELETE: [] } as const;
 
 // =============================================================================
 // THE MANIFEST — dispatch section 8: "require an explicit capability-mapping
@@ -228,24 +291,27 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     label: 'Income',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
-    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
-    note: 'No country_code/currency_code field on income_sources or its grid config. Two AU-only catalogue items (age_pension, family_tax_benefit) are already independently gated per-row by assertItemCreationAllowedForUser(), which fails closed for a GENERIC (null-country) caller — this module-level ENABLED decision does not bypass that existing per-item gate.',
+    operationPolicy: OPERATIONS_G5B_WRITE_CERTIFIED,
+    writeTables: { CREATE: ['income_sources'], UPDATE: ['income_sources'], DELETE: [] },
+    note: 'No country_code/currency_code field on income_sources or its grid config. Two AU-only catalogue items (age_pension, family_tax_benefit) are already independently gated per-row by assertItemCreationAllowedForUser(), which fails closed for a GENERIC (null-country) caller — this module-level ENABLED decision does not bypass that existing per-item gate. G5B (2026-09-05): CREATE/UPDATE re-certified safe and gated behind the G5B flag — see supabase/migrations/0129 and lib/services/g5bWriteFlag.ts. DELETE has no writeTables entry because the app never issues a literal SQL DELETE against income_sources (its "delete" archives via UPDATE, already covered by the UPDATE cell) — DISCLOSED FINDING (not fixed here): lib/validation/income.ts hardcodes currency_code to z.enum([\'AUD\',\'INR\']) with no default, a real domestic hardcode G4\'s evidence note missed; a GENERIC user with a non-AUD/INR currency still cannot submit a schema-valid payload even with this flag on.',
   },
   EXPENSES: {
     key: 'EXPENSES',
     label: 'Expenses',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
-    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
-    note: 'No country_code/currency_code field anywhere in expenseGridConfig, validation, or its API routes. No catalogue-item jurisdiction gate exists or is needed (no AU/IN-restricted expense item found).',
+    operationPolicy: OPERATIONS_G5B_WRITE_CERTIFIED,
+    writeTables: { CREATE: ['expense_items'], UPDATE: ['expense_items'], DELETE: [] },
+    note: 'No country_code/currency_code field anywhere in expenseGridConfig, validation, or its API routes. No catalogue-item jurisdiction gate exists or is needed (no AU/IN-restricted expense item found). G5B (2026-09-05): CREATE/UPDATE re-certified safe and gated behind the G5B flag — see supabase/migrations/0129 and lib/services/g5bWriteFlag.ts. DISCLOSED FINDING (not fixed here): lib/validation/expense.ts hardcodes currency_code to z.enum([\'AUD\',\'INR\']) with no default — same gap as INCOME above.',
   },
   INSURANCE: {
     key: 'INSURANCE',
     label: 'Insurance',
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
-    operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
-    note: 'No country_code/currency_code field anywhere in insuranceGridConfig, lib/validation/insurance.ts, or its API routes. No AU/IN literal found in page, config or routes.',
+    operationPolicy: OPERATIONS_G5B_WRITE_CERTIFIED,
+    writeTables: { CREATE: ['insurance_policies'], UPDATE: ['insurance_policies'], DELETE: [] },
+    note: 'No country_code/currency_code field anywhere in insuranceGridConfig, lib/validation/insurance.ts, or its API routes. No AU/IN literal found in page, config or routes. G5B (2026-09-05): CREATE/UPDATE re-certified safe and gated behind the G5B flag — see supabase/migrations/0129 and lib/services/g5bWriteFlag.ts. DISCLOSED FINDING (not fixed here): lib/validation/insurance.ts hardcodes currency_code to z.enum([\'AUD\',\'INR\']) with no default — same gap as INCOME above.',
   },
   PROFILE: {
     key: 'PROFILE',
@@ -253,6 +319,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: false,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Already universal by design (G3): app/api/user/profile/route.ts uses plain requireUser(), no country gate at all. Reporting-currency choice and cross-border declarations are the sanctioned G3 generic surfaces.',
   },
   CROSS_BORDER: {
@@ -261,6 +328,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'CROSS_BORDER_RELATIONSHIPS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'G3-sanctioned generic surface (requireCountryConfirmedUserAllowingGeneric). A declaration only, never a calculation (dispatch section 4: CROSS_BORDER_RELATIONSHIPS permits declarations, not calculations) -- lib/api.ts header comment.',
   },
 
@@ -272,6 +340,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'NOT universal: lib/services/dashboardData.ts hardcodes preferred_currency to (\'AUD\'|\'INR\') with an AUD fallback default, and getFxRateAudInr() bakes in a literal AU/IN FX-rate assumption (fallback 56) used in the summary hot path. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   ASSETS: {
@@ -280,6 +349,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'NOT universal: country_code field hardcoded to lib/constants.ts COUNTRY_OPTIONS (AU/IN only), lib/validation/asset.ts enums country_code/currency_code to (\'AU\'|\'IN\')/(\'AUD\'|\'INR\'), and unlike Income/Liabilities, POST has NO assertItemCreationAllowedForUser call at all -- a real gap, not safe to open to GENERIC. Assigned to G5.',
   },
   LIABILITIES: {
@@ -288,6 +358,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'NOT universal: country_code/currency_code fields hardcoded to AU/IN vocabulary in lib/validation/liability.ts and its grid config, and FinancialDataGrid.tsx\'s shared currency-mismatch copy literally branches "row.country_code === \'IN\' ? India\'s : Australia\'s" (treats any non-IN value, including a hypothetical generic-country row, as Australia\'s). Assigned to G5.',
   },
   GOALS: {
@@ -296,6 +367,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'NOT universal: currency type/default hardcoded to (\'AUD\'|\'INR\') with an AUD fallback in three places (goals page, buildGoalForecastInputs, computeGoalsPagePayload), and lib/validation/goal.ts hardcodes country_code to [\'AU\',\'IN\']. Assigned to G5.',
   },
   INVESTMENTS: {
@@ -304,6 +376,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'NOT universal: the single most explicit AU/IN split found in the app -- a dedicated AU-only broker-statement import panel/copy, and a hardcoded IN-only routing decision to /investment-intelligence. Assigned to G5.',
   },
   RETIREMENT: {
@@ -312,7 +385,8 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_RETIREMENT',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
-    note: 'NOT universal: lib/services/retirementMemberData.ts:62 resolves countryCode via `profile?.country_of_residence === \'IN\' ? \'IN\' : \'AU\'` -- a "not IN becomes AU" fallback, a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users. requireCountryConfirmedUser() already refuses GENERIC before this function is ever called; this manifest entry keeps that true under the new resolver too.',
+    writeTables: NO_WRITE_TABLES,
+    note: 'NOT universal for GENERIC (still domestic AU/IN calculation content -- retirement age assumptions, member tracking). G5-D1 FIXED (this pass): lib/services/retirementMemberData.ts used to resolve countryCode via `profile?.country_of_residence === \'IN\' ? \'IN\' : \'AU\'` -- a "not IN becomes AU" fallback that would have silently misclassified GB/US/SG/AE/missing/invalid values as Australia. It now reuses the canonical G1 toFullExperienceCountryOrNull() narrowing and fails closed (throws, never fabricates AU/IN) for anything else. requireCountryConfirmedUser() already refuses GENERIC before this function is ever called; the fix is defence-in-depth, and this manifest entry keeps GENERIC UNAVAILABLE here unchanged -- Retirement itself remains a G6+ candidate, not re-certified universal by this fix alone.',
   },
   SMSF: {
     key: 'SMSF',
@@ -320,7 +394,24 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_RETIREMENT',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'AU-only by design and by DB trigger (trg_retirement_accounts_smsf_au_gate, migration 0084) -- confirmed still present. Country_capabilities has DOMESTIC_RETIREMENT=true only for AU (IN is false -- no certified India retirement-product engine per migration 0122\'s own comment), so this manifest entry is also correctly UNAVAILABLE for IN under a strict capability read; IN\'s existing (non-SMSF) retirement-member tracking is unaffected since it is served by the RETIREMENT module entry above, not this one.',
+  },
+  BUSINESS_ENTITIES: {
+    key: 'BUSINESS_ENTITIES',
+    label: 'Companies',
+    // LR-11's own discovery/WP-09 finding: unlike SMSF (a specific AU legal
+    // structure), a generic Company/Family Trust ownership label has no
+    // obvious single-country restriction. business_entities.country_code
+    // (migration 0134) is nullable and purely informational -- no DB trigger,
+    // no per-country gate anywhere in app/api/business-entities/**. Genuinely
+    // universal, unlike ASSETS/LIABILITIES above (both hardcoded to AU/IN
+    // vocabulary) or SMSF (hardcoded AU-only).
+    requiredCapability: 'UNIVERSAL_MODULES',
+    supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
+    note: 'LR-11 (Company first; Family Trust a planned fast-follow reusing this same ModuleKey). No country_code/currency_code hardcode anywhere in businessEntityCreateSchema (lib/validation/businessEntity.ts) or its API routes -- currency_code is AUD/INR (matching this app\'s existing 2-currency engine), country_code accepts any of the 6 AUTHORITATIVE_COUNTRY_CODES or null. Not gated behind the G5B write-enablement flag (OPERATIONS_G5B_WRITE_CERTIFIED) since this is a brand-new feature with no pre-existing GENERIC-write history to re-certify, unlike Income/Expenses/Insurance.',
   },
   INVESTMENT_INTELLIGENCE: {
     key: 'INVESTMENT_INTELLIGENCE',
@@ -328,6 +419,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'India-only by design across R1-R6 (CAS parsing, FIFO/grandfathering CGT engine) -- not evaluated for AU or GENERIC applicability at all; out of scope for any change here.',
   },
   FORECASTING: {
@@ -336,6 +428,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Consumes Dashboard/Assets/Goals/Retirement data plus forecast_global_assumptions keyed by country_code (AU/IN) and DEFAULT_FX_RATE_AUD_INR (lib/forecast/crossBorderCalculator.ts) -- inherits the same non-universal assumptions as the modules it forecasts. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   SCORES: {
@@ -344,6 +437,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
+    writeTables: NO_WRITE_TABLES,
     note: 'G4 evidence pass: lib/services/healthScoreData.ts, lib/engines/healthScore.ts and lib/engines/healthScoreEligibility.ts contain zero AU/IN/country/currency/retirement_age literals of their own -- BUT healthScoreData.ts:64 calls dashboardData.ts\'s loadDashboard(), which DOES carry the AUD-default/FX-rate-56 assumption (see the DASHBOARD entry below). This is provably inert for a GENERIC user specifically: the ~85-table MCC/G1 backstop (countries.is_supported false for every GENERIC country) makes it structurally impossible for a GENERIC user to hold ANY income/expense/asset/liability/investment/retirement row, so loadDashboard() always aggregates zero real rows for them regardless of the currency it assumes, and the FX-56 fallback is only reached when a foreign-currency row exists to convert -- which cannot happen. The score therefore renders an honest zero/no-data state for a GENERIC user, never a fabricated or misconverted figure. This reasoning does NOT extend to DASHBOARD itself, whose page also surfaces the raw currency/FX figures directly (not just a derived score), so Dashboard stays UNAVAILABLE.',
   },
   DNA: {
@@ -352,6 +446,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
+    writeTables: NO_WRITE_TABLES,
     note: 'G4 evidence pass: lib/services/financialDnaData.ts and lib/engines/financialDna.ts contain no country/currency hardcodes of their own, but financialDnaData.ts:83 calls dashboardData.ts\'s loadDashboard() the same way healthScoreData.ts does -- see the SCORES entry above for why this is provably inert (zero real rows possible) for a GENERIC user rather than a live defect.',
   },
   RESILIENCE: {
@@ -360,6 +455,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'UNIVERSAL_MODULES',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_WRITE_NOT_YET_CERTIFIED,
+    writeTables: NO_WRITE_TABLES,
     note: 'G4 evidence pass: the historical currency-derived-country defect (G0-JA-1 Wave 1) is CONFIRMED FIXED -- lib/engines/resilienceStress.ts\'s applyCurrencyShock() no longer guesses AU/IN from currency; it resolves homeCountry via the canonical getUserHomeCountry() (jurisdiction.ts) with no `?? \'AU\'` fallback, and explicitly skips the home/foreign split (fails closed) rather than fabricating one for an unresolved country. resilienceData.ts:68 also calls dashboardData.ts\'s loadDashboard() -- see the SCORES entry above for why that is provably inert (zero real rows possible) for a GENERIC user.',
   },
   FINANCIAL_TWIN: {
@@ -368,6 +464,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Cohort-matching/benchmark engine historically AU-fallback-affected (G0-JA-1 Wave 1); not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   RECOMMENDATIONS: {
@@ -376,6 +473,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Recommendation content library is pillar/band-triggered off the same underlying financial data; not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   REPORTS: {
@@ -384,6 +482,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'LOCALISED_REPORTS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'LOCALISED_REPORTS is true for AU/IN only (migration 0122) -- reports carry AU/IN-specific sections per that migration\'s own comment. Kept UNAVAILABLE for GENERIC.',
   },
   RESOURCES: {
@@ -392,6 +491,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'LOCALISED_RESOURCES',
     supportsExistingRecordPreservation: false,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'LOCALISED_RESOURCES is true for AU/IN only (migration 0122); the PUBLIC Resources site (app/(marketing)/resources/**) is unauthenticated and out of this authenticated-app scope regardless -- this entry covers only any authenticated in-app Resources surface, and G7 (Report/Resources localisation) is explicitly out of scope for G4.',
   },
   FINANCIAL_DATA_HUB: {
@@ -400,7 +500,8 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'COUNTRY_SPECIFIC_CATALOGUE_ITEMS',
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
-    note: 'NOT universal: app/api/financial-data-hub/investment-statement/[documentId]/account-match/route.ts:47 hardcodes countryCode: \'AU\' -- a named G5-deferred defect this task must NOT fix but must keep unreachable by GENERIC users via this manifest entry (requireCountryConfirmedUser already refuses GENERIC before this route is ever reached).',
+    writeTables: NO_WRITE_TABLES,
+    note: 'NOT universal for GENERIC (COUNTRY_SPECIFIC_CATALOGUE_ITEMS -- AU-only FDH-11 statement bridge alongside India-only Investment Intelligence). G5-D2 FIXED (this pass): app/api/financial-data-hub/investment-statement/[documentId]/account-match/route.ts and its paired upload/route.ts used to hardcode countryCode: \'AU\' unconditionally. Both now resolve the authoritative country server-side (getUserFullExperienceHomeCountry -- never client-supplied, never currency-derived) and fail closed with an explicit unavailable/manual-review response for any non-AU caller, so an IN user (who is NOT blocked by requireCountryConfirmedUser, only GENERIC is) can no longer have their statement silently matched/created as an Australian document. GENERIC users remain refused before either route is ever reached; this manifest entry\'s UNAVAILABLE-for-GENERIC decision is unchanged.',
   },
   SUBSCRIPTION_PRICING: {
     key: 'SUBSCRIPTION_PRICING',
@@ -408,6 +509,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'APPROVED_PRICING',
     supportsExistingRecordPreservation: false,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'APPROVED_PRICING/APPROVED_BILLING are false for every country including AU/IN (migration 0122 -- "no certified AU/IN billing or FX-expansion claim"). No live billing/checkout surface currently exists in the repo behind this manifest entry; kept UNAVAILABLE for every country until a billing surface is actually built and certified.',
   },
   AI_INSIGHTS: {
@@ -416,6 +518,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: false,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Module 11\'s standard-question/insight library is triggered off the same underlying financial data as Dashboard/Scores/Recommendations; not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5. G4 EVIDENCE-PASS FINDING (disclosed, NOT fixed here -- out of this task\'s authorised scope): 4 of its 5 API routes (standard-questions, standard-questions/[code]/resolve, contextual-explanations, contextual-explanations/resolve) resolve auth via lib/ai/household/resolveHouseholdContext.ts, which imports the PLAIN requireUser() (auth-only, no country-confirmation check) rather than requireCountryConfirmedUser() -- an authenticated-but-country-UNCONFIRMED user can reach them today. This predates G4 and is a Mandatory-Country-Confirmation completeness gap, not a G4 regression; flagged for separate remediation.',
   },
   ADMIN: {
@@ -424,6 +527,7 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     requiredCapability: 'DOMESTIC_CALCULATIONS',
     supportsExistingRecordPreservation: false,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
     note: 'Not a country-experience surface at all -- admin access is governed entirely by lib/services/adminAuth.ts\'s requireAdmin()/role model, independent of country. This manifest entry exists only so the route-manifest completeness test has a home for app/(app)/admin/**; it is never used to grant or deny admin access, and a non-admin GENERIC (or AU/IN) user is refused by requireAdmin() regardless of this entry\'s value.',
   },
 };
@@ -498,6 +602,18 @@ export function resolveModuleCapability(
 
   const policy = rule.operationPolicy[operation];
   if (policy === 'UNAVAILABLE_FOR_GENERIC_WRITE' && context.experienceLevel === 'GENERIC') {
+    return { decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' };
+  }
+  // G5B: identical to UNAVAILABLE_FOR_GENERIC_WRITE above while the G5B flag
+  // is off (byte-identical to pre-G5B behaviour, by construction) — falls
+  // through to FOLLOWS_VIEW's plain `return viewResult` only once the flag is
+  // on. Never consulted for a FULL user (the `context.experienceLevel ===
+  // 'GENERIC'` guard), so a FULL user's access is never narrowed either way.
+  if (
+    policy === 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED' &&
+    context.experienceLevel === 'GENERIC' &&
+    !isG5BGenericWriteEnabled()
+  ) {
     return { decision: 'UNAVAILABLE', reason: 'WRITE_NOT_CERTIFIED_FOR_GENERIC' };
   }
   return viewResult;

@@ -257,6 +257,44 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // file that starts genuinely importing FDH code would still be caught.
       path.join(REPO_ROOT, 'lib', 'nav', 'appNavCapability.ts'),
       path.join(REPO_ROOT, 'lib', 'services', 'appCapability.ts'),
+      // LR-3 (2026-09-08): components/expenses/BankStatementImportPanel.tsx
+      // trips the identical naive-substring limitation the FDH-9/FDH-10/
+      // FDH-11/FDH-12 exceptions above document, for the identical reason —
+      // verified by hand, same standard: it is the Expenses-tab bank-
+      // statement-import UI (mirrors PayslipImportPanel.tsx's own precedent
+      // exactly — a new phase living behind an existing tab, not a new
+      // top-level destination). It never imports anything from
+      // `lib/financial-data-hub`; every reference is a `fetch()` call to a
+      // public `/api/financial-data-hub/...` route string, or a plain `<a
+      // href="/financial-data-hub/review">` link (a route string, not an
+      // import, identical in kind to AppShell.tsx's own precedent above).
+      // Its one call site, app/(app)/expenses/page.tsx, is named alongside
+      // it for the same reason app/(app)/income/page.tsx is not listed here
+      // at all — income/page.tsx never names the literal substring itself,
+      // only PayslipImportPanel.tsx does; expenses/page.tsx's JSX comment
+      // explaining this same architecture happens to also contain the
+      // substring, so both files are approved as exactly these two, not a
+      // directory.
+      path.join(REPO_ROOT, 'components', 'expenses', 'BankStatementImportPanel.tsx'),
+      path.join(REPO_ROOT, 'app', '(app)', 'expenses', 'page.tsx'),
+      // LR-8 (2026-09-08): app/(app)/reports/page.tsx's new "Other Reports &
+      // Outputs" section trips the identical naive-substring limitation the
+      // precedents above document, for the identical reason: it renders a
+      // plain `<Link href="/financial-data-hub/activity">` pointing at the
+      // Financial Activity analytics page (a route string, not an import,
+      // identical in kind to AppShell.tsx's own precedent). It never imports
+      // anything from `lib/financial-data-hub`.
+      path.join(REPO_ROOT, 'app', '(app)', 'reports', 'page.tsx'),
+      // LR-9 (2026-09-08): lib/services/accountDeletionStorage.ts trips the
+      // identical naive-substring limitation the precedents above document,
+      // for the identical reason: it names "lib/financial-data-hub/services/
+      // storage.ts" in a comment explaining why it deliberately does NOT
+      // import that file (the same "keeps its own isolation-safe copy"
+      // precedent lib/import-bridge/adapters/incomeAdapter.ts already
+      // established) — the bucket-name constant it needs is kept as an
+      // independent literal instead. It never imports anything from
+      // `lib/financial-data-hub`.
+      path.join(REPO_ROOT, 'lib', 'services', 'accountDeletionStorage.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

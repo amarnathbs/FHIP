@@ -3,9 +3,12 @@ import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 
 export type PlanTier = 'free' | 'premium';
 
-// No billing/subscription system exists yet — this is a minimal stand-in.
-// Every user starts on 'free' (seeded by migration + signup trigger); there
-// is no self-service upgrade path until a real billing integration exists.
+// Every user starts on 'free' (seeded by migration + signup trigger).
+// LR-10 added a real billing integration (Stripe for AU, Razorpay for IN —
+// see lib/services/payments/) that upgrades plan_tier here via its own
+// webhook-verified entitlementSync.ts, never directly — this function's own
+// read stays exactly as simple as before, it just now has a real writer
+// behind it instead of none.
 //
 // Accepts an optional pre-built client — without this, the scheduled
 // monthly-report cron job (app/api/reports/cron/monthly-generate/route.ts,

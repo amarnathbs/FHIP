@@ -1,0 +1,20 @@
+{
+  "fixtureId": "fs1-q03-sip-registration-mandate-immunity",
+  "title": "FS-Q03 — a SIP REGISTRATION mandate table (with dates spanning 2020-2030, including a From Date before this statement's own transaction history) must never generate synthetic transactions; only the one real Financial Transactions row is extracted",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-06-30",
+  "statementPeriodEndIso": "2025-06-30",
+  "accounts": [
+    { "folioNumber": "5553333/45", "holderName": "Synthetic Test Holder Three", "holdingModeRaw": null }
+  ],
+  "transactionCount": 1,
+  "transactions": [
+    { "folioNumber": "5553333/45", "scheme": "Synthetic Growth Champion Fund - Direct Plan - Growth", "isin": "INF999E05005", "amfiSchemeCode": null, "transactionDateIso": "2025-06-05", "canonicalType": "sip", "amount": "1000.00", "units": "33.333", "nav": "30.0000", "sourceReference": "FS1Q03SIP001" }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    { "folioNumber": "5553333/45", "scheme": "Synthetic Growth Champion Fund - Direct Plan - Growth", "asOfDateIso": "2025-06-30", "units": "100.000", "value": "3200.00", "nav": "32.0000" }
+  ]
+}

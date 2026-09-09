@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
+import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import {
   uploadAndProcessRetirementStatement,
   RetirementStatementProcessingError,
@@ -49,6 +50,16 @@ function currencyMatchesJurisdiction(jurisdiction: 'AU' | 'IN', currency: string
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+
+  // LR-4 (2026-09-08): every other FDH-3-descended upload route (Income/
+  // Payslip, Liability, AU Investment) calls this same gate; Retirement
+  // statement upload never did — a real, unintentional production-safety
+  // gap found during LR-4's capability audit, not a design choice (no
+  // comment anywhere in this file claimed otherwise). Fixed by adding the
+  // identical check, in the identical place, that every sibling route uses.
+  if (!isFdhDocumentUploadEnabled()) {
+    return bad('Statement uploads are not currently enabled in this environment.', 403);
+  }
 
   const url = new URL(req.url);
   const parsed = metadataSchema.safeParse({

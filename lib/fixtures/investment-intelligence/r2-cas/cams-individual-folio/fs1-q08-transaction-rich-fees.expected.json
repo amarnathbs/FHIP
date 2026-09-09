@@ -1,0 +1,26 @@
+{
+  "fixtureId": "fs1-q08-transaction-rich-fees",
+  "title": "FS-Q08 — every supported canonical transaction type plus Stamp Duty/STT fee evidence; fees never carry units",
+  "sourceKey": "cams",
+  "documentTypeDetected": "cams_folio_details",
+  "formatVersionDetected": "folio_details_v1",
+  "statementPeriodStartIso": "2025-04-30",
+  "statementPeriodEndIso": "2025-04-30",
+  "accounts": [
+    { "folioNumber": "5551112/23", "holderName": "Synthetic Test Holder Eight", "holdingModeRaw": null }
+  ],
+  "transactionCount": 7,
+  "transactions": [
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-05", "canonicalType": "purchase", "amount": "10000.00", "units": "500.000", "nav": "20.0000", "sourceReference": "FS1Q08P001" },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-10", "canonicalType": "sip", "amount": "2100.00", "units": "100.000", "nav": "21.0000", "sourceReference": "FS1Q08S001" },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-15", "canonicalType": "switch_in", "amount": "1100.00", "units": "50.000", "nav": "22.0000", "sourceReference": "FS1Q08SW001" },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-20", "canonicalType": "redemption", "amount": "4600.00", "units": "200.000", "nav": "23.0000", "sourceReference": "FS1Q08R001" },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-22", "canonicalType": "reinvestment", "amount": "235.00", "units": "10.000", "nav": "23.5000", "sourceReference": "FS1Q08DR001" },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-25", "canonicalType": "fee", "amount": "15.00", "units": "0.000", "nav": null, "sourceReference": null },
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "isin": "INF999D04004", "amfiSchemeCode": null, "transactionDateIso": "2025-04-26", "canonicalType": "tax", "amount": "8.00", "units": "0.000", "nav": null, "sourceReference": null }
+  ],
+  "holdingCount": 1,
+  "holdings": [
+    { "folioNumber": "5551112/23", "scheme": "Synthetic Largecap Value Fund - Regular Plan - Growth", "asOfDateIso": "2025-04-30", "units": "460.000", "value": "11040.00", "nav": "24.0000" }
+  ]
+}

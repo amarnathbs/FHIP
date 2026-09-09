@@ -16,9 +16,17 @@
 // each label is taken from the destination page's own existing <h1>:
 //   /performance -> "Investment performance"       -> "Performance"
 //   /sip         -> "Recurring investments"        -> "Recurring investments"
-//   /xray        -> "What your funds actually hold"-> "Fund holdings"
+//   /xray        -> "What your funds actually hold"-> "Underlying fund holdings"
 //   /tax         -> "India tax & cost intelligence"-> "Tax & cost"
 //   /review      -> "Investment Review Centre"     -> "Review"
+//
+// PC4 section 14 finding (2026-09-07): the /xray label was originally just
+// "Fund holdings" — genuinely ambiguous against "8 holdings" on the
+// Performance tab, which counts the user's OWN positions (a completely
+// different thing from what a fund itself holds underneath). Renamed to
+// "Underlying fund holdings" to disambiguate; the destination page's own
+// heading/copy was already reasonably clear ("What your funds actually
+// hold"), so only the short nav label needed the fix.
 
 export const II_WORKSPACE_ROOT = '/investment-intelligence';
 
@@ -63,9 +71,9 @@ export const II_WORKSPACE_NAV: readonly IiWorkspaceNavItem[] = [
   },
   {
     key: 'xray',
-    label: 'Fund holdings',
+    label: 'Underlying fund holdings',
     href: `${II_WORKSPACE_ROOT}/xray`,
-    description: 'The securities inside your funds, and where they overlap',
+    description: 'Stocks, bonds or other securities held inside your funds, and where they overlap',
   },
   {
     key: 'tax',

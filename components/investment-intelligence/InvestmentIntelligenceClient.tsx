@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fmtDate } from './dateDisplay';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -79,8 +80,25 @@ interface DocumentSummary {
   holdings: { id: string; account_id: string; instrument_id: string; as_of_date: string; units: string; value: string; quality_status: string }[];
   reconciliationCases: ReconciliationCase[];
   openReconciliationCaseCount: number;
-  portfolioTruthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: unknown[]; warning_reasons: unknown[] }[];
+  portfolioTruthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: { code: string; message: string }[]; warning_reasons: { code: string; message: string }[] }[];
 }
+
+// FS1 (dispatch section 43): a clear, user-friendly document-kind label —
+// never the internal parser code/document_type_detected string verbatim.
+// Falls back honestly to "Not yet identified" rather than guessing.
+function documentKindLabel(documentTypeDetected: string | null): string {
+  if (documentTypeDetected === 'cas_statement') return 'CAMS/KFintech Consolidated Account Statement';
+  if (documentTypeDetected === 'cams_folio_details') return 'CAMS Folio Statement';
+  return 'Not yet identified';
+}
+
+// FS1 (dispatch sections 28-29, 44): these are the exact certification
+// warning codes certification.ts emits when transaction history is not
+// complete from scheme inception (a printed Opening Balance, or a
+// holdings-only position with no reconstructable transactions at all) —
+// read here, not re-derived, so this copy can never drift from what R2's
+// own certification engine actually decided.
+const INCOMPLETE_HISTORY_WARNING_CODES = new Set(['incomplete_transaction_history', 'holdings_only_no_transaction_history']);
 
 const STATUS_LABEL: Record<string, string> = {
   uploaded: 'Uploaded — not yet processed',
@@ -235,7 +253,18 @@ export function InvestmentIntelligenceClient() {
         body: JSON.stringify({ password: passwordInputs[id] || undefined, forceReparse }),
       });
       const json = await res.json();
+      // This route always answers HTTP 200 (see lib/api.ts's `ok()` helper)
+      // even when processing itself failed -- the semantic outcome lives in
+      // `json.data.ok`, not the HTTP status. Checking only `res.ok` (as this
+      // used to) meant every real processing failure -- wrong/missing
+      // password, a corrupt PDF, an unsupported format -- was silently
+      // swallowed: loadDocuments()/loadSummary() still ran, the document
+      // list re-rendered whatever status the server left behind, and the
+      // user never saw why. Found live 2026-09-06 when a password
+      // resubmission attempt produced no error banner at all despite
+      // having actually failed server-side.
       if (!res.ok) throw new Error(json.error ?? 'Processing failed');
+      if (json.data && json.data.ok === false) throw new Error(json.data.error ?? 'Processing failed');
       await loadDocuments();
       await loadSummary(id);
     } catch (e) {
@@ -381,9 +410,11 @@ export function InvestmentIntelligenceClient() {
           </button>
         </form>
         <p className="mt-2 text-xs text-gray-500">
-          Supported today: a CAMS or KFintech consolidated account statement as a digitally-generated <strong>PDF</strong>. Mutual fund CSV exports and
-          broker CSV files are not supported by this workflow and will be rejected as unrecognised. Scanned or photographed statements cannot be read
-          either — there is no OCR, and nothing is ever guessed from an unreadable document.
+          Supported today, as a digitally-generated <strong>PDF</strong>: a CAMS or KFintech consolidated account statement, or a supported CAMS-serviced
+          individual Folio Statement (&ldquo;Folio Details&rdquo; statement). This is not every AMC statement or every CAMS folio-style document — only the
+          structural variants above are certified. Mutual fund CSV exports and broker CSV files are not supported by this workflow and will be rejected
+          as unrecognised. Scanned or photographed statements cannot be read either — there is no OCR, and nothing is ever guessed from an unreadable
+          document.
         </p>
         <p className="mt-2 text-xs text-gray-500">
           Only the statement bytes are uploaded here — nothing is parsed yet. The source is detected from the document itself; the dropdown above is a
@@ -407,7 +438,19 @@ export function InvestmentIntelligenceClient() {
                 </button>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={doc.status} />
-                  {doc.status === 'password_required' && (
+                  {/* The password box is shown for 'parsed' documents too (not just
+                      'password_required') so Reprocess can carry a password for an
+                      encrypted file. Before this, Reprocess always called
+                      handleProcess(id, true) with no way to supply one -- for any
+                      password-protected document that had already succeeded once,
+                      clicking Reprocess was GUARANTEED to fail immediately (no
+                      password sent), which then corrupted the document's own
+                      status via handleExtractionFailure (see documentProcessing.ts
+                      for the full incident writeup) even though the earlier
+                      successful extraction's data was untouched in the database.
+                      Left blank, it behaves exactly as before for a document that
+                      was never password-protected. */}
+                  {(doc.status === 'password_required' || doc.status === 'parsed') && (
                     <input
                       type="password"
                       placeholder="Document password"
@@ -426,8 +469,23 @@ export function InvestmentIntelligenceClient() {
                     </button>
                   )}
                   {doc.status === 'parsed' && (
-                    <button onClick={() => handleProcess(doc.id, true)} disabled={processing === doc.id} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                      Reprocess
+                    <button
+                      onClick={() => {
+                        // A document that already succeeded is, by design, meant to
+                        // be processed once -- Reprocess is for the rare deliberate
+                        // case (a parser fix ships, or something looks wrong), not
+                        // a casual click. This confirmation is the guard against
+                        // exactly the accidental click that caused the 2026-09-06
+                        // incident, now that the password box above also makes a
+                        // genuine reprocess of a protected file actually work.
+                        if (window.confirm('This statement has already been processed successfully. Reprocess it anyway?')) {
+                          handleProcess(doc.id, true);
+                        }
+                      }}
+                      disabled={processing === doc.id}
+                      className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      {processing === doc.id ? 'Processing…' : 'Reprocess'}
                     </button>
                   )}
                 </div>
@@ -449,7 +507,7 @@ export function InvestmentIntelligenceClient() {
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Source identified</h3>
                 <p className="mt-1 text-sm text-gray-800">
-                  {summary.document.source_detected ? summary.document.source_detected.toUpperCase() : 'Not yet identified'}
+                  {documentKindLabel(summary.document.document_type_detected)}
                   {summary.document.source_confidence != null && ` (confidence ${(summary.document.source_confidence * 100).toFixed(0)}%)`}
                 </p>
                 {(summary.document.statement_period_start || summary.document.statement_period_end) && (
@@ -514,26 +572,45 @@ export function InvestmentIntelligenceClient() {
                 {summary.portfolioTruthStatuses.length === 0 ? (
                   <p className="mt-1 text-sm text-gray-500">No positions evaluated yet for this statement.</p>
                 ) : (
-                  <ul className="mt-1 space-y-1">
+                  <ul className="mt-1 space-y-2">
                     {summary.portfolioTruthStatuses.map((s) => {
                       const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
                       const canPublish = holding && (s.status === 'certified' || s.status === 'certified_with_warnings');
+                      // FS1 (dispatch sections 4, 29, 44-45): a position can be a
+                      // fully valid CURRENT holding while its historical
+                      // transaction record is honestly incomplete (a folio
+                      // statement's Opening Balance, or a holdings-only
+                      // position). This is never framed as "failed" — the
+                      // holding itself is still shown and still publishable —
+                      // but analytics relying on full history are called out
+                      // as not yet fully available, with a neutral CTA rather
+                      // than a hard requirement to re-upload anything.
+                      const incompleteHistoryWarning = (s.warning_reasons ?? []).find((w) => INCOMPLETE_HISTORY_WARNING_CODES.has(w.code));
                       return (
-                        <li key={`${s.account_id}:${s.instrument_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
-                          <span className="text-xs text-gray-600">
-                            Position {s.account_id.slice(0, 8)}…/{s.instrument_id.slice(0, 8)}…
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <StatusBadge status={s.status} />
-                            <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                              Re-evaluate
-                            </button>
-                            {canPublish && (
-                              <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
-                                Publish to FHIP
+                        <li key={`${s.account_id}:${s.instrument_id}`} className="rounded border border-gray-100 px-2 py-1.5 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs text-gray-600">
+                              Position {s.account_id.slice(0, 8)}…/{s.instrument_id.slice(0, 8)}…
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <StatusBadge status={s.status} />
+                              <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                Re-evaluate
                               </button>
-                            )}
-                          </span>
+                              {canPublish && (
+                                <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                                  Publish to FHIP
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                          {incompleteHistoryWarning && (
+                            <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                              Current holdings were imported successfully. This statement does not contain the complete acquisition history, so some
+                              performance and tax calculations may remain unavailable until fuller transaction history or a consolidated statement is
+                              provided. Uploading a CAMS/KFintech consolidated account statement for this folio can fill in that history.
+                            </p>
+                          )}
                         </li>
                       );
                     })}
@@ -592,7 +669,7 @@ export function InvestmentIntelligenceClient() {
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500">As of</dt>
-                      <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ?? '—'}</dd>
+                      <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ? fmtDate(publishPreview.valuationAsOfDate) : '—'}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500">Target register</dt>

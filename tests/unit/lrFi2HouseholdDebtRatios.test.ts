@@ -415,8 +415,13 @@ describe('LR-FI-2 — data-layer guards', () => {
   it('DTI is the only ratio re-pointed off totalLiabilities in the engine', () => {
     const src = read('lib/engines/dashboard.ts');
     expect(src).toContain('const debtToIncome = annualGrossIncome > 0 ? householdLiabilityBalance / annualGrossIncome : null;');
-    // Net Worth must still use the whole balance.
-    expect(src).toContain('const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;');
+    // Net Worth must still use the whole balance. LR-11 added an additive
+    // businessEntityOwnershipValue term on top (Company/Trust consolidation)
+    // — this assertion is updated to match, but still proves the important
+    // thing: totalLiabilities (the whole balance), not householdLiabilityBalance.
+    expect(src).toContain(
+      'const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities + businessEntityOwnershipValue;'
+    );
   });
 
   it('What-If re-derives DTI from the household balance, not the total', () => {

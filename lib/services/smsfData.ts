@@ -196,3 +196,69 @@ export async function listSmsfPropertyLoanLinks(fundId: string, userId: string, 
     .eq('link_type', 'smsf_property_loan')
     .eq('is_active', true);
 }
+
+// ---------------------------------------------------------------------------
+// LR-6 — P&L / cash flow / contribution reconciliation read paths.
+//
+// These are pure additional READS over data this file (and LR-5) already
+// established as canonical: owner='smsf' income_sources/expense_items rows,
+// the fund's linked property-loan liability (full economic fields this
+// time, not just the display subset listSmsfPropertyLoanLinks needed), and
+// the fund's own linked retirement_accounts row's contribution columns. No
+// new table, no new write path.
+// ---------------------------------------------------------------------------
+
+/** owner='smsf' income_sources rows for this household — same discriminator LR-FI-1 established. */
+export async function listSmsfOwnedIncome(userId: string, supabase: SupabaseClient) {
+  return supabase
+    .from('income_sources')
+    .select('source_name, amount, net_amount, frequency, master_item_key, employer_name, owner')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .eq('owner', 'smsf');
+}
+
+/** owner='smsf' expense_items rows for this household — same discriminator LR-FI-1 established. */
+export async function listSmsfOwnedExpenses(userId: string, supabase: SupabaseClient) {
+  return supabase
+    .from('expense_items')
+    .select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .eq('owner', 'smsf');
+}
+
+/**
+ * This fund's linked property-loan liability, with the full economic fields
+ * the P&L/cash-flow engines need (balance, interest_rate, monthly_repayment,
+ * debt_type, master_item_key) — a fund-scoped query, never household-wide,
+ * so a household's OTHER (non-SMSF) liabilities can never leak into an SMSF
+ * P&L by construction.
+ */
+export async function listSmsfPropertyLoanLiabilitiesForPnl(fundId: string, userId: string, supabase: SupabaseClient) {
+  const { data: fund, error: fundErr } = await getSmsfFund(fundId, supabase);
+  if (fundErr || !fund) return { data: null, error: fundErr ?? new Error('fund not found') };
+
+  return supabase
+    .from('property_liability_links')
+    .select(
+      'id, liability_id, is_active, liabilities(id, liability_name, balance, interest_rate, monthly_repayment, debt_type, master_item_key, currency_code)'
+    )
+    .eq('user_id', userId)
+    .eq('linked_retirement_id', fund.retirement_account_id)
+    .eq('link_type', 'smsf_property_loan')
+    .eq('is_active', true);
+}
+
+/** The fund's own linked retirement_accounts row's contribution columns (see smsfContributions.ts). */
+export async function getSmsfFundContributionSource(fundId: string, userId: string, supabase: SupabaseClient) {
+  const { data: fund, error: fundErr } = await getSmsfFund(fundId, supabase);
+  if (fundErr || !fund) return { data: null, error: fundErr ?? new Error('fund not found') };
+  if (fund.user_id !== userId) return { data: null, error: new Error('not found') };
+
+  return supabase
+    .from('retirement_accounts')
+    .select('employer_contribution, personal_contribution, contribution_frequency')
+    .eq('id', fund.retirement_account_id)
+    .single();
+}

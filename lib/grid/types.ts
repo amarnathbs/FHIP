@@ -101,4 +101,20 @@ export interface GridConfig {
   // doesn't opt in. See lib/grid/assetFieldMetadata.ts for the Assets
   // implementation.
   fieldVisibleForRow?: (fieldName: string, masterItemKey: string | null) => boolean;
+  // LR-7 WP-03 — SMSF-paid insurance is Australia-only (SMSFs are an AU
+  // legal structure; the certified SMSF fund model itself is already
+  // AU-gated at the database level, migration 0084's jurisdiction trigger).
+  // OWNER_OPTIONS (lib/constants.ts) is a single static list shared
+  // unconditionally by every one of the 7 grids — hiding 'smsf' correctly
+  // for a non-AU household requires knowing the household's country, which
+  // this generic component does not otherwise fetch. Declaring the
+  // restriction here, config-driven exactly like excludeMasterItemKeys
+  // above, means FinancialDataGrid only pays the extra country lookup for
+  // a grid that actually opts in — set only on insuranceGridConfig this
+  // phase. The same latent gap exists identically on the other 6 registers
+  // (owner='smsf' is offered to every household regardless of country
+  // there too) — disclosed as a deferred, cross-cutting finding rather than
+  // fixed everywhere in this pass, since that is a larger, unscoped change
+  // this phase's own "keep the branch narrow" instruction does not cover.
+  restrictedOwnerValues?: { value: string; requiredCountry: 'AU' | 'IN' }[];
 }

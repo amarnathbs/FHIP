@@ -32,7 +32,10 @@ export default function TermsPage() {
         <h2 className="text-xl font-semibold">Your account</h2>
         <p>
           You&apos;re responsible for keeping your account credentials secure and for the accuracy of the
-          information you provide. You can close your account and request deletion of your data at any time.
+          information you provide. You can request closure of your account and deletion of your data at any
+          time from your Profile page. Requesting closure does not delete anything instantly: an authorised
+          reviewer processes each request before deletion is carried out, and you can cancel your request at
+          any time before that happens.
         </p>
       </section>
 

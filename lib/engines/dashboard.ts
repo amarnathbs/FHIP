@@ -1,5 +1,6 @@
 import { toMonthly, type Frequency } from './money';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from './businessEntityValuation';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 
@@ -20,6 +21,12 @@ export interface IncomeRow {
   master_item_key: string | null;
   employer_name?: string | null;
   owner?: string | null;
+  // LR-3 (migration 0131): explicit, user-declared opt-out — true once the
+  // user has said this row's real income is now tracked via an approved
+  // bank/payslip import instead. Optional so every existing caller (tests,
+  // any select that predates the column) keeps compiling and behaving
+  // identically — undefined is treated the same as false.
+  superseded_by_bank_import?: boolean | null;
 }
 export interface ExpenseRow {
   expense_name: string;
@@ -29,6 +36,25 @@ export interface ExpenseRow {
   master_item_key?: string | null;
   expense_category?: string | null;
   owner?: string | null;
+  // LR-3 (migration 0131): see IncomeRow's matching field.
+  superseded_by_bank_import?: boolean | null;
+}
+
+// LR-3: an approved fdh_transactions row, already scoped by the caller to a
+// single household, `approval_status = 'approved'`, and a specific calendar
+// period (dashboardData.ts uses the current month) — this engine does no
+// date filtering of its own, matching the "just sum what you're given"
+// contract every other DashboardInput array already has. Deliberately reads
+// amount_original/currency_original (not fdh_transactions' own precomputed
+// amount_reporting_currency) and converts via this engine's own
+// reportingValue()/fxRateAudInr — the same single conversion mechanism every
+// other register in this file already uses, rather than trusting a second,
+// independently-computed reporting-currency figure that could in principle
+// have been derived against a different rate or preference than this
+// dashboard's own.
+export interface BankTransactionRow {
+  amount_original: number;
+  currency_original: string | null;
 }
 // LR-FI-1: assets/investments/retirement_accounts carry the same `owner`
 // column as the other four registers (migration 0004), so it is declared here
@@ -119,6 +145,21 @@ export interface DashboardInput {
   insurance: InsuranceRow[];
   goals: GoalRow[];
   snapshots: SnapshotRow[]; // most recent last
+  // LR-3: approved bank-statement transactions for the current period.
+  // Optional and defaulted to [] below so every existing caller (every test
+  // fixture, and any caller that predates LR-3) keeps compiling and behaves
+  // byte-for-byte identically — a household with no linked bank import sees
+  // zero change from this feature existing.
+  bankExpenseTransactions?: BankTransactionRow[];
+  bankIncomeTransactions?: BankTransactionRow[];
+  // LR-11 (Company / Family Trust Entity Architecture) — this household's
+  // active business entities, each with the raw line items
+  // computeBusinessEntityOwnershipValue() needs to net. Optional and
+  // defaulted to [] below so every existing caller/test fixture (everyone
+  // before LR-11) keeps compiling and behaves byte-for-byte identically — a
+  // household with no business entities sees zero change from this feature
+  // existing, exactly like bankExpenseTransactions above.
+  businessEntities?: BusinessEntityWithLineItems[];
 }
 
 // Income sources not derived from active work — used for passive-income and
@@ -355,7 +396,13 @@ export interface DashboardSummary {
   // wirings in lib/services/forecastData.ts). Equal to debtMonthlyRepayments
   // by construction for every household with no SMSF rows.
   totalLiabilityMonthlyRepayments: number;
-  totalMonthlyExpenses: number; // essential + lifestyle (excludes debt repayments, tracked separately)
+  totalMonthlyExpenses: number; // essential + lifestyle + bank-derived (excludes debt repayments, tracked separately)
+  // LR-3: the slice of totalMonthlyExpenses/grossMonthlyIncome that came from
+  // approved bank-statement transactions rather than manual entry — exposed
+  // separately so a caller (or a future UI) can show "how much of this came
+  // from your bank feed" without re-deriving it from raw input arrays.
+  bankMonthlyExpenses: number;
+  bankMonthlyIncome: number;
   monthlySurplus: number;
   savingsRate: number | null;
   operatingCashFlow: number; // net income after essential expenses only
@@ -383,6 +430,13 @@ export interface DashboardSummary {
   // economic value (LR-FI-1 §5, §28); this figure exists so a ratio whose
   // denominator is household-only income has a numerator on the same basis.
   householdLiabilityBalance: number;
+  // LR-11 (Company / Family Trust Entity Architecture) — this user's own
+  // ownership-% share of their active business entities' net asset value,
+  // already included in totalAssetsCombined/netWorth above. Exposed
+  // separately for transparency/traceability (AC-09: never mix incompatible
+  // entity populations into one opaque number) — 0 for every household with
+  // no business entities, identical to every pre-LR-11 result.
+  businessEntityOwnershipValue: number;
   netWorth: number;
   netWorthAllocation: AllocationSlice[];
   liabilityByType: { debtType: string; balance: number }[];
@@ -497,20 +551,49 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // belong to the fund, not to the member's disposable income (spec §10,
   // §14) — including them inflated gross/net income and therefore flattered
   // the Savings Rate, DSR and every score derived from them.
-  const householdIncome = householdOperatingCashFlowRows(input.income);
+  // LR-3: a row the user has explicitly marked as "tracked via bank import
+  // instead" is excluded from every calculation below exactly as if it did
+  // not exist — its real economic value is counted instead via
+  // bankMonthlyIncome/bankMonthlyExpenses further down. It is NOT removed
+  // from `input.income`/`input.expenses` themselves (the grid still shows
+  // it, unchanged, for the user's own reference) — only from the arrays this
+  // engine computes from. Filtered before the SMSF household-context split
+  // below so an SMSF-owned row that also happens to be superseded is
+  // excluded for both reasons consistently, never double-handled.
+  const nonSupersededIncome = input.income.filter((r) => !r.superseded_by_bank_import);
+  const nonSupersededExpenses = input.expenses.filter((r) => !r.superseded_by_bank_import);
+  const householdIncome = householdOperatingCashFlowRows(nonSupersededIncome);
   // Expenses: SMSF audit/accounting/administration/property costs are fund
   // operating costs, never household consumption (spec §4, §13).
-  const householdExpenses = householdOperatingCashFlowRows(input.expenses);
+  const householdExpenses = householdOperatingCashFlowRows(nonSupersededExpenses);
   // Liabilities: the rows stay whole — only their monthly_repayment is
   // household cash flow. An SMSF property loan keeps its balance in Net
   // Worth while its instalment leaves household expenses (spec §12, §29).
   const householdLiabilities = householdOperatingCashFlowRows(input.liabilities);
 
-  const grossMonthlyIncome = sumMonthly(householdIncome, 'amount', 'frequency');
+  // LR-3: approved bank-derived income (the current period's real, already-
+  // realised money, not a recurring-frequency estimate) is added directly
+  // into both gross and net — there is no separate "gross vs net" concept
+  // for a bank transaction the way there is for a manually-entered salary
+  // row, so it is treated as already-net, already-realised income for both
+  // figures. Not counted in passiveMonthlyIncome (no master_item_key exists
+  // on a bank transaction to classify it by), so it falls into
+  // activeMonthlyIncome by exclusion below — a reasonable default, not a
+  // claim that all bank-derived income is active.
+  const bankMonthlyIncome = (input.bankIncomeTransactions ?? []).reduce(
+    (sum, t) => sum + reportingValue(t.currency_original, t.amount_original),
+    0
+  );
+  const bankMonthlyExpenses = (input.bankExpenseTransactions ?? []).reduce(
+    (sum, t) => sum + reportingValue(t.currency_original, t.amount_original),
+    0
+  );
+
+  const grossMonthlyIncome = sumMonthly(householdIncome, 'amount', 'frequency') + bankMonthlyIncome;
   const netMonthlyIncome = householdIncome.reduce((sum, r) => {
     const monthly = toMonthly(r.net_amount ?? r.amount, r.frequency);
     return sum + monthly;
-  }, 0);
+  }, bankMonthlyIncome);
   const passiveMonthlyIncome = householdIncome
     .filter((r) => r.master_item_key && PASSIVE_INCOME_KEYS.has(r.master_item_key))
     .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
@@ -578,7 +661,19 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     'amount',
     'frequency'
   );
-  const totalMonthlyExpenses = essentialMonthlyExpenses + lifestyleMonthlyExpenses;
+  // LR-3: bankMonthlyExpenses is added as its own explicit third term,
+  // deliberately NOT folded into essentialMonthlyExpenses or
+  // lifestyleMonthlyExpenses — a bank-derived transaction has no
+  // is_essential signal (that classification exists only on manually-
+  // entered expense_items rows), and guessing essential-vs-lifestyle from
+  // its FDH category would be exactly the kind of inference this codebase's
+  // established rigor forbids. It still reaches totalMonthlyExpenses (and
+  // therefore monthlySurplus, cashFlowRatio, totalOutflow below) — the
+  // figure the Product Owner explicitly asked LR-3 to wire this into — but
+  // does not appear split into essential/lifestyle, and does not enter
+  // liquidityRatio/financialIndependenceRatio further down, both of which
+  // are keyed specifically off essentialMonthlyExpenses.
+  const totalMonthlyExpenses = essentialMonthlyExpenses + lifestyleMonthlyExpenses + bankMonthlyExpenses;
   // Same reporting-currency conversion as the balance totals above — a
   // foreign-currency liability's repayment must not be added raw into a
   // reporting-currency cash-flow figure (monthlySurplus, disposableIncome).
@@ -644,6 +739,16 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       ? Array.from(employerMap.values()).reduce((sum, v) => sum + (v / activeIncomeTotal) ** 2, 0)
       : null;
 
+  // LR-11 (Company / Family Trust Entity Architecture, WP-05). Computed via
+  // the dedicated isolated engine — see businessEntityValuation.ts's own
+  // header for why the entity-specific arithmetic lives there rather than
+  // here. Added into totalAssetsCombined AND netWorth below (both derived
+  // from the same expanded formula) so totalAssetsCombined's own documented
+  // contract ("the figure to show as total assets anywhere net worth is
+  // also shown, so the two reconcile") keeps holding for a household with
+  // business entities, not just one without any.
+  const businessEntityOwnershipValue = computeBusinessEntityOwnershipValue(input.businessEntities ?? [], currency, fxRateAudInr);
+
   const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
@@ -652,7 +757,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // householdLiabilities array the cash-flow figures use, so there is one
   // filter rule in this engine, not two.
   const householdLiabilityBalance = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
-  const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
+  const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities + businessEntityOwnershipValue;
 
   const allocationMap = new Map<AllocationBucket, number>();
   const addAlloc = (bucket: AllocationBucket, value: number) =>
@@ -983,6 +1088,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     debtMonthlyRepayments,
     totalLiabilityMonthlyRepayments,
     totalMonthlyExpenses,
+    bankMonthlyExpenses,
+    bankMonthlyIncome,
     monthlySurplus,
     savingsRate,
     operatingCashFlow,
@@ -998,11 +1105,17 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     hasRetirement: input.retirement.length > 0,
     hasInsurance: input.insurance.length > 0,
     totalAssets,
-    totalAssetsCombined: totalAssetBaseForRatios,
+    // LR-11: includes businessEntityOwnershipValue (also exposed separately
+    // below) so this field's own documented contract — "the figure to show
+    // as total assets anywhere net worth is also shown, so the two
+    // reconcile" — keeps holding: totalAssetsCombined - totalLiabilities ===
+    // netWorth for every household, business entities or not.
+    totalAssetsCombined: totalAssetBaseForRatios + businessEntityOwnershipValue,
     totalInvestments,
     totalRetirement,
     totalLiabilities,
     householdLiabilityBalance,
+    businessEntityOwnershipValue,
     netWorth,
     netWorthAllocation,
     liabilityByType,

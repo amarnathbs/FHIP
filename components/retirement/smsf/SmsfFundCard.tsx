@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { fetchJson, formatMoneySafe, formatDateSafe } from './format';
 import { SmsfMembers } from './SmsfMembers';
 import { SmsfDetailedWorkspace } from './SmsfDetailedWorkspace';
+import { SmsfReportsPanel } from './SmsfReportsPanel';
 import type { SmsfFundRow } from './types';
 
 // One SMSF fund's card (spec s.4-9, s.32-33). Summary Mode is rendered as a
@@ -188,6 +189,8 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
           <SmsfDetailedWorkspace fund={fund} onFundUpdated={handleFundUpdated} />
         )}
       </div>
+
+      <SmsfReportsPanel fund={fund} />
     </div>
   );
 }

@@ -226,13 +226,38 @@ describe('requireModuleCapability — flag ON (G4 manifest-driven)', () => {
     }
   });
 
-  it('DELETE follows the VIEW decision (explicit manifest choice, not an implicit fallthrough) — still ENABLED for GENERIC on the six modules since there is nothing a GENERIC caller could ever validly hold to delete; the DB backstop remains the real enforcement layer for a forged direct DELETE', async () => {
+  it('DELETE follows the VIEW decision (explicit manifest choice, not an implicit fallthrough) — still ENABLED for GENERIC on Scores/DNA/Resilience since there is nothing a GENERIC caller could ever validly hold to delete; the DB backstop remains the real enforcement layer for a forged direct DELETE', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
     currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
-    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE', 'SCORES', 'DNA', 'RESILIENCE'] as const) {
+    for (const moduleKey of ['SCORES', 'DNA', 'RESILIENCE'] as const) {
       const result = await requireModuleCapability(moduleKey, req('DELETE'));
       expect(result.blocked, moduleKey).toBeNull();
       expect(result.decision, moduleKey).toBe('ENABLED');
+    }
+  });
+
+  // G5B Phase 2 (2026-09-06): Income/Expenses/Insurance's "delete" is
+  // implemented as an UPDATE (archive) via lib/services/registry.ts's
+  // archive() — once the G5B flag makes UPDATE grantable to a GENERIC
+  // caller, FOLLOWS_VIEW would silently ALSO grant DELETE (since these three
+  // modules' VIEW is ENABLED for GENERIC), letting a GENERIC user archive
+  // their own row through the checkbox-uncheck/"Remove" affordances in
+  // components/grid/FinancialDataGrid.tsx — the opposite of this phase's
+  // explicit "Delete: Unavailable" decision. requireModuleCapability() must
+  // therefore reject DELETE for these three modules, at the same
+  // server-authoritative layer that already gates CREATE/UPDATE, regardless
+  // of the G5B flag's state (see appCapability.ts's
+  // OPERATIONS_G5B_WRITE_CERTIFIED comment).
+  it('DELETE is REJECTED (403, WRITE_NOT_CERTIFIED_FOR_GENERIC) for GENERIC on Income/Expenses/Insurance — never follows their now-grantable UPDATE decision', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('DELETE'));
+      expect(result.blocked, moduleKey).not.toBeNull();
+      expect(result.blocked!.status, moduleKey).toBe(403);
+      const body = await result.blocked!.json();
+      expect(body.error, moduleKey).toBe('WRITE_NOT_CERTIFIED_FOR_GENERIC');
+      expect(result.decision, moduleKey).toBe('UNAVAILABLE');
     }
   });
 

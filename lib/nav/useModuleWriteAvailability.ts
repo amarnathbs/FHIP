@@ -17,10 +17,27 @@
 // nothing (rather than a locked-state flash) during the brief initial fetch.
 import { useEffect, useState } from 'react';
 import type { ModuleKey } from '@/lib/services/appCapability';
-import { parseWriteDecisions, isModuleWriteAvailable } from '@/lib/nav/appNavCapability';
+import {
+  parseWriteDecisions,
+  isModuleWriteAvailable,
+  parseDeleteDecisions,
+  isModuleDeleteAvailable,
+} from '@/lib/nav/appNavCapability';
 
-export function useModuleWriteAvailability(moduleKey: ModuleKey): { available: boolean; resolved: boolean } {
+// G5B Phase 2 (2026-09-06): `deleteAvailable` added alongside the pre-existing
+// `available`/`resolved` pair from the SAME single fetch (no extra network
+// round-trip) — for every module before G5B this is byte-identical to
+// `available` (CREATE and DELETE share a policy everywhere except Income/
+// Expenses/Insurance), so existing callers that only destructure
+// `{ available, resolved }` see no change at all. Fails closed the same way:
+// while loading, on a failed fetch, or on a malformed body, `deleteAvailable`
+// stays false — a page must never default to showing a live remove control
+// before it has proof the delete is actually safe.
+export function useModuleWriteAvailability(
+  moduleKey: ModuleKey
+): { available: boolean; resolved: boolean; deleteAvailable: boolean } {
   const [available, setAvailable] = useState(false);
+  const [deleteAvailable, setDeleteAvailable] = useState(false);
   const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
@@ -30,11 +47,13 @@ export function useModuleWriteAvailability(moduleKey: ModuleKey): { available: b
       .then((j) => {
         if (cancelled) return;
         setAvailable(isModuleWriteAvailable(moduleKey, parseWriteDecisions(j)));
+        setDeleteAvailable(isModuleDeleteAvailable(moduleKey, parseDeleteDecisions(j)));
         setResolved(true);
       })
       .catch(() => {
         if (cancelled) return;
         setAvailable(false);
+        setDeleteAvailable(false);
         setResolved(true);
       });
     return () => {
@@ -42,5 +61,5 @@ export function useModuleWriteAvailability(moduleKey: ModuleKey): { available: b
     };
   }, [moduleKey]);
 
-  return { available, resolved };
+  return { available, resolved, deleteAvailable };
 }

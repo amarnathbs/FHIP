@@ -66,6 +66,14 @@ function makeFakeSupabase(tables: Record<string, unknown[]>) {
       in(col: string, vals: unknown[]) { rows = rows.filter((r: any) => vals.includes(r[col])); return builder; },
       is(col: string, val: unknown) { rows = rows.filter((r: any) => r[col] === val); return builder; },
       lte(col: string, val: string | number) { rows = rows.filter((r: any) => r[col] <= val); return builder; },
+      // LR-3: dashboardData.ts's new bank-transaction fetch (loadDashboard())
+      // filters by a calendar-month date range — same rationale as .range()
+      // above, this fake builder needs the same methods so tests routed
+      // through computeGoalsPagePayload() -> loadDashboard() keep working.
+      // No fdh_transactions rows are seeded by this test's fixtures, so
+      // these are no-ops in practice here, but a correct stand-in regardless.
+      gte(col: string, val: string | number) { rows = rows.filter((r: any) => r[col] >= val); return builder; },
+      lt(col: string, val: string | number) { rows = rows.filter((r: any) => r[col] < val); return builder; },
       not(col: string, _op: string, val: string) {
         // Only usage in this codepath is .not('status', 'in', '(archived,cancelled)').
         const excluded = val.replace(/[()]/g, '').split(',');

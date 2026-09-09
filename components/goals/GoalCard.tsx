@@ -33,6 +33,13 @@ export function GoalCard({ goal, currency }: { goal: GoalPayload; currency: 'AUD
   const nextMilestone = goal.milestones
     .filter((m) => m.status === 'pending')
     .sort((a, b) => a.display_order - b.display_order)[0];
+  // LR-7 WP-09/WP-10 — goal.currentAmount is manualCurrentAmount (the
+  // user-typed ledger) plus the live value of any linked investment/asset/
+  // retirement funding source, added on top by design (see
+  // goalFundingAllocation.ts's own header). Rounding to whole cents before
+  // comparing avoids a floating-point remainder showing as a spurious
+  // "$0.00 from linked investments" caption.
+  const linkedFundingPortion = Math.round((goal.currentAmount - goal.manualCurrentAmount) * 100) / 100;
 
   return (
     <div className="rounded-card border bg-white p-5">
@@ -57,6 +64,11 @@ export function GoalCard({ goal, currency }: { goal: GoalPayload; currency: 'AUD
           <div className="h-2 rounded-full bg-trust" style={{ width: `${displayProgress}%` }} />
         </div>
         <p className="mt-1 text-xs text-gray-500">{displayProgress.toFixed(0)}% funded</p>
+        {linkedFundingPortion !== 0 && (
+          <p className="mt-1 text-[11px] text-gray-500">
+            {`${formatMoney(goal.manualCurrentAmount, currency)} manually tracked + ${formatMoney(linkedFundingPortion, currency)} from linked investments`}
+          </p>
+        )}
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
