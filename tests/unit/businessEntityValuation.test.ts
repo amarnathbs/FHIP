@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeDashboard, type DashboardInput } from '@/lib/engines/dashboard';
 import { computeBusinessEntityNetAssetValue, computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from '@/lib/engines/businessEntityValuation';
-import { businessEntityCreateInputSchema } from '@/lib/validation/businessEntity';
+import { businessEntityCreateInputSchema, businessEntityCreateSchema } from '@/lib/validation/businessEntity';
 
 // ---------------------------------------------------------------------------
 // LR-11 (Company / Family Trust Entity Architecture) — WP-05 consolidation
@@ -210,5 +210,81 @@ describe('businessEntityCreateInputSchema validation', () => {
     expect(
       businessEntityCreateInputSchema.safeParse({ name: 'Co', currency_code: 'AUD', ownership_percentage: 101, valuation_mode: 'detailed' }).success
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LR-13 — Family Trust fast-follow. computeBusinessEntityOwnershipValue()
+// and computeBusinessEntityNetAssetValue() take no entity_type parameter at
+// all (see lib/engines/businessEntityValuation.ts's own BusinessEntityRow
+// type) — this test proves that's a deliberate design property, not an
+// oversight: a row representing a Family Trust runs through the EXACT same
+// consolidation math as a Company, with zero special-casing.
+// ---------------------------------------------------------------------------
+describe('LR-13 — Family Trust uses the identical consolidation math as Company', () => {
+  it('a Family Trust-representing row consolidates via the same ownership% * NAV rule', () => {
+    // The engine has no entity_type field to branch on — this row is
+    // "a Family Trust" only by the test's own labelling, proving the
+    // computation itself cannot distinguish the two.
+    const familyTrustRow = summaryEntity({ id: 'trust-1', ownership_percentage: 30, summary_net_asset_value: 400_000 });
+    expect(computeBusinessEntityOwnershipValue([familyTrustRow], 'AUD', 56)).toBe(120_000); // 30% of 400,000
+  });
+
+  it('a mixed household (one Company, one Family Trust) sums both without cross-contamination', () => {
+    const company = summaryEntity({ id: 'company-1', ownership_percentage: 100, summary_net_asset_value: 100_000 });
+    const familyTrust = summaryEntity({ id: 'trust-1', ownership_percentage: 30, summary_net_asset_value: 400_000 });
+    expect(computeBusinessEntityOwnershipValue([company, familyTrust], 'AUD', 56)).toBe(220_000); // 100,000 + 120,000
+  });
+});
+
+describe('LR-13 — schema accepts family_trust as a valid entity_type', () => {
+  it('accepts entity_type: family_trust on creation', () => {
+    const result = businessEntityCreateInputSchema.safeParse({
+      name: 'Smith Family Trust',
+      entity_type: 'family_trust',
+      currency_code: 'AUD',
+      ownership_percentage: 100,
+      valuation_mode: 'summary',
+      summary_net_asset_value: 1000,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('defaults entity_type to company when omitted (backward compatibility)', () => {
+    const result = businessEntityCreateInputSchema.safeParse({
+      name: 'Legacy Co',
+      currency_code: 'AUD',
+      ownership_percentage: 100,
+      valuation_mode: 'summary',
+      summary_net_asset_value: 1000,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.entity_type).toBe('company');
+  });
+
+  it('rejects an arbitrary third entity_type', () => {
+    const result = businessEntityCreateInputSchema.safeParse({
+      name: 'Bogus',
+      entity_type: 'partnership',
+      currency_code: 'AUD',
+      ownership_percentage: 100,
+      valuation_mode: 'summary',
+      summary_net_asset_value: 1000,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// NEG-06 "trust semantics invented" (LR-11's own numbering — N/A there since
+// Trust didn't exist yet; a real, checkable control now that it does). Per
+// migration 0136's own Product Owner lock, no trustee/beneficiary/
+// distribution-rule concept may exist anywhere in this schema.
+describe('NEG-06 — no invented trust legal/beneficial-ownership concept exists', () => {
+  it('the create schema has no trustee, beneficiary, or distribution field', () => {
+    const shape = businessEntityCreateSchema.shape;
+    const forbiddenKeys = ['trustee', 'trustee_type', 'beneficiary', 'beneficiaries', 'distribution_rule', 'discretionary'];
+    for (const key of forbiddenKeys) {
+      expect(key in shape, `businessEntityCreateSchema unexpectedly has a '${key}' field — this is exactly the invented legal/beneficial-ownership concept migration 0136 forbids without separate Product Owner authorisation`).toBe(false);
+    }
   });
 });

@@ -71,12 +71,12 @@ const NAV_GROUPS: NavGroup[] = [
       // that explicit rather than implying only Investments lives here.
       { type: 'link', label: 'Investment & Retirement', href: '/investments' },
       { type: 'link', label: 'Insurance', href: '/insurance' },
-      // LR-11 — Company entity workspace (Family Trust planned as a fast
-      // follow-up, same nav entry once built). Its own destination, not
-      // folded into Assets, since an entity's value only reaches personal
-      // Net Worth via the ownership-% consolidation model, not as a
+      // LR-11 — Company entity workspace. LR-13 — Family Trust fast-follow,
+      // same route/page, label updated to cover both. Its own destination,
+      // not folded into Assets, since an entity's value only reaches
+      // personal Net Worth via the ownership-% consolidation model, not as a
       // personally-held asset.
-      { type: 'link', label: 'Companies', href: '/companies' },
+      { type: 'link', label: 'Companies & Trusts', href: '/companies' },
     ],
   },
   {
