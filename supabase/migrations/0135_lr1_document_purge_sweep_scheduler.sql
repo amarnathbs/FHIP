@@ -1,3 +1,23 @@
+-- RENUMBERED 0128 -> 0135 during LR-2..LR-12 programme reconciliation
+-- (2026-09-09): this file was originally allocated as 0128 on the
+-- feature/lr-1-upload-security-lifecycle branch and applied to DEV under
+-- that number (cron job id 4, confirmed live 2026-09-05) BEFORE LR-9/G5B/
+-- LR-10/LR-11's own migrations (0129-0134) were allocated and applied to
+-- production on a separate branch. Historical migrations are immutable and
+-- production already has 0129-0134 applied, so this file is renumbered
+-- forward to the next free slot for the merge into main -- exactly the same
+-- reconciliation pattern already used for the FDH-3/R6 (0058) and App
+-- Review (0031-0039) sibling-branch migration collisions. The file's SQL
+-- CONTENT is unchanged from what DEV already ran under "0128" -- DEV's
+-- already-created objects (the cron job, the vault secret, etc.) do not
+-- need to be redone; only the filename/ledger-position changes for a fresh
+-- migration chain built from main going forward. Any documentation still
+-- referring to "migration 0128" (docs/financial-data-hub/
+-- LR1_SCHEDULER_CLOSURE_MIGRATION_READY.md, scripts/lr1_scheduler_live_
+-- autonomy_proof.mjs's own comments) is now describing this same file by
+-- its old number -- harmless drift, not corrected retroactively, matching
+-- this project's own established practice for prior renumbers.
+--
 -- LR-1 Scheduler Closure — activate the janitor as a genuine periodic
 -- background sweep via Supabase's pg_cron + pg_net extensions, calling the
 -- already-deployed, already-certified purge-sweep endpoint
