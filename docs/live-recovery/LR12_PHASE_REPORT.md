@@ -3,7 +3,7 @@
 **Status:** GAP-ANALYSIS CERTIFICATION — scope explicitly agreed with the Product Owner given this phase's nature (proof/closure across the whole recovered product, not a new feature) and this agent's lack of any mechanism to create real DEV auth users or execute live payment checkouts itself. This report cites existing, already-obtained certification evidence per work package wherever it genuinely covers the claim, verifies that evidence against the CURRENT repository/production state (not merely trusting an old report), and names every genuine, currently-undocumented gap explicitly rather than folding it into an aggregate pass rate. No new architecture was built in this phase, per its own lock.
 
 **Date:** 2026-09-09
-**Base:** `origin/main` at `f4f5e1e` (LR-11 docs update), migration head `0134` (129 migration files present; `0128` is a genuine numbering gap — never allocated — not a duplicate or a defect).
+**Base:** `origin/main` at `f4f5e1e` (LR-11 docs update), migration head `0134` (129 migration files present). *Correction, post-LR-12 (see `LR1_PHASE_REPORT.md`): `0128` was not actually an unallocated gap — it was reserved on the separate, not-yet-reconciled LR-1 branch and has since been renumbered to `0135` as part of that branch's own merge into `main`.*
 
 ---
 
