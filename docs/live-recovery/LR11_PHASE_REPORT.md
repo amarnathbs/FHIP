@@ -1,6 +1,6 @@
 # LR-11 Phase Report — Company / Family Trust Entity Architecture (Company first; Child Discovery Only)
 
-**Status:** CONDITIONAL PASS — code complete, tsc/lint/unit tests clean; blocked on migration `0134` application (DEV then production, same discipline as every prior phase) and live-DEV RLS/round-trip verification before this can be called terminal.
+**Status:** CONDITIONAL PASS — code complete, tsc/lint/unit tests/build clean; migration `0134` applied to DEV and production 2026-09-09, independently re-verified read-only (6/6 checks pass, including a live anon-write-blocked RLS proof). Pushed to `main` (`3c8476f`). Remaining gap before this is terminal: an authenticated cross-tenant round trip against hosted DEV (two real synthetic users) rather than only the anon-write proof below.
 
 **Date:** 2026-09-09
 **Scope decision (Product Owner, this phase):** Company built first and fully; Family Trust deferred as a fast-follow reusing the same schema/service/UI shape. Consolidation model: ownership % × entity net asset value is the only thing that reaches personal household Net Worth. Entity liabilities are excluded from personal DTI/DSR only (mirroring SMSF), not from Net Worth consolidation (they still reduce the entity's own net value).
@@ -56,7 +56,7 @@ All except NEG-06/NEG-07 (N/A this phase — no Trust or Child schema exists to 
 | NEG-05 | SMSF rules copied blindly | Tested: the create schema accepts all 6 authoritative country codes (and null) — no AU-only literal anywhere in `businessEntityCreateSchema` or its API routes. |
 | NEG-06 | Trust semantics invented | N/A — `entity_type` is hard-constrained to `'company'` only; no trust-specific field or logic exists anywhere. |
 | NEG-07 | Child schema built without approval | Confirmed absent — no child table, column, or UI was created; discovery's own finding (nothing beyond a cosmetic label + unrelated aggregate counter) stands unchanged. |
-| NEG-08 | Cross-entity data leak | Tested at the unit level (fake-Supabase-client cross-tenant requests denied) for entities, assets and liabilities. RLS policies mirror SMSF's already-certified shape exactly. **Live-DEV RLS proof is a disclosed gap** — needs a real cross-tenant attempt against hosted DEV once migration `0134` is applied (see §5). |
+| NEG-08 | Cross-entity data leak | Tested at the unit level (fake-Supabase-client cross-tenant requests denied) for entities, assets and liabilities. RLS policies mirror SMSF's already-certified shape exactly. **Live production proof (2026-09-09)**: an unauthenticated anon-key INSERT attempt into `business_entities` was rejected with `401`/`42501` (RLS, no anon policy) — genuine live confirmation the table is not openly writable. A full authenticated cross-tenant round trip (two real synthetic users, live DEV) remains a disclosed residual gap. |
 
 ## 5. Verification performed / outstanding
 
@@ -74,12 +74,9 @@ All except NEG-06/NEG-07 (N/A this phase — no Trust or Child schema exists to 
 - **WP-08 (entity reports)**: Reports Hub infrastructure and SMSF's own CSV-export precedent (`smsfExport.ts`) are confirmed reusable, but no Company-specific export was built this pass, to keep this delivery bounded to registry + valuation + workspace + tests, per the Product Owner's own "Company first, fully verified" scoping choice.
 - **Family Trust**: planned fast-follow reusing this exact schema/service/UI shape (`entity_type` already a real column, just constrained to `'company'` for now) — a forward migration widening the CHECK constraint plus a UI label change is expected to be materially smaller than this phase.
 
-## 7. What the Product Owner needs to do next
+## 7. Closure status
 
-1. Apply [`0134_lr11_business_entity_registry.sql`](../../supabase/migrations/0134_lr11_business_entity_registry.sql) to **DEV**, confirm.
-2. Once confirmed, push this commit.
-3. Apply the same migration to **production**, confirm.
-4. A live-DEV round trip (create a company, add Detailed-mode assets/liabilities, confirm Net Worth reflects the ownership-scaled value, attempt a cross-tenant read as a second synthetic user) closes the remaining AC-05/AC-07 evidence gaps.
+Steps 1-3 (DEV migration, push, production migration) are complete as of 2026-09-09, each independently confirmed by the user and, for production, independently re-verified read-only by this agent (6/6 checks: negative controls sound, all 3 new tables genuinely live, anon writes blocked). The one remaining item — an authenticated two-user cross-tenant round trip against hosted DEV (create a company as user A, confirm user B cannot read/write it via a real session, confirm Net Worth reflects the ownership-scaled value end-to-end) — is deferred to whenever the Product Owner wants full terminal closure; it does not block starting LR-12.
 
 ---
 
