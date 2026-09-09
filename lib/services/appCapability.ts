@@ -218,6 +218,7 @@ export const MODULE_KEYS = [
   'FINANCIAL_DATA_HUB',
   'RETIREMENT',
   'SMSF',
+  'BUSINESS_ENTITIES',
   'INVESTMENT_INTELLIGENCE',
   'CROSS_BORDER',
   'PROFILE',
@@ -395,6 +396,22 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
     writeTables: NO_WRITE_TABLES,
     note: 'AU-only by design and by DB trigger (trg_retirement_accounts_smsf_au_gate, migration 0084) -- confirmed still present. Country_capabilities has DOMESTIC_RETIREMENT=true only for AU (IN is false -- no certified India retirement-product engine per migration 0122\'s own comment), so this manifest entry is also correctly UNAVAILABLE for IN under a strict capability read; IN\'s existing (non-SMSF) retirement-member tracking is unaffected since it is served by the RETIREMENT module entry above, not this one.',
+  },
+  BUSINESS_ENTITIES: {
+    key: 'BUSINESS_ENTITIES',
+    label: 'Companies',
+    // LR-11's own discovery/WP-09 finding: unlike SMSF (a specific AU legal
+    // structure), a generic Company/Family Trust ownership label has no
+    // obvious single-country restriction. business_entities.country_code
+    // (migration 0134) is nullable and purely informational -- no DB trigger,
+    // no per-country gate anywhere in app/api/business-entities/**. Genuinely
+    // universal, unlike ASSETS/LIABILITIES above (both hardcoded to AU/IN
+    // vocabulary) or SMSF (hardcoded AU-only).
+    requiredCapability: 'UNIVERSAL_MODULES',
+    supportsExistingRecordPreservation: true,
+    operationPolicy: OPERATIONS_FOLLOW_VIEW,
+    writeTables: NO_WRITE_TABLES,
+    note: 'LR-11 (Company first; Family Trust a planned fast-follow reusing this same ModuleKey). No country_code/currency_code hardcode anywhere in businessEntityCreateSchema (lib/validation/businessEntity.ts) or its API routes -- currency_code is AUD/INR (matching this app\'s existing 2-currency engine), country_code accepts any of the 6 AUTHORITATIVE_COUNTRY_CODES or null. Not gated behind the G5B write-enablement flag (OPERATIONS_G5B_WRITE_CERTIFIED) since this is a brand-new feature with no pre-existing GENERIC-write history to re-certify, unlike Income/Expenses/Insurance.',
   },
   INVESTMENT_INTELLIGENCE: {
     key: 'INVESTMENT_INTELLIGENCE',

@@ -1,5 +1,6 @@
 import { toMonthly, type Frequency } from './money';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from './businessEntityValuation';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 
@@ -151,6 +152,14 @@ export interface DashboardInput {
   // zero change from this feature existing.
   bankExpenseTransactions?: BankTransactionRow[];
   bankIncomeTransactions?: BankTransactionRow[];
+  // LR-11 (Company / Family Trust Entity Architecture) — this household's
+  // active business entities, each with the raw line items
+  // computeBusinessEntityOwnershipValue() needs to net. Optional and
+  // defaulted to [] below so every existing caller/test fixture (everyone
+  // before LR-11) keeps compiling and behaves byte-for-byte identically — a
+  // household with no business entities sees zero change from this feature
+  // existing, exactly like bankExpenseTransactions above.
+  businessEntities?: BusinessEntityWithLineItems[];
 }
 
 // Income sources not derived from active work — used for passive-income and
@@ -421,6 +430,13 @@ export interface DashboardSummary {
   // economic value (LR-FI-1 §5, §28); this figure exists so a ratio whose
   // denominator is household-only income has a numerator on the same basis.
   householdLiabilityBalance: number;
+  // LR-11 (Company / Family Trust Entity Architecture) — this user's own
+  // ownership-% share of their active business entities' net asset value,
+  // already included in totalAssetsCombined/netWorth above. Exposed
+  // separately for transparency/traceability (AC-09: never mix incompatible
+  // entity populations into one opaque number) — 0 for every household with
+  // no business entities, identical to every pre-LR-11 result.
+  businessEntityOwnershipValue: number;
   netWorth: number;
   netWorthAllocation: AllocationSlice[];
   liabilityByType: { debtType: string; balance: number }[];
@@ -723,6 +739,16 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       ? Array.from(employerMap.values()).reduce((sum, v) => sum + (v / activeIncomeTotal) ** 2, 0)
       : null;
 
+  // LR-11 (Company / Family Trust Entity Architecture, WP-05). Computed via
+  // the dedicated isolated engine — see businessEntityValuation.ts's own
+  // header for why the entity-specific arithmetic lives there rather than
+  // here. Added into totalAssetsCombined AND netWorth below (both derived
+  // from the same expanded formula) so totalAssetsCombined's own documented
+  // contract ("the figure to show as total assets anywhere net worth is
+  // also shown, so the two reconcile") keeps holding for a household with
+  // business entities, not just one without any.
+  const businessEntityOwnershipValue = computeBusinessEntityOwnershipValue(input.businessEntities ?? [], currency, fxRateAudInr);
+
   const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
@@ -731,7 +757,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // householdLiabilities array the cash-flow figures use, so there is one
   // filter rule in this engine, not two.
   const householdLiabilityBalance = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
-  const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities;
+  const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities + businessEntityOwnershipValue;
 
   const allocationMap = new Map<AllocationBucket, number>();
   const addAlloc = (bucket: AllocationBucket, value: number) =>
@@ -1079,11 +1105,17 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     hasRetirement: input.retirement.length > 0,
     hasInsurance: input.insurance.length > 0,
     totalAssets,
-    totalAssetsCombined: totalAssetBaseForRatios,
+    // LR-11: includes businessEntityOwnershipValue (also exposed separately
+    // below) so this field's own documented contract — "the figure to show
+    // as total assets anywhere net worth is also shown, so the two
+    // reconcile" — keeps holding: totalAssetsCombined - totalLiabilities ===
+    // netWorth for every household, business entities or not.
+    totalAssetsCombined: totalAssetBaseForRatios + businessEntityOwnershipValue,
     totalInvestments,
     totalRetirement,
     totalLiabilities,
     householdLiabilityBalance,
+    businessEntityOwnershipValue,
     netWorth,
     netWorthAllocation,
     liabilityByType,

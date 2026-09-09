@@ -27,6 +27,7 @@ const PAGE_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   admin: 'ADMIN',
   'ai-insights': 'AI_INSIGHTS',
   assets: 'ASSETS',
+  companies: 'BUSINESS_ENTITIES',
   dashboard: 'DASHBOARD',
   dna: 'DNA',
   expenses: 'EXPENSES',
@@ -54,6 +55,7 @@ const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup']);
 const API_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   'ai-insights': 'AI_INSIGHTS', // (folder is actually named "ai" — see alias below)
   assets: 'ASSETS',
+  'business-entities': 'BUSINESS_ENTITIES',
   dashboard: 'DASHBOARD',
   expenses: 'EXPENSES',
   'financial-data-hub': 'FINANCIAL_DATA_HUB',

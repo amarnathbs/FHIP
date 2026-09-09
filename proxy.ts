@@ -59,7 +59,7 @@ export async function proxy(request: NextRequest) {
   // reintroduce the gap silently. 'twin', 'coach' and 'settings' are retained
   // as-is: they are pre-existing entries unrelated to this fix.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights)/
+    /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights|companies)/
   );
 
   // ---------------------------------------------------------------------

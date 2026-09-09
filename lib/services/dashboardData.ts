@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { computeDashboard, type DashboardSummary } from '@/lib/engines/dashboard';
+import { loadBusinessEntitiesForValuation } from '@/lib/services/businessEntityData';
 
 export type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -120,6 +121,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
     fxRateAudInr,
     bankExpenseTransactions,
     bankIncomeTransactions,
+    businessEntitiesResult,
   ] = await Promise.all([
       supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
       fetchAllRows((from, to) =>
@@ -216,6 +218,13 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
           .lt('transaction_date', nextMonthStart())
           .range(from, to)
       ),
+      // LR-11 (Company / Family Trust Entity Architecture) — this user's own
+      // active business entities plus their Detailed-mode line items (empty
+      // arrays for Summary-mode entities, per loadBusinessEntitiesForValuation's
+      // own contract). A household with none gets [], which
+      // computeBusinessEntityOwnershipValue() (called inside computeDashboard)
+      // reduces to exactly 0 — byte-for-byte identical to every pre-LR-11 result.
+      loadBusinessEntitiesForValuation(userId, supabase),
     ]);
 
   const currency = (profile.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
@@ -256,6 +265,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       snapshots: snapshots.data ?? [],
       bankExpenseTransactions: bankExpenseTransactionsNet,
       bankIncomeTransactions,
+      businessEntities: businessEntitiesResult.data ?? [],
     },
     currency,
     fxRateAudInr
