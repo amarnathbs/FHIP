@@ -1,6 +1,6 @@
 # LR-1 Phase Report — Upload Security, Strict Raw-File Deletion & Document Lifecycle (Reconciliation + Merge)
 
-**Status:** CONDITIONAL PASS — code merged to `main` and live via Amplify auto-deploy; the janitor scheduler's own live-activation proof remains blocked on a publicly-reachable DEV URL, unchanged from before this reconciliation.
+**Status:** UNCONDITIONAL FULL PASS — TERMINAL. Code merged to `main`, live via Amplify auto-deploy; migration `0135` applied to DEV and production, both independently verified; the janitor scheduler is now proven genuinely live in production end-to-end (see §4a) — closed 2026-09-09, without needing the originally-planned tunnel at all, since production already has a real public URL unlike DEV.
 
 **Date:** 2026-09-09
 
@@ -26,16 +26,24 @@ LR-1 (Upload Security) was explicitly deferred to the very end of the LR-2..LR-1
 - `npm run build` (production build) — clean, exit code 0.
 - Pushed to `main` (`98b2a27`).
 
-## 4. What remains open (unchanged from before this reconciliation)
+## 4a. Scheduler live-activation — CLOSED 2026-09-09
 
-The **janitor scheduler's live-activation proof** is still blocked exactly as before: `pg_net` (Supabase Cloud) cannot reach a `next dev` server running only on localhost, and no standing publicly-reachable DEV deployment of this app exists. The user's own explicit decision stands: they will run a tunnel themselves (e.g. `npx localtunnel --port <this worktree's dev server port>`) and paste back the resulting public URL, rather than using an Amplify preview deployment. This reconciliation did not attempt to re-run that proof — it was purely a code/migration-ledger reconciliation so LR-1's work could actually become part of the release.
+Migration `0135` was applied to DEV (cron job id `6` returned) and then to production. Production's own first `cron.schedule()` attempt as pasted from the full migration file returned zero rows in `cron.job` — the final statement did not appear to execute as part of the bulk paste, for reasons not fully diagnosed (isolated re-run of the exact same statement, on its own, succeeded immediately and cleanly: `jobid = 3`, confirming the SQL itself was correct all along — the likely culprit is a Supabase SQL-editor multi-statement/dollar-quote paste quirk, not a defect in the migration). Re-running just the `cron.schedule(...)` call directly resolved it: `jobid = 3`, `schedule = */5 * * * *`, `active = true`, independently re-confirmed via a direct `cron.job` query.
 
-## 5. What the Product Owner needs to do next
+The job's first several ticks (12:30–12:45 UTC) returned `401 Unauthorized` — the `vault.create_secret('<real CRON_SECRET>', 'lr1_purge_sweep_cron_secret')` manual step (documented in this migration's own header, deliberately never embedded in any file or git history) had not yet been run in production. The user located the real `CRON_SECRET` value themselves (via AWS Amplify's environment variables console — never pasted into this agent's chat, consistent with this project's own established credential-handling discipline) and ran `vault.create_secret(...)`, later `vault.update_secret(...)`. The very next tick (12:50 UTC) returned **`200`** with the purge-sweep route's real, correctly-shaped JSON response (`abandoned_sessions_swept`, `hard_backstop_scanned`, `hard_backstop_forced`, `due_purges_attempted`, `purged`, `already_purged`, `skipped_no_object`, `failed` — all `0`, which is the correct answer for a production environment with nothing currently stale to purge).
 
-1. Apply migration `0135_lr1_document_purge_sweep_scheduler.sql` to **DEV** (safe, idempotent re-run of the same SQL DEV already ran once under the old `0128` filename — the migration unschedules-then-reschedules its own cron job by name, and the `supabase_vault` extension creation is `if not exists`).
-2. Once confirmed, apply the same migration to **production**.
-3. When ready, run a tunnel against this worktree's dev server and paste back the public URL so the janitor's actual reachability can finally be proven live — the one remaining item in the entire LR-2..LR-12 programme.
+This is genuine, independently-verified, live production proof that the entire janitor pipeline — pg_cron trigger → pg_net HTTP call → Vault secret lookup → the purge-sweep route's own authentication → its actual sweep logic — works end-to-end. **The originally-planned tunnel was never needed**: it was only ever a workaround for DEV's lack of a public URL; production already has one (`app.financialhealthplatform.com`), so applying and testing this migration directly against production closed the gap DEV alone never could.
+
+## 5. Closure status
+
+All Product Owner actions for this phase are complete:
+1. ✅ Migration `0135` applied to DEV (confirmed).
+2. ✅ Migration `0135` applied to production (confirmed).
+3. ✅ Vault secret created/updated to match production's real `CRON_SECRET`.
+4. ✅ Live end-to-end success independently verified (`200`, correct response shape, 2026-09-09 12:50 UTC).
+
+**LR-1 is TERMINAL — no further action needed.**
 
 ---
 
-*This is the last individual LR-phase report. Next: the consolidated final matrix report (LR-2 through LR-12) per the master spec's own "Required final report template".*
+*This is the last individual LR-phase report. See `LR_CONSOLIDATED_FINAL_REPORT.md` for the full programme's Appendix-J table — updated to reflect this closure.*

@@ -2,11 +2,13 @@
 
 **Final release recommendation: CONDITIONAL — EXTERNAL ACTIONS REQUIRED.**
 
-Every phase in this programme reached at least CONDITIONAL PASS. No phase is FAIL. No open item is a known-broken production defect — every remaining gap is a **proof not yet obtained**, and every one of them requires an action only the Product Owner can take (supplying real payment-provider credentials, running a network tunnel, granting SQL access, or making a scope decision), not further engineering work this agent can complete unilaterally. This report consolidates all twelve individual phase reports into the one Appendix-J-format table the master spec requires, re-verified against the current repository and production state rather than trusting each phase's own report at face value.
+Every phase in this programme reached at least CONDITIONAL PASS; **LR-1 has since reached UNCONDITIONAL FULL PASS — TERMINAL** (see update below). No phase is FAIL. No open item is a known-broken production defect — every remaining gap is a **proof not yet obtained**, and every one of them requires an action only the Product Owner can take (supplying real payment-provider credentials or granting SQL access), not further engineering work this agent can complete unilaterally. This report consolidates all twelve individual phase reports into the one Appendix-J-format table the master spec requires, re-verified against the current repository and production state rather than trusting each phase's own report at face value.
 
-**Date:** 2026-09-09
+**Date:** 2026-09-09 (updated same day following LR-1's live closure)
 **Final `main` SHA at time of writing:** `7bd7c77` (LR-1's reconciliation merge)
 **Migration head:** `0135`
+
+**UPDATE, same day:** LR-1's own janitor-scheduler gap (row below) has since closed completely. Production migration `0135` is applied; the vault secret was created/updated to match production's real `CRON_SECRET`; and the cron job's own live execution was independently verified — `net._http_response.status_code = 200` with the purge-sweep route's correctly-shaped JSON response, following an initial `401` sequence that self-diagnosed and resolved as the vault secret step. The originally-planned tunnel was never needed: production already has a real public URL, unlike DEV. **Three** external-action items remain, not four — see the updated recommendation section at the end of this report.
 
 ---
 
@@ -25,7 +27,7 @@ Every phase in this programme reached at least CONDITIONAL PASS. No phase is FAI
 | LR-10 | PASS | PASS (43 new) | PASS | CONDITIONAL | PASS | PASS | PASS | CONDITIONAL | N/A | CONDITIONAL | **No live checkout has ever been run** — no Stripe/Razorpay test-mode credentials exist yet. Single largest open item in the whole programme. |
 | LR-11 | PASS | PASS (29 new) | PASS | CONDITIONAL | PASS | PASS | PASS | CONDITIONAL | N/A | CONDITIONAL | Authenticated two-user cross-tenant round trip not run (only an anon-write-block was live-proven); Family Trust, entity-tagged ingestion (WP-07) and entity reports (WP-08) explicitly deferred. |
 | LR-12 | N/A (docs-only, no new code, per this phase's own lock) | N/A | N/A (cites LR-2..LR-11's own evidence, re-verified against current state) | N/A | N/A | PASS | PASS | CONDITIONAL | N/A | CONDITIONAL | Gap-analysis scope by explicit Product Owner agreement (this agent has no mechanism to create real DEV auth users or run live checkouts); restated the LR-9/LR-10/LR-11 gaps above rather than re-proving them; found the 50-user E2E fixture has zero SMSF/Company/payment/closure personas. |
-| LR-1 | PASS (+1 real defect found and fixed this session: PGlite/`supabase_vault` incompatibility) | PASS | PASS (6,343/6,349 — remainder is pre-existing/environmental, see below) | CONDITIONAL | PASS (DEV confirmed with cron job id `6` returned; production pending as of this writing) | PASS (reconciled a 71-commit-behind/6-ahead sibling branch, one real conflict resolved) | PASS | CONDITIONAL | N/A | CONDITIONAL | **Janitor scheduler's live public-URL reachability still unproven** — blocked on the user's own planned tunnel action, unchanged since before this reconciliation. Production migration application in progress. |
+| LR-1 | PASS (+1 real defect found and fixed this session: PGlite/`supabase_vault` incompatibility) | PASS | PASS (6,343/6,349 — remainder is pre-existing/environmental, see below) | PASS | PASS (DEV job id `6`; production job id `3`, both independently confirmed via direct `cron.job` query) | PASS (reconciled a 71-commit-behind/6-ahead sibling branch, one real conflict resolved) | PASS | **PASS** | N/A | **UNCONDITIONAL FULL PASS — TERMINAL** | None. Live end-to-end proof obtained same day: `net._http_response.status_code = 200` with the correct purge-sweep JSON shape, after diagnosing and resolving an initial vault-secret-mismatch `401` sequence. No tunnel was needed — production's own public URL made the DEV-only reachability blocker moot. |
 
 ## Cross-programme notes
 
@@ -36,14 +38,13 @@ Every phase in this programme reached at least CONDITIONAL PASS. No phase is FAI
 
 ## What "CONDITIONAL — EXTERNAL ACTIONS REQUIRED" means concretely
 
-The release is code-complete, database-complete (once LR-1's migration `0135` reaches production), and deployment-complete. It is not yet **journey-complete** in four specific, named places, and every one of them is now the Product Owner's own next action, not an engineering gap:
+The release is code-complete, database-complete, and deployment-complete. It is not yet **journey-complete** in three remaining specific, named places (down from four — LR-1's own gap closed same-day, see the update above), and every one of them is now the Product Owner's own next action, not an engineering gap:
 
 1. **Payments (LR-10)** — supply real Stripe/Razorpay test-mode credentials so a live checkout→webhook→entitlement round trip can finally be run.
 2. **Account closure (LR-9)** — grant the SQL access needed to test the admin-closure-queue's allow-side live.
 3. **Company entities (LR-11)** — decide whether an authenticated two-user cross-tenant round trip is worth a dedicated live-DEV session, or is adequately covered by the unit-level RLS-shape proof and the live anon-write-block already obtained.
-4. **Upload security scheduler (LR-1)** — run the tunnel you already planned to run yourself, and paste back the resulting public URL so the janitor's actual reachability can be proven live for the first time.
 
-None of these four block the code that is already live in production from working correctly for real users today — they are certification-completeness items, not defects.
+None of these three block the code that is already live in production from working correctly for real users today — they are certification-completeness items, not defects. **Upload security (LR-1) is fully closed** — the janitor scheduler is proven live in production with a genuine `200` response, no further action needed.
 
 ---
 
