@@ -1,16 +1,22 @@
 'use client';
 
-// LR-11 — Company entity workspace. Family Trust is a planned fast-follow
-// reusing this same page/schema (Product Owner decision, this phase) —
-// entity_type is already a real column (migration 0134), just constrained
-// to 'company' for now.
+// LR-11 — Company entity workspace. LR-13 — Family Trust fast-follow: same
+// page/schema, entity_type widened at migration 0136.
 
 import { useEffect, useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 
+type BusinessEntityType = 'company' | 'family_trust';
+
+const ENTITY_TYPE_LABEL: Record<BusinessEntityType, string> = {
+  company: 'Company',
+  family_trust: 'Family Trust',
+};
+
 interface BusinessEntity {
   id: string;
   name: string;
+  entity_type: BusinessEntityType;
   country_code: string | null;
   currency_code: 'AUD' | 'INR';
   ownership_percentage: number;
@@ -48,6 +54,7 @@ export default function CompaniesPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newEntityType, setNewEntityType] = useState<BusinessEntityType>('company');
   const [newOwnership, setNewOwnership] = useState('100');
   const [newCurrency, setNewCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [newMode, setNewMode] = useState<'summary' | 'detailed'>('summary');
@@ -88,6 +95,7 @@ export default function CompaniesPage() {
     try {
       const body: Record<string, unknown> = {
         name: newName.trim(),
+        entity_type: newEntityType,
         ownership_percentage: Number(newOwnership),
         currency_code: newCurrency,
         valuation_mode: newMode,
@@ -96,6 +104,7 @@ export default function CompaniesPage() {
       await fetchJson('/api/business-entities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       setCreating(false);
       setNewName('');
+      setNewEntityType('company');
       setNewOwnership('100');
       setNewNav('');
       await load();
@@ -121,11 +130,11 @@ export default function CompaniesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-trust">Companies</h1>
+        <h1 className="text-2xl font-semibold text-trust">Companies &amp; Trusts</h1>
         <p className="mt-1 text-muted">
-          Track a company you own, separate from your personal finances. Only your ownership share of its net value
-          is added to your household Net Worth — the company&apos;s own assets and debts are never counted a second
-          time as personally yours.
+          Track a company or family trust you have an interest in, separate from your personal finances. Only your
+          own share of its net value is added to your household Net Worth — its own assets and debts are never
+          counted a second time as personally yours.
         </p>
       </div>
 
@@ -139,20 +148,31 @@ export default function CompaniesPage() {
             <CompanyCard key={entity.id} entity={entity} onChanged={load} onArchive={() => void archive(entity.id)} busy={busy} />
           ))}
 
-          <SectionCard title="Add a company" description="Record a company you own an interest in.">
+          <SectionCard title="Add a company or trust" description="Record a company or family trust you have an interest in.">
             {!creating ? (
               <button
                 type="button"
                 onClick={() => setCreating(true)}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               >
-                Add company
+                Add company or trust
               </button>
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-xs font-medium text-muted">Company name</label>
+                    <label className="block text-xs font-medium text-muted">Type</label>
+                    <select
+                      value={newEntityType}
+                      onChange={(e) => setNewEntityType(e.target.value as BusinessEntityType)}
+                      className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                    >
+                      <option value="company">Company</option>
+                      <option value="family_trust">Family Trust</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted">Name</label>
                     <input
                       type="text"
                       value={newName}
@@ -316,7 +336,7 @@ function CompanyCard({
 
   return (
     <SectionCard
-      title={entity.name}
+      title={`${entity.name} · ${ENTITY_TYPE_LABEL[entity.entity_type]}`}
       description={`${entity.ownership_percentage}% owned · ${entity.valuation_mode === 'summary' ? 'Net value entered directly' : 'Valued from its own assets and debts'}`}
     >
       <div className="space-y-3">

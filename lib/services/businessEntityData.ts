@@ -24,10 +24,14 @@ export async function getBusinessEntity(entityId: string, userId: string, supaba
   return supabase.from('business_entities').select('*').eq('id', entityId).eq('user_id', userId).single();
 }
 
+// LR-13: entity_type now comes from the validated input (Company or Family
+// Trust) rather than being hardcoded — businessEntityCreateSchema already
+// defaults it to 'company', so every pre-LR-13 caller keeps working
+// byte-for-byte.
 export async function createBusinessEntity(userId: string, input: BusinessEntityCreateInput, supabase: SupabaseClient) {
   return supabase
     .from('business_entities')
-    .insert({ ...input, user_id: userId, entity_type: 'company' })
+    .insert({ ...input, user_id: userId })
     .select()
     .single();
 }

@@ -115,6 +115,33 @@ describe('GET/POST /api/business-entities', () => {
     expect(listedBody.data.every((e: FakeRow) => e.user_id === USER_A)).toBe(true);
     expect(listedBody.data.some((e: FakeRow) => e.id === 'e-other')).toBe(false);
   });
+
+  // LR-13 — Family Trust fast-follow.
+  it('creates a Family Trust entity when entity_type is explicitly requested', async () => {
+    vi.resetModules();
+    asUser(USER_A);
+    const fake = makeFakeSupabase({ business_entities: [] });
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: async () => fake.client }));
+    const { POST } = await import('@/app/api/business-entities/route');
+
+    const created = await POST(
+      new Request('http://x', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Smith Family Trust',
+          entity_type: 'family_trust',
+          ownership_percentage: 40,
+          currency_code: 'AUD',
+          valuation_mode: 'summary',
+          summary_net_asset_value: 500_000,
+        }),
+      })
+    );
+    expect(created.status).toBe(200);
+    const body = await created.json();
+    expect(body.data.entity_type).toBe('family_trust');
+    expect(body.data.user_id).toBe(USER_A);
+  });
 });
 
 describe('NEG-08 — GET/PATCH/DELETE /api/business-entities/[id] cross-tenant isolation', () => {

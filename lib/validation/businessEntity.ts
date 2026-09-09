@@ -1,15 +1,20 @@
 import { z } from 'zod';
 import { AUTHORITATIVE_COUNTRY_CODES } from '@/lib/services/jurisdiction';
 
-// LR-11 — Company (Family Trust planned as a fast follow-up reusing this
-// same schema/validation shape, per the Product Owner's own phase-scoping
-// decision). Deliberately NOT restricted to AU like SMSF's validation
+// LR-11 — Company. LR-13 — Family Trust (fast-follow, migration 0136 widens
+// the DB CHECK). Deliberately NOT restricted to AU like SMSF's validation
 // (lib/validation/smsf.ts's `country_code: z.literal('AU')`) — see migration
-// 0134's own header for why that assumption does not transfer to Company.
+// 0134's own header for why that assumption does not transfer to either
+// entity type.
 const businessEntityCountryCode = z.enum(AUTHORITATIVE_COUNTRY_CODES).optional().nullable();
 
+// LR-13: no trustee/beneficiary/distribution-rule field exists here or
+// anywhere in this schema, deliberately — see migration 0136's own header
+// for the Product Owner lock this respects. A Family Trust is modelled with
+// exactly the same ownership_percentage-based consolidation as a Company.
 export const businessEntityCreateSchema = z.object({
   name: z.string().min(1),
+  entity_type: z.enum(['company', 'family_trust']).default('company'),
   country_code: businessEntityCountryCode,
   currency_code: z.enum(['AUD', 'INR']).default('AUD'),
   ownership_percentage: z.number().gt(0).max(100).default(100),
