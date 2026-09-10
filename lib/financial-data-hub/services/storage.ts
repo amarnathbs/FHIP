@@ -123,8 +123,24 @@ export async function verifyDocumentObjectAbsent(storageKey: string): Promise<bo
  * Orphan detection (spec section 49). Lists every object under one user's
  * storage prefix and returns keys not present in the given set of live
  * document storage keys for that user. Read-only — performs no deletion.
- * Intended for `scripts/fdh3_orphan_storage_report.mjs`, never for a
+ * Intended for `scripts/fdh3_orphan_storage_report.mjs` (never built; this
+ * function currently has no caller anywhere in the codebase), never for a
  * request-path call.
+ *
+ * CORRECTED DISCRIMINATOR (2026-09-10 — real live-DEV LR-9 finding, see
+ * docs/live-recovery/LR9_STORAGE_PURGE_FOLDER_DISCRIMINATOR_FIX.md).
+ * Empirically confirmed against a real Supabase Storage bucket: a `.list()`
+ * entry for a FOLDER placeholder comes back with `id: null`; a real,
+ * deletable OBJECT comes back with a real UUID `id`. This function's
+ * previous `if (!docFolder.id) continue` had that backwards — it skipped
+ * every real folder without ever recursing into it, so this always
+ * returned an empty array regardless of what actually existed. Never
+ * caused live harm (this function has no caller today), but it was copied,
+ * bug included, into lib/services/accountDeletionStorage.ts's own
+ * independent isolation-preserving copy — where the same inversion DID
+ * cause real harm (silently orphaning every account-deletion subject's FDH
+ * documents and report exports). Fixed here too so the same discriminator
+ * mistake can't be copied a third time.
  */
 export async function listObjectsUnderUserPrefix(userId: string): Promise<string[]> {
   const admin = createAdminClient();
@@ -133,13 +149,21 @@ export async function listObjectsUnderUserPrefix(userId: string): Promise<string
   });
   if (error || !data) return [];
   const keys: string[] = [];
-  for (const docFolder of data) {
-    if (!docFolder.id) continue; // a "folder" placeholder entry, not an object
+  for (const entry of data) {
+    if (entry.id) {
+      // Defensive: an unexpected flat file sitting directly at the top
+      // level (every known writer nests two levels deep) — include it
+      // rather than silently skipping it.
+      keys.push(`${userId}/${entry.name}`);
+      continue;
+    }
+    // entry.id === null: this IS the real folder placeholder — recurse
+    // into it to find the actual files inside.
     const { data: inner } = await admin.storage
       .from(FDH_SOURCE_DOCUMENTS_BUCKET)
-      .list(`${userId}/${docFolder.name}`, { limit: 10 });
+      .list(`${userId}/${entry.name}`, { limit: 1000 });
     for (const obj of inner ?? []) {
-      if (obj.id) keys.push(`${userId}/${docFolder.name}/${obj.name}`);
+      if (obj.id) keys.push(`${userId}/${entry.name}/${obj.name}`);
     }
   }
   return keys;

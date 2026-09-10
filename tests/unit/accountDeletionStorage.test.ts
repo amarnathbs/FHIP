@@ -1,9 +1,17 @@
 // LR-9 WP-09 — Storage purge routines. Exercises purgeAllUserStorage()
 // against a fake storage client mimicking Supabase Storage's .list()/
-// .remove() shape, including the folder-vs-object `id` discriminator this
-// mirrors from the already-certified FDH-3 orphan-report reference
-// (lib/financial-data-hub/services/storage.ts's listObjectsUnderUserPrefix —
-// an entry with no `id` is a folder placeholder, not a real object).
+// .remove() shape.
+//
+// CORRECTED MOCK SEMANTICS (2026-09-10 — real live-DEV LR-9 finding, see
+// docs/live-recovery/LR9_STORAGE_PURGE_FOLDER_DISCRIMINATOR_FIX.md). This
+// file's own original fixtures had the folder/object `id` discriminator
+// BACKWARDS (gave folder-placeholder entries a truthy `id`, matching the
+// equally-backwards production code at the time) — so this suite passed
+// while testing the wrong behaviour end-to-end. Empirically confirmed
+// against a REAL Supabase Storage bucket: a folder placeholder entry
+// (e.g. a `documentId` directory) comes back with `id: null`; a real,
+// deletable object comes back with a real UUID `id`. Every fixture below
+// now matches that real shape.
 import { describe, it, expect, vi } from 'vitest';
 
 const USER_ID = 'storage-purge-user';
@@ -40,7 +48,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => currentFake.cl
 let currentFake: ReturnType<typeof makeFakeStorage>;
 
 describe('purgeAllUserStorage', () => {
-  it('purges a flat bucket (investment-source-documents) and a nested bucket (report-exports, fdh-source-documents) correctly', async () => {
+  it('purges a flat bucket (investment-source-documents) and nested buckets (report-exports, fdh-source-documents) correctly', async () => {
     currentFake = makeFakeStorage({
       'investment-source-documents': {
         [USER_ID]: [
@@ -48,16 +56,15 @@ describe('purgeAllUserStorage', () => {
           { id: 'obj-2', name: 'doc2.pdf' },
         ],
       },
-      // Per-document "folder" listing entries carry a truthy `id` in this
-      // bucket shape (matching the already-certified FDH-3 orphan-report
-      // reference this mirrors) — only entries with NO id at all are the
-      // true empty-folder placeholders skipped below.
+      // Real Supabase Storage semantics: the per-document "folder" listing
+      // entry carries `id: null` (it is a virtual placeholder, not a real
+      // object) — only the file ONE LEVEL DEEPER has a real id.
       'report-exports': {
-        [USER_ID]: [{ id: 'folder-marker-1', name: 'report-1' }],
+        [USER_ID]: [{ id: null, name: 'report-1' }],
         [`${USER_ID}/report-1`]: [{ id: 'export-1', name: 'export-1.pdf' }],
       },
       'fdh-source-documents': {
-        [USER_ID]: [{ id: 'folder-marker-2', name: 'doc-abc' }],
+        [USER_ID]: [{ id: null, name: 'doc-abc' }],
         [`${USER_ID}/doc-abc`]: [{ id: 'file-1', name: 'doc-abc.bin' }],
       },
     });
@@ -81,6 +88,40 @@ describe('purgeAllUserStorage', () => {
     expect(currentFake.removed['fdh-source-documents']).toEqual([`${USER_ID}/doc-abc/doc-abc.bin`]);
   });
 
+  it('REGRESSION (the exact bug this test suite originally missed): a real folder (id: null) containing a real file is found and deleted, not silently skipped', async () => {
+    currentFake = makeFakeStorage({
+      'fdh-source-documents': {
+        [USER_ID]: [{ id: null, name: 'genuine-document-folder' }],
+        [`${USER_ID}/genuine-document-folder`]: [{ id: 'a-real-object-id', name: 'genuine-document-folder.bin' }],
+      },
+    });
+    vi.resetModules();
+    const { purgeAllUserStorage } = await import('@/lib/services/accountDeletionStorage');
+
+    const results = await purgeAllUserStorage(USER_ID);
+    const fdh = results.find((r) => r.bucket === 'fdh-source-documents')!;
+
+    expect(fdh.objectsFound).toBe(1);
+    expect(fdh.objectsDeleted).toBe(1);
+    expect(currentFake.removed['fdh-source-documents']).toEqual([`${USER_ID}/genuine-document-folder/genuine-document-folder.bin`]);
+  });
+
+  it('an unexpected flat file sitting directly at the top level (defensive case, no known writer produces this) is still found and deleted', async () => {
+    currentFake = makeFakeStorage({
+      'report-exports': {
+        [USER_ID]: [{ id: 'unexpected-flat-object-id', name: 'unexpected-flat-file.pdf' }],
+      },
+    });
+    vi.resetModules();
+    const { purgeAllUserStorage } = await import('@/lib/services/accountDeletionStorage');
+
+    const results = await purgeAllUserStorage(USER_ID);
+    const reportExports = results.find((r) => r.bucket === 'report-exports')!;
+
+    expect(reportExports.objectsFound).toBe(1);
+    expect(currentFake.removed['report-exports']).toEqual([`${USER_ID}/unexpected-flat-file.pdf`]);
+  });
+
   it('a user with no files anywhere purges cleanly to zero, with no error', async () => {
     currentFake = makeFakeStorage({});
     vi.resetModules();
@@ -92,7 +133,7 @@ describe('purgeAllUserStorage', () => {
     }
   });
 
-  it('a folder-placeholder entry (no id) is never mistaken for a deletable object', async () => {
+  it('a genuinely empty folder placeholder (id: null, nothing inside) purges to zero for that folder, with no error', async () => {
     currentFake = makeFakeStorage({
       'report-exports': {
         [USER_ID]: [{ id: null, name: 'phantom-folder' }],
