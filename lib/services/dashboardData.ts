@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { computeDashboard, type DashboardSummary } from '@/lib/engines/dashboard';
 import { loadBusinessEntitiesForValuation } from '@/lib/services/businessEntityData';
+import { applySmsfPropertyLoanLinkOverride } from '@/lib/engines/householdContext';
 
 export type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -122,6 +123,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
     bankExpenseTransactions,
     bankIncomeTransactions,
     businessEntitiesResult,
+    smsfPropertyLoanLinks,
   ] = await Promise.all([
       supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
       fetchAllRows((from, to) =>
@@ -141,7 +143,7 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       fetchAllRows((from, to) =>
         supabase
           .from('liabilities')
-          .select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner')
+          .select('id, balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner')
           .eq('user_id', userId)
           .eq('is_active', true)
           .range(from, to)
@@ -225,6 +227,29 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       // computeBusinessEntityOwnershipValue() (called inside computeDashboard)
       // reduces to exactly 0 — byte-for-byte identical to every pre-LR-11 result.
       loadBusinessEntitiesForValuation(userId, supabase),
+      // LR-12R reconciliation fix (2026-09-11, PO ruling): a liability
+      // structurally linked to an SMSF fund as its property loan
+      // (property_liability_links.link_type='smsf_property_loan') is the
+      // fund's own debt regardless of whether the user separately, manually
+      // tags the liability row owner='smsf' — householdContext.ts's own
+      // header (LR-FI-1 §... ) had explicitly deferred this exact case as
+      // "absent for the plain 'user tagged this row as SMSF' case this
+      // defect is about," leaving it counted in personal DTI/DSR until a
+      // live oracle test (household income $10k/mo, personal debt service
+      // $1k/mo, SMSF-linked-but-not-owner-tagged loan $2k/mo) proved DSR
+      // came back 30%, not the required 10% — a real financial-context
+      // defect, not merely a discoverability gap. Fetched here, at the data
+      // layer, so computeDashboard() itself never needs to know about
+      // property_liability_links — see the owner-override mapping below.
+      fetchAllRows<{ liability_id: string }>((from, to) =>
+        supabase
+          .from('property_liability_links')
+          .select('liability_id')
+          .eq('user_id', userId)
+          .eq('link_type', 'smsf_property_loan')
+          .eq('is_active', true)
+          .range(from, to)
+      ),
     ]);
 
   const currency = (profile.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
@@ -252,12 +277,19 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
     ...refunds.map((r) => ({ ...r, amount_original: -r.amount_original })),
   ];
 
+  // LR-12R reconciliation fix — see the property_liability_links fetch above
+  // for the full rationale and applySmsfPropertyLoanLinkOverride()'s own
+  // header for the exact contract (a shallow copy fed only to
+  // computeDashboard(); the real liabilities.owner column is untouched).
+  const smsfLinkedLiabilityIds = new Set(smsfPropertyLoanLinks.map((l) => l.liability_id));
+  const liabilitiesForHouseholdContext = applySmsfPropertyLoanLinkOverride(liabilities, smsfLinkedLiabilityIds);
+
   const summary = computeDashboard(
     {
       income,
       expenses,
       assets,
-      liabilities,
+      liabilities: liabilitiesForHouseholdContext,
       investments,
       retirement,
       insurance,
