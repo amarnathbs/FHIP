@@ -381,8 +381,28 @@ export function FinancialDataGrid({
     // Purchase Date on a Savings Account) is never submitted, even if a
     // stale value exists locally — omitted (not null), so any pre-existing
     // saved value is left untouched server-side rather than force-cleared.
+    //
+    // LR-5/LR-6 SMSF certification (2026-09-10) — CRITICAL FIX: every
+    // optional field here (interest_rate, credit_limit, lender, notes,
+    // country_code, ...) is declared `.optional()` in every register's Zod
+    // schema, which accepts the key being ABSENT but never accepts an
+    // explicit `null` (Zod's own `invalid_type` rejection: "expected
+    // number, received null"). A row's client-side `''` (from
+    // fieldDefaults() on a brand-new draft) correctly hit the `=== ''`
+    // branch below and got omitted — but a row hydrated from a real GET
+    // response has a genuine SQL NULL for the same unset column, which
+    // deserializes to JS `null`, not `''`, and was passed straight through
+    // unchanged. Net effect: editing ANY row with ANY blank optional field
+    // worked once, immediately after creating it in the same session, but
+    // permanently failed with this exact Zod dump the moment the page was
+    // reloaded and the row was re-edited from its real server
+    // representation — reproduced live across every register (Liabilities,
+    // and by the same code path every other register sharing this
+    // component). `== null` (loose, deliberate) catches both `null` and
+    // `undefined` without touching `0`, `false`, or `''` (already handled).
     for (const f of config.fields) {
-      body[f.name] = !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' ? undefined : row[f.name];
+      body[f.name] =
+        !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' || row[f.name] == null ? undefined : row[f.name];
     }
 
     const usePatch = row.is_custom && row.id;
