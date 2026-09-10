@@ -147,6 +147,23 @@ describe('POST /api/admin/account-deletions/[id]/execute', () => {
     expect(deleteUserCalls).toEqual([]);
   });
 
+  it('refuses an admin executing a request for their OWN account, and never calls deleteUser (found live in production 2026-09-11: self-execution left the request permanently stuck at processing, since the finalise step tries to set processed_by to an id auth.users no longer has once the identity is deleted)', async () => {
+    vi.resetModules();
+    const { client, deleteUserCalls } = makeFakeSupabase({
+      adminRow: { can_manage_account_deletions: true },
+      requests: [{ id: 'req-1', user_id: ADMIN_USER_ID, status: 'pending' }],
+    });
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: async () => client }));
+    vi.doMock('@/lib/supabase/admin', () => ({ createAdminClient: () => client }));
+    const executeMock = vi.fn();
+    vi.doMock('@/lib/services/accountDeletionOrchestration', () => ({ executeAccountDeletion: executeMock }));
+    const { POST } = await import('@/app/api/admin/account-deletions/[id]/execute/route');
+    const res = await POST(new Request('http://x', { method: 'POST' }), { params: Promise.resolve({ id: 'req-1' }) });
+    expect(res.status).toBe(403);
+    expect(deleteUserCalls).toEqual([]);
+    expect(executeMock).not.toHaveBeenCalled();
+  });
+
   it('a genuine deletion admin executing a real pending request claims it, runs the orchestration, and finalises to completed', async () => {
     vi.resetModules();
     const { client } = makeFakeSupabase({
