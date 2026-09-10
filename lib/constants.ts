@@ -87,3 +87,31 @@ export const OWNER_OPTIONS: { value: Owner; label: string }[] = [
   { value: 'smsf', label: 'SMSF' },
   { value: 'other', label: 'Other' },
 ];
+
+// LR-11B — 'company'/'family_trust' pre-date the real Company/Family Trust
+// entity workspace (LR-11/LR-11B) and are cosmetic-only free-text owner tags
+// with no valuation, consolidation, or RLS logic of their own (LR-11 §3's
+// disclosed double-entry risk: a user could tag a personal-grid row
+// owner='company' AND separately record the same value in the real Company
+// workspace, double-counting it). Existing rows keep this value exactly as
+// they were -- never silently migrated or reclassified without explicit
+// user action -- but it is no longer offered as a choice for a BRAND-NEW
+// row on any of the 7 financial-data-grid registers; see
+// GridConfig.restrictedOwnerValues (lib/grid/configs.ts) and
+// docs/live-recovery/LR11B_LEGACY_OWNER_TAG_RESOLUTION.md for the full
+// record of this decision.
+export const LEGACY_ENTITY_OWNER_RESTRICTIONS: { value: Owner }[] = [
+  { value: 'company' },
+  { value: 'family_trust' },
+];
+
+const LEGACY_ENTITY_OWNER_VALUES = new Set<string>(LEGACY_ENTITY_OWNER_RESTRICTIONS.map((r) => r.value));
+
+/** Owner label for display, marking the two legacy cosmetic-only entity tags
+ *  so an existing row reads as "this predates the entity workspace", not as
+ *  a live link to a real Company/Family Trust record. */
+export function ownerDisplayLabel(owner: string | null | undefined): string {
+  if (!owner) return '';
+  const base = OWNER_OPTIONS.find((o) => o.value === owner)?.label ?? owner;
+  return LEGACY_ENTITY_OWNER_VALUES.has(owner) ? `${base} (Legacy)` : base;
+}

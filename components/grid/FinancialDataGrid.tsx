@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
-import { OWNER_OPTIONS, expectedCurrencyForCountry } from '@/lib/constants';
+import { OWNER_OPTIONS, expectedCurrencyForCountry, ownerDisplayLabel } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
 import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
 import {
@@ -270,15 +270,19 @@ export function FinancialDataGrid({
       const currency = profile?.preferred_currency ?? 'AUD';
       setDefaultCurrency(currency);
 
-      // LR-7 WP-03 — see GridConfig.restrictedOwnerValues' own doc comment.
-      // A household whose country isn't yet known/confirmed keeps every
-      // owner value available (fail-open on ambiguity, not fail-closed on
-      // an already-existing selection) rather than guessing.
+      // LR-7 WP-03 / LR-11B — see GridConfig.restrictedOwnerValues' own doc
+      // comment. A restriction with a requiredCountry keeps every owner
+      // value available for a household whose country isn't yet known/
+      // confirmed (fail-open on ambiguity, not fail-closed on an already-
+      // existing selection) rather than guessing. A restriction with NO
+      // requiredCountry (LR-11B's 'company'/'family_trust' legacy-tag
+      // restriction) is unconditional -- always hidden from new selection
+      // regardless of country.
       if (config.restrictedOwnerValues?.length) {
         const householdCountry = profile?.country_of_residence ?? null;
         const hidden = new Set(
           config.restrictedOwnerValues
-            .filter((r) => householdCountry !== null && r.requiredCountry !== householdCountry)
+            .filter((r) => r.requiredCountry === undefined || (householdCountry !== null && r.requiredCountry !== householdCountry))
             .map((r) => r.value)
         );
         setHiddenOwnerValues(hidden);
@@ -933,7 +937,7 @@ export function FinancialDataGrid({
                     >
                       {OWNER_OPTIONS.filter((o) => o.value === draft.owner || !hiddenOwnerValues.has(o.value)).map((o) => (
                         <option key={o.value} value={o.value}>
-                          {o.label}
+                          {ownerDisplayLabel(o.value)}
                         </option>
                       ))}
                     </select>
@@ -1117,7 +1121,7 @@ export function FinancialDataGrid({
                         <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
                       )}
                     </td>
-                    <td className="px-3 py-2">{OWNER_OPTIONS.find((o) => o.value === row.owner)?.label ?? row.owner}</td>
+                    <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
                     <td className="px-3 py-2">{formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
                     <td className="px-3 py-2">{row.currency_code}</td>
                     <td className="px-3 py-2 text-right">
@@ -1158,7 +1162,7 @@ export function FinancialDataGrid({
                   <div>
                     <p className="font-medium text-ink">{row.item_label}</p>
                     <p className="text-xs text-muted">
-                      {OWNER_OPTIONS.find((o) => o.value === row.owner)?.label ?? row.owner} · {formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
+                      {ownerDisplayLabel(row.owner)} · {formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
                     </p>
                     {isIiPublished(row) && (
                       <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
