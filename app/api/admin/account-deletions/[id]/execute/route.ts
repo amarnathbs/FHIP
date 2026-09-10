@@ -37,6 +37,30 @@ export const POST = adminRoute(async (_req: Request, { params }: { params: Promi
     await admin.from('account_deletion_requests').update({ status: 'failed', failure_reason: 'Request has no linked user.' }).eq('id', id);
     return bad('This request has no linked user and cannot be executed.', 422);
   }
+  if (claimed.user_id === user!.id) {
+    // An admin holding can_manage_account_deletions must never be the
+    // person who executes their OWN closure request — "reviewed by an
+    // authorised person" (the product's own copy, components/profile/
+    // CloseAccountPanel.tsx) means a separate person, not self-service.
+    // Beyond the policy reason, this is also a genuine correctness trap:
+    // executeAccountDeletion() below deletes claimed.user_id via
+    // auth.admin.deleteUser() — if that's the SAME id as the acting
+    // admin, the finalise UPDATE further down tries to set
+    // processed_by = user!.id against a row that auth.users no longer
+    // has (the identity was just deleted moments earlier in this same
+    // request), violating processed_by's FK and leaving this request
+    // stuck at status='processing' forever, even though the identity
+    // and its data are genuinely gone (found via a real production
+    // reproduction of exactly this case, 2026-09-11 LR-9 reconciliation).
+    // Failing here, before executeAccountDeletion is ever called, avoids
+    // the trap entirely rather than trying to make the finalise step
+    // tolerate a vanished admin id after the fact.
+    await admin
+      .from('account_deletion_requests')
+      .update({ status: 'failed', failure_reason: 'An account-deletion admin cannot execute a request for their own account.', updated_at: new Date().toISOString() })
+      .eq('id', id);
+    return bad('You cannot execute an account-deletion request for your own account. A different authorised reviewer must process it.', 403);
+  }
 
   const result = await executeAccountDeletion(claimed.user_id);
 
