@@ -116,5 +116,10 @@ export interface GridConfig {
   // there too) — disclosed as a deferred, cross-cutting finding rather than
   // fixed everywhere in this pass, since that is a larger, unscoped change
   // this phase's own "keep the branch narrow" instruction does not cover.
-  restrictedOwnerValues?: { value: string; requiredCountry: 'AU' | 'IN' }[];
+  // LR-11B: requiredCountry is now optional. Omitting it means the value is
+  // ALWAYS hidden from new selection regardless of household country (used
+  // for the 'company'/'family_trust' legacy-tag restriction below, which has
+  // nothing to do with jurisdiction) -- see LEGACY_ENTITY_OWNER_RESTRICTIONS
+  // in lib/constants.ts.
+  restrictedOwnerValues?: { value: string; requiredCountry?: 'AU' | 'IN' }[];
 }

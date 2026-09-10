@@ -1,5 +1,5 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
-import { COUNTRY_OPTIONS } from '@/lib/constants';
+import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
 import type { GridConfig } from './types';
 
@@ -13,6 +13,10 @@ export const incomeGridConfig: GridConfig = {
   isFlow: true,
   frequencyField: 'frequency',
   reviewSection: 'income',
+  // LR-11B: 'company'/'family_trust' are legacy cosmetic-only owner tags,
+  // no longer offered for a brand-new row on any of the 7 registers — see
+  // LEGACY_ENTITY_OWNER_RESTRICTIONS' own doc comment (lib/constants.ts).
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
     { name: 'net_amount', label: 'Net Amount', type: 'number', step: '0.01' },
@@ -38,6 +42,7 @@ export const expenseGridConfig: GridConfig = {
   isFlow: true,
   frequencyField: 'frequency',
   reviewSection: 'expenses',
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
@@ -60,6 +65,7 @@ export const assetGridConfig: GridConfig = {
   valueField: 'current_value',
   reviewSection: 'assets',
   propertyLinkSide: 'property',
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'current_value', label: 'Current Market Value', type: 'number', step: '0.01', required: true },
     { name: 'purchase_price', label: 'Purchase Price', type: 'number', step: '0.01' },
@@ -92,6 +98,7 @@ export const liabilityGridConfig: GridConfig = {
     question: 'Do you currently have any debts or financial liabilities?',
     noLabel: 'No, I have no debts or liabilities',
   },
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'lender', label: 'Lender', type: 'text' },
     { name: 'balance', label: 'Outstanding Balance', type: 'number', step: '0.01', required: true },
@@ -124,6 +131,7 @@ export const investmentGridConfig: GridConfig = {
   propertyLinkSide: 'property',
   goalLinkable: true,
   notApplicable: { profileField: 'not_applicable_investments', label: "I don't have any investments" },
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'institution', label: 'Institution', type: 'text' },
     { name: 'current_value', label: 'Current Value', type: 'number', step: '0.01', required: true },
@@ -186,6 +194,7 @@ export const retirementGridConfig: GridConfig = {
   // and completion stats via the real SMSF UI — this only removes it from
   // this specific editable table.
   excludeMasterItemKeys: ['smsf'],
+  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
 };
 
 export const insuranceGridConfig: GridConfig = {
@@ -215,7 +224,7 @@ export const insuranceGridConfig: GridConfig = {
   // LR-7 WP-03: SMSF-paid insurance only makes sense for an AU household —
   // see the type's own doc comment (lib/grid/types.ts) for why this is
   // scoped to Insurance only, not every register that offers 'smsf'.
-  restrictedOwnerValues: [{ value: 'smsf', requiredCountry: 'AU' }],
+  restrictedOwnerValues: [{ value: 'smsf', requiredCountry: 'AU' }, ...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'provider', label: 'Provider', type: 'text' },
     { name: 'cover_amount', label: 'Cover Amount', type: 'number', step: '0.01', required: true },
