@@ -75,6 +75,48 @@ export function householdOperatingCashFlowRows<T extends OwnedRow>(rows: T[]): T
   return rows.filter(isHouseholdOperatingCashFlow);
 }
 
+// ---------------------------------------------------------------------------
+// LR-12R reconciliation (2026-09-11, PO ruling) — the gap this module's own
+// header (line 28-30 above) explicitly named as deferred: a liability
+// structurally linked to an SMSF fund as its property loan
+// (property_liability_links.link_type='smsf_property_loan') is the fund's
+// own debt regardless of whether the row is ALSO manually owner-tagged
+// 'smsf'. A live oracle (household income $10k/mo, personal debt service
+// $1k/mo, an SMSF-linked-but-not-owner-tagged loan repayment of $2k/mo)
+// proved DSR came back 30% instead of the required 10% before this fix —
+// a real financial-context defect, not a discoverability nuance. The PO's
+// own instruction: "The correct fix should preferably use the canonical
+// SMSF link/context rather than requiring a user to understand that they
+// must separately set owner='smsf'."
+//
+// This does not change isHouseholdOperatingCashFlow()'s own rule (still
+// exactly `owner !== 'smsf'`) — it widens what counts as 'smsf' for
+// liabilities specifically, by overriding the EFFECTIVE owner on a shallow
+// copy fed to computeDashboard(). The real, stored liabilities.owner
+// column — and every other reader of it, including the Liabilities
+// register's own display/edit UI — is completely untouched; only the
+// dashboard/DTI/DSR calculation's own input is enriched.
+/** Minimal shape of a liability row this override needs to see. */
+export interface LiabilityRowForSmsfLinkOverride {
+  id: string;
+  owner?: string | null;
+}
+
+/**
+ * Returns a new array where any liability whose id is in `smsfLinkedLiabilityIds`
+ * has its effective `owner` forced to `'smsf'` — used only as computeDashboard()'s
+ * input, never written back to the database. Rows not in the set are returned
+ * unchanged (same object reference), so this is a no-op, allocation-free pass
+ * for the overwhelmingly common household with no SMSF-linked property loan.
+ */
+export function applySmsfPropertyLoanLinkOverride<T extends LiabilityRowForSmsfLinkOverride>(
+  liabilities: T[],
+  smsfLinkedLiabilityIds: ReadonlySet<string>
+): T[] {
+  if (smsfLinkedLiabilityIds.size === 0) return liabilities;
+  return liabilities.map((l) => (smsfLinkedLiabilityIds.has(l.id) ? { ...l, owner: SMSF_OWNER } : l));
+}
+
 // QUERY-LEVEL EXCLUSION.
 //
 // Two registers — income_sources and expense_items — are 100% operating cash
