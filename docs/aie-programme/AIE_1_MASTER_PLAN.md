@@ -11,6 +11,22 @@ for exactly what was built, reused, deferred, and verified. That work is
 NOT a certification and grants no production authority — this master plan's
 phase ordering and scoping note below remain unchanged by it.
 
+**AIE-1.4 (other PDF-enabled FHIP modules) has since been implemented,
+unit-tested, typechecked and linted clean on
+`feature/aie-1-4-other-modules` (based on `feature/aie-1-1-document-
+gateway`) — see [`AIE_1_4_IMPLEMENTATION.md`](./AIE_1_4_IMPLEMENTATION.md)
+for exactly what was built, reused, deferred, and verified. Of the nine
+candidate document classes this plan's section 3 table anticipated, only
+Insurance was ruled IMPLEMENT_NOW this pass; the rest were ruled DEFER —
+see that report for the full eligibility scorecard and rationale per class.
+Same caveat as AIE-1.2's note below: NOT a certification, grants no
+production authority, and the section 5 open item below (AIE-1.0
+substitution) is unchanged by it — still an open PO decision, not resolved
+by proceeding. This pass was done concurrently with (and has NOT reviewed
+the code of) `feature/aie-1-2-investment-adapter` and
+`feature/aie-1-3-fdh-bank-adapter` — only their migration numbers (0141,
+0142) were checked, per this phase's own collision-avoidance requirement.
+
 **Source documents** (`C:\Users\user\Downloads\`, read 2026-09-11, not committed to this repo):
 - `AIE-1.1_Shared_Preprocessing_Masking_and_JSON-Schema_Gateway (1).md` (~3089 lines / 332 numbered requirements)
 - `AIE-1.2_Investment_Intelligence_Adapter.md` (~3148 lines / 346 numbered requirements)
