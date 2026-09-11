@@ -7,7 +7,17 @@ import {
   type AllocatedContributionInvestment,
   type AllocatedContributionRetirementAccount,
   type LiveLinkedFundingSource,
+  type LiveLinkedCurrentValue,
 } from '@/lib/services/goalFundingAllocation';
+
+// G6 Contract 6: currentValueById now carries each linked record's own
+// currency_code alongside its value. `null` here means "same currency as
+// the goal" for these pre-Contract-6 tests, which never pass
+// goalCurrencyCode/fxRateAudInr either — proving the no-op/backward-compat
+// path (untouched raw value) still holds byte-for-byte.
+function localValue(value: number): LiveLinkedCurrentValue {
+  return { value, currencyCode: null };
+}
 
 describe('computeAllocatedMonthlyContribution', () => {
   it('sums an allocated share of a linked investment annual_contribution as a monthly figure', () => {
@@ -109,7 +119,7 @@ describe('computeLiveLinkedFundingValue', () => {
     const sources: LiveLinkedFundingSource[] = [
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'etf-1', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
     ];
-    const currentValueById = new Map([['etf-1', 40000]]);
+    const currentValueById = new Map([['etf-1', localValue(40000)]]);
     expect(computeLiveLinkedFundingValue(sources, currentValueById)).toBe(40000);
   });
 
@@ -117,7 +127,7 @@ describe('computeLiveLinkedFundingValue', () => {
     const sources: LiveLinkedFundingSource[] = [
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'etf-1', linkedRetirementId: null, allocationPercentage: 60, allocatedAmount: 0 },
     ];
-    const currentValueById = new Map([['etf-1', 100000]]);
+    const currentValueById = new Map([['etf-1', localValue(100000)]]);
     expect(computeLiveLinkedFundingValue(sources, currentValueById)).toBe(60000);
   });
 
@@ -126,7 +136,7 @@ describe('computeLiveLinkedFundingValue', () => {
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'etf-1', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
     ];
     // allocatedAmount snapshot (stale) says $50,000; live current_value has since moved to $55,000.
-    expect(computeLiveLinkedFundingValue(sources, new Map([['etf-1', 55000]]))).toBe(55000);
+    expect(computeLiveLinkedFundingValue(sources, new Map([['etf-1', localValue(55000)]]))).toBe(55000);
   });
 
   it('spec s.79 Multiple Holdings -> one Goal: $50k + $30k + $20k = $100,000, not $200,000', () => {
@@ -136,9 +146,9 @@ describe('computeLiveLinkedFundingValue', () => {
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'mf', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
     ];
     const currentValueById = new Map([
-      ['etf', 50000],
-      ['td', 30000],
-      ['mf', 20000],
+      ['etf', localValue(50000)],
+      ['td', localValue(30000)],
+      ['mf', localValue(20000)],
     ]);
     expect(computeLiveLinkedFundingValue(sources, currentValueById)).toBe(100000);
   });
@@ -148,7 +158,7 @@ describe('computeLiveLinkedFundingValue', () => {
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'etf-1', linkedRetirementId: null, allocationPercentage: null, allocatedAmount: 25000 },
     ];
     // Live value has grown to $100,000, but this is a FIXED-amount commitment, not a percentage share.
-    expect(computeLiveLinkedFundingValue(sources, new Map([['etf-1', 100000]]))).toBe(25000);
+    expect(computeLiveLinkedFundingValue(sources, new Map([['etf-1', localValue(100000)]]))).toBe(25000);
   });
 
   it('manual/cash/expected sources carry no live-value signal (spec: informational only)', () => {
@@ -163,5 +173,61 @@ describe('computeLiveLinkedFundingValue', () => {
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'missing', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
     ];
     expect(computeLiveLinkedFundingValue(sources, new Map())).toBe(0);
+  });
+});
+
+// G6 Contract 6 (docs/country-programme/g6-data-contracts.md) — a
+// percentage-based funding source linked to a record in a DIFFERENT
+// currency from its goal is now converted before the percentage is applied.
+describe('computeLiveLinkedFundingValue — cross-currency conversion (G6 Contract 6)', () => {
+  const fxRateAudInr = 55; // INR per 1 AUD
+
+  it('THE DEFECT THIS CONTRACT FIXES: an INR-denominated linked investment feeding an AUD goal is converted, not treated as a raw AUD figure', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-in', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
+    ];
+    const currentValueById = new Map([['inv-in', { value: 5500000, currencyCode: 'INR' }]]);
+    // 5,500,000 INR / 55 = 100,000 AUD — NOT 5,500,000 (which the pre-Contract-6 code would have returned).
+    expect(computeLiveLinkedFundingValue(sources, currentValueById, 'AUD', fxRateAudInr)).toBe(100000);
+  });
+
+  it('a percentage allocation is applied AFTER conversion, not before', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-in', linkedRetirementId: null, allocationPercentage: 50, allocatedAmount: 0 },
+    ];
+    const currentValueById = new Map([['inv-in', { value: 5500000, currencyCode: 'INR' }]]);
+    expect(computeLiveLinkedFundingValue(sources, currentValueById, 'AUD', fxRateAudInr)).toBe(50000);
+  });
+
+  it('same-currency link and goal: convertToReportingCurrency is a no-op, zero numeric change from before Contract 6', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-au', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
+    ];
+    const currentValueById = new Map([['inv-au', { value: 40000, currencyCode: 'AUD' }]]);
+    expect(computeLiveLinkedFundingValue(sources, currentValueById, 'AUD', fxRateAudInr)).toBe(40000);
+  });
+
+  it('fixed-amount sources are NEVER converted, even when currencies differ — they are already goal-currency-denominated by the user\'s own entry', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-in', linkedRetirementId: null, allocationPercentage: null, allocatedAmount: 25000 },
+    ];
+    const currentValueById = new Map([['inv-in', { value: 5500000, currencyCode: 'INR' }]]);
+    expect(computeLiveLinkedFundingValue(sources, currentValueById, 'AUD', fxRateAudInr)).toBe(25000);
+  });
+
+  it('backward compatibility: omitting goalCurrencyCode/fxRateAudInr entirely (pre-Contract-6 call shape) leaves the raw value untouched', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-in', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
+    ];
+    const currentValueById = new Map([['inv-in', { value: 5500000, currencyCode: 'INR' }]]);
+    expect(computeLiveLinkedFundingValue(sources, currentValueById)).toBe(5500000);
+  });
+
+  it('an unrecognised/missing linked currency_code is never guessed at — the raw value passes through unconverted', () => {
+    const sources: LiveLinkedFundingSource[] = [
+      { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-x', linkedRetirementId: null, allocationPercentage: 100, allocatedAmount: 0 },
+    ];
+    const currentValueById = new Map([['inv-x', { value: 40000, currencyCode: null }]]);
+    expect(computeLiveLinkedFundingValue(sources, currentValueById, 'AUD', fxRateAudInr)).toBe(40000);
   });
 });

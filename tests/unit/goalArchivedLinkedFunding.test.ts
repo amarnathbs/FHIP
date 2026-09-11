@@ -208,7 +208,10 @@ describe('computeLiveLinkedFundingValue', () => {
     const sources: LiveLinkedFundingSource[] = [
       { sourceType: 'investment', linkedAssetId: null, linkedInvestmentId: 'inv-1', linkedRetirementId: null, allocationPercentage: 60, allocatedAmount: 66000 },
     ];
-    const currentValueById = new Map([['inv-1', 110000]]);
+    // G6 Contract 6: currentValueById now carries {value, currencyCode} per
+    // linked record — currencyCode: null here means "same currency as the
+    // goal" for this pre-Contract-6 test, which doesn't exercise conversion.
+    const currentValueById = new Map([['inv-1', { value: 110000, currencyCode: null }]]);
     expect(computeLiveLinkedFundingValue(sources, currentValueById)).toBe(66000);
   });
 
