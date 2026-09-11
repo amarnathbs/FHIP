@@ -11,6 +11,15 @@ for exactly what was built, reused, deferred, and verified. That work is
 NOT a certification and grants no production authority — this master plan's
 phase ordering and scoping note below remain unchanged by it.
 
+**AIE-1.2 (Investment Intelligence adapter) has since been implemented,
+unit-tested, typechecked and linted clean on
+`feature/aie-1-2-investment-adapter` (based on `feature/aie-1-1-document-
+gateway`) — see [`AIE_1_2_IMPLEMENTATION.md`](./AIE_1_2_IMPLEMENTATION.md)
+for exactly what was built, reused, deferred, and verified. Same caveat:
+NOT a certification, grants no production authority, and the section 5 open
+item below (AIE-1.0 substitution) is unchanged by it — still an open PO
+decision, not resolved by proceeding.
+
 **Source documents** (`C:\Users\user\Downloads\`, read 2026-09-11, not committed to this repo):
 - `AIE-1.1_Shared_Preprocessing_Masking_and_JSON-Schema_Gateway (1).md` (~3089 lines / 332 numbered requirements)
 - `AIE-1.2_Investment_Intelligence_Adapter.md` (~3148 lines / 346 numbered requirements)
