@@ -445,6 +445,17 @@ export interface DashboardSummary {
   assetsByCountry: { countryCode: string; value: number }[];
   liabilitiesByCountry: { countryCode: string; value: number }[];
   retirementByCountry: { countryCode: string; value: number }[];
+  // G6 Contract 5 (docs/country-programme/g6-data-contracts.md) — a THIRD,
+  // additive per-country view alongside assetsByCountry/liabilitiesByCountry/
+  // retirementByCountry above (both of which are untouched and stay in each
+  // row's OWN currency, by design — see reportingValue()'s own comment).
+  // This one converts assets + retirement - liabilities per country through
+  // the exact same reportingValue() function used for the blended netWorth
+  // total, so a household can see net worth broken out by country in one
+  // consistent reporting currency. Deliberately excludes investments (no
+  // investmentsByCountry rollup exists anywhere in this engine today — adding
+  // one would be new scope, not this contract's).
+  netWorthByCountryConverted: { countryCode: string; value: number }[];
   countriesInUse: string[]; // distinct country_code values recorded anywhere, for cross-border section eligibility
 
   // Savings / emergency fund
@@ -792,6 +803,42 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const liabilitiesByCountry = byCountry(input.liabilities, 'balance', 'country_code');
   const retirementByCountry = byCountry(input.retirement, 'current_balance', 'country_code');
 
+  // G6 Contract 5 — same per-country grouping as byCountry() above, but each
+  // row passes through reportingValue() (currency conversion) before being
+  // summed, so rows recorded in different currencies within the same country
+  // bucket combine correctly. Unlike byCountry(), this needs the row's own
+  // currency_code, so it groups from the raw input rows directly rather than
+  // reusing byCountry()'s already-summed (and therefore currency-erased)
+  // output.
+  function byCountryConverted<T extends { currency_code?: string | null }>(
+    rows: T[],
+    valueField: keyof T,
+    countryField: keyof T
+  ): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const code = r[countryField] as unknown as string | null | undefined;
+      if (!code) continue;
+      map.set(code, (map.get(code) ?? 0) + reportingValue(r.currency_code, Number(r[valueField])));
+    }
+    return map;
+  }
+  const assetsByCountryConverted = byCountryConverted(input.assets, 'current_value', 'country_code');
+  const liabilitiesByCountryConverted = byCountryConverted(input.liabilities, 'balance', 'country_code');
+  const retirementByCountryConverted = byCountryConverted(input.retirement, 'current_balance', 'country_code');
+  const netWorthByCountryCodes = new Set([
+    ...assetsByCountryConverted.keys(),
+    ...liabilitiesByCountryConverted.keys(),
+    ...retirementByCountryConverted.keys(),
+  ]);
+  const netWorthByCountryConverted = Array.from(netWorthByCountryCodes).map((countryCode) => ({
+    countryCode,
+    value:
+      (assetsByCountryConverted.get(countryCode) ?? 0) +
+      (retirementByCountryConverted.get(countryCode) ?? 0) -
+      (liabilitiesByCountryConverted.get(countryCode) ?? 0),
+  }));
+
   const liquidAssets = allocationMap.get('cash') ?? 0;
   const emergencyFundMonths = essentialMonthlyExpenses > 0 ? liquidAssets / essentialMonthlyExpenses : null;
   const totalAssetBaseForRatios = totalAssets + totalInvestments + totalRetirement;
@@ -1124,6 +1171,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     assetsByCountry,
     liabilitiesByCountry,
     retirementByCountry,
+    netWorthByCountryConverted,
     countriesInUse,
     liquidAssets,
     emergencyFundMonths,
