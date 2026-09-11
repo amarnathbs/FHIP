@@ -34,11 +34,11 @@ function buildSource(assets: AssetRow[]): ReportSourceData {
     healthScore: null,
     resilience: null,
     dna: null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     goals: {
       summary: { onTrackCount: 0, activeGoalsCount: 0 },
       goals: [],
       affordability: { status: 'comfortable', monthlySurplus: null, totalPlannedGoalContributions: 0, unallocatedAmount: null, overallocatedAmount: null, usageRatio: null, warning: null },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any,
     previousGoalsOnTrackCount: null,
     previousActiveGoalsCount: null,
