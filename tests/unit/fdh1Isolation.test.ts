@@ -321,6 +321,22 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'types.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'validation', 'fileValidation.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'aie', 'intake', 'route.ts'),
+      // AIE-1.4 (2026-09-11): lib/aie/adapters/insurance/documentCatalogue.ts
+      // and labels.ts trip the identical naive-substring limitation, for the
+      // identical reason as the AIE-1.1 exception directly above — their own
+      // header comments cite `lib/financial-data-hub/payslip/**`,
+      // `lib/financial-data-hub/liability/adapters/**` and
+      // `lib/financial-data-hub/retirement/**` as the reason payslip/income,
+      // loans/liabilities and retirement/SMSF were each ruled DEFER this pass
+      // (a mature, separate FDH pipeline for each already exists — see
+      // AIE_1_4_IMPLEMENTATION.md's eligibility scorecard), and
+      // `lib/financial-data-hub/payslip/labels.ts`'s own documented
+      // label-matching design rule as prior art this adapter's own
+      // `labels.ts` reuses IN SUBSTANCE, not by import. Confirmed by hand and
+      // by `grep -rn "from '@/lib/financial-data-hub" lib/aie/adapters/insurance`
+      // returning zero matches.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'documentCatalogue.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'labels.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
