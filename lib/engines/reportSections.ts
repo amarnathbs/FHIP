@@ -1,5 +1,5 @@
 import type { ReportSourceData } from '@/lib/services/reportSnapshotResolver';
-import { computeSectionEligibility, type SectionCode, type FreeSectionCode, type SectionStatus, type EligibilityInput } from './reportEligibility';
+import { computeSectionEligibility, hasCrossBorderEligibility, type SectionCode, type FreeSectionCode, type SectionStatus, type EligibilityInput } from './reportEligibility';
 import { computeMetricMovement, scoreMovementNarrative, overallocationNarrative, firstReportMessage } from './reportNarrative';
 import { generateGoalInsights } from './goalInsights';
 import { computeKeyInsights } from './reportInsights';
@@ -7,6 +7,20 @@ import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
 import type { DashboardSummary, SnapshotRow } from './dashboard';
+
+// G7 Contract 4 (docs/country-programme/g7-data-contracts.md) — appends a
+// cross-border blending caveat to a consolidated (multi-register) section's
+// existing limitationText, additive only. `existingText` is usually the
+// section's own eligibility `reason` (often null when 'included') — this
+// never overwrites a real, existing limitation, only adds to it. A
+// single-country household's countriesInUse.length is always 1, so this
+// never fires for the overwhelming majority of existing reports (confirmed
+// by construction: hasCrossBorderEligibility(1) === false).
+function withCrossBorderLimitation(existingText: string | null, countriesInUseCount: number): string | null {
+  if (!hasCrossBorderEligibility(countriesInUseCount)) return existingText;
+  const note = `This section blends figures from ${countriesInUseCount} countries.`;
+  return existingText ? `${existingText} ${note}` : note;
+}
 
 export interface BuiltSection {
   sectionCode: SectionCode;
@@ -243,7 +257,8 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
     chartData: { cashFlow: cashFlowChart, emergencyFund: emergencyFundChart },
     sourceReferences: { healthScoreId: source.healthScore ? 'current' : null },
     confidenceLevel: source.healthScore ? source.healthScore.dataConfidence.toFixed(0) : null,
-    limitationText: null,
+    // G7 Contract 4 — additive cross-border blending caveat.
+    limitationText: withCrossBorderLimitation(null, d.countriesInUse.length),
   };
 }
 
@@ -296,7 +311,11 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
         : null,
     sourceReferences: {},
     confidenceLevel: null,
-    limitationText: reason,
+    // G7 Contract 4 — additive cross-border blending caveat, only when this
+    // section is actually rendering consolidated figures (an omitted/
+    // unavailable section's `reason` is a different kind of message, not a
+    // figure to caveat).
+    limitationText: status === 'included' ? withCrossBorderLimitation(reason, d.countriesInUse.length) : reason,
   };
 }
 
@@ -348,7 +367,8 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
         : null,
     sourceReferences: { financialSnapshotMonth: source.reportMonth },
     confidenceLevel: null,
-    limitationText: reason,
+    // G7 Contract 4 — same rationale as buildCashFlow's own comment above.
+    limitationText: status === 'included' ? withCrossBorderLimitation(reason, d.countriesInUse.length) : reason,
   };
 }
 
