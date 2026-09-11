@@ -1,6 +1,25 @@
 // Deterministic section-inclusion rules (spec section 9). Kept separate from
 // data-fetching so eligibility can be unit-tested without a database.
 
+// G7 Contract 3 (docs/country-programme/g7-data-contracts.md) — the shared
+// cross-border-eligibility threshold, used by this file's own 'cross_border'
+// check below AND by reportSectionsPremium.ts's buildCrossBorderFull(),
+// replacing two independent inline `> 1` / `<= 1` checks with one function.
+// Takes a COUNT rather than the raw countriesInUse array (a deliberate,
+// deliberately-documented deviation from this contract's own illustrative
+// `(countriesInUse: string[])` signature): by the point this file's own
+// EligibilityInput reaches this check, buildEligibilityInput() has already
+// reduced the array to countriesInUseCount, and restructuring that existing
+// input shape just to pass the shared function an array — only to have it
+// call `.length` internally anyway — would be a larger, unnecessary change
+// for the exact same zero-behavioural-change guarantee. Confirmed by
+// construction: both call sites' existing threshold is `> 1`, so replacing
+// either inline literal with this function cannot change any existing
+// report's eligibility outcome.
+export function hasCrossBorderEligibility(countriesInUseCount: number): boolean {
+  return countriesInUseCount > 1;
+}
+
 export type FreeSectionCode =
   | 'executive_summary'
   | 'cash_flow'
@@ -129,8 +148,8 @@ export function computeSectionEligibility(input: EligibilityInput): SectionEligi
 
   add(
     'cross_border',
-    input.countriesInUseCount > 1 ? 'included' : 'omitted',
-    input.countriesInUseCount > 1 ? null : 'Recorded in a single country for this period.'
+    hasCrossBorderEligibility(input.countriesInUseCount) ? 'included' : 'omitted',
+    hasCrossBorderEligibility(input.countriesInUseCount) ? null : 'Recorded in a single country for this period.'
   );
 
   add(

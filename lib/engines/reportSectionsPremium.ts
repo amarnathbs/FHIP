@@ -5,7 +5,7 @@
 // Engine, Resilience Stress) — nothing here recalculates anything (Rule 15).
 // Only ever called when source.premium is non-null (planTier === 'premium').
 import type { ReportSourceData, PremiumSourceData } from '@/lib/services/reportSnapshotResolver';
-import type { PremiumSectionCode } from './reportEligibility';
+import { hasCrossBorderEligibility, type PremiumSectionCode } from './reportEligibility';
 import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
@@ -460,9 +460,12 @@ function buildFinancialTwinFull(source: ReportSourceData): BuiltSection {
   };
 }
 
-function buildCrossBorderFull(source: ReportSourceData): BuiltSection {
+// Exported for direct unit testing, matching buildStressTesting's own
+// precedent above.
+export function buildCrossBorderFull(source: ReportSourceData): BuiltSection {
   const d = source.dashboard;
-  if (d.countriesInUse.length <= 1) {
+  // G7 Contract 3 — was an independent inline `<= 1` check.
+  if (!hasCrossBorderEligibility(d.countriesInUse.length)) {
     return {
       sectionCode: 'cross_border_full',
       sectionTitle: PREMIUM_SECTION_TITLES.cross_border_full,
