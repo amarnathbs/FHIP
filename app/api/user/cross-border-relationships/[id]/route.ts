@@ -5,16 +5,18 @@
 // this app's existing INSERT/reactivation-only gating convention, e.g.
 // SMSF's trigger, migration 0084).
 import { z } from 'zod';
-// G3 section 9/10: generic-experience users may manage their own
-// declarations (see ../route.ts).
-import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
+// G6 Contract 7 — same migration as ../route.ts, same rationale: onto the
+// G4 capability resolver, `allowGenericWhenG4Off: true` preserving this
+// route's own G3-era generic-experience allowance byte-for-byte.
+import { requireModuleCapability } from '@/lib/services/appCapability';
+import { ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 const endSchema = z.object({ end_date: z.string().date().optional() });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('CROSS_BORDER', req, { allowGenericWhenG4Off: true });
+  if (!user) return blocked!;
 
   const { id } = await params;
   const parsed = endSchema.safeParse(await req.json().catch(() => ({})));
