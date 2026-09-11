@@ -27,6 +27,22 @@ the code of) `feature/aie-1-2-investment-adapter` and
 `feature/aie-1-3-fdh-bank-adapter` — only their migration numbers (0141,
 0142) were checked, per this phase's own collision-avoidance requirement.
 
+**AIE-1.5 (unified review/acceptance UX) has since been implemented,
+unit-tested, typechecked and linted clean on
+`feature/aie-1-5-exception-review-ux` (based on
+`feature/aie-1-1-document-gateway`, with `feature/aie-1-4-other-modules`
+merged in for real integration testing) — see
+[`AIE_1_5_IMPLEMENTATION.md`](./AIE_1_5_IMPLEMENTATION.md) for exactly what
+was built, reused, deferred, and verified. Only the Insurance adapter was
+actually wired end-to-end and tested; Investment Intelligence and FDH bank
+statement are design-compatible-only (their reason codes/contracts were
+transcribed from their own unmerged branches, never executed) — see that
+report's section 5 for the extension-point design and section 11 for the
+full honest limitations list (no PC5 integration, no bulk actions, no
+amendments/notifications, no live-DEV proof, no automated accessibility
+certification). Same caveat as every prior phase: NOT a certification,
+grants no production authority.
+
 **Source documents** (`C:\Users\user\Downloads\`, read 2026-09-11, not committed to this repo):
 - `AIE-1.1_Shared_Preprocessing_Masking_and_JSON-Schema_Gateway (1).md` (~3089 lines / 332 numbered requirements)
 - `AIE-1.2_Investment_Intelligence_Adapter.md` (~3148 lines / 346 numbered requirements)
