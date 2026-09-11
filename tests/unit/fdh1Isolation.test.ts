@@ -295,6 +295,32 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // independent literal instead. It never imports anything from
       // `lib/financial-data-hub`.
       path.join(REPO_ROOT, 'lib', 'services', 'accountDeletionStorage.ts'),
+      // AIE-1.1 (2026-09-11): lib/aie/** and app/api/aie/intake/route.ts trip
+      // the identical naive-substring limitation the precedents above
+      // document, for the identical reason: several files' header comments
+      // explain a REUSE DECISION by naming
+      // `lib/financial-data-hub/domain/fileValidation.ts`,
+      // `lib/financial-data-hub/payslip/privacy.ts`, and similar existing
+      // FDH modules as prior art AIE-1.1 deliberately re-implements the
+      // technique of rather than importing (the same reasoning FDH-5's own
+      // bank-pdf/textExtraction.ts gives for not importing Investment
+      // Intelligence R2's pdfExtraction.ts directly — each domain keeps its
+      // own independent, non-coupled copy of a shared technique). None of
+      // these files has any `from '@/lib/financial-data-hub...'` import —
+      // confirmed by hand and by `grep -rn "from '@/lib/financial-data-hub"
+      // lib/aie app/api/aie` returning zero matches. Approved as exactly
+      // these ten files, not a directory, so a future lib/aie file that
+      // starts genuinely importing FDH code would still be caught.
+      path.join(REPO_ROOT, 'lib', 'aie', 'audit.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'classifier', 'registry.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'db', 'repository.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'extraction', 'textExtraction.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'featureFlags.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'masking', 'piiMasking.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'stateMachine.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'types.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'validation', 'fileValidation.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'intake', 'route.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
