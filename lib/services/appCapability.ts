@@ -474,7 +474,15 @@ export const APP_CAPABILITY_MANIFEST: Record<ModuleKey, ModuleCapabilityRule> = 
     supportsExistingRecordPreservation: true,
     operationPolicy: OPERATIONS_FOLLOW_VIEW,
     writeTables: NO_WRITE_TABLES,
-    note: 'Recommendation content library is pillar/band-triggered off the same underlying financial data; not independently re-certified as country-neutral in this pass. Kept UNAVAILABLE for GENERIC pending G5.',
+    // G7 Contract 6 (docs/country-programme/g7-data-contracts.md, ownership
+    // G7.040) — doc-accuracy fix only, no behavioural change. The library
+    // has 28 confirmed AU/IN-only-triggering condition rows BY DESIGN
+    // (action_recommendation_master's country_code conditions, sourced
+    // correctly from user_profiles.country_of_residence — never
+    // currency-derived, confirmed by discovery); this was previously
+    // understated as merely "not yet re-certified," implying an open
+    // question rather than a known, intentional scoping fact.
+    note: 'Recommendation content library has 28 AU/IN-only-triggering condition rows by design; not country-neutral. Kept UNAVAILABLE for GENERIC pending G5.',
   },
   REPORTS: {
     key: 'REPORTS',
