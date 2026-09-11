@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { SupabaseServerClient } from '@/lib/services/dashboardData';
+import { getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { resolveReportSourceData, buildEligibilityInput, isEligibleForOfficialMonthlyReport } from '@/lib/services/reportSnapshotResolver';
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
 import { localeForReportingCurrency } from '@/lib/engines/money';
@@ -255,6 +255,15 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
       }))
     );
 
+    // G7 Contract 5 (docs/country-programme/g7-data-contracts.md) — FX/
+    // country provenance added to the primary 'financial' snapshot's
+    // existing metadata JSONB, mirroring G6 Contract 3's financial_snapshots
+    // columns exactly. Resolved independently of source.premium (which is
+    // null for free-tier reports) via the same getFxRateAudInr() every
+    // other write-time FX resolution in this app uses — never a second,
+    // possibly-drifting source. No schema change: snapshot_metadata_json
+    // already exists precisely for this kind of additive provenance data.
+    const fxRateAudInr = await getFxRateAudInr(supabase);
     await supabase.from('report_snapshots').insert([
       {
         report_id: report.id,
@@ -262,7 +271,12 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         snapshot_type: 'financial',
         source_version: 'dashboard-1.0.0',
         source_as_of_date: source.asOfDate,
-        snapshot_metadata_json: { reportMonth },
+        snapshot_metadata_json: {
+          reportMonth,
+          fxRateAudInr,
+          fxRateDate: new Date().toISOString().slice(0, 10),
+          countryOfResidence: source.profile.countryOfResidence ?? null,
+        },
       },
       ...(source.healthScore
         ? [
