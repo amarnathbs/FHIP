@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
   if (!user) return unauthenticated!;
 
   const { runId } = await params;
-  let body: { ownerHouseholdRole?: string; masterItemKey?: string | null; notes?: string | null; idempotencyKey?: string };
+  let body: { ownerHouseholdRole?: string; masterItemKey?: string | null; notes?: string | null; idempotencyKey?: string; ownerMemberId?: string | null; countryCode?: string };
   try {
     body = await req.json();
   } catch {
@@ -29,6 +29,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
     return bad('idempotencyKey is required', 422);
   }
 
+  // ownerMemberId/countryCode are only meaningful (and only required) for a
+  // run this resolves as an Investment Intelligence run — acceptRun() itself
+  // is the one place that actually knows the run's real adapter id and
+  // enforces this (`missing_required_input`); this route passes them
+  // through verbatim, never guessing a value for either.
   const outcome = await acceptRun({
     runId,
     userId: user.id,
@@ -37,6 +42,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
     masterItemKey: body.masterItemKey ?? null,
     notes: body.notes ?? null,
     idempotencyKey: body.idempotencyKey,
+    ownerMemberId: body.ownerMemberId ?? null,
+    countryCode: body.countryCode,
   });
 
   if (!outcome.ok) {
@@ -48,10 +55,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
       reconciliation_not_fresh: 409,
       stale_conflict: 409,
       unsupported_adapter: 422,
+      missing_required_input: 422,
       write_failed: 502,
     };
     return bad(`could not accept run: ${outcome.reason}`, statusByReason[outcome.reason] ?? 400, outcome.reason);
   }
 
-  return ok({ accepted: true, alreadyCompleted: outcome.alreadyCompleted, insurancePolicyId: outcome.insurancePolicyId ?? null });
+  return ok({ accepted: true, alreadyCompleted: outcome.alreadyCompleted, insurancePolicyId: outcome.insurancePolicyId ?? null, iiSourceDocumentId: outcome.iiSourceDocumentId ?? null });
 }

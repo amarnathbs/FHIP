@@ -18,6 +18,8 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
   const deps: AcceptRunDeps = {
     isCanonicalAcceptanceEnabled: () => true,
     getRunForUser: async () => baseRun(),
+    getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
+    getIntakeUploadMetadata: async () => null,
     countItemsBlockingAcceptanceForRun: async () => 0,
     latestReconciliationOutcomesForRun: async () => [{ ruleId: 'insurance_required_fields_present', outcome: 'pass' }],
     listFieldCandidatesForRun: async () => [],
@@ -41,6 +43,11 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
       return { ok: true, insurancePolicyId: 'policy-1' };
     },
     insuranceWriteDeps: {} as AcceptRunDeps['insuranceWriteDeps'],
+    acceptAndWriteInvestment: async (input) => {
+      calls.writes.push(input);
+      return { ok: true, iiSourceDocumentId: 'ii-doc-1', iiResult: { ok: true, status: 'parsed', parseRunId: 'parse-run-1', error: null } };
+    },
+    investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
     ...overrides,
   };
   return { deps, calls };
@@ -148,5 +155,104 @@ describe('AIE-1.5 accept.ts — acceptRun', () => {
     await acceptRun(baseParams, deps);
     const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
     expect(toStates).toEqual(['accepted', 'write_pending', 'failed_retryable']);
+  });
+
+  // AIE-1 merge plan section 4b / AIE_1_MERGE_PLAN.md's own follow-up fix:
+  // accept.ts now dispatches to Investment Intelligence's real write.ts,
+  // keyed off the run's own recorded adapter id — never defaulting to
+  // Insurance for a run some other adapter actually produced.
+  describe('Investment Intelligence dispatch (AIE-1.2 write.ts, via the run\'s real adapter id)', () => {
+    const iiParams = { ...baseParams, ownerMemberId: 'member-1', countryCode: 'IN' };
+    const iiOverrides = {
+      getAdapterIdForRun: async () => 'ii_cas_kfintech_folio_v1',
+      getIntakeUploadMetadata: async () => ({ storageKey: 'user-1/intake-1', declaredMimeType: 'application/pdf', displayFilename: 'statement.pdf' }),
+    };
+
+    it('reaches acceptAndWriteInvestment (not acceptAndWriteInsurance) for a run whose real adapter id is Investment Intelligence\'s', async () => {
+      const insuranceWrite = vi.fn();
+      const { deps, calls } = fakeDeps({ ...iiOverrides, acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'] });
+      const outcome = await acceptRun(iiParams, deps);
+      expect(outcome).toEqual({ ok: true, alreadyCompleted: false, iiSourceDocumentId: 'ii-doc-1' });
+      expect(calls.writes).toHaveLength(1);
+      expect(insuranceWrite).not.toHaveBeenCalled();
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'completed']);
+    });
+
+    it('passes the caller-supplied ownerMemberId/countryCode and the intake\'s own real storage key/mime type/filename through to write.ts, never invented', async () => {
+      const { deps, calls } = fakeDeps(iiOverrides);
+      await acceptRun(iiParams, deps);
+      expect(calls.writes[0]).toMatchObject({
+        ownerMemberId: 'member-1',
+        countryCode: 'IN',
+        quarantineStorageKey: 'user-1/intake-1',
+        declaredMimeType: 'application/pdf',
+        originalFilename: 'statement.pdf',
+      });
+    });
+
+    it('refuses with missing_required_input when the caller has not supplied ownerMemberId/countryCode for an Investment Intelligence run', async () => {
+      const { deps, calls } = fakeDeps(iiOverrides);
+      const outcome = await acceptRun(baseParams, deps); // baseParams has neither field
+      expect(outcome.ok).toBe(false);
+      expect((outcome as { reason: string }).reason).toBe('missing_required_input');
+      expect(calls.writes).toHaveLength(0);
+    });
+
+    it('"already_written" from write.ts is reported as success with iiSourceDocumentId, not failure', async () => {
+      const { deps } = fakeDeps({ ...iiOverrides, acceptAndWriteInvestment: async () => ({ ok: false, reason: 'already_written', iiSourceDocumentId: 'ii-doc-existing' }) });
+      const outcome = await acceptRun(iiParams, deps);
+      expect(outcome).toEqual({ ok: true, alreadyCompleted: true, iiSourceDocumentId: 'ii-doc-existing' });
+    });
+
+    it('a storage/DB-shaped write.ts failure (e.g. quarantine_download_failed) transitions to failed_retryable, not failed_terminal', async () => {
+      const { deps, calls } = fakeDeps({ ...iiOverrides, acceptAndWriteInvestment: async () => ({ ok: false, reason: 'quarantine_download_failed', message: 'not found' }) });
+      const outcome = await acceptRun(iiParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'write_failed', message: 'quarantine_download_failed' });
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'failed_retryable']);
+    });
+  });
+
+  // Negative control: before this fix, EVERY run reaching this point was
+  // unconditionally written through Insurance's service, whatever adapter
+  // actually produced it (the exact latent defect AIE_1_MERGE_PLAN.md
+  // section 3 finding #2 flagged for moduleRegistry.ts and this file both).
+  // A run recorded against neither Insurance's nor Investment
+  // Intelligence's real adapter id (e.g. FDH-bank's, not yet wired — see
+  // AIE_1_3_IMPLEMENTATION.md section 5/8 — or none at all) must be refused,
+  // never silently routed to Insurance's write service.
+  describe('unsupported/unrecognised adapter (never silently defaults to Insurance)', () => {
+    it('refuses a run recorded against FDH-bank\'s real adapter id — not yet wired to any write service', async () => {
+      const insuranceWrite = vi.fn();
+      const investmentWrite = vi.fn();
+      const { deps, calls } = fakeDeps({
+        getAdapterIdForRun: async () => 'aie_fdh_bank_statement_bridge_v1',
+        acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'],
+        acceptAndWriteInvestment: investmentWrite as unknown as AcceptRunDeps['acceptAndWriteInvestment'],
+      });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'unsupported_adapter' });
+      expect(insuranceWrite).not.toHaveBeenCalled();
+      expect(investmentWrite).not.toHaveBeenCalled();
+      expect(calls.transitions).toHaveLength(0); // refused before any CAS transition — never stranded mid-flight
+    });
+
+    it('refuses a run with no adapter recorded at all (null) the same way, never defaulting to Insurance', async () => {
+      const insuranceWrite = vi.fn();
+      const { deps, calls } = fakeDeps({ getAdapterIdForRun: async () => null, acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'] });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'unsupported_adapter' });
+      expect(insuranceWrite).not.toHaveBeenCalled();
+      expect(calls.transitions).toHaveLength(0);
+    });
+
+    it('a reconciliation-not-passed run for an unsupported adapter is still refused at the adapter check, not left ambiguous between the two gates', async () => {
+      // Reconciliation itself passes here — proves the adapter check, not
+      // the reconciliation gate, is what refuses this run.
+      const { deps } = fakeDeps({ getAdapterIdForRun: async () => 'some_future_adapter_v1' });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'unsupported_adapter' });
+    });
   });
 });

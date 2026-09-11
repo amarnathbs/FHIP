@@ -434,6 +434,25 @@ export async function getIntakeDisplayFilename(intakeId: string): Promise<string
 }
 
 /**
+ * AIE-1.2 accept-time dispatch — the ORIGINAL upload's own storage
+ * location + declared metadata, already persisted at intake time by
+ * `createIntake`/`updateIntakeStatus` (AIE-1.1 core). Nothing new is
+ * persisted here: `storage_key` is set once, at intake, when the bytes are
+ * first written to quarantine (`app/api/aie/intake/route.ts`'s own
+ * `uploadToQuarantine` call), and never changes afterwards — an accept-time
+ * caller needing the original bytes (Investment Intelligence's
+ * `write.ts`'s own `downloadFromQuarantine` call) re-fetches from the SAME
+ * quarantine object this row already names, rather than re-uploading or
+ * persisting a second copy of anything.
+ */
+export async function getIntakeUploadMetadata(intakeId: string): Promise<{ storageKey: string; declaredMimeType: string; displayFilename: string | null } | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_document_intake').select('storage_key, declared_mime_type, display_filename').eq('id', intakeId).maybeSingle();
+  if (!data?.storage_key) return null;
+  return { storageKey: data.storage_key, declaredMimeType: data.declared_mime_type, displayFilename: data.display_filename ?? null };
+}
+
+/**
  * CONC-01/02: compare-and-swap run-status transition. Returns `false`
  * (never throws) when `fromStatus` no longer matches the current row —
  * the caller's own stale-conflict signal, identical in spirit to

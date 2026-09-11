@@ -157,6 +157,8 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
     const acceptDeps: AcceptRunDeps = {
       isCanonicalAcceptanceEnabled: () => true,
       getRunForUser: async () => runRow,
+      getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
+      getIntakeUploadMetadata: async () => null,
       countItemsBlockingAcceptanceForRun: async () => 0,
       latestReconciliationOutcomesForRun: async () => [
         { ruleId: 'insurance_currency_supported', outcome: 'pass' },
@@ -175,6 +177,10 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
       audit: async () => {},
       acceptAndWriteInsurance: acceptAndWriteInsuranceCandidates,
       insuranceWriteDeps,
+      acceptAndWriteInvestment: async () => {
+        throw new Error('not exercised by this Insurance-only E2E journey');
+      },
+      investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
     };
 
     const acceptance = await acceptRun(

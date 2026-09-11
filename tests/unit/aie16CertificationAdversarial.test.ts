@@ -24,6 +24,12 @@ function makeSharedFakeDb() {
   const deps: AcceptRunDeps = {
     isCanonicalAcceptanceEnabled: () => true,
     getRunForUser: async () => ({ ...state.run }),
+    // This probe exercises Insurance's own concurrency path specifically —
+    // returning the real Insurance adapter id keeps accept.ts's own
+    // adapter dispatch (see AIE_1_MERGE_PLAN.md section 3 finding #2 / the
+    // moduleRegistry.ts and accept.ts fixes) routing here exactly as before.
+    getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
+    getIntakeUploadMetadata: async () => null,
     countItemsBlockingAcceptanceForRun: async () => 0,
     latestReconciliationOutcomesForRun: async () => [{ ruleId: 'insurance_required_fields_present', outcome: 'pass' }],
     listFieldCandidatesForRun: async () => [],
@@ -53,6 +59,10 @@ function makeSharedFakeDb() {
       return { ok: true, insurancePolicyId: 'policy-1' };
     },
     insuranceWriteDeps: {} as AcceptRunDeps['insuranceWriteDeps'],
+    acceptAndWriteInvestment: async () => {
+      throw new Error('not exercised by this Insurance-only concurrency probe');
+    },
+    investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
   };
 
   return { deps, state };
