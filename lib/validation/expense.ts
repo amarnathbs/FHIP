@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OWNER_VALUES } from '@/lib/constants';
+import { AUTHORITATIVE_COUNTRY_CODES } from '@/lib/services/jurisdiction';
 
 // Reload-edit contract note (G5B Phase 2 closure) — see lib/validation/income.ts's
 // matching comment for the full root-cause writeup, shared verbatim across all
@@ -15,6 +16,10 @@ export const expenseSchema = z.object({
   amount: z.number().min(0),
   frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off']),
   currency_code: z.enum(['AUD', 'INR']),
+  // G6 Contract 2 (docs/country-programme/g6-data-contracts.md) — new
+  // optional/nullable column (migration 0138); every existing payload with
+  // no country_code key at all remains valid.
+  country_code: z.enum(AUTHORITATIVE_COUNTRY_CODES).optional().nullable(),
   owner: z.enum(OWNER_VALUES).default('self'),
   is_essential: z.boolean().default(false),
   master_item_key: z.string().nullable().optional(),
