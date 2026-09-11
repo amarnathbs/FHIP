@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS, expectedCurrencyForCountry, ownerDisplayLabel } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
-import { currencyMismatch, currencyMismatchBlocked } from '@/lib/validation/currencyCountry';
+import { currencyMismatch, currencyMismatchBlocked, currencyMismatchCountryLabel } from '@/lib/validation/currencyCountry';
 import {
   effectiveSectionStatus,
   computeSectionCompletionPercent,
@@ -1023,7 +1023,11 @@ export function FinancialDataGrid({
                       <div className="mt-1 max-w-sm">
                         <p className={`text-xs ${draftCurrencyMismatchBlocked ? 'text-risk' : 'text-muted'}`}>
                           {draftCurrencyMismatchBlocked
-                            ? `Doesn't match ${draft.country_code === 'IN' ? "India's" : "Australia's"} currency (${expectedCurrencyForCountry(draft.country_code)}) — won't save until fixed or confirmed.`
+                            ? // G8 Contract 1 (docs/country-programme/g8-data-contracts.md) —
+                              // was `country_code === 'IN' ? "India's" : "Australia's"`, a
+                              // "not IN becomes Australia" literal. See
+                              // currencyMismatchCountryLabel()'s own comment.
+                              `Doesn't match ${currencyMismatchCountryLabel(draft.country_code)}'s currency (${expectedCurrencyForCountry(draft.country_code)}) — won't save until fixed or confirmed.`
                             : 'Confirmed as an intentionally different currency.'}
                         </p>
                         <label className="mt-1 flex items-center gap-1 text-xs text-muted">

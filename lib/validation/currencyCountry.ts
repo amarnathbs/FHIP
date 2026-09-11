@@ -10,6 +10,8 @@
 // the currency away from the country is the original bug; this override is
 // never itself a silent default (see FinancialDataGrid.tsx for the UI).
 import { expectedCurrencyForCountry } from '@/lib/constants';
+import { COUNTRY_LABELS } from '@/lib/services/countryDisclosure';
+import type { CountryCode } from '@/lib/services/jurisdiction';
 
 export interface CurrencyCountryFields {
   currency_code?: string;
@@ -50,4 +52,22 @@ export function currencyMismatch(row: CurrencyCountryFields): boolean {
 // explicitly overridden.
 export function currencyMismatchBlocked(row: CurrencyCountryFields): boolean {
   return currencyMismatch(row) && !row.currency_override;
+}
+
+// G8 Contract 1 (docs/country-programme/g8-data-contracts.md) — the label
+// used in FinancialDataGrid.tsx's currency-mismatch warning text ("Doesn't
+// match X's currency..."). Was a hardcoded `country_code === 'IN' ?
+// "India's" : "Australia's"` ternary, a "not IN becomes Australia" literal
+// (the same defect class already fixed elsewhere as G5-D1, see
+// appCapability.ts:389,459). Reuses the same canonical COUNTRY_LABELS map
+// G3's disclosure copy uses, so any future country never silently reads as
+// "Australia's". Falls back to the raw code for a value outside the six
+// authoritative countries (should not occur in practice — this warning is
+// currently only ever reachable for country_code 'AU'/'IN', since
+// currencyMismatch() itself gates on expectedCurrencyForCountry()
+// returning non-undefined — but never hides a code this map doesn't know,
+// which a hardcoded two-way ternary structurally cannot do).
+export function currencyMismatchCountryLabel(countryCode: string | null | undefined): string {
+  if (!countryCode) return 'the selected country';
+  return COUNTRY_LABELS[countryCode as CountryCode] ?? countryCode;
 }

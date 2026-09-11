@@ -5,6 +5,7 @@ import {
   currencyMismatch,
   currencyMismatchBlocked,
   currencyMatchesCountry,
+  currencyMismatchCountryLabel,
 } from '@/lib/validation/currencyCountry';
 import { expectedCurrencyForCountry, COUNTRY_TO_CURRENCY } from '@/lib/constants';
 
@@ -160,5 +161,33 @@ describe('income/expense/insurance have no country_code field and are unaffected
   it('a currency/country cross-check is a no-op with no country_code present', () => {
     expect(currencyMatchesCountry({ currency_code: 'AUD' })).toBe(true);
     expect(currencyMatchesCountry({ currency_code: 'INR' })).toBe(true);
+  });
+});
+
+// G8 Contract 1 (docs/country-programme/g8-data-contracts.md) —
+// currencyMismatchCountryLabel(), used by FinancialDataGrid.tsx's
+// currency-mismatch warning text. Replaces a hardcoded
+// `country_code === 'IN' ? "India's" : "Australia's"` ternary — a
+// "not IN becomes Australia" literal that would have mislabelled any
+// non-AU/IN country as Australia.
+describe('currencyMismatchCountryLabel — THE DEFECT G8 CONTRACT 1 FIXES', () => {
+  it('AU resolves to "Australia", not by exclusion', () => {
+    expect(currencyMismatchCountryLabel('AU')).toBe('Australia');
+  });
+  it('IN resolves to "India"', () => {
+    expect(currencyMismatchCountryLabel('IN')).toBe('India');
+  });
+  it('a non-AU/IN authoritative country resolves to its OWN name, never falling back to "Australia"', () => {
+    expect(currencyMismatchCountryLabel('GB')).toBe('United Kingdom');
+    expect(currencyMismatchCountryLabel('US')).toBe('United States');
+    expect(currencyMismatchCountryLabel('SG')).toBe('Singapore');
+    expect(currencyMismatchCountryLabel('AE')).toBe('United Arab Emirates');
+  });
+  it('a null/undefined/unresolved country never fabricates a country name', () => {
+    expect(currencyMismatchCountryLabel(null)).toBe('the selected country');
+    expect(currencyMismatchCountryLabel(undefined)).toBe('the selected country');
+  });
+  it('an unrecognised code (should not occur in practice) falls back to the raw code rather than a wrong label', () => {
+    expect(currencyMismatchCountryLabel('ZZ')).toBe('ZZ');
   });
 });
