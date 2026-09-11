@@ -14,7 +14,7 @@
  * gateway for actual use; tests construct their own fakes.
  */
 
-import { sniffDocument, type DeterministicParserResult } from './classifier/registry';
+import { sniffDocument, type DeterministicParserResult, type RegisteredParser } from './classifier/registry';
 import { maskText, isBelowMaskingPolicy } from './masking/piiMasking';
 import type { AieDocumentAiGateway } from './provider/gateway';
 import { AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME, AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION } from './schema/schemaRegistry';
@@ -61,6 +61,23 @@ export interface RunPipelineParams {
   extractedText: string;
   reconcile: ReconciliationRule;
   deps: AieOrchestratorDeps;
+  /**
+   * AIE-1.3 addition (disclosed, additive, backward-compatible — every
+   * existing caller that omits this field is byte-for-byte unaffected).
+   * `sniffDocument()`'s global `aieParserRegistry` lookup assumes every
+   * registered parser is STATELESS (no per-request dependencies). Some
+   * domain adapters are not — e.g. FDH bank-statement duplicate detection
+   * needs an account-scoped `DedupIndex` resolved from THIS request's own
+   * account-identity resolution (see
+   * `lib/aie/adapters/fdhBankStatement/parser.ts`'s header for the full
+   * explanation). When supplied, this request-scoped parser is used
+   * INSTEAD of the global registry lookup for this one call — its own
+   * `sniff()` still gates whether it applies at all (never assumed
+   * unconditionally applicable), preserving REG-02/REG-03's discipline
+   * exactly, just against one caller-supplied parser instead of every
+   * globally registered one.
+   */
+  parserOverride?: RegisteredParser;
 }
 
 export interface RunPipelineOutcome {
@@ -85,14 +102,22 @@ async function transition(deps: AieOrchestratorDeps, params: { runId: string; in
 }
 
 export async function runExtractionPipeline(params: RunPipelineParams): Promise<RunPipelineOutcome> {
-  const { runId, intakeId, userId, extractedText, reconcile, deps } = params;
+  const { runId, intakeId, userId, extractedText, reconcile, deps, parserOverride } = params;
   let current: AieRunStatus = 'local_extracting';
 
   await transition(deps, { runId, intakeId, userId, from: current, to: 'local_complete' });
   current = 'local_complete';
 
   // --- Deterministic classifier/parser first (architecture step 6) -------
-  const sniff = sniffDocument(extractedText);
+  // AIE-1.3 addition: a caller-supplied, request-scoped parser (see
+  // `RunPipelineParams.parserOverride`'s own doc comment) takes the place of
+  // the global registry lookup for this one call, but is still gated by its
+  // own `sniff()` exactly like a registry match would be.
+  const sniff = parserOverride
+    ? parserOverride.sniff(extractedText)
+      ? ({ kind: 'unambiguous', parser: parserOverride } as const)
+      : ({ kind: 'none_matched' } as const)
+    : sniffDocument(extractedText);
   let parserResult: DeterministicParserResult;
   if (sniff.kind === 'unambiguous') {
     parserResult = sniff.parser.parse(extractedText);
