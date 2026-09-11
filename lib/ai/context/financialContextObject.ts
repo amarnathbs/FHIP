@@ -171,15 +171,21 @@ export async function buildFinancialContextObject(userId: string, options: Build
   const includedDomains = resolveDomainsForMode(options.mode, options.intentCode);
   const include = (d: ContextDomain) => includedDomains.includes(d);
 
-  const [profileRes, householdRes, currencyIntegrityOk] = await Promise.all([
+  const [profileRes, householdRes, currencyIntegrityOk, crossBorderRes] = await Promise.all([
     supabase.from('user_profiles').select('country_of_residence, secondary_country, preferred_currency, employment_status').eq('user_id', userId).maybeSingle(),
     supabase.from('households').select('household_type, marital_status, dependants_count').eq('user_id', userId).maybeSingle(),
     checkCurrencyIntegrity(userId, supabase),
+    // G6 Contract 10 (docs/country-programme/g6-data-contracts.md) — the
+    // real cross-border signal, replacing the legacy
+    // Boolean(profile.secondary_country) read (secondary_country in
+    // {'AU','IN'} only — this widens correctness to any active declared
+    // relationship, in any country).
+    supabase.from('cross_border_relationships').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'ACTIVE'),
   ]);
 
   const reportingCurrency = (profileRes.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
   const countryOfResidence = profileRes.data?.country_of_residence ?? null;
-  const crossBorderIndicator = Boolean(profileRes.data?.secondary_country);
+  const crossBorderIndicator = (crossBorderRes.count ?? 0) > 0;
 
   // FDH-16 closure round (item 8, regression discovered fresh against a clean
   // origin/main baseline): FDH16-DEF-001's fetchAllRows() fix
