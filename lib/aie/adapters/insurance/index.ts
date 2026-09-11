@@ -9,7 +9,7 @@
 export { registerInsuranceAieParser, insuranceRegisteredParser, sniffInsuranceDocument, parseInsuranceDocument, INSURANCE_ADAPTER_ID, INSURANCE_ADAPTER_VERSION } from './parser';
 export { registerInsuranceAdapterSchema, AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME, AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION, ALLOWED_AI_COMPLETABLE_FIELDS } from './schema';
 export { InsuranceDocumentCatalogue, isInsuranceDocumentClassCertified, type InsuranceDocumentClassEntry } from './documentCatalogue';
-export { buildInsuranceReconciliationRule } from './reconciliation';
+export { buildInsuranceReconciliationRule, INSURANCE_REQUIRED_FIELDS } from './reconciliation';
 export { isAieInsuranceAdapterEnabled, isInsuranceAdapterCanonicalWriteEnabled } from './featureFlags';
 export {
   acceptAndWriteInsuranceCandidates,

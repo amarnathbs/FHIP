@@ -27,7 +27,11 @@ export type AieAuditEventType =
   | 'unresolved_item_created'
   | 'review_decision_recorded'
   | 'run_completed'
-  | 'run_failed';
+  | 'run_failed'
+  // AIE-1.5 additions — additive only, no existing event type's meaning
+  // changes. 'evidence_revealed' carries a mask TOKEN in metadata, never a
+  // plaintext value (P10) — see lib/aie/review/reveal.ts.
+  | 'evidence_revealed';
 
 export async function recordAieAuditEvent(event: {
   intakeId: string | null;

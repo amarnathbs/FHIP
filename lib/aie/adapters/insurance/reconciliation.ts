@@ -27,6 +27,17 @@ import { INSURANCE_SUPPORTED_CURRENCIES, PERIODS_PER_YEAR, type InsurancePremium
 
 const RULE_VERSION = '1';
 
+/**
+ * AIE-1.5 addition (disclosed): extracted from `requiredFieldsPresentResult`
+ * below into a named export so AIE-1.5's review layer
+ * (`lib/aie/review/moduleRegistry.ts`) can compute exactly which required
+ * field(s) are missing for a given run without duplicating this list —
+ * the SAME single source of truth this rule already used inline. No
+ * behaviour changes: `requiredFieldsPresentResult` is refactored to read
+ * from this constant instead of its own local literal.
+ */
+export const INSURANCE_REQUIRED_FIELDS = ['policyName', 'coverAmount', 'premium', 'premiumFrequency', 'currencyCode'] as const;
+
 function fieldMap(candidates: readonly AieFieldCandidate[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const c of candidates) {
@@ -55,8 +66,7 @@ function requiredFieldsPresentResult(fields: Map<string, string>): AieReconcilia
   if (!subClass || !isInsuranceDocumentClassCertified(subClass)) {
     return { ruleId: 'insurance_required_fields_present', ruleVersion: RULE_VERSION, outcome: 'not_applicable' };
   }
-  const required = ['policyName', 'coverAmount', 'premium', 'premiumFrequency', 'currencyCode'];
-  const missing = required.filter((f) => !fields.has(f));
+  const missing = INSURANCE_REQUIRED_FIELDS.filter((f) => !fields.has(f));
   return {
     ruleId: 'insurance_required_fields_present',
     ruleVersion: RULE_VERSION,

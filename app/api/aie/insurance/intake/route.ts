@@ -11,12 +11,9 @@ import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
-import { OWNER_VALUES } from '@/lib/constants';
 
 import { isAieInsuranceAdapterEnabled } from '@/lib/aie/adapters/insurance/featureFlags';
 import { buildInsuranceReconciliationRule } from '@/lib/aie/adapters/insurance/reconciliation';
-import { worstOutcome } from '@/lib/aie/reconciliation/types';
-import { acceptAndWriteInsuranceCandidates, createDefaultAcceptAndWriteInsuranceDeps } from '@/lib/aie/adapters/insurance/write';
 import '@/lib/aie/adapters/insurance'; // side-effecting registration (parser + AI-fallback schema)
 
 // A single project-wide mock provider instance — genuinely no external AI
@@ -55,13 +52,15 @@ export async function POST(req: Request) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
 
+  // AIE-1.5 note: this route used to also parse `owner`/`master_item_key`
+  // query params here, purely to feed its own since-removed self-accept
+  // call (see below). Household-role ownership and any amendment-lineage
+  // key are now supplied by the CALLER OF ACCEPTANCE
+  // (`POST /api/aie/review/runs/{runId}/accept`'s request body), matching
+  // the real manual-entry form's own timing (a user picks "whose policy is
+  // this" at the moment they confirm the save, not at upload time) — so
+  // this route no longer needs either param.
   const url = new URL(req.url);
-  const ownerParam = url.searchParams.get('owner') ?? 'self';
-  if (!(OWNER_VALUES as readonly string[]).includes(ownerParam)) {
-    return bad('invalid owner', 422);
-  }
-  const ownerHouseholdRole = ownerParam as (typeof OWNER_VALUES)[number];
-  const masterItemKey = url.searchParams.get('master_item_key');
   const filename = url.searchParams.get('filename');
 
   const contentLength = Number(req.headers.get('content-length') ?? '0');
@@ -135,26 +134,24 @@ export async function POST(req: Request) {
     deps,
   });
 
-  let write: Awaited<ReturnType<typeof acceptAndWriteInsuranceCandidates>> | null = null;
-  if (outcome.finalStatus === 'awaiting_acceptance') {
-    const worst = worstOutcome(outcome.reconciliation);
-    write = await acceptAndWriteInsuranceCandidates(
-      {
-        aieIntakeId: intakeId,
-        aieRunId: run.id,
-        userId: user.id,
-        ownerHouseholdRole,
-        candidates: outcome.candidates,
-        acceptedByUserId: user.id,
-        reconciliationOutcome: worst,
-        hasOpenBlockingUnresolvedItems: outcome.unresolvedItemIds.length > 0,
-        masterItemKey,
-        notes: null,
-      },
-      createDefaultAcceptAndWriteInsuranceDeps(),
-    );
-  }
-
+  // AIE-1.5 SUPERSEDES THE SELF-ACCEPT THIS ROUTE USED TO PERFORM HERE.
+  //
+  // AIE-1.4's own comment above this route (see the module header) called
+  // the previous auto-write "the SAME authenticated user as the uploader,
+  // matching AIE-1.2/1.3's own identical, disclosed placeholder for
+  // 'required user acceptance' [because] there is no review/acceptance UI
+  // yet — explicitly AIE-1.5's job." That UI now exists
+  // (`POST /api/aie/review/runs/{runId}/accept`,
+  // `lib/aie/review/accept.ts`) and is the real, gated, versioned,
+  // idempotent acceptance path AIE-1.5 section 20 requires — silently
+  // auto-writing the moment extraction reaches `awaiting_acceptance` would
+  // be exactly the "no explicit user acceptance" / "no accept-anyway"
+  // violation AIE-1.5's own non-negotiable prohibitions forbid, even though
+  // the write itself only ever fired on a genuine pass outcome. This route
+  // now stops at reporting the outcome; the caller (the AIE-1.5 review UI)
+  // decides whether/when to call the accept endpoint, and does so with a
+  // server-re-verified reconciliation outcome and a fresh blocking-item
+  // count rather than the values this one request happened to compute.
   return ok({
     intake_id: intakeId,
     run_id: run.id,
@@ -163,6 +160,5 @@ export async function POST(req: Request) {
     field_count: outcome.candidates.length,
     unresolved_item_ids: outcome.unresolvedItemIds,
     duplicate_classification: duplicateClassification,
-    write,
   });
 }

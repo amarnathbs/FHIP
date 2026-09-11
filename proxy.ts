@@ -58,8 +58,12 @@ export async function proxy(request: NextRequest) {
   // directory under app/(app)/ is matched here, so a future module cannot
   // reintroduce the gap silently. 'twin', 'coach' and 'settings' are retained
   // as-is: they are pre-existing entries unrelated to this fix.
+  // AIE-1.5: 'aie-review' added — the shared document review/acceptance
+  // inbox under app/(app)/aie-review/**. Matches this regex's own
+  // documented intent (MC-17) rather than silently leaving a new module's
+  // route unauthenticated/ungated.
   const isAppRoute = pathname.match(
-    /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights|companies)/
+    /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights|companies|aie-review)/
   );
 
   // ---------------------------------------------------------------------

@@ -15,6 +15,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { encryptTokenValue } from '../masking/tokenMapCrypto';
+import { assertRunTransition } from '../stateMachine';
 import type {
   AieActorType,
   AieAiOutcome,
@@ -22,6 +23,7 @@ import type {
   AieFieldCandidate,
   AieIntakeStatus,
   AieItemSeverity,
+  AieReconciliationOutcome,
   AieReconciliationRunResult,
   AieRunStatus,
   AieSourceModuleHint,
@@ -333,6 +335,14 @@ export type DecisionOutcome = { ok: true } | { ok: false; reason: 'not_found' | 
  * recording. The ONLY way an `aie_unresolved_item` row's status changes —
  * matches AIE-1.5's own "no direct client mutation of status" principle,
  * enforced here a phase early since AIE-1.1 already owns the table.
+ *
+ * AIE-1.5 addition: three optional `correction*` params, persisted to the
+ * additive columns migration 0144 adds to this same table (no second
+ * table) — populated only for a `decisionType` of `'correct'`, by a caller
+ * that has ALREADY run both field-name-allowlist and typed-value
+ * validation (lib/aie/review/decide.ts + validation.ts). This function
+ * itself does not re-validate them — it is the persistence boundary, not
+ * the policy boundary, exactly like every other function in this file.
  */
 export async function recordReviewDecision(params: {
   itemId: string;
@@ -344,6 +354,9 @@ export async function recordReviewDecision(params: {
   idempotencyKey: string;
   actorId?: string;
   newStatus: AieUnresolvedItemStatus;
+  correctionFieldName?: string;
+  correctionValueRaw?: string;
+  correctionValueNormalized?: string;
 }): Promise<DecisionOutcome> {
   const admin = createAdminClient();
   const { data: item } = await admin.from('aie_unresolved_item').select('item_version').eq('id', params.itemId).maybeSingle();
@@ -359,6 +372,9 @@ export async function recordReviewDecision(params: {
     rationale: params.rationale ?? null,
     idempotency_key: params.idempotencyKey,
     actor_id: params.actorId ?? null,
+    correction_field_name: params.correctionFieldName ?? null,
+    correction_value_raw: params.correctionValueRaw ?? null,
+    correction_value_normalized: params.correctionValueNormalized ?? null,
   });
   if (decisionError) {
     if (decisionError.code === '23505') return { ok: true }; // idempotent replay
@@ -372,4 +388,259 @@ export async function recordReviewDecision(params: {
     .eq('item_version', params.expectedItemVersion);
   if (updateError) return { ok: false, reason: 'db_error' };
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// AIE-1.5 additions below — read/transition helpers the review layer needs.
+// Same discipline as every function above: service-role only, caller has
+// already proven ownership via an RLS-scoped read or an explicit userId
+// filter in the query itself.
+// ---------------------------------------------------------------------------
+
+export interface AieRunRow {
+  id: string;
+  intakeId: string;
+  userId: string;
+  status: AieRunStatus;
+  aiUsed: boolean;
+  startedAt: string;
+}
+
+/** Ownership-scoped by construction (`.eq('user_id', userId)`) — never
+ * trusts a bare runId alone as proof of access (VALID-03 / PRIV-06: IDOR
+ * protection). */
+export async function getRunForUser(runId: string, userId: string): Promise<AieRunRow | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_extraction_run').select('id, intake_id, user_id, status, ai_used, started_at').eq('id', runId).eq('user_id', userId).maybeSingle();
+  if (!data) return null;
+  return { id: data.id, intakeId: data.intake_id, userId: data.user_id, status: data.status as AieRunStatus, aiUsed: data.ai_used, startedAt: data.started_at };
+}
+
+export async function listRunsForUser(userId: string, limit = 50): Promise<AieRunRow[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_extraction_run')
+    .select('id, intake_id, user_id, status, ai_used, started_at')
+    .eq('user_id', userId)
+    .order('started_at', { ascending: false })
+    .limit(Math.min(limit, 100));
+  return (data ?? []).map((r) => ({ id: r.id, intakeId: r.intake_id, userId: r.user_id, status: r.status as AieRunStatus, aiUsed: r.ai_used, startedAt: r.started_at }));
+}
+
+export async function getIntakeDisplayFilename(intakeId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_document_intake').select('display_filename').eq('id', intakeId).maybeSingle();
+  return data?.display_filename ?? null;
+}
+
+/**
+ * CONC-01/02: compare-and-swap run-status transition. Returns `false`
+ * (never throws) when `fromStatus` no longer matches the current row —
+ * the caller's own stale-conflict signal, identical in spirit to
+ * `recordReviewDecision`'s item-version check, at the run level instead of
+ * the item level.
+ */
+export async function transitionRunStatusCas(params: { runId: string; fromStatus: AieRunStatus; toStatus: AieRunStatus }): Promise<boolean> {
+  assertRunTransition(params.fromStatus, params.toStatus);
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('aie_extraction_run')
+    .update({ status: params.toStatus })
+    .eq('id', params.runId)
+    .eq('status', params.fromStatus)
+    .select('id');
+  if (error) return false;
+  return (data ?? []).length > 0;
+}
+
+export async function recordRunTransitionAudit(params: { runId: string; intakeId: string; userId: string; fromState: string; toState: AieRunStatus; actorType: AieActorType; actorId?: string | null; reason?: string }): Promise<void> {
+  const admin = createAdminClient();
+  await admin.from('aie_processing_transition').insert({
+    run_id: params.runId,
+    intake_id: params.intakeId,
+    user_id: params.userId,
+    from_state: params.fromState,
+    to_state: params.toState,
+    actor_type: params.actorType,
+    actor_id: params.actorId ?? null,
+    reason: params.reason ?? null,
+  });
+}
+
+export async function listFieldCandidatesForRun(runId: string): Promise<AieFieldCandidate[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_field_candidate').select('field_name, value_raw, is_null, null_reason, source_method, source_reference').eq('run_id', runId);
+  return (data ?? []).map((r) => ({
+    fieldName: r.field_name,
+    valueRaw: r.value_raw,
+    isNull: r.is_null,
+    nullReason: r.null_reason ?? undefined,
+    sourceMethod: r.source_method as AieFieldCandidate['sourceMethod'],
+    sourceReference: r.source_reference ?? undefined,
+  }));
+}
+
+export interface LatestCorrectionRow {
+  fieldName: string;
+  valueNormalized: string;
+  valueRaw: string;
+  decisionId: string;
+  actorId: string | null;
+}
+
+/** Returns the LATEST accepted correction per field name for this run,
+ * across every item belonging to it — the effective override set
+ * `lib/aie/review/candidateMerge.ts` applies on top of the original,
+ * never-mutated field candidates (VALID-12). */
+export async function listLatestCorrectionsForRun(runId: string): Promise<LatestCorrectionRow[]> {
+  const admin = createAdminClient();
+  const { data: items } = await admin.from('aie_unresolved_item').select('id').eq('run_id', runId);
+  const itemIds = (items ?? []).map((i: { id: string }) => i.id);
+  if (itemIds.length === 0) return [];
+  const { data } = await admin
+    .from('aie_review_decision')
+    .select('id, item_id, correction_field_name, correction_value_raw, correction_value_normalized, actor_id, created_at')
+    .in('item_id', itemIds)
+    .eq('decision_type', 'correct')
+    .order('created_at', { ascending: true });
+  const latestByField = new Map<string, LatestCorrectionRow>();
+  for (const row of data ?? []) {
+    if (!row.correction_field_name || row.correction_value_normalized === null) continue;
+    latestByField.set(row.correction_field_name, {
+      fieldName: row.correction_field_name,
+      valueNormalized: row.correction_value_normalized,
+      valueRaw: row.correction_value_raw ?? row.correction_value_normalized,
+      decisionId: row.id,
+      actorId: row.actor_id ?? null,
+    });
+  }
+  return Array.from(latestByField.values());
+}
+
+export async function getAdapterIdForRun(runId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_parser_attempt').select('adapter_id').eq('run_id', runId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return data?.adapter_id ?? null;
+}
+
+export async function listOpenUnresolvedItemsForRun(runId: string): Promise<
+  { id: string; reasonCode: string; severity: AieItemSeverity; status: AieUnresolvedItemStatus; displayCandidate: string | null; evidenceRef: Record<string, unknown> | null; itemVersion: number }[]
+> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_unresolved_item')
+    .select('id, reason_code, severity, status, display_candidate, evidence_ref, item_version')
+    .eq('run_id', runId)
+    .in('status', ['open', 'in_review']);
+  return (data ?? []).map((r) => ({ id: r.id, reasonCode: r.reason_code, severity: r.severity, status: r.status, displayCandidate: r.display_candidate, evidenceRef: r.evidence_ref, itemVersion: r.item_version }));
+}
+
+/**
+ * Broader than `listOpenUnresolvedItemsForRun`'s `open`/`in_review` filter
+ * ON PURPOSE — a `deferred` item is a deliberate "not now" (ACT-06: "never
+ * creating false completion"), not a resolution, so it must still count
+ * toward "this run cannot be accepted yet" (section 35: "Needs your
+ * review" permits defer without granting Ready-to-accept). Only `resolved`
+ * and `superseded`/`rejected` items are excluded. Used by both
+ * `computeUserFacingState`'s caller and the accept-gate (ACPT-02).
+ */
+export async function countItemsBlockingAcceptanceForRun(runId: string): Promise<number> {
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from('aie_unresolved_item')
+    .select('id', { count: 'exact', head: true })
+    .eq('run_id', runId)
+    .eq('severity', 'blocking')
+    .in('status', ['open', 'in_review', 'deferred']);
+  return count ?? 0;
+}
+
+export async function latestReconciliationOutcomesForRun(runId: string): Promise<{ ruleId: string; outcome: AieReconciliationOutcome }[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_reconciliation_run').select('rule_id, outcome, created_at').eq('run_id', runId).order('created_at', { ascending: true });
+  const latestByRule = new Map<string, AieReconciliationOutcome>();
+  for (const row of data ?? []) latestByRule.set(row.rule_id, row.outcome as AieReconciliationOutcome);
+  return Array.from(latestByRule.entries()).map(([ruleId, outcome]) => ({ ruleId, outcome }));
+}
+
+/** System-actor resolution of an item made moot by revalidation (a
+ * correction elsewhere already fixed the underlying condition, or a rule
+ * that used to fail now passes) — goes through the EXACT SAME
+ * version-checked `aie_review_decision` audit trail as a human decision,
+ * with `actorId` left null and `decisionType` naming the system event, so
+ * the audit history never implies a human clicked something they did not
+ * (AUD-01/ACT-12). */
+export async function resolveItemBySystem(params: { itemId: string; intakeId: string; userId: string; expectedItemVersion: number; decisionType: 'superseded_by_revalidation' | 'auto_resolved_by_revalidation'; idempotencyKey: string; rationale?: string }): Promise<DecisionOutcome> {
+  return recordReviewDecision({
+    itemId: params.itemId,
+    intakeId: params.intakeId,
+    userId: params.userId,
+    expectedItemVersion: params.expectedItemVersion,
+    decisionType: params.decisionType,
+    rationale: params.rationale,
+    idempotencyKey: params.idempotencyKey,
+    newStatus: params.decisionType === 'superseded_by_revalidation' ? 'superseded' : 'resolved',
+  });
+}
+
+/**
+ * ACPT-07: "create a stable canonical-write batch/idempotency identity."
+ * Populates AIE-1.1 core's own `aie_write_batch` SCAFFOLD table (migration
+ * 0140 — "a future domain adapter will populate, not a canonical table")
+ * exactly as that table's header always intended, rather than inventing a
+ * new tracking row. Idempotent by construction: `idempotency_key` is
+ * unique, so a retry with the SAME key returns the EXISTING row instead of
+ * creating a second one (FAIL-03/04/10).
+ */
+export async function findOrCreateWriteBatch(params: { runId: string; intakeId: string; userId: string; targetModule: 'investment_intelligence' | 'fdh_bank' | 'other'; idempotencyKey: string }): Promise<{ id: string; status: 'pending' | 'committed' | 'failed' }> {
+  const admin = createAdminClient();
+  const { data: existing } = await admin.from('aie_write_batch').select('id, status').eq('idempotency_key', params.idempotencyKey).maybeSingle();
+  if (existing) return { id: existing.id, status: existing.status };
+  const { data, error } = await admin
+    .from('aie_write_batch')
+    .insert({ run_id: params.runId, intake_id: params.intakeId, user_id: params.userId, target_module: params.targetModule, idempotency_key: params.idempotencyKey, status: 'pending' })
+    .select('id, status')
+    .single();
+  if (error || !data) {
+    // Lost a race with a concurrent identical request — read back the row
+    // the other request just created rather than failing outright.
+    const { data: raced } = await admin.from('aie_write_batch').select('id, status').eq('idempotency_key', params.idempotencyKey).maybeSingle();
+    if (raced) return { id: raced.id, status: raced.status };
+    throw new Error(`aie_write_batch: could not create or find batch for ${params.idempotencyKey}`);
+  }
+  return { id: data.id, status: data.status };
+}
+
+/** Distinguishes "this run's terminal/retryable state came from an actual
+ * write attempt" from "this run never got that far" (e.g. the user
+ * rejected the document, or admission failed) — `aie_write_batch` rows are
+ * created ONLY by `lib/aie/review/accept.ts`, never by rejection/cancellation,
+ * so its mere existence for a run is an unambiguous signal, used by
+ * `userState.ts`'s `hasEverReachedWritePending` input. */
+export async function hasWriteBatchForRun(runId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { count } = await admin.from('aie_write_batch').select('id', { count: 'exact', head: true }).eq('run_id', runId);
+  return (count ?? 0) > 0;
+}
+
+export async function markWriteBatchStatus(batchId: string, status: 'committed' | 'failed'): Promise<void> {
+  const admin = createAdminClient();
+  await admin
+    .from('aie_write_batch')
+    .update({ status, committed_at: status === 'committed' ? new Date().toISOString() : null })
+    .eq('id', batchId);
+}
+
+export async function findMaskTokenCiphertext(runId: string, token: string): Promise<Buffer | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_mask_token_map').select('ciphertext').eq('run_id', runId).eq('token', token).maybeSingle();
+  if (!data?.ciphertext) return null;
+  // supabase-js returns bytea as a hex string ("\\x...") over PostgREST —
+  // normalise defensively so this works whether the driver already handed
+  // back a Buffer (service-role admin client, most configurations) or the
+  // raw PostgREST hex-encoded string.
+  if (Buffer.isBuffer(data.ciphertext)) return data.ciphertext;
+  const raw = String(data.ciphertext);
+  const hex = raw.startsWith('\\x') ? raw.slice(2) : raw;
+  return Buffer.from(hex, 'hex');
 }
