@@ -321,6 +321,17 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'types.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'validation', 'fileValidation.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'aie', 'intake', 'route.ts'),
+      // AIE-1.2 (2026-09-11): lib/aie/adapters/investment-intelligence/
+      // featureFlags.ts trips the identical naive-substring limitation as
+      // the AIE-1.1 precedent immediately above, for the identical reason —
+      // its own module header names `lib/financial-data-hub/constants/
+      // featureFlags.ts` in prose as the established house convention this
+      // file's own env-var-default-off pattern follows, not an import. No
+      // `from '@/lib/financial-data-hub...'` import exists in this file —
+      // confirmed by hand and by `grep -rn "from '@/lib/financial-data-hub"
+      // lib/aie/adapters/investment-intelligence` returning zero matches.
+      // Approved as exactly this one file, not a directory.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'investment-intelligence', 'featureFlags.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
