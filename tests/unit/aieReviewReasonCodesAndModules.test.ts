@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { stripCoreReconciliationPrefix, GENERIC_FALLBACK_REASON_META, INSURANCE_REASON_CODES } from '@/lib/aie/review/reasonCodes';
 import { resolveModuleDescriptorByAdapterId, resolveReasonCodeMeta, narrowInsuranceRequiredFieldsCorrection, listModuleDescriptors } from '@/lib/aie/review/moduleRegistry';
+import { II_ADAPTER_ID } from '@/lib/aie/adapters/investment-intelligence';
+import { FDH_BANK_CLASSIFICATION_ADAPTER_ID, FDH_BANK_STATEMENT_ADAPTER_ID } from '@/lib/aie/adapters/fdhBankStatement';
 
 describe('AIE-1.5 reasonCodes.ts — prefix stripping', () => {
   it('strips the AIE-1.1 core "reconciliation_fail:" wrapper', () => {
@@ -51,10 +53,45 @@ describe('AIE-1.5 moduleRegistry.ts — adapter resolution and reason-code looku
   });
 
   it('a design-only module\'s prefix-matched (dynamic-id) reason code resolves correctly', () => {
-    const descriptor = resolveModuleDescriptorByAdapterId('investment_intelligence_something');
+    const descriptor = resolveModuleDescriptorByAdapterId(II_ADAPTER_ID);
     expect(descriptor).not.toBeNull();
     const meta = resolveReasonCodeMeta(descriptor, 'ii_adapter_roll_forward:acct-123:instr-456');
     expect(meta.humanQuestion).toMatch(/roll forward/);
+  });
+
+  // AIE-1 merge plan, section 3 finding #2: these three real, committed
+  // adapter ids (only knowable once 1.2/1.3 were actually merged in) each
+  // used to resolve to `null` (the generic fallback) because
+  // `moduleRegistry.ts`'s own `matchesAdapterId` predicates for Investment
+  // Intelligence and FDH-bank were guesses made before those branches
+  // existed. Proves the fix: each real id now resolves to its correct,
+  // module-specific descriptor — imported from the real adapters' own
+  // exported constants, never re-typed as a string literal, so this test
+  // would fail the moment the predicate and the constant drift apart again.
+  describe('real, merged adapter ids resolve to their own module-specific descriptor (not the generic fallback)', () => {
+    it('Investment Intelligence: II_ADAPTER_ID resolves to the investment_intelligence descriptor', () => {
+      const descriptor = resolveModuleDescriptorByAdapterId(II_ADAPTER_ID);
+      expect(descriptor?.moduleKey).toBe('investment_intelligence');
+      expect(descriptor).not.toBeNull();
+    });
+
+    it('FDH bank (request-scoped bridge parser): FDH_BANK_STATEMENT_ADAPTER_ID resolves to the fdh_bank descriptor', () => {
+      const descriptor = resolveModuleDescriptorByAdapterId(FDH_BANK_STATEMENT_ADAPTER_ID);
+      expect(descriptor?.moduleKey).toBe('fdh_bank');
+      expect(descriptor).not.toBeNull();
+    });
+
+    it('FDH bank (globally-registered classification parser): FDH_BANK_CLASSIFICATION_ADAPTER_ID resolves to the fdh_bank descriptor', () => {
+      const descriptor = resolveModuleDescriptorByAdapterId(FDH_BANK_CLASSIFICATION_ADAPTER_ID);
+      expect(descriptor?.moduleKey).toBe('fdh_bank');
+      expect(descriptor).not.toBeNull();
+    });
+
+    it('the old, pre-merge GUESSED ids no longer accidentally match (proves the fix is an exact-match against the real constant, not a broader prefix that happens to still catch the real id)', () => {
+      expect(resolveModuleDescriptorByAdapterId('investment_intelligence_something')).toBeNull();
+      expect(resolveModuleDescriptorByAdapterId('ii_adapter_v1')).toBeNull();
+      expect(resolveModuleDescriptorByAdapterId('fdh_bank_v1')).toBeNull();
+    });
   });
 });
 

@@ -11,6 +11,8 @@
  */
 
 import { INSURANCE_REQUIRED_FIELDS } from '../adapters/insurance';
+import { II_ADAPTER_ID } from '../adapters/investment-intelligence';
+import { FDH_BANK_CLASSIFICATION_ADAPTER_ID, FDH_BANK_STATEMENT_ADAPTER_ID } from '../adapters/fdhBankStatement';
 import type { AieCorrectableFieldSpec, AieReasonCodeMeta, AieReviewModuleDescriptor } from './types';
 import { FDH_BANK_REASON_CODES, GENERIC_FALLBACK_REASON_META, INSURANCE_REASON_CODES, INVESTMENT_INTELLIGENCE_REASON_CODES, stripCoreReconciliationPrefix } from './reasonCodes';
 
@@ -23,16 +25,21 @@ const INSURANCE_DESCRIPTOR: AieReviewModuleDescriptor = {
   reasonCodes: INSURANCE_REASON_CODES,
 };
 
-/** DESIGN-ONLY — see reasonCodes.ts's header. Never exercised by this
- * pass's tests or live pipeline; included so the review UI's contract is
- * genuinely adapter-agnostic and a future AIE-1.2 merge only needs to flip
- * `integrationTested` to true and correct any drift found by then, not
- * invent this registry from scratch. */
+/** AIE-1.2 is now merged in (`integration/aie-1-release-candidate`). The
+ * `matchesAdapterId` predicate below was originally a GUESS at 1.2's
+ * eventual adapter-id naming, written before that branch existed — it did
+ * not match the real, committed `II_ADAPTER_ID` and silently resolved every
+ * Investment Intelligence run to the generic fallback (found by the AIE-1
+ * merge plan's own post-merge verification, section 3 finding #2). Fixed to
+ * match the real exported constant directly, so it can never drift from it
+ * again. `integrationTested` stays `false` — this fix corrects the id
+ * predicate itself; no end-to-end run through the actual review UI has yet
+ * exercised this descriptor. */
 const INVESTMENT_INTELLIGENCE_DESCRIPTOR: AieReviewModuleDescriptor = {
   moduleKey: 'investment_intelligence',
   label: 'Investment Intelligence',
   integrationTested: false,
-  matchesAdapterId: (adapterId) => adapterId.startsWith('investment_intelligence_') || adapterId.startsWith('ii_adapter'),
+  matchesAdapterId: (adapterId) => adapterId === II_ADAPTER_ID,
   summaryFieldOrder: ['accountId', 'ownerMemberId', 'statementPeriodStart', 'statementPeriodEnd', 'asOfDate', 'holdingCount', 'closingCashBalance'],
   reasonCodes: INVESTMENT_INTELLIGENCE_REASON_CODES,
   reasonCodePrefixes: [
@@ -57,12 +64,24 @@ const INVESTMENT_INTELLIGENCE_DESCRIPTOR: AieReviewModuleDescriptor = {
   ],
 };
 
-/** DESIGN-ONLY — see reasonCodes.ts's header. */
+/** AIE-1.3 is now merged in (`integration/aie-1-release-candidate`). The
+ * `matchesAdapterId` predicate below was originally a GUESS at 1.3's
+ * eventual adapter-id naming, written before that branch existed — neither
+ * real id (`FDH_BANK_CLASSIFICATION_ADAPTER_ID`, the globally-registered
+ * institution/layout sniffer, nor `FDH_BANK_STATEMENT_ADAPTER_ID`, the
+ * request-scoped `parserOverride` bridge that actually claims a real run —
+ * see `fdhBankStatement/parser.ts`'s own header) starts with `'fdh_bank'`,
+ * so this silently resolved every FDH-bank run to the generic fallback
+ * (found by the AIE-1 merge plan's own post-merge verification, section 3
+ * finding #2). Fixed to match both real exported constants directly.
+ * `integrationTested` stays `false` — this fix corrects the id predicate
+ * itself; no end-to-end run through the actual review UI has yet exercised
+ * this descriptor. */
 const FDH_BANK_DESCRIPTOR: AieReviewModuleDescriptor = {
   moduleKey: 'fdh_bank',
   label: 'Bank statement',
   integrationTested: false,
-  matchesAdapterId: (adapterId) => adapterId.startsWith('fdh_bank'),
+  matchesAdapterId: (adapterId) => adapterId === FDH_BANK_STATEMENT_ADAPTER_ID || adapterId === FDH_BANK_CLASSIFICATION_ADAPTER_ID,
   summaryFieldOrder: ['accountId', 'statementPeriodStart', 'statementPeriodEnd', 'openingBalance', 'closingBalance', 'transactionCount'],
   reasonCodes: FDH_BANK_REASON_CODES,
 };
