@@ -25,6 +25,8 @@ import { runSipAnalytics, type SipAnalyticsResult } from '@/lib/engines/investme
 import { runXrayAnalytics, type XrayResult } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { loadTaxDataset, loadTaxProfile, toTaxProfileInput } from '@/lib/services/investment-intelligence/taxRepository';
 import { runTaxSimulation, type TaxSimulationOutput } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
+import type { ResidencyProfileInput } from '@/lib/engines/investment-intelligence/tax/residency';
+import type { TaxpayerType } from '@/lib/engines/investment-intelligence/tax/taxProfile';
 import { listReviewItems } from '@/lib/services/investment-intelligence/reviewCentreData';
 import type { IiReviewItem } from '@/lib/services/investment-intelligence/types';
 import { createClient } from '@/lib/supabase/server';
@@ -95,6 +97,31 @@ export interface ReportTaxData {
   taxProfileSource: 'persisted_profile' | 'none';
 }
 
+// G6 Contract 9 (docs/country-programme/g6-data-contracts.md) — a
+// self-declared 'resident' taxpayerType (RESIDENT_INDIVIDUAL/RESIDENT_HUF)
+// is no longer trusted blindly for the tax-report's residency check. If the
+// household's own country_of_residence disagrees (present and not 'IN'),
+// this falls through to checkResidency()'s existing countryOfTaxResidence
+// fallback (lib/engines/investment-intelligence/tax/residency.ts) instead
+// of forcing residencyStatus: 'resident' — that fallback already flags NRI
+// rules with an honest, country-specific note. Missing/unresolved residence
+// data never overrides the self-declaration (consistent with this
+// programme's "never assume on missing data" rule elsewhere, e.g.
+// isDomesticRecord() in lib/services/jurisdiction.ts) — only a POSITIVE,
+// confirmed mismatch does. taxProfile.taxpayerType itself is untouched:
+// this only widens when the NRI disclaimer is shown, never overrides the
+// user's own declared taxpayer type.
+export function resolveResidencyProfileForTaxReport(
+  taxpayerType: TaxpayerType | null | undefined,
+  countryOfResidence: string | null
+): ResidencyProfileInput {
+  if (taxpayerType === 'NON_RESIDENT_INDIVIDUAL') return { residencyStatus: 'nri' };
+  const declaredResident = taxpayerType === 'RESIDENT_INDIVIDUAL' || taxpayerType === 'RESIDENT_HUF';
+  if (!declaredResident) return {};
+  if (countryOfResidence && countryOfResidence !== 'IN') return { countryOfTaxResidence: countryOfResidence };
+  return { residencyStatus: 'resident' };
+}
+
 export async function loadTaxForReport(userId: string, supabase: SupabaseServerClient): Promise<ReportTaxData | null> {
   try {
     const { dataset, empty } = await loadTaxDataset(supabase, userId, {});
@@ -106,12 +133,17 @@ export async function loadTaxForReport(userId: string, supabase: SupabaseServerC
     const acquisitions = [...dataset.acquisitionsByInstrument.values()].flat();
     const { profile: persistedProfile } = await loadTaxProfile(supabase, userId);
     const taxProfile = toTaxProfileInput(persistedProfile);
-    const residencyProfile =
-      taxProfile.taxpayerType === 'NON_RESIDENT_INDIVIDUAL'
-        ? ({ residencyStatus: 'nri' as const })
-        : taxProfile.taxpayerType === 'RESIDENT_INDIVIDUAL' || taxProfile.taxpayerType === 'RESIDENT_HUF'
-          ? ({ residencyStatus: 'resident' as const })
-          : {};
+    // G6 Contract 9 (docs/country-programme/g6-data-contracts.md) — see
+    // resolveResidencyProfileForTaxReport()'s own doc comment below.
+    const { data: residenceProfile } = await supabase
+      .from('user_profiles')
+      .select('country_of_residence')
+      .eq('user_id', userId)
+      .maybeSingle<{ country_of_residence: string | null }>();
+    const residencyProfile = resolveResidencyProfileForTaxReport(
+      taxProfile.taxpayerType,
+      residenceProfile?.country_of_residence ?? null
+    );
     const results = runTaxSimulation({
       acquisitions,
       disposals,
