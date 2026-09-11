@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { formatDateShort } from '@/lib/engines/date';
+import { localeForReportingCurrency } from '@/lib/engines/money';
 
 const STATUS_COLOR: Record<string, string> = {
   ready: '#198754',
@@ -39,7 +40,7 @@ export function ReportHistoryTable({ reports, currency }: { reports: ReportRow[]
       <tbody>
         {reports.map((r) => (
           <tr key={r.id} className="border-t">
-            <td className="py-2">{new Date(r.report_month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</td>
+            <td className="py-2">{new Date(r.report_month).toLocaleDateString(localeForReportingCurrency(currency), { month: 'long', year: 'numeric' })}</td>
             <td className="py-2">{TYPE_LABELS[r.report_type_code] ?? r.report_type_code}</td>
             <td className="py-2">{r.generated_at ? formatDateShort(r.generated_at, currency) : '—'}</td>
             <td className="py-2">

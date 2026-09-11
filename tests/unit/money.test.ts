@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toMonthly, formatMoney } from '@/lib/engines/money';
+import { toMonthly, formatMoney, localeForReportingCurrency } from '@/lib/engines/money';
 
 describe('toMonthly', () => {
   it('annualises correctly', () => {
@@ -26,5 +26,20 @@ describe('formatMoney', () => {
 
   it('formats INR', () => {
     expect(formatMoney(1234, 'INR')).toContain('1,234');
+  });
+});
+
+// G7 Contract 2 (docs/country-programme/g7-data-contracts.md) — shared
+// locale-selection rule, using the exact same currency->locale mapping
+// formatMoney already applies above, so report-side date formatting
+// (lib/services/reportsData.ts, ReportHistoryTable, ReportPreview) stops
+// hardcoding 'en-AU' independently at each call site.
+describe('localeForReportingCurrency', () => {
+  it('returns en-AU for AUD (unchanged from every existing hardcoded literal)', () => {
+    expect(localeForReportingCurrency('AUD')).toBe('en-AU');
+  });
+
+  it('returns en-IN for INR — the correctness fix itself', () => {
+    expect(localeForReportingCurrency('INR')).toBe('en-IN');
   });
 });

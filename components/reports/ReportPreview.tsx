@@ -1,4 +1,4 @@
-import { formatMoneyWhole } from '@/lib/engines/money';
+import { formatMoneyWhole, localeForReportingCurrency } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
@@ -105,11 +105,13 @@ function formatGoalForecastCell(cell: GoalForecastCell | null, hasTargetDate: bo
   return '—';
 }
 
-function formatReportMonth(monthStr: string): string {
-  return new Date(monthStr).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+// G7 Contract 2 (docs/country-programme/g7-data-contracts.md) — both were
+// hardcoded 'en-AU' literals.
+function formatReportMonth(monthStr: string, currency: 'AUD' | 'INR'): string {
+  return new Date(monthStr).toLocaleDateString(localeForReportingCurrency(currency), { month: 'long', year: 'numeric' });
 }
-function formatSnapshotDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+function formatSnapshotDate(dateStr: string, currency: 'AUD' | 'INR'): string {
+  return new Date(dateStr).toLocaleDateString(localeForReportingCurrency(currency), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export function ReportPreview({
@@ -226,8 +228,8 @@ export function ReportPreview({
         <h1 className="mt-2 text-2xl font-bold text-trust">{reportTitle}</h1>
         {householdName && <p className="mt-2 text-sm font-medium text-gray-700">Prepared for: {householdName}</p>}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-gray-500">
-          <span>Reporting month: {formatReportMonth(report.report_month)}</span>
-          <span>Financial position snapshot: {formatSnapshotDate(report.as_of_date)}</span>
+          <span>Reporting month: {formatReportMonth(report.report_month, currency)}</span>
+          <span>Financial position snapshot: {formatSnapshotDate(report.as_of_date, currency)}</span>
         </div>
         <p className="mt-1 text-sm text-gray-500">
           Reporting currency: {content.currencyName(currency)} — {currency}
@@ -782,7 +784,7 @@ export function ReportPreview({
                 <tbody>
                   {(commitmentsTimeline.sectionData.commitments as { amount: number; due_date: string; is_mandatory: boolean }[]).map((c, i) => (
                     <tr key={i} className="border-t">
-                      <td className="py-1">{new Date(c.due_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="py-1">{new Date(c.due_date).toLocaleDateString(localeForReportingCurrency(currency), { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                       <td className="py-1">{fmt(c.amount)}</td>
                       <td className="py-1">{c.is_mandatory ? 'Mandatory' : 'Discretionary'}</td>
                     </tr>
