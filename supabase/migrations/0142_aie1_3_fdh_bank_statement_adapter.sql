@@ -12,16 +12,25 @@
 -- HELD LOCALLY. Not applied to any DEV or production database this pass —
 -- see AIE-1.3's own final report for exact verification evidence.
 --
--- Numbered 0141: main's highest is 0137, `feature/lr-1-upload-security-
--- lifecycle` claims 0138/0139, `feature/aie-1-1-document-gateway` (this
--- branch's own base) claims 0140, and the concurrently-developed
--- `feature/aie-1-2-investment-adapter` branch was re-checked immediately
--- before writing this file and had not diverged from
--- `feature/aie-1-1-document-gateway` (identical HEAD `cd2d4a2` at the time
--- of that check) — so 0141 is free on every branch this repository's own
--- collision-guard script (`scripts/check-migration-versions-against-
--- branch.mjs`) can see. Re-verify before ever applying this file for real,
--- exactly as AIE-1.1's own migration header instructs.
+-- Numbered 0142 — RENUMBERED FROM 0141, DISCLOSED. Originally written as
+-- 0141: at that time main's highest was 0137, `feature/lr-1-upload-security-
+-- lifecycle` claimed 0138/0139, `feature/aie-1-1-document-gateway` (this
+-- branch's own base) claimed 0140, and `feature/aie-1-2-investment-adapter`
+-- (the concurrently-developed sibling branch) had not diverged from
+-- `feature/aie-1-1-document-gateway` (identical HEAD `cd2d4a2`) — so 0141
+-- was genuinely free at that moment. Immediately before finalising this
+-- branch, `scripts/check-migration-versions-against-branch.mjs
+-- --against=feature/aie-1-2-investment-adapter` was re-run as this
+-- repository's own documented discipline requires ("re-verify right before
+-- you actually apply a number") and found that branch had since progressed
+-- and claimed its OWN `0141_aie1_2_investment_adapter_link.sql` — a genuine
+-- collision, not a false positive. This file was renumbered to 0142 (free
+-- on `origin/main`, `feature/aie-1-1-document-gateway`, AND
+-- `feature/aie-1-2-investment-adapter` as of this check) rather than kept at
+-- 0141 — this migration was never applied anywhere, so renumbering is safe
+-- (the ADRs this repository already has for the opposite case — a migration
+-- ALREADY applied to a shared environment — do not apply here). Re-verify
+-- again before ever applying this file for real.
 
 -- ---------------------------------------------------------------------------
 -- 1. aie_write_batch — record which canonical FDH row a committed batch
