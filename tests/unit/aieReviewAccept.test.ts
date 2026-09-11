@@ -20,6 +20,9 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
     getRunForUser: async () => baseRun(),
     getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
     getIntakeUploadMetadata: async () => null,
+    getFdhBankUploadMetadata: async () => null,
+    findCommittedFdhBankWriteForRun: async () => null,
+    downloadQuarantinedBytes: async () => ({ ok: true, bytes: new Uint8Array([1, 2, 3]) }),
     countItemsBlockingAcceptanceForRun: async () => 0,
     latestReconciliationOutcomesForRun: async () => [{ ruleId: 'insurance_required_fields_present', outcome: 'pass' }],
     listFieldCandidatesForRun: async () => [],
@@ -48,6 +51,10 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
       return { ok: true, iiSourceDocumentId: 'ii-doc-1', iiResult: { ok: true, status: 'parsed', parseRunId: 'parse-run-1', error: null } };
     },
     investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
+    commitFdhBankImport: async (req) => {
+      calls.writes.push(req);
+      return { committed: true, statementUploadId: 'statement-1', transactionsCreated: 12, certificationStatus: 'certified' };
+    },
     ...overrides,
   };
   return { deps, calls };
@@ -214,30 +221,105 @@ describe('AIE-1.5 accept.ts — acceptRun', () => {
     });
   });
 
+  // AIE-1 merge plan section 4a / AIE_1_MERGE_PLAN.md's own follow-up fix:
+  // accept.ts now dispatches to FDH-bank's real commitFdhBankStatementImport,
+  // fetching the original bytes back from quarantine storage (never
+  // re-uploaded) and the original upload metadata from migration 0145's new
+  // `aie_document_intake.fdh_bank_upload_metadata` column (never re-collected
+  // from the user).
+  describe('FDH-bank dispatch (AIE-1.3 commitFdhBankStatementImport, via the run\'s real adapter id)', () => {
+    const fdhBankMetadata = { country_code: 'AU', currency_code: 'AUD', institution_id: null, declared_masked_identifier: null, statement_period_start: null, statement_period_end: null, original_filename_sanitised: 'statement.pdf' };
+    const fdhBankOverrides = {
+      getAdapterIdForRun: async () => 'aie_fdh_bank_statement_bridge_v1',
+      getIntakeUploadMetadata: async () => ({ storageKey: 'user-1/intake-1', declaredMimeType: 'application/pdf', displayFilename: 'statement.pdf' }),
+      getFdhBankUploadMetadata: async () => fdhBankMetadata,
+      findCommittedFdhBankWriteForRun: async () => null,
+      downloadQuarantinedBytes: async () => ({ ok: true as const, bytes: new Uint8Array([1, 2, 3]) }),
+    };
+
+    it('reaches commitFdhBankImport (not the other two write services) for a run whose real adapter id is FDH-bank\'s', async () => {
+      const insuranceWrite = vi.fn();
+      const investmentWrite = vi.fn();
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'], acceptAndWriteInvestment: investmentWrite as unknown as AcceptRunDeps['acceptAndWriteInvestment'] });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: true, alreadyCompleted: false, statementUploadId: 'statement-1' });
+      expect(calls.writes).toHaveLength(1);
+      expect(insuranceWrite).not.toHaveBeenCalled();
+      expect(investmentWrite).not.toHaveBeenCalled();
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'completed']);
+    });
+
+    it('passes the bytes fetched from quarantine storage and the persisted upload metadata through, never re-collected or re-uploaded', async () => {
+      const { deps, calls } = fakeDeps(fdhBankOverrides);
+      await acceptRun(baseParams, deps);
+      expect(calls.writes[0]).toMatchObject({ userId: 'user-1', runId: 'run-1', intakeId: 'intake-1', bytes: new Uint8Array([1, 2, 3]), metadata: fdhBankMetadata });
+    });
+
+    it('refuses with missing_required_input when the persisted upload metadata is absent (e.g. a pre-migration-0145 row)', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, getFdhBankUploadMetadata: async () => null });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome.ok).toBe(false);
+      expect((outcome as { reason: string }).reason).toBe('missing_required_input');
+      expect(calls.writes).toHaveLength(0);
+    });
+
+    it('refuses with missing_required_input when the persisted upload metadata is malformed (missing country_code/currency_code)', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, getFdhBankUploadMetadata: async () => ({ foo: 'bar' }) });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toMatchObject({ ok: false, reason: 'missing_required_input' });
+      expect(calls.writes).toHaveLength(0);
+    });
+
+    it('IDEMPOTENCY GUARD: a prior commitFdhBankStatementImport success (its own internal aie_write_batch row already committed) short-circuits — never calls the write service a second time', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, findCommittedFdhBankWriteForRun: async () => ({ canonicalReferenceId: 'statement-existing' }) });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: true, alreadyCompleted: true, statementUploadId: 'statement-existing' });
+      expect(calls.writes).toHaveLength(0);
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'completed']);
+    });
+
+    it('a quarantine download failure is reported honestly as write_failed/retryable, never treated as an empty document', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, downloadQuarantinedBytes: async () => ({ ok: false as const, message: 'not found' }) });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'write_failed', message: 'quarantine_download_failed' });
+      expect(calls.writes).toHaveLength(0);
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'failed_retryable']);
+    });
+
+    it('atomic_import_disabled (the feature-flag gate) transitions to failed_terminal, not failed_retryable', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, commitFdhBankImport: async () => ({ committed: false, reason: 'atomic_import_disabled' }) });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'write_failed', message: 'atomic_import_disabled' });
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'failed_terminal']);
+    });
+
+    it('account_ambiguous (a genuine domain conflict discovered at commit time) transitions to failed_retryable, not failed_terminal', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, commitFdhBankImport: async () => ({ committed: false, reason: 'account_ambiguous' }) });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'write_failed', message: 'account_ambiguous' });
+      const toStates = calls.transitions.map((t) => (t as { toStatus: string }).toStatus);
+      expect(toStates).toEqual(['accepted', 'write_pending', 'failed_retryable']);
+    });
+
+    it('a reconciliation-not-passed FDH-bank run is still refused at the generic reconciliation gate, before ever reaching the FDH-bank-specific checks', async () => {
+      const { deps, calls } = fakeDeps({ ...fdhBankOverrides, latestReconciliationOutcomesForRun: async () => [{ ruleId: 'r', outcome: 'fail' }] });
+      const outcome = await acceptRun(baseParams, deps);
+      expect(outcome).toEqual({ ok: false, reason: 'reconciliation_not_fresh' });
+      expect(calls.writes).toHaveLength(0);
+    });
+  });
+
   // Negative control: before this fix, EVERY run reaching this point was
   // unconditionally written through Insurance's service, whatever adapter
   // actually produced it (the exact latent defect AIE_1_MERGE_PLAN.md
   // section 3 finding #2 flagged for moduleRegistry.ts and this file both).
-  // A run recorded against neither Insurance's nor Investment
-  // Intelligence's real adapter id (e.g. FDH-bank's, not yet wired — see
-  // AIE_1_3_IMPLEMENTATION.md section 5/8 — or none at all) must be refused,
-  // never silently routed to Insurance's write service.
+  // A run recorded against none of the three real, wired adapter ids must
+  // be refused, never silently routed to Insurance's write service.
   describe('unsupported/unrecognised adapter (never silently defaults to Insurance)', () => {
-    it('refuses a run recorded against FDH-bank\'s real adapter id — not yet wired to any write service', async () => {
-      const insuranceWrite = vi.fn();
-      const investmentWrite = vi.fn();
-      const { deps, calls } = fakeDeps({
-        getAdapterIdForRun: async () => 'aie_fdh_bank_statement_bridge_v1',
-        acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'],
-        acceptAndWriteInvestment: investmentWrite as unknown as AcceptRunDeps['acceptAndWriteInvestment'],
-      });
-      const outcome = await acceptRun(baseParams, deps);
-      expect(outcome).toEqual({ ok: false, reason: 'unsupported_adapter' });
-      expect(insuranceWrite).not.toHaveBeenCalled();
-      expect(investmentWrite).not.toHaveBeenCalled();
-      expect(calls.transitions).toHaveLength(0); // refused before any CAS transition — never stranded mid-flight
-    });
-
     it('refuses a run with no adapter recorded at all (null) the same way, never defaulting to Insurance', async () => {
       const insuranceWrite = vi.fn();
       const { deps, calls } = fakeDeps({ getAdapterIdForRun: async () => null, acceptAndWriteInsurance: insuranceWrite as unknown as AcceptRunDeps['acceptAndWriteInsurance'] });

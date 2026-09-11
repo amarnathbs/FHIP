@@ -30,6 +30,9 @@ function makeSharedFakeDb() {
     // moduleRegistry.ts and accept.ts fixes) routing here exactly as before.
     getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
     getIntakeUploadMetadata: async () => null,
+    getFdhBankUploadMetadata: async () => null,
+    findCommittedFdhBankWriteForRun: async () => null,
+    downloadQuarantinedBytes: async () => ({ ok: false, message: 'not exercised by this Insurance-only concurrency probe' }),
     countItemsBlockingAcceptanceForRun: async () => 0,
     latestReconciliationOutcomesForRun: async () => [{ ruleId: 'insurance_required_fields_present', outcome: 'pass' }],
     listFieldCandidatesForRun: async () => [],
@@ -63,6 +66,9 @@ function makeSharedFakeDb() {
       throw new Error('not exercised by this Insurance-only concurrency probe');
     },
     investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
+    commitFdhBankImport: async () => {
+      throw new Error('not exercised by this Insurance-only concurrency probe');
+    },
   };
 
   return { deps, state };

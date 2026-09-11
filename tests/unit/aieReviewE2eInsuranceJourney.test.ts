@@ -159,6 +159,9 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
       getRunForUser: async () => runRow,
       getAdapterIdForRun: async () => 'insurance_generic_schedule_v1',
       getIntakeUploadMetadata: async () => null,
+      getFdhBankUploadMetadata: async () => null,
+      findCommittedFdhBankWriteForRun: async () => null,
+      downloadQuarantinedBytes: async () => ({ ok: false, message: 'not exercised by this Insurance-only E2E journey' }),
       countItemsBlockingAcceptanceForRun: async () => 0,
       latestReconciliationOutcomesForRun: async () => [
         { ruleId: 'insurance_currency_supported', outcome: 'pass' },
@@ -181,6 +184,9 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
         throw new Error('not exercised by this Insurance-only E2E journey');
       },
       investmentWriteDeps: {} as AcceptRunDeps['investmentWriteDeps'],
+      commitFdhBankImport: async () => {
+        throw new Error('not exercised by this Insurance-only E2E journey');
+      },
     };
 
     const acceptance = await acceptRun(

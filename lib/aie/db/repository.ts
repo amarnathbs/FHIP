@@ -77,6 +77,60 @@ export async function updateIntakeStatus(params: {
   return { ok: true };
 }
 
+/**
+ * AIE-1.3 (FDH bank-statement adapter) only — migration 0145. Persists the
+ * caller-supplied `BankCsvUploadMetadataInput` (country_code, currency_code,
+ * institution_id?, declared_masked_identifier?, statement_period_start?,
+ * statement_period_end?, original_filename_sanitised?) captured at intake
+ * time (`app/api/aie/fdh-bank/intake/route.ts`, after its own
+ * `bankCsvUploadMetadataSchema.safeParse`), so accept.ts's centralized
+ * acceptance gate can re-read it in a LATER request. Deliberately typed as
+ * `Record<string, unknown>` here (not `BankCsvUploadMetadataInput`) so
+ * AIE-1.1's core persistence layer stays domain-agnostic — the FDH-specific
+ * shape is validated at the point of use (route.ts on write, accept.ts's
+ * FDH-bank dispatch on read), matching this file's own existing precedent
+ * of `targetModule` carrying adapter-specific string values without
+ * importing each adapter's own types.
+ */
+export async function recordFdhBankUploadMetadata(intakeId: string, metadata: Record<string, unknown>): Promise<void> {
+  const admin = createAdminClient();
+  await admin.from('aie_document_intake').update({ fdh_bank_upload_metadata: metadata, updated_at: new Date().toISOString() }).eq('id', intakeId);
+}
+
+export async function getFdhBankUploadMetadata(intakeId: string): Promise<Record<string, unknown> | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_document_intake').select('fdh_bank_upload_metadata').eq('id', intakeId).maybeSingle();
+  return (data?.fdh_bank_upload_metadata as Record<string, unknown> | null) ?? null;
+}
+
+/**
+ * Idempotency guard for the FDH-bank accept-time dispatch specifically
+ * (see `lib/aie/review/accept.ts`'s own header for why this adapter needs
+ * one that Insurance's/Investment Intelligence's own `findExistingLink`
+ * checks don't have to provide separately): unlike those two adapters'
+ * write.ts files, `commitFdhBankStatementImport()`
+ * (`lib/aie/adapters/fdhBankStatement/atomicImport.ts`) has no existing-
+ * write check of its OWN before calling FDH-5's `uploadBankPdf` — it relies
+ * entirely on its caller never invoking it twice for the same run. Reuses
+ * the SAME `aie_write_batch` row that function's own `recordWriteBatch`
+ * helper already writes (`target_module: 'fdh_bank'`,
+ * `canonical_reference_id` set to the real `fdh_statement_uploads.id` on
+ * success) — no new table, no new column beyond what AIE-1.1 core already
+ * has for exactly this purpose.
+ */
+export async function findCommittedFdhBankWriteForRun(runId: string): Promise<{ canonicalReferenceId: string | null } | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_write_batch')
+    .select('canonical_reference_id')
+    .eq('run_id', runId)
+    .eq('target_module', 'fdh_bank')
+    .eq('status', 'committed')
+    .maybeSingle();
+  if (!data) return null;
+  return { canonicalReferenceId: (data.canonical_reference_id as string | null) ?? null };
+}
+
 export async function recordFingerprint(params: {
   intakeId: string;
   userId: string;

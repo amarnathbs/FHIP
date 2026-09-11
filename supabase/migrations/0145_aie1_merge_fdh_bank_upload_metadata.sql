@@ -1,0 +1,66 @@
+-- AIE-1 real merge (integration/aie-1-release-candidate) — follow-up fix
+-- section 4a / AIE_1_MERGE_PLAN.md section 4a: persist the FDH-bank
+-- adapter's own upload-time metadata so accept.ts's centralized
+-- acceptance gate can dispatch to `commitFdhBankStatementImport()` in a
+-- LATER request, without re-uploading or re-collecting anything from the
+-- user.
+--
+-- NUMBERING NOTE: highest migration in this merged tree
+-- (`integration/aie-1-release-candidate`, AIE-1.1 through AIE-1.6 plus the
+-- production-cert-plan and merge-plan docs branches) is 0144
+-- (`0144_aie1_5_review_decision_correction_columns.sql`). `origin/main`'s
+-- own highest migration at the time this file was written is 0137 (see
+-- `npm run check:migrations:against-main`, clean). This file is numbered
+-- 0145 to leave no gap. Confirmed via
+-- `node scripts/check-migration-versions.mjs` (OK, 137 active migrations,
+-- next version 0145) and `npm run check:migrations:against-main` (OK, no
+-- cross-branch collision) on this exact merged tree.
+--
+-- PRODUCTION AUTHORITY: NONE. Held locally on
+-- `integration/aie-1-release-candidate`, NOT applied to any DEV or
+-- production database, matching every other AIE-1.x migration's own
+-- disclosed constraint.
+--
+-- THE GAP THIS CLOSES. `commitFdhBankStatementImport()`
+-- (`lib/aie/adapters/fdhBankStatement/atomicImport.ts`) needs the
+-- caller-supplied `BankCsvUploadMetadataInput` (`country_code`,
+-- `currency_code`, and the optional `institution_id` /
+-- `declared_masked_identifier` / `statement_period_start` /
+-- `statement_period_end` / `original_filename_sanitised`) to re-run FDH-5's
+-- own `uploadBankPdf` -> `processBankPdfDocument` pipeline. Confirmed by
+-- direct code reading (`app/api/aie/fdh-bank/intake/route.ts`): today this
+-- metadata is parsed from the intake request's own query string
+-- (`bankCsvUploadMetadataSchema.safeParse(...)`) and lives ONLY as a local
+-- variable for the lifetime of that one HTTP request — it is never
+-- persisted to `aie_document_intake` or anywhere else, and AIE-1.5's real
+-- review/acceptance UX (a genuinely separate, later HTTP request against
+-- `POST /api/aie/review/runs/{runId}/accept`) has no way to reconstruct it.
+-- Unlike Investment Intelligence's equivalent gap (closed without a new
+-- column — see accept.ts's own `getIntakeUploadMetadata`, which reads
+-- columns AIE-1.1 core already had), no existing AIE-1.1/1.5 table or
+-- column carries country/currency/institution/masked-identifier/statement-
+-- period — confirmed by reading `0140_aie1_1_shared_document_gateway.sql`
+-- and every field-candidate name this adapter's own parser ever produces
+-- (`lib/aie/adapters/fdhBankStatement/types.ts`): none of them is a
+-- country/currency/period value, because this adapter's parser never
+-- derives those from document content — they are, and always were, purely
+-- caller-supplied upload metadata (the SAME metadata FDH-5's own existing
+-- `/api/financial-data-hub/bank-pdf/upload` route already requires from
+-- every caller, AIE-fronted or not).
+--
+-- ONE new nullable JSONB column on the EXISTING `aie_document_intake`
+-- table (AIE-1.1 core) — no new table, no new RLS policy (the existing
+-- "select own aie_document_intake" policy already covers this column; no
+-- authenticated UPDATE policy exists on this table at all, matching
+-- AIE-1.1's own established write discipline — every write to this column
+-- goes through the service-role client, from the SAME intake route that
+-- already validates+parses this metadata with `bankCsvUploadMetadataSchema`
+-- before ever writing it). Nullable and populated ONLY for an
+-- `fdh_bank`-sourced intake; every other intake's row leaves it null,
+-- exactly like `source_module_hint` already models "which adapter this
+-- document belongs to" without constraining any other adapter's shape.
+alter table aie_document_intake
+  add column fdh_bank_upload_metadata jsonb;
+
+comment on column aie_document_intake.fdh_bank_upload_metadata is
+  'AIE-1.3 (FDH bank-statement adapter) only: the caller-supplied BankCsvUploadMetadataInput (country_code, currency_code, institution_id?, declared_masked_identifier?, statement_period_start?, statement_period_end?, original_filename_sanitised?) captured at intake time, re-read by accept.ts at accept time so commitFdhBankStatementImport() can re-run FDH-5''s own upload pipeline without re-collecting anything from the user. Null for every non-fdh_bank intake.';

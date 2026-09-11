@@ -61,5 +61,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
     return bad(`could not accept run: ${outcome.reason}`, statusByReason[outcome.reason] ?? 400, outcome.reason);
   }
 
-  return ok({ accepted: true, alreadyCompleted: outcome.alreadyCompleted, insurancePolicyId: outcome.insurancePolicyId ?? null, iiSourceDocumentId: outcome.iiSourceDocumentId ?? null });
+  return ok({
+    accepted: true,
+    alreadyCompleted: outcome.alreadyCompleted,
+    insurancePolicyId: outcome.insurancePolicyId ?? null,
+    iiSourceDocumentId: outcome.iiSourceDocumentId ?? null,
+    statementUploadId: outcome.statementUploadId ?? null,
+  });
 }

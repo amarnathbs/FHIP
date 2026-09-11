@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
-import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun, createUnresolvedItems } from '@/lib/aie/db/repository';
+import { createIntake, updateIntakeStatus, recordFdhBankUploadMetadata, recordFingerprint, existingFingerprintHashesForUser, createRun, createUnresolvedItems } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
@@ -97,6 +97,13 @@ export async function POST(req: Request) {
   if ('error' in created) return bad('could not create intake', 500);
   const intakeId = created.id;
   await recordAieAuditEvent({ intakeId, runId: null, userId: user.id, eventType: 'intake_created', actorType: 'user', actorId: user.id });
+
+  // Migration 0145 — persist this request's own already-validated upload
+  // metadata so accept.ts's centralized acceptance gate (a genuinely later,
+  // separate request) can re-read it at accept time without asking the user
+  // to re-supply it. See accept.ts's own header and repository.ts's
+  // `recordFdhBankUploadMetadata` doc comment for the full rationale.
+  await recordFdhBankUploadMetadata(intakeId, metadata);
 
   const admission = validateUploadForAdmission({
     declaredMimeType: 'application/pdf',
