@@ -321,6 +321,32 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'types.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'validation', 'fileValidation.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'aie', 'intake', 'route.ts'),
+      // AIE-1.3 (2026-09-11): lib/aie/adapters/fdhBankStatement/** and
+      // app/api/aie/fdh-bank/intake/route.ts are DIFFERENT IN KIND from the
+      // AIE-1.1 entries immediately above — these ARE real, intentional
+      // imports of FDH module code, not naive-substring false positives.
+      // This is the exact analogue of the `lib/investment-import-bridge/`
+      // and `lib/retirement-import-bridge/` precedents already approved
+      // above: AIE-1.3's whole job (per its own spec, section 2's binding
+      // scope decision) is to WRAP FDH-5's already-certified
+      // `lib/financial-data-hub/bank-pdf/**` classification/extraction/
+      // reconciliation primitives and FDH-5's own upload/processing
+      // services behind AIE-1.1's shared contract, and to commit through
+      // FDH's own existing atomic-import boundary — "reuse it, do not
+      // build a second one" is only meaningful if this adapter is actually
+      // allowed to import it. Approved as exactly these seven files, not a
+      // directory, so a future lib/aie file that starts importing FDH code
+      // for an unrelated reason would still be caught (this list does NOT
+      // include reconciliation.ts, which genuinely has no FDH import at
+      // all — it consumes only this adapter's own field-candidate
+      // vocabulary, per its own header).
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'atomicImport.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'featureFlags.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'index.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'parser.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'types.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'fdh-bank', 'intake', 'route.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
