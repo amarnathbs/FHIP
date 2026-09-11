@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { resolveReportSourceData, buildEligibilityInput, isEligibleForOfficialMonthlyReport } from '@/lib/services/reportSnapshotResolver';
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
+import { localeForReportingCurrency } from '@/lib/engines/money';
 
 // II-R10 security hardening (migration 0070_ii_r10_reports_authoritative_write_hardening.sql):
 // the `reports` table family now grants the `authenticated` role SELECT-own
@@ -35,8 +36,10 @@ function monthEnd(month: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function reportTitle(type: ReportTypeCode, month: string): string {
-  const label = new Date(month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+function reportTitle(type: ReportTypeCode, month: string, reportingCurrency: 'AUD' | 'INR'): string {
+  // G7 Contract 2 (docs/country-programme/g7-data-contracts.md) — was a
+  // hardcoded 'en-AU' literal.
+  const label = new Date(month).toLocaleDateString(localeForReportingCurrency(reportingCurrency), { month: 'long', year: 'numeric' });
   const typeTitles: Record<ReportTypeCode, string> = {
     monthly_financial_health: 'Monthly Financial Health Report',
     financial_health_score: 'Financial Health Score Report',
@@ -145,7 +148,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
             report_period_end: monthEnd(reportMonth),
             report_month: reportMonth,
             as_of_date: source.asOfDate,
-            title: reportTitle(reportType, reportMonth),
+            title: reportTitle(reportType, reportMonth, source.currency),
             status: 'failed',
             reporting_currency: source.currency,
             template_version: TEMPLATE_VERSION,
@@ -198,13 +201,29 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         report_period_end: monthEnd(reportMonth),
         report_month: reportMonth,
         as_of_date: source.asOfDate,
-        title: reportTitle(reportType, reportMonth),
+        title: reportTitle(reportType, reportMonth, source.currency),
         status: 'ready',
         version_number: versionNumber,
         revises_report_id: revisesReportId,
         revision_reason: params.revisionReason ?? null,
         reporting_currency: source.currency,
-        country_scope: 'household',
+        // G7 Contract 1 (docs/country-programme/g7-data-contracts.md) —
+        // resolved from the same source (source.profile.countryOfResidence)
+        // stress_testing's applicabilityNote (reportSectionsPremium.ts)
+        // already reads, not a second resolution path. Was a fixed literal
+        // ('household') never read again — closes G7.008's own disclosed
+        // provenance gap. Go-forward only: existing report rows keep their
+        // stored 'household' value untouched, never backfilled.
+        //
+        // reports.country_scope is `text not null default 'household'`
+        // (migration 0010) — the contract's own illustrative snippet falls
+        // back to `null`, which would violate that NOT NULL constraint for
+        // any household whose country_of_residence is unresolved (e.g. a
+        // GENERIC-experience user). Falling back to the column's own
+        // pre-existing default value instead preserves the DB contract and
+        // is honest: "household" was, and remains, the correct label for
+        // an unattributed/unresolved report.
+        country_scope: source.profile.countryOfResidence ?? 'household',
         financial_snapshot_id: null,
         health_score_snapshot_id: null,
         resilience_snapshot_id: null,
