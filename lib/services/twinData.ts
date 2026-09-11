@@ -109,7 +109,7 @@ export type TwinSourceDataOutcome = { status: 'ok'; data: TwinSourceData } | { s
 export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceDataOutcome> {
   const supabase = client ?? (await createClient());
 
-  const [homeCountry, profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes] =
+  const [homeCountry, profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes, crossBorderRes] =
     await Promise.all([
       // Canonical resolver (lib/services/jurisdiction.ts) — the single
       // source of truth every other correctly-behaving module uses. Fails
@@ -142,6 +142,11 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       supabase.from('liabilities').select('balance, debt_type, master_item_key, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
       supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
+      // G6 Contract 10 (docs/country-programme/g6-data-contracts.md) — the
+      // real cross-border signal, replacing the legacy Boolean(secondary_country)
+      // read below (secondary_country in {'AU','IN'} only — this widens
+      // correctness to any active declared relationship, in any country).
+      supabase.from('cross_border_relationships').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'ACTIVE'),
     ]);
 
   // Fail closed BEFORE running the expensive downstream engines (dashboard,
@@ -166,6 +171,10 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
   const household = householdRes.data;
   const countryOfResidence = homeCountry;
   const secondaryCountry = (profile?.secondary_country as 'AU' | 'IN' | null) ?? null;
+  // G6 Contract 10 — secondaryCountry itself is untouched (still displayed
+  // via TwinHouseholdContext.secondaryCountry below; the column is not
+  // dropped, per the contract's own note), but the cross-border SIGNAL used
+  // for isCrossBorder is now the real cross_border_relationships count.
   const age = profile?.date_of_birth ? ageFromDateOfBirth(profile.date_of_birth) : null;
   const ageBand = age !== null ? ageToAgeBand(age) : null;
   const dependantsCount = household?.dependants_count ?? 0;
@@ -174,7 +183,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
   const lifeStage = deriveLifeStage({ ageBand, dependantsCount, employmentType });
   const annualGrossIncome = dashboard.grossMonthlyIncome * 12;
   const incomeBand = annualGrossIncomeToIncomeBand(countryOfResidence, annualGrossIncome);
-  const isCrossBorder = Boolean(secondaryCountry) || dashboard.countriesInUse.length > 1;
+  const isCrossBorder = (crossBorderRes.count ?? 0) > 0 || dashboard.countriesInUse.length > 1;
 
   const expenseHousingMonthly = (expensesRes.data ?? [])
     .filter((e) => e.master_item_key === 'mortgage' || e.master_item_key === 'rent' || e.master_item_key === 'council_rates' || e.master_item_key === 'strata_fees')

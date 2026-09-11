@@ -80,8 +80,14 @@ function makeFakeClient(tables: Record<string, Row[]>) {
   function from(table: string) {
     const rows = tables[table] ?? [];
     let filtered = rows;
+    // G6 Contract 10: loadTwinSourceData's cross_border_relationships read
+    // uses .select('id', { count: 'exact', head: true }) — a genuine
+    // head-count query (no rows in `data`, only a `count`), distinct from
+    // this fake's other reads which resolve full rows via `then()`.
+    let headCount = false;
     const builder = {
-      select() {
+      select(_col?: string, opts?: { count?: string; head?: boolean }) {
+        if (opts?.head) headCount = true;
         return builder;
       },
       eq(col: string, val: unknown) {
@@ -111,7 +117,8 @@ function makeFakeClient(tables: Record<string, Row[]>) {
         return Promise.resolve({ data: filtered[0] ?? null, error: filtered[0] ? null : { message: 'no rows' } });
       },
       then(resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
-        return Promise.resolve({ data: filtered, error: null }).then(resolve, reject);
+        const result = headCount ? { data: null, count: filtered.length, error: null } : { data: filtered, error: null };
+        return Promise.resolve(result).then(resolve, reject);
       },
     };
     return builder;
@@ -179,5 +186,51 @@ describe('loadTwinSourceData — country resolution (JA-D1)', () => {
     const client = makeFakeClient({ user_profiles: [] });
     const outcome = await loadTwinSourceData('user-1', client);
     expect(outcome.status).toBe('country_unresolved');
+  });
+});
+
+describe('loadTwinSourceData — isCrossBorder (G6 Contract 10)', () => {
+  it('an active cross_border_relationships row makes isCrossBorder true, even with secondary_country null (the real signal, not the legacy field)', async () => {
+    const client = makeFakeClient({
+      user_profiles: [profileRow('AU')],
+      cross_border_relationships: [{ id: 'cbr-1', user_id: 'user-1', status: 'ACTIVE' }],
+    });
+    const outcome = await loadTwinSourceData('user-1', client);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') throw new Error('unreachable');
+    expect(outcome.data.household.isCrossBorder).toBe(true);
+  });
+
+  it('an ENDED (non-active) cross_border_relationships row does NOT make isCrossBorder true on its own', async () => {
+    const client = makeFakeClient({
+      user_profiles: [profileRow('AU')],
+      cross_border_relationships: [{ id: 'cbr-1', user_id: 'user-1', status: 'ENDED' }],
+    });
+    const outcome = await loadTwinSourceData('user-1', client);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') throw new Error('unreachable');
+    expect(outcome.data.household.isCrossBorder).toBe(false);
+  });
+
+  it('THE DEFECT G6 CONTRACT 10 FIXES: a legacy secondary_country value with NO active cross_border_relationships row no longer counts as cross-border', async () => {
+    const client = makeFakeClient({
+      user_profiles: [profileRow('AU', { secondary_country: 'IN' })],
+      cross_border_relationships: [],
+    });
+    const outcome = await loadTwinSourceData('user-1', client);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') throw new Error('unreachable');
+    expect(outcome.data.household.isCrossBorder).toBe(false);
+    // secondary_country itself is still read through and displayed —
+    // Contract 10 does not drop the column, only the signal it feeds.
+    expect(outcome.data.household.secondaryCountry).toBe('IN');
+  });
+
+  it('no cross_border_relationships row and no secondary_country: isCrossBorder is false (unless countriesInUse says otherwise, which this fixture does not exercise)', async () => {
+    const client = makeFakeClient({ user_profiles: [profileRow('AU')], cross_border_relationships: [] });
+    const outcome = await loadTwinSourceData('user-1', client);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') throw new Error('unreachable');
+    expect(outcome.data.household.isCrossBorder).toBe(false);
   });
 });
