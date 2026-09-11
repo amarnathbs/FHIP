@@ -1,7 +1,7 @@
 import type { DashboardSummary } from './dashboard';
 import { recomputeDerived } from './whatIf';
 import { computeAccessibleLiquidResources, type CommitmentRow } from './resilience';
-import type { CountryCode } from '@/lib/services/jurisdiction';
+import { isDomesticRecord, type CountryCode } from '@/lib/services/jurisdiction';
 
 export type StressScenarioType =
   | 'income_stops'
@@ -98,8 +98,14 @@ function applyInvestmentMarketDecline(d: DashboardSummary, pct: number): void {
 // guessed home country.
 function applyCurrencyShock(d: DashboardSummary, pct: number, homeCountry: CountryCode | null): void {
   if (!homeCountry) return;
+  // G6 Contract 4 — shared isDomesticRecord(), replacing this file's own
+  // previously-independent `c.countryCode !== homeCountry` comparison.
+  // `!== true` (not `=== false`) preserves the exact original semantics: a
+  // row whose country is unresolved was, and still is, treated as foreign
+  // for this filter (never silently reclassified as domestic on missing
+  // data) — only a row CONFIRMED domestic is excluded from the foreign sum.
   const foreignValue = d.investmentByCountry
-    .filter((c) => c.countryCode !== homeCountry)
+    .filter((c) => isDomesticRecord(c.countryCode as CountryCode | null, homeCountry) !== true)
     .reduce((sum, c) => sum + c.value, 0);
   const loss = foreignValue * (pct / 100);
   d.totalInvestments = Math.max(0, d.totalInvestments - loss);

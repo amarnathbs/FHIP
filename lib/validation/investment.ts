@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OWNER_VALUES } from '@/lib/constants';
+import { AUTHORITATIVE_COUNTRY_CODES } from '@/lib/services/jurisdiction';
 import { currencyMatchesCountry, currencyCountryRefinement } from './currencyCountry';
 
 const investmentBaseSchema = z.object({
@@ -9,7 +10,9 @@ const investmentBaseSchema = z.object({
     .default('other'),
   current_value: z.number().min(0),
   currency_code: z.enum(['AUD', 'INR']),
-  country_code: z.enum(['AU', 'IN']).optional(),
+  // G6 Contract 1 — widened from ['AU','IN'] to all 6 authoritative country
+  // codes; Zod-only restriction, no DB CHECK narrower than the FK. No migration.
+  country_code: z.enum(AUTHORITATIVE_COUNTRY_CODES).optional(),
   // See lib/validation/asset.ts's identical field for why this is
   // .optional() with no .default() — a default would break every save to
   // this table until the currency_override column migration is applied.

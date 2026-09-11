@@ -121,6 +121,22 @@ export function isKnownCountry(value: unknown): value is CountryCode {
   return typeof value === 'string' && (KNOWN_COUNTRIES as readonly string[]).includes(value);
 }
 
+// G6 Contract 4 (docs/country-programme/g6-data-contracts.md) — a shared
+// domestic/overseas comparison, replacing two previously-independent private
+// inline comparisons (lib/engines/resilienceStress.ts's applyCurrencyShock(),
+// lib/engines/reportSectionsPremium.ts's applicabilityNote()) that discovery
+// found could in principle silently drift apart from each other over time,
+// even though both were already correct today. Pure function, no I/O, no new
+// type beyond the existing CountryCode — null means "cannot classify" (either
+// side unresolved), never assume domestic on missing data.
+export function isDomesticRecord(
+  recordCountryCode: CountryCode | null | undefined,
+  homeCountryCode: CountryCode | null | undefined
+): boolean | null {
+  if (!recordCountryCode || !homeCountryCode) return null;
+  return recordCountryCode === homeCountryCode;
+}
+
 /**
  * The user's canonical home jurisdiction, or null if it genuinely isn't set
  * yet (e.g. onboarding incomplete) or holds a value this app doesn't

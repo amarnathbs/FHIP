@@ -10,7 +10,7 @@ import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
-import { isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
+import { isDomesticRecord, isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -520,7 +520,12 @@ function buildCrossBorderFull(source: ReportSourceData): BuiltSection {
 function applicabilityNote(scenario: StressScenarioType, d: ReportSourceData['dashboard'], homeCountry: CountryCode | null): string | null {
   if (scenario === 'currency_shock') {
     if (!homeCountry) return 'Not applicable — no overseas investment holdings are currently recorded.';
-    const foreignInvestments = d.investmentByCountry.filter((c) => c.countryCode !== homeCountry).reduce((s, c) => s + c.value, 0);
+    // G6 Contract 4 — shared isDomesticRecord(); `!== true` preserves this
+    // file's exact original `!==` semantics (see resilienceStress.ts's own
+    // identical replacement for the full rationale).
+    const foreignInvestments = d.investmentByCountry
+      .filter((c) => isDomesticRecord(c.countryCode as CountryCode | null, homeCountry) !== true)
+      .reduce((s, c) => s + c.value, 0);
     if (foreignInvestments <= 0) return 'Not applicable — no overseas investment holdings are currently recorded.';
   }
   if (scenario === 'rental_vacancy' && d.rentalMonthlyIncome <= 0) {
