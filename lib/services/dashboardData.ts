@@ -183,7 +183,9 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       // Deliberately bounded to the most recent 12 months, not a scale-risk query.
       supabase
         .from('financial_snapshots')
-        .select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities')
+        // fx_rate_aud_inr/fx_rate_date added for G6 Contract 3 — read-side
+        // half of the FX-rate lineage; passed through SnapshotRow untouched.
+        .select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities, fx_rate_aud_inr, fx_rate_date')
         .eq('user_id', userId)
         .order('snapshot_month', { ascending: true })
         .limit(12),
@@ -315,6 +317,14 @@ export async function loadDashboard(userId: string, client?: SupabaseServerClien
       monthly_surplus: summary.monthlySurplus,
       savings_rate: summary.savingsRate,
       currency_code: currency,
+      // G6 Contract 3 (docs/country-programme/g6-data-contracts.md) — FX-rate
+      // lineage, populated at write-time only (never backfilled for
+      // historical rows — a pre-G6 snapshot legitimately has NULL here,
+      // meaning "rate unknown," never a retroactively-assumed value).
+      // fxRateAudInr is the exact same value already resolved by
+      // getFxRateAudInr() above and passed into computeDashboard().
+      fx_rate_aud_inr: fxRateAudInr,
+      fx_rate_date: new Date().toISOString().slice(0, 10),
     },
     { onConflict: 'user_id,snapshot_month' }
   );

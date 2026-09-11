@@ -133,6 +133,16 @@ export interface SnapshotRow {
   savings_rate: number | null;
   total_assets: number;
   total_liabilities: number;
+  // G6 Contract 3 (docs/country-programme/g6-data-contracts.md) — FX-rate
+  // lineage, optional/nullable so every pre-G6 historical row (and every
+  // existing caller/test fixture that doesn't select these two new
+  // columns) keeps compiling and behaving byte-for-byte identically.
+  // Passed through verbatim (this engine does no snapshot-trend
+  // calculation with them today) — a future currency-drift-aware trend UI
+  // can read them; NULL means "rate unknown," never a fabricated/assumed
+  // value.
+  fx_rate_aud_inr?: number | null;
+  fx_rate_date?: string | null;
 }
 
 export interface DashboardInput {
