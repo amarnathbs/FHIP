@@ -37,6 +37,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { inflateSync } from 'node:zlib';
 
 export interface AieUploadLimits {
   allowedMimeTypes: readonly string[];
@@ -80,10 +81,15 @@ export function isPdfLikelyPasswordProtected(bytes: Uint8Array, scanCapBytes: nu
  * QUA-03: "reject PDF JavaScript/launch actions/embedded executables/
  * disallowed attachments." A real PDF object-model parser is not built here
  * (out of scope for this pass — see module header); instead this scans for
- * the literal PDF dictionary-key tokens that declare those features. This
- * is a heuristic, not a guarantee (a sufficiently obfuscated/compressed
- * object stream could hide the literal token) — disclosed as such, matching
- * FDH-3's own "sufficient to answer X, nothing more" framing.
+ * the literal PDF dictionary-key tokens that declare those features,
+ * re-scanning any `/FlateDecode`-compressed stream's decompressed content
+ * too (see `scanFlateDecodeStreamsForDisallowedTokens` below — added after
+ * an AIE-1.6 certification pass demonstrated a FlateDecode-wrapped token
+ * evaded the original literal-only scan). This is still a heuristic, not a
+ * guarantee: a stream compressed with a DIFFERENT or CHAINED filter (LZW,
+ * ASCII85, RunLength, or several filters applied together) can still hide
+ * the literal token from both scans — disclosed as such, matching FDH-3's
+ * own "sufficient to answer X, nothing more" framing.
  */
 const DISALLOWED_PDF_TOKENS: { token: Buffer; label: string }[] = [
   { token: Buffer.from('/JavaScript', 'ascii'), label: 'embedded_javascript' },
@@ -92,6 +98,103 @@ const DISALLOWED_PDF_TOKENS: { token: Buffer; label: string }[] = [
   { token: Buffer.from('/EmbeddedFile', 'ascii'), label: 'embedded_file' },
   { token: Buffer.from('/OpenAction', 'ascii'), label: 'auto_open_action' },
 ];
+
+/**
+ * AIE-1.6 certification finding (see AIE_1_6_CERTIFICATION_REPORT.md
+ * section 5, "aie16CertificationAdversarialPdf.test.ts"): the literal-token
+ * scan above cannot see a token that has been deflate-compressed inside a
+ * standard PDF stream object — a completely unremarkable PDF feature, not
+ * an exotic attack. Certification CONSTRUCTED a `/JavaScript` action inside
+ * a `/Filter /FlateDecode` stream and confirmed it evaded detection
+ * entirely. This closes that specific, demonstrated gap: every stream
+ * object whose dictionary declares `/FlateDecode` is decompressed (best
+ * effort) and the same disallowed-token scan is re-run against its
+ * decompressed content.
+ *
+ * This remains a HEURISTIC, not a full PDF object-model parser (still
+ * disclosed as such) — it does not handle streams compressed with a
+ * DIFFERENT filter (LZW, ASCII85, RunLength, or a `/Filter` ARRAY chaining
+ * more than one, e.g. `[/ASCII85Decode /FlateDecode]`), and it locates
+ * stream/dictionary boundaries with a bounded literal-byte scan rather than
+ * a real tokenizer. A sufficiently adversarial combination of those
+ * remaining gaps could still evade it — this is one closed hole, not a
+ * claim of "solved." A real PDF-parsing library or a genuine anti-malware
+ * signature engine remains the only way to close this class of gap fully,
+ * and is still explicitly out of scope for this pass (see module header).
+ *
+ * Decompression-bomb guard: both the NUMBER of streams inspected and the
+ * TOTAL decompressed bytes scanned across the whole file are capped,
+ * independent of and in addition to the outer structuralScanCapBytes (which
+ * only bounds the RAW/compressed bytes read). A stream that would exceed
+ * the remaining decompressed-byte budget is flagged as suspicious in its
+ * own right (`oversized_compressed_stream`) rather than silently skipped —
+ * a compressed object that expands far past what genuine PDF content needs
+ * is itself an anomaly worth surfacing, not just an inconvenience to scan
+ * around.
+ */
+const STREAM_KEYWORD = Buffer.from('stream', 'ascii');
+const ENDSTREAM_KEYWORD = Buffer.from('endstream', 'ascii');
+const FLATE_DECODE_TOKEN = Buffer.from('/FlateDecode', 'ascii');
+const STREAM_DICT_LOOKBACK_BYTES = 2000; // bounded window to find this stream's own dictionary
+const MAX_FLATE_STREAMS_SCANNED = 200; // bounds parse time on a pathological object count
+const MAX_DECOMPRESSED_SCAN_BYTES = 20 * 1024 * 1024; // bounds total decompression work/memory
+
+function scanFlateDecodeStreamsForDisallowedTokens(buf: Buffer): string[] {
+  const reasons = new Set<string>();
+  let searchFrom = 0;
+  let streamsScanned = 0;
+  let decompressedBytesUsed = 0;
+
+  while (streamsScanned < MAX_FLATE_STREAMS_SCANNED) {
+    const streamKeywordIndex = buf.indexOf(STREAM_KEYWORD, searchFrom);
+    if (streamKeywordIndex === -1) break;
+
+    const endIndex = buf.indexOf(ENDSTREAM_KEYWORD, streamKeywordIndex + STREAM_KEYWORD.length);
+    if (endIndex === -1) break; // malformed/truncated tail — nothing more to scan
+
+    const dictLookbackStart = Math.max(0, streamKeywordIndex - STREAM_DICT_LOOKBACK_BYTES);
+    const isFlateDecode = buf.subarray(dictLookbackStart, streamKeywordIndex).includes(FLATE_DECODE_TOKEN);
+
+    if (isFlateDecode) {
+      // The PDF spec requires an EOL (CR, LF, or CRLF) immediately after the
+      // `stream` keyword before the raw stream data begins.
+      let rawStart = streamKeywordIndex + STREAM_KEYWORD.length;
+      if (buf[rawStart] === 0x0d) rawStart++;
+      if (buf[rawStart] === 0x0a) rawStart++;
+      const rawBytes = buf.subarray(rawStart, endIndex);
+
+      const remainingBudget = MAX_DECOMPRESSED_SCAN_BYTES - decompressedBytesUsed;
+      if (remainingBudget <= 0) {
+        reasons.add('oversized_compressed_stream');
+      } else {
+        try {
+          const decompressed = inflateSync(rawBytes, { maxOutputLength: remainingBudget });
+          decompressedBytesUsed += decompressed.length;
+          for (const { token, label } of DISALLOWED_PDF_TOKENS) {
+            if (decompressed.includes(token)) reasons.add(label);
+          }
+        } catch (err) {
+          // ERR_BUFFER_TOO_LARGE means this one stream alone would exceed
+          // the remaining decompression budget — flag it explicitly rather
+          // than silently skipping, per this function's own header.
+          // Any OTHER zlib error (corrupt data, a different/layered filter
+          // this heuristic doesn't attempt to unwrap, a truncated stream)
+          // is not itself evidence of anything — this is a best-effort
+          // heuristic scan, not a full parser, matching this module's own
+          // disclosed "heuristic, not a guarantee" framing throughout.
+          if ((err as NodeJS.ErrnoException)?.code === 'ERR_BUFFER_TOO_LARGE') {
+            reasons.add('oversized_compressed_stream');
+          }
+        }
+      }
+    }
+
+    streamsScanned++;
+    searchFrom = endIndex + ENDSTREAM_KEYWORD.length;
+  }
+
+  return Array.from(reasons);
+}
 
 export interface PdfStructuralScanResult {
   suspicious: boolean;
@@ -106,6 +209,9 @@ export function scanPdfStructure(bytes: Uint8Array, scanCapBytes: number): PdfSt
   const reasons: string[] = [];
   for (const { token, label } of DISALLOWED_PDF_TOKENS) {
     if (buf.includes(token) && !reasons.includes(label)) reasons.push(label);
+  }
+  for (const label of scanFlateDecodeStreamsForDisallowedTokens(buf)) {
+    if (!reasons.includes(label)) reasons.push(label);
   }
 
   // Trailing-content-after-%%EOF check runs over the FULL file (bounded to a
