@@ -41,6 +41,18 @@ export async function POST(req: Request) {
     return bad('COUNTRY_NOT_SELECTABLE', 422);
   }
 
+  // G6 Contract 8 (docs/country-programme/g6-data-contracts.md) — this used
+  // to be a hardcoded `true` literal, never actually checked. Real count
+  // query against the same table G1's cross-border-relationships routes
+  // read/write; a primary-country change never touches these rows (they are
+  // independent, user-declared, non-authoritative facts), so this is purely
+  // informational for the preview screen, not a gate.
+  const { count: activeCrossBorderCount } = await supabase
+    .from('cross_border_relationships')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('status', 'ACTIVE');
+
   const currentPrimary = profile.primary_country ?? profile.country_of_residence;
   const { data: currentCountry } = currentPrimary
     ? await supabase.from('countries').select('experience_level, default_currency_code').eq('country_code', currentPrimary).maybeSingle()
@@ -99,7 +111,12 @@ export async function POST(req: Request) {
     modules_losing_capability: lostCapabilities,
     residence_country_unaffected: true,
     historical_data_preserved: true,
-    cross_border_relationships_retained: true,
+    // G6 Contract 8 — deliberate breaking rename from the old
+    // `cross_border_relationships_retained: true` literal (never actually
+    // checked). No known UI consumer of the old field name exists yet (this
+    // preview endpoint has no wired-up frontend caller in this codebase
+    // today — verified by search), so there is nothing else to update.
+    active_cross_border_relationships_count: activeCrossBorderCount ?? 0,
     warnings: [
       'This changes only your primary application experience and, where applicable, your reporting currency default.',
       'Your confirmed country of residence and existing financial records are never changed by this action.',
