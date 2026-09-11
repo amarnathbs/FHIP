@@ -47,7 +47,12 @@ const PAGE_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   retirement: 'RETIREMENT', // SMSF is a section within this page, not a separate route folder
   score: 'SCORES',
 };
-const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup']);
+// AIE-1.5: 'aie-review' is the shared, cross-module document review/
+// acceptance UI (lib/aie/review/**, app/api/aie/review/**) — explicitly
+// cross-cutting infrastructure, not owned by one financial module, matching
+// the identical reasoning AIE-1.1 already established for 'aie' in
+// API_FOLDER_INFRA_ALLOWLIST below.
+const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup', 'aie-review']);
 
 // app/api/** top-level folders -> ModuleKey, OR the infra allowlist below for
 // folders that are genuinely cross-cutting/shared infrastructure rather than
