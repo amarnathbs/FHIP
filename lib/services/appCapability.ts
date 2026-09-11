@@ -678,6 +678,17 @@ export async function requireModuleCapability(
     /** Override the HTTP-method-based operation default — see
      * defaultOperationForMethod()'s doc comment for when this is required. */
     operation?: CapabilityOperation;
+    /**
+     * G6 Contract 7 (docs/country-programme/g6-data-contracts.md) — set
+     * true ONLY for a module whose pre-G4 gate already allowed GENERIC
+     * users (e.g. CROSS_BORDER, a G3 decision layered under/before G4
+     * existed at all). The G4-off fallback below otherwise always uses the
+     * strict, non-generic-allowing gate — correct for every module that was
+     * never generic-accessible pre-G4 (Income/Expenses/Insurance), but a
+     * real regression for one that was. Every existing caller omits this
+     * (default false), so this option changes zero existing behaviour.
+     */
+    allowGenericWhenG4Off?: boolean;
   } = {}
 ): Promise<{ user: { id: string } | null; blocked: Response | null; decision: CapabilityDecision | null }> {
   const supabase = await createClient();
@@ -687,7 +698,9 @@ export async function requireModuleCapability(
   if (!user) return { user: null, blocked: bad('unauthenticated', 401), decision: null };
 
   if (!isG4CapabilityLayerEnabled()) {
-    const block = await countryConfirmationBlockResponse(supabase, user.id);
+    const block = await countryConfirmationBlockResponse(supabase, user.id, {
+      allowGenericExperience: options.allowGenericWhenG4Off === true,
+    });
     if (block) return { user: null, blocked: block, decision: null };
     return { user, blocked: null, decision: 'ENABLED' };
   }

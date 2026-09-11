@@ -3,13 +3,21 @@
 // only input validation and the MCC gate, matching the existing pattern of
 // every other catalogue-adjacent route in this app.
 import { z } from 'zod';
-// G3 section 9/10: a GENERIC-experience user (GB/US/SG/AE) may DECLARE
-// cross-border relationships — that is one of the few things G3 explicitly
-// permits them before G4 — so this route uses the allowing-generic guard.
-// The declaration remains non-authoritative: it never changes residence,
+import { ok, bad } from '@/lib/api';
+// G6 Contract 7 (docs/country-programme/g6-data-contracts.md) — migrated
+// off the direct generic-allowing gate this route used to import from
+// lib/api.ts, onto the G4 capability resolver, closing the "CROSS_BORDER
+// capability defined
+// but never actually consulted" gap G6 discovery found. `allowGenericWhenG4Off:
+// true` preserves this route's own G3-era behaviour byte-for-byte while the
+// G4 flag stays off (current production state) — a GENERIC-experience user
+// (GB/US/SG/AE) may DECLARE cross-border relationships, one of the few
+// things G3 explicitly permits them before G4 exists at all. The
+// declaration remains non-authoritative: it never changes residence,
 // primary country, billing country or currency, and no cross-border
-// CALCULATION is performed anywhere in G3 (that is G6).
-import { requireCountryConfirmedUserAllowingGeneric as requireUser, ok, bad } from '@/lib/api';
+// CALCULATION is performed anywhere here (that is G6's own reconciliation
+// question, still open — see g6-data-contracts.md's own scope notes).
+import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
 
 const RELATIONSHIP_TYPES = ['ASSET', 'INVESTMENT', 'PROPERTY', 'INCOME', 'LIABILITY', 'RETIREMENT', 'TAX', 'OTHER'] as const;
@@ -20,9 +28,9 @@ const createSchema = z.object({
   effective_date: z.string().date().optional(),
 });
 
-export async function GET() {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+export async function GET(request: Request) {
+  const { user, blocked } = await requireModuleCapability('CROSS_BORDER', request, { allowGenericWhenG4Off: true });
+  if (!user) return blocked!;
 
   const supabase = await createClient();
   // No .eq('user_id', ...) filter needed for correctness (RLS already scopes
@@ -38,8 +46,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  const { user, blocked } = await requireModuleCapability('CROSS_BORDER', req, { allowGenericWhenG4Off: true });
+  if (!user) return blocked!;
 
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return bad('INVALID_REQUEST', 422);

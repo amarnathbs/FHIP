@@ -571,7 +571,7 @@ describe('G3 — the generic API opt-in is used by exactly the reasoned-about ro
     return out;
   }
 
-  it('only six route files opt out of the generic block directly (requireCountryConfirmedUserAllowingGeneric) — the four G3 originally authorised, plus two G4 closure additions', () => {
+  it('only four route files opt out of the generic block directly (requireCountryConfirmedUserAllowingGeneric) — the two remaining G3 originals, plus two G4 closure additions (cross-border-relationships migrated onto requireModuleCapability under G6 Contract 7, see below)', () => {
     const routes = walk(join(process.cwd(), 'app', 'api'));
     const optedIn = routes
       .filter((f) => readFileSync(f, 'utf8').includes('requireCountryConfirmedUserAllowingGeneric'))
@@ -596,12 +596,20 @@ describe('G3 — the generic API opt-in is used by exactly the reasoned-about ro
     // here, not to freeze the list at G3's count forever.
     expect(optedIn).toEqual([
       '/app/api/master-items/route.ts',
-      '/app/api/user/cross-border-relationships/[id]/route.ts',
-      '/app/api/user/cross-border-relationships/route.ts',
       '/app/api/user/primary-country/confirm/route.ts',
       '/app/api/user/primary-country/preview/route.ts',
       '/app/api/user/section-status/route.ts',
     ]);
+  });
+
+  it('cross-border-relationships (both route files) now opt generic experience in via requireModuleCapability\'s allowGenericWhenG4Off, not the direct gate — G6 Contract 7\'s own migration, re-asserted here so this guard keeps covering both mechanisms rather than silently losing coverage when a route migrates from one to the other', () => {
+    const routes = walk(join(process.cwd(), 'app', 'api', 'user', 'cross-border-relationships'));
+    for (const f of routes) {
+      const src = readFileSync(f, 'utf8');
+      expect(src).toContain("requireModuleCapability('CROSS_BORDER'");
+      expect(src).toContain('allowGenericWhenG4Off: true');
+      expect(src).not.toContain('requireCountryConfirmedUserAllowingGeneric');
+    }
   });
 
   it('no financial, report, admin or billing route opts in', () => {
