@@ -1,4 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
+import { convertToReportingCurrency, type SupportedCurrency } from '@/lib/engines/fx';
+
+// See lib/engines/dashboard.ts / businessEntityValuation.ts's identical
+// local copy — a row/linked-record currency this app doesn't recognise (or
+// doesn't have) is assumed to already be in the goal's own currency, same
+// fail-safe convention used everywhere else currency conversion happens.
+function toSupportedCurrency(code: string | null | undefined): SupportedCurrency | null {
+  return code === 'AUD' || code === 'INR' ? code : null;
+}
 
 export interface FundingSourceCandidate {
   linkedAssetId?: string | null;
@@ -244,22 +253,53 @@ export interface LiveLinkedFundingSource {
   allocationPercentage: number | null;
   allocatedAmount: number;
 }
+// G6 Contract 6 (docs/country-programme/g6-data-contracts.md) — a linked
+// record's current value now carries its own currency_code, so a
+// percentage-based funding source linked to a record in a DIFFERENT
+// currency from the goal's own is converted before the percentage is
+// applied. Was Map<string, number> (bare current value, implicitly assumed
+// to already be in the goal's currency — the pre-Contract-6 defect for a
+// cross-currency link).
+export interface LiveLinkedCurrentValue {
+  value: number;
+  currencyCode: string | null;
+}
 export function computeLiveLinkedFundingValue(
   fundingSources: LiveLinkedFundingSource[],
-  currentValueById: Map<string, number>
+  currentValueById: Map<string, LiveLinkedCurrentValue>,
+  // Both optional and defaulted so every pre-Contract-6 caller/test fixture
+  // keeps compiling and behaves byte-for-byte identically for the
+  // overwhelmingly common single-currency case (goalCurrencyCode
+  // unresolvable or absent -> toSupportedCurrency(null) -> no-op passthrough
+  // in convertToReportingCurrency, since a null local currency also fails
+  // the guard and returns the raw amount unchanged).
+  goalCurrencyCode?: string | null,
+  fxRateAudInr?: number
 ): number {
   let total = 0;
+  const goalCurrency = toSupportedCurrency(goalCurrencyCode);
   for (const source of fundingSources) {
     if (!['investment', 'asset', 'retirement'].includes(source.sourceType)) continue; // manual/cash/expected carry no live-value signal
     const linkedId = source.linkedInvestmentId ?? source.linkedAssetId ?? source.linkedRetirementId ?? null;
     if (!linkedId) continue;
     if (source.allocationPercentage !== null && source.allocationPercentage !== undefined) {
       // Percentage-based: recompute live against the linked record's current value (spec s.33).
-      const currentValue = currentValueById.get(linkedId) ?? 0;
+      const linked = currentValueById.get(linkedId) ?? { value: 0, currencyCode: null };
+      const linkedCurrency = toSupportedCurrency(linked.currencyCode);
+      // Only convert when BOTH sides resolve to a real, known currency and
+      // fxRateAudInr was actually supplied — otherwise leave the raw value
+      // untouched exactly as before Contract 6 (never guess an fx rate).
+      const currentValue =
+        linkedCurrency && goalCurrency && typeof fxRateAudInr === 'number'
+          ? convertToReportingCurrency(linked.value, linkedCurrency, goalCurrency, fxRateAudInr)
+          : linked.value;
       total += currentValue * (source.allocationPercentage / 100);
     } else {
       // Fixed-amount: a committed dollar figure independent of the linked balance's
-      // later movement (spec s.44's fixed-allocation semantics) — use the stored value.
+      // later movement (spec s.44's fixed-allocation semantics) — use the stored
+      // value, NEVER converted: it is already denominated in the goal's own
+      // currency (the user entered it directly), unlike the percentage case
+      // above which reads a foreign-currency-denominated live balance.
       total += source.allocatedAmount;
     }
   }

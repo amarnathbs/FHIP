@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
-import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadDashboard, getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { buildResilienceInput } from '@/lib/services/resilienceData';
 import { computeResilience } from '@/lib/engines/resilience';
 import { computeGoalAffordability, type AffordabilityResult } from '@/lib/engines/goalAffordability';
@@ -9,6 +9,7 @@ import {
   computeLiveLinkedFundingValue,
   type AllocatedContributionInvestment,
   type AllocatedContributionRetirementAccount,
+  type LiveLinkedCurrentValue,
 } from '@/lib/services/goalFundingAllocation';
 import {
   computeAllScenarios,
@@ -286,7 +287,7 @@ export async function loadLinkedContributionSources(
 ): Promise<{
   investmentsById: Map<string, AllocatedContributionInvestment>;
   retirementAccountsById: Map<string, AllocatedContributionRetirementAccount>;
-  currentValueById: Map<string, number>;
+  currentValueById: Map<string, LiveLinkedCurrentValue>;
 }> {
   const assetIds = new Set<string>();
   const investmentIds = new Set<string>();
@@ -300,27 +301,31 @@ export async function loadLinkedContributionSources(
   }
   const investmentsById = new Map<string, AllocatedContributionInvestment>();
   const retirementAccountsById = new Map<string, AllocatedContributionRetirementAccount>();
-  const currentValueById = new Map<string, number>();
+  // G6 Contract 6 (docs/country-programme/g6-data-contracts.md) — each
+  // linked record's own currency_code travels alongside its current value,
+  // so computeLiveLinkedFundingValue() can convert a percentage-based
+  // source into the goal's own currency instead of assuming they match.
+  const currentValueById = new Map<string, LiveLinkedCurrentValue>();
   if (assetIds.size > 0) {
-    const { data } = await client.from('assets').select('id, current_value').eq('user_id', userId).eq('is_active', true).in('id', Array.from(assetIds));
-    for (const row of data ?? []) currentValueById.set(row.id as string, Number(row.current_value ?? 0));
+    const { data } = await client.from('assets').select('id, current_value, currency_code').eq('user_id', userId).eq('is_active', true).in('id', Array.from(assetIds));
+    for (const row of data ?? []) currentValueById.set(row.id as string, { value: Number(row.current_value ?? 0), currencyCode: (row.currency_code as string) ?? null });
   }
   if (investmentIds.size > 0) {
     const { data } = await client
       .from('investments')
-      .select('id, annual_contribution, current_value')
+      .select('id, annual_contribution, current_value, currency_code')
       .eq('user_id', userId)
       .eq('is_active', true)
       .in('id', Array.from(investmentIds));
     for (const row of data ?? []) {
       investmentsById.set(row.id as string, { annualContribution: (row.annual_contribution as number) ?? null });
-      currentValueById.set(row.id as string, Number(row.current_value ?? 0));
+      currentValueById.set(row.id as string, { value: Number(row.current_value ?? 0), currencyCode: (row.currency_code as string) ?? null });
     }
   }
   if (retirementIds.size > 0) {
     const { data } = await client
       .from('retirement_accounts')
-      .select('id, employer_contribution, personal_contribution, contribution_frequency, current_balance')
+      .select('id, employer_contribution, personal_contribution, contribution_frequency, current_balance, currency_code')
       .eq('user_id', userId)
       .eq('is_active', true)
       .in('id', Array.from(retirementIds));
@@ -330,7 +335,7 @@ export async function loadLinkedContributionSources(
         personalContribution: (row.personal_contribution as number) ?? null,
         contributionFrequency: (row.contribution_frequency as string) ?? null,
       });
-      currentValueById.set(row.id as string, Number(row.current_balance ?? 0));
+      currentValueById.set(row.id as string, { value: Number(row.current_balance ?? 0), currencyCode: (row.currency_code as string) ?? null });
     }
   }
   return { investmentsById, retirementAccountsById, currentValueById };
@@ -347,12 +352,14 @@ export interface SingleGoalForecastInputs {
 // what-if scenario endpoint (never persisted, mirrors lib/engines/whatIf.ts).
 export async function buildGoalForecastInputs(userId: string, goalId: string): Promise<SingleGoalForecastInputs | null> {
   const supabase = await createClient();
-  const [goalRes, config, goalTypes, dashboard, profileRes] = await Promise.all([
+  const [goalRes, config, goalTypes, dashboard, profileRes, fxRateAudInr] = await Promise.all([
     supabase.from('user_goals').select('*').eq('id', goalId).eq('user_id', userId).single(),
     loadGoalPlanningConfig(),
     loadGoalTypes(),
     loadDashboard(userId),
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
+    // G6 Contract 6 — for computeLiveLinkedFundingValue()'s cross-currency conversion below.
+    getFxRateAudInr(supabase),
   ]);
   if (goalRes.error || !goalRes.data) return null;
 
@@ -385,7 +392,9 @@ export async function buildGoalForecastInputs(userId: string, goalId: string): P
       allocationPercentage: s.allocation_percentage,
       allocatedAmount: s.allocated_amount,
     })),
-    currentValueById
+    currentValueById,
+    row.currency_code as string | null | undefined,
+    fxRateAudInr
   );
 
   return { goalRecord: toGoalRecord(row, allocatedMonthlyContribution, liveLinkedFundingValue), extras, config, allocatedMonthlyContribution };
@@ -403,7 +412,7 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
 }> {
   const supabase = client ?? (await createClient());
 
-  const [goalsRes, config, goalTypes, dashboard, resilienceInput, profileRes] = await Promise.all([
+  const [goalsRes, config, goalTypes, dashboard, resilienceInput, profileRes, fxRateAudInr] = await Promise.all([
     supabase
       .from('user_goals')
       .select('*')
@@ -414,6 +423,8 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
     loadDashboard(userId, supabase),
     buildResilienceInput(userId, supabase),
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
+    // G6 Contract 6 — for computeLiveLinkedFundingValue()'s cross-currency conversion below.
+    getFxRateAudInr(supabase),
   ]);
 
   const reportingCurrency = (profileRes.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
@@ -460,7 +471,9 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
         allocationPercentage: s.allocation_percentage,
         allocatedAmount: s.allocated_amount,
       })),
-      currentValueById
+      currentValueById,
+      row.currency_code as string | null | undefined,
+      fxRateAudInr
     );
     const goalRecord = toGoalRecord(row, allocatedMonthlyContribution, liveLinkedFundingValue);
     const extras = await buildExtrasForGoal(userId, row, dashboard.essentialMonthlyExpenses, reportingCurrency, supabase);

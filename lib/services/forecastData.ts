@@ -792,7 +792,14 @@ async function buildCalculatorInput(
             allocationPercentage: s.allocation_percentage,
             allocatedAmount: s.allocated_amount,
           })),
-          currentValueById
+          currentValueById,
+          // G6 Contract 6 — same conversion goalsData.ts's own callers now
+          // get, so this forecast branch and the Goal detail page's own
+          // figure (LR-7 WP-11's whole point: "the two surfaces can only
+          // drift if the shared function itself changes") stay identical
+          // for a cross-currency-linked funding source too.
+          g.currency_code,
+          getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56)
         );
         return {
           id: g.id,
@@ -1412,7 +1419,9 @@ async function getCurrentActualValue(
     // value, matching the Goal detail page's own established figure, so
     // this variance tracker's "actual" position isn't understated relative
     // to what the user already sees for the same goals.
-    const { data: goals } = await supabase.from('user_goals').select('id, current_amount, target_amount').eq('user_id', userId).eq('status', 'active');
+    // currency_code added for G6 Contract 6 — needed by
+    // computeLiveLinkedFundingValue()'s cross-currency conversion below.
+    const { data: goals } = await supabase.from('user_goals').select('id, current_amount, target_amount, currency_code').eq('user_id', userId).eq('status', 'active');
     const goalIds = (goals ?? []).map((g) => g.id as string);
     const fundingSourcesByGoal = new Map<string, GoalFundingSourceRow[]>();
     if (goalIds.length > 0) {
@@ -1440,7 +1449,10 @@ async function getCurrentActualValue(
           allocationPercentage: s.allocation_percentage,
           allocatedAmount: s.allocated_amount,
         })),
-        currentValueById
+        currentValueById,
+        // G6 Contract 6 — same rationale as buildCalculatorInput's 'goal' branch above.
+        g.currency_code,
+        getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56)
       );
       return sum + (g.current_amount ?? 0) + liveLinkedFundingValue;
     }, 0);
