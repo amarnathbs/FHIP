@@ -2,7 +2,45 @@
 
 **Branch:** `integration/aie-1-release-candidate` (merged release candidate; individual phase branches listed per-phase below)
 **Report date:** 2026-09-12
-**Status at a glance:** All 6 phases implemented, tested, merged into one integration branch, and live-DEV verified across two passes. **No production authority has been granted at any point in this programme** — every phase document says so explicitly, and this report restates it. One real defect (migration `0146`) was found live, fixed, and — per the user's message earlier this session — has now been applied to DEV; re-verification of the one journey it affects has not yet been re-run.
+
+## Executive Summary
+
+**AIE-1 integrated release candidate — CONDITIONAL PASS.** All phase branches are merged into `integration/aie-1-release-candidate`, but not into `main`. Production application functionality remains disabled and unauthorised.
+
+| Phase | Current status | What is complete | Material remaining work |
+|---|---|---|---|
+| AIE-1.1 Shared Gateway | CONDITIONAL PASS | Shared AIE schema, RLS, intake, structural PDF validation, extraction, masking, schema registry, gateway, orchestration and unresolved-item foundation | Real malware scanner absent; retention/purge job absent; only mock AI provider tested; final production build evidence requires closure |
+| AIE-1.2 Investment Adapter | CONDITIONAL PASS | Adapter implemented and merged; centralized acceptance dispatch fixed; canonical write delegates to existing II processing | Limited certified scope; only CAMS CAS has dedicated fixture; no live II canonical-write proof; masked-AI fallback not exercised; broader broker/non-Indian formats deferred |
+| AIE-1.3 FDH Bank Adapter | CONDITIONAL PASS | Existing FDH PDF pipeline wrapped; centralized commit route and idempotency guard completed; migration 0145 added | No full live-DEV bank-statement corpus run; scanned/OCR and password-protected statements deferred; bank coverage remains limited to existing certified formats |
+| AIE-1.4 Other Modules | CONDITIONAL PASS | Insurance adapter implemented and merged; parser-registration defect fixed; real DEV extraction, correction and canonical-write path substantially exercised | Post-0146 completion/idempotency rerun still required; no exact real-insurer layout certification; eight other candidate document classes remain deferred or prohibited |
+| AIE-1.5 Review & Acceptance | CONDITIONAL PASS | Shared review backend/UI, typed corrections, revalidation, evidence reveal, acceptance gates and adapter dispatch implemented | PC5 integration not implemented; no bulk review; no post-acceptance undo workflow; accessibility tooling/manual certification incomplete; II/FDH review journeys not fully live-certified |
+| AIE-1.6 Certification | CONDITIONAL PASS — NO PRODUCTION GO | Independent review caught genuine defects; compressed-PDF bypass fixed; integration defects found and fixed; production-certification plan prepared | Must rerun terminal certification after all remaining blockers close; real provider, retention, malware, accessibility, PC5 and controlled-rollout evidence remain missing |
+
+**Note on these labels**: only AIE-1.6 is the actual certifying pass with authority to issue a verdict, and its own verdict was narrower and more qualified at the time it ran ("CONDITIONAL PASS for 1.1+Insurance(1.4)+review-UX(1.5) on real re-executed evidence; 1.2/1.3 paper-reviewed only, not runtime-verified" — see §6). The real merge (§8) subsequently exercised 1.2/1.3 together with everything else, narrowing that original gap considerably. The table above is a synthesis of where things stand today, not a re-run of AIE-1.6's own formal certification process per phase.
+
+### Migration and deployment position
+
+| Migration | Environment status |
+|---|---|
+| 0140–0145 | Applied to DEV and production |
+| 0146 | Applied to DEV only |
+| AIE application branch | Not merged to `main` |
+| Production AIE flags | Not authorised for activation |
+| Production application functionality | Inactive |
+| Real production AIE documents | Not authorised |
+
+Although 0140–0145 are present in production, they are currently dormant additive schema because the integration release candidate has not been merged into deployed `main`.
+
+### Overall completion assessment
+
+At an engineering implementation level, the six phases are substantially advanced. At a strict phase-certification level:
+
+- **FULL PASS: 0 of 6**
+- **CONDITIONAL PASS: 6 of 6**
+- **Production GO: No**
+- **Production authority: Not granted**
+
+The full phase-by-phase detail, the real merge and its follow-up fixes, both live-DEV passes, and the honest outstanding-items list all follow below unchanged.
 
 ---
 
