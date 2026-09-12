@@ -14,7 +14,28 @@ import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
 
 import { isAieInsuranceAdapterEnabled } from '@/lib/aie/adapters/insurance/featureFlags';
 import { buildInsuranceReconciliationRule } from '@/lib/aie/adapters/insurance/reconciliation';
-import '@/lib/aie/adapters/insurance'; // side-effecting registration (parser + AI-fallback schema)
+import { registerInsuranceAdapter } from '@/lib/aie/adapters/insurance';
+
+// LIVE-DEV VERIFICATION FIX (2026-09-12, AIE_1_LIVE_DEV_VERIFICATION_REPORT.md
+// pass 2): this used to be a bare `import '@/lib/aie/adapters/insurance';`
+// with a comment claiming "side-effecting registration (parser + AI-fallback
+// schema)". That claim was FALSE — `lib/aie/adapters/insurance/index.ts`'s
+// own header is explicit that "nothing else in this module has side effects
+// at import time" and registration only happens via an explicit
+// `registerInsuranceAdapter()` call, which every AIE-1.4/1.5 unit test makes
+// in its own `beforeAll` but which no application code ever made. The
+// defect was invisible to every existing test (each one calls
+// `registerInsuranceAdapter()` itself) and only surfaced when this document
+// was driven through the real running route against real DEV infrastructure:
+// `sniffDocument()` returned `none_matched` for a genuine insurance-shaped
+// document, so the deterministic parser never ran, zero field candidates
+// were ever produced, and the run could never reach `awaiting_acceptance`.
+// Calling the real registration function here (once, at module load, exactly
+// the "API route module" call site its own doc comment already anticipated)
+// fixes it for real; the previous bare import is removed rather than kept
+// alongside it, since a no-op import left in place would silently invite the
+// same false "this line already does the job" reading again.
+registerInsuranceAdapter();
 
 // A single project-wide mock provider instance — genuinely no external AI
 // provider traffic occurs anywhere in this route (matches the generic
