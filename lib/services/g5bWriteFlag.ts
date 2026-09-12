@@ -17,6 +17,21 @@
 // (never NEXT_PUBLIC_*), default OFF, fails to the safer legacy behaviour on
 // any misconfiguration (unset, empty, or any value other than the exact
 // string 'true'), plus a deterministic test override seam.
+//
+// G8.056 — ROLLBACK ASYMMETRY, DISCLOSED HERE SO A FUTURE OPERATOR'S RUNBOOK
+// CANNOT ASSUME "FLIP THIS OFF" IS SUFFICIENT: this flag ONLY controls
+// whether FHIP's own Next.js API routes are willing to construct a
+// GENERIC-write request. It has NO effect on the separate, independently-
+// controlled DATABASE-layer grant (migration 0129's is_write_permitted() /
+// mcc_generic_write_capabilities) — Postgres cannot read a Node.js
+// process.env value. The instant migration 0129 is applied to an
+// environment, GENERIC-user writes to Income/Expenses/Insurance become
+// permanently, unconditionally permitted at the database layer, independent
+// of this flag's state, for ANY client authenticated as that user —
+// including a direct PostgREST call outside this app entirely. Setting this
+// env var back to 'false' does NOT revoke that grant; only migration 0129's
+// own commented-out manual rollback SQL block does. See that migration's
+// header for the actual kill-switch procedure.
 const ENV_VAR_NAME = 'G5B_GENERIC_WRITE_ENABLED';
 
 let testOverride: boolean | undefined;

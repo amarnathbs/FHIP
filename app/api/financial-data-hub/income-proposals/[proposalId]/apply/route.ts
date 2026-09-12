@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
+import { bad, ok } from '@/lib/api';
+import { requireModuleCapability } from '@/lib/services/appCapability';
 import { applyIncomeProposalAtomic } from '@/lib/import-bridge/applyIncomeProposalAtomic';
 import { USER_APPLY_DECISIONS } from '@/lib/import-bridge/types';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
@@ -20,8 +21,14 @@ const bodySchema = z.object({
 // (of the ones the SERVER's own proposal already offered) are selected.
 export async function POST(req: Request, { params }: { params: Promise<{ proposalId: string }> }) {
   const { proposalId } = await params;
-  const { user, unauthenticated } = await requireUser();
-  if (!user) return unauthenticated!;
+  // G8.056 fix: this route had drifted onto the pre-G4 requireCountryConfirmedUser()
+  // gate while its sibling manual-entry route (app/api/income/route.ts) was
+  // already migrated onto the manifest-driven requireModuleCapability()
+  // resolver — meaning G5B's GENERIC-write enablement for Income never
+  // actually reached this FDH-derived apply path, contrary to what enabling
+  // the flag implicitly claims. Same call-site-level change as the sibling.
+  const { user, blocked } = await requireModuleCapability('INCOME', req);
+  if (!user) return blocked!;
 
   const rawBody = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(rawBody);

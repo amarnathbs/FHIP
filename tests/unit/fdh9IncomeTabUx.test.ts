@@ -37,6 +37,30 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, requireUser: () => requireUserMock(), requireCountryConfirmedUser: () => requireUserMock() };
 });
 
+// G8.056: income-proposals/apply/route.ts was migrated onto the manifest-
+// driven requireModuleCapability() resolver (same fix as the sibling manual-
+// entry route). Unlike requireCountryConfirmedUser() above, that resolver
+// unconditionally constructs a real Supabase server client (real
+// next/headers cookies()) before this test file's harness ever gets a
+// chance to intervene — this file's own header explains why it otherwise
+// avoids a general Supabase mock (every OTHER route here returns before
+// touching one). Rather than introduce that general mock just for this one
+// route, requireModuleCapability itself is mocked here, delegating to the
+// SAME requireUserMock control variable the rest of this file already uses
+// so every existing `requireUserMock.mockResolvedValue(...)` call keeps
+// working unchanged — only the field name differs (`blocked`, not
+// `unauthenticated`), matching requireModuleCapability's real return shape.
+vi.mock('@/lib/services/appCapability', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/services/appCapability')>('@/lib/services/appCapability');
+  return {
+    ...actual,
+    requireModuleCapability: async () => {
+      const { user, unauthenticated } = await requireUserMock();
+      return { user, blocked: unauthenticated };
+    },
+  };
+});
+
 import {
   errorCodeForPdfExtractionFailure,
   errorCodeForPayslipParseFailure,

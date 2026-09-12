@@ -359,6 +359,10 @@ export function OnboardingWizard() {
                       next === 'IN' ? 'INR' : next === 'AU' ? 'AUD' : '',
                   });
                 }}
+                required
+                aria-required="true"
+                aria-invalid={!!fieldErrors.country_of_residence}
+                aria-describedby={fieldErrors.country_of_residence ? 'country_of_residence_error' : 'country_of_residence_help'}
                 className="mt-1 w-full rounded border border-line px-3 py-2"
               >
                 <option value="">Select a country…</option>
@@ -368,12 +372,12 @@ export function OnboardingWizard() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">
+              <p id="country_of_residence_help" className="mt-1 text-xs text-gray-500">
                 The country you currently live in. You will be asked to confirm this explicitly before you can
                 continue.
               </p>
               {fieldErrors.country_of_residence && (
-                <p role="alert" className="mt-1 text-xs text-risk">
+                <p id="country_of_residence_error" role="alert" className="mt-1 text-xs text-risk">
                   {fieldErrors.country_of_residence}
                 </p>
               )}

@@ -60,6 +60,12 @@ export interface ReportRow {
   version_number: number;
   revises_report_id: string | null;
   reporting_currency: string;
+  // migration 0010's own column, real since before G7 Contract 1 — this
+  // interface simply never declared it, discovered by tsc while writing
+  // tests/live-dev/g7LiveDevReportCertification.test.ts. `country_scope` is
+  // `text not null default 'household'`, so it is always a real string on
+  // every row, never null/undefined.
+  country_scope: string;
   data_completeness_pct: number | null;
   generated_at: string | null;
   published_at: string | null;

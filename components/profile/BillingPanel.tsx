@@ -151,7 +151,7 @@ export function BillingPanel() {
         <label htmlFor="billing-country-select" className="block text-xs font-medium text-muted">
           Billing country
         </label>
-        <p className="mt-1 text-xs text-muted">
+        <p id="billing-country-helper" className="mt-1 text-xs text-muted">
           Determines which currency and payment provider are used for any subscription. This is separate from your
           country of residence.
         </p>
@@ -161,6 +161,8 @@ export function BillingPanel() {
             value={countrySelection}
             onChange={(e) => setCountrySelection(e.target.value as CountryCode)}
             disabled={countryBusy}
+            aria-invalid={!!countryError}
+            aria-describedby={countryError ? 'billing-country-error' : 'billing-country-helper'}
             className="rounded border px-3 py-2 text-sm"
           >
             {REGISTRATION_COUNTRY_OPTIONS.map((o) => (
@@ -178,14 +180,21 @@ export function BillingPanel() {
             {countryBusy ? 'Saving…' : status.billingConfirmed && status.billingCountry === countrySelection ? 'Confirmed' : 'Confirm billing country'}
           </button>
         </div>
+        {/* G8.053 fix: neither error paragraph previously had role="alert"
+            (unlike ConfirmCountryForm.tsx's equivalent case), so a screen-
+            reader user got no announcement when a billing-country change was
+            rejected. Both now carry role="alert" plus an id the select's own
+            aria-describedby links to when an error is showing. */}
         {countryError === 'ACTIVE_SUBSCRIPTION_BLOCKS_COUNTRY_CHANGE' && (
-          <p className="mt-2 text-sm text-risk">
+          <p id="billing-country-error" role="alert" className="mt-2 text-sm text-risk">
             You have an active subscription tied to your current billing country. Contact support to move your
             subscription to a new region before changing this.
           </p>
         )}
         {countryError && countryError !== 'ACTIVE_SUBSCRIPTION_BLOCKS_COUNTRY_CHANGE' && (
-          <p className="mt-2 text-sm text-risk">{countryError}</p>
+          <p id="billing-country-error" role="alert" className="mt-2 text-sm text-risk">
+            {countryError}
+          </p>
         )}
       </div>
 

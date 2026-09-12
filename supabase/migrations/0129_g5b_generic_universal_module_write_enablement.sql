@@ -346,6 +346,16 @@ create trigger trg_g5b_write_permitted
 -- ============================================================================
 -- ROLLBACK BOUNDARY
 -- ============================================================================
+-- G8.056 — OPERATIONAL WARNING, cross-referenced from lib/services/
+-- g5bWriteFlag.ts's own header: the application-layer G5B_GENERIC_WRITE_ENABLED
+-- env var has NO effect on the grant this migration creates once applied --
+-- Postgres cannot read process.env. Flipping that env var to 'false' only
+-- stops FHIP's own Next.js API routes from constructing a GENERIC-write
+-- request; it does NOT revoke is_write_permitted()'s grant for any other
+-- authenticated client (including a direct PostgREST call). The ONLY real
+-- kill switch for this migration's effect is the rollback block immediately
+-- below. Do not treat "flip the env var" as a sufficient rollback runbook.
+--
 -- Rollback notes (manual -- this repo has no down-migration runner). Running
 -- the block below returns income_sources/expense_items/insurance_policies to
 -- their exact pre-0129 state — the migration 0108 trigger DDL (`before

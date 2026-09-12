@@ -335,6 +335,42 @@ describe('MC-16 — every authenticated API route is country-gated (reconciliati
     expect(unmatched).toEqual([]);
   });
 
+  // G8.050 (docs/country-programme/g8-discovery-batch5-pricing-auth-rls-mobile.md):
+  // MC-17 above proves every app/(app) directory IS matched by proxy.ts's
+  // gate regex, but until this test there was no equivalent negative
+  // assertion that (auth) routes are specifically excluded — nothing
+  // prevented a future engineer from accidentally widening the regex to
+  // catch /login etc, except code review. Derives the real (auth) directory
+  // listing rather than hand-typing route names, same discipline as MC-17.
+  //
+  // NOTE: an earlier draft of this test also asserted `/onboarding` was
+  // excluded, based on a misreading of app/(app)/layout.tsx's own comment
+  // ("onboarding is deliberately NOT under this route group") as meaning
+  // proxy.ts's isAppRoute gate excludes it too. Re-checked directly against
+  // both files: that comment is about layout.tsx's OWN narrower MCC-redirect
+  // scope (app/(app)/** only) — a completely separate concern. proxy.ts's
+  // isAppRoute regex legitimately DOES include 'onboarding' by design
+  // (layout.tsx's own comment confirms it: "proxy.ts already confines the
+  // user to /onboarding"), since a user mid-onboarding is still inside the
+  // authenticated app shell and needs the general auth gate. No assertion
+  // about /onboarding belongs in this test.
+  it('MC-17b — proxy.ts isAppRoute matches NONE of the real app/(auth) directories', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../../proxy.ts'), 'utf8');
+    const match = src.match(/\/\^\\\/\(([^)]+)\)\//);
+    expect(match).not.toBeNull();
+    const regex = new RegExp(`^/(${match![1]})`);
+
+    const authGroup = path.resolve(__dirname, '../../app/(auth)');
+    const authDirs = fs
+      .readdirSync(authGroup, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+
+    expect(authDirs.length).toBeGreaterThan(0);
+    const wronglyMatched = authDirs.filter((d) => regex.test(`/${d}`));
+    expect(wronglyMatched).toEqual([]);
+  });
+
   it('the one allowed exemption really is secret-authorised, not merely allowlisted', () => {
     const src = fs.readFileSync(path.resolve(apiRoot, 'reports/cron/monthly-generate/route.ts'), 'utf8');
     expect(src).toMatch(/process\.env\.CRON_SECRET/);
