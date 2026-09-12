@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { __resetCountryRegistryCacheForTests } from '@/lib/services/countryGate';
 import { __setG4CapabilityLayerFlagForTests } from '@/lib/services/appCapabilityFlag';
+import { __setG5BGenericWriteFlagForTests } from '@/lib/services/g5bWriteFlag';
+import { __setRolloutConfigForTests } from '@/lib/services/rolloutCohort';
 
 // Registry rows: AU/IN FULL, GB/US/SG/AE GENERIC — matches migration 0122/0127.
 const COUNTRY_ROWS = [
@@ -280,5 +282,87 @@ describe('requireModuleCapability — flag ON (G4 manifest-driven)', () => {
     expect(result.blocked?.status).toBe(403);
     const body = await result.blocked!.json();
     expect(body.error).toBe('CAPABILITY_NOT_ENABLED');
+  });
+});
+
+// G8.055 — the controlled-cohort rollout composed strictly LAST, exactly
+// after G4+G5B+module-policy have already produced 'ENABLED'. No existing
+// test in this file (or in appCapability.test.ts, which only exercises the
+// PURE resolveModuleCapability() function, never this async wrapper) ever
+// reached this new code path before — it is scoped to GENERIC + non-VIEW +
+// the three G5B-write-certified modules only.
+describe('requireModuleCapability — G8.055 rollout composed after G4+G5B', () => {
+  beforeEach(() => {
+    __setG4CapabilityLayerFlagForTests(true);
+    __setG5BGenericWriteFlagForTests(true);
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', undefined);
+  });
+
+  it('OPERATIONAL WARNING, proven: with G4+G5B both ON but the rollout left UNCONFIGURED (the state any environment is in the moment this code first ships), a GENERIC user\'s CREATE that used to succeed is now refused — this is the exact regression the deploy of this change must avoid by setting the rollout to 100% first', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('POST'));
+      expect(result.blocked?.status, moduleKey).toBe(403);
+      const body = await result.blocked!.json();
+      expect(body.error, moduleKey).toBe('WRITE_NOT_CERTIFIED_FOR_GENERIC');
+    }
+  });
+
+  it('the documented safe no-op configuration (ENABLED=true, any VERSION, PERCENTAGE=100) restores exactly today\'s behaviour', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 100 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('POST'));
+      expect(result.blocked, moduleKey).toBeNull();
+      expect(result.decision, moduleKey).toBe('ENABLED');
+    }
+  });
+
+  it('PERCENTAGE=0 refuses a GENERIC user\'s write even though G4+G5B are both ON — real percentage control, not a pass-through', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 0 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    const result = await requireModuleCapability('INCOME', req('POST'));
+    expect(result.blocked?.status).toBe(403);
+  });
+
+  it('an allowlisted subject is admitted even at PERCENTAGE=0', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 0, allowlist: ['u1'] });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    const result = await requireModuleCapability('INCOME', req('POST'));
+    expect(result.blocked).toBeNull();
+  });
+
+  it('a FULL (AU) user is completely unaffected by rollout configuration — the rollout gate is never even consulted for them', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 0 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'AU', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    for (const moduleKey of ['INCOME', 'EXPENSES', 'INSURANCE'] as const) {
+      const result = await requireModuleCapability(moduleKey, req('POST'));
+      expect(result.blocked, moduleKey).toBeNull();
+      expect(result.decision, moduleKey).toBe('ENABLED');
+    }
+  });
+
+  it('a VIEW (GET) request is completely unaffected by rollout configuration — the gate only ever narrows write operations', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 0 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    const result = await requireModuleCapability('INCOME', req('GET'));
+    expect(result.blocked).toBeNull();
+    expect(result.decision).toBe('ENABLED');
+  });
+
+  it('a non-G5B module (Scores) is unaffected by the G5B_GENERIC_WRITE rollout key even though it also uses UNAVAILABLE_FOR_GENERIC_WRITE — the rollout key never applies to it at all, it is refused by the pre-existing manifest policy instead', async () => {
+    __setRolloutConfigForTests('G5B_GENERIC_WRITE', { enabled: true, version: 'v1', percentage: 100 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    currentProfile = { country_of_residence: 'GB', country_confirmed_at: '2026-01-01T00:00:00Z', country_source: 'USER_CONFIRMED', onboarding_completed: true };
+    const result = await requireModuleCapability('SCORES', req('POST'));
+    expect(result.blocked?.status).toBe(403);
+    const body = await result.blocked!.json();
+    expect(body.error).toBe('WRITE_NOT_CERTIFIED_FOR_GENERIC');
   });
 });

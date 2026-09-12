@@ -33,6 +33,7 @@ import {
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
 import { isG5BGenericWriteEnabled } from '@/lib/services/g5bWriteFlag';
+import { resolveRolloutDecision } from '@/lib/services/rolloutCohort';
 
 // The exact G1 registry vocabulary (migration 0122) — re-exported as a type
 // here rather than redefined, so this file and jurisdiction.ts/countryGate.ts
@@ -730,6 +731,43 @@ export async function requireModuleCapability(
       blocked: capabilityBlockResponse('METHOD_NOT_PERMITTED_FOR_EXISTING_RECORD_ONLY'),
       decision: result.decision,
     };
+  }
+
+  // G8.055 — controlled-cohort rollout, composed strictly LAST, exactly per
+  // lib/services/rolloutCohort.ts's own required formula: "Authenticated and
+  // country-confirmed AND jurisdiction/module/operation eligible AND
+  // rollout permits exposure AND kill switch is not active." Every gate
+  // above this point (auth, MCC, G4, G5B, the module/operation policy
+  // itself) has already run and already produced 'ENABLED' — this can only
+  // ever NARROW that decision for the one specific case it targets, never
+  // widen it, and it is scoped to exactly the GENERIC + G5B-write-certified
+  // + non-VIEW case so a FULL user, a VIEW request, or any other module is
+  // completely unaffected (their decision is returned unchanged, one line
+  // below, without ever calling isRolloutPermitted()).
+  //
+  // OPERATIONAL WARNING, read before deploying this anywhere: this
+  // primitive fails closed on absent configuration (see rolloutCohort.ts's
+  // own header). The FIRST time this code reaches an environment where
+  // ROLLOUT_G5B_GENERIC_WRITE_ENABLED/_VERSION/_PERCENTAGE are not already
+  // set, every currently-working GENERIC write (already live in production,
+  // already certified) will start being refused. Do not deploy this change
+  // to any environment without setting ROLLOUT_G5B_GENERIC_WRITE_ENABLED=true,
+  // ROLLOUT_G5B_GENERIC_WRITE_VERSION=<any non-empty string>, and
+  // ROLLOUT_G5B_GENERIC_WRITE_PERCENTAGE=100 in that SAME environment first
+  // (or in the same change) — that combination is the exact no-op
+  // configuration that preserves today's "100% of confirmed GENERIC users"
+  // behaviour while making the mechanism live and ready to be dialled down
+  // later.
+  if (
+    result.decision === 'ENABLED' &&
+    context.experienceLevel === 'GENERIC' &&
+    operation !== 'VIEW' &&
+    APP_CAPABILITY_MANIFEST[moduleKey]?.operationPolicy[operation] === 'FOLLOWS_VIEW_WHEN_G5B_WRITE_ENABLED'
+  ) {
+    const rolloutDecision = resolveRolloutDecision('G5B_GENERIC_WRITE', user.id);
+    if (!rolloutDecision.permitted) {
+      return { user: null, blocked: capabilityBlockResponse('WRITE_NOT_CERTIFIED_FOR_GENERIC'), decision: 'UNAVAILABLE' };
+    }
   }
 
   return { user, blocked: null, decision: result.decision };
