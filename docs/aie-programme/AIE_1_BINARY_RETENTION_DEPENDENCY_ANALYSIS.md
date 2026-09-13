@@ -101,6 +101,27 @@ because the mechanism doesn't exist or wasn't tested at the unit level
 (`tests/unit/aiePurgeService.test.ts` already covers it), but because the
 one DB column its live behavior depends on isn't in DEV yet.**
 
+## 3a. 2026-09-13 update — verified live, migration 0149 now applied
+
+The Product Owner applied migration `0149` to DEV. Both previously-blocked
+verifications are now done, live, with real evidence:
+
+- **Insurance's full immediate-deletion path** (storage delete AND DB
+  bookkeeping together, not just the storage half) re-run end-to-end —
+  `storage_key` now correctly clears and `status` correctly flips, closing
+  the previously-disclosed gap exactly.
+- **The 24-hour hard backstop** (`scripts/aiecl_24h_backstop_live_dev.ts`,
+  16/16 PASS): a genuinely-backdated (`created_at` −25h), never-accepted
+  intake row with a real quarantine object was found by the sweep
+  (`scanned:1`), scheduled, and genuinely purged — its real storage object
+  deleted, its DB status flipped. A fresh negative-control row was
+  confirmed completely untouched, proving the age filter is real. Zero
+  residue.
+
+**This directly and completely closes the Product Owner's stated concern**:
+the bound on "how long can an unaccepted II/FDH PDF remain" is now
+verified, live, at 24 hours — not merely implemented and asserted.
+
 ## 4. Conclusion and recommendation
 
 - **Do not build a workaround that lets acceptance consume AIE's own
