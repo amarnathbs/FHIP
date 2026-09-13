@@ -215,11 +215,12 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
 
     // Persist the completion attempt + schema validation result for every
     // GENUINE provider attempt (AI-DEV-04..06 evidence trail) — but not for
-    // kill_switch_blocked/unmasked_pii_detected, since those two outcomes
-    // mean the provider was never actually called (GW-03/PAY-04 blocked the
-    // call before it happened, so there is no "attempt" to record — only
-    // the audit event already written above/below for those two cases).
-    if (result.outcome !== 'kill_switch_blocked' && result.outcome !== 'unmasked_pii_detected') {
+    // kill_switch_blocked/unmasked_pii_detected/budget_exhausted, since all
+    // three outcomes mean the provider was never actually called (GW-03/
+    // PAY-04/cost-admission all block the call before it happens, so there
+    // is no "attempt" to record — only the audit event already written
+    // above/below for these cases).
+    if (result.outcome !== 'kill_switch_blocked' && result.outcome !== 'unmasked_pii_detected' && result.outcome !== 'budget_exhausted') {
       const attempt = await deps.recordAiCompletionAttempt({
         runId,
         intakeId,
@@ -246,8 +247,14 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
       }
     }
 
-    if (result.outcome === 'kill_switch_blocked' || result.outcome === 'unmasked_pii_detected') {
-      await deps.audit({ intakeId, runId, userId, eventType: result.outcome === 'kill_switch_blocked' ? 'ai_fallback_kill_switch_blocked' : 'ai_fallback_unmasked_pii_blocked', actorType: 'system' });
+    if (result.outcome === 'kill_switch_blocked' || result.outcome === 'unmasked_pii_detected' || result.outcome === 'budget_exhausted') {
+      const eventType =
+        result.outcome === 'kill_switch_blocked'
+          ? 'ai_fallback_kill_switch_blocked'
+          : result.outcome === 'unmasked_pii_detected'
+            ? 'ai_fallback_unmasked_pii_blocked'
+            : 'ai_fallback_budget_exhausted';
+      await deps.audit({ intakeId, runId, userId, eventType, actorType: 'system' });
       await transition(deps, { runId, intakeId, userId, from: current, to: 'reconciling' });
       current = 'reconciling';
     } else if (result.outcome === 'schema_rejected') {

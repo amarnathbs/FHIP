@@ -8,6 +8,7 @@ import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
 import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
+import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
@@ -55,6 +56,7 @@ registerInsuranceAdapterSchema();
 // kill switch, defaulted OFF, regardless of which provider is selected.
 const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
+  costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
 
 // POST /api/aie/insurance/intake?owner=self[&master_item_key=...]

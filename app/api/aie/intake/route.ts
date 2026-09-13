@@ -12,6 +12,7 @@ import { noDomainAdapterReconciliationRule } from '@/lib/aie/reconciliation/type
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
+import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import type { AieSourceModuleHint } from '@/lib/aie/types';
 
 const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investment_intelligence', 'fdh_bank', 'other', null];
@@ -21,7 +22,9 @@ const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investme
 // `lib/aie/provider/providerFactory.ts`'s header. Still gated by
 // gateway.ts's own kill switch (defaults OFF) regardless of which provider
 // is selected.
-const gateway = new AieDocumentAiGateway(createAieAiProvider());
+const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+  costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
+});
 
 // POST /api/aie/intake?filename=...&source_module_hint=...
 // AIE-1.1 architecture steps 1-11 in one server-mediated request (same

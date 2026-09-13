@@ -119,3 +119,74 @@ describe('AIE-1.1 AI gateway — the one choke point (GW-01..12, PAY-01..12)', (
     expect(recordAttempt).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AIE-1 closure mission (section 8) — atomic cost admission wired through the gateway', () => {
+  it('refuses the reservation -> provider is NEVER called, outcome is budget_exhausted, no recordAttempt', async () => {
+    const generate = vi.fn(async () => ({ rawText: JSON.stringify({ fields: [] }), inputTokens: 1, outputTokens: 1, latencyMs: 1, modelVersion: 'x', finishReason: 'stop' as const }));
+    const provider = new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) });
+    provider.generateStructured = generate;
+    const recordAttempt = vi.fn(async () => undefined);
+    const settle = vi.fn<(params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>>(async () => undefined);
+    const gateway = new AieDocumentAiGateway(provider, {
+      isKillSwitchEnabled: () => true,
+      recordAttempt,
+      costAdmission: { reserve: async () => ({ admitted: false, reservedUsd: 0 }), settle },
+    });
+    const result = await gateway.requestFieldCompletion(baseRequest());
+    expect(result.outcome).toBe('budget_exhausted');
+    expect(generate).not.toHaveBeenCalled();
+    expect(recordAttempt).not.toHaveBeenCalled();
+    expect(settle).not.toHaveBeenCalled();
+  });
+
+  it('admits the reservation -> provider is called and the reservation is settled against actual usage', async () => {
+    const provider = new MockAieProvider({
+      respond: () => JSON.stringify({ fields: [{ fieldName: 'account_number', value: '12345', nullReason: null, sourceReferenceId: 'p1' }] }),
+    });
+    const settle = vi.fn<(params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>>(async () => undefined);
+    const gateway = new AieDocumentAiGateway(provider, {
+      isKillSwitchEnabled: () => true,
+      costAdmission: { reserve: async () => ({ admitted: true, reservedUsd: 0.001234 }), settle },
+    });
+    const result = await gateway.requestFieldCompletion(baseRequest());
+    expect(result.outcome).toBe('success');
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle.mock.calls[0][0]).toMatchObject({ reservedUsd: 0.001234, treatAsFullReservedCost: false });
+  });
+
+  it('settles a TIMEOUT at the full reserved amount (uncertain charge, section 8), not assumed zero', async () => {
+    const provider = new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) });
+    provider.generateStructured = async () => {
+      throw new ProviderError('TIMEOUT', 'boom');
+    };
+    const settle = vi.fn<(params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>>(async () => undefined);
+    const gateway = new AieDocumentAiGateway(provider, {
+      isKillSwitchEnabled: () => true,
+      costAdmission: { reserve: async () => ({ admitted: true, reservedUsd: 0.05 }), settle },
+    });
+    const result = await gateway.requestFieldCompletion(baseRequest());
+    expect(result.outcome).toBe('timeout');
+    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', treatAsFullReservedCost: true });
+  });
+
+  it('settles a genuine (non-timeout) provider error at zero actual cost, not the full reservation', async () => {
+    const provider = new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) });
+    provider.generateStructured = async () => {
+      throw new ProviderError('AUTH', 'bad key');
+    };
+    const settle = vi.fn<(params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>>(async () => undefined);
+    const gateway = new AieDocumentAiGateway(provider, {
+      isKillSwitchEnabled: () => true,
+      costAdmission: { reserve: async () => ({ admitted: true, reservedUsd: 0.05 }), settle },
+    });
+    await gateway.requestFieldCompletion(baseRequest());
+    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', treatAsFullReservedCost: false });
+  });
+
+  it('with no costAdmission configured at all, behaves exactly as before (backward compatible)', async () => {
+    const provider = new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) });
+    const gateway = new AieDocumentAiGateway(provider, { isKillSwitchEnabled: () => true });
+    const result = await gateway.requestFieldCompletion(baseRequest());
+    expect(result.outcome).toBe('success');
+  });
+});

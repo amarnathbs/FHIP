@@ -43,7 +43,9 @@ export interface AieFieldCompletionRequest {
 }
 
 export interface AieFieldCompletionResult {
-  outcome: AieAiOutcome | 'kill_switch_blocked' | 'unmasked_pii_detected';
+  // 'budget_exhausted' (AIE-1 closure mission, section 8): the atomic cost
+  // admission reservation was refused -- the provider was never called.
+  outcome: AieAiOutcome | 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted';
   data?: unknown;
   errorCodes?: string[];
   inputTokens?: number;
@@ -72,6 +74,22 @@ export interface AieGatewayOptions {
     schemaValid?: boolean;
     errorCodes?: string[];
   }) => Promise<void>;
+  /**
+   * AIE-1 closure mission (section 8) — atomic cost admission, injected the
+   * same way `recordAttempt` is so this class stays unit-testable without a
+   * database/RPC. When supplied, a conservative reservation is made BEFORE
+   * every genuinely-attempted provider call (never for kill_switch_blocked/
+   * unmasked_pii_detected, which never reach the provider at all) and
+   * settled against the actual observed usage afterward, regardless of
+   * outcome. If the reservation is refused (budget exhausted), the provider
+   * is never called at all — a new `budget_exhausted` outcome, distinct
+   * from every existing provider-side outcome, so callers/tests can tell
+   * "the provider said no" apart from "we never asked."
+   */
+  costAdmission?: {
+    reserve: (model: string) => Promise<{ admitted: boolean; reservedUsd: number }>;
+    settle: (params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>;
+  };
 }
 
 function defaultKillSwitch(): boolean {
@@ -109,6 +127,25 @@ export class AieDocumentAiGateway {
   }
 
   private async executeOnce(req: AieFieldCompletionRequest): Promise<AieFieldCompletionResult> {
+    // AIE-1 closure mission (section 8): reserve a conservative maximum
+    // BEFORE the provider call. Never for a call that was never going to
+    // reach the provider (kill switch / PII guard already returned earlier
+    // in requestFieldCompletion, before this method is ever entered) -- so
+    // every reservation made here corresponds to a genuine attempt, and
+    // every genuine attempt is settled below regardless of how it ends.
+    let reservedUsd = 0;
+    if (this.options.costAdmission) {
+      const reservation = await this.options.costAdmission.reserve(req.model);
+      if (!reservation.admitted) {
+        // No provider call, no recordAttempt (nothing was attempted) --
+        // matches kill_switch_blocked/unmasked_pii_detected precedent.
+        return { outcome: 'budget_exhausted' };
+      }
+      reservedUsd = reservation.reservedUsd;
+    }
+    const settle = (actualInputTokens: number, actualOutputTokens: number, treatAsFullReservedCost = false) =>
+      this.options.costAdmission?.settle({ reservedUsd, actualInputTokens, actualOutputTokens, model: req.model, treatAsFullReservedCost }) ?? Promise.resolve();
+
     let raw;
     try {
       raw = await this.provider.generateStructured({
@@ -121,12 +158,20 @@ export class AieDocumentAiGateway {
       });
     } catch (e) {
       const outcome = mapProviderErrorToOutcome(e);
+      // Section 8: "handle uncertain charges after timeouts conservatively"
+      // -- a TIMEOUT specifically means the provider may or may not have
+      // actually processed (and been billed for) the request, so it settles
+      // at the full conservative reserved amount rather than assumed zero.
+      // Every other pre-response failure (auth/rate-limit/network) genuinely
+      // never produced billable tokens.
+      await settle(0, 0, outcome === 'timeout');
       await this.options.recordAttempt?.({ idempotencyKey: req.idempotencyKey, outcome });
       // GW-10: never return the raw provider error to the caller.
       return { outcome };
     }
 
     if (raw.finishReason === 'content_filter' || raw.finishReason === 'error') {
+      await settle(raw.inputTokens, raw.outputTokens);
       await this.options.recordAttempt?.({
         idempotencyKey: req.idempotencyKey,
         outcome: 'refused',
@@ -139,6 +184,7 @@ export class AieDocumentAiGateway {
 
     const validation = validateAiOutput({ schemaName: req.schemaName, schemaVersion: req.schemaVersion, rawText: raw.rawText });
     if (!validation.valid) {
+      await settle(raw.inputTokens, raw.outputTokens);
       await this.options.recordAttempt?.({
         idempotencyKey: req.idempotencyKey,
         outcome: 'schema_rejected',
@@ -151,6 +197,7 @@ export class AieDocumentAiGateway {
       return { outcome: 'schema_rejected', errorCodes: validation.errorCodes };
     }
 
+    await settle(raw.inputTokens, raw.outputTokens);
     await this.options.recordAttempt?.({
       idempotencyKey: req.idempotencyKey,
       outcome: 'success',

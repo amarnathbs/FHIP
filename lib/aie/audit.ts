@@ -44,7 +44,11 @@ export type AieAuditEventType =
   | 'document_deleted_immediate'
   | 'document_purge_scheduled'
   | 'document_purged'
-  | 'document_purge_failed';
+  | 'document_purge_failed'
+  // AIE-1 closure mission (section 8) — atomic cost admission refused the
+  // reservation; the provider was never called, same category as the
+  // existing kill_switch/PII blocks above.
+  | 'ai_fallback_budget_exhausted';
 
 export async function recordAieAuditEvent(event: {
   intakeId: string | null;

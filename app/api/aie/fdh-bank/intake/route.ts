@@ -10,6 +10,7 @@ import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
+import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges, loadExistingAccountsForInstitutionCurrency } from '@/lib/financial-data-hub/bank-csv/repository';
@@ -34,6 +35,7 @@ import '@/lib/aie/adapters/fdhBankStatement'; // side-effecting registration (sc
 // default OFF.
 const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled() && isAieFdhBankAiFallbackEnabled(),
+  costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
 
 // POST /api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD[&institution_id=...]
