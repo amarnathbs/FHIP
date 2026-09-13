@@ -83,11 +83,11 @@ merged. No production action taken anywhere in this register.
 |---|---|
 | Requirement | Apply reviewed closure migrations to DEV; verify actual database behavior, not just SQL review |
 | Observed | **0149/0150 applied to DEV this session** (prior turn) and independently re-verified live: Insurance's full immediate-deletion path (storage + DB bookkeeping) now works end-to-end; the 24-hour hard-retention backstop proven live (16/16, real aged document, real negative control). **0151** (fixes 0150's 2-row return bug) written, PGlite-proven, **not yet applied**. **0152** (this session, new: fixes a real duplicate-settlement double-counting defect found by live-testing 0150) written, proven against a real Postgres engine (PGlite, 5/5), **not yet applied** |
-| Remaining | Apply 0151 and 0152 to DEV (0151 is superseded functionally by 0152, which also includes 0151's fix — applying 0152 alone is sufficient; 0151 can be skipped if applying 0152 directly, since 0152's `CREATE OR REPLACE` covers both signatures in sequence — **apply 0151 then 0152, in order, matching migration numbering**, or confirm with the PO whether skipping straight to 0152 is acceptable; this register recommends applying both in order for a clean, honest migration history) |
-| Dependency | PO, via Supabase SQL Editor (same channel as every prior migration) |
-| Verification method | Live RPC probes (already written, reusable): column-existence checks, reserve/settle idempotency checks |
-| Evidence location | `scripts/aiecl_insurance_regression_live_dev.ts`, `scripts/aiecl_24h_backstop_live_dev.ts`, `tests/unit/aieCostAdmissionPglitePostgresProof.test.ts` |
-| Status | 0149/0150 **VERIFIED IN DEV**. 0151/0152 **IMPLEMENTED, PGlite-PROVEN, BLOCKED on DEV application** |
+| Remaining | Nothing — **PO applied both 0151 and 0152 to DEV this session**, in order |
+| Dependency | None — closed |
+| Verification method | Live RPC probes against real DEV: successful reservation returns exactly 1 row, repeat reservation under the same key doesn't double-reserve, duplicate settle under the same key is a no-op, a different key reserves independently |
+| Evidence location | `scripts/aiecl_insurance_regression_live_dev.ts`, `scripts/aiecl_24h_backstop_live_dev.ts`, `tests/unit/aieCostAdmissionPglitePostgresProof.test.ts` (PGlite, pre-application), `scripts/aiecl_0152_cost_idempotency_live_dev_verify.mjs` (real DEV, post-application, 9/9 PASS) |
+| Status | **0149/0150/0151/0152 all VERIFIED IN DEV** |
 
 ## 6. Cost admission — atomic, idempotent, duplicate-safe
 
@@ -95,11 +95,11 @@ merged. No production action taken anywhere in this register.
 |---|---|
 | Requirement | Atomic reservation; concurrent reservations cannot exceed allowance; settlement/release safe under duplicate execution |
 | Observed | Atomicity of the admission check itself: sound since 0150 (single `UPDATE...WHERE...RETURNING`), re-confirmed this session. **Duplicate-settlement protection: absent in 0150/0151, confirmed live via direct RPC calls (settled_usd doubled on a repeat call) — a real, named defect this mission specifically asked to verify.** Fixed in 0152 with a new idempotency-attempt table, proven against a real Postgres engine |
-| Remaining | Apply 0152 to DEV; then a live-DEV re-confirmation once applied (script exists: reuse the same probe pattern used to find the defect) |
-| Dependency | Migration application (§5) |
-| Verification method | `tests/unit/aieCostAdmissionPglitePostgresProof.test.ts` (5/5, real Postgres, done); live-DEV re-confirmation (pending application) |
+| Remaining | Nothing |
+| Dependency | None — closed |
+| Verification method | `tests/unit/aieCostAdmissionPglitePostgresProof.test.ts` (5/5, real Postgres, pre-application) AND `scripts/aiecl_0152_cost_idempotency_live_dev_verify.mjs` (9/9, real DEV, post-application) |
 | Evidence location | `supabase/migrations/0152_...sql`, `lib/aie/cost/costAdmission.ts`, `lib/aie/provider/gateway.ts` |
-| Status | **IMPLEMENTED + PGlite-VERIFIED. Live-DEV re-confirmation BLOCKED on migration application** |
+| Status | **VERIFIED IN DEV** |
 
 ## 7. II/FDH binary-retention-at-acceptance refactor
 
