@@ -1,6 +1,32 @@
 # AIE-1 Closure — Accessibility Certification (mission section 12)
 
-## Headline: real automated tooling added and run against real DEV, zero violations on the two screens covered. Manual screen-reader certification remains an explicit, disclosed gap — not fabricated.
+## Headline: real automated tooling added and run against real DEV. As of the 2026-09-13 infrastructure-activation follow-on, 4 of the run-detail component's states are axe-scanned with zero violations (unresolved, awaiting_acceptance, completed, plus the inbox empty state). Manual screen-reader certification remains an explicit, disclosed gap — not fabricated.
+
+## 0. 2026-09-13 update — awaiting_acceptance and completed states now scanned
+
+Per the Product Owner's follow-on "AIE-1 — Infrastructure Activation,
+Remaining Integration and Final DEV Certification" mission (item 5:
+"complete supported-adapter journeys and accessibility checks"),
+`scripts/aiecl_accessibility_additional_states_live_dev.ts` extends §4
+below with the two states §5 originally named as remaining work:
+
+- **Run detail page, REAL `awaiting_acceptance` state** — reached via the
+  exact same certified live-DEV Insurance HTTP journey
+  (`aiecl_insurance_regression_live_dev.ts`'s own method: real upload →
+  real extraction → real `awaiting_acceptance`), not a seeded/synthetic DOM
+  state: **zero automated WCAG2A/AA violations**, keyboard Tab reaches a
+  real interactive element (the Accept control).
+- **Run detail page, REAL `completed`/accepted state** — reached via a
+  real `POST .../accept` call against the real route, then reloading the
+  same page: **zero automated WCAG2A/AA violations**, at least one live
+  region present for the acceptance confirmation announcement.
+
+**9/9 checks passed, zero residue.** This closes the `unresolved` +
+`awaiting_acceptance` + `completed` states of the run-detail component
+(3 of its states now scanned; only the `failed`/retry state — not
+exercised anywhere yet, including functionally — remains open). II/FDH-bank
+review journeys remain unscanned for the same reasons named in §5 below
+(no HTTP route for II; FDH-bank not separately seeded this pass either).
 
 ## 1. Starting position
 
@@ -65,18 +91,12 @@ Zero residue after cleanup (independently re-verified).
   "If tooling is unavailable, report that verification gap explicitly. Do
   not claim manual accessibility certification from static code review." —
   is followed here: this gap is real and open, not asserted closed.
-- **Only two of the run-detail component's several states were axe-
-  scanned**: `unresolved`. The `awaiting_acceptance`/`accepted`/
-  `completed` states were exercised FUNCTIONALLY (proven to work
-  end-to-end) by `scripts/aiecl_insurance_regression_live_dev.ts`, but not
-  separately run through axe-core in this pass — the DOM does differ
-  between these states (different controls: correction inputs vs. an
-  Accept button vs. a completion summary), so a full certification should
-  scan each state independently. This is real, scoped-down, disclosed
-  remaining work, not silently skipped.
+- **Three of the run-detail component's states are now axe-scanned**
+  (`unresolved`, and — per the 2026-09-13 update in §0 above —
+  `awaiting_acceptance` and `completed`). All three: zero violations.
 - **Failure/retry states were not exercised at all in this accessibility
   pass** (a rejected/failed run's own detail view) — flagged as remaining
-  work.
+  work, unchanged by the 2026-09-13 update.
 - **Investment Intelligence and FDH-bank review journeys were not
   scanned** — no route exists to drive II through the review UI at all
   (see the mission's own baseline reconciliation: no HTTP intake route
