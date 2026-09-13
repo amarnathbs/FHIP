@@ -27,7 +27,23 @@ frontend:
         # introduced (SUPABASE_SERVICE_ROLE_KEY/CRON_SECRET/APP_BASE_URL
         # were already broken before RESEND_API_KEY/CONTACT_FROM_EMAIL
         # surfaced the same gap for the Contact page).
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL >> .env.production
+        #
+        # G8 closure (2026-09-13): G4_APP_CAPABILITY_LAYER_ENABLED,
+        # G5B_GENERIC_WRITE_ENABLED, G2_LANDING_LOCALISATION_ENABLED,
+        # G2_ALLOW_TEST_DETECTION_HEADER and the new ROLLOUT_* rollout-cohort
+        # variables were NEVER on this list -- confirmed live, not assumed:
+        # a real disposable synthetic GENERIC production user got
+        # GENERIC_EXPERIENCE_RESTRICTED (the LEGACY flag-off refusal reason,
+        # not a manifest-driven one) from the real running app, proving
+        # G4_APP_CAPABILITY_LAYER_ENABLED was effectively OFF at runtime
+        # regardless of its Amplify console value. This means the entire
+        # G4/G5B GENERIC-write application-layer feature has likely never
+        # actually been reachable by a real user through the real app,
+        # despite being "enabled" in the console — only the database-layer
+        # grant (migration 0129, unconditional once applied, independent of
+        # these flags) has ever been live. Adding them here is what actually
+        # makes the console configuration take effect for the first time.
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e '^ROLLOUT_' >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         - npm run build
   artifacts:
