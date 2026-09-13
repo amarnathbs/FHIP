@@ -24,14 +24,27 @@ export interface CostReservation {
  * Uses the configured per-document max input/output token ceilings, not an
  * estimate of THIS document's actual masked-text length — the whole point
  * of a conservative reservation is that it never under-reserves.
+ *
+ * `idempotencyKey` (added migration 0152, after a real duplicate-settlement
+ * defect was found by live-testing 0150): the SAME key
+ * `AieDocumentAiGateway` already uses for its own in-memory in-flight
+ * de-duplication (`req.idempotencyKey`) — reused here, not a second key
+ * concept, so one logical attempt has exactly one identity across both the
+ * process-local and DB-level idempotency layers. A repeat reservation
+ * under an already-used key returns the SAME stored outcome rather than
+ * reserving a second time — protects a genuine cross-process retry (a
+ * worker crash/restart, or a client retry after ITS OWN request timed out
+ * even though the server-side call already completed), which the gateway's
+ * in-memory map cannot protect against on its own.
  */
-export async function reserveConservativeAiCost(model: string): Promise<CostReservation> {
+export async function reserveConservativeAiCost(model: string, idempotencyKey: string): Promise<CostReservation> {
   const admin = createAdminClient();
   const reservedUsd = estimateOpenAiCostUsd(getAieAiMaxInputTokensPerDocument(), getAieAiMaxOutputTokensPerDocument(), model);
   const { data, error } = await admin.rpc('aie_reserve_ai_cost', {
     p_ledger_id: AIE_COST_LEDGER_ID,
     p_amount_usd: reservedUsd,
     p_allowance_usd: getAieCostAllowanceUsd(),
+    p_idempotency_key: idempotencyKey,
   });
   if (error || !data || data.length === 0) {
     // Fail closed: if the ledger RPC itself is unreachable/misconfigured,
@@ -56,12 +69,20 @@ export async function reserveConservativeAiCost(model: string): Promise<CostRese
  * full RESERVED amount, per mission section 8's "handle uncertain charges
  * after timeouts conservatively" — callers pass `treatAsFullReservedCost:
  * true` for that case rather than guessing zero.
+ *
+ * `idempotencyKey` (added migration 0152): the SAME key passed to
+ * `reserveConservativeAiCost` for this attempt. A duplicate settle call
+ * under the same key is a no-op at the DB layer — CONFIRMED LIVE, this
+ * session, before this fix: two identical settle calls doubled
+ * `settled_usd` and the recorded token counts. Fixed at the SQL level
+ * (`aie_ai_cost_attempt`), not just by convention here.
  */
 export async function settleAiCost(params: {
   reservedUsd: number;
   actualInputTokens: number;
   actualOutputTokens: number;
   model: string;
+  idempotencyKey: string;
   treatAsFullReservedCost?: boolean;
 }): Promise<void> {
   const admin = createAdminClient();
@@ -72,6 +93,7 @@ export async function settleAiCost(params: {
     p_actual_usd: actualUsd,
     p_input_tokens: params.actualInputTokens,
     p_output_tokens: params.actualOutputTokens,
+    p_idempotency_key: params.idempotencyKey,
   });
 }
 

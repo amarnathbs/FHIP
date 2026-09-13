@@ -40,7 +40,7 @@ describe('reserveConservativeAiCost', () => {
       expect(typeof args.p_allowance_usd).toBe('number');
       return { data: [{ reserved: true, remaining_usd: 9.5 }], error: null };
     };
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-1');
     expect(result.admitted).toBe(true);
     expect(result.remainingUsd).toBe(9.5);
     expect(result.reservedUsd).toBeGreaterThan(0);
@@ -48,21 +48,31 @@ describe('reserveConservativeAiCost', () => {
 
   it('refuses when the RPC refuses', async () => {
     rpcImpl = async () => ({ data: [{ reserved: false, remaining_usd: 0 }], error: null });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-2');
     expect(result.admitted).toBe(false);
     expect(result.reservedUsd).toBe(0);
   });
 
   it('fails CLOSED (never admits) if the RPC itself errors -- a broken admission gate must not become no gate at all', async () => {
     rpcImpl = async () => ({ data: null, error: { message: 'function does not exist' } });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-3');
     expect(result.admitted).toBe(false);
   });
 
   it('fails closed on an empty data array too', async () => {
     rpcImpl = async () => ({ data: [], error: null });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-4');
     expect(result.admitted).toBe(false);
+  });
+
+  it('passes idempotencyKey through as p_idempotency_key (migration 0152 -- protects a genuine cross-process retry, not just the gateway\'s own in-memory in-flight map)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    rpcImpl = async (_fn, args) => {
+      captured = args;
+      return { data: [{ reserved: true, remaining_usd: 9.5 }], error: null };
+    };
+    await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-5-stable-key');
+    expect((captured as unknown as { p_idempotency_key: string }).p_idempotency_key).toBe('attempt-5-stable-key');
   });
 });
 
@@ -74,10 +84,11 @@ describe('settleAiCost', () => {
       expect(fn).toBe('aie_settle_ai_cost');
       return { data: null, error: null };
     };
-    await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 100, actualOutputTokens: 50, model: 'gpt-4o-mini-2024-07-18' });
+    await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 100, actualOutputTokens: 50, model: 'gpt-4o-mini-2024-07-18', idempotencyKey: 'attempt-settle-1' });
     expect((captured as unknown as { p_reserved_usd: number }).p_reserved_usd).toBe(0.01);
     expect((captured as unknown as { p_actual_usd: number }).p_actual_usd).toBeGreaterThan(0);
     expect((captured as unknown as { p_input_tokens: number }).p_input_tokens).toBe(100);
+    expect((captured as unknown as { p_idempotency_key: string }).p_idempotency_key).toBe('attempt-settle-1');
   });
 
   it('settles at the full reserved amount when treatAsFullReservedCost is set (uncertain/timeout charge)', async () => {
@@ -86,7 +97,7 @@ describe('settleAiCost', () => {
       captured = args;
       return { data: null, error: null };
     };
-    await settleAiCost({ reservedUsd: 0.02, actualInputTokens: 0, actualOutputTokens: 0, model: 'gpt-4o-mini-2024-07-18', treatAsFullReservedCost: true });
+    await settleAiCost({ reservedUsd: 0.02, actualInputTokens: 0, actualOutputTokens: 0, model: 'gpt-4o-mini-2024-07-18', idempotencyKey: 'attempt-settle-2', treatAsFullReservedCost: true });
     expect((captured as unknown as { p_actual_usd: number }).p_actual_usd).toBe(0.02);
   });
 });

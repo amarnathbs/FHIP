@@ -166,7 +166,7 @@ describe('AIE-1 closure mission (section 8) — atomic cost admission wired thro
     });
     const result = await gateway.requestFieldCompletion(baseRequest());
     expect(result.outcome).toBe('timeout');
-    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', treatAsFullReservedCost: true });
+    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', idempotencyKey: 'test-key-1', treatAsFullReservedCost: true });
   });
 
   it('settles a genuine (non-timeout) provider error at zero actual cost, not the full reservation', async () => {
@@ -180,7 +180,7 @@ describe('AIE-1 closure mission (section 8) — atomic cost admission wired thro
       costAdmission: { reserve: async () => ({ admitted: true, reservedUsd: 0.05 }), settle },
     });
     await gateway.requestFieldCompletion(baseRequest());
-    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', treatAsFullReservedCost: false });
+    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', idempotencyKey: 'test-key-1', treatAsFullReservedCost: false });
   });
 
   it('with no costAdmission configured at all, behaves exactly as before (backward compatible)', async () => {

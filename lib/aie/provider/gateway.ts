@@ -87,8 +87,8 @@ export interface AieGatewayOptions {
    * "the provider said no" apart from "we never asked."
    */
   costAdmission?: {
-    reserve: (model: string) => Promise<{ admitted: boolean; reservedUsd: number }>;
-    settle: (params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; treatAsFullReservedCost?: boolean }) => Promise<void>;
+    reserve: (model: string, idempotencyKey: string) => Promise<{ admitted: boolean; reservedUsd: number }>;
+    settle: (params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; idempotencyKey: string; treatAsFullReservedCost?: boolean }) => Promise<void>;
   };
 }
 
@@ -135,7 +135,11 @@ export class AieDocumentAiGateway {
     // every genuine attempt is settled below regardless of how it ends.
     let reservedUsd = 0;
     if (this.options.costAdmission) {
-      const reservation = await this.options.costAdmission.reserve(req.model);
+      // req.idempotencyKey identifies this ONE logical attempt at both the
+      // gateway's own in-memory in-flight layer AND (migration 0152) the
+      // DB-level reserve/settle idempotency layer -- one key, one identity,
+      // across both defenses, rather than a second key concept.
+      const reservation = await this.options.costAdmission.reserve(req.model, req.idempotencyKey);
       if (!reservation.admitted) {
         // No provider call, no recordAttempt (nothing was attempted) --
         // matches kill_switch_blocked/unmasked_pii_detected precedent.
@@ -144,7 +148,7 @@ export class AieDocumentAiGateway {
       reservedUsd = reservation.reservedUsd;
     }
     const settle = (actualInputTokens: number, actualOutputTokens: number, treatAsFullReservedCost = false) =>
-      this.options.costAdmission?.settle({ reservedUsd, actualInputTokens, actualOutputTokens, model: req.model, treatAsFullReservedCost }) ?? Promise.resolve();
+      this.options.costAdmission?.settle({ reservedUsd, actualInputTokens, actualOutputTokens, model: req.model, idempotencyKey: req.idempotencyKey, treatAsFullReservedCost }) ?? Promise.resolve();
 
     let raw;
     try {
