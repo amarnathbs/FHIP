@@ -1,6 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/lib/aie/featureFlags';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
@@ -39,6 +39,9 @@ export async function POST(req: Request) {
 
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
+  }
+  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) {
+    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
   }
 
   const url = new URL(req.url);

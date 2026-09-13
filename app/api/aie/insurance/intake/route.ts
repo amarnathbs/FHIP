@@ -1,7 +1,7 @@
 import { bad, ok } from '@/lib/api';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
@@ -85,6 +85,15 @@ export async function POST(req: Request) {
   }
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
+  }
+  // `requireModuleCapability`'s declared return type narrows `user` to
+  // `{ id: string }` only (no `.email`) -- userId-based cohort membership
+  // alone is checked here; an operator using the email-allowlist form of
+  // AIE_PILOT_COHORT_EMAILS should list this route's callers by user id
+  // instead, or this route's own capability layer can be extended to
+  // surface email if that becomes a real operational need.
+  if (!isUserInAiePilotCohort({ userId: user.id })) {
+    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
   }
 
   // AIE-1.5 note: this route used to also parse `owner`/`master_item_key`
