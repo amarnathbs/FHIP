@@ -31,7 +31,20 @@ export type AieAuditEventType =
   // AIE-1.5 additions — additive only, no existing event type's meaning
   // changes. 'evidence_revealed' carries a mask TOKEN in metadata, never a
   // plaintext value (P10) — see lib/aie/review/reveal.ts.
-  | 'evidence_revealed';
+  | 'evidence_revealed'
+  // AIE-1 closure mission additions (section 4/9 — temporary document
+  // lifecycle). `event_type` has no DB CHECK constraint (confirmed:
+  // migration 0140 declares it plain `text not null`), so these new values
+  // need no migration of their own. Mirrors FDH's own purge event naming
+  // (`document_purge_scheduled`/`document_purged`/`document_purge_failed`)
+  // for a reader who already knows that vocabulary; `document_deleted_
+  // immediate` is AIE-specific — it fires on the PRIMARY deletion path
+  // (right after a pipeline run concludes), distinct from the scheduled
+  // sweep's backstop path.
+  | 'document_deleted_immediate'
+  | 'document_purge_scheduled'
+  | 'document_purged'
+  | 'document_purge_failed';
 
 export async function recordAieAuditEvent(event: {
   intakeId: string | null;

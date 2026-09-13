@@ -10,20 +10,18 @@ import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { noDomainAdapterReconciliationRule } from '@/lib/aie/reconciliation/types';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
+import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import type { AieSourceModuleHint } from '@/lib/aie/types';
 
 const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investment_intelligence', 'fdh_bank', 'other', null];
 
-// A single project-wide mock provider instance. Genuinely no external AI
-// provider traffic occurs anywhere in this route — see gateway.ts's kill
-// switch (defaults OFF) and this pass's explicit constraint against live
-// provider calls. A real provider is a separately-authorised future step.
-const gateway = new AieDocumentAiGateway(
-  new MockAieProvider({
-    respond: () => JSON.stringify({ fields: [] }),
-  }),
-);
+// AIE-1 closure mission: provider selection now goes through the one shared
+// factory (`AIE_AI_PROVIDER` env var) instead of a hardcoded mock — see
+// `lib/aie/provider/providerFactory.ts`'s header. Still gated by
+// gateway.ts's own kill switch (defaults OFF) regardless of which provider
+// is selected.
+const gateway = new AieDocumentAiGateway(createAieAiProvider());
 
 // POST /api/aie/intake?filename=...&source_module_hint=...
 // AIE-1.1 architecture steps 1-11 in one server-mediated request (same
@@ -131,6 +129,12 @@ export async function POST(req: Request) {
     reconcile: noDomainAdapterReconciliationRule,
     deps,
   });
+
+  // AIE-1 closure mission (section 4.1): this diagnostic/no-domain-adapter
+  // route never performs any canonical write, so nothing downstream ever
+  // needs these bytes again once the pipeline run concludes — safe to
+  // delete immediately. Non-fatal on failure; the scheduled sweep backstops.
+  await finalizeDocumentBinaryAfterRun({ intakeId, userId: user.id, storageKey });
 
   return ok({
     intake_id: intakeId,

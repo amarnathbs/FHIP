@@ -87,6 +87,7 @@ import { acceptAndWriteInsuranceCandidates, createDefaultAcceptAndWriteInsurance
 import { acceptAndWriteInvestmentCandidates, createDefaultAcceptAndWriteDeps, II_ADAPTER_ID, type AcceptAndWriteDeps as AcceptAndWriteInvestmentDeps, type AcceptAndWriteOutcome as AcceptAndWriteInvestmentOutcome } from '../adapters/investment-intelligence';
 import { commitFdhBankStatementImport, FDH_BANK_STATEMENT_ADAPTER_ID, type FdhBankCommitRequest, type FdhBankCommitOutcome } from '../adapters/fdhBankStatement';
 import { downloadFromQuarantine } from '../storage';
+import { finalizeDocumentBinaryAfterRun } from '../services/purge';
 import { isAieCanonicalAcceptanceEnabled } from './featureFlags';
 import type { Owner as OwnerValue } from '@/lib/constants';
 
@@ -147,6 +148,21 @@ export interface AcceptRunDeps {
   acceptAndWriteInvestment: (input: Parameters<typeof acceptAndWriteInvestmentCandidates>[0], deps: AcceptAndWriteInvestmentDeps) => Promise<AcceptAndWriteInvestmentOutcome>;
   investmentWriteDeps: AcceptAndWriteInvestmentDeps;
   commitFdhBankImport: (req: FdhBankCommitRequest) => Promise<FdhBankCommitOutcome>;
+  /**
+   * AIE-1 closure mission (section 4.1) addition. Investment Intelligence's
+   * and FDH-bank's writes both need the ORIGINAL quarantine bytes AT ACCEPT
+   * TIME (unlike Insurance, whose candidate-based write never touches
+   * storage — see `insurance/write.ts`'s absence of any storage import) —
+   * so, unlike Insurance's document, their AIE quarantine copy cannot be
+   * deleted immediately after the extraction run; it must wait until the
+   * accept-time write that consumes it has genuinely succeeded. Called
+   * once, right after each adapter's own write call returns success, never
+   * on an `alreadyCompleted` replay branch (the first successful call
+   * already deleted it; a replay finding nothing to delete is harmless but
+   * unnecessary). A failure here is non-fatal to acceptance itself — the
+   * scheduled sweep's hard-age backstop remains the safety net.
+   */
+  finalizeDocumentBinary: typeof finalizeDocumentBinaryAfterRun;
 }
 
 export function createDefaultAcceptRunDeps(): AcceptRunDeps {
@@ -171,6 +187,7 @@ export function createDefaultAcceptRunDeps(): AcceptRunDeps {
     acceptAndWriteInvestment: acceptAndWriteInvestmentCandidates,
     investmentWriteDeps: createDefaultAcceptAndWriteDeps(),
     commitFdhBankImport: commitFdhBankStatementImport,
+    finalizeDocumentBinary: finalizeDocumentBinaryAfterRun,
   };
 }
 
@@ -371,6 +388,10 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
     }
 
     await deps.markWriteBatchStatus(batch.id, 'committed');
+    // AIE's own temporary quarantine copy is no longer needed — the write
+    // just durably persisted II's own copy of the document. See
+    // `AcceptRunDeps.finalizeDocumentBinary`'s doc comment.
+    await deps.finalizeDocumentBinary({ intakeId: run.intakeId, userId: run.userId, storageKey: investmentUploadMetadata!.storageKey });
     const movedToCompleted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
     await deps.audit({ intakeId: run.intakeId, runId: run.id, userId: run.userId, eventType: 'run_completed', actorType: 'user', actorId: params.acceptedByUserId, metadata: { iiSourceDocumentId: write.iiSourceDocumentId } });
     if (!movedToCompleted) {
@@ -419,6 +440,10 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   }
 
   await deps.markWriteBatchStatus(batch.id, 'committed');
+  // AIE's own temporary quarantine copy is no longer needed — FDH-5's own
+  // pipeline just durably persisted its own copy via `commitFdhBankImport`.
+  // See `AcceptRunDeps.finalizeDocumentBinary`'s doc comment.
+  await deps.finalizeDocumentBinary({ intakeId: run.intakeId, userId: run.userId, storageKey: fdhBankStorageKey! });
   const movedToCompleted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
   await deps.audit({
     intakeId: run.intakeId,

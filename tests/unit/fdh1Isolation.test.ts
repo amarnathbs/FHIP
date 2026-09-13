@@ -374,6 +374,21 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // returning zero matches.
       path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'documentCatalogue.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'labels.ts'),
+      // AIE-1 closure mission (2026-09-13): the same naive-substring
+      // limitation again. `lib/aie/storage.ts#verifyQuarantineObjectAbsent`
+      // and `lib/aie/services/purge.ts` (AIE's own new retention/purge
+      // service, reusing LR-1's DESIGN, not its CODE) both cite
+      // `lib/financial-data-hub/services/storage.ts#verifyDocumentObjectExists`
+      // and `lib/financial-data-hub/services/purge.ts` in header comments as
+      // the prior-art pattern being mirrored — neither file imports FDH code.
+      // `app/api/aie/cron/purge-sweep/route.ts` cites
+      // `app/api/financial-data-hub/documents/cron/purge-sweep/route.ts` the
+      // same way. Confirmed by hand and by
+      // `grep -n "from '@/lib/financial-data-hub" lib/aie/storage.ts lib/aie/services/purge.ts app/api/aie/cron/purge-sweep/route.ts`
+      // returning zero matches.
+      path.join(REPO_ROOT, 'lib', 'aie', 'storage.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'services', 'purge.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'cron', 'purge-sweep', 'route.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

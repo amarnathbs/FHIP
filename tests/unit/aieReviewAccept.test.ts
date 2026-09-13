@@ -55,6 +55,10 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
       calls.writes.push(req);
       return { committed: true, statementUploadId: 'statement-1', transactionsCreated: 12, certificationStatus: 'certified' };
     },
+    finalizeDocumentBinary: async (p) => {
+      calls.audits.push({ finalizeDocumentBinary: p });
+      return { status: 'deleted' };
+    },
     ...overrides,
   };
   return { deps, calls };

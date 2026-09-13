@@ -48,3 +48,25 @@ export async function deleteFromQuarantine(storageKey: string): Promise<{ ok: tr
   if (error) return { ok: false, message: error.message };
   return { ok: true };
 }
+
+/**
+ * AIE-1 closure mission (section 9) — independent existence check, mirroring
+ * `lib/financial-data-hub/services/storage.ts#verifyDocumentObjectExists`'s
+ * own technique exactly (list the parent "directory" and search for the
+ * exact object name — Supabase Storage's `.list()` is the only reliable way
+ * to distinguish "genuinely absent" from a transient error, since `.remove()`
+ * itself can report success without the object having actually existed).
+ * `runPurgeAttempt` (`lib/aie/services/purge.ts`) never marks a row `purged`
+ * on the strength of a successful `deleteFromQuarantine` call alone — it
+ * calls this function next and only proceeds once it returns `true`.
+ */
+export async function verifyQuarantineObjectAbsent(storageKey: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const lastSlash = storageKey.lastIndexOf('/');
+  const dir = storageKey.slice(0, lastSlash);
+  const name = storageKey.slice(lastSlash + 1);
+  const { data, error } = await admin.storage.from(AIE_QUARANTINE_BUCKET).list(dir, { search: name, limit: 1 });
+  if (error) return false; // cannot confirm absence -> treat as still present (fail closed)
+  const stillPresent = (data ?? []).some((f) => f.name === name);
+  return !stillPresent;
+}

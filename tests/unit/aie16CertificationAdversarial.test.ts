@@ -69,6 +69,7 @@ function makeSharedFakeDb() {
     commitFdhBankImport: async () => {
       throw new Error('not exercised by this Insurance-only concurrency probe');
     },
+    finalizeDocumentBinary: async () => ({ status: 'deleted' }),
   };
 
   return { deps, state };

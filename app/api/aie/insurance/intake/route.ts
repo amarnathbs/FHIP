@@ -7,14 +7,20 @@ import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
 import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
+import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
+import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 
 import { isAieInsuranceAdapterEnabled } from '@/lib/aie/adapters/insurance/featureFlags';
 import { buildInsuranceReconciliationRule } from '@/lib/aie/adapters/insurance/reconciliation';
 import { registerInsuranceAdapter } from '@/lib/aie/adapters/insurance';
+import {
+  registerInsuranceAdapterSchema,
+  AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME,
+  AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
+} from '@/lib/aie/adapters/insurance/schema';
 
 // LIVE-DEV VERIFICATION FIX (2026-09-12, AIE_1_LIVE_DEV_VERIFICATION_REPORT.md
 // pass 2): this used to be a bare `import '@/lib/aie/adapters/insurance';`
@@ -36,12 +42,18 @@ import { registerInsuranceAdapter } from '@/lib/aie/adapters/insurance';
 // alongside it, since a no-op import left in place would silently invite the
 // same false "this line already does the job" reading again.
 registerInsuranceAdapter();
+// AIE-1 closure mission: this adapter's own narrower field-completion
+// schema (closed enum: only `policyNameClarification`) must be registered
+// before any run can select it via `schemaOverride` below.
+registerInsuranceAdapterSchema();
 
-// A single project-wide mock provider instance — genuinely no external AI
-// provider traffic occurs anywhere in this route (matches the generic
-// `/api/aie/intake` and AIE-1.3 `fdh-bank/intake` routes' own disclosed
-// constraint). Gated by AIE-1.1's global kill switch, defaulted OFF.
-const gateway = new AieDocumentAiGateway(new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) }), {
+// AIE-1 closure mission: provider selection now goes through the one shared
+// factory (`AIE_AI_PROVIDER` env var) instead of a hardcoded mock — see
+// `lib/aie/provider/providerFactory.ts`'s header for why this was a real,
+// disclosed gap (three routes each independently hardcoded the mock with
+// no switch to a real provider anywhere). Still gated by AIE-1.1's global
+// kill switch, defaulted OFF, regardless of which provider is selected.
+const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
 });
 
@@ -153,7 +165,24 @@ export async function POST(req: Request) {
     extractedText: extraction.concatenatedText,
     reconcile: buildInsuranceReconciliationRule(),
     deps,
+    schemaOverride: {
+      schemaName: AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME,
+      schemaVersion: AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
+    },
   });
+
+  // AIE-1 closure mission (section 4.1): Insurance's canonical write never
+  // touches storage (`insurance/write.ts` has no download/storage import at
+  // all — it writes typed fields only) — so, unlike Investment Intelligence
+  // and FDH-bank (whose accept-time writes need the original bytes; see
+  // `lib/aie/review/accept.ts`'s `finalizeDocumentBinary` doc comment), the
+  // AIE quarantine copy is safe to delete now, immediately, rather than
+  // waiting for a later, separate acceptance request. `runExtractionPipeline`
+  // only ever returns `privacy_blocked`/`unresolved`/`awaiting_acceptance`
+  // here — never a state that still needs the binary — and structured
+  // candidates/reconciliation results are already durably persisted by this
+  // point. A failure here is non-fatal; the scheduled sweep is the backstop.
+  await finalizeDocumentBinaryAfterRun({ intakeId, userId: user.id, storageKey });
 
   // AIE-1.5 SUPERSEDES THE SELF-ACCEPT THIS ROUTE USED TO PERFORM HERE.
   //

@@ -8,7 +8,7 @@ import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
+import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
@@ -32,7 +32,7 @@ import '@/lib/aie/adapters/fdhBankStatement'; // side-effecting registration (sc
 // both must be 'true' or every call short-circuits to
 // `kill_switch_blocked` before the (mock) provider is ever invoked. Both
 // default OFF.
-const gateway = new AieDocumentAiGateway(new MockAieProvider({ respond: () => JSON.stringify({ fields: [] }) }), {
+const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled() && isAieFdhBankAiFallbackEnabled(),
 });
 

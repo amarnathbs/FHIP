@@ -187,6 +187,7 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
       commitFdhBankImport: async () => {
         throw new Error('not exercised by this Insurance-only E2E journey');
       },
+      finalizeDocumentBinary: async () => ({ status: 'deleted' }),
     };
 
     const acceptance = await acceptRun(
