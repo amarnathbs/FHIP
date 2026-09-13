@@ -43,23 +43,22 @@ frontend:
         # grant (migration 0129, unconditional once applied, independent of
         # these flags) has ever been live. Adding them here is what actually
         # makes the console configuration take effect for the first time.
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e '^ROLLOUT_' >> .env.production
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
-        # TEMPORARY DIAGNOSTIC (2026-09-13, G8 closure) — G4/G5B/ROLLOUT_*
-        # still show as effectively OFF/absent at production runtime after
-        # this exact forwarding mechanism was added and two redeploys ran.
-        # Print ONLY variable-name presence (never a value) so the build log
-        # (visible in the Amplify console, unlike this session's own
-        # sandbox) can confirm or refute each stage independently. Remove
-        # once the root cause is found.
-        - echo "--- DIAG: names present in raw build env (no values) ---"
-        - env | grep -oE '^[A-Z0-9_]+' | grep -E '^(G4_APP_CAPABILITY_LAYER_ENABLED|G5B_GENERIC_WRITE_ENABLED|ROLLOUT_G5B_GENERIC_WRITE_ENABLED|ROLLOUT_G5B_GENERIC_WRITE_VERSION|ROLLOUT_G5B_GENERIC_WRITE_PERCENTAGE)$' || echo "NONE of the 5 target names found in raw build env"
-        - echo "--- DIAG: .env.production line count and target names present (no values) ---"
-        - wc -l .env.production
-        - grep -oE '^[A-Z0-9_]+' .env.production | grep -E '^(G4_APP_CAPABILITY_LAYER_ENABLED|G5B_GENERIC_WRITE_ENABLED|ROLLOUT_G5B_GENERIC_WRITE_ENABLED|ROLLOUT_G5B_GENERIC_WRITE_VERSION|ROLLOUT_G5B_GENERIC_WRITE_PERCENTAGE)$' || echo "NONE of the 5 target names found in .env.production"
-        - echo "--- DIAG: is .env.production going to ship in the deployed artifact? baseDirectory is .next, this file lives at repo root ---"
-        - pwd
-        - ls -la .env.production
+        # TEMPORARY DIAGNOSTIC (2026-09-13, G8 closure) — none of these 5
+        # values are secret (a boolean flag, a percentage, a version label),
+        # so printing them directly is safe. Simplest possible syntax
+        # deliberately, after the previous diagnostic version broke the
+        # build. Remove once the root cause is found.
+        - echo DIAG_G4=$G4_APP_CAPABILITY_LAYER_ENABLED
+        - echo DIAG_G5B=$G5B_GENERIC_WRITE_ENABLED
+        - echo DIAG_ROLLOUT_ENABLED=$ROLLOUT_G5B_GENERIC_WRITE_ENABLED
+        - echo DIAG_ROLLOUT_VERSION=$ROLLOUT_G5B_GENERIC_WRITE_VERSION
+        - echo DIAG_ROLLOUT_PERCENTAGE=$ROLLOUT_G5B_GENERIC_WRITE_PERCENTAGE
+        - echo DIAG_PWD=$(pwd)
+        - grep G4_APP_CAPABILITY_LAYER_ENABLED .env.production || echo DIAG_NOT_IN_ENV_PRODUCTION_FILE
+        - grep G5B_GENERIC_WRITE_ENABLED .env.production || echo DIAG_NOT_IN_ENV_PRODUCTION_FILE
+        - grep ROLLOUT_ .env.production || echo DIAG_NOT_IN_ENV_PRODUCTION_FILE
         - npm run build
   artifacts:
     baseDirectory: .next
