@@ -118,6 +118,10 @@ export function RunReviewPanel({ runId }: { runId: string }) {
           setAnnouncement('This document was accepted, but saving it to your records did not complete.');
         } else if (result.detail.summary.userState === 'unable_to_process_safely') {
           setAnnouncement('This document could not be processed safely.');
+        } else if (result.detail.summary.userState === 'accepted_importing') {
+          setAnnouncement('This document was accepted and is being saved to your records now.');
+        } else if (result.detail.summary.userState === 'completed') {
+          setAnnouncement('This document has been saved to your records.');
         }
       }
       setLoading(false);
@@ -343,6 +347,34 @@ export function RunReviewPanel({ runId }: { runId: string }) {
 
       {!isClean && items.length === 0 && summary.userState === 'processing' && (
         <ResourceEmptyState title="Still processing" message="We're rechecking this document. This page will update automatically once it's ready." />
+      )}
+
+      {/* AIE-1 infrastructure-activation follow-on: the SAME class of gap
+          as isTerminalFailure below, found the same way (checking every
+          AieUserFacingState value against every render branch, then
+          confirming live) -- 'accepted_importing' (run status 'accepted'
+          or 'write_pending') with zero open items matched none of the
+          other branches either, and rendered nothing. Confirmed live
+          before this fix: a run in this exact state showed the nav shell
+          and filename header only. */}
+      {!isClean && items.length === 0 && summary.userState === 'accepted_importing' && (
+        <ResourceEmptyState title="Saving to your records" message="This document was accepted and is being saved to your records now. This page will update automatically once it's done." />
+      )}
+
+      {/* THIRD real instance of the same gap, found the same systematic
+          way and confirmed live BEFORE this fix: a genuinely 'completed'
+          run with zero items also matched no branch and rendered nothing
+          -- arguably the most commonly reached of the four gaps in real
+          usage, since every successful acceptance eventually reaches this
+          state permanently (e.g. a user revisiting a bookmarked/refreshed
+          URL after their document was already saved). The earlier
+          accessibility pass's "live region exists" check only verified
+          the (always-present) live-region ELEMENT's existence, never that
+          it held any actual announced text -- which is exactly why an
+          empty announcement here passed that check without anyone
+          noticing the visible content was also missing. */}
+      {!isClean && items.length === 0 && summary.userState === 'completed' && (
+        <ResourceEmptyState title="Saved" message="This document has been saved to your records." />
       )}
 
       {!isClean && items.length === 0 && isTerminalFailure && (
