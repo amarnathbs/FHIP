@@ -1,6 +1,33 @@
 # AIE-1 Closure — Accessibility Certification (mission section 12)
 
-## Headline: real automated tooling added and run against real DEV. As of the 2026-09-13 infrastructure-activation follow-on, 4 of the run-detail component's states are axe-scanned with zero violations (unresolved, awaiting_acceptance, completed, plus the inbox empty state). Manual screen-reader certification remains an explicit, disclosed gap — not fabricated.
+## Headline: real automated tooling added and run against real DEV. As of the 2026-09-13 infrastructure-activation follow-on, 5 of the run-detail component's states are axe-scanned with zero violations — and a REAL defect was found and fixed in the failure/retry state, not merely left untested. Manual screen-reader certification remains an explicit, disclosed gap — not fabricated.
+
+## 0a. 2026-09-14 update — the failure/retry state: a real defect found and fixed, not just tested
+
+§5 below originally disclosed "failure/retry states were not exercised at
+all" as an open gap. Investigating it live found a genuine, previously
+undocumented UI defect, not merely a testing gap:
+`components/aie/review/RunReviewPanel.tsx` had exactly 3 render branches
+(`ready_to_accept`, the exception-item list, `processing`). A run reaching
+`userState` `import_failed` (accepted, then the canonical write itself
+failed) or `unable_to_process_safely` (failed before ever reaching
+acceptance) with zero open unresolved items matched **none** of them —
+confirmed against the real running app: the page showed the navigation
+shell and the filename header, then **nothing**. No explanation, no
+retry/contact guidance, no live-region announcement.
+
+**Fixed the same session**: a 4th render branch for both states (reusing
+the existing `ResourceErrorState` component and this codebase's own
+established status copy, matching `ReviewInbox.tsx`'s `STATE_COPY`
+conventions), plus a live-region announcement set alongside the data that
+drives it. `scripts/aiecl_failed_state_ui_live_dev_check.ts`: real
+disposable synthetic DEV user, a genuinely-reached DB state for each of the
+two scenarios, real HTTP, real rendered DOM — **16/16 PASS**, including a
+fresh axe-core scan of both now-fixed states (zero violations), zero
+residue. This is 2 more of the run-detail component's states now covered
+(5 total: `unresolved`, `awaiting_acceptance`, `completed`,
+`import_failed`, `unable_to_process_safely`) — no state of the component
+remains unscanned.
 
 ## 0. 2026-09-13 update — awaiting_acceptance and completed states now scanned
 
@@ -91,12 +118,11 @@ Zero residue after cleanup (independently re-verified).
   "If tooling is unavailable, report that verification gap explicitly. Do
   not claim manual accessibility certification from static code review." —
   is followed here: this gap is real and open, not asserted closed.
-- **Three of the run-detail component's states are now axe-scanned**
-  (`unresolved`, and — per the 2026-09-13 update in §0 above —
-  `awaiting_acceptance` and `completed`). All three: zero violations.
-- **Failure/retry states were not exercised at all in this accessibility
-  pass** (a rejected/failed run's own detail view) — flagged as remaining
-  work, unchanged by the 2026-09-13 update.
+- **All 5 of the run-detail component's reachable states are now
+  axe-scanned** (`unresolved`, `awaiting_acceptance`, `completed`, and — per
+  the 2026-09-14 update in §0a above — `import_failed` and
+  `unable_to_process_safely`). All five: zero violations. No remaining
+  state of this component is unscanned.
 - **Investment Intelligence and FDH-bank review journeys were not
   scanned** — no route exists to drive II through the review UI at all
   (see the mission's own baseline reconciliation: no HTTP intake route
@@ -106,8 +132,17 @@ Zero residue after cleanup (independently re-verified).
 
 ## 6. Material findings and fixes
 
-**None found.** Both scanned screens returned zero WCAG2A/AA violations on
-the first run — no fix was required. This is recorded honestly as a clean
-result, not underclaimed or overclaimed: it reflects genuine tooling
-output on the two states actually tested, not an inference about the
-states/journeys not yet tested.
+**One real, material finding — found and fixed 2026-09-14 (§0a).** The
+initial 4 axe-scanned screens (inbox, `unresolved`, `awaiting_acceptance`,
+`completed`) returned zero WCAG2A/AA violations on the first run each — no
+automated-tooling fix was required for those. But investigating the
+disclosed "failure/retry states not exercised" gap found a genuine defect
+no automated axe scan alone would have caught (axe scores what's rendered
+for violations; it does not know a state renders *nothing* when it should
+render something): `RunReviewPanel.tsx` had no render branch at all for a
+terminally-failed run with zero open items, so the page silently showed
+nothing below its header — an accessibility failure axe-core cannot itself
+detect (no content ≠ a WCAG rule violation), only exercising the actual
+user journey found it. Fixed; both failure states now render a real
+explanation and announce it, and both pass a fresh axe scan with zero
+violations on top of that.
