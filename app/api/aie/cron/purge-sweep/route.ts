@@ -17,7 +17,7 @@ import { enforceAieRawFileHardBackstop, findDuePurges, runPurgeAttempt } from '@
  *
  * Reuses the SAME `CRON_SECRET` env var as the FDH purge-sweep route (one
  * shared platform secret, matching this app's one existing scheduled-job
- * precedent) — see migration `0147`'s own header for why the Vault SECRET
+ * precedent) — see migration `0149`'s own header for why the Vault SECRET
  * NAME is nonetheless kept distinct per-job.
  */
 export async function POST(req: Request) {

@@ -105,7 +105,7 @@ async function main() {
     // The mission's own new behaviour: the quarantine binary should already
     // be gone by now (immediate deletion right after the pipeline run
     // concludes, since Insurance's canonical write never needs it again).
-    // DISCLOSED, EXPECTED DEGRADATION: migration 0147 (which adds
+    // DISCLOSED, EXPECTED DEGRADATION: migration 0149 (which adds
     // aie_document_intake.purge_status/purge_due_at/purged_at) is NOT
     // applied to DEV (same DDL-channel blocker as everywhere else in this
     // closure mission) -- finalizeDocumentBinaryAfterRun's own DB bookkeeping
@@ -119,23 +119,23 @@ async function main() {
     // (currently unusable) purge_status column.
     const intakeRowBasic = await admin.from('aie_document_intake').select('status, storage_key').eq('id', intakeId).single();
     storageKey = intakeRowBasic.data?.storage_key ?? null;
-    check('intake row query succeeds on the columns that exist today (pre-0147)', !intakeRowBasic.error, intakeRowBasic.error);
+    check('intake row query succeeds on the columns that exist today (pre-0149)', !intakeRowBasic.error, intakeRowBasic.error);
     if (storageKey) {
       const lastSlash = storageKey.lastIndexOf('/');
       const listing = await admin.storage.from('aie-document-quarantine').list(storageKey.slice(0, lastSlash), { search: storageKey.slice(lastSlash + 1) });
       const stillPresent = (listing.data ?? []).some((f) => f.name === storageKey!.slice(lastSlash + 1));
       check(
-        'the actual Supabase Storage object WAS genuinely deleted by finalizeDocumentBinaryAfterRun\'s delete call, even though migration 0147 is not yet applied (only the DB status bookkeeping is blocked, not the real delete)',
+        'the actual Supabase Storage object WAS genuinely deleted by finalizeDocumentBinaryAfterRun\'s delete call, even though migration 0149 is not yet applied (only the DB status bookkeeping is blocked, not the real delete)',
         !stillPresent,
         listing,
       );
       check(
-        'DISCLOSED GAP (blocked on migration 0147): the DB row status is still "ready" with a now-dangling storage_key, because the post-delete DB update itself failed on a missing column -- this is a real, live-DEV-observed consequence of the DDL-application blocker, not a code defect in the delete/verify logic itself',
+        'DISCLOSED GAP (blocked on migration 0149): the DB row status is still "ready" with a now-dangling storage_key, because the post-delete DB update itself failed on a missing column -- this is a real, live-DEV-observed consequence of the DDL-application blocker, not a code defect in the delete/verify logic itself',
         intakeRowBasic.data?.status === 'ready' && intakeRowBasic.data?.storage_key !== null,
         intakeRowBasic.data,
       );
     } else {
-      check('storage_key already cleared (unexpected pre-0147, but not wrong)', true);
+      check('storage_key already cleared (unexpected pre-0149, but not wrong)', true);
     }
 
     const idempotencyKey = `aiecl-ins-regr-${stamp}-accept`;

@@ -1,6 +1,6 @@
 /**
  * AIE-1 closure mission (section 8) — TypeScript wrapper around migration
- * 0148's atomic `aie_reserve_ai_cost`/`aie_settle_ai_cost` Postgres
+ * 0150's atomic `aie_reserve_ai_cost`/`aie_settle_ai_cost` Postgres
  * functions. Every actual concurrency-safety guarantee lives in the SQL
  * function (one atomic `UPDATE ... WHERE ... RETURNING`) — this module
  * only shapes the RPC call and estimates the conservative pre-call

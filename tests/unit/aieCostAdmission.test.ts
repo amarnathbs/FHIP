@@ -1,6 +1,6 @@
 /**
  * AIE-1 closure mission — unit coverage for `lib/aie/cost/costAdmission.ts`.
- * The actual atomicity guarantee lives entirely in migration 0148's SQL
+ * The actual atomicity guarantee lives entirely in migration 0150's SQL
  * function (one atomic `UPDATE ... WHERE ... RETURNING`) — DEV/production
  * verification of THAT is BLOCKED (no DDL channel; see the migration's own
  * header). This suite proves the TypeScript wrapper shapes the RPC call
@@ -100,7 +100,7 @@ describe('getAieCostLedgerSnapshot', () => {
     expect(snapshot!.totalAttempts).toBe(5);
   });
 
-  it('returns null when the ledger row does not exist (e.g. migration 0148 not yet applied)', async () => {
+  it('returns null when the ledger row does not exist (e.g. migration 0150 not yet applied)', async () => {
     selectRow = null;
     const snapshot = await getAieCostLedgerSnapshot();
     expect(snapshot).toBeNull();

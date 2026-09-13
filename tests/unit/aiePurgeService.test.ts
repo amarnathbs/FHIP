@@ -1,7 +1,7 @@
 /**
  * AIE-1 closure mission — unit coverage for `lib/aie/services/purge.ts`,
  * the retention/purge job AIE never had before this mission. DEV/production
- * live verification is BLOCKED (migration 0147, which adds the
+ * live verification is BLOCKED (migration 0149, which adds the
  * `purge_status`/`purge_due_at`/etc. columns this module reads and writes,
  * cannot be applied from this session — no DDL execution channel exists;
  * see the migration's own header). This suite proves the SAFETY LOGIC using

@@ -378,7 +378,7 @@ aws cloudwatch put-metric-alarm --region "$REGION" \
 # -- this is the AWS-side cost, not the AI-provider-side cost). Mission
 # section 8: "do not rely solely on provider dashboard budgets as hard
 # stops" applies to the AI cost, which this mission already enforces via a
-# real atomic DB reservation (migration 0148) -- this budget alert is a
+# real atomic DB reservation (migration 0150) -- this budget alert is a
 # secondary, AWS-side observability signal, not AIE's primary cost gate.
 aws budgets create-budget --account-id "$ACCOUNT_ID" --budget '{
   "BudgetName": "aie-guardduty-s3-quarantine-dev",

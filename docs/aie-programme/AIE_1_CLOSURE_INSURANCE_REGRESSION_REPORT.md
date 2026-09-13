@@ -26,7 +26,7 @@ journey.
    `.list()` call, not merely trusting the delete call's return value) —
    `finalizeDocumentBinaryAfterRun`'s immediate-deletion path executed
    against real Supabase Storage.
-4. **Disclosed gap, observed live, not just theorised**: migration 0147
+4. **Disclosed gap, observed live, not just theorised**: migration 0149
    (adds `aie_document_intake.purge_status`/etc.) is not applied to DEV,
    so the DB-side status bookkeeping for that same deletion (`status ->
    'deleted'`, clearing `storage_key`) fails on a missing column and the
@@ -34,7 +34,7 @@ journey.
    This is a genuine, narrow, correctly-scoped consequence of the DDL-
    application blocker (same blocker as every other migration-dependent
    item in this mission) — not a defect in the delete/verify logic, which
-   demonstrably ran and worked. It resolves itself the moment 0147 is
+   demonstrably ran and worked. It resolves itself the moment 0149 is
    applied; no code change is needed.
 5. Accept still succeeds via the real route even though the quarantine
    binary is already gone — confirms Insurance's canonical write genuinely
@@ -54,5 +54,5 @@ The previously-certified Insurance HTTP journey
 mission's changes. The one behavioural difference this mission introduces
 — immediate quarantine deletion — is proven to work at the storage layer
 today, with its DB bookkeeping honestly disclosed as blocked pending
-migration 0147, exactly as documented elsewhere in this mission's other
+migration 0149, exactly as documented elsewhere in this mission's other
 migration-dependent work.
