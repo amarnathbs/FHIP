@@ -157,6 +157,18 @@ merged. No production action taken anywhere in this register.
 | Evidence location | `docs/aie-programme/AIE_1_CLOSURE_ACCESSIBILITY_REPORT.md` |
 | Status | **VERIFIED IN DEV** for every reachable state of the reviewed component. Manual screen-reader pass **BLOCKED** (tooling) |
 
+## 12a. Passwords and resource-abuse protection
+
+| | |
+|---|---|
+| Requirement | Reject encrypted PDFs clearly and purge temporary content if unsupported; protect against oversized documents/excessive page counts |
+| Observed | Confirmed by direct code read: **no password-decryption path exists anywhere in AIE** (`app/api/aie/insurance/intake/route.ts` and the generic route both stop at `passwordRequired: true` and never proceed) — matches "currently unsupported" exactly. The intake row is left `status: 'quarantined'`, never explicitly purged at that moment, but the already-verified adapter-agnostic 24-hour hard backstop (§5/8) picks it up regardless of status (its query has no status filter) — so cleanup is real, not merely assumed. File-size limit (25MB for PDF) and page-count limit (`AIE_PDF_MAX_PAGES`) are both real, enforced checks in `lib/aie/validation/fileValidation.ts`/`lib/aie/extraction/textExtraction.ts` |
+| Remaining | Decompression-bomb/embedded-active-content protection was not independently audited at the underlying PDF-parsing library level this pass — out of scope for a code-read-level check without a deeper library audit |
+| Dependency | None blocking for what was checked |
+| Verification method | Direct code read (this pass); the 24h backstop's own behavior already live-verified generically (§5/8), not re-run specifically for a password-required row this pass |
+| Evidence location | `lib/aie/validation/fileValidation.ts`, `lib/aie/extraction/textExtraction.ts`, `app/api/aie/insurance/intake/route.ts` |
+| Status | **IMPLEMENTED and consistent with the mission's own "reject clearly, purge via backstop" instruction** — not separately re-verified live this pass beyond the already-established generic backstop proof |
+
 ## 12. Masking verified before network egress
 
 | | |
