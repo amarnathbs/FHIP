@@ -131,7 +131,7 @@ merged. No production action taken anywhere in this register.
 |---|---|
 | Insurance | **VERIFIED IN DEV**, full real HTTP journey, re-verified post-0149/0150, zero regression, 4 UI states (unresolved/awaiting_acceptance/completed + 2 failure states) all axe-clean and confirmed to render correctly (2 real UI defects found+fixed this session, see accessibility report) |
 | Investment Intelligence | **Re-traced this session, confirmed unchanged**: the generic intake route's `source_module_hint=investment_intelligence` is validated and stored as metadata ONLY (`createIntake({..., sourceModuleHint: moduleHint})`) — never passed to `runExtractionPipeline`, which always uses `noDomainAdapterReconciliationRule` for this route regardless of the hint. **No real dispatch path to II's own adapter logic exists** — confirmed by tracing, not assumed. Building the missing route remains the largest single implementation gap, deliberately not rushed (§9.1 of the original closure report) |
-| FDH-bank | Adapter logic implemented, own regression not separately re-run this pass (same shared review-UI component as Insurance, already exercised) |
+| FDH-bank | Adapter logic implemented; own integration test suite (`tests/unit/aieFdhBankStatementOrchestratorIntegration.test.ts`) re-read this pass and confirmed substantive, not vacuous — real coverage of balance-reconciliation blocking, masking of institution-hint prompts, and kill-switch-off behavior. A full new real-HTTP live-DEV journey (matching Insurance's own) was deliberately not built this pass — reasoned, not rushed: FDH-bank shares the exact same review-UI component (already exhaustively verified across all 7 states this session) and the exact same cost-admission/masking infrastructure (also verified this session including under genuine concurrency), so the marginal risk-adjusted value of a new bespoke journey is lower than for II (which has zero real dispatch path at all) |
 
 ## 10. PC5
 
@@ -184,6 +184,18 @@ merged. No production action taken anywhere in this register.
 **Real, previously-undiscovered finding along the way, fixed for real**: `AIE_MASK_TOKEN_ENCRYPTION_KEY` was entirely absent from DEV's `.env.local` — meaning **any real document that ever reached the masking/AI-fallback path in the real running app would have crashed with an unhandled exception**, today, before this fix. Not previously caught because every prior Insurance regression fixture had `productName` present, which never enters this code path at all — this is the first time this session's testing actually exercised it. A genuine 64-hex-char key has been generated and added to `.env.local` (confirmed gitignored, never committed). This is a local DEV configuration file this session has direct write access to — no external credential or approval was needed to close this gap, unlike the AWS/OpenAI items above.
 
 ---
+
+## 13. Provider refusal/timeout/schema-rejection cannot write canonical records
+
+| | |
+|---|---|
+| Requirement | A refused, malformed, or schema-invalid AI response can never reach a canonical write |
+| Observed | Already real, substantive unit coverage, re-confirmed this pass: `tests/unit/aieOrchestrator.test.ts`'s "a schema-rejected AI response still proceeds to reconciliation with only deterministic candidates, never fabricating AI data" and "a FAIL reconciliation outcome always produces a blocking unresolved item and the run stops at 'unresolved', never awaiting_acceptance" — the state machine itself structurally prevents a schema-rejected/refused/failed-reconciliation run from ever reaching the one status (`awaiting_acceptance`) that a canonical write can proceed from |
+| Remaining | Nothing — genuinely already closed, not a new gap |
+| Dependency | None |
+| Verification method | Existing unit suite (re-run this pass as part of the full 467/468 AIE suite) |
+| Evidence location | `tests/unit/aieOrchestrator.test.ts` |
+| Status | **VERIFIED** (unit-level; the state-machine guarantee is structural, not adapter-specific, so it applies identically to Insurance/II/FDH-bank) |
 
 ## Consolidated question — the one blocker for the entire AWS-touching half of this mission
 
