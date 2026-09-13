@@ -103,8 +103,23 @@ export function RunReviewPanel({ runId }: { runId: string }) {
       setError(null);
       const result = await fetchRunDetail(runId);
       if (cancelled) return;
-      if ('error' in result) setError(result.error);
-      else setDetail(result.detail);
+      if ('error' in result) {
+        setError(result.error);
+      } else {
+        setDetail(result.detail);
+        // A11Y: announce a terminal failure state to assistive technology
+        // as soon as it's loaded — the same live region every other
+        // status change already uses (IA-07: never expect a screen-reader
+        // user to infer "nothing happened" from silence). Set here,
+        // alongside the data that drives it, rather than in a separate
+        // effect reacting to state (avoids a synchronous setState-in-effect
+        // render cascade).
+        if (result.detail.summary.userState === 'import_failed') {
+          setAnnouncement('This document was accepted, but saving it to your records did not complete.');
+        } else if (result.detail.summary.userState === 'unable_to_process_safely') {
+          setAnnouncement('This document could not be processed safely.');
+        }
+      }
       setLoading(false);
     })();
     return () => {
@@ -207,6 +222,17 @@ export function RunReviewPanel({ runId }: { runId: string }) {
 
   const { summary, candidates, summaryFieldOrder, items, integrationTested } = detail;
   const isClean = summary.userState === 'ready_to_accept';
+  // AIE-1 infrastructure-activation follow-on: a run can reach
+  // 'import_failed' (accepted, then the canonical write itself failed) or
+  // 'unable_to_process_safely' (a pre-acceptance terminal failure) with
+  // ZERO open unresolved items left -- neither the clean-summary branch
+  // nor the exception-item-list branch below matches that combination.
+  // Found live (not by static review alone): before this fix, that exact
+  // state rendered nothing but the filename header, with no explanation
+  // and no live-region announcement -- a real, previously undocumented
+  // gap, not merely an untested one. See lib/aie/review/userState.ts's own
+  // computeUserFacingState() for how these two states are reached.
+  const isTerminalFailure = summary.userState === 'import_failed' || summary.userState === 'unable_to_process_safely';
   const candidateByField = new Map(candidates.map((c) => [c.fieldName, c]));
 
   return (
@@ -317,6 +343,17 @@ export function RunReviewPanel({ runId }: { runId: string }) {
 
       {!isClean && items.length === 0 && summary.userState === 'processing' && (
         <ResourceEmptyState title="Still processing" message="We're rechecking this document. This page will update automatically once it's ready." />
+      )}
+
+      {!isClean && items.length === 0 && isTerminalFailure && (
+        <ResourceErrorState
+          title={summary.userState === 'import_failed' ? 'Saving this document failed' : 'This document could not be processed'}
+          message={
+            summary.userState === 'import_failed'
+              ? "This document was accepted, but saving it to your records did not complete. Nothing was changed in your records. Please contact support if you'd like help with this document."
+              : "This document could not be processed safely, and nothing was saved. Please contact support if you'd like help with this document."
+          }
+        />
       )}
 
       <ConfirmDialog
