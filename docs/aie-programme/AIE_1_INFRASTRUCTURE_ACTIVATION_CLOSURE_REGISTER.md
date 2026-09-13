@@ -157,6 +157,20 @@ merged. No production action taken anywhere in this register.
 | Evidence location | `docs/aie-programme/AIE_1_CLOSURE_ACCESSIBILITY_REPORT.md` |
 | Status | **VERIFIED IN DEV** for every reachable state of the reviewed component. Manual screen-reader pass **BLOCKED** (tooling) |
 
+## 12. Masking verified before network egress
+
+| | |
+|---|---|
+| Requirement | Prove synthetic identifiers occur in the input fixture and are absent from the outbound provider payload; required financial relationships remain interpretable |
+| Observed | **VERIFIED IN DEV** (17/17): real orchestrator + real Insurance parser + real masking engine, a spy provider capturing the exact request object any real OpenAI provider would receive. All 4 synthetic PII values (email/TFN/PAN/card) present in input, absent from the captured outbound payload; the cover-amount financial figure survives unmasked; explicit `[MASKED:...]` tokens present (not silently dropped); real encrypted rows written to `aie_mask_token_map`; full cascade cleanup |
+| Remaining | Nothing on the masking logic itself |
+| Dependency | None — closed |
+| Verification method | `scripts/aiecl_masking_before_egress_live_dev_check.ts` |
+| Evidence location | Same |
+| Status | **VERIFIED IN DEV** |
+
+**Real, previously-undiscovered finding along the way, fixed for real**: `AIE_MASK_TOKEN_ENCRYPTION_KEY` was entirely absent from DEV's `.env.local` — meaning **any real document that ever reached the masking/AI-fallback path in the real running app would have crashed with an unhandled exception**, today, before this fix. Not previously caught because every prior Insurance regression fixture had `productName` present, which never enters this code path at all — this is the first time this session's testing actually exercised it. A genuine 64-hex-char key has been generated and added to `.env.local` (confirmed gitignored, never committed). This is a local DEV configuration file this session has direct write access to — no external credential or approval was needed to close this gap, unlike the AWS/OpenAI items above.
+
 ---
 
 ## Consolidated question — the one blocker for the entire AWS-touching half of this mission
