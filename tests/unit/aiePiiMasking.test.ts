@@ -124,6 +124,38 @@ describe('AIE-1.1 PII masking engine (PII-01..12)', () => {
       expect(containsUnmaskedPii('Folio No: 12345678/90')).toBe(true);
     });
 
+    it('masks a holder name, which had no rule at all before M2', () => {
+      // Found by M2's own live provider proof: the holder name was being sent
+      // to OpenAI verbatim. D.6 requires holder names to be tokenised.
+      const result = maskText('Investor: RAJESH KUMAR SHARMA');
+      expect(result.maskedText).not.toContain('RAJESH KUMAR SHARMA');
+      expect(result.coverageByType.person_name_label).toBe(1);
+      expect(result.maskedText).toContain('Investor:');
+    });
+
+    it('masks a nominee name', () => {
+      const result = maskText('Nominee: PRIYA SHARMA');
+      expect(result.maskedText).not.toContain('PRIYA SHARMA');
+      expect(result.coverageByType.person_name_label).toBe(1);
+    });
+
+    it('does NOT mask a scheme name, the non-personal field the adapter exists to read', () => {
+      // Guard against the obvious over-reach: a bare `name` label alternative
+      // would match `Scheme Name:` and destroy the extraction target.
+      const result = maskText('Scheme Name: NIPPON INDIA LIQUID FUND - GROWTH');
+      expect(result.maskedText).toContain('NIPPON INDIA LIQUID FUND');
+      expect(result.coverageByType.person_name_label ?? 0).toBe(0);
+    });
+
+    it('a folio value does not swallow the next field label on a real CAS line', () => {
+      // Regression guard for an M2 draft bug: allowing whitespace inside the
+      // folio value ran the match across the gap and consumed `IFSC`.
+      const result = maskText('Folio No: 12345678/90   IFSC: HDFC0001234');
+      expect(result.maskedText).toContain('IFSC:');
+      expect(result.coverageByType.folio_number).toBe(1);
+      expect(result.coverageByType.ifsc).toBe(1);
+    });
+
     it('a realistic CAS header leaks none of PAN, Aadhaar, IFSC, folio, email or mobile', () => {
       const cas = [
         'CONSOLIDATED ACCOUNT STATEMENT',

@@ -56,6 +56,15 @@ interface PiiPattern {
    * Omitted means the whole match is tokenised, which stays the default.
    */
   valueGroup?: number;
+  /**
+   * M2 (H.9). Optional extra predicate the captured value must satisfy for
+   * the match to count. Needed where the LABEL has to be matched
+   * case-insensitively (statement labels appear as `Investor:`, `INVESTOR:`
+   * and `investor:` interchangeably) but the VALUE still needs a
+   * case-sensitive guard — under the `i` flag a `[A-Z]` class silently
+   * matches lowercase too, so the guard has to live outside the pattern.
+   */
+  valuePredicate?: (value: string) => boolean;
 }
 
 /** Carried over verbatim in substance from
@@ -81,7 +90,41 @@ const PII_PATTERNS: PiiPattern[] = [
   // only the value is tokenised, so an adapter can still see that a folio
   // field was present — which is what it needs for structure — without the
   // identifier itself leaving the process.
-  { type: 'folio_number', pattern: /\b(folio(?:\s*(?:no|number|#))?\s*[:.\-]?\s*)([A-Z0-9][A-Z0-9/\- ]{3,24}[A-Z0-9])/gi, valueGroup: 2 },
+  // The value charset deliberately EXCLUDES whitespace. An earlier M2 draft
+  // allowed spaces inside the value, and on a real CAS line
+  // (`Folio No: 12345678/90   IFSC: HDFC0001234`) it greedily ran across the
+  // gap and swallowed the *next field's label* into the folio token. That
+  // over-captures rather than under-captures, so it was not a privacy leak,
+  // but it destroyed a label a downstream adapter needs and made
+  // `coverage_by_type` describe the document inaccurately.
+  { type: 'folio_number', pattern: /\b(folio(?:\s*(?:no|number|#))?\s*[:.\-]?\s*)([A-Z0-9][A-Z0-9/\-]{2,24})/gi, valueGroup: 2 },
+
+  // Person / holder / nominee NAME. Global invariant D.6 requires holder
+  // names to be excluded or tokenised where not required, and nominee
+  // details never to egress. Before M2 there was NO name rule of any kind —
+  // `FORBIDDEN_LABEL_TERMS` nominally mentioned `name` and `account holder`,
+  // but that list is only consulted by `isBelowMaskingPolicy`, which its
+  // sole caller invokes with an empty array, so it could never fire. A
+  // holder name therefore reached the provider verbatim. This was caught by
+  // M2's own live provider proof, not by inspection.
+  //
+  // LABEL-ANCHORED, and deliberately does NOT include a bare `name`
+  // alternative: `Scheme Name: NIPPON INDIA LIQUID FUND` would then match
+  // and mask the scheme name, which is exactly the non-personal field the
+  // adapter exists to read. Only unambiguously person-bearing labels are
+  // listed. Bounded to 5 words so a runaway match cannot eat a paragraph.
+  {
+    type: 'person_name_label',
+    pattern:
+      /\b((?:investor|account\s*holder|unit\s*holder|first\s*holder|second\s*holder|joint\s*holder|holder|nominee|beneficiary|applicant)(?:\s*name)?\s*[:.\-]\s*)([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+    valueGroup: 2,
+    // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
+    // `investor:` all occur in real statements), so the value needs its
+    // capitalisation guard here rather than in the pattern. A real holder
+    // name is Title Case or ALL CAPS; requiring at least one capital keeps
+    // this from matching prose that happens to follow one of these labels.
+    valuePredicate: (value) => /[A-Z]/.test(value),
+  },
 
   // India Aadhaar, canonical spaced form `1234 5678 9012`. A real Aadhaar
   // never begins with 0 or 1, which is what keeps this from eating ordinary
@@ -169,7 +212,7 @@ export function maskText(text: string, opts?: { callSalt?: string }): MaskingRes
   const tokensForValue = new Map<string, string>();
   let counter = 0;
 
-  for (const { type, pattern, valueGroup } of PII_PATTERNS) {
+  for (const { type, pattern, valueGroup, valuePredicate } of PII_PATTERNS) {
     masked = masked.replace(pattern, (...args: unknown[]) => {
       const match = args[0] as string;
       // `replace` passes (match, ...groups, offset, string) — groups are
@@ -181,6 +224,7 @@ export function maskText(text: string, opts?: { callSalt?: string }): MaskingRes
       // that is written back verbatim.
       const sensitive = valueGroup === undefined ? match : groups[valueGroup - 1];
       if (sensitive === undefined || sensitive === '') return match;
+      if (valuePredicate !== undefined && !valuePredicate(sensitive)) return match;
 
       let token = tokensForValue.get(sensitive);
       if (!token) {
