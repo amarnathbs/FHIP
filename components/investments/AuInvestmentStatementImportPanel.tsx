@@ -19,7 +19,7 @@
  * surface purely over `fetch()`.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type Phase = 'form' | 'uploading' | 'unable_to_read' | 'duplicate' | 'review' | 'matching' | 'comparing' | 'applied' | 'error';
 
@@ -78,6 +78,27 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [applyResult, setApplyResult] = useState<{ applied_count: number } | null>(null);
+  // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
+  // (see that file's identical comment) — this panel used to always render
+  // as a fully working upload form and only discover the FDH-3 production
+  // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
+  // upload itself failed. `null` = not checked yet; `true`/`false` once known.
+  const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/financial-data-hub/upload-status')
+      .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
+      .then((json) => {
+        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setUploadEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function reset() {
     setPhase('form');
@@ -229,7 +250,16 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         </button>
       </div>
 
-      {phase === 'form' && (
+      {uploadEnabled === false && phase === 'form' && (
+        <div className="mt-4 space-y-2">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Statement import isn&apos;t turned on in this environment yet. You can still add this investment
+            yourself using the Investments form below.
+          </p>
+        </div>
+      )}
+
+      {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before
@@ -261,7 +291,7 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
-          <button type="button" onClick={handleUpload} disabled={!file || busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+          <button type="button" onClick={handleUpload} disabled={!file || busy || uploadEnabled !== true} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>
         </div>
