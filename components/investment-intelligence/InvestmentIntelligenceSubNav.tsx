@@ -33,26 +33,39 @@ import { II_WORKSPACE_NAV, isIiNavItemActive } from '@/lib/investment-intelligen
 export function InvestmentIntelligenceSubNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Investment Intelligence sections" className="mb-6 border-b border-line">
-      <ul className="-mb-px flex gap-x-1 overflow-x-auto whitespace-nowrap">
-        {II_WORKSPACE_NAV.map((item) => {
-          const active = isIiNavItemActive(pathname, item.href);
-          return (
-            <li key={item.key}>
-              <Link
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                aria-label={`${item.label} — ${item.description}`}
-                className={`inline-block border-b-2 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
-                  active ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted hover:text-primary'
-                }`}
-              >
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <div className="mb-6">
+      {/* App Review 2026-09-14, item 4: none of the seven workspace pages
+          offered any way back out of Investment Intelligence other than
+          AppShell's own persistent sidebar — easy to miss once several tabs
+          deep, especially on a narrow viewport where the sidebar collapses
+          behind a menu toggle. Same "← Back to X" link/style already used by
+          other deep workspace views (app/(app)/goals/[id]/page.tsx,
+          financial-data-hub/review/ReviewWorkspace.tsx) — placed once here
+          since every one of the seven pages renders this shared component. */}
+      <Link href="/dashboard" className="mb-3 inline-block text-xs text-muted hover:underline">
+        ← Back to Dashboard
+      </Link>
+      <nav aria-label="Investment Intelligence sections" className="border-b border-line">
+        <ul className="-mb-px flex gap-x-1 overflow-x-auto whitespace-nowrap">
+          {II_WORKSPACE_NAV.map((item) => {
+            const active = isIiNavItemActive(pathname, item.href);
+            return (
+              <li key={item.key}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  aria-label={`${item.label} — ${item.description}`}
+                  className={`inline-block border-b-2 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
+                    active ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted hover:text-primary'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </div>
   );
 }
