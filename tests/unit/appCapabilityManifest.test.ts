@@ -47,7 +47,12 @@ const PAGE_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   retirement: 'RETIREMENT', // SMSF is a section within this page, not a separate route folder
   score: 'SCORES',
 };
-const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup']);
+// AIE-1.5: 'aie-review' is the shared, cross-module document review/
+// acceptance UI (lib/aie/review/**, app/api/aie/review/**) — explicitly
+// cross-cutting infrastructure, not owned by one financial module, matching
+// the identical reasoning AIE-1.1 already established for 'aie' in
+// API_FOLDER_INFRA_ALLOWLIST below.
+const PAGE_FOLDER_INFRA_ALLOWLIST = new Set(['global-setup', 'aie-review']);
 
 // app/api/** top-level folders -> ModuleKey, OR the infra allowlist below for
 // folders that are genuinely cross-cutting/shared infrastructure rather than
@@ -103,6 +108,15 @@ const API_FOLDER_ALIASES: Record<string, string> = { ai: 'ai-insights' };
 //     and CROSS_BORDER entries and lib/api.ts's own guard choices; the folder
 //     itself spans more than one ModuleKey so isn't force-mapped to just one.
 //   - capabilities: this task's OWN new /api/capabilities/nav endpoint.
+//   - aie: AIE-1.1's shared, cross-domain document preprocessing/masking/
+//     JSON-Schema gateway (app/api/aie/**) — explicitly NOT owned by any
+//     single financial module (that is the whole point of the "shared
+//     gateway" architecture: AIE-1.2 Investment Intelligence, AIE-1.3 FDH
+//     bank statements, and AIE-1.4's other module adapters are all meant to
+//     be built ON TOP of it, per docs/aie-programme/AIE_1_MASTER_PLAN.md).
+//     No end-user nav destination exists for it today — it is a diagnostic/
+//     DEV harness surface for this phase only (AIE-1.1's own scope
+//     explicitly excludes building the real reviewer UI; that is AIE-1.5).
 //   - account: LR-9's account-closure request routes (app/api/account/close),
 //     reached from the Profile page (already covered by the PROFILE
 //     ModuleKey), not itself a distinct nav destination — same reasoning as
@@ -119,6 +133,7 @@ const API_FOLDER_ALIASES: Record<string, string> = { ai: 'ai-insights' };
 //     billing-country check, not by this manifest.
 const API_FOLDER_INFRA_ALLOWLIST = new Set([
   'account',
+  'aie',
   'payments',
   'benchmarks',
   'commitments',
