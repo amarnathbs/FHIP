@@ -263,9 +263,25 @@ export function InvestmentIntelligenceClient() {
       // user never saw why. Found live 2026-09-06 when a password
       // resubmission attempt produced no error banner at all despite
       // having actually failed server-side.
+      //
+      // App Review 2026-09-14, item 5: that 2026-09-06 fix introduced its
+      // own regression -- moving loadDocuments() after these throws meant
+      // it now runs ONLY on the success path, so a `password_required`
+      // failure (server-side status correctly flips, confirmed live via
+      // GET /api/investment-intelligence/source-documents) never reaches
+      // the client: the error banner shows the raw "...supply the document
+      // password..." message, but the document row is left rendering its
+      // STALE pre-request status, and the password input (gated on
+      // `doc.status === 'password_required'`) never appears -- a real
+      // dead end reproduced live with a genuinely encrypted test PDF.
+      // loadDocuments() now runs unconditionally, before either throw, so
+      // the row's status-dependent UI is always current regardless of
+      // outcome; the throws still fire afterward so the error banner and
+      // the "no silent swallow" behaviour from the earlier fix are both
+      // preserved.
+      await loadDocuments();
       if (!res.ok) throw new Error(json.error ?? 'Processing failed');
       if (json.data && json.data.ok === false) throw new Error(json.data.error ?? 'Processing failed');
-      await loadDocuments();
       await loadSummary(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
