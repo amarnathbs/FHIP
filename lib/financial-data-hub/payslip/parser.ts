@@ -311,18 +311,38 @@ export function parsePayslipText(
       continue;
     }
 
+    // A deduction-side amount is a MAGNITUDE by domain definition (every
+    // deduction/tax/contribution column in `fdh_payroll_events` is `>= 0` —
+    // there is no such thing as "negative tax withheld"). Several real
+    // payslip templates (confirmed against 4 genuine payslips from the same
+    // employer, all sharing this layout) print deduction/tax lines with a
+    // leading "-" that lands in its own table cell, separated from the
+    // digits by whitespace once the PDF's columns collapse to plain text
+    // (e.g. "Full Income tax\t-\t1,498.00") — a running-total bookkeeping
+    // convention ("this reduces net pay"), not a genuine negative quantity.
+    // `extractAmountTokens` correctly reads that as -1498, which is right
+    // for a signed running column but wrong for this field's own domain
+    // meaning. Without normalising here, that raw negative value reaches
+    // the database unchanged and the insert is rejected outright by the
+    // column's own `>= 0` check — the entire payslip import fails, not just
+    // this one figure. Earnings-side amounts are deliberately left signed:
+    // a retro reversal (e.g. "Base Salary -22.5 hrs ... -1,711.70") must
+    // stay negative so it correctly nets against its own correcting line.
+    const normalise = (value: number) => (classified.side === 'deduction' ? Math.abs(value) : value);
+
     if (current !== undefined) {
       components.push({
         side: classified.side, type: classified.type, labelRaw: safeLabel,
-        amount: current, isYearToDate: false,
+        amount: normalise(current), isYearToDate: false,
       });
     }
     if (ytd !== undefined) {
+      const normalisedYtd = normalise(ytd);
       components.push({
         side: classified.side, type: classified.type, labelRaw: safeLabel,
-        amount: ytd, isYearToDate: true,
+        amount: normalisedYtd, isYearToDate: true,
       });
-      if (classified.type === 'income_tax_withheld') ytdTax ??= ytd;
+      if (classified.type === 'income_tax_withheld') ytdTax ??= normalisedYtd;
     }
   }
 
