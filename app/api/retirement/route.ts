@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { retirementSchema } from '@/lib/validation/retirement';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
@@ -24,7 +24,10 @@ export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = retirementSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  // App Review 2026-09-14, item 1: was `bad(parsed.error.message, 422)` —
+  // leaked ZodError's raw issue dump to the client. See lib/api.ts's
+  // badValidation() comment for the full history.
+  if (!parsed.success) return badValidation(parsed.error);
 
   const supabase = await createClient();
   const gate = await assertItemCreationAllowedForUser({
