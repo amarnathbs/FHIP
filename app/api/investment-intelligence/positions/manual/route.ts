@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiManualDirectPositionSchema } from '@/lib/validation/investment-intelligence';
 import { submitManualDirectPosition } from '@/lib/services/investment-intelligence/manualDirectPositionService';
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const parsed = iiManualDirectPositionSchema.safeParse(body);
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const result = await submitManualDirectPosition(user.id, parsed.data);
   if (result.validationError) return bad(result.validationError, 422, result.validationErrorCode ?? undefined);

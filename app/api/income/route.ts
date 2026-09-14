@@ -1,4 +1,4 @@
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { incomeSchema } from '@/lib/validation/income';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   const { user, blocked } = await requireModuleCapability('INCOME', req);
   if (!user) return blocked!;
   const parsed = incomeSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const gate = await assertItemCreationAllowedForUser({

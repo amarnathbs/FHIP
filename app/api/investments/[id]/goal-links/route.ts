@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { z } from 'zod';
 import { checkFundingAllocation, resolveAllocatedAmount, assertOwnsGoal } from '@/lib/services/goalFundingAllocation';
 
@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = linkBodySchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data: investment } = await supabase.from('investments').select('id, currency_code').eq('id', id).eq('user_id', user.id).maybeSingle();

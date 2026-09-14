@@ -1,4 +1,4 @@
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { insuranceSchema } from '@/lib/validation/insurance';
 import { requireModuleCapability } from '@/lib/services/appCapability';
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const { user, blocked } = await requireModuleCapability('INSURANCE', req);
   if (!user) return blocked!;
   const parsed = insuranceSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const { data, error } = await registry.save(user.id, parsed.data);
   return error ? bad(error.message) : ok(data);
 }

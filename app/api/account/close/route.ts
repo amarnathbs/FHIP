@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 
 // LR-9 WP-06/WP-07 — the user-facing side of account closure. Creating a
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = closeRequestSchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data, error } = await supabase

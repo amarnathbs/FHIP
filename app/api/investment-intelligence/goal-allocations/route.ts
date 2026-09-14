@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiGoalAllocationSchema } from '@/lib/validation/investment-intelligence';
 import { createOrUpdateGoalAllocation } from '@/lib/services/investment-intelligence/goalAllocations';
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = iiGoalAllocationSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data: goal } = await supabase.from('user_goals').select('id').eq('id', parsed.data.goalId).eq('user_id', user.id).maybeSingle();
