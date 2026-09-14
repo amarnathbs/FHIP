@@ -36,11 +36,37 @@ const FORECASTING_ITEMS = [
   { label: 'Investment Growth', href: '/forecast/investments' },
   { label: 'Cross-Border', href: '/forecast/cross-border' },
   { label: 'Financial Resilience', href: '/forecast/resilience' },
-  { label: 'Forecast Variance', href: '/forecast/variance' },
-  { label: 'Consolidated Report', href: '/forecast/report' },
   { label: 'Scenarios', href: '/forecast/scenarios' },
   { label: 'Assumptions', href: '/forecast/assumptions' },
   { label: 'Forecast History', href: '/forecast/history' },
+];
+
+// Reports IA correction (2026-09-14, PO instruction — supersedes the LR-8
+// WP-02/03/04/06 "link-out card" interpretation in app/(app)/reports/page.tsx,
+// which is being retired in the same change). "Reports" becomes an
+// expandable group, matching Forecasting's own pattern, with four real
+// sidebar sub-links rather than page-body cards duplicating the same
+// destinations:
+//   - Monthly Report: the pre-existing /reports page itself (Latest Report /
+//     Report History / Export Centre) — this WAS "Reports"' own single link.
+//   - Financial Activity: MOVED here from "Your finances" below. It is
+//     confirmed (by direct inspection, not assumption) to be a pure
+//     read-only analysis/insights view — approved-transaction dashboards
+//     only, with zero upload/accept/categorise controls of its own — so it
+//     never belonged in the input-register group alongside Income/Expenses/
+//     Assets in the first place. The actual upload → review → approve
+//     workflow lives entirely under Expenses ("Import bank statement" →
+//     /financial-data-hub/review) and is UNCHANGED by this move.
+//   - Consolidated Report / Forecast Variance: MOVED here from
+//     FORECASTING_ITEMS above — both are Forecasting's own GENERATED
+//     OUTPUTS (a report and a report-shaped comparison), not the
+//     interactive forecasting tool itself, so they belong with the other
+//     generated outputs rather than the 11 interactive forecast pages.
+const REPORTS_ITEMS = [
+  { label: 'Monthly Report', href: '/reports' },
+  { label: 'Financial Activity', href: '/financial-data-hub/activity' },
+  { label: 'Consolidated Report', href: '/forecast/report' },
+  { label: 'Forecast Variance', href: '/forecast/variance' },
 ];
 
 // Grouped per the approved design-system nav pattern (Overview / Your
@@ -59,11 +85,13 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: 'link', label: 'Income', href: '/income' },
       { type: 'link', label: 'Expenses', href: '/expenses' },
-      // FDH-8: statement-derived transaction activity (Overview/Transactions/
-      // Spending/Income/Recurring/Accounts) — a distinct data source from the
-      // manually-entered Income/Expenses above, so it gets its own entry
-      // rather than folding into either.
-      { type: 'link', label: 'Financial Activity', href: '/financial-data-hub/activity' },
+      // FDH-8's "Financial Activity" entry MOVED to the Reports group
+      // (2026-09-14, PO instruction) — see REPORTS_ITEMS above. It is a
+      // pure read-only analysis view over already-approved statement
+      // activity, not a data-entry register, so it never belonged in this
+      // input group alongside Income/Expenses/Assets. The actual bank-
+      // statement upload/review/approve workflow lives under Expenses
+      // ("Import bank statement") and is unaffected by this move.
       { type: 'link', label: 'Assets', href: '/assets' },
       { type: 'link', label: 'Liabilities', href: '/liabilities' },
       // Retirement isn't its own sidebar entry — it's reached via the
@@ -108,7 +136,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Review & share',
     items: [
       { type: 'link', label: 'Recommendations', href: '/recommendations' },
-      { type: 'link', label: 'Reports', href: '/reports' },
+      // Expanded into a dropdown (2026-09-14, PO instruction) — see
+      // REPORTS_ITEMS above for what moved here and why.
+      { type: 'dropdown', id: 'reports', label: 'Reports', items: REPORTS_ITEMS },
       // Module 11.4 — the standard question library / Insight experience.
       // Deliberately labelled "Insights", not "AI Coach" (that would imply
       // open chat, which does not exist until a later phase).
@@ -163,12 +193,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [navDecisions, setNavDecisions] = useState<Record<string, CapabilityDecision>>(EMPTY_NAV_DECISIONS);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
-  // Auto-expand the Forecasting group only if the initial page load lands
-  // inside it; thereafter the user's own expand/collapse choice persists
-  // across navigation (a persistent sidebar, unlike the old floating
-  // top-bar dropdown, has no overlay-conflict reason to force-close it).
+  // Auto-expand the Forecasting/Reports group only if the initial page load
+  // lands inside it; thereafter the user's own expand/collapse choice
+  // persists across navigation (a persistent sidebar, unlike the old
+  // floating top-bar dropdown, has no overlay-conflict reason to force-close
+  // it). /forecast/report and /forecast/variance are checked BEFORE the
+  // general '/forecast' prefix below — both moved into the Reports dropdown
+  // (2026-09-14) even though their URL still starts with /forecast, since
+  // they are Forecasting's generated OUTPUTS, not the interactive tool.
   const [openDropdown, setOpenDropdown] = useState<string | null>(() =>
-    pathname.startsWith('/forecast') ? 'forecasting' : pathname.startsWith('/admin') ? 'admin' : null
+    pathname.startsWith('/reports') ||
+    pathname.startsWith('/financial-data-hub/activity') ||
+    pathname.startsWith('/forecast/report') ||
+    pathname.startsWith('/forecast/variance')
+      ? 'reports'
+      : pathname.startsWith('/forecast')
+        ? 'forecasting'
+        : pathname.startsWith('/admin')
+          ? 'admin'
+          : null
   );
   // Multi-item groups (Your finances, Plan & improve, Review & share) are
   // collapsible via their header, same idea as the Forecasting dropdown but
@@ -337,7 +380,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         dropdownTriggerRefs.current[entry.id] = el;
                       }}
                       type="button"
-                      data-testid={entry.id === 'forecasting' ? 'nav-forecasting' : undefined}
+                      data-testid={entry.id === 'forecasting' ? 'nav-forecasting' : entry.id === 'reports' ? 'nav-reports' : undefined}
                       aria-expanded={openDropdown === entry.id}
                       aria-controls={`${scope}-${entry.id}-group`}
                       aria-current={dropdownActive(entry) ? 'page' : undefined}

@@ -67,6 +67,9 @@ const REQUIRED_ORDER = [
   'Reports',
 ];
 
+// 'Forecast Variance' and 'Consolidated Report' MOVED to the Reports
+// dropdown (2026-09-14, PO instruction, see REPORTS_SUBITEMS below) — both
+// are Forecasting's own generated OUTPUTS, not the interactive tool itself.
 const FORECASTING_SUBITEMS = [
   'Overview',
   'Net Worth',
@@ -76,12 +79,17 @@ const FORECASTING_SUBITEMS = [
   'Investment Growth',
   'Cross-Border',
   'Financial Resilience',
-  'Forecast Variance',
-  'Consolidated Report',
   'Scenarios',
   'Assumptions',
   'Forecast History',
 ];
+
+// 'Reports' became a dropdown (2026-09-14, PO instruction): 'Monthly Report'
+// is the pre-existing /reports page, 'Financial Activity' moved here from
+// "Your finances" (confirmed a pure read-only analysis view, never an input
+// register), and 'Consolidated Report'/'Forecast Variance' moved here from
+// Forecasting's own item list above.
+const REPORTS_SUBITEMS = ['Monthly Report', 'Financial Activity', 'Consolidated Report', 'Forecast Variance'];
 
 // Playwright treats each distinct combination of describe-level test.use()
 // overrides (viewport, storageState) as its own worker context, so this
@@ -208,7 +216,7 @@ test.describe('Desktop navigation', () => {
     await expect(trigger).toBeFocused();
   });
 
-  test('the Forecasting dropdown lists all 13 items in order', async ({ page }) => {
+  test('the Forecasting dropdown lists all 11 items in order', async ({ page }) => {
     await page.goto('/dashboard');
     await page.getByRole('button', { name: 'Forecasting' }).click();
     const items = (await page.getByRole('menu', { name: 'Forecasting' }).getByRole('menuitem').allTextContents()).map((t) =>
@@ -225,6 +233,48 @@ test.describe('Desktop navigation', () => {
     // A persistent sidebar (unlike the old floating top-bar dropdown) has no
     // overlay-conflict reason to force-close after navigating into it.
     await expect(page.getByRole('menu', { name: 'Forecasting' })).toBeVisible();
+  });
+
+  // Reports dropdown (2026-09-14) — same mechanism as Forecasting's, so the
+  // same coverage shape applies.
+  test('the Reports dropdown opens and closes on click', async ({ page }) => {
+    await page.goto('/dashboard');
+    const trigger = page.getByRole('button', { name: 'Reports' });
+    const menu = page.getByRole('menu', { name: 'Reports' });
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    await trigger.click();
+    await expect(menu).toBeHidden();
+  });
+
+  test('the Reports dropdown lists all 4 items in order', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Reports' }).click();
+    const items = (await page.getByRole('menu', { name: 'Reports' }).getByRole('menuitem').allTextContents()).map((t) =>
+      t.trim()
+    );
+    expect(items).toEqual(REPORTS_SUBITEMS);
+  });
+
+  test('selecting "Monthly Report" navigates to /reports and keeps the Reports group expanded', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Reports' }).click();
+    await page.getByRole('menuitem', { name: 'Monthly Report' }).click();
+    await expect(page).toHaveURL(/\/reports$/);
+    await expect(page.getByRole('menu', { name: 'Reports' })).toBeVisible();
+  });
+
+  test('selecting "Financial Activity" navigates to the activity module', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Reports' }).click();
+    await page.getByRole('menuitem', { name: 'Financial Activity' }).click();
+    await expect(page).toHaveURL(/\/financial-data-hub\/activity/);
+  });
+
+  test('"Financial Activity" is no longer a direct link inside "Your finances"', async ({ page }) => {
+    await page.goto('/dashboard');
+    const group = page.getByRole('navigation', { name: 'Main' }).locator('div').filter({ hasText: 'Your finances' }).first();
+    await expect(group.getByRole('link', { name: 'Financial Activity' })).toHaveCount(0);
   });
 
   test('direct child-route URLs and a browser refresh continue to work', async ({ page }) => {
