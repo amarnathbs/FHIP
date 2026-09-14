@@ -140,10 +140,11 @@ export async function runPurgeAttempt(row: AiePurgeRow): Promise<PurgeAttemptRes
   await admin.from('aie_document_intake').update({ purge_status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', row.id);
 
   if (!row.storage_key) {
-    await admin
+    const { error: noObjectError } = await admin
       .from('aie_document_intake')
-      .update({ status: row.status === 'ready' ? 'deleted' : row.status, purge_status: 'purged', purged_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: terminalStatusAfterPurge(), purge_status: 'purged', purged_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', row.id);
+    if (noObjectError) return failAttempt(row, noObjectError.message);
     return { status: 'skipped_no_object' };
   }
 
@@ -153,18 +154,56 @@ export async function runPurgeAttempt(row: AiePurgeRow): Promise<PurgeAttemptRes
   const absent = await verifyQuarantineObjectAbsent(row.storage_key);
   if (!absent) return failAttempt(row, 'storage object still present after delete');
 
-  await admin
+  // M2 (H.1) — the result of this update is now CHECKED. Previously it was
+  // not, and that was a real audit-integrity defect, not a theoretical one:
+  // `chk_aie_intake_purged_status` (migration 0149) requires
+  // `purge_status <> 'purged' OR status = 'deleted'`, but the old status
+  // expression left `received` and `quarantined` rows unchanged while still
+  // setting `purge_status: 'purged'`. The database refused the whole row
+  // update, the error was discarded, and the code then wrote a
+  // `document_purged` audit event and returned `{ status: 'purged' }` for a
+  // row that had not been updated at all. Because `storage_key` was
+  // therefore never nulled, `findDuePurges` kept re-selecting the same row,
+  // so each sweep appended another false `document_purged` event for a
+  // document that was already gone from storage. The hard backstop
+  // (`enforceAieRawFileHardBackstop`) genuinely reaches those two statuses
+  // -- it selects on age alone with no status filter -- so this was live on
+  // exactly the abandoned-upload rows the backstop exists to clean up.
+  const { error: purgeError } = await admin
     .from('aie_document_intake')
     .update({
-      status: row.status === 'ready' || row.status === 'rejected' || row.status === 'cancelled' ? 'deleted' : row.status,
+      status: terminalStatusAfterPurge(),
       storage_key: null,
       purge_status: 'purged',
       purged_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', row.id);
+  if (purgeError) return failAttempt(row, purgeError.message);
+
   await recordAieAuditEvent({ intakeId: row.id, runId: null, userId: row.user_id, eventType: 'document_purged', actorType: 'system' });
   return { status: 'purged' };
+}
+
+/**
+ * M2 (H.1) — the single place that decides what an intake's `status` becomes
+ * once its bytes are gone.
+ *
+ * `deleted` is the purge job's own terminal verdict and it must be reachable
+ * from EVERY non-deleted state, because the 24-hour retention guarantee
+ * cannot be allowed to depend on which state a row happened to stall in. An
+ * upload that crashed while still `received` or `quarantined` is precisely
+ * the case the hard backstop exists for; leaving those rows in a
+ * non-`deleted` status made them unpurgeable (see the CHECK-constraint
+ * explanation above) and so made them accumulate forever.
+ *
+ * Kept as one function rather than two inline ternaries so the two call
+ * sites above cannot drift apart again -- they previously listed different
+ * status sets (`ready` only, versus `ready`/`rejected`/`cancelled`), which
+ * is how the gap survived review.
+ */
+function terminalStatusAfterPurge(): AiePurgeRow['status'] {
+  return 'deleted';
 }
 
 async function failAttempt(row: AiePurgeRow, rawMessage: string): Promise<PurgeAttemptResult> {

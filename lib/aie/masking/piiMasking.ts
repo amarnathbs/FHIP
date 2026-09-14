@@ -32,7 +32,10 @@
 
 export type AiePiiType =
   | 'tax_id' // AU TFN / India PAN
+  | 'aadhaar' // M2 (H.9)
   | 'bank_account'
+  | 'ifsc' // M2 (H.9)
+  | 'folio_number' // M2 (H.9)
   | 'card_number'
   | 'email'
   | 'phone'
@@ -43,6 +46,16 @@ export type AiePiiType =
 interface PiiPattern {
   type: AiePiiType;
   pattern: RegExp;
+  /**
+   * M2 (H.9). When set, only THIS capture group is replaced by a token and
+   * the rest of the match is written back unchanged. Needed for
+   * label-anchored rules, where the label is the only reliable way to
+   * recognise the value but the label itself is not sensitive and is worth
+   * keeping — a downstream adapter still needs to see that the document had
+   * a "Folio No:" field even though the number itself must not egress.
+   * Omitted means the whole match is tokenised, which stays the default.
+   */
+  valueGroup?: number;
 }
 
 /** Carried over verbatim in substance from
@@ -51,6 +64,38 @@ interface PiiPattern {
  * 1-letter pattern below) and new card/phone detectors AIE-1.1 needs that
  * neither existing file has. */
 const PII_PATTERNS: PiiPattern[] = [
+  // ---- M2 (H.9). ORDER IS LOAD-BEARING: these run FIRST because they are
+  // the high-precision rules, and `maskText` applies patterns in array order
+  // over progressively-masked text, so whichever rule matches first owns the
+  // span. Put below the generic digit rules, a folio like `12345678/90` is
+  // swallowed by the AU-TFN rule (`\d{3}\d{3}\d{2,3}` matches `12345678`)
+  // and gets tagged `tax_id` — still masked, but mislabelled, which corrupts
+  // `aie_masking_summary.coverage_by_type` and makes the privacy evidence
+  // say something untrue about what the document contained.
+
+  // Mutual-fund folio number. Folio formats are genuinely not uniform
+  // (`1234567/89`, `12345678`, `91234567-01`, alphanumeric registrar codes),
+  // so a bare shape rule would be either uselessly narrow or would swallow
+  // unit/NAV figures. This is therefore LABEL-ANCHORED: it matches only a
+  // value the document itself introduces as a folio. The label is kept and
+  // only the value is tokenised, so an adapter can still see that a folio
+  // field was present — which is what it needs for structure — without the
+  // identifier itself leaving the process.
+  { type: 'folio_number', pattern: /\b(folio(?:\s*(?:no|number|#))?\s*[:.\-]?\s*)([A-Z0-9][A-Z0-9/\- ]{3,24}[A-Z0-9])/gi, valueGroup: 2 },
+
+  // India Aadhaar, canonical spaced form `1234 5678 9012`. A real Aadhaar
+  // never begins with 0 or 1, which is what keeps this from eating ordinary
+  // 12-digit money figures grouped in fours. The UNSPACED form was already
+  // incidentally caught by `long_digit_run` (11+ digits); the spaced form
+  // matched nothing before M2, because the card rule needs 13-19 digits and
+  // the TFN rule needs a word boundary after 8-9.
+  { type: 'aadhaar', pattern: /\b[2-9]\d{3}\s\d{4}\s\d{4}\b/g },
+
+  // India IFSC: 4 letters, a literal 0, then 6 alphanumerics. Fixed shape,
+  // so this is a low-false-positive rule.
+  { type: 'ifsc', pattern: /\b[A-Z]{4}0[A-Z0-9]{6}\b/g },
+
+  // ---- pre-M2 rules, unchanged.
   // AU Tax File Number: 8-9 digits, usually spaced 3-3-3.
   { type: 'tax_id', pattern: /\b\d{3}\s?\d{3}\s?\d{2,3}\b(?=[^\d]|$)/g },
   // India PAN: 5 letters, 4 digits, 1 letter.
@@ -124,17 +169,34 @@ export function maskText(text: string, opts?: { callSalt?: string }): MaskingRes
   const tokensForValue = new Map<string, string>();
   let counter = 0;
 
-  for (const { type, pattern } of PII_PATTERNS) {
-    masked = masked.replace(pattern, (match) => {
-      let token = tokensForValue.get(match);
+  for (const { type, pattern, valueGroup } of PII_PATTERNS) {
+    masked = masked.replace(pattern, (...args: unknown[]) => {
+      const match = args[0] as string;
+      // `replace` passes (match, ...groups, offset, string) — groups are
+      // everything between the match and the trailing offset/string pair.
+      const groups = args.slice(1, -2) as (string | undefined)[];
+
+      // A label-anchored rule tokenises ONLY its value group; the sensitive
+      // value is `sensitive`, and `prefix` is the non-sensitive label text
+      // that is written back verbatim.
+      const sensitive = valueGroup === undefined ? match : groups[valueGroup - 1];
+      if (sensitive === undefined || sensitive === '') return match;
+
+      let token = tokensForValue.get(sensitive);
       if (!token) {
         counter += 1;
         token = `[MASKED:${type}:${salt}:${counter.toString(36)}]`;
-        tokensForValue.set(match, token);
+        tokensForValue.set(sensitive, token);
       }
       coverageByType[type] = (coverageByType[type] ?? 0) + 1;
       totalMatches += 1;
-      return token;
+
+      if (valueGroup === undefined) return token;
+      // Rebuild the match with only the value group replaced, so the label
+      // survives. Uses the LAST occurrence so a value that also appears
+      // inside the label text cannot shift the splice point.
+      const at = match.lastIndexOf(sensitive);
+      return match.slice(0, at) + token + match.slice(at + sensitive.length);
     });
   }
 

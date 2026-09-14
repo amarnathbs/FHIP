@@ -74,4 +74,68 @@ describe('AIE-1.1 PII masking engine (PII-01..12)', () => {
     expect(maskPanForDisplay('not-a-pan')).toBe('NOT-A-PAN');
     expect(maskPanForDisplay(null)).toBeNull();
   });
+
+  // ---- M2 (H.9): categories named by global invariant D.6 that previously
+  // had no detector at all. Each test states the pre-M2 behaviour it guards
+  // against, so a future narrowing of these patterns fails loudly.
+  describe('M2 (H.9) — D.6 categories that had no detector before M2', () => {
+    it('masks a spaced India Aadhaar, which no pre-M2 pattern matched', () => {
+      // Pre-M2: the card rule needed 13-19 digits and the TFN rule needed a
+      // word boundary after 8-9, so `1234 5678 9012` fell through entirely.
+      const result = maskText('Aadhaar: 2345 6789 0123 on file.');
+      expect(result.maskedText).not.toContain('2345 6789 0123');
+      expect(result.coverageByType.aadhaar).toBe(1);
+    });
+
+    it('does not mask a 12-digit money figure grouped in fours that cannot be an Aadhaar', () => {
+      // A real Aadhaar never starts with 0 or 1 — that is what keeps this
+      // rule from eating ordinary financial values.
+      const result = maskText('Value 1234 5678 9012 INR');
+      expect(result.coverageByType.aadhaar ?? 0).toBe(0);
+    });
+
+    it('masks an India IFSC code', () => {
+      const result = maskText('Bank IFSC HDFC0001234 branch Mumbai.');
+      expect(result.maskedText).not.toContain('HDFC0001234');
+      expect(result.coverageByType.ifsc).toBe(1);
+    });
+
+    it('tokenises a folio number but KEEPS the folio label so the adapter can still see the field existed', () => {
+      const result = maskText('Folio No: 12345678/90');
+      expect(result.maskedText).not.toContain('12345678/90');
+      expect(result.maskedText.toLowerCase()).toContain('folio');
+      expect(result.coverageByType.folio_number).toBe(1);
+    });
+
+    it('gives the same folio value the same token twice within one document, and reverses only via the token map', () => {
+      const result = maskText('Folio No: 1234567/89 ... Folio Number 1234567/89');
+      const tokens = Object.keys(result.reversibleTokenMap);
+      const folioTokens = tokens.filter((t) => t.includes(':folio_number:'));
+      expect(folioTokens).toHaveLength(1);
+      expect(result.reversibleTokenMap[folioTokens[0]]).toBe('1234567/89');
+    });
+
+    it('containsUnmaskedPii — the independent pre-egress gate — now catches all three new categories', () => {
+      // This is the check `lib/aie/provider/gateway.ts` runs immediately
+      // before building a provider payload. Before M2 all three returned
+      // false, i.e. the gate would have passed them straight through.
+      expect(containsUnmaskedPii('Aadhaar 2345 6789 0123')).toBe(true);
+      expect(containsUnmaskedPii('IFSC HDFC0001234')).toBe(true);
+      expect(containsUnmaskedPii('Folio No: 12345678/90')).toBe(true);
+    });
+
+    it('a realistic CAS header leaks none of PAN, Aadhaar, IFSC, folio, email or mobile', () => {
+      const cas = [
+        'CONSOLIDATED ACCOUNT STATEMENT',
+        'PAN: ABCDE1234F   Aadhaar: 2345 6789 0123',
+        'Folio No: 12345678/90   IFSC: HDFC0001234',
+        'Email: investor@example.com   Mobile: +919876543210',
+      ].join('\n');
+      const masked = maskText(cas).maskedText;
+      for (const secret of ['ABCDE1234F', '2345 6789 0123', '12345678/90', 'HDFC0001234', 'investor@example.com', '+919876543210']) {
+        expect(masked).not.toContain(secret);
+      }
+      expect(containsUnmaskedPii(masked)).toBe(false);
+    });
+  });
 });

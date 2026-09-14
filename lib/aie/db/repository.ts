@@ -15,7 +15,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { encryptTokenValue } from '../masking/tokenMapCrypto';
-import { assertRunTransition } from '../stateMachine';
+import { AieInvalidTransitionError, assertRunTransition, isAllowedIntakeTransition } from '../stateMachine';
 import type {
   AieActorType,
   AieAiOutcome,
@@ -60,20 +60,104 @@ export async function createIntake(
   return { id: data.id as string };
 }
 
+export type UpdateIntakeStatusFailureCode =
+  | 'not_found'
+  | 'invalid_transition'
+  | 'stale_conflict'
+  | 'write_failed';
+
+/**
+ * M2 (H.1) — this function now ENFORCES the intake state machine.
+ *
+ * WHAT WAS WRONG. Before M2 this was an unvalidated write primitive: it took
+ * no `from` status, called no `assertIntakeTransition`, and performed no
+ * compare-and-swap. Because it is the ONLY way any product code changes an
+ * intake status, the consequence was that `assertIntakeTransition` — and
+ * therefore `AIE_INTAKE_TRANSITIONS`, the declared intake FSM — had **zero
+ * production callers**. The FSM was declared, unit-tested, and documented as
+ * enforced (see `lib/aie/review/reject.ts`'s own header, which asserted the
+ * vocabulary was "honoured exactly as `assertIntakeTransition` enforces it")
+ * while in reality nothing enforced it at runtime. Only the DB CHECK
+ * constraint applied, and a CHECK constrains the VOCABULARY, never the
+ * TRANSITIONS — exactly the division of labour this module's own header
+ * describes. An illegal edge was consequently being taken in production
+ * (`ready -> rejected`, from both `app/api/aie/intake/route.ts` and
+ * `app/api/aie/insurance/intake/route.ts`) and succeeding silently.
+ *
+ * WHAT IT DOES NOW. Reads the current status, validates the edge against
+ * `AIE_INTAKE_TRANSITIONS`, then writes under a compare-and-swap on that
+ * same status so a concurrent writer cannot interleave between the check and
+ * the write. Failures are TYPED rather than collapsed into a bare message,
+ * so a caller can distinguish "this edge is illegal" (a bug) from "someone
+ * else moved this row first" (a race) from "the write itself failed".
+ *
+ * IDEMPOTENCE. A no-op write (`toStatus` already equal to the current
+ * status) returns `ok` WITHOUT writing and without consulting the FSM. This
+ * is deliberate: no state machine lists a state as its own successor, so a
+ * retried request that had already applied its transition would otherwise be
+ * reported as an illegal edge. Re-applying a transition that already
+ * happened is not an FSM violation, it is a duplicate delivery.
+ */
 export async function updateIntakeStatus(params: {
   intakeId: string;
   toStatus: AieIntakeStatus;
   storageKey?: string;
   detectedMimeType?: string;
   rejectionReason?: string;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+  /** Optional explicit CAS guard. When supplied, the update is refused as
+   * `stale_conflict` unless the row is in exactly this status — for callers
+   * that know which state they believe they are transitioning out of. */
+  expectedFromStatus?: AieIntakeStatus;
+}): Promise<{ ok: true } | { ok: false; message: string; code: UpdateIntakeStatusFailureCode }> {
   const admin = createAdminClient();
+
+  const { data: current, error: readError } = await admin
+    .from('aie_document_intake')
+    .select('status')
+    .eq('id', params.intakeId)
+    .maybeSingle();
+  if (readError) return { ok: false, message: readError.message, code: 'write_failed' };
+  if (!current) return { ok: false, message: 'intake not found', code: 'not_found' };
+
+  const fromStatus = current.status as AieIntakeStatus;
+
+  if (params.expectedFromStatus !== undefined && params.expectedFromStatus !== fromStatus) {
+    return {
+      ok: false,
+      message: `expected intake to be ${params.expectedFromStatus} but it is ${fromStatus}`,
+      code: 'stale_conflict',
+    };
+  }
+
+  // Duplicate delivery, not a transition -- see IDEMPOTENCE above.
+  if (fromStatus === params.toStatus) return { ok: true };
+
+  if (!isAllowedIntakeTransition(fromStatus, params.toStatus)) {
+    return {
+      ok: false,
+      message: new AieInvalidTransitionError(fromStatus, params.toStatus, 'aie intake lifecycle').message,
+      code: 'invalid_transition',
+    };
+  }
+
   const patch: Record<string, unknown> = { status: params.toStatus, updated_at: new Date().toISOString() };
   if (params.storageKey !== undefined) patch.storage_key = params.storageKey;
   if (params.detectedMimeType !== undefined) patch.detected_mime_type = params.detectedMimeType;
   if (params.rejectionReason !== undefined) patch.rejection_reason = params.rejectionReason;
-  const { error } = await admin.from('aie_document_intake').update(patch).eq('id', params.intakeId);
-  if (error) return { ok: false, message: error.message };
+
+  // CAS on the status we validated against -- a concurrent writer that moved
+  // the row after our read loses this write rather than silently overwriting
+  // a state we never checked the edge from.
+  const { data: updated, error } = await admin
+    .from('aie_document_intake')
+    .update(patch)
+    .eq('id', params.intakeId)
+    .eq('status', fromStatus)
+    .select('id');
+  if (error) return { ok: false, message: error.message, code: 'write_failed' };
+  if (!updated || updated.length === 0) {
+    return { ok: false, message: 'intake status changed concurrently', code: 'stale_conflict' };
+  }
   return { ok: true };
 }
 

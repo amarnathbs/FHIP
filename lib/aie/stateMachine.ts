@@ -21,9 +21,31 @@
 import type { AieIntakeStatus, AieRunStatus } from './types';
 
 export const AIE_INTAKE_TRANSITIONS: Record<AieIntakeStatus, readonly AieIntakeStatus[]> = {
-  received: ['quarantined', 'rejected', 'cancelled'],
-  quarantined: ['ready', 'rejected'],
-  ready: ['cancelled', 'deleted'],
+  // M2 (H.1): `deleted` added to both. The retention/purge job's terminal
+  // verdict must be reachable from EVERY non-deleted state -- the 24-hour
+  // maximum-age guarantee cannot depend on which state a row stalled in, and
+  // an upload that crashed while still `received` or `quarantined` is
+  // exactly what `enforceAieRawFileHardBackstop` exists to clean up (it
+  // selects on age alone, with no status filter). Omitting these edges did
+  // not prevent anything -- `lib/aie/services/purge.ts` writes status
+  // directly rather than through this table -- it only made the declared FSM
+  // disagree with the job's real behaviour, which is how the corresponding
+  // CHECK-constraint defect there went unnoticed.
+  received: ['quarantined', 'rejected', 'cancelled', 'deleted'],
+  quarantined: ['ready', 'rejected', 'deleted'],
+  // M2 (H.1): `rejected` added. Admission to `ready` happens BEFORE local
+  // text extraction is attempted, so extraction failure legitimately has to
+  // reject an already-`ready` intake -- which both `app/api/aie/intake/
+  // route.ts` and `app/api/aie/insurance/intake/route.ts` have always done.
+  // The edge was missing from this table, so those were illegal transitions
+  // taken in production; they only ever succeeded because nothing enforced
+  // this table at runtime (see `updateIntakeStatus`). The correct fix is to
+  // admit the edge the product genuinely needs rather than to contort the
+  // routes: an intake whose bytes cannot be read is rejected, not cancelled
+  // (cancellation is a USER action; rejection is a SYSTEM verdict) and not
+  // deleted (deletion is the purge job's verdict, and must stay reachable
+  // only from a settled state).
+  ready: ['rejected', 'cancelled', 'deleted'],
   // Terminal for ordinary flow: only the retention/purge job may move a
   // rejected/cancelled intake on to deleted.
   rejected: ['deleted'],
@@ -42,8 +64,22 @@ export class AieInvalidTransitionError extends Error {
   }
 }
 
+/**
+ * M2 (H.1) fail-closed hardening. `AIE_INTAKE_TRANSITIONS[from]` is
+ * `undefined` for a `from` value that is not in the table, and the previous
+ * `[from].includes(to)` therefore threw a raw
+ * `TypeError: Cannot read properties of undefined` rather than the module's
+ * own `AieInvalidTransitionError`. That still failed closed (no write
+ * occurred) but callers catching `AieInvalidTransitionError` misclassified
+ * it as an unexpected crash. This matters because statuses come back out of
+ * the database as untyped `text` and are cast unchecked (`repository.ts`
+ * does `data.status as AieRunStatus`), so a legacy, hand-edited or
+ * future-migration row genuinely can arrive here as an unknown literal.
+ * An unrecognised state is now simply "no legal edges" -- refused, typed.
+ */
 export function isAllowedIntakeTransition(from: AieIntakeStatus, to: AieIntakeStatus): boolean {
-  return AIE_INTAKE_TRANSITIONS[from].includes(to);
+  const allowed = AIE_INTAKE_TRANSITIONS[from] as readonly AieIntakeStatus[] | undefined;
+  return allowed !== undefined && allowed.includes(to);
 }
 
 export function assertIntakeTransition(from: AieIntakeStatus, to: AieIntakeStatus): void {
@@ -93,8 +129,10 @@ export const AIE_RUN_TRANSITIONS: Record<AieRunStatus, readonly AieRunStatus[]> 
   failed_terminal: [],
 };
 
+/** M2 (H.1): same fail-closed hardening as `isAllowedIntakeTransition`. */
 export function isAllowedRunTransition(from: AieRunStatus, to: AieRunStatus): boolean {
-  return AIE_RUN_TRANSITIONS[from].includes(to);
+  const allowed = AIE_RUN_TRANSITIONS[from] as readonly AieRunStatus[] | undefined;
+  return allowed !== undefined && allowed.includes(to);
 }
 
 export function assertRunTransition(from: AieRunStatus, to: AieRunStatus): void {
@@ -103,6 +141,12 @@ export function assertRunTransition(from: AieRunStatus, to: AieRunStatus): void 
   }
 }
 
+/** M2 (H.1): an UNKNOWN status is deliberately NOT reported as terminal.
+ * Terminality is used to decide that no further work is owed on a run;
+ * answering "yes, finished" for a state this module does not recognise would
+ * be the unsafe direction of the two. An unrecognised state is treated as
+ * still-in-flight, which surfaces it rather than silently retiring it. */
 export function isTerminalRunStatus(status: AieRunStatus): boolean {
-  return AIE_RUN_TRANSITIONS[status].length === 0;
+  const allowed = AIE_RUN_TRANSITIONS[status] as readonly AieRunStatus[] | undefined;
+  return allowed !== undefined && allowed.length === 0;
 }

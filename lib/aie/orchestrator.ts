@@ -181,10 +181,33 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
     current = 'masking';
 
     const masking = maskText(extractedText);
-    await deps.recordMaskingSummary({ runId, intakeId, userId, coverageByType: masking.coverageByType as Record<string, number>, belowPolicy: false });
+
+    // M2 (H.9): the policy verdict is now COMPUTED BEFORE the summary row is
+    // written, and the real verdict is what gets recorded. It was previously
+    // hardcoded `belowPolicy: false` here and only computed on the next
+    // line, so `aie_masking_summary.below_policy` said "within policy" for
+    // every run ever recorded — including any run that then immediately
+    // transitioned to `privacy_blocked`. That made the privacy audit trail
+    // assert something the pipeline itself had already contradicted.
+    //
+    // OPEN ITEM, deliberately NOT guessed at here (M2 report H.9-4):
+    // `labelsSeenRaw` is still `[]`, so `FORBIDDEN_LABEL_TERMS` — the only
+    // nominal coverage for person name, address and nominee — still cannot
+    // fire. It is left inert rather than wired, because the intended
+    // semantics are genuinely ambiguous and the two readings differ wildly
+    // in effect: if it means "a forbidden label APPEARS in the document",
+    // then `name`/`address`/`phone` are in that list and essentially every
+    // real financial document would hard-block AI fallback; if it means "a
+    // forbidden label's VALUE survived masking unmasked", it is a useful
+    // backstop. Wiring the first reading would silently disable the feature;
+    // wiring the second requires label->value association the extractor does
+    // not currently produce. This needs an architecture decision, not a
+    // guess, so it is reported as a blocker rather than papered over.
+    const belowPolicy = isBelowMaskingPolicy({ maskedText: masking.maskedText, labelsSeenRaw: [] });
+
+    await deps.recordMaskingSummary({ runId, intakeId, userId, coverageByType: masking.coverageByType as Record<string, number>, belowPolicy });
     if (masking.totalMatches > 0) await deps.persistMaskTokenMap({ runId, reversibleTokenMap: masking.reversibleTokenMap });
 
-    const belowPolicy = isBelowMaskingPolicy({ maskedText: masking.maskedText, labelsSeenRaw: [] });
     if (belowPolicy) {
       await deps.audit({ intakeId, runId, userId, eventType: 'masking_below_policy', actorType: 'system' });
       await transition(deps, { runId, intakeId, userId, from: current, to: 'privacy_blocked' });

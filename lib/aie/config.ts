@@ -20,15 +20,42 @@
  * real production cost decision.
  */
 
-/** The exact model SNAPSHOT id, not a floating alias (mission section 2.3:
- * "pin a supported snapshot after evaluation where practical"). Confirmed
- * via OpenAI's own documentation (2026-09-13) that Structured Outputs with
- * strict json_schema is supported on this snapshot and later. Overridable
- * for a future re-pin, but the override is deliberately a distinct env var
- * from `AIE_AI_PROVIDER`/`AIE_OPENAI_API_KEY` so a pin change is a reviewed,
- * one-line diff, not an accidental drift. */
+/** The configured default model.
+ *
+ * M2 (H.5) RE-PIN, 2026-09-15 — was `'gpt-4o-mini-2024-07-18'`.
+ *
+ * The previous value was a pinned SNAPSHOT id, chosen on the reasoning that
+ * a snapshot is more reproducible than a floating alias. That reasoning was
+ * sound in the abstract but wrong for this deployment, and it was proven
+ * wrong against the real provider rather than argued: M2 issued two real
+ * calls to `POST https://api.openai.com/v1/chat/completions` with the
+ * configured project key and an identical masked synthetic payload —
+ *
+ *   `gpt-4o-mini-2024-07-18` -> HTTP 403, error.code=`model_not_found`,
+ *       "Project `proj_***` does not have access to model
+ *        `gpt-4o-mini-2024-07-18`"
+ *   `gpt-4o-mini`            -> HTTP 200, strict json_schema honoured,
+ *       usage 261 in / 37 out
+ *
+ * So the snapshot id was not merely suboptimal, it was UNCALLABLE by the
+ * only OpenAI project this application is configured to use: every real AI
+ * fallback would have failed 403 the moment `AIE_AI_PROVIDER=openai` was
+ * set. This is the Product Owner's decided default (mission Part H.5:
+ * "Default configured low-cost model: `gpt-4o-mini`").
+ *
+ * Reproducibility is NOT lost by using the alias here. The 200 response's
+ * own `model` field echoed back `gpt-4o-mini-2024-07-18` — the alias
+ * resolves server-side to exactly the snapshot that was pinned before, so
+ * this change alters which NAME is sent, not which weights answer. The
+ * project allowlist admits the alias and refuses the snapshot id.
+ *
+ * Still overridable via `AIE_AI_MODEL`, deliberately a distinct env var from
+ * `AIE_AI_PROVIDER`/`AIE_OPENAI_API_KEY` so a re-pin is a reviewed one-line
+ * diff, not accidental drift. Anything set here must be confirmed callable
+ * by the target project's allowlist first — a model name that typechecks is
+ * not evidence that the project may call it. */
 export function getAieAiModel(): string {
-  return process.env.AIE_AI_MODEL?.trim() || 'gpt-4o-mini-2024-07-18';
+  return process.env.AIE_AI_MODEL?.trim() || 'gpt-4o-mini';
 }
 
 /** Request timeout for one provider call (mission section 6.4/7.6: "define
