@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { recertifyPosition } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (!user) return unauthenticated!;
 
   const parsed = certifySchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data: account } = await supabase.from('ii_accounts').select('id').eq('id', parsed.data.accountId).eq('user_id', user.id).maybeSingle();

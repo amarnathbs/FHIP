@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-intelligence';
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     return bad('Invalid meta JSON', 422);
   }
   const parsedMeta = iiSourceDocumentUploadMetaSchema.safeParse(meta);
-  if (!parsedMeta.success) return bad(parsedMeta.error.message, 422);
+  if (!parsedMeta.success) return badValidation(parsedMeta.error, 422);
 
   const validation = validateUploadedFile({ filename: file.name, mimeType: file.type, sizeBytes: file.size });
   if (!validation.ok) return bad(validation.error!, 422);

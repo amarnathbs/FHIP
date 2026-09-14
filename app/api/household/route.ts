@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { householdSchema } from '@/lib/validation/household';
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // Mandatory Country Confirmation, round-2 closure (MCC-7): this route used
@@ -41,7 +41,7 @@ export async function PUT(req: Request) {
   if (countryBlock) return countryBlock;
 
   const parsed = householdSchema.partial().safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const { data: existing } = await supabase.from('households').select('id').eq('user_id', user.id).maybeSingle();
 

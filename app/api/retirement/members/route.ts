@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { loadRetirementPlanningContext } from '@/lib/services/retirementMemberData';
 import { retirementMemberPatchSchema } from '@/lib/validation/retirementMember';
@@ -33,7 +33,7 @@ export async function PATCH(req: Request) {
   if (!user) return unauthenticated!;
 
   const parsed = retirementMemberPatchSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const { member_type, target_retirement_age, country_code } = parsed.data;
 
   const supabase = await createClient();

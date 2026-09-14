@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { propertyLiabilityLinkSchema } from '@/lib/validation/propertyLiabilityLink';
 import { unlinkPropertyLiabilityLink, updatePropertyLiabilityLink } from '@/lib/services/propertyLiabilityLinksData';
 
@@ -14,7 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .pick({ link_type: true, allocation_percent: true, allocation_amount: true, is_primary: true, notes: true })
     .partial()
     .safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const { data, error } = await updatePropertyLiabilityLink(user.id, id, parsed.data);
   return error ? bad(error.message, 422) : ok(data);
 }

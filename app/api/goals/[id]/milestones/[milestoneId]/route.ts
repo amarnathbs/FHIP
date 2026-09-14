@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { goalMilestoneSchema } from '@/lib/validation/goalMilestone';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; milestoneId: string }> }) {
@@ -8,7 +8,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!user) return unauthenticated!;
   const body = await req.json();
   const parsed = goalMilestoneSchema.partial().safeParse(body);
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const supabase = await createClient();
   const patch: Record<string, unknown> = { ...parsed.data };
   if (body.status === 'achieved') {

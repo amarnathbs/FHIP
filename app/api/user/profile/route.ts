@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { profileSchema } from '@/lib/validation/profile';
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { recordCountryAuditEvent, recordReportingCurrencyAuditEvent } from '@/lib/services/countryAudit';
 
 export async function GET() {
@@ -29,7 +29,7 @@ export async function PUT(req: Request) {
   // ADMIN_CORRECTED"). The only legitimate way to set them is
   // POST /api/user/country/confirm.
   const parsed = profileSchema.partial().safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   // Mandatory Country Confirmation (spec 5.7) — changing country_of_residence
   // through this general profile endpoint must require EXPLICIT

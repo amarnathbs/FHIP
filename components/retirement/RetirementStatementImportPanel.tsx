@@ -21,7 +21,7 @@
  * SMSF section whose boundary it respects.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type Phase =
   | 'form'
@@ -218,6 +218,27 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   const [fields, setFields] = useState<ProposalField[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [decision, setDecision] = useState<Decision>('update_existing');
+  // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
+  // (see that file's identical comment) — this panel used to always render
+  // as a fully working upload form and only discover the FDH-3 production
+  // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
+  // upload itself failed. `null` = not checked yet; `true`/`false` once known.
+  const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/financial-data-hub/upload-status')
+      .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
+      .then((json) => {
+        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setUploadEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const currency = statement?.currency_code ?? (jurisdiction === 'IN' ? 'INR' : 'AUD');
 
@@ -408,7 +429,16 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         <p className="mt-3 rounded bg-gray-50 px-3 py-2 text-sm">{message}</p>
       )}
 
-      {phase === 'form' && (
+      {uploadEnabled === false && phase === 'form' && (
+        <div className="mt-4 space-y-2">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Statement import isn&apos;t turned on in this environment yet. You can still add this account yourself
+            using the Retirement form above.
+          </p>
+        </div>
+      )}
+
+      {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <label className="flex flex-col text-sm">
@@ -464,7 +494,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             </span>
           </label>
           <button
-            type="button" onClick={handleUpload} disabled={busy || !file}
+            type="button" onClick={handleUpload} disabled={busy || !file || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Upload and read statement

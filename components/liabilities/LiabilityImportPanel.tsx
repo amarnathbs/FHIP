@@ -19,7 +19,7 @@
  * — the same relationship any other HTTP client has to a public route.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
@@ -165,6 +165,27 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   const [decision, setDecision] = useState<Decision>('update_existing');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
+  // (see that file's identical comment) — this panel used to always render
+  // as a fully working upload form and only discover the FDH-3 production
+  // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
+  // upload itself failed. `null` = not checked yet; `true`/`false` once known.
+  const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/financial-data-hub/upload-status')
+      .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
+      .then((json) => {
+        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setUploadEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reset = useCallback(() => {
     setPhase('type_select');
@@ -364,7 +385,16 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         </button>
       </div>
 
-      {phase === 'type_select' && (
+      {uploadEnabled === false && phase === 'type_select' && (
+        <div className="mt-4 space-y-2">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Statement import isn&apos;t turned on in this environment yet. You can still add this credit card or
+            loan yourself using the Liabilities form below.
+          </p>
+        </div>
+      )}
+
+      {uploadEnabled !== false && phase === 'type_select' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">What would you like to import?</p>
           <div className="flex gap-3">
@@ -453,7 +483,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={handleUpload}
-              disabled={!file || busy}
+              disabled={!file || busy || uploadEnabled !== true}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               Upload statement

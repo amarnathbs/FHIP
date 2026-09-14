@@ -24,7 +24,7 @@
  * are already there — see that test's own comment for the precedent.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Phase =
   | 'form'
@@ -110,6 +110,27 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   const [decision, setDecision] = useState<Decision>('update_existing');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
+  // (see that file's identical comment) — this panel used to always render
+  // as a fully working upload form and only discover the FDH-3 production
+  // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
+  // upload itself failed. `null` = not checked yet; `true`/`false` once known.
+  const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/financial-data-hub/upload-status')
+      .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
+      .then((json) => {
+        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setUploadEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reset = useCallback(() => {
     setPhase('form');
@@ -308,7 +329,16 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         </button>
       </div>
 
-      {phase === 'form' && (
+      {uploadEnabled === false && phase === 'form' && (
+        <div className="mt-4 space-y-2">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Payslip import isn&apos;t turned on in this environment yet. You can still add this income yourself
+            using the Income form below.
+          </p>
+        </div>
+      )}
+
+      {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a payslip and FHIP will extract your income details for you to review before updating your Income
@@ -337,7 +367,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file || busy}
+            disabled={!file || busy || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload payslip

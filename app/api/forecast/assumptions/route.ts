@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { getOrCreateForecastProfile, ensureDefaultScenario, getResolvedAssumptions, upsertUserAssumption } from '@/lib/services/forecastData';
 import { forecastAssumptionUpsertSchema } from '@/lib/validation/forecast';
 
@@ -20,7 +20,7 @@ export async function PUT(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = forecastAssumptionUpsertSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   try {
     const profile = await getOrCreateForecastProfile(user.id);
     const updated = await upsertUserAssumption(user.id, profile.id, parsed.data);

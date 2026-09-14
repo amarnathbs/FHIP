@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { z } from 'zod';
 
@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = resolveSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   // Ownership + not-already-resolved re-checked here (never trusted from

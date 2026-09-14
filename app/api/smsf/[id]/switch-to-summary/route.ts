@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { switchSmsfFundToSummary } from '@/lib/services/smsfData';
 import { smsfSwitchToSummarySchema } from '@/lib/validation/smsf';
@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = smsfSwitchToSummarySchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data, error } = await switchSmsfFundToSummary(

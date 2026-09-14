@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { getSmsfFund, updateSmsfFundSummary } from '@/lib/services/smsfData';
 import { smsfFundUpdateSchema } from '@/lib/validation/smsf';
@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = smsfFundUpdateSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data, error } = await updateSmsfFundSummary(id, user.id, parsed.data, supabase);
