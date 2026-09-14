@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { runForecast } from '@/lib/services/forecastData';
 import { forecastRunRequestSchema } from '@/lib/validation/forecast';
 import type { StressScenarioParams } from '@/lib/engines/resilienceStress';
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = forecastRunRequestSchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   try {
     const stressParams: StressScenarioParams = omitUndefined({
       durationMonths: parsed.data.resilience_duration_months,

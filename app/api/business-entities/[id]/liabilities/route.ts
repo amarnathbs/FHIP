@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { listBusinessEntityLiabilities, createBusinessEntityLiability } from '@/lib/services/businessEntityData';
 import { businessEntityLiabilitySchema } from '@/lib/validation/businessEntity';
@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = businessEntityLiabilitySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
   const { data, error } = await createBusinessEntityLiability(id, user.id, parsed.data, supabase);

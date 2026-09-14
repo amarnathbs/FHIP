@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
 
@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const bodyRaw = await req.json().catch(() => ({}));
   const parsed = processBodySchema.safeParse(bodyRaw);
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const result = await processSourceDocument({
     userId: user.id,

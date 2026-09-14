@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiManualFixtureSchema } from '@/lib/validation/investment-intelligence';
 import { importManualFixture } from '@/lib/services/investment-intelligence/manualImporter';
 
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const body = await req.json().catch(() => null);
   const parsed = iiManualFixtureSchema.safeParse(body);
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   // The route path's [id] must match a real, owned ii_source_documents row
   // — this endpoint does not create a fresh document out of thin air. In

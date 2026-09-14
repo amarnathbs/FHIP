@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { goalFundingSourceSchema } from '@/lib/validation/goalFundingSource';
 import { checkFundingAllocation, resolveAllocatedAmount, assertOwnsGoal, assertOwnsFundingTarget } from '@/lib/services/goalFundingAllocation';
 
@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = goalFundingSourceSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   // Education/Children Investment -> Goal Linkage, spec s.60-61: verify the
   // goal itself, and whichever balance is being linked, are both actually

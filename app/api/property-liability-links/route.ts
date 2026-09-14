@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { propertyLiabilityLinkSchema } from '@/lib/validation/propertyLiabilityLink';
 import {
   listPropertyLiabilityLinks,
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = propertyLiabilityLinkSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const { data, error } = await createPropertyLiabilityLink(user.id, parsed.data);
   return error ? bad(error.message, 422) : ok(data);
 }

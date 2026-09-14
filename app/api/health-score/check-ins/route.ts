@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { checkInsSchema } from '@/lib/validation/checkIns';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 
@@ -15,7 +15,7 @@ export async function PUT(req: Request) {
   const { user, blocked } = await requireModuleCapability('SCORES', req);
   if (!user) return blocked!;
   const parsed = checkInsSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('health_check_ins')

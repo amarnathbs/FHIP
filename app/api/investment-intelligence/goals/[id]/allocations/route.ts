@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiGoalAllocationSchema } from '@/lib/validation/investment-intelligence';
 import { createOrUpdateGoalAllocation } from '@/lib/services/investment-intelligence/goalAllocations';
 
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!user) return unauthenticated!;
   const body = await req.json();
   const parsed = iiGoalAllocationSchema.safeParse({ ...body, goalId: id });
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
   if (body.goalId && body.goalId !== id) return bad('goalId in body does not match the goal in the URL path', 422);
 
   const supabase = await createClient();

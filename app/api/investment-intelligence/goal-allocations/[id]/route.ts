@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiGoalAllocationUpdateSchema } from '@/lib/validation/investment-intelligence';
 import { updateGoalAllocation, removeGoalAllocation } from '@/lib/services/investment-intelligence/goalAllocations';
 
@@ -11,7 +11,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const parsed = iiGoalAllocationUpdateSchema.safeParse(await req.json());
-  if (!parsed.success) return bad(parsed.error.message, 422);
+  if (!parsed.success) return badValidation(parsed.error, 422);
 
   const result = await updateGoalAllocation(
     user.id,
