@@ -33,15 +33,32 @@
 // the future SMSF entity workspace, this module is the single place to
 // re-point — no engine hard-codes the string itself.
 //
-// SCOPE — CASH FLOW ONLY (LR-FI-1 §5, §28). SMSF economic value must REMAIN
-// in household wealth: assets, investments, retirement balances, liability
-// balances, Gross Assets and Net Worth are all deliberately left untouched by
-// this rule, so the hotfix's Net Worth effect is $0 for unchanged economic
-// balances. What is removed is only the household's *operating cash flow*
-// reading of an SMSF-context row: its income, its expense, its loan
-// instalment, its insurance premium. A liability keeps its balance in Net
-// Worth while its repayment leaves household expenses — exactly the
-// separation LR-FI-1 §12 specifies.
+// SCOPE — CASH FLOW ONLY (LR-FI-1 §5, §28), CORRECTED for liability BALANCES
+// by the LR independent audit's P0-1 fix (2026-09-14). This module's own
+// filter (isHouseholdOperatingCashFlow/householdOperatingCashFlowRows) is
+// unchanged — still exactly `owner !== 'smsf'` on cash-flow fields. What
+// changed is which of dashboard.ts's OWN aggregates apply that filter to a
+// liability's *balance*, not just its repayment.
+//
+// The original text asserted here was: "liability balances... are all
+// deliberately left untouched... a liability keeps its balance in Net
+// Worth." That was wrong for an SMSF-linked property loan specifically, and
+// is corrected, not merely restated: an SMSF fund's own valuation
+// (smsf_compute_detailed_net_value(), migration 0084) already SUBTRACTS its
+// linked loan before that net figure reaches totalRetirement, so also
+// keeping the loan's balance in totalLiabilities subtracted it a SECOND
+// time. Live-proven: a $500,000 SMSF property against a $365,000 linked
+// loan (nothing else) reported Net Worth −$230,000 instead of $135,000 —
+// off by exactly the loan balance, in both Summary and Detailed mode.
+// dashboard.ts's totalLiabilities/totalLiabilityMonthlyRepayments/
+// liabilityByType now all use the SAME household-only filter this module
+// already applied to cash flow, for exactly this reason — see their own
+// doc comments there for the full mechanism.
+//
+// Assets, investments, retirement balances and Gross Assets remain
+// untouched by this rule, as originally stated — this correction is scoped
+// to liability balances only, because only a liability can be the OTHER
+// side of a fund's own already-netted valuation.
 // ---------------------------------------------------------------------------
 
 /** The `owner` value denoting an SMSF-context row (migration 0004's CHECK). */
@@ -94,8 +111,10 @@ export function householdOperatingCashFlowRows<T extends OwnedRow>(rows: T[]): T
 // liabilities specifically, by overriding the EFFECTIVE owner on a shallow
 // copy fed to computeDashboard(). The real, stored liabilities.owner
 // column — and every other reader of it, including the Liabilities
-// register's own display/edit UI — is completely untouched; only the
-// dashboard/DTI/DSR calculation's own input is enriched.
+// register's own display/edit UI — is completely untouched; only
+// computeDashboard()'s own input is enriched. Originally consumed by DTI/
+// DSR only; as of the P0-1 fix (2026-09-14) also determines Net Worth's own
+// totalLiabilities/liabilityByType — see dashboard.ts's doc comments there.
 /** Minimal shape of a liability row this override needs to see. */
 export interface LiabilityRowForSmsfLinkOverride {
   id: string;

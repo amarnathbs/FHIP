@@ -396,15 +396,25 @@ export interface DashboardSummary {
   coreSurvivalMonthlyExpenses: number; // Level 1 subset of essential expenses (see CORE_SURVIVAL_EXPENSE_KEYS)
   lifestyleMonthlyExpenses: number;
   debtMonthlyRepayments: number;
-  // LR-FI-2 §6c. The same sum across ALL owners, SMSF included. This is NOT a
-  // household cash-flow figure and must never be used as one — it exists
-  // solely so a WEALTH projection that amortises the whole balance sheet
-  // (`totalLiabilities`) has a repayment on the same basis. Pairing the
-  // household-only `debtMonthlyRepayments` above with the unfiltered
-  // `totalLiabilities` made an SMSF household's Net Worth and Resilience
-  // forecasts show debt compounding upward forever (see the two forecast
-  // wirings in lib/services/forecastData.ts). Equal to debtMonthlyRepayments
-  // by construction for every household with no SMSF rows.
+  // LR-FI-2 §6c, corrected by the LR independent audit's P0-1 fix
+  // (2026-09-14). Originally the sum across ALL owners including SMSF, kept
+  // separate from `debtMonthlyRepayments` so a wealth projection amortising
+  // the (then-unfiltered) whole-balance-sheet `totalLiabilities` had a
+  // repayment on the same basis. `totalLiabilities` is now household-only
+  // (SMSF-linked liabilities are excluded — P0-1: a fund's linked loan is
+  // already netted out of the fund's own valuation, so also subtracting its
+  // balance from `totalLiabilities` double-counted it against Net Worth).
+  // Keeping this field on the OLD whole-balance-sheet basis while
+  // `totalLiabilities` moved to household-only would reintroduce the exact
+  // "repayment sized for the wrong balance" defect this field was created to
+  // fix, just inverted (an SMSF-inclusive repayment amortising a
+  // household-only balance over-pays it down). So this field now shares
+  // `totalLiabilities`'s own household-only source array and is equal to
+  // `debtMonthlyRepayments` by construction for every household, not only
+  // ones with no SMSF rows. Kept as its own named field (rather than having
+  // every caller read `debtMonthlyRepayments` directly) purely so
+  // `lib/services/forecastData.ts`'s and `lib/engines/whatIf.ts`'s existing
+  // "same basis as totalLiabilities" wiring needed no changes here.
   totalLiabilityMonthlyRepayments: number;
   totalMonthlyExpenses: number; // essential + lifestyle + bank-derived (excludes debt repayments, tracked separately)
   // LR-3: the slice of totalMonthlyExpenses/grossMonthlyIncome that came from
@@ -433,12 +443,29 @@ export interface DashboardSummary {
   totalAssetsCombined: number; // totalAssets + totalInvestments + totalRetirement — the figure to show as "total assets" anywhere net worth is also shown, so the two reconcile
   totalInvestments: number;
   totalRetirement: number;
+  // LR independent audit P0-1 fix (2026-09-14): household-only, same
+  // filter as householdLiabilityBalance below (an SMSF-linked loan is
+  // excluded — its economic effect already reaches Net Worth once, netted
+  // inside the fund's own valuation via totalRetirement). Originally
+  // "stayed whole" on the stated rationale that Net Worth must keep SMSF
+  // economic value (LR-FI-1 §5, §28); that rationale assumed the SMSF
+  // fund's own valuation was GROSS (holdings only), so the loan's balance
+  // was needed here to net it out for Net Worth. It is not gross —
+  // smsf_compute_detailed_net_value() (migration 0084) already subtracts
+  // the linked loan before the fund's value ever reaches totalRetirement —
+  // so keeping the same loan here too subtracted it a second time. Ground
+  // truth proved live: an SMSF holding a $500,000 property against a
+  // $365,000 linked loan (nothing else) reported Net Worth −$230,000
+  // instead of the correct $135,000 — an error of exactly the loan
+  // balance. See householdContext.ts's own header for the full mechanism.
   totalLiabilities: number;
   // LR-FI-2 §1. Liability balances in HOUSEHOLD context only — the balance-side
   // counterpart to debtMonthlyRepayments, and the basis for debtToIncome.
-  // `totalLiabilities` above stays whole because Net Worth must keep SMSF
-  // economic value (LR-FI-1 §5, §28); this figure exists so a ratio whose
-  // denominator is household-only income has a numerator on the same basis.
+  // As of the P0-1 fix above, `totalLiabilities` uses this exact same
+  // household-only filter for Net Worth too, so the two fields are now
+  // identical by construction for every household. Kept as two separate
+  // named fields (rather than collapsing one into the other) purely to
+  // avoid renaming every existing reader of either name.
   householdLiabilityBalance: number;
   // LR-11 (Company / Family Trust Entity Architecture) — this user's own
   // ownership-% share of their active business entities' net asset value,
@@ -587,9 +614,15 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // Expenses: SMSF audit/accounting/administration/property costs are fund
   // operating costs, never household consumption (spec §4, §13).
   const householdExpenses = householdOperatingCashFlowRows(nonSupersededExpenses);
-  // Liabilities: the rows stay whole — only their monthly_repayment is
-  // household cash flow. An SMSF property loan keeps its balance in Net
-  // Worth while its instalment leaves household expenses (spec §12, §29).
+  // Liabilities: as of the LR independent audit's P0-1 fix (2026-09-14),
+  // this same filter now ALSO governs totalLiabilities/liabilityByType
+  // (Net Worth), not just this household-cash-flow split — an SMSF-linked
+  // loan's balance is excluded from Net Worth entirely because it is
+  // already netted out of the fund's own valuation (totalRetirement).
+  // Originally only monthly_repayment left Net Worth here while the
+  // balance stayed in (spec §12, §29); that balance-side exception is what
+  // P0-1 removed. See the totalLiabilities field's own doc comment on
+  // DashboardSummary for the full mechanism and live proof.
   const householdLiabilities = householdOperatingCashFlowRows(input.liabilities);
 
   // LR-3: approved bank-derived income (the current period's real, already-
@@ -703,10 +736,12 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // Ratio. The SMSF loan's BALANCE is untouched and still reaches
   // totalLiabilities/netWorth below.
   const debtMonthlyRepayments = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
-  // LR-FI-2 §6c: the whole-balance-sheet repayment, for wealth-side
-  // amortisation only. Never enters monthlySurplus, DSR or any other
-  // household cash-flow figure — see the field's comment on DashboardSummary.
-  const totalLiabilityMonthlyRepayments = input.liabilities.reduce(
+  // LR-FI-2 §6c, corrected by P0-1 (2026-09-14): same household-only source
+  // array as totalLiabilities now, so the two stay on the same basis for
+  // forecastData.ts's/whatIf.ts's amortisation wiring. Never enters
+  // monthlySurplus, DSR or any other household cash-flow figure — see the
+  // field's comment on DashboardSummary.
+  const totalLiabilityMonthlyRepayments = householdLiabilities.reduce(
     (sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0),
     0
   );
@@ -773,10 +808,16 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const totalAssets = input.assets.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalInvestments = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_value), 0);
   const totalRetirement = input.retirement.reduce((sum, r) => sum + reportingValue(r.currency_code, r.current_balance), 0);
-  const totalLiabilities = input.liabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
+  // P0-1 (LR independent audit, 2026-09-14): household-only — same array as
+  // householdLiabilityBalance below. An SMSF-linked liability is excluded
+  // here because its balance is already netted into totalRetirement via the
+  // fund's own valuation; including it again here double-subtracted it from
+  // Net Worth. See this field's doc comment on DashboardSummary.
+  const totalLiabilities = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   // LR-FI-2 §1 — the household-context balance total. Built from the SAME
-  // householdLiabilities array the cash-flow figures use, so there is one
-  // filter rule in this engine, not two.
+  // householdLiabilities array the cash-flow figures (and, since P0-1,
+  // totalLiabilities itself) use, so there is one filter rule in this
+  // engine, not two.
   const householdLiabilityBalance = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.balance), 0);
   const netWorth = totalAssets + totalInvestments + totalRetirement - totalLiabilities + businessEntityOwnershipValue;
 
@@ -791,8 +832,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     value,
   }));
 
+  // P0-1: sourced from householdLiabilities (same as totalLiabilities
+  // above), not the raw input.liabilities — reportSections.ts's Net Worth
+  // section presents liabilityByType alongside totalLiabilities with an
+  // explicit "the two reconcile" contract; sourcing this from the
+  // unfiltered array would make its sum silently disagree with the total
+  // it's shown next to for any SMSF household.
   const liabilityTypeMap = new Map<string, number>();
-  for (const l of input.liabilities) {
+  for (const l of householdLiabilities) {
     const key = l.master_item_key ?? l.debt_type;
     liabilityTypeMap.set(key, (liabilityTypeMap.get(key) ?? 0) + l.balance);
   }

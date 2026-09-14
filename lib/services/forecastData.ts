@@ -920,6 +920,18 @@ async function buildCalculatorInput(
     //   Expected new result: 5,000 - 3,825 = +1,175/mo, debt genuinely
     //   reduces. Byte-identical for every household with no SMSF rows, where
     //   totalLiabilityMonthlyRepayments === debtMonthlyRepayments.
+    //
+    //   ADDENDUM (LR independent audit P0-1, 2026-09-14): `totalLiabilities`
+    //   is no longer whole-balance-sheet either — it now excludes
+    //   SMSF-linked liabilities too (a fund's linked loan is already netted
+    //   into its own valuation before it reaches openingRetirement above;
+    //   keeping the loan's balance here as well double-subtracted it from
+    //   Net Worth). `totalLiabilityMonthlyRepayments` was updated in lockstep
+    //   (same household-only source array in dashboard.ts), so this pairing
+    //   still amortises whichever balance-sheet population totalLiabilities
+    //   itself now represents with a repayment on that same basis — the two
+    //   are equal by construction for every household now, not only ones
+    //   with no SMSF rows, and no change was needed at this call site.
     monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
     assumptions,
     plannedEvents,
