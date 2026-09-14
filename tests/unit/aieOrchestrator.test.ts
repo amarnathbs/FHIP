@@ -28,9 +28,8 @@ function fakeDeps(overrides: Partial<AieOrchestratorDeps> = {}): { deps: AieOrch
     recordMaskingSummary: async (p) => {
       calls.maskingSummaries.push(p);
     },
-    persistMaskTokenMap: async (p) => {
-      calls.tokenMaps.push(p);
-    },
+    // M3: `persistMaskTokenMap` was here. The orchestrator no longer has that
+    // dependency — see the "no escrow" assertion at the bottom of this file.
     recordAiCompletionAttempt: async (p) => {
       calls.aiAttempts.push(p);
       return { id: 'fake-attempt-id' };
@@ -59,6 +58,9 @@ function fakeDeps(overrides: Partial<AieOrchestratorDeps> = {}): { deps: AieOrch
 
 describe('AIE-1.1 orchestrator — the pipeline route (architecture steps 4-11)', () => {
   beforeAll(() => {
+    // M3: masking now fails closed without a key (see identifierToken.ts), so
+    // any test that exercises the AI-fallback branch needs one installed.
+    process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'a1'.repeat(32);
     aieParserRegistry.register({
       adapterId: 'test_complete_parser',
       version: '1',
@@ -121,7 +123,12 @@ describe('AIE-1.1 orchestrator — the pipeline route (architecture steps 4-11)'
     });
     expect(outcome.aiWasUsed).toBe(true);
     expect(seenPrompt).not.toContain(seededPan); // PII canary: never reaches the "provider"
-    expect(calls.tokenMaps.length).toBe(1); // reversible map persisted for the masked PAN
+    // M3: the PAN is replaced by a keyed one-way pseudonym and NOTHING is
+    // escrowed. Pre-M3 this line asserted the opposite (`tokenMaps.length === 1`,
+    // "reversible map persisted for the masked PAN") — that map no longer
+    // exists, by Product-Owner decision.
+    expect(seenPrompt).toMatch(/\[MASKED:tax_id:hmac:[a-p]+\]/);
+    expect(calls.tokenMaps.length).toBe(0);
     expect(outcome.finalStatus).toBe('awaiting_acceptance');
     expect(outcome.candidates.some((c) => c.fieldName === 'account_number' && c.valueRaw === '999')).toBe(true);
   });

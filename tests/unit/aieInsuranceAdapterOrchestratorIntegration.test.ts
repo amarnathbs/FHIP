@@ -27,7 +27,6 @@ function fakeDeps(gateway: AieDocumentAiGateway): { deps: AieOrchestratorDeps; c
       recordMaskingSummary: async (p) => {
         calls.maskingSummaries.push(p);
       },
-      persistMaskTokenMap: async () => {},
       recordAiCompletionAttempt: async (p) => {
         calls.aiAttempts.push(p);
         return { id: 'fake-id' };
@@ -50,6 +49,10 @@ function fakeDeps(gateway: AieDocumentAiGateway): { deps: AieOrchestratorDeps; c
 
 describe('AIE-1.4 Insurance adapter — end-to-end through AIE-1.1 core orchestrator', () => {
   beforeAll(() => {
+    // M3: identifier tokenisation is keyed and fails closed without the key,
+    // so any path that reaches the masking stage needs one installed. This
+    // suite's AI-fallback cases do.
+    process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'a1'.repeat(32);
     registerInsuranceAdapter();
   });
 

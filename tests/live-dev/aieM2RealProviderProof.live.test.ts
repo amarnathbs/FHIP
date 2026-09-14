@@ -30,6 +30,10 @@ import { getAieAiModel } from '@/lib/aie/config';
 
 const ENABLED = process.env.AIE_M2_LIVE_PROVIDER_PROOF === '1';
 
+/** M3: masking is tenant-bound. A fixed synthetic tenant id keeps this
+ * proof reproducible across runs. */
+const LIVE_TENANT = { tenantKey: 'm2-live-proof-synthetic-tenant' };
+
 /** Synthetic. Every value here is invented for this test; no real holder,
  * PAN, folio, email or phone number appears. These doubles as the PII
  * sentinels asserted absent from the pre-egress payload. */
@@ -64,7 +68,7 @@ describe.skipIf(!ENABLED)('M2 (H.6) real OpenAI provider proof', () => {
   });
 
   it('sends only masked minimum-necessary content and no raw PII sentinel', async () => {
-    const masking = maskText(SYNTHETIC_DOCUMENT);
+    const masking = maskText(SYNTHETIC_DOCUMENT, LIVE_TENANT);
     expect(containsUnmaskedPii(masking.maskedText)).toBe(false);
     for (const sentinel of SENTINELS) {
       expect(masking.maskedText, `sentinel leaked pre-egress: ${sentinel}`).not.toContain(sentinel);
@@ -72,7 +76,7 @@ describe.skipIf(!ENABLED)('M2 (H.6) real OpenAI provider proof', () => {
   });
 
   it('makes a real call that returns strict structured output, records usage, and leaks no PII back', async () => {
-    const masking = maskText(SYNTHETIC_DOCUMENT);
+    const masking = maskText(SYNTHETIC_DOCUMENT, LIVE_TENANT);
     const gateway = new AieDocumentAiGateway(createAieAiProvider(), { isKillSwitchEnabled: () => true });
 
     const result = await gateway.requestFieldCompletion({
@@ -103,17 +107,18 @@ describe.skipIf(!ENABLED)('M2 (H.6) real OpenAI provider proof', () => {
     for (const sentinel of SENTINELS) {
       expect(serialised, `sentinel returned by provider path: ${sentinel}`).not.toContain(sentinel);
     }
-    // The reversible map must never be reachable from a gateway result.
-    for (const rawValue of Object.values(masking.reversibleTokenMap)) {
-      expect(serialised).not.toContain(rawValue);
-    }
+    // M3: there is no reversible map to be reachable any more. The stronger
+    // replacement assertion — every value that WAS in the document is absent
+    // from the result — is the SENTINELS loop directly above, which covers
+    // the same ground without depending on what masking happened to capture.
+    expect('reversibleTokenMap' in masking).toBe(false);
   }, 60_000);
 
   it('the kill switch prevents any new provider call', async () => {
     const gateway = new AieDocumentAiGateway(createAieAiProvider(), { isKillSwitchEnabled: () => false });
     const result = await gateway.requestFieldCompletion({
       systemPrompt: 'extract only requested fields',
-      maskedUserPrompt: maskText(SYNTHETIC_DOCUMENT).maskedText,
+      maskedUserPrompt: maskText(SYNTHETIC_DOCUMENT, LIVE_TENANT).maskedText,
       schemaName: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME,
       schemaVersion: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION,
       model: getAieAiModel(),

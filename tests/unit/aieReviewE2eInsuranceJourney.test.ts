@@ -45,7 +45,6 @@ function orchestratorFakeDeps(): { deps: AieOrchestratorDeps; calls: Record<stri
       recordTransition: async () => {},
       recordParserAttempt: async () => {},
       recordMaskingSummary: async () => {},
-      persistMaskTokenMap: async () => {},
       recordAiCompletionAttempt: async () => ({ id: 'fake' }),
       recordSchemaValidationResult: async () => {},
       recordFieldCandidates: async () => {},

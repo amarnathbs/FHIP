@@ -14,8 +14,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { encryptTokenValue } from '../masking/tokenMapCrypto';
 import { AieInvalidTransitionError, assertRunTransition, isAllowedIntakeTransition } from '../stateMachine';
+import type { AieAuditEventType as AieAuditEventTypeName } from '../audit';
 import type {
   AieActorType,
   AieAiOutcome,
@@ -319,18 +319,30 @@ export async function recordMaskingSummary(params: {
   });
 }
 
-/** PII-08: encrypts every value before it ever reaches the database. */
-export async function persistMaskTokenMap(params: { runId: string; reversibleTokenMap: Record<string, string> }): Promise<void> {
-  const entries = Object.entries(params.reversibleTokenMap);
-  if (entries.length === 0) return;
-  const admin = createAdminClient();
-  const rows = entries.map(([token, rawValue]) => ({
-    run_id: params.runId,
-    token,
-    ciphertext: encryptTokenValue(rawValue),
-  }));
-  await admin.from('aie_mask_token_map').insert(rows);
-}
+/**
+ * M3 (Phase 4) — `persistMaskTokenMap` WAS HERE AND HAS BEEN REMOVED.
+ *
+ * It was the only writer of `aie_mask_token_map`, the table holding
+ * reversible de-tokenisation material. The Product Owner's 2026-09-15
+ * decision replaced the reversible escrow scheme with keyed one-way HMAC
+ * pseudonyms (`lib/aie/masking/identifierToken.ts`), so there is nothing
+ * left to escrow: `maskText` no longer returns original values at all, and
+ * therefore no caller could supply them even if this function still existed.
+ *
+ * Removed rather than left in place unused, deliberately. A dormant function
+ * that writes reversible PII is an invitation for a future adapter to call
+ * it "because it was already there", which would silently reintroduce the
+ * exact retention defect M2 recorded as H.10/PO-BLOCKER-4.
+ *
+ * The TABLE is intentionally NOT dropped and its migration is NOT re-emitted
+ * — `0140` is already applied to DEV and production (M0 finding MG-1: never
+ * renumber or rewrite an applied migration). Instead it is left with no
+ * writer at all, plus an unconditional 48-hour TTL sweep over anything that
+ * somehow appears in it (`purgeExpiredMaskTokenMaps`,
+ * `lib/aie/services/purge.ts`). Verified read-only on 2026-09-15: the table
+ * holds ZERO rows in both DEV and production, so no historical row exists to
+ * migrate or strand.
+ */
 
 export async function recordAiCompletionAttempt(params: {
   runId: string;
@@ -565,6 +577,45 @@ export async function listRunsForUser(userId: string, limit = 50): Promise<AieRu
   return (data ?? []).map((r) => ({ id: r.id, intakeId: r.intake_id, userId: r.user_id, status: r.status as AieRunStatus, aiUsed: r.ai_used, startedAt: r.started_at }));
 }
 
+/**
+ * M3 (Phase 4) — ownership-scoped intake read for the Investment
+ * Intelligence password-unlock route. Scoped by `user_id` in the query
+ * itself, never by a bare `intakeId`, so a guessed id cannot be used to
+ * discover whether someone else's document exists (PRIV-06 / IDOR).
+ */
+export async function getIntakeForUser(
+  intakeId: string,
+  userId: string,
+): Promise<{ id: string; status: AieIntakeStatus; storageKey: string | null; displayFilename: string | null } | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('aie_document_intake').select('id, status, storage_key, display_filename').eq('id', intakeId).eq('user_id', userId).maybeSingle();
+  if (!data) return null;
+  return { id: data.id, status: data.status as AieIntakeStatus, storageKey: data.storage_key ?? null, displayFilename: data.display_filename ?? null };
+}
+
+/**
+ * M3 (Phase 4) — audit events of one type for one intake, newest first.
+ *
+ * Exists so AIE can rate-limit password attempts the SAME way FDH-5 already
+ * does, by counting recorded attempts rather than by storing anything about
+ * them. `lib/financial-data-hub/bank-pdf/password.ts`'s own header makes the
+ * distinction that licenses this: "an AUDIT EVENT RECORDING 'an attempt
+ * occurred' is not the password". This function returns only `event_type`
+ * and `created_at` — deliberately not `metadata` — so the rate-limit path
+ * cannot read attempt metadata even by accident.
+ */
+export async function listAuditEventsForIntake(params: { intakeId: string; eventType: AieAuditEventTypeName; limit?: number }): Promise<{ event_type: string; created_at: string }[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_audit_event')
+    .select('event_type, created_at')
+    .eq('intake_id', params.intakeId)
+    .eq('event_type', params.eventType)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(params.limit ?? 50, 200));
+  return (data ?? []).map((r) => ({ event_type: r.event_type as string, created_at: r.created_at as string }));
+}
+
 export async function getIntakeDisplayFilename(intakeId: string): Promise<string | null> {
   const admin = createAdminClient();
   const { data } = await admin.from('aie_document_intake').select('display_filename').eq('id', intakeId).maybeSingle();
@@ -788,16 +839,40 @@ export async function markWriteBatchStatus(batchId: string, status: 'committed' 
     .eq('id', batchId);
 }
 
-export async function findMaskTokenCiphertext(runId: string, token: string): Promise<Buffer | null> {
+/**
+ * M3 (Phase 4) — `findMaskTokenCiphertext` WAS HERE AND HAS BEEN REMOVED,
+ * for the same reason as `persistMaskTokenMap` above: with one-way HMAC
+ * pseudonyms there is no ciphertext to look up, and `lib/aie/review/reveal.ts`
+ * now refuses every reveal request structurally rather than attempting a
+ * decrypt that could never succeed.
+ */
+
+/**
+ * M3 (Phase 4) — unconditional retention enforcement over
+ * `aie_mask_token_map`, implementing the Product Owner's 2026-09-15
+ * decision: "FIXED SHORT TTL (24-48 hours), independent of document
+ * lifecycle state", with 48 hours taken as the decided default.
+ *
+ * DELIBERATELY NOT LIFECYCLE-AWARE. It does not join to
+ * `aie_document_intake`, does not consider `status`, `purge_status`, run
+ * state, or whether a review is still open. The Product Owner explicitly
+ * accepted that a document still under review past the TTL loses this
+ * transient data; building a lifecycle-aware retention rule instead would
+ * be substituting a different policy for the one that was decided.
+ *
+ * NO SCHEMA CHANGE WAS NEEDED. `aie_mask_token_map.created_at` already
+ * exists (`0140:312`, `not null default now()`), so the TTL is expressed
+ * against it rather than by adding an `expires_at` column. That matters
+ * practically, not just aesthetically: this environment has no way to apply
+ * DDL to DEV or production (M0 operator item OA-3 — no SQL-execution RPC is
+ * exposed on either project), so a column-based TTL would have shipped as an
+ * unapplied migration and the retention guarantee would have been a
+ * statement of intent rather than something that actually runs.
+ */
+export async function purgeExpiredMaskTokenMapRows(ttlHours: number): Promise<{ deleted: number }> {
   const admin = createAdminClient();
-  const { data } = await admin.from('aie_mask_token_map').select('ciphertext').eq('run_id', runId).eq('token', token).maybeSingle();
-  if (!data?.ciphertext) return null;
-  // supabase-js returns bytea as a hex string ("\\x...") over PostgREST —
-  // normalise defensively so this works whether the driver already handed
-  // back a Buffer (service-role admin client, most configurations) or the
-  // raw PostgREST hex-encoded string.
-  if (Buffer.isBuffer(data.ciphertext)) return data.ciphertext;
-  const raw = String(data.ciphertext);
-  const hex = raw.startsWith('\\x') ? raw.slice(2) : raw;
-  return Buffer.from(hex, 'hex');
+  const cutoffIso = new Date(Date.now() - ttlHours * 3600_000).toISOString();
+  const { data, error } = await admin.from('aie_mask_token_map').delete().lt('created_at', cutoffIso).select('id');
+  if (error) return { deleted: 0 };
+  return { deleted: (data ?? []).length };
 }

@@ -33,10 +33,23 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { deleteFromQuarantine, verifyQuarantineObjectAbsent } from '../storage';
+import { purgeExpiredMaskTokenMapRows } from '../db/repository';
 import { recordAieAuditEvent } from '../audit';
 
 const AIE_PURGE_HARD_MAX_AGE_MINUTES = 24 * 60; // mission section 4.2 default
 const AIE_PURGE_FAILED_RETRY_DELAY_MINUTES = 5; // bounded backoff before a failed sweep attempt is retried
+
+/**
+ * M3 (Phase 4) — the Product Owner's 2026-09-15 mask-token retention
+ * decision, as a constant so the number is reviewable in one place: "FIXED
+ * SHORT TTL (24-48 hours), independent of document lifecycle state", with
+ * 48 hours taken as the decided default. Nothing shorter was chosen because
+ * no reason to prefer 24 was found — after the one-way-HMAC decision there
+ * is no legitimate writer of this table left at all, so the TTL now acts
+ * purely as a hard backstop rather than as a working retention window, and
+ * the looser end of the decided range is the safer default for a backstop.
+ */
+export const AIE_MASK_TOKEN_MAP_TTL_HOURS = 48;
 
 interface AiePurgeRow {
   id: string;
@@ -230,6 +243,46 @@ async function failAttempt(row: AiePurgeRow, rawMessage: string): Promise<PurgeA
     metadata: { attempt: row.purge_attempt_count + 1 },
   });
   return { status: 'failed', errorMessage: sanitised };
+}
+
+/**
+ * M3 (Phase 4) — mask-token-map TTL enforcement, run by the same scheduled
+ * sweep as the binary purge.
+ *
+ * SEPARATE FROM THE BINARY PURGE ON PURPOSE. `runPurgeAttempt` above deletes
+ * a document's bytes and is driven by that document's own lifecycle
+ * (`purge_status`, `purge_due_at`). This one is driven by nothing but wall
+ * time. It takes no intake id, performs no join, consults no status, and has
+ * no way to be told "not yet, this one is still under review" — because the
+ * Product Owner's decision was explicitly that a document still under review
+ * past the TTL loses this data, and a lifecycle-aware variant would quietly
+ * be a different policy.
+ *
+ * It also runs UNCONDITIONALLY rather than only when rows are expected. The
+ * table has had no writer since the one-way-HMAC change, so in normal
+ * operation this deletes zero rows every time — which is the point: the
+ * guarantee should hold even if some future code path starts writing to the
+ * table again without anyone remembering this decision.
+ */
+export async function purgeExpiredMaskTokenMaps(ttlHours: number = AIE_MASK_TOKEN_MAP_TTL_HOURS): Promise<{ deleted: number; ttlHours: number }> {
+  const { deleted } = await purgeExpiredMaskTokenMapRows(ttlHours);
+  if (deleted > 0) {
+    // No intake id and no user id are available here (the table keys on
+    // run_id only, and this sweep deliberately does not join to find them),
+    // so the audit records the COUNT and the policy, never a subject. That
+    // is the correct shape for a time-driven retention event: it evidences
+    // that the policy ran and what it removed, without re-identifying whose
+    // data it was.
+    await recordAieAuditEvent({
+      intakeId: null,
+      runId: null,
+      userId: null,
+      eventType: 'mask_token_map_ttl_purged',
+      actorType: 'system',
+      metadata: { deleted_rows: deleted, ttl_hours: ttlHours, policy: 'po_decision_2026_09_15_fixed_ttl_lifecycle_independent' },
+    });
+  }
+  return { deleted, ttlHours };
 }
 
 /**

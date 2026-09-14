@@ -8,7 +8,7 @@
  * parser + reconciliation rule, using the same `fakeDeps()` pattern
  * `tests/unit/aieOrchestrator.test.ts` already established.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildBankPdfFixture } from '../support/buildBankPdfFixture';
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
 import { runExtractionPipeline, createDefaultDeps, type AieOrchestratorDeps } from '@/lib/aie/orchestrator';
@@ -41,7 +41,6 @@ function fakeDeps(gateway: AieDocumentAiGateway): { deps: AieOrchestratorDeps; c
       recordTransition: async () => {},
       recordParserAttempt: async () => {},
       recordMaskingSummary: async () => {},
-      persistMaskTokenMap: async () => {},
       recordAiCompletionAttempt: async (p) => {
         calls.aiAttempts.push(p);
         return { id: 'fake-id' };
@@ -63,6 +62,13 @@ function fakeDeps(gateway: AieDocumentAiGateway): { deps: AieOrchestratorDeps; c
 }
 
 describe('AIE-1.3 FDH bank-statement adapter — end-to-end through AIE-1.1 core orchestrator', () => {
+  beforeAll(() => {
+    // M3: identifier tokenisation is keyed and fails closed without the key,
+    // so any path that reaches the masking stage needs one installed. This
+    // suite's AI-fallback cases do.
+    process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'a1'.repeat(32);
+  });
+
   it('scenario 1: deterministic-complete CBA statement reaches awaiting_acceptance with ZERO AI calls', async () => {
     const pdf = buildBankPdfFixture({
       brandLines: ['Commonwealth Bank of Australia', 'Statement of Account'],

@@ -32,6 +32,26 @@ export type AieAuditEventType =
   // changes. 'evidence_revealed' carries a mask TOKEN in metadata, never a
   // plaintext value (P10) — see lib/aie/review/reveal.ts.
   | 'evidence_revealed'
+  // M3 (Phase 4) — the Product Owner's one-way-HMAC decision removed the
+  // reveal capability entirely. 'evidence_revealed' can no longer be
+  // emitted by any code path and is kept only so an existing historical row
+  // still has a name; every reveal request now records this refusal
+  // instead. Metadata carries the opaque token and whether it was a one-way
+  // pseudonym — never a value, because none is recoverable.
+  | 'evidence_reveal_refused_one_way_masking'
+  // M3 (Phase 4) — the fixed, lifecycle-independent mask-token-map TTL. A
+  // time-driven retention event with no subject: metadata carries the row
+  // COUNT and the policy identity, never an intake, run or user.
+  | 'mask_token_map_ttl_purged'
+  // M3 (Phase 4) — one PDF password attempt occurred for this intake.
+  // Recorded on EVERY attempt, right or wrong, BEFORE the decrypt is tried,
+  // which is what makes rate limiting possible. Carries no metadata about
+  // the password whatsoever — per FDH-5's own established distinction, "an
+  // audit event recording that an attempt occurred is not the password".
+  | 'aie_pdf_password_attempt'
+  // M3 (Phase 4) — a further password attempt was refused because the
+  // per-document hourly bound was already reached.
+  | 'aie_pdf_password_rate_limited'
   // AIE-1 closure mission additions (section 4/9 — temporary document
   // lifecycle). `event_type` has no DB CHECK constraint (confirmed:
   // migration 0140 declares it plain `text not null`), so these new values

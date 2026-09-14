@@ -16,7 +16,6 @@ function fakeDeps(): { deps: AieOrchestratorDeps; calls: Record<string, unknown[
     recordTransition: async (p) => void calls.transitions.push(p),
     recordParserAttempt: async (p) => void calls.parserAttempts.push(p),
     recordMaskingSummary: async () => {},
-    persistMaskTokenMap: async () => {},
     recordAiCompletionAttempt: async () => ({ id: 'fake' }),
     recordSchemaValidationResult: async () => {},
     recordFieldCandidates: async (p) => void calls.fieldCandidates.push(p),

@@ -14,7 +14,30 @@ export { matchInstrumentsReadOnly, schemeKey } from './instrumentMatching';
 export { checkStatementPeriod } from './statementMatching';
 export { unresolvedItemsForAccountMatches, unresolvedItemForOwnerUnresolved, unresolvedItemsForInstrumentMatches, unresolvedItemForStatementPeriod } from './unresolvedItems';
 export { buildInvestmentReconciliationRule, type InvestmentReconciliationContext } from './reconciliationRule';
-export { isIiAdapterCanonicalWriteEnabled } from './featureFlags';
+export { isIiAdapterCanonicalWriteEnabled, isAieIiAdapterEnabled } from './featureFlags';
+// M3 (Phase 4) — the I.1 dispatch path and the pieces it needed.
+export { dispatchInvestmentDocument, type DispatchParams, type DispatchOutcome } from './dispatch';
+export { buildInvestmentReconciliationContext, type BuildContextParams } from './context';
+export {
+  registerInvestmentDocumentFactsSchema,
+  investmentDocumentFactsSchema,
+  AIE_II_DOCUMENT_FACTS_SCHEMA_NAME,
+  AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION,
+  II_MISSING_REASON_CODES,
+  II_AI_TRANSACTION_TYPE_CANDIDATES,
+  type InvestmentDocumentFacts,
+} from './documentFactsSchema';
+export {
+  compareFieldEvidence,
+  unresolvedItemsForDisagreements,
+  objectiveResolutionsForAudit,
+  isMaterialFinancialField,
+  MATERIAL_FINANCIAL_FIELDS,
+  type FieldComparison,
+  type FieldDisagreementInput,
+  type CandidateEvidence,
+  type RollForwardTieBreak,
+} from './disagreement';
 export { acceptAndWriteInvestmentCandidates, createDefaultAcceptAndWriteDeps, type AcceptAndWriteInput, type AcceptAndWriteOutcome, type AcceptAndWriteDeps } from './write';
 
 import { registerInvestmentIntelligenceAieParser } from './parserAdapter';

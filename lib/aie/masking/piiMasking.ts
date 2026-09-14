@@ -28,7 +28,35 @@
  * local/deterministic extraction and BEFORE any AI payload is constructed
  * (see `lib/aie/provider/gateway.ts`, which refuses to build a payload from
  * anything that has not been through `maskText()` first).
+ *
+ * M3 (Phase 4) — TOKENISATION SCHEME CHANGED BY PRODUCT-OWNER DECISION.
+ * Every identifier category below is now replaced by a KEYED ONE-WAY HMAC
+ * pseudonym (`lib/aie/masking/identifierToken.ts`), not by an opaque
+ * per-call counter token backed by a reversible encrypted escrow map. The
+ * `reversibleTokenMap` this function used to return is GONE, along with the
+ * `aie_mask_token_map` write path and the evidence-reveal capability that
+ * consumed it — see `lib/aie/review/reveal.ts`. The Product Owner made this
+ * call knowing and accepting that a user can no longer see their own
+ * original folio / PAN / account / holder-name value at any point,
+ * including during their own document review.
+ *
+ * Consequence worth stating plainly, because it is a genuine improvement
+ * rather than only a cost: tokens are now STABLE per (tenant, type, value).
+ * The same folio in January's and February's statements yields the same
+ * token, which is exactly the "account/folio stable token" the M3 AI
+ * investment JSON contract needs and which the per-call counter scheme could
+ * not express at all.
+ *
+ * WHAT IS NOT MASKED, AND WHY THAT IS CORRECT. Financial VALUES — amounts,
+ * units, NAV, closing balances, statement market value — are deliberately
+ * not a masked category and are unaffected by the decision above. They are
+ * not identifiers, they are the evidence the adapter exists to read, and
+ * H.9's own text preserves them ("financial values needed for extraction may
+ * remain"). Masking them would not protect a user; it would simply make the
+ * feature impossible.
  */
+
+import { deriveIdentifierToken } from './identifierToken';
 
 export type AiePiiType =
   | 'tax_id' // AU TFN / India PAN
@@ -126,6 +154,34 @@ const PII_PATTERNS: PiiPattern[] = [
     valuePredicate: (value) => /[A-Z]/.test(value),
   },
 
+  // M3 (Phase 4) — ADDRESS. Closes M2-OPEN-7, which recorded address as the
+  // one D.6 category still with no rule of any kind. LABEL-ANCHORED for the
+  // same reason as the two rules above: there is no shape a street address
+  // reliably has, so the only dependable signal is the label the document
+  // itself prints. Captures to end of line.
+  //
+  // DISCLOSED LIMITATION, not a silent one: a postal address printed across
+  // several lines is masked on its FIRST line only. Extending the capture
+  // across newlines would be worse, not better — with no reliable
+  // end-of-address signal it would run on and swallow the next labelled
+  // field (exactly the over-capture failure the folio rule already hit once
+  // during M2 and had to be narrowed for). Lines two and three of a wrapped
+  // address still reach the provider. This is an improvement on "no rule at
+  // all" and is stated here rather than implied to be complete.
+  //
+  // The `(?<!e-?mail )` lookbehind is load-bearing, not defensive padding:
+  // real statements print `Email Address: investor@example.com`, and without
+  // it this rule would claim that span before the email rule ever ran. The
+  // value would still be masked — so this is not a leak — but it would be
+  // recorded as an `address_label` in `aie_masking_summary.coverage_by_type`,
+  // which is the same "privacy evidence describes the document inaccurately"
+  // failure M2 fixed for the AU-TFN-vs-folio ordering.
+  {
+    type: 'address_label',
+    pattern: /\b(?<!e-?mail )((?:residential\s*address|correspondence\s*address|permanent\s*address|mailing\s*address|registered\s*address|address)\s*[:.\-]\s*)([^\r\n]{5,160})/gi,
+    valueGroup: 2,
+  },
+
   // India Aadhaar, canonical spaced form `1234 5678 9012`. A real Aadhaar
   // never begins with 0 or 1, which is what keeps this from eating ordinary
   // 12-digit money figures grouped in fours. The UNSPACED form was already
@@ -182,35 +238,48 @@ export interface MaskingResult {
   coverageByType: Partial<Record<AiePiiType, number>>;
   totalMatches: number;
   /**
-   * SENSITIVE — token -> original raw matched value. NEVER log, audit, or
-   * include this in any AI payload/response/error. Its ONLY legitimate
-   * destination is `lib/aie/db/repository.ts`'s `persistMaskTokenMap`,
-   * which encrypts every value before it reaches the database
-   * (`aie_mask_token_map.ciphertext`, PII-08). Empty object when
-   * `totalMatches` is 0.
+   * M3 — how many DISTINCT identifier values were tokenised (as opposed to
+   * `totalMatches`, which counts occurrences). Recorded because a one-way
+   * scheme has no map to count, and privacy evidence still needs to be able
+   * to say "this document contained N distinct identifiers" without holding
+   * any of them.
+   *
+   * NOTE what is deliberately absent from this type: there is no
+   * `reversibleTokenMap` any more. It was removed, not renamed — no caller
+   * can obtain the original values from this function's result, because the
+   * function no longer retains them past the `.replace()` callback that
+   * MAC'd them.
    */
-  reversibleTokenMap: Record<string, string>;
+  distinctIdentifierCount: number;
 }
 
 /**
  * Masks every recognised PII pattern in `text`, replacing each match with a
- * stable, collision-resistant placeholder token (PII-06: "collision-
- * resistant tokens, prevent cross-user correlation") scoped to THIS call
- * only (document-local placeholder scope, PII-05) — the same raw value
- * appearing twice in one document gets the same token within that call,
- * but two different documents (two different calls) never share a token
- * space, since each token embeds a fresh per-call salt.
+ * KEYED ONE-WAY HMAC pseudonym (PII-06: "collision-resistant tokens, prevent
+ * cross-user correlation"; D.6: "stable pseudonyms via keyed one-way HMAC,
+ * never reversible/dictionary-vulnerable").
+ *
+ * `tenantKey` (the authenticated user id) is REQUIRED and has no default.
+ * It is part of the MAC input, so tokens are stable within one tenant and
+ * uncorrelatable across tenants. Making it optional would let a caller
+ * silently produce globally-correlatable pseudonyms, which is the precise
+ * failure PII-06 exists to prevent — so it is a required field rather than a
+ * defaulted one.
+ *
+ * THROWS if `AIE_MASK_TOKEN_ENCRYPTION_KEY` is unset or malformed. That is
+ * the intended fail-closed behaviour and it is load-bearing: no key means no
+ * tokenisation, which means the caller cannot construct an AI payload, which
+ * means nothing egresses. It is never downgraded to an unkeyed hash.
  */
-export function maskText(text: string, opts?: { callSalt?: string }): MaskingResult {
-  const salt = opts?.callSalt ?? cryptoRandomSalt();
+export function maskText(text: string, opts: { tenantKey: string }): MaskingResult {
   let masked = text;
   const coverageByType: Partial<Record<AiePiiType, number>> = {};
   let totalMatches = 0;
-  // Track raw-value -> token within this call so repeats of the same value
-  // get the same placeholder (still never reversible without the encrypted
-  // token map — see lib/aie/db/repository.ts's maskTokenMap persistence).
+  // Raw value -> its derived token, so the same value occurring many times in
+  // one document is MAC'd once rather than once per occurrence. This map is
+  // local to the call and is never returned, logged or persisted; it dies
+  // with this function's stack frame.
   const tokensForValue = new Map<string, string>();
-  let counter = 0;
 
   for (const { type, pattern, valueGroup, valuePredicate } of PII_PATTERNS) {
     masked = masked.replace(pattern, (...args: unknown[]) => {
@@ -224,12 +293,23 @@ export function maskText(text: string, opts?: { callSalt?: string }): MaskingRes
       // that is written back verbatim.
       const sensitive = valueGroup === undefined ? match : groups[valueGroup - 1];
       if (sensitive === undefined || sensitive === '') return match;
+
+      // M3: never re-tokenise something an EARLIER pattern already replaced.
+      // `maskText` applies patterns in sequence over progressively-masked
+      // text, so a later open-ended rule (the address rule captures to end of
+      // line) can otherwise swallow a placeholder a previous rule wrote and
+      // MAC it a second time — producing a token of a token, double-counting
+      // `coverageByType`, and destroying the stability property the one-way
+      // scheme exists to provide. Applies to every rule, so a future
+      // open-ended pattern inherits the protection automatically rather than
+      // needing to remember it.
+      if (sensitive.includes('[MASKED:')) return match;
+
       if (valuePredicate !== undefined && !valuePredicate(sensitive)) return match;
 
       let token = tokensForValue.get(sensitive);
       if (!token) {
-        counter += 1;
-        token = `[MASKED:${type}:${salt}:${counter.toString(36)}]`;
+        token = deriveIdentifierToken({ tenantKey: opts.tenantKey, type, value: sensitive });
         tokensForValue.set(sensitive, token);
       }
       coverageByType[type] = (coverageByType[type] ?? 0) + 1;
@@ -244,22 +324,7 @@ export function maskText(text: string, opts?: { callSalt?: string }): MaskingRes
     });
   }
 
-  const reversibleTokenMap: Record<string, string> = {};
-  for (const [rawValue, token] of tokensForValue.entries()) reversibleTokenMap[token] = rawValue;
-
-  return { maskedText: masked, coverageByType, totalMatches, reversibleTokenMap };
-}
-
-function cryptoRandomSalt(): string {
-  // Not security-critical (only needs to avoid cross-call token collision,
-  // never reversibility) — Math.random is adequate here; the actual
-  // sensitive material lives in aie_mask_token_map's encrypted ciphertext,
-  // not in this salt. Letters only (digits stripped): a placeholder token
-  // like "[MASKED:tax_id:ab12cd:3]" must never itself contain a 3+ digit
-  // run that a LATER pattern in PII_PATTERNS could re-match on a
-  // subsequent .replace() pass over the same (already partially masked)
-  // string — this keeps every placeholder structurally immune to that.
-  return Math.random().toString(36).replace(/[0-9]/g, 'x').slice(2, 10);
+  return { maskedText: masked, coverageByType, totalMatches, distinctIdentifierCount: tokensForValue.size };
 }
 
 /** PAN display-masking convention carried over from `textUtils.ts.maskPan`

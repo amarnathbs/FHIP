@@ -1,5 +1,5 @@
 import { ok, bad } from '@/lib/api';
-import { enforceAieRawFileHardBackstop, findDuePurges, runPurgeAttempt } from '@/lib/aie/services/purge';
+import { enforceAieRawFileHardBackstop, findDuePurges, purgeExpiredMaskTokenMaps, runPurgeAttempt } from '@/lib/aie/services/purge';
 
 /**
  * AIE-1 closure mission (sections 4 & 9) — the AIE temporary-document purge
@@ -28,6 +28,13 @@ export async function POST(req: Request) {
 
   const backstop = await enforceAieRawFileHardBackstop();
 
+  // M3 (Phase 4) — the Product Owner's fixed, lifecycle-independent
+  // mask-token TTL. Run FIRST and unconditionally, before any
+  // document-lifecycle work, so that a failure or a slow binary purge later
+  // in this handler can never delay or skip the retention guarantee. It
+  // takes no input from the document sweep and gives none to it.
+  const maskTokenTtl = await purgeExpiredMaskTokenMaps();
+
   const due = await findDuePurges();
   const results: Array<{ intakeId: string; status: string }> = [];
   for (const intake of due) {
@@ -36,6 +43,8 @@ export async function POST(req: Request) {
   }
 
   return ok({
+    mask_token_map_ttl_hours: maskTokenTtl.ttlHours,
+    mask_token_map_rows_deleted: maskTokenTtl.deleted,
     hard_backstop_scanned: backstop.scanned,
     hard_backstop_forced: backstop.forcedPurgeCount,
     due_purges_attempted: due.length,

@@ -29,7 +29,8 @@ export interface AieOrchestratorDeps {
   recordTransition: typeof repo.recordTransition;
   recordParserAttempt: typeof repo.recordParserAttempt;
   recordMaskingSummary: typeof repo.recordMaskingSummary;
-  persistMaskTokenMap: typeof repo.persistMaskTokenMap;
+  // M3: `persistMaskTokenMap` WAS a dependency here and has been removed
+  // along with the reversible escrow it wrote. See `lib/aie/db/repository.ts`.
   recordAiCompletionAttempt: typeof repo.recordAiCompletionAttempt;
   recordSchemaValidationResult: typeof repo.recordSchemaValidationResult;
   recordFieldCandidates: typeof repo.recordFieldCandidates;
@@ -44,7 +45,6 @@ export function createDefaultDeps(gateway: AieDocumentAiGateway): AieOrchestrato
     recordTransition: repo.recordTransition,
     recordParserAttempt: repo.recordParserAttempt,
     recordMaskingSummary: repo.recordMaskingSummary,
-    persistMaskTokenMap: repo.persistMaskTokenMap,
     recordAiCompletionAttempt: repo.recordAiCompletionAttempt,
     recordSchemaValidationResult: repo.recordSchemaValidationResult,
     recordFieldCandidates: repo.recordFieldCandidates,
@@ -180,7 +180,11 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
     await transition(deps, { runId, intakeId, userId, from: current, to: 'masking' });
     current = 'masking';
 
-    const masking = maskText(extractedText);
+    // M3: `tenantKey` is the authenticated user id and is part of the HMAC
+    // input, so pseudonyms are stable within one user's documents and
+    // uncorrelatable between users (PII-06). Throws — and therefore aborts
+    // the run before any payload is built — if the masking key is unset.
+    const masking = maskText(extractedText, { tenantKey: userId });
 
     // M2 (H.9): the policy verdict is now COMPUTED BEFORE the summary row is
     // written, and the real verdict is what gets recorded. It was previously
@@ -206,7 +210,8 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
     const belowPolicy = isBelowMaskingPolicy({ maskedText: masking.maskedText, labelsSeenRaw: [] });
 
     await deps.recordMaskingSummary({ runId, intakeId, userId, coverageByType: masking.coverageByType as Record<string, number>, belowPolicy });
-    if (masking.totalMatches > 0) await deps.persistMaskTokenMap({ runId, reversibleTokenMap: masking.reversibleTokenMap });
+    // M3: no token map is persisted. `maskText` no longer produces one —
+    // the pseudonyms are keyed one-way MACs with nothing to escrow.
 
     if (belowPolicy) {
       await deps.audit({ intakeId, runId, userId, eventType: 'masking_below_policy', actorType: 'system' });
