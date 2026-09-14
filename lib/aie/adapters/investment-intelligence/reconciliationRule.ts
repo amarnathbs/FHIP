@@ -137,8 +137,41 @@ function duplicateOverlapResult(ctx: InvestmentReconciliationContext, candidates
   return { ruleId: 'ii_adapter_duplicate_overlap', ruleVersion: '1', outcome: 'pass' };
 }
 
-/** Rule 2 — per-position roll-forward, one `AieReconciliationRunResult` per
- * distinct (account, instrument) position with a closing holding candidate. */
+/**
+ * Rule 2 — per-position roll-forward, one `AieReconciliationRunResult` per
+ * distinct position with a closing holding candidate.
+ *
+ * M3 DEFECT FIX — BRAND-NEW POSITIONS ARE NOW RECONCILED.
+ *
+ * This function used to `continue` (skip entirely, producing no result at
+ * all) whenever the position did not resolve to an EXISTING canonical
+ * account and instrument, on the reasoning that there is "nothing to roll
+ * forward against yet". That reasoning conflates two different checks:
+ *
+ *   - roll-forward against PRIOR canonical state, which indeed needs an
+ *     existing snapshot and existing transactions; and
+ *   - the STATEMENT-INTERNAL check, which needs neither: a statement's own
+ *     printed closing balance must equal the sum of its own printed
+ *     transactions, from zero, regardless of whether the platform has ever
+ *     seen this folio before.
+ *
+ * Skipping the second one meant that EVERY position on a user's FIRST upload
+ * was silently unreconciled. `worstOutcome` over the remaining results would
+ * read `pass`, the run would reach `awaiting_acceptance`, and `accept.ts`
+ * would find nothing to object to — so a materially wrong first statement
+ * could be accepted on a reconciliation that never ran. The defect was
+ * invisible to the existing unit tests because every one of them seeds an
+ * existing account and instrument.
+ *
+ * Found by M3's own dispatch test driving a deliberately-broken statement
+ * (corpus fixture C10) through the real path with an empty canonical store —
+ * i.e. by exercising the first-upload case, which nothing had.
+ *
+ * The fix reuses Investment Intelligence's OWN `reconcilePosition` with
+ * `openingUnitsScaled: null` and `statementCoversFromInception`, which is
+ * exactly what `documentProcessing.ts` already does for a first-time
+ * position on the real write path. No new formula is introduced here.
+ */
 function rollForwardResults(
   ctx: InvestmentReconciliationContext,
   transactionCandidates: ReturnType<typeof candidatesByRecordType>,
@@ -158,7 +191,10 @@ function rollForwardResults(
 
     const accountId = resolvedAccountId(ctx, folioNumber, scheme.amcName);
     const instrumentId = resolvedInstrumentId(ctx, schemeKeyValue);
-    if (!accountId || !instrumentId) continue; // brand-new position — nothing to roll forward against yet, not a failure
+    // A position that resolves to existing canonical rows is reconciled
+    // against that history; one that does not is still reconciled, but
+    // against this statement alone.
+    const isBrandNewPosition = !accountId || !instrumentId;
 
     const positionKey = `${accountId}:${instrumentId}`;
     const closingUnits = toScaled(holding.units) ?? ZERO;
@@ -167,13 +203,20 @@ function rollForwardResults(
       .filter(({ value: t }) => {
         const tScheme = t.scheme as typeof scheme;
         const tKey = `${tScheme.normalisedSchemeName}|${tScheme.planType}|${tScheme.optionType}|${tScheme.amcName}`;
-        return resolvedAccountId(ctx, (t.folioNumber as string | null) ?? null, tScheme.amcName) === accountId && tKey === schemeKeyValue;
+        if (tKey !== schemeKeyValue) return false;
+        // For a brand-new position there is no account id to match on, so
+        // rows are grouped by the statement's OWN (folio, scheme) identity.
+        // This keeps two folios holding the same scheme separate — the
+        // PC4-INV-07 property that account-scoped FIFO depends on — rather
+        // than summing them into one position because the scheme matches.
+        if (isBrandNewPosition) return (((t.folioNumber as string | null) ?? null) === folioNumber);
+        return resolvedAccountId(ctx, (t.folioNumber as string | null) ?? null, tScheme.amcName) === accountId;
       })
       .map(({ value: t }) => ({ canonicalType: t.canonicalType as IiTransactionType, unitsScaled: toScaled(t.units) }));
 
     const hasNewOpeningMarker = transactionCandidates.some(({ value: t }) => t.sourceReference === OPENING_BALANCE_SOURCE_REFERENCE);
-    const existingSnapshot = ctx.existingSnapshots.get(positionKey) ?? null;
-    const existingTxns = ctx.existingTransactionsForPosition.get(positionKey) ?? [];
+    const existingSnapshot = isBrandNewPosition ? null : (ctx.existingSnapshots.get(positionKey) ?? null);
+    const existingTxns = isBrandNewPosition ? [] : (ctx.existingTransactionsForPosition.get(positionKey) ?? []);
     const hasExistingOpeningMarker = existingTxns.some((t) => t.sourceReference === OPENING_BALANCE_SOURCE_REFERENCE);
 
     const allTxns: ReconciliationTransactionInput[] = [
@@ -196,7 +239,14 @@ function rollForwardResults(
       config: ctx.config,
     });
 
-    const ruleId = `ii_adapter_roll_forward:${accountId}:${instrumentId}`;
+    // A brand-new position has no canonical ids to name, so the rule id is
+    // keyed on the statement's own identity instead. It must still be
+    // STABLE and UNIQUE per position, because `latestReconciliationOutcomesForRun`
+    // collapses by `rule_id` — two positions sharing a rule id would mean one
+    // silently overwrote the other's outcome.
+    const ruleId = isBrandNewPosition
+      ? `ii_adapter_roll_forward:new:${folioNumber ?? 'no-folio'}:${schemeKeyValue}`
+      : `ii_adapter_roll_forward:${accountId}:${instrumentId}`;
     if (reconciliation.withinTolerance === null) {
       results.push({ ruleId, ruleVersion: '1', outcome: 'indeterminate' });
     } else if (!reconciliation.withinTolerance) {

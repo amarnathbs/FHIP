@@ -146,4 +146,65 @@ describe('AIE-1.2 — deterministic reconciliation rule (execution sequence step
     const results = rule({ runId: 'run-1', candidates: [{ fieldName: 'metadata', valueRaw: '{}', isNull: false, sourceMethod: 'deterministic' }] });
     expect(results).toEqual([{ ruleId: 'ii_adapter_no_candidates', ruleVersion: '1', outcome: 'not_applicable' }]);
   });
+
+  /**
+   * M3 DEFECT REGRESSION — BRAND-NEW POSITIONS ARE RECONCILED.
+   *
+   * Every test above this point seeds an EXISTING account and instrument.
+   * That is why the defect survived: `rollForwardResults` used to skip a
+   * position entirely when it resolved to neither, producing no result at
+   * all, so on a user's FIRST upload nothing was reconciled and
+   * `worstOutcome` read `pass` over whatever remained. A materially wrong
+   * first statement could therefore reach `awaiting_acceptance` and be
+   * accepted on a check that never ran.
+   *
+   * These two tests fix the coverage hole that allowed it, by exercising the
+   * empty-canonical-store case in both directions — a correct statement must
+   * still pass, and a wrong one must now fail.
+   */
+  describe('M3 — first upload, empty canonical store', () => {
+    function emptyStoreContext(parsedText: string) {
+      const parsed = parseExtractedDocument(parsedText).parsed!;
+      return {
+        parsed,
+        candidates: toAieCandidates(parsed),
+        ctx: {
+          sourceKey: 'cams',
+          countryCode: 'IN',
+          // No existing accounts and no existing instruments — the state a
+          // brand-new user is genuinely in.
+          accountMatches: matchAccountsReadOnly(parsed, []),
+          instrumentMatches: matchInstrumentsReadOnly(
+            parsed.transactions.map((t) => t.scheme),
+            'IN',
+            [],
+            [],
+          ),
+          existingFingerprints: new Set<string>(),
+          existingSnapshots: new Map(),
+          existingTransactionsForPosition: new Map(),
+          existingAccountCurrency: new Map(),
+          config: DEFAULT_RECONCILIATION_CONFIG,
+        } as InvestmentReconciliationContext,
+      };
+    }
+
+    it('a CORRECT first statement produces a real roll-forward result, not silence', () => {
+      const { ctx, candidates } = emptyStoreContext(buildAieIiCasFixtureText());
+      const results = buildInvestmentReconciliationRule(ctx)({ runId: 'run-new-1', candidates });
+      const rollForward = results.filter((r) => r.ruleId.startsWith('ii_adapter_roll_forward:'));
+      expect(rollForward.length, 'a brand-new position must still be reconciled').toBe(1);
+      expect(rollForward[0].outcome).toBe('pass');
+    });
+
+    it('a WRONG first statement now FAILS — previously it was skipped and read as a pass', () => {
+      // Closing balance claims 175.000 units against 100.000 of activity.
+      const { ctx, candidates } = emptyStoreContext(buildAieIiCasFixtureText({ closingUnits: '175.000' }));
+      const results = buildInvestmentReconciliationRule(ctx)({ runId: 'run-new-2', candidates });
+      const rollForward = results.filter((r) => r.ruleId.startsWith('ii_adapter_roll_forward:'));
+      expect(rollForward.length).toBe(1);
+      expect(rollForward[0].outcome).toBe('fail');
+      expect(rollForward[0].delta).toBeCloseTo(-75, 6);
+    });
+  });
 });

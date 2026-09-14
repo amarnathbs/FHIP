@@ -79,26 +79,45 @@ export const II_MISSING_REASON_CODES = [
   'conflicting_values_on_document',
 ] as const;
 
-/** CLOSED. Mirrors `IiTransactionType` in
- * `lib/services/investment-intelligence/types.ts` exactly, plus `unknown`.
- * Deliberately NOT imported and spread from that type: this is a wire
- * contract with a version attached, and it must be able to stay stable while
- * the internal enum evolves. A mismatch is caught by the test that asserts
- * this list against the canonical one, which fails loudly and makes the
- * version bump a conscious decision rather than an accident. */
+/**
+ * CLOSED, and DELIBERATELY NARROWER than the canonical `IiTransactionType`
+ * union in `lib/services/investment-intelligence/types.ts`.
+ *
+ * Every value here is a real canonical value (a test asserts the subset
+ * relation, so a typo cannot create a type that maps to nothing), plus
+ * `unknown` for the honest "the narrative does not tell me" case.
+ *
+ * WHAT IS EXCLUDED, AND WHY EXCLUSION IS THE SAFE DIRECTION. The canonical
+ * union also carries `switch_in`/`switch_out`/`stp_in`/`stp_out`/`swp`/
+ * `transfer_in`/`transfer_out`/`segregation`/`bonus`/`split`/`merger`/
+ * `sale`. Several of those feed R6's tax-lot engine, which needs cost-basis
+ * data no statement narrative supplies — PC4-INV-18 records the same
+ * reasoning for why a "Lateral Shift" narrative is mapped to the neutral
+ * `transfer` rather than to `switch_in`/`switch_out`. A model that guessed
+ * one of them would not merely be wrong about a label; it would seed a tax
+ * lot with an invented cost base.
+ *
+ * A narrower enum fails in the safe direction: an unrepresentable
+ * transaction becomes `unknown`, which is an unresolved item for a human,
+ * rather than a confident wrong classification that reconciles silently.
+ *
+ * This is a VERSIONED wire contract, so it is not derived from the canonical
+ * union at runtime — it must be able to stay stable while the internal union
+ * evolves. The subset test is what turns a future divergence into a
+ * conscious version bump instead of a silent mismatch.
+ */
 export const II_AI_TRANSACTION_TYPE_CANDIDATES = [
   'purchase',
   'sip',
   'redemption',
-  'switch_in',
-  'switch_out',
   'dividend',
   'reinvestment',
   'transfer',
-  'merger',
   'fee',
   'tax',
   'adjustment',
+  'reversal',
+  'unclassified',
   'unknown',
 ] as const;
 

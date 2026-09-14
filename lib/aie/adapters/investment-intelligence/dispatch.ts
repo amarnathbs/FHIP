@@ -64,7 +64,7 @@
 
 import { extractPdfTextLocally } from '../../extraction/textExtraction';
 import { downloadFromQuarantine } from '../../storage';
-import { createRun, createUnresolvedItems, recordReconciliationRuns, updateIntakeStatus } from '../../db/repository';
+import { createRun, createUnresolvedItems, recordReconciliationRuns, transitionRunStatusCas, updateIntakeStatus } from '../../db/repository';
 import { recordAieAuditEvent } from '../../audit';
 import { runExtractionPipeline, type AieOrchestratorDeps, type RunPipelineOutcome } from '../../orchestrator';
 import { detectSource, parseDocumentWithParser } from '@/lib/services/investment-intelligence/parsers/registry';
@@ -249,9 +249,35 @@ export async function dispatchInvestmentDocument(params: DispatchParams): Promis
   ];
 
   let unresolvedItemIds = [...outcome.unresolvedItemIds];
+  let finalStatus = outcome.finalStatus;
   if (matchingItems.length > 0) {
     const ids = await createUnresolvedItems({ runId: run.id, intakeId, userId, items: matchingItems });
     unresolvedItemIds = [...unresolvedItemIds, ...ids];
+
+    // THE RUN ROW MUST MOVE TOO, not just the value this function returns.
+    //
+    // `runExtractionPipeline` may already have transitioned the run to
+    // `awaiting_acceptance` on arithmetic alone — that is the state
+    // `accept.ts` reads as "ready". A run that has just acquired a blocking
+    // identity item must not stay there. Routed through `reconciling`,
+    // matching `revalidate.ts`'s own idiom for re-evaluating a run.
+    //
+    // Found by M3's live-DEV proof: the dispatch reported `unresolved` while
+    // the database row still read `awaiting_acceptance`. The acceptance gate
+    // would still have refused (it re-derives the blocking count and the
+    // reconciliation outcomes server-side rather than trusting this
+    // request), so nothing unsafe could have followed — but a stored state
+    // that contradicts the reported one is a trap for the next reader.
+    if (outcome.finalStatus === 'awaiting_acceptance') {
+      const backToReconciling = await transitionRunStatusCas({ runId: run.id, fromStatus: 'awaiting_acceptance', toStatus: 'reconciling' });
+      if (backToReconciling) {
+        await transitionRunStatusCas({ runId: run.id, fromStatus: 'reconciling', toStatus: 'unresolved' });
+      }
+      // A lost race here means something else already moved the run; the
+      // acceptance gate's own re-check remains the authority either way, so
+      // this is reported rather than thrown.
+      finalStatus = 'unresolved';
+    }
 
     // A blocking identity item must also be visible to the acceptance gate's
     // RECONCILIATION check, not only to its blocking-item count. Recording it
@@ -276,11 +302,8 @@ export async function dispatchInvestmentDocument(params: DispatchParams): Promis
     ok: true,
     intakeId,
     runId: run.id,
-    // `runExtractionPipeline` may have reached `awaiting_acceptance` on
-    // arithmetic alone. If identity items were added afterwards the document
-    // is NOT acceptable, and saying `awaiting_acceptance` here would be
-    // misleading to the caller even though `accept.ts` would still refuse it.
-    finalStatus: unresolvedItemIds.length > outcome.unresolvedItemIds.length ? 'unresolved' : outcome.finalStatus,
+    // Matches what the run row now actually says — see the transition above.
+    finalStatus,
     aiWasUsed: outcome.aiWasUsed,
     candidateCount: outcome.candidates.length,
     unresolvedItemIds,

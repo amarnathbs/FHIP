@@ -121,7 +121,31 @@ export const AIE_RUN_TRANSITIONS: Record<AieRunStatus, readonly AieRunStatus[]> 
   schema_rejected: ['ai_pending', 'reconciling', 'failed_terminal'],
   reconciling: ['unresolved', 'awaiting_acceptance', 'failed_terminal'],
   unresolved: ['awaiting_acceptance', 'reconciling', 'failed_terminal'],
-  awaiting_acceptance: ['accepted', 'failed_terminal'],
+  // M3 (Phase 4) — `reconciling` added as a successor.
+  //
+  // WHY. `awaiting_acceptance` is the state `accept.ts` reads as "ready", so
+  // a run must not sit there once blocking evidence exists. The Investment
+  // Intelligence dispatch evaluates IDENTITY checks (ambiguous account,
+  // ambiguous instrument, unstated owner, unusable statement period) after
+  // the shared pipeline returns, because they are not arithmetic and are not
+  // part of the reconciliation rule's inputs. A document can therefore pass
+  // arithmetic reconciliation, reach `awaiting_acceptance`, and only then
+  // acquire a blocking item — at which point it has to go back.
+  //
+  // Found by M3's live-DEV proof, not by inspection: the dispatch REPORTED
+  // `unresolved` while the row in the database still read
+  // `awaiting_acceptance`. That was safe in practice (the acceptance gate
+  // independently re-checks the blocking count and the reconciliation
+  // outcomes, and would have refused) but it is exactly the kind of
+  // divergence between reported and stored state that a later reader, or a
+  // later feature, would reasonably trust and be wrong about.
+  //
+  // Routed via `reconciling` rather than as a direct back-edge to
+  // `unresolved`, matching `lib/aie/review/revalidate.ts`'s established
+  // idiom for re-evaluating a run (`unresolved -> reconciling ->
+  // unresolved | awaiting_acceptance`). One new edge, and the FSM keeps
+  // saying that every arrival at `unresolved` came through reconciliation.
+  awaiting_acceptance: ['accepted', 'reconciling', 'failed_terminal'],
   accepted: ['write_pending'],
   write_pending: ['completed', 'failed_retryable', 'failed_terminal'],
   completed: [],
