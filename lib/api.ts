@@ -1,3 +1,4 @@
+import type { ZodError } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
@@ -10,6 +11,39 @@ export const ok = (data: unknown) => Response.json({ data });
 // branch on `error` without parsing prose.
 export const bad = (msg: string, code = 400, errorCode?: string) =>
   Response.json(errorCode ? { error: errorCode, message: msg } : { error: msg }, { status: code });
+
+// App Review 2026-09-14, item 1 (leaked validation error): `parsed.error.message`
+// is ZodError's own stringified issue dump — e.g. `[{"expected":"'AU' | 'IN'",
+// "received":"null","code":"invalid_type","path":["country_code"], ...}]` —
+// and several route handlers were returning that verbatim as the client-facing
+// error body, so a validation failure surfaced raw internal type/enum plumbing
+// to the end user. This turns the same ZodError into a short, actionable,
+// field-named message with no technical jargon (still 422 by default, still
+// takes an optional `errorCode` for callers that branch on it). Applied so far
+// only to the routes the app-review report actually reproduced against
+// (Retirement); the same `bad(parsed.error.message, ...)` pattern exists on
+// other registers' routes too and is a good candidate for the same treatment,
+// but that is a separate, broader cleanup from this bug-fix pass.
+function humanizeFieldName(name: string): string {
+  return name
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export const badValidation = (error: ZodError, code = 422, errorCode?: string) => {
+  const fields = Array.from(
+    new Set(
+      error.issues
+        .map((issue) => issue.path.filter((seg): seg is string => typeof seg === 'string'))
+        .filter((path) => path.length > 0)
+        .map((path) => humanizeFieldName(path.join(' ')))
+    )
+  );
+  const msg = fields.length
+    ? `Please check: ${fields.join(', ')}. ${fields.length === 1 ? 'This field could not be saved — correct it' : 'These fields could not be saved — correct them'} and try again.`
+    : 'Some of the details for this item could not be saved. Please check your entries and try again.';
+  return bad(msg, code, errorCode);
+};
 
 export async function requireUser() {
   const supabase = await createClient();

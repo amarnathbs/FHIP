@@ -32,7 +32,7 @@
  * files above already are.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type Phase = 'form' | 'uploading' | 'processing' | 'done' | 'error';
 
@@ -55,6 +55,28 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<Phase>('form');
   const [message, setMessage] = useState<string | null>(null);
+  // App Review 2026-09-14, item 2: this panel used to always render as a
+  // fully working upload form and only discover the FDH-3 production hard
+  // gate (see lib/financial-data-hub/constants/featureFlags.ts) when the
+  // upload itself failed — a dead-end that read as a broken button rather
+  // than a known, temporary limitation. `null` = not checked yet (render
+  // nothing that could flash and disappear); `true`/`false` once known.
+  const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/financial-data-hub/upload-status')
+      .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
+      .then((json) => {
+        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setUploadEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleUpload() {
     if (!file) return;
@@ -110,7 +132,16 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {phase === 'form' && (
+      {uploadEnabled === false && phase === 'form' && (
+        <div className="mt-4 space-y-2">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Statement import isn&apos;t turned on in this environment yet. You can still add these transactions
+            yourself using the Expenses list below.
+          </p>
+        </div>
+      )}
+
+      {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a bank or credit card statement (PDF or CSV) and FHIP will extract your transactions for you to
@@ -154,7 +185,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file}
+            disabled={!file || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload statement

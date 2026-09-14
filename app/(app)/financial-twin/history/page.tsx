@@ -19,7 +19,16 @@ export default async function FinancialTwinHistoryPage() {
 
   return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-trust">Financial Twin History</h1>
+        <div>
+          {/* App Review 2026-09-14, item (nav audit): this drill-in page had no
+              way back to /financial-twin other than the browser's own back
+              button — invisible on mobile once AppShell's sidebar is
+              collapsed. Same "← Back to X" pattern as goals/[id]/page.tsx. */}
+          <Link href="/financial-twin" className="text-xs text-muted hover:underline">
+            ← Back to Twin / Benchmark
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-trust">Financial Twin History</h1>
+        </div>
         <SectionCard title="Past runs">
           <div className="divide-y">
             {runs.map((r) => (

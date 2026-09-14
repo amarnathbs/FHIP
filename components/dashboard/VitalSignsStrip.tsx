@@ -1,5 +1,5 @@
 import { MetricCard } from '@/components/ui/MetricCard';
-import { formatMoney } from '@/lib/engines/money';
+import { formatMoneyWhole } from '@/lib/engines/money';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
 
 function ratioStatus(summary: DashboardSummary, key: string): 'good' | 'caution' | 'risk' | 'neutral' {
@@ -33,13 +33,17 @@ export function VitalSignsStrip({ summary, contextLinks }: { summary: DashboardS
           (spec section 7: prefer a small number of high-value entry points). */}
       <MetricCard
         label="Monthly Surplus"
-        value={formatMoney(summary.monthlySurplus, summary.currency)}
+        // App Review 2026-09-14, item 3: whole dollars here (formatMoneyWhole,
+        // already used by the Consolidated Forecasting Report for the same
+        // "cents read as false precision" reason) -- this is the headline
+        // vital-signs figure, not a reconciliation total.
+        value={formatMoneyWhole(summary.monthlySurplus, summary.currency)}
         status={surplusStatus}
         explain={{ targetCode: 'DASHBOARD_CASH_FLOW', accessibleLabel: 'Explain your monthly surplus' }}
       />
       <MetricCard
         label="Net Worth"
-        value={formatMoney(summary.netWorth, summary.currency)}
+        value={formatMoneyWhole(summary.netWorth, summary.currency)}
         status="neutral"
         contextResolved={contextLinks?.['dashboard.net_worth']}
         explain={{ targetCode: 'DASHBOARD_NET_WORTH', accessibleLabel: 'Explain your net worth' }}
