@@ -276,7 +276,37 @@ export function ReportPreview({
         )}
         {healthScore?.sectionStatus === 'included' &&
           (() => {
-            const scoreEligibility = healthScore.sectionData.eligibility as HealthScoreEligibility;
+            // Live-production defect (found 2026-09-14, a real report from
+            // 2026-08-05 threw "This page couldn't load" on view — Next's
+            // generic unhandled-server-error fallback, since app/(app)/
+            // reports has no local error.tsx). `sectionData` is the exact
+            // JSON persisted to report_sections at GENERATION time and is
+            // never retroactively backfilled (same go-forward-only pattern
+            // reportsData.ts's own country_scope comment documents). Commit
+            // e89e696 (2026-08-15, Phase 0C) added `eligibility` to
+            // buildHealthScore()'s sectionData AND started reading it here
+            // unconditionally in the same change — any report generated
+            // before that commit has no `eligibility` key at all, so the
+            // bare cast below produced `undefined`, and the very next
+            // line's `.state` read threw. Falling back to the 'full' state
+            // reproduces exactly what THIS component rendered for every
+            // included health-score section before Phase 0C existed (there
+            // was no not_yet_scored/preliminary distinction yet), so a
+            // pre-Phase-0C report renders exactly as it always did.
+            const scoreEligibility: HealthScoreEligibility = (healthScore.sectionData.eligibility as
+              | HealthScoreEligibility
+              | undefined) ?? {
+              state: 'full',
+              reviewedSections: 0,
+              totalRelevantSections: 0,
+              scoredComponents: 0,
+              totalRelevantComponents: 0,
+              confidencePercent: 100,
+              confidenceTier: 'high',
+              missingSections: [],
+              preliminaryReasons: [],
+              canDisplayNumericScore: true,
+            };
             return (
               <div className="report-section grid gap-6 sm:grid-cols-2">
                 <HealthScoreStateCard
