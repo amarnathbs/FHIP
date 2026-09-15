@@ -181,7 +181,7 @@ export interface Pc5GovernedResolutionParams {
 }
 
 export type Pc5GovernedResolutionOutcome =
-  | { ok: false; reason: 'capability_denied' | 'not_found' | 'stale_conflict' | 'db_error' | 'status_not_live' }
+  | { ok: false; reason: 'capability_denied' | 'not_found' | 'stale_conflict' | 'db_error' | 'status_not_live'; detail?: string }
   | { ok: true; decisionId: string | null; replayed: boolean };
 
 /** The AIE statuses a governed PC5 decision may be recorded against. A
@@ -230,6 +230,6 @@ export async function recordGovernedResolutionForPc5(
     parserVersionAtDecision: params.parserVersionAtDecision,
   });
 
-  if (!outcome.ok) return { ok: false, reason: outcome.reason === 'not_found' ? 'not_found' : outcome.reason };
+  if (!outcome.ok) return { ok: false, reason: outcome.reason === 'not_found' ? 'not_found' : outcome.reason, detail: outcome.detail };
   return { ok: true, decisionId: outcome.decisionId, replayed: outcome.replayed };
 }

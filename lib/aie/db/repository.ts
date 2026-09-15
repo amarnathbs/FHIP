@@ -685,7 +685,29 @@ export async function markDecisionReReconciled(decisionId: string, at: string): 
  */
 export type DecisionOutcome =
   | { ok: true; decisionId: string | null; replayed: boolean }
-  | { ok: false; reason: 'not_found' | 'stale_conflict' | 'db_error' };
+  | {
+      ok: false;
+      reason: 'not_found' | 'stale_conflict' | 'db_error';
+      /**
+       * PC5 (M4) addition, prompted by its live-DEV matrix: a bare
+       * `db_error` with no detail is indistinguishable from a transient
+       * failure, a constraint violation and a MISSING COLUMN, and the
+       * matrix spent several scenarios reporting "db_error" for what turned
+       * out to be one unapplied migration. The sanitised database message
+       * is carried so a caller can tell those apart.
+       *
+       * SANITISED, not raw: URLs are stripped (a signed-URL or host detail
+       * must never travel in an error) and the length is capped, matching
+       * `lib/aie/services/purge.ts`'s own `sanitiseError`. It is a
+       * diagnostic for a server-side caller and a report, never something
+       * to render verbatim to a browser.
+       */
+      detail?: string;
+    };
+
+function sanitiseDbMessage(message: string): string {
+  return message.replace(/https?:\/\/\S+/g, '[redacted-url]').slice(0, 200);
+}
 
 /**
  * EXC-05/EXC-08: server-validated, idempotent, version-checked decision
@@ -749,7 +771,7 @@ export async function recordReviewDecision(params: {
     .maybeSingle();
   if (decisionError) {
     if (decisionError.code === '23505') return { ok: true, decisionId: null, replayed: true }; // idempotent replay
-    return { ok: false, reason: 'db_error' };
+    return { ok: false, reason: 'db_error', detail: sanitiseDbMessage(`${decisionError.code ?? ''} ${decisionError.message}`) };
   }
 
   const { error: updateError } = await admin
@@ -757,7 +779,7 @@ export async function recordReviewDecision(params: {
     .update({ status: params.newStatus, item_version: params.expectedItemVersion + 1, updated_at: new Date().toISOString() })
     .eq('id', params.itemId)
     .eq('item_version', params.expectedItemVersion);
-  if (updateError) return { ok: false, reason: 'db_error' };
+  if (updateError) return { ok: false, reason: 'db_error', detail: sanitiseDbMessage(`${updateError.code ?? ''} ${updateError.message}`) };
   return { ok: true, decisionId: (inserted?.id as string | undefined) ?? null, replayed: false };
 }
 

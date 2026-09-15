@@ -343,6 +343,44 @@ describe('PC5 K.19 — reReconcileInvestmentRun happy paths', () => {
     expect(rows[0].outcome).toBe('fail');
   });
 
+  it('REGRESSION (found live): a FAILED resolution still counts as blocking — the run must not be reported ready while the item is open', async () => {
+    // Before the fix, the blocking count came from what this pass INTENDED
+    // (`stillOpenReasonCodes` + items about to be created) and never from
+    // what it achieved. A `resolveItemBySystem` failure therefore left the
+    // item open in the database while the pass counted it as gone and moved
+    // the run to `awaiting_acceptance`. Nothing unsafe could follow —
+    // `accept.ts` re-derives the count — but the stored run status
+    // contradicted the stored item set, which is the exact trap M3 fixed in
+    // `dispatch.ts`. The live-DEV matrix caught it recurring here (S-26).
+    const { deps, calls } = fakeDeps({ openItems: [fullItem()] });
+    deps.resolveItemBySystem = (async () => ({ ok: false as const, reason: 'db_error' as const })) as typeof deps.resolveItemBySystem;
+
+    const outcome = await reReconcileInvestmentRun(
+      { runId: 'run-1', userId: 'user-1', countryCode: 'IN', overrides: { ownerMemberId: 'm1' } },
+      deps,
+    );
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.resolvedItemIds).toEqual([]);
+    expect(outcome.failedResolutionItemIds).toEqual(['item-1']);
+    expect(outcome.openBlockingItemCount).toBe(1);
+    expect(outcome.runStatus).toBe('unresolved');
+    // And the run row is moved to match what was reported, not to
+    // `awaiting_acceptance`.
+    expect(calls.transitions.map((t) => t.toStatus)).toEqual(['reconciling', 'unresolved']);
+  });
+
+  it('a WARNING item that fails to resolve does NOT inflate the blocking count', async () => {
+    const { deps } = fakeDeps({ openItems: [fullItem({ severity: 'warning' })] });
+    deps.resolveItemBySystem = (async () => ({ ok: false as const, reason: 'db_error' as const })) as typeof deps.resolveItemBySystem;
+    const outcome = await reReconcileInvestmentRun({ runId: 'run-1', userId: 'user-1', countryCode: 'IN', overrides: { ownerMemberId: 'm1' } }, deps);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.openBlockingItemCount).toBe(0);
+    expect(outcome.failedResolutionItemIds).toEqual([]);
+    expect(outcome.runStatus).toBe('awaiting_acceptance');
+  });
+
   it('never leaves the run stranded in `reconciling` when the pass throws', async () => {
     const { deps, calls } = fakeDeps({});
     deps.buildContext = (async () => {

@@ -310,7 +310,10 @@ export async function decidePc5Resolution(params: Pc5DecideParams): Promise<Pc5D
   if (!recorded.ok) {
     if (recorded.reason === 'capability_denied') return { ok: false, reason: 'forbidden' };
     if (recorded.reason === 'status_not_live') return { ok: false, reason: 'stale_conflict' };
-    return { ok: false, reason: recorded.reason };
+    // The sanitised database detail is carried through so a caller — and
+    // PC5's own live-DEV matrix — can tell a transient failure from a
+    // schema gap. Without it, every one is an opaque `db_error`.
+    return { ok: false, reason: recorded.reason, detail: recorded.detail };
   }
 
   await emitAuditEvent({

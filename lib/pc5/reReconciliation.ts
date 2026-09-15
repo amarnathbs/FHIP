@@ -119,6 +119,11 @@ export type Pc5ReReconcileOutcome =
       openBlockingItemCount: number;
       newItemIds: string[];
       resolvedItemIds: string[];
+      /** Blocking items this pass tried and failed to resolve — they are
+       * still open and still counted. Reported rather than swallowed so a
+       * caller can tell "nothing needed resolving" from "resolution was
+       * attempted and did not land". */
+      failedResolutionItemIds: string[];
       reconciledAt: string;
     };
 
@@ -331,6 +336,10 @@ export async function reReconcileInvestmentRun(
 
     const openItems = await deps.listUnresolvedItemsForRunPc5(run.id, run.userId, ['open', 'in_review', 'deferred']);
     const resolvedItemIds: string[] = [];
+    /** Blocking items this pass tried and FAILED to resolve. They are still
+     * open in the database, so they still block — see the comment at the
+     * push site. */
+    const failedResolutionItemIds: string[] = [];
     const stillOpenReasonCodes = new Set<string>();
     const supersededItemIdByRuleId = new Map<string, string>();
 
@@ -358,6 +367,27 @@ export async function reReconcileInvestmentRun(
       if (resolution.ok) {
         resolvedItemIds.push(item.id);
         if (sameRuleDifferentOutcome) supersededItemIdByRuleId.set(ruleId, item.id);
+      } else if (item.severity === 'blocking') {
+        // FOUND BY THE LIVE-DEV MATRIX (S-26), and it was a real defect,
+        // not a test artefact: the final blocking count used to be derived
+        // from what this pass INTENDED — `stillOpenReasonCodes` plus the
+        // items it was about to create — and never from what it actually
+        // achieved. So when `resolveItemBySystem` FAILED (a stale conflict,
+        // or, as the matrix exposed, a schema gap), the item stayed open in
+        // the database while this function counted it as gone, and the run
+        // was moved to `awaiting_acceptance` with a live blocking item
+        // still on it.
+        //
+        // Nothing unsafe could follow — `accept.ts` re-derives the blocking
+        // count server-side and would still have refused — but a stored run
+        // status that contradicts the stored item set is exactly the trap
+        // M3 fixed in `dispatch.ts` for the same reason, and letting it
+        // reappear here would be worse: a user would be told their document
+        // was ready and then refused with no visible cause.
+        //
+        // An item that could not be resolved is therefore counted as STILL
+        // BLOCKING, which is the truth.
+        failedResolutionItemIds.push(item.id);
       }
       // A `stale_conflict` means something else moved this item since it
       // was listed. Left exactly as it is rather than force-written — the
@@ -386,7 +416,7 @@ export async function reReconcileInvestmentRun(
     }
 
     const openBlockingItemCount =
-      [...stillOpenReasonCodes].length + itemsToCreate.filter((i) => i.severity === 'blocking').length;
+      [...stillOpenReasonCodes].length + itemsToCreate.filter((i) => i.severity === 'blocking').length + failedResolutionItemIds.length;
     const finalStatus = openBlockingItemCount > 0 ? 'unresolved' : 'awaiting_acceptance';
     await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'reconciling', toStatus: finalStatus });
     await deps.recordRunTransitionAudit({
@@ -422,6 +452,7 @@ export async function reReconcileInvestmentRun(
       openBlockingItemCount,
       newItemIds,
       resolvedItemIds,
+      failedResolutionItemIds,
       reconciledAt,
     };
   } catch (error) {

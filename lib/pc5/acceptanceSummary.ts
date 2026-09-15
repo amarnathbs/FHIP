@@ -247,8 +247,16 @@ export async function buildAcceptanceSummary(params: {
           // returned to a browser — it is the raw document text.
           raw: undefined,
         })),
-        transactions: transactionRecords.map((r) => r.value),
-        holdings: holdingRecords.map((r) => r.value),
+        // FOUND BY THE LIVE-DEV MATRIX (S-44). The account rows were being
+        // masked and the transaction and holding rows were not — and every
+        // one of those carries its own `folioNumber`, verbatim from the
+        // statement. So the "full extract" leaked in the clear exactly the
+        // identifier the summary above had just taken care to mask, for
+        // every transaction on the document. A one-line omission with a
+        // real privacy consequence, and precisely the kind of thing a
+        // structural test does not catch and a live assertion does.
+        transactions: transactionRecords.map((r) => ({ ...r.value, folioNumber: maskFolio((r.value.folioNumber as string | null) ?? null) })),
+        holdings: holdingRecords.map((r) => ({ ...r.value, folioNumber: maskFolio((r.value.folioNumber as string | null) ?? null) })),
       }
     : null;
 

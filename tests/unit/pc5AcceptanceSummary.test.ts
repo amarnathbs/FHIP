@@ -8,6 +8,8 @@
  * fabricated-assurance PC4-INV-08 is about.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { PC5_PDF_LIFECYCLE_COPY, deriveHistoryCompleteness, maskFolio } from '@/lib/pc5/acceptanceSummary';
 import type { AieReconciliationOutcome } from '@/lib/aie/types';
 
@@ -63,6 +65,38 @@ describe('PC5 K.15 — maskFolio never prints an identifier in full', () => {
 
   it('preserves length, so two different folios of different lengths remain visibly different', () => {
     expect(maskFolio('1122334455')!.length).toBe('1122334455'.length);
+  });
+});
+
+describe('PC5 K.16 — REGRESSION (found live): the full extract masks the folio on EVERY record shape', () => {
+  it('the acceptance-summary module masks transaction and holding folios, not only account folios', () => {
+    // The live-DEV matrix (S-44) caught the full extract masking account
+    // rows while leaving `folioNumber` in the clear on every transaction
+    // and holding — each of which carries its own copy, verbatim from the
+    // statement. So the "full extract" leaked exactly the identifier the
+    // summary above had just masked, once per transaction.
+    //
+    // Asserted structurally because the extract is assembled inside a
+    // database-bound function; the behavioural proof is the live matrix's
+    // own S-44, which asserts the raw folio does not appear in the
+    // serialised response.
+    const source = readFileSync(join(process.cwd(), 'lib', 'pc5', 'acceptanceSummary.ts'), 'utf8');
+    const extractBlock = source.slice(source.indexOf('const fullExtract'));
+
+    // All three record shapes are built.
+    for (const shape of ['accounts:', 'transactions:', 'holdings:']) {
+      expect(extractBlock.includes(shape), `the full extract must build ${shape}`).toBe(true);
+    }
+
+    // And EVERY `folioNumber:` assignment inside the extract is wrapped in
+    // `maskFolio` — asserted per occurrence rather than per window, so a
+    // fourth record shape added later is covered automatically and a long
+    // comment between the two cannot create a false pass.
+    const folioAssignments = [...extractBlock.matchAll(/folioNumber:\s*([^,\n]+)/g)].map((m) => m[1].trim());
+    expect(folioAssignments.length, 'the full extract must assign folioNumber on each record shape').toBeGreaterThanOrEqual(3);
+    for (const assignment of folioAssignments) {
+      expect(assignment.startsWith('maskFolio('), `an unmasked folioNumber assignment survives: ${assignment}`).toBe(true);
+    }
   });
 });
 
