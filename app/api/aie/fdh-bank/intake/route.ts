@@ -20,7 +20,13 @@ import { bankCsvUploadMetadataSchema } from '@/lib/financial-data-hub/validation
 import { isAieFdhBankAdapterEnabled, isAieFdhBankAiFallbackEnabled } from '@/lib/aie/adapters/fdhBankStatement/featureFlags';
 import { createFdhBankStatementParser } from '@/lib/aie/adapters/fdhBankStatement/parser';
 import { fdhBankStatementReconciliationRule, extractInstitutionHintForDisplay } from '@/lib/aie/adapters/fdhBankStatement/reconciliation';
-import { commitFdhBankStatementImport } from '@/lib/aie/adapters/fdhBankStatement/atomicImport';
+// M12A section 3: `commitFdhBankStatementImport` is NO LONGER IMPORTED HERE.
+// The canonical write for an FDH-bank run happens in exactly one place —
+// `lib/aie/review/accept.ts`, reached via
+// `POST /api/aie/review/runs/{runId}/accept` — and removing the import (not
+// merely the call) is what makes a future re-introduction of an intake-time
+// write a deliberate act rather than an easy one. See the block at the end
+// of `POST` for the full rationale and the RED reproduction it closes.
 import '@/lib/aie/adapters/fdhBankStatement'; // side-effecting registration (schemas + classification parser)
 
 // A single project-wide mock provider instance — genuinely no external AI
@@ -47,8 +53,15 @@ const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
 // wrapping FDH-5's certified row-extraction) -> masked AI fallback for the
 // ONE declared gap only (institution-hint-on-ambiguous-layout) -> this
 // adapter's reconciliation rule -> AIE unresolved items for material
-// failure/ambiguity, OR (gated, OFF by default) FDH's own existing atomic
-// import service.
+// failure/ambiguity, OR `awaiting_acceptance` — and it STOPS THERE.
+//
+// M12A section 3: this route performs NO canonical FDH write. The required
+// lifecycle is ingest -> extract -> validate -> reconcile -> unresolved /
+// user review if needed -> awaiting_acceptance -> EXPLICIT ACCEPT ->
+// canonical FDH write, and the last two steps belong to AIE-1.5's shared,
+// already-built acceptance gate (`POST /api/aie/review/runs/{runId}/accept`
+// -> `lib/aie/review/accept.ts`), which has dispatched FDH-bank since the
+// AIE-1 merge. Extraction succeeding is not acceptance.
 //
 // This is additive: FDH's own existing
 // `/api/financial-data-hub/bank-pdf/upload` route is completely unmodified
@@ -224,20 +237,55 @@ export async function POST(req: Request) {
   // domain.
   const outcome = await runFdhBankStatementPipeline({ run, intakeId, userId: user.id, extractedText, parser });
 
-  // Reachable only when this adapter's reconciliation rule returned
-  // pass/pass_with_tolerance for every rule (`blockingItemsForReconciliation`
-  // — AIE-1.1 core, unchanged — turns any fail/indeterminate outcome into a
-  // blocking unresolved item and stops the run at 'unresolved' before this
-  // point). Note this can never be reached on an AMBIGUOUS layout at all:
-  // `reconciliation.ts` always reports that case as `indeterminate` (see its
-  // own header on why the AI institution-hint candidate can never change
-  // this), so an ambiguous statement is always blocked here regardless of
-  // whether AI was consulted for a display-only hint.
-  let commit: Awaited<ReturnType<typeof commitFdhBankStatementImport>> | null = null;
-  if (outcome.finalStatus === 'awaiting_acceptance') {
-    commit = await commitFdhBankStatementImport({ userId: user.id, runId: run.id, intakeId, bytes, metadata });
-  }
-
+  // M12A section 3 — THE INTAKE-TIME CANONICAL WRITE IS REMOVED, NOT
+  // DISABLED.
+  //
+  // This route used to call `commitFdhBankStatementImport` right here,
+  // inline, the moment `outcome.finalStatus` reached `awaiting_acceptance`
+  // — no acceptance feature flag, no re-read of the blocking-item count, no
+  // CAS transition, and no explicit user acceptance of any kind. That is
+  // the defect the prior mission recorded as `M2-OPEN-6` and carried
+  // forward untouched (M11 final certification section 6.8); M12A
+  // reproduced it against this exact code first
+  // (`tests/unit/m12aFdhBankIntakeGate.test.ts`, RED commit) rather than
+  // taking the paper trail's word for it. With
+  // `AIE_FDH_BANK_ATOMIC_IMPORT_ENABLED=true` — the configuration a
+  // production activation would have to run in — a single upload request
+  // both reached `awaiting_acceptance` AND drove FDH-5's own
+  // `uploadBankPdf` + `processBankPdfDocument` to completion, committing an
+  // `aie_write_batch` row for a run nobody had accepted.
+  //
+  // AIE-1.5's own non-negotiable prohibition forbids exactly this, and the
+  // INSURANCE route already removed the identical pattern for the identical
+  // reason (see `app/api/aie/insurance/intake/route.ts`'s own "AIE-1.5
+  // SUPERSEDES THE SELF-ACCEPT THIS ROUTE USED TO PERFORM HERE" comment).
+  // The FDH route never received that fix. It does now, and the removal is
+  // deliberately a REMOVAL: no flag, no opt-in, no dormant branch. A branch
+  // left in place behind a switch would still be a second write path, and
+  // the whole point is that there is exactly one.
+  //
+  // WHAT REPLACES IT — EXISTING INFRASTRUCTURE, REUSED, NOT REBUILT. The
+  // real, gated, versioned, idempotent acceptance path already exists and
+  // ALREADY DISPATCHES FDH-BANK: `lib/aie/review/accept.ts` resolves the
+  // run's own recorded `adapter_id` (`aie_fdh_bank_statement_bridge_v1`,
+  // written by the orchestrator's `recordParserAttempt` from the
+  // request-scoped parser above), re-reads the blocking-item count,
+  // re-derives the worst reconciliation outcome, CAS-transitions
+  // `awaiting_acceptance -> accepted -> write_pending`, guards against a
+  // crash-window double import via `findCommittedFdhBankWriteForRun`,
+  // re-fetches THESE bytes from quarantine, re-reads THIS request's
+  // metadata (persisted three lines below the intake row above, by
+  // migration 0145, for precisely this later request), calls the same
+  // `commitFdhBankStatementImport`, and only then finalises the quarantine
+  // binary and completes the run. Every one of those gates is skipped by an
+  // inline intake-time call. Nothing new was built for this fix; the
+  // acceptance path was already wired for all three Phase-1 adapters and
+  // was simply never used by this one.
+  //
+  // The binary therefore MUST NOT be deleted here (unlike Insurance's
+  // route, whose candidate-based write never needs the bytes again) —
+  // `accept.ts` re-fetches it, and `finalizeDocumentBinaryAfterRun` runs
+  // there, after the write it feeds has genuinely succeeded.
   return ok({
     intake_id: intakeId,
     run_id: run.id,
@@ -247,7 +295,15 @@ export async function POST(req: Request) {
     field_count: outcome.candidates.length,
     unresolved_item_ids: outcome.unresolvedItemIds,
     duplicate_classification: duplicateClassification,
-    commit,
+    // Retained as an explicit, always-`null` field rather than dropped, so
+    // any existing caller reading `commit` sees "nothing was committed"
+    // instead of `undefined`, and so the removal is legible at the response
+    // contract rather than only in this comment. A canonical write for this
+    // run now happens in exactly one place:
+    // `POST /api/aie/review/runs/{runId}/accept`.
+    commit: null,
+    accepted: false,
+    accept_endpoint: outcome.finalStatus === 'awaiting_acceptance' ? `/api/aie/review/runs/${run.id}/accept` : null,
   });
 }
 
