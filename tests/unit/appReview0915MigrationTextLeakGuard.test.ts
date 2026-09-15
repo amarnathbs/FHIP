@@ -108,9 +108,10 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
         for (const lit of literals(stmt)) {
           if (!PROVENANCE.test(lit)) continue;
           if (lit.length < 25) continue; // an enum value or a key, not prose
-          // Migration 0156 is the fix: it matches the offending literals in
-          // order to clear or rewrite them, and never writes one anywhere.
-          if (file.startsWith('0156_')) continue;
+          // Migrations 0156 and 0158 are the fix: they match the offending
+          // literals in order to clear or rewrite them, and never write one
+          // anywhere themselves.
+          if (file.startsWith('0156_') || file.startsWith('0158_')) continue;
           offenders.push(`${file}:~${offsetLine} -> ${lit.slice(0, 110)}`);
         }
       }
@@ -139,9 +140,33 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
     // The one note that is rewritten rather than cleared keeps its ages.
     expect(src).toContain('None was assumed — please confirm your target retirement age.');
     expect(src).toContain("substring(notes from 'accounts \\(([^)]*)\\)')");
+    // 0156 also had to bypass enforce_country_confirmed() (and any other
+    // trigger) to actually apply on real DEV data — see the migration's own
+    // REVISED header. DISABLE/ENABLE TRIGGER ALL was tried first and failed
+    // (Postgres refuses to let a non-superuser touch its own internal FK
+    // constraint triggers); TRIGGER USER is the one that actually works.
+    expect(src).not.toMatch(/disable trigger all/i);
+    expect(src).toMatch(/disable trigger user/i);
+    expect(src).toMatch(/enable trigger user/i);
   });
 
-  it('the remediation list is exactly the three offenders found, and no more', () => {
+  it('migration 0158 remediates the third offender 0156 missed', () => {
+    // Live re-verification after applying 0156 to DEV found retirement_members
+    // still had 103 leaked rows — one single distinct pattern from migration
+    // 0077 that 0156's own audit sweep did not catch. 0156 was already applied
+    // to DEV by the time this was found, so the fix is a new, additive
+    // migration rather than an edit to an already-applied one.
+    const src = fs.readFileSync(path.join(MIGRATIONS, '0158_app_review_0915_clear_third_leaked_migration_note.sql'), 'utf8');
+    expect(src).toContain(
+      "where notes = 'Migration 0077: this member has retirement account(s) but no legacy target retirement age was ever recorded. Age left unconfirmed.'"
+    );
+    expect(src).toMatch(/backfill_source = coalesce\(backfill_source, 'migration_0077_no_legacy_age_recorded'\)/);
+    // Same trigger-bypass fix as 0156, for the same reason.
+    expect(src).toMatch(/disable trigger user/i);
+    expect(src).toMatch(/enable trigger user/i);
+  });
+
+  it('the remediation list covers all offenders found across 0156 and 0158, and no more', () => {
     expect([...REMEDIATED_BY_0156].sort()).toEqual([
       '0077_retirement_member_target_age.sql',
       '0078_property_liability_linking.sql',
