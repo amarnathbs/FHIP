@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // R4 — Performance UX (spec sections 60-65).
 //
@@ -139,16 +140,9 @@ function num(v: number | undefined | null, digits = 2): string {
   return v.toFixed(digits);
 }
 
+// App Review 2026-09-15 G1: single shared whole-unit helper.
 function money(v: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-AU', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(v);
-  } catch {
-    return `${currency} ${Math.round(v).toLocaleString()}`;
-  }
+  return formatMoneyCode(v, currency);
 }
 
 const STATUS_LABEL: Record<CalculationStatus, string> = {

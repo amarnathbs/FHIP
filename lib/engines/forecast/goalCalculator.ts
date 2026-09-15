@@ -14,6 +14,7 @@ import { addMonthsToDateString, firstOfMonth, monthlyCompoundRate, projectInvest
 import type { ForecastExplanationRow, ForecastResultRow } from './types';
 import { getAssumptionValue } from './assumptions';
 import type { ResolvedAssumptionSet } from './types';
+import { formatMoneyNarrative } from '../money';
 
 export interface GoalCalculatorInputEntry {
   id: string;
@@ -96,12 +97,17 @@ export function runGoalForecast(input: GoalCalculatorInput): { results: Forecast
       : null;
     const contributionGap = requiredContribution !== null ? round2(Math.max(0, requiredContribution - goal.monthlyContribution)) : null;
 
+    // App Review 2026-09-15, item 7 (and G1): every amount in this sentence
+    // used to be a raw float interpolated straight into the string —
+    // "541.6666666666666/month", "3690.83", "3149.16". They now go through
+    // the shared whole-unit money formatter, with the goal's own currency.
+    const money = (n: number) => formatMoneyNarrative(n, goal.currency);
     const completionNarrative =
       completionMonth === null
-        ? `At the current contribution of ${goal.monthlyContribution}/month, this goal is not projected to reach its target within the ${input.months}-month forecast horizon.`
+        ? `At the current contribution of ${money(goal.monthlyContribution)}/month, this goal is not projected to reach its target within the ${input.months}-month forecast horizon.`
         : completionMonth === 0
           ? 'This goal has already reached its target amount.'
-          : `At the current contribution of ${goal.monthlyContribution}/month plus assumed growth, this goal is projected to reach its target in month ${completionMonth} of the forecast.`;
+          : `At the current contribution of ${money(goal.monthlyContribution)}/month plus assumed growth, this goal is projected to reach its target in month ${completionMonth} of the forecast.`;
 
     explanations.push(
       buildExplanation({
@@ -112,7 +118,7 @@ export function runGoalForecast(input: GoalCalculatorInput): { results: Forecast
         narrative:
           completionNarrative +
           (contributionGap && contributionGap > 0
-            ? ` To reach the target by ${goal.targetDate ?? 'the planned date'}, the required monthly contribution is ${requiredContribution?.toFixed(2)} — a gap of ${contributionGap.toFixed(2)} above the current plan.`
+            ? ` To reach the target by ${goal.targetDate ?? 'the planned date'}, the required monthly contribution is ${money(requiredContribution ?? 0)} — a gap of ${money(contributionGap)} above the current plan.`
             : ''),
         inputs: {
           currentAmount: goal.currentAmount,

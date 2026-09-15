@@ -16,6 +16,14 @@ import { addMonthsToDateString, firstOfMonth, monthlyCompoundRate, projectInvest
 import { getAssumptionValue } from './assumptions';
 import { convertToReportingCurrency, type SupportedCurrency } from '@/lib/engines/fx';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
+import { formatMoneyNarrative } from '../money';
+
+// App Review 2026-09-15 G1/item 7 — narrative amounts go through the shared
+// whole-unit formatter; sign is kept because these two figures are
+// genuinely signed (a currency loss must not read as a gain).
+function signedMoney(amount: number, currencyCode: string): string {
+  return `${amount < 0 ? '-' : ''}${formatMoneyNarrative(Math.abs(amount), currencyCode)}`;
+}
 
 export interface CrossBorderCalculatorInput {
   baselineDate: string;
@@ -142,7 +150,7 @@ export function runCrossBorderForecast(input: CrossBorderCalculatorInput): { res
           entityId: null,
           explanationType: 'cross_border_projection',
           title: `Cross-border wealth projection — month ${m}`,
-          narrative: `Net foreign wealth (assets + investments + retirement - liabilities, in ${input.foreignCurrency}) is projected using the same category return assumptions as domestic holdings, then converted to ${input.reportingCurrency} using the FX rate assumption (${round2(fxRate)} INR per AUD) with ${fxDriftAnnualPercent}%/year assumed drift. This period's ${input.reportingCurrency} movement splits into a local-currency return of ${localReturnInReportingCurrency.toLocaleString()} and a currency gain/loss of ${currencyGainLoss.toLocaleString()} — the same foreign holding can grow in its own currency while its ${input.reportingCurrency} value falls if that currency weakens, or vice versa.`,
+          narrative: `Net foreign wealth (assets + investments + retirement - liabilities, in ${input.foreignCurrency}) is projected using the same category return assumptions as domestic holdings, then converted to ${input.reportingCurrency} using the FX rate assumption (${round2(fxRate)} INR per AUD) with ${fxDriftAnnualPercent}%/year assumed drift. This period's ${input.reportingCurrency} movement splits into a local-currency return of ${signedMoney(localReturnInReportingCurrency, input.reportingCurrency)} and a currency gain/loss of ${signedMoney(currencyGainLoss, input.reportingCurrency)} — the same foreign holding can grow in its own currency while its ${input.reportingCurrency} value falls if that currency weakens, or vice versa.`,
           inputs: {
             assetGrowthPercent: assetGrowth,
             investmentReturnPercent: investmentReturn,

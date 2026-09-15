@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -55,9 +56,10 @@ interface PublicationPreview {
   alreadyPublished: { publicationId: string; publishedRowId: string | null; status: string } | null;
 }
 
+// App Review 2026-09-15 G1: whole currency units, via the shared helper.
 function formatMoney(value: number | null, currency: string | null): string {
   if (value == null) return '—';
-  return `${currency ?? ''} ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`.trim();
+  return formatMoneyCode(value, currency);
 }
 
 interface DocumentSummary {

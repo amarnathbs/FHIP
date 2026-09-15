@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatMoneyExact } from '@/lib/engines/money';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
@@ -114,7 +115,9 @@ const FIELD_LABELS: Record<string, string> = {
 
 function money(value: number | null | undefined, currency: string) {
   if (value === null || value === undefined) return 'Not shown on statement';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  // App Review 2026-09-15 G1 sanctioned exception (a): literal statement
+  // transcription shown for verification. See lib/engines/money.ts.
+  return formatMoneyExact(value, currency);
 }
 
 function displayValue(v: string | null, kind: string) {

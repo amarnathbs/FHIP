@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 import type { IiReviewComplianceClassification, IiReviewSeverity, IiReviewSourceModule, IiReviewType } from '@/lib/services/investment-intelligence/types';
 import type { PerInvestmentAttribution } from '@/lib/services/investment-intelligence/portfolioAttribution';
+// App Review 2026-09-15 G1: review-item descriptions are user-facing copy.
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // Investment Intelligence R9 — Review Centre deterministic rule engine.
 //
@@ -73,7 +75,7 @@ export function detectUnallocatedInvestments(userId: string, perInvestment: PerI
       severity: rule.defaultSeverity,
       complianceClassification: rule.complianceClassification,
       title: 'Investment not linked to a financial goal',
-      description: `A portion of your investment portfolio is not currently linked to a financial goal (${i.unallocatedValue.toFixed(2)} ${i.currencyCode} unallocated of ${i.currentValue.toFixed(2)} ${i.currencyCode}).`,
+      description: `A portion of your investment portfolio is not currently linked to a financial goal (${formatMoneyCode(i.unallocatedValue, i.currencyCode)} unallocated of ${formatMoneyCode(i.currentValue, i.currencyCode)}).`,
       evidence: { investmentId: i.investmentId, currentValue: i.currentValue, allocatedValue: i.allocatedValue, unallocatedValue: i.unallocatedValue, allocatedPct: i.allocatedPct, currencyCode: i.currencyCode },
       sourceModule: 'ii_publishing' as IiReviewSourceModule,
       sourceRecordId: i.investmentId,
@@ -144,7 +146,7 @@ export function detectGoalForecastGap(userId: string, goals: GoalForecastInput[]
       title: `"${g.goalName}" forecast is ${g.trackStatus.replace('_', ' ')}`,
       description:
         g.fundingGapAtTargetDate !== null
-          ? `This goal's current forecast is below its target by ${Math.abs(g.fundingGapAtTargetDate).toFixed(2)} ${g.currencyCode}.`
+          ? `This goal's current forecast is below its target by ${formatMoneyCode(Math.abs(g.fundingGapAtTargetDate), g.currencyCode)}.`
           : `This goal's current forecast status is ${g.trackStatus.replace('_', ' ')}.`,
       evidence: {
         goalId: g.goalId,

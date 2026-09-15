@@ -11,6 +11,7 @@ import {
 } from '@/lib/investment-intelligence/analysisAvailability';
 import { II_RELATED_DESTINATIONS } from '@/lib/investment-intelligence/workspaceNav';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // II-PC2 — the Investment Intelligence workspace Overview (spec sections 10,
 // 12, 29, 64).
@@ -98,13 +99,11 @@ function StatusPill({ status }: { status: AnalysisAvailability }) {
   );
 }
 
+// App Review 2026-09-15 G1: single shared whole-unit helper (it keeps the
+// same "an unknown/experimental ISO code must not blank the whole summary"
+// fallback this local version had).
 function formatMoney(value: number, currencyCode: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(value);
-  } catch {
-    // An unknown/experimental ISO code must not blank the whole summary.
-    return `${currencyCode} ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  }
+  return formatMoneyCode(value, currencyCode);
 }
 
 const CLASS_LABEL: Record<string, string> = {

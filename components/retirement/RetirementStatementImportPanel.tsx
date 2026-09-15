@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatMoneyExact } from '@/lib/engines/money';
 
 type Phase =
   | 'form'
@@ -182,7 +183,9 @@ function money(value: string | null | undefined, currency: string): string {
   if (value === null || value === undefined || value === '') return 'Not shown on statement';
   const n = Number(value);
   if (!Number.isFinite(n)) return value;
-  return n.toLocaleString(undefined, { style: 'currency', currency, minimumFractionDigits: 2 });
+  // App Review 2026-09-15 G1 sanctioned exception (a): literal statement
+  // transcription shown for verification. See lib/engines/money.ts.
+  return formatMoneyExact(n, currency);
 }
 
 function displayValue(value: string | null, kind: string, currency: string): string {

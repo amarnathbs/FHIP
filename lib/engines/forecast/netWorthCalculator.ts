@@ -9,6 +9,7 @@ import { buildExplanation } from './explain';
 import { projectInvestmentMonth, projectLoanMonth, firstOfMonth, addMonthsToDateString, round2 } from './monthlyPrimitives';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
 import { getAssumptionValue } from './assumptions';
+import { formatMoneyNarrative } from '../money';
 
 // A one-off future inflow (positive amount, e.g. inheritance, bonus, asset
 // sale) or outflow (negative amount, e.g. planned purchase) applied to the
@@ -152,7 +153,10 @@ export function runNetWorthForecast(input: NetWorthCalculatorInput): { results: 
           explanationType: 'planned_financial_event',
           title: `Planned event — month ${m}`,
           narrative: eventsThisMonth
-            .map((e) => `${e.description}: ${e.amount >= 0 ? '+' : ''}${e.amount.toLocaleString()}`)
+            // App Review 2026-09-15 G1/item 7: raw toLocaleString() emitted an
+            // unsigned, un-symboled, cents-bearing float into user-facing
+            // narrative text. Shared whole-unit formatter, sign preserved.
+            .map((e) => `${e.description}: ${e.amount >= 0 ? '+' : '-'}${formatMoneyNarrative(Math.abs(e.amount), input.currency)}`)
             .join('; '),
           inputs: { month: m, events: eventsThisMonth },
           formula: 'Applied as an additional one-time contribution (or reduction, if negative) to general assets in the specified month.',

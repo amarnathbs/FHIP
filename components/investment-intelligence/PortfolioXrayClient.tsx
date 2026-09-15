@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // R5 — Portfolio X-Ray UX (spec sections 98-99).
 //
@@ -91,8 +92,8 @@ function fmtPct(v: number | null | undefined, dp = 1): string {
 }
 function fmtMoney(v: number | null | undefined, currency: string | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  const c = currency ?? 'INR';
-  return new Intl.NumberFormat(c === 'INR' ? 'en-IN' : 'en-AU', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(v);
+  // App Review 2026-09-15 G1: single shared whole-unit helper.
+  return formatMoneyCode(v, currency ?? 'INR');
 }
 
 function DataUnavailable({ title, detail }: { title: string; detail?: string }) {

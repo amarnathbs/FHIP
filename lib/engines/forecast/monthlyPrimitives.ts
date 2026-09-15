@@ -117,6 +117,64 @@ export function levelPaymentForPayoff(balance: number, annualRatePercent: number
   return round2((balance * r) / (1 - Math.pow(1 + r, -months)));
 }
 
+// App Review 2026-09-15, item 9 — "payoff term must be derived, not
+// hard-coded". Every debt card previously said "…within the 120-month
+// forecast horizon" regardless of balance, rate or repayment, because the
+// only payoff figure the engine ever computed was clipped to the forecast
+// window: the projection loop stops at `months`, so a loan that pays off in
+// month 326 was indistinguishable from one that never pays off at all.
+//
+// This projects the SAME reducing-balance step (projectLoanMonth — identical
+// rounding and identical max(0, …) flooring, so a derived term can never
+// disagree with the balances rendered on the same card) forward past the
+// forecast window until the balance actually reaches zero.
+//
+// `capMonths` bounds the loop at 1200 months (100 years). A repayment that
+// only just exceeds the first month's interest can take an arbitrarily long
+// time to amortise; beyond a century the honest answer is "not on any
+// meaningful horizon", not a number.
+export const PAYOFF_SEARCH_CAP_MONTHS = 1200;
+
+export interface DerivedPayoff {
+  /** Months until the balance reaches zero. null when it never does. */
+  months: number | null;
+  /** True when the repayment does not cover the first month's interest+fees,
+   *  i.e. the balance grows rather than reduces. */
+  balanceGrowing: boolean;
+  /** True when the repayment does reduce the balance, but not to zero within
+   *  capMonths — distinct from balanceGrowing, and reported differently. */
+  beyondSearchCap: boolean;
+}
+
+export function derivePayoffTerm(
+  openingBalance: number,
+  annualInterestRatePercent: number,
+  repayment: number,
+  fees = 0,
+  capMonths = PAYOFF_SEARCH_CAP_MONTHS
+): DerivedPayoff {
+  if (openingBalance <= 0) return { months: 0, balanceGrowing: false, beyondSearchCap: false };
+  const firstMonthCost = interestOnlyPayment(openingBalance, annualInterestRatePercent, fees);
+  if (repayment <= firstMonthCost) {
+    return { months: null, balanceGrowing: true, beyondSearchCap: false };
+  }
+  let balance = openingBalance;
+  for (let m = 1; m <= capMonths; m++) {
+    balance = projectLoanMonth({ openingBalance: balance, annualInterestRatePercent, repayment, fees }).closingBalance;
+    if (balance <= 0) return { months: m, balanceGrowing: false, beyondSearchCap: false };
+  }
+  return { months: null, balanceGrowing: false, beyondSearchCap: true };
+}
+
+/** "8 years 4 months", "27 years 2 months", "7 months", "3 years". */
+export function formatTerm(months: number): string {
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m} month${m === 1 ? '' : 's'}`;
+  if (m === 0) return `${y} year${y === 1 ? '' : 's'}`;
+  return `${y} year${y === 1 ? '' : 's'} ${m} month${m === 1 ? '' : 's'}`;
+}
+
 export function addMonthsToDateString(isoDate: string, months: number): string {
   const d = new Date(isoDate + 'T00:00:00Z');
   d.setUTCMonth(d.getUTCMonth() + months);

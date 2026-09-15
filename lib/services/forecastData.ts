@@ -699,7 +699,17 @@ async function buildCalculatorInput(
         id: l.id,
         name: l.liability_name,
         currentBalance: l.balance,
+        // App Review 2026-09-15, item 8 requirement 2 ("confirm the interest
+        // rate source for each loan is the user-entered rate, not a default"):
+        // it IS the user-entered rate — liabilities.interest_rate — and no
+        // product default is ever substituted. The `?? 0` below is the only
+        // fallback and it applies solely when the user has left the field
+        // blank, in which case the loan is projected interest-free. That was
+        // previously invisible: the card showed a confident amortisation with
+        // no indication the rate was missing. It is now passed through as an
+        // explicit flag so debtCalculator can say so in the explanation.
         annualInterestRatePercent: l.interest_rate ?? 0,
+        interestRateProvided: l.interest_rate !== null && l.interest_rate !== undefined,
         monthlyRepayment: l.monthly_repayment ?? 0,
         debtType: l.debt_type,
         currency: l.currency_code,

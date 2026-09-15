@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // R5 — SIP Intelligence UX (spec sections 98-100).
 //
@@ -80,7 +81,8 @@ function fmtPct(v: number | null | undefined, dp = 2): string {
 }
 function fmtMoney(v: number | null | undefined, currency: string): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-AU', { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
+  // App Review 2026-09-15 G1: single shared whole-unit helper.
+  return formatMoneyCode(v, currency);
 }
 
 /** The ONLY way an unavailable metric is ever rendered. Never a zero. */

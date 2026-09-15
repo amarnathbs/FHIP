@@ -12,6 +12,7 @@ import { addMonthsToDateString, firstOfMonth, projectInvestmentMonth, projectLoa
 import { getAssumptionValue } from './assumptions';
 import { bandFor, type ScoreBand } from '../scoring';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
+import { formatMoneyNarrative } from '../money';
 
 export interface ResilienceCalculatorInput {
   baselineDate: string;
@@ -157,10 +158,12 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
 
   const narrativeParts: string[] = [`Scenario: ${input.scenarioLabel}.`, `Resilience Health: ${resilienceHealth.label}.`];
   if (netWorthImpact !== 0) {
-    narrativeParts.push(`Immediate net worth impact from the shock: ${netWorthImpact.toLocaleString()}.`);
+    // App Review 2026-09-15 G1/item 7 — shared whole-unit formatter instead of
+    // a raw toLocaleString() float in user-facing narrative text.
+    narrativeParts.push(`Immediate net worth impact from the shock: ${netWorthImpact >= 0 ? '' : '-'}${formatMoneyNarrative(Math.abs(netWorthImpact), input.currency)}.`);
   }
   if (retirementImpact !== 0) {
-    narrativeParts.push(`Retirement balance impact: ${retirementImpact.toLocaleString()}.`);
+    narrativeParts.push(`Retirement balance impact: ${retirementImpact >= 0 ? '' : '-'}${formatMoneyNarrative(Math.abs(retirementImpact), input.currency)}.`);
   }
   narrativeParts.push(
     depletionMonth === null
