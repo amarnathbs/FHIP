@@ -72,6 +72,7 @@ import type {
   ParseMetadata,
   ParsedAccountRecord,
   ParsedDocumentOutput,
+  ParsedFieldSeverity,
   ParsedHoldingRecord,
   ParsedInstrumentRecord,
   ParsedTransactionRecord,
@@ -84,6 +85,10 @@ import { parseExactDecimal } from '../decimal';
 import { parseStatementDate } from '../dateNormalisation';
 import { classifyTransactionType } from '../transactionTypeMapping';
 import type { IiTransactionType } from '../types';
+// M12C §8.3 — the shared, provider-agnostic opening-balance sentinel. Imported
+// rather than re-declared so this parser and camsFolioStatementParser.ts can
+// never drift onto two different magic strings for the same concept.
+import { OPENING_BALANCE_SOURCE_REFERENCE } from '../openingBalanceMarker';
 
 export const CAMS_PARSER_CODE = 'cams_detailed_v1' as const;
 export const CAMS_PARSER_VERSION = '1.0.0';
@@ -417,6 +422,110 @@ const ALT_FEE_ROW_LABEL_ONLY_RE = /^\*+\s*(Stamp\s+Duty|Securities\s+Transaction
 // as "this scheme had zero transactions," never a parse error.
 const NO_ACTIVITY_RE = /^No transactions? (?:for|during|in) (?:the|this) (?:statement )?period\.?\s*$/i;
 
+// ---------------------------------------------------------------------------
+// M12C §8.2 — severity classification for a line inside a transaction table
+// that no row grammar could parse.
+//
+// The defect this closes (M1-F3 / OA-9, reproduced live against PRODUCTION on
+// 2026-09-16): this parser emitted `unparseable_transaction_row` at severity
+// `error` for EVERY line that failed the row grammar, with no distinction
+// between "a row that looked like a transaction and would not parse" and "a
+// page footer that is not a transaction at all". `registry.ts:112` turns every
+// error-severity warning into `parsed.errors`, `documentProcessing.ts:885`
+// turns a non-empty `parsed.errors` into `parserHasFatalError`, and
+// `certification.ts:65` turns that into the `parser_fatal_error` blocker for
+// EVERY position in the document. On the Product Owner's real 19-page CAS that
+// was 251 findings blocking all 17 positions — and PC4's own Section 3
+// accounting had already classified all 251 as benign (77 boilerplate, 84
+// non-economic lifecycle markers, 90 regulatory footnotes).
+//
+// The fix belongs HERE, at severity assignment, and NOT in `certification.ts`:
+// the `parser_fatal_error` wiring is correct and is pinned by the PC4
+// regression contract as PC4-INV-19. A document with a genuine parse error
+// must still never reach `certified` on reconciliation math alone.
+//
+// The discriminator is structural, not a keyword list. EVERY transaction-row
+// grammar in this file (TXN_ROW_RE, ALT_TXN_ROW_RE, ALT_FEE_ROW_RE,
+// ALT_FEE_ROW_SPLIT_DATE_AMOUNT_RE, ALT_TXN_ROW_WRAPPED_START_RE) is
+// `^`-anchored on a DD-MMM-YYYY date, and every economically material row
+// carries a money-shaped amount. So:
+//
+//   * leading date AND a money-shaped token  -> genuinely a transaction row
+//     that would not parse. STAYS `error`. This is the case the blocker exists
+//     for and it is deliberately untouched.
+//   * a money-shaped token but NO leading date -> not a row by this layout's
+//     own grammar, but an amount is printed on it, so it is NOT silently
+//     dropped either: `warning`, which is visible in the run's warnings and in
+//     the review surface but does not block certification (the same severity
+//     `unclassified_transaction` already uses).
+//   * everything else -> carries no date-led structure and no amount, so it
+//     cannot move a position by construction. `info`, under a code naming
+//     which of PC4's three benign categories it is.
+//
+// These predicates are the SAME ones
+// `scripts/m12c_pc4_warning_taxonomy_probe.mjs` applied to the real production
+// run, deliberately, so the evidence in the M12C report and the behaviour of
+// this code cannot drift apart. That probe's result on the real document:
+// 0 of 251 findings are date-led and money-shaped; 100 carry no digit at all,
+// 64 carry digits but neither a date nor an amount, 56 are a bare date or a
+// bare `<date> To <date>` page stamp, 14 are `Page N of M` footers, 8 are a
+// URL/email, 5 are mid-line-date prose and 4 are money-shaped prose.
+const LEADING_TXN_DATE_RE = /^\(?\d{1,2}-[A-Za-z]{3}-\d{4}/;
+const ANY_TXN_DATE_RE = /\b\d{1,2}-[A-Za-z]{3}-\d{4}\b/;
+// Money as this layout prints it: 2-6 decimal places, optionally grouped, and
+// NOT immediately followed by `%` (a percentage is a rate, never an amount) and
+// not part of a dotted version triple such as `V3.5.1` (the real CAS prints a
+// per-page `CAMSCASWS-.../Version:V3.5 Live-...` stamp).
+// `\d+` (not `\d{1,3}`) on the leading run is deliberate: this layout prints
+// amounts BOTH ungrouped (`3000.00`) and in Indian lakh grouping
+// (`1,23,456.78`), and a leading-run cap of 3 would silently fail to see every
+// ungrouped amount of 1000 or more — which is most of them.
+const MONEY_SHAPED_RE = /(?<![.\d])\(?-?\d+(?:,\d{2,3})*\.\d{2,6}\)?(?![.\d%])/;
+const PAGE_FOOTER_RE = /\bpage\s+\d+\s+of\s+\d+\b/i;
+const URL_OR_EMAIL_RE = /(https?:\/\/|www\.|@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/;
+const BARE_DATE_STAMP_RE = /^\d{1,2}-[A-Za-z]{3}-\d{4}(?:\s+To\s+\d{1,2}-[A-Za-z]{3}-\d{4})?$/i;
+
+export interface UnparsedTableLineClassification {
+  code: string;
+  severity: ParsedFieldSeverity;
+}
+
+/**
+ * Classify a line inside a transaction table that no row grammar matched.
+ * Exported so the M12C regression suite asserts the real function rather than
+ * a copy of its rules.
+ */
+export function classifyUnparsedTableLine(line: string): UnparsedTableLineClassification {
+  const t = line.trim();
+  const leadingDate = LEADING_TXN_DATE_RE.test(t);
+  const money = MONEY_SHAPED_RE.test(t);
+
+  // Unchanged, and deliberately so: a date-led line carrying an amount is a
+  // transaction row this parser could not read. That is a real economic
+  // omission and must keep blocking certification.
+  if (leadingDate && money) return { code: 'unparseable_transaction_row', severity: 'error' };
+
+  // An amount is printed but the line is not date-led, so it is not a row by
+  // this grammar. Visible, never silent, never blocking.
+  if (money) return { code: 'unparseable_non_transaction_row_with_amount', severity: 'warning' };
+
+  // From here down the line carries no amount at all, so it cannot contribute
+  // units or cash to any position.
+  if (PAGE_FOOTER_RE.test(t) || URL_OR_EMAIL_RE.test(t) || BARE_DATE_STAMP_RE.test(t)) {
+    return { code: 'non_transaction_boilerplate', severity: 'info' };
+  }
+  if (!/\d/.test(t)) {
+    // `*** Stamp Duty ***`, `*** Systematic Investment Rejection ***` and the
+    // rest of the marker family: a lifecycle annotation with no amount and no
+    // units of its own.
+    return { code: 'non_economic_lifecycle_marker', severity: 'info' };
+  }
+  if (ANY_TXN_DATE_RE.test(t) || /\d\s*%/.test(t)) {
+    return { code: 'regulatory_footnote', severity: 'info' };
+  }
+  return { code: 'non_transaction_boilerplate', severity: 'info' };
+}
+
 function requireScaled(raw: string, warnings: ParsedWarning[], code: string): bigint | null {
   const parsed = parseExactDecimal(raw);
   if (!parsed.ok) {
@@ -670,6 +779,15 @@ export const camsParser: InvestmentDocumentParser = {
     let lastKnownAmcName = '';
     let inTable = false;
 
+    // M12C §8.3: the ONLY date a preserved opening balance may carry. This is
+    // `extractMetadata`'s `statementPeriodStartIso`, which is set ONLY by the
+    // labelled `Statement Period : <start> To <end>` line — extractMetadata's
+    // unlabelled fallback deliberately populates the END date only, because
+    // that range's leading date is a sentinel placeholder on a real
+    // since-inception request. So when this is null, the document genuinely
+    // printed no usable start date and none is fabricated.
+    const openingBalanceAsOfIso = this.extractMetadata(text).statementPeriodStartIso;
+
     for (let idx = 0; idx < lines.length; idx++) {
       const line = lines[idx].trim();
       const folio = extractLabelledField(line, 'Folio No');
@@ -839,8 +957,93 @@ export const camsParser: InvestmentDocumentParser = {
       // document where the header line DOES immediately precede it
       // (the common case this file's other fixtures already cover), this
       // is a harmless redundant re-set of an already-true flag.
-      if (OPENING_BALANCE_RE.test(line)) {
+      // M12C §8.3 (defect `M3-F1`, confirmed) — the captured opening balance
+      // was thrown away.
+      //
+      // This regex has ALWAYS captured the figure in group 1. Until now the
+      // use site called `.test()` and `continue`d, so the value was read and
+      // immediately discarded, while the sibling certified parser
+      // `camsFolioStatementParser.ts` `.exec()`s the identical concept and
+      // emits it correctly (its OPENING_BALANCE_ROW_RE / :361-392). Two
+      // certified parsers disagreed about the same concept, and one of them
+      // proves the value is deterministically readable.
+      //
+      // The consequence is not cosmetic. `documentProcessing.ts:1158` decides
+      // `hasExplicitOpeningBalanceTransaction` by looking for an
+      // OPENING_BALANCE_SOURCE_REFERENCE-marked row, and :1164 then computes
+      // `statementCoversFromInception` as `!earlierSnapshot && txns.length > 0
+      // && !hasExplicitOpeningBalanceTransaction`. Because THIS parser could
+      // never produce that marker, that expression was unconditionally TRUE
+      // for every first CAS import — so `determineHistoryCompleteness` always
+      // returned `complete_from_inception`, and `reconcilePosition` always
+      // summed the stream from a ZERO baseline. Confirmed live against
+      // PRODUCTION on 2026-09-16: `history_completeness` is
+      // `complete_from_inception` and `reconciled_opening_units` is `0` on ALL
+      // 17 of the Product Owner's real positions, without exception.
+      //
+      // The value is preserved as an ADJUSTMENT and nothing else — exactly the
+      // shape FS1 already certified (see openingBalanceMarker.ts's own header):
+      //   * `canonicalType: 'adjustment'`, which `taxRepository.ts`'s
+      //     ACQUISITION_TYPE_MAP does not contain, so R6's FIFO/tax-lot engine
+      //     can never consume it as an acquisition;
+      //   * `amountScaled: 0` — a position figure is never cash consideration,
+      //     so it is never an amount-as-transaction;
+      //   * `navScaled: null` — no NAV is invented;
+      //   * no tax lot and no cost basis are created anywhere by this row.
+      //
+      // Two deliberate restrictions bound the blast radius to precisely the
+      // defect:
+      //
+      // 1. A ZERO opening balance changes NOTHING. A since-inception CAS
+      //    prints `Opening Unit Balance: 0.000` for every scheme, and emitting
+      //    17 no-op rows for it would flip every one of those positions out of
+      //    `complete_from_inception` and alter certified behaviour for the 12
+      //    positions that reconcile to variance 0.000 today. Zero keeps the
+      //    pre-M12C code path byte-for-byte.
+      //
+      // 2. A NON-ZERO opening balance needs an as-of date, and this layout's
+      //    line carries none (unlike FS1's, which prints `DD-MMM-YYYY Opening
+      //    Balance <units>`). No date is invented. The only date used is the
+      //    document's own printed `Statement Period : <start> To <end>` start.
+      //    Where the document prints no labelled period start — which is the
+      //    case for a real "since inception" request, whose range is printed
+      //    unlabelled and whose leading date is a sentinel placeholder, see
+      //    extractMetadata's own comment — the value is NOT dropped and NOT
+      //    dated by guesswork: an `error`-severity finding is raised so the
+      //    position fails CLOSED instead of silently reconciling from a
+      //    fabricated zero.
+      const openingMatch = OPENING_BALANCE_RE.exec(line);
+      if (openingMatch) {
         inTable = true;
+        const openingScaled = requireScaled(openingMatch[1], warnings, 'unparseable_opening_balance_units');
+        if (openingScaled === null || openingScaled === BigInt(0)) continue;
+        if (!currentScheme) {
+          warnings.push({ code: 'opening_balance_without_scheme_context', message: 'A non-zero opening unit balance was printed before any scheme header was read.', severity: 'error', lineHint: idx });
+          continue;
+        }
+        if (!openingBalanceAsOfIso) {
+          warnings.push({
+            code: 'opening_balance_not_datable',
+            message: 'A non-zero opening unit balance is printed but this statement prints no labelled statement-period start date to place it at. The value is preserved as evidence and the position is blocked rather than reconciled from a zero baseline.',
+            severity: 'error',
+            lineHint: idx,
+          });
+          continue;
+        }
+        transactions.push({
+          folioNumber: currentFolio,
+          scheme: currentScheme,
+          transactionDateIso: openingBalanceAsOfIso,
+          rawTransactionTypeText: 'Opening Unit Balance',
+          canonicalType: 'adjustment',
+          classificationConfidence: 1,
+          amountScaled: BigInt(0),
+          unitsScaled: openingScaled,
+          navScaled: null,
+          balanceUnitsAfterScaled: openingScaled,
+          sourceReference: OPENING_BALANCE_SOURCE_REFERENCE,
+          sourceDescription: line.slice(0, 500),
+        });
         continue;
       }
       // II-PC3 Gate A finding #12: a "no activity this period" placeholder
@@ -1102,7 +1305,10 @@ export const camsParser: InvestmentDocumentParser = {
             });
             continue;
           }
-          warnings.push({ code: 'unparseable_transaction_row', message: `Could not parse transaction row: "${line}"`, severity: 'error', lineHint: idx });
+          // M12C §8.2: severity is now assigned from the line's own structure
+          // rather than uniformly `error`. See classifyUnparsedTableLine.
+          const classified = classifyUnparsedTableLine(line);
+          warnings.push({ code: classified.code, message: `Could not parse transaction row: "${line}"`, severity: classified.severity, lineHint: idx });
           continue;
         }
         const [, dateRaw, amountRaw, priceRaw, unitsRaw, descRaw, balanceRaw, ref] = am;
