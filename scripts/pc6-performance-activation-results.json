@@ -1,0 +1,151 @@
+{
+  "ranAt": "2026-09-15T09:27:27.163Z",
+  "pass": 24,
+  "fail": 0,
+  "results": [
+    {
+      "id": "PC6-PERF-01",
+      "verdict": "PASS",
+      "label": "a REAL multi-period NAV series is assembled from AMFI reference data",
+      "evidence": "14 month-end NAVs for AMFI code 120503 (\"Axis ELSS Tax Saver Fund - Direct Plan - Growth Option\"), 2025-07-31 .. 2026-08-31"
+    },
+    {
+      "id": "PC6-PERF-02",
+      "verdict": "PASS",
+      "label": "CURRENT VALUATION is computed from PC6 NAV × units",
+      "evidence": "1210.9329 units × NAV 112.9309 (as at 2026-08-31) = 136751.75 INR, from 13 contributions of 10000"
+    },
+    {
+      "id": "PC6-PERF-03",
+      "verdict": "PASS",
+      "label": "XIRR activates and is produced by the certified R4 engine (not reimplemented)",
+      "evidence": "investorXirr=ok rate=0.089803 engineVersion=performance-engine-r4-v1"
+    },
+    {
+      "id": "PC6-PERF-04",
+      "verdict": "PASS",
+      "label": "CAGR / point-to-point returns activate across every horizon the series supports, with finite values",
+      "evidence": "5/5 finite — 1M=1.22%, 3M=8.27%, 6M=3.67%, 1Y=5.42%, SINCE_INCEPTION=4.15% (cagr 3.82%)"
+    },
+    {
+      "id": "PC6-PERF-05",
+      "verdict": "PASS",
+      "label": "TWRR activates from the certified chain-linked engine and produces a real number",
+      "evidence": "portfolioTwrr=ok twrr=0.041505 subPeriods=13 method=twrr-chain-linked-eod-v1, portfolioXirr=ok rate=0.089803"
+    },
+    {
+      "id": "PC6-PERF-06",
+      "verdict": "PASS",
+      "label": "every metric carries a reproducible input fingerprint and engine version",
+      "evidence": "scheme fingerprint=045c67e883e39f7fe02552d8… portfolio fingerprint=a26cb2d3dca66528833acd1b… engine=performance-engine-r4-v1"
+    },
+    {
+      "id": "PC6-PERF-07",
+      "verdict": "PASS",
+      "label": "every risk metric N.12 names activates from the certified R4 risk engine",
+      "evidence": "11/11 CALCULATED — vol={\"annualisedVolatility\":0.1651500988758015,\"observationCount\":13} sharpe={\"sharpe\":-0.08064926489036015} sortino={\"sortino\":-0.10985156062754488} beta={\"beta\":0.5046512140974545} maxDD=-0.139101 calmar={\"calmar\":0.2747734449356455}"
+    },
+    {
+      "id": "PC6-PERF-08",
+      "verdict": "PASS",
+      "label": "rolling returns activate from the certified engine, or say honestly why not",
+      "evidence": "status=unavailable reason=INSUFFICIENT_HISTORY — a 14-month series cannot support a 1-year rolling series, and the engine says so rather than producing one"
+    },
+    {
+      "id": "PC6-PERF-09",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — with no risk-free series, Sharpe/Sortino are WITHHELD, never computed against an assumed zero",
+      "evidence": "sharpe=MISSING_REFERENCE_DATA, sortino=MISSING_REFERENCE_DATA, but volatility=CALCULATED (it needs no rf). riskFree={\"status\":\"unavailable\"}"
+    },
+    {
+      "id": "PC6-PERF-10",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — with no benchmark series, beta/alpha/TE/IR/capture are WITHHELD",
+      "evidence": "beta=MISSING_REFERENCE_DATA alpha=MISSING_REFERENCE_DATA trackingError=MISSING_REFERENCE_DATA informationRatio=MISSING_REFERENCE_DATA capture=MISSING_REFERENCE_DATA"
+    },
+    {
+      "id": "PC6-PERF-11",
+      "verdict": "PASS",
+      "label": "BENCHMARK GROWTH activates from the certified benchmark service",
+      "evidence": "[SEALED-ORACLE-SYNTHETIC] pointToPoint=0.024447 cagr=0.022528 — SYNTHETIC series, never a real index"
+    },
+    {
+      "id": "PC6-PERF-12",
+      "verdict": "PASS",
+      "label": "ACTIVE RETURN activates and only ever subtracts like from like (CAGR vs CAGR)",
+      "evidence": "scheme CAGR 0.038195 − benchmark CAGR 0.022528 = 0.015667 (status=ok, family=CAGR)"
+    },
+    {
+      "id": "PC6-PERF-13",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — active return with a missing benchmark side is unavailable, not treated as the scheme return",
+      "evidence": "status=unavailable; the certified engine refuses rather than defaulting the absent side to zero"
+    },
+    {
+      "id": "PC6-PERF-14",
+      "verdict": "PASS",
+      "label": "blended benchmark activates, with coverage reported honestly",
+      "evidence": "status=ok, rebalance boundaries=14, contributing=1, annotations=none"
+    },
+    {
+      "id": "PC6-PERF-15",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — an UNMAPPED scheme reduces coverage and suppresses the conclusion; it never contributes a 0% benchmark return",
+      "evidence": "status=unavailable reason=INSUFFICIENT_BENCHMARK_COVERAGE annotations=BENCHMARK_MAPPING_MISSING (coverage threshold 0.8)"
+    },
+    {
+      "id": "PC6-PERF-16",
+      "verdict": "PASS",
+      "label": "N.13 — FIFO unit attribution and the actual SIP XIRR both activate from the certified R5 engines",
+      "evidence": "attribution=ok seriesUnitsRemaining=1210.9329; actual SIP XIRR=0.089803 (sip-xirr-r5-v1)"
+    },
+    {
+      "id": "PC6-PERF-17",
+      "verdict": "PASS",
+      "label": "N.13 — the benchmark comparison uses the SAME dated cashflows, applied to benchmark index levels",
+      "evidence": "13/13 contributions applied at their own dates; method=benchmark-sip-identical-cashflow-r5-v1; syntheticUnits=133.2612; terminalValue=134061.73"
+    },
+    {
+      "id": "PC6-PERF-18",
+      "verdict": "PASS",
+      "label": "N.13 — the comparison is a single XIRR over the shared schedule, NOT a weighted average of individual XIRRs",
+      "evidence": "benchmark SIP XIRR = 0.053796 computed once over 13 dated flows plus one terminal value, via xirr-newton-bisection-v1. No per-contribution XIRR is computed anywhere in the path."
+    },
+    {
+      "id": "PC6-PERF-19",
+      "verdict": "PASS",
+      "label": "N.13 — excess return is actual-minus-benchmark over an identical schedule, and is never called alpha",
+      "evidence": "status=ok label=\"SIP benchmark excess return\" excessReturn=0.036007; actual=0.089803 − benchmark=0.053796"
+    },
+    {
+      "id": "PC6-PERF-20",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — if any contribution cannot be aligned to a benchmark observation, the whole comparison is UNAVAILABLE",
+      "evidence": "truncated benchmark history -> status=unavailable reason=INCOMPLETE_BENCHMARK_HISTORY; a partial-period comparison is never shown as a full one"
+    },
+    {
+      "id": "PC6-PERF-21",
+      "verdict": "PASS",
+      "label": "N.14 — with opening-balance-only history, since-inception XIRR is WITHHELD",
+      "evidence": "investorXirr=unavailable reason=INSUFFICIENT_HISTORY; eligibility gate = {\"eligible\":false,\"annotation\":{\"flag\":\"PARTIAL_TRANSACTION_HISTORY\",\"detail\":\"Since-inception XIRR unavailable: cash-flow history completeness could not be certified.\"}}"
+    },
+    {
+      "id": "PC6-PERF-22",
+      "verdict": "PASS",
+      "label": "N.14 — but CURRENT VALUE and NAV-based point-to-point returns still work",
+      "evidence": "5 NAV-based horizons still produced, and current value 136751.75 is unaffected — incomplete TRANSACTION history does not invalidate a PRICE fact"
+    },
+    {
+      "id": "PC6-PERF-23",
+      "verdict": "PASS",
+      "label": "N.14 — the withholding carries a user-facing explanation, not a silent blank",
+      "evidence": "1 annotation(s): PARTIAL_TRANSACTION_HISTORY — \"Since-inception XIRR unavailable: cash-flow history completeness could not be certified.…\""
+    },
+    {
+      "id": "PC6-PERF-24",
+      "verdict": "PASS",
+      "label": "N.12 — the PC6 modules contain no re-implementation of any certified metric",
+      "evidence": "5 PC6 module(s) scanned (amfiParser.ts, benchmarkGovernance.ts, referenceDataQuality.ts, referenceImportRunner.ts, riskFreeSeries.ts); 0 contain a metric implementation"
+    }
+  ]
+}
