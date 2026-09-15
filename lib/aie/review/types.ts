@@ -29,10 +29,45 @@ export const AIE_USER_FACING_STATES = [
 ] as const;
 export type AieUserFacingState = (typeof AIE_USER_FACING_STATES)[number];
 
-/** The five review actions AIE-1.5 section 12 defines. "request_reprocessing"
+/** The review actions AIE-1.5 section 12 defines. "request_reprocessing"
  * and "reject_document" are RUN/document-level (there is no partial-document
- * accept); "correct", "not_present" and "defer" are ITEM-level. */
-export type AieReviewActionType = 'accept' | 'correct' | 'not_present' | 'defer' | 'reject_document' | 'request_reprocessing';
+ * accept); "correct", "not_present" and "defer" are ITEM-level.
+ *
+ * PC5 (M4) ADDITION — `'choose_value'`. This mission made PC5 responsible
+ * for adding a "choose/confirm a value" action to this SHARED vocabulary
+ * rather than inventing a PC5-private one, because a private vocabulary
+ * would be the first brick of the second exception system K.3 forbids.
+ *
+ * It is a genuinely different action from `'correct'`, not a synonym:
+ *   - `'correct'` takes FREE-FORM input the user types, validated against a
+ *     static per-field type/bounds spec (`AieCorrectableFieldSpec`). The
+ *     permitted VALUES are open; only the SHAPE is constrained.
+ *   - `'choose_value'` takes an id or token selected from a CLOSED set that
+ *     the server resolves per-user, per-item, from canonical data at
+ *     request time (which household members exist; which account ids AIE
+ *     itself recorded as match candidates in `evidence_ref`). The client
+ *     never supplies the option set and cannot widen it.
+ * Collapsing the two would mean either validating a household-member id as
+ * "a string" (letting a browser post any uuid) or hard-coding a user's
+ * household into a static registry. Both are wrong; hence a second action.
+ *
+ * NOTE ON `'request_reprocessing'`: it appears in every `permittedActionTypes`
+ * array and most `allowedActions` arrays, but NO route or service implements
+ * it — `VALID_ACTIONS` in `app/api/aie/review/items/[itemId]/decide/route.ts`
+ * is `['correct','not_present','defer']`. PC5 does not implement it either;
+ * for the one case where reprocessing is genuinely the answer (a
+ * password-protected document, K.8) PC5 deep-links to the real unlock route
+ * that DOES exist rather than to an action that does not. Recorded here
+ * because a reader of this union would otherwise reasonably assume the
+ * action works. */
+export type AieReviewActionType =
+  | 'accept'
+  | 'correct'
+  | 'choose_value'
+  | 'not_present'
+  | 'defer'
+  | 'reject_document'
+  | 'request_reprocessing';
 
 export type AieCorrectableFieldType = 'string' | 'number' | 'date' | 'enum';
 
@@ -82,6 +117,33 @@ export interface AieReasonCodeMeta {
   allowedActions: readonly AieReviewActionType[];
   /** Populated only when 'correct' is in allowedActions. */
   correctableFields?: readonly AieCorrectableFieldSpec[];
+  /** PC5 (M4): populated only when 'choose_value' is in allowedActions.
+   * Declares WHERE the server should resolve this item's option set from —
+   * never the options themselves, which are per-user and per-run and would
+   * be a tenant leak if they lived in a static module-level registry. */
+  choosableFields?: readonly AieChoosableFieldSpec[];
+}
+
+/**
+ * PC5 (M4) — the declaration side of a `'choose_value'` action.
+ *
+ * Deliberately carries NO `options` array. A reason-code registry is
+ * module-level, process-wide and shared by every tenant; putting one user's
+ * household members in it would be a cross-tenant leak waiting for a cache
+ * to outlive a request. `optionSource` names a resolver instead, and the
+ * resolver runs inside the request, scoped to the authenticated user.
+ */
+export interface AieChoosableFieldSpec {
+  fieldName: string;
+  /** Plain-language label shown above the choices — never the raw
+   * fieldName or reason code (ITEM-01). */
+  label: string;
+  /** Resolved server-side, per user and per item. See
+   * `lib/pc5/optionSets.ts`. */
+  optionSource: 'household_owner' | 'account_match_candidates' | 'instrument_match_candidates' | 'duplicate_resolution' | 'summary_mismatch_resolution';
+  /** True when choosing certain options additionally requires an ownership
+   * allocation split to be supplied (K.6 — a joint holding). */
+  allocationMayBeRequired?: boolean;
 }
 
 /** AIE15-MOD-01/12 — one module's rendering/reason-code metadata. Module

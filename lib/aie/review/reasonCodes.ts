@@ -115,13 +115,60 @@ export const INVESTMENT_INTELLIGENCE_REASON_CODES: Record<string, AieReasonCodeM
     humanQuestion: 'We could not tell which of your investment accounts this statement belongs to.',
     explanation: 'More than one of your accounts could plausibly match this statement, and the document does not identify one uniquely enough for us to choose automatically.',
     severity: 'blocking',
-    allowedActions: ['reject_document', 'request_reprocessing', 'defer'],
+    // PC5 (M4): the ambiguity is between a KNOWN, FINITE set of the user's
+    // own account ids — `matchAccountsReadOnly` already recorded them in
+    // this item's own `evidence_ref.candidateAccountIds`. A user can
+    // legitimately say which one it is; a machine may not guess, which is
+    // why the item exists. `choose_value` resolves exactly that, from that
+    // recorded candidate list and no wider.
+    allowedActions: ['choose_value', 'reject_document', 'request_reprocessing', 'defer'],
+    choosableFields: [
+      { fieldName: 'accountId', label: 'Which account is this statement for?', optionSource: 'account_match_candidates' },
+    ],
   },
   'ii_adapter:owner_unresolved': {
     humanQuestion: 'We could not confirm who owns this investment account.',
     explanation: 'Ownership must be confirmed before holdings from this statement can be recorded against the right person or entity.',
     severity: 'blocking',
-    allowedActions: ['reject_document', 'request_reprocessing', 'defer'],
+    // PC5 (M4): `choose_value` added. Before this phase the ONLY ways out of
+    // an owner-unresolved item were to reject the document or to request a
+    // reprocessing action that has no implementation — i.e. a user who
+    // simply forgot to say whose statement it was had no way to say so
+    // afterwards, and their only real option was to throw the document
+    // away and upload it again. That is the "passive observation" state
+    // K.2 exists to end.
+    allowedActions: ['choose_value', 'reject_document', 'request_reprocessing', 'defer'],
+    choosableFields: [
+      { fieldName: 'ownerMemberId', label: 'Who does this statement belong to?', optionSource: 'household_owner', allocationMayBeRequired: true },
+    ],
+  },
+  // PC5 (M4) — NEW. The mismatch half of PC4-INV-12, which did not exist in
+  // any form before this phase: `holderName` was parsed by three certified
+  // parsers and discarded, so a statement belonging to a DIFFERENT PERSON,
+  // uploaded with any owner set, was ingested with no signal at all. See
+  // `lib/pc5/ownerMatching.ts` for the comparison itself and for why it is
+  // exact-after-normalisation rather than fuzzy.
+  'ii_adapter:owner_mismatch': {
+    humanQuestion: 'The name on this statement does not match the person you selected.',
+    explanation:
+      'The account holder printed on this statement does not match the household member this upload was filed against. We will not record someone else’s holdings against your household, so this needs your decision before the statement can be accepted.',
+    severity: 'blocking',
+    allowedActions: ['choose_value', 'reject_document', 'defer'],
+    choosableFields: [
+      { fieldName: 'ownerMemberId', label: 'Who does this statement actually belong to?', optionSource: 'household_owner', allocationMayBeRequired: true },
+    ],
+  },
+  // PC5 (M4) — NEW. A jointly-held folio has no single owner, so it cannot
+  // be published under one household member without an explicit split.
+  'ii_adapter:owner_joint_allocation_required': {
+    humanQuestion: 'This account is held jointly. How should it be split?',
+    explanation:
+      'The statement shows more than one account holder. The holdings are still counted once in your net worth — this only records who owns which share of them, so reports and goals attribute the position correctly.',
+    severity: 'blocking',
+    allowedActions: ['choose_value', 'reject_document', 'defer'],
+    choosableFields: [
+      { fieldName: 'ownerAllocation', label: 'Who are the owners, and in what shares?', optionSource: 'household_owner', allocationMayBeRequired: true },
+    ],
   },
   'ii_adapter:ambiguous_instrument': {
     humanQuestion: 'One of the holdings on this statement could not be matched to a known instrument.',

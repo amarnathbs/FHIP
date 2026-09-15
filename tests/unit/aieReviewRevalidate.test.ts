@@ -35,7 +35,10 @@ function fakeDeps(opts: {
     },
     resolveItemBySystem: async (p) => {
       calls.resolved.push(p);
-      return { ok: true };
+      // `decisionId`/`replayed` added to `DecisionOutcome` by PC5 (M4) so a
+      // caller can attach K.12 provenance to the row it actually wrote.
+      // A stub returns a real-shaped success rather than a partial one.
+      return { ok: true, decisionId: `decision-${calls.resolved.length}`, replayed: false };
     },
     transitionRunStatusCas: async (p) => {
       calls.transitions.push(p);

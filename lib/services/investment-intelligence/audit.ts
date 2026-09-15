@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { IiActorType, IiAuditEventTypeR9 } from './types';
+import type { IiActorType, IiAuditEventTypePc5 } from './types';
 
 // R0_AUDIT_REQUIREMENTS.md section 3: ii_audit_events has NO insert policy
 // for the authenticated role at all — every insert happens through the
@@ -10,7 +10,10 @@ import type { IiActorType, IiAuditEventTypeR9 } from './types';
 // a future call site copy-pasting an insert.
 export interface AuditEventInput {
   userId: string | null;
-  eventType: IiAuditEventTypeR9;
+  // PC5 (M4) widened this from `IiAuditEventTypeR9` to the PC5 superset.
+  // Every prior value remains valid — the alias extends rather than
+  // replaces — so no existing call site changes.
+  eventType: IiAuditEventTypePc5;
   subjectType: string;
   subjectId?: string | null;
   actorType: IiActorType;

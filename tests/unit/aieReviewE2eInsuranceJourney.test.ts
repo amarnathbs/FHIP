@@ -123,7 +123,8 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
         revalidateCalls.reconciliationRuns.push(p);
       },
       createUnresolvedItems: async (p: { items: AieUnresolvedItemInput[] }) => p.items.map((_, i: number) => `new-${i}`),
-      resolveItemBySystem: async () => ({ ok: true }),
+      // `decisionId`/`replayed` added to `DecisionOutcome` by PC5 (M4).
+      resolveItemBySystem: async () => ({ ok: true, decisionId: 'decision-e2e-1', replayed: false }),
       transitionRunStatusCas: async (p) => {
         revalidateCalls.transitions.push(p);
         runRow.status = p.toStatus;

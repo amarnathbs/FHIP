@@ -478,7 +478,214 @@ export async function listOpenUnresolvedItemsForUser(userId: string): Promise<
   }));
 }
 
-export type DecisionOutcome = { ok: true } | { ok: false; reason: 'not_found' | 'stale_conflict' | 'db_error' };
+export interface AieUnresolvedItemFullRow {
+  id: string;
+  runId: string;
+  intakeId: string;
+  userId: string;
+  reasonCode: string;
+  severity: AieItemSeverity;
+  status: AieUnresolvedItemStatus;
+  displayCandidate: string | null;
+  evidenceRef: Record<string, unknown> | null;
+  /** The column AIE-1.1 has written on every item since migration 0140 and
+   * that NOTHING in the application read back until PC5. See
+   * `lib/aie/adapters/investment-intelligence/unresolvedItems.ts`'s header
+   * for what changed and why it is now load-bearing. */
+  permittedActionTypes: string[];
+  itemVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toFullItemRow(r: Record<string, unknown>): AieUnresolvedItemFullRow {
+  return {
+    id: r.id as string,
+    runId: r.run_id as string,
+    intakeId: r.intake_id as string,
+    userId: r.user_id as string,
+    reasonCode: r.reason_code as string,
+    severity: r.severity as AieItemSeverity,
+    status: r.status as AieUnresolvedItemStatus,
+    displayCandidate: (r.display_candidate as string | null) ?? null,
+    evidenceRef: (r.evidence_ref as Record<string, unknown> | null) ?? null,
+    // Defensive: the column is `jsonb not null default '[]'` so it is
+    // always an array in practice, but a hand-written row or a future
+    // migration error should degrade to "no PC5 action permitted" rather
+    // than to a crash or, worse, to an implicit allow.
+    permittedActionTypes: Array.isArray(r.permitted_action_types) ? (r.permitted_action_types as string[]) : [],
+    itemVersion: r.item_version as number,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
+const AIE_UNRESOLVED_ITEM_FULL_COLUMNS =
+  'id, run_id, intake_id, user_id, reason_code, severity, status, display_candidate, evidence_ref, permitted_action_types, item_version, created_at, updated_at';
+
+/**
+ * PC5 (M4) — the full-fidelity item listing PC5's governed resolution
+ * surface needs, ownership-scoped by construction.
+ *
+ * DIFFERS FROM `listOpenUnresolvedItemsForRun` IN TWO WAYS, BOTH DELIBERATE:
+ *   1. It selects `permitted_action_types` and `intake_id`, which the
+ *      existing listings omit. PC5 needs the first as the outer bound on
+ *      what a user may do, and the second to deep-link (K.14) and to
+ *      record a decision (`recordReviewDecision` requires it).
+ *   2. Its `statuses` filter is caller-supplied and defaults to
+ *      `PC5_LIVE_ITEM_STATUSES` — which INCLUDES `'deferred'`.
+ *      `listOpenUnresolvedItemsForRun` filters to `['open','in_review']`
+ *      while `countItemsBlockingAcceptanceForRun` counts
+ *      `['open','in_review','deferred']`, so today a deferred item blocks
+ *      the accept button while being invisible in the run-detail response.
+ *      PC5 must never show a user a clean list next to a refusal they
+ *      cannot account for.
+ */
+export async function listUnresolvedItemsForUserPc5(
+  userId: string,
+  statuses: readonly AieUnresolvedItemStatus[],
+  limit = 200,
+): Promise<AieUnresolvedItemFullRow[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_unresolved_item')
+    .select(AIE_UNRESOLVED_ITEM_FULL_COLUMNS)
+    .eq('user_id', userId)
+    .in('status', statuses as string[])
+    .order('created_at', { ascending: true })
+    .limit(Math.min(limit, 500));
+  return (data ?? []).map((r) => toFullItemRow(r as Record<string, unknown>));
+}
+
+export async function listUnresolvedItemsForRunPc5(
+  runId: string,
+  userId: string,
+  statuses: readonly AieUnresolvedItemStatus[],
+): Promise<AieUnresolvedItemFullRow[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_unresolved_item')
+    .select(AIE_UNRESOLVED_ITEM_FULL_COLUMNS)
+    .eq('run_id', runId)
+    .eq('user_id', userId)
+    .in('status', statuses as string[])
+    .order('created_at', { ascending: true });
+  return (data ?? []).map((r) => toFullItemRow(r as Record<string, unknown>));
+}
+
+/**
+ * One item, ownership-proven BY THE QUERY (`.eq('user_id', userId)`) rather
+ * than by the caller — the identical IDOR discipline `getRunForUser` and
+ * `decide.ts`'s `loadItemForOwner` already apply. A cross-user id returns
+ * null, indistinguishable from a nonexistent one, so the endpoint above it
+ * cannot be used to probe which item ids exist (K.20).
+ */
+export async function getUnresolvedItemForUserPc5(itemId: string, userId: string): Promise<AieUnresolvedItemFullRow | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_unresolved_item')
+    .select(AIE_UNRESOLVED_ITEM_FULL_COLUMNS)
+    .eq('id', itemId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data ? toFullItemRow(data as Record<string, unknown>) : null;
+}
+
+export interface AieDecisionHistoryRow {
+  id: string;
+  itemId: string;
+  decisionType: string;
+  rationale: string | null;
+  actorId: string | null;
+  itemVersionAtDecision: number;
+  correctionFieldName: string | null;
+  correctionValueRaw: string | null;
+  correctionValueNormalized: string | null;
+  originalValueAtDecision: string | null;
+  parserVersionAtDecision: string | null;
+  resultingReconciliationAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * PC5 (M4) — K.12's correction overlay, read back. Ordered oldest-first so
+ * a reader sees the sequence of decisions as it happened; PC5's projection
+ * derives "is this item currently dismissed" from the LAST dismiss/
+ * acknowledge pair rather than from a status column, because dismissal is a
+ * presentation fact layered on top of AIE's status and deliberately does
+ * not get one.
+ */
+export async function listDecisionsForItemsPc5(itemIds: readonly string[]): Promise<AieDecisionHistoryRow[]> {
+  if (itemIds.length === 0) return [];
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_review_decision')
+    .select(
+      'id, item_id, decision_type, rationale, actor_id, item_version_at_decision, correction_field_name, correction_value_raw, correction_value_normalized, original_value_at_decision, parser_version_at_decision, resulting_reconciliation_at, created_at',
+    )
+    .in('item_id', itemIds as string[])
+    .order('created_at', { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    itemId: r.item_id as string,
+    decisionType: r.decision_type as string,
+    rationale: (r.rationale as string | null) ?? null,
+    actorId: (r.actor_id as string | null) ?? null,
+    itemVersionAtDecision: r.item_version_at_decision as number,
+    correctionFieldName: (r.correction_field_name as string | null) ?? null,
+    correctionValueRaw: (r.correction_value_raw as string | null) ?? null,
+    correctionValueNormalized: (r.correction_value_normalized as string | null) ?? null,
+    originalValueAtDecision: (r.original_value_at_decision as string | null) ?? null,
+    parserVersionAtDecision: (r.parser_version_at_decision as string | null) ?? null,
+    resultingReconciliationAt: (r.resulting_reconciliation_at as string | null) ?? null,
+    createdAt: r.created_at as string,
+  }));
+}
+
+/** The parser version recorded for a run, for K.12's provenance snapshot.
+ * Latest attempt wins, matching `getAdapterIdForRun`'s own ordering. */
+export async function getParserVersionForRun(runId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('aie_parser_attempt')
+    .select('parser_version')
+    .eq('run_id', runId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.parser_version as string | null) ?? null;
+}
+
+/**
+ * PC5 (M4) — K.12's third provenance field, written AFTER a decision's
+ * re-reconciliation has actually run. Separate from `recordReviewDecision`
+ * on purpose: the reconciliation happens after the decision row exists, and
+ * back-dating it into the insert would mean recording a reconciliation that
+ * had not happened yet (and would still have to record one for the case
+ * where it is subsequently REFUSED — e.g. a password-protected document
+ * that cannot be re-extracted). Null therefore keeps its meaning: "no
+ * re-reconciliation ran for this decision."
+ */
+export async function markDecisionReReconciled(decisionId: string, at: string): Promise<void> {
+  const admin = createAdminClient();
+  await admin.from('aie_review_decision').update({ resulting_reconciliation_at: at }).eq('id', decisionId);
+}
+
+/**
+ * PC5 (M4) widened the success branch with two ADDITIVE fields. Existing
+ * callers that only check `ok` are unaffected.
+ *
+ * `decisionId` is null on an idempotent replay, and that is the honest
+ * answer rather than an inconvenience: on a replay this function did not
+ * insert a row, so it has no id to give, and inventing one (by looking the
+ * existing row up) would let a caller believe its own write succeeded when
+ * an earlier, possibly different call is what actually landed. PC5 uses the
+ * id only to attach K.12 provenance to the row IT wrote, so "no id, nothing
+ * to attach" is exactly right.
+ */
+export type DecisionOutcome =
+  | { ok: true; decisionId: string | null; replayed: boolean }
+  | { ok: false; reason: 'not_found' | 'stale_conflict' | 'db_error' };
 
 /**
  * EXC-05/EXC-08: server-validated, idempotent, version-checked decision
@@ -507,27 +714,41 @@ export async function recordReviewDecision(params: {
   correctionFieldName?: string;
   correctionValueRaw?: string;
   correctionValueNormalized?: string;
+  /** PC5 (M4) / K.12 — the MASKED or otherwise already-irreversible
+   * extracted value this decision overrode. Never a recoverable original;
+   * see migration 0153's column comment. */
+  originalValueAtDecision?: string | null;
+  /** PC5 (M4) / K.12 — parser (or provider/model) version at decision
+   * time, frozen so a later reprocess cannot retroactively rewrite a
+   * decision's provenance. */
+  parserVersionAtDecision?: string | null;
 }): Promise<DecisionOutcome> {
   const admin = createAdminClient();
   const { data: item } = await admin.from('aie_unresolved_item').select('item_version').eq('id', params.itemId).maybeSingle();
   if (!item) return { ok: false, reason: 'not_found' };
   if (item.item_version !== params.expectedItemVersion) return { ok: false, reason: 'stale_conflict' };
 
-  const { error: decisionError } = await admin.from('aie_review_decision').insert({
-    item_id: params.itemId,
-    intake_id: params.intakeId,
-    user_id: params.userId,
-    item_version_at_decision: params.expectedItemVersion,
-    decision_type: params.decisionType,
-    rationale: params.rationale ?? null,
-    idempotency_key: params.idempotencyKey,
-    actor_id: params.actorId ?? null,
-    correction_field_name: params.correctionFieldName ?? null,
-    correction_value_raw: params.correctionValueRaw ?? null,
-    correction_value_normalized: params.correctionValueNormalized ?? null,
-  });
+  const { data: inserted, error: decisionError } = await admin
+    .from('aie_review_decision')
+    .insert({
+      item_id: params.itemId,
+      intake_id: params.intakeId,
+      user_id: params.userId,
+      item_version_at_decision: params.expectedItemVersion,
+      decision_type: params.decisionType,
+      rationale: params.rationale ?? null,
+      idempotency_key: params.idempotencyKey,
+      actor_id: params.actorId ?? null,
+      correction_field_name: params.correctionFieldName ?? null,
+      correction_value_raw: params.correctionValueRaw ?? null,
+      correction_value_normalized: params.correctionValueNormalized ?? null,
+      original_value_at_decision: params.originalValueAtDecision ?? null,
+      parser_version_at_decision: params.parserVersionAtDecision ?? null,
+    })
+    .select('id')
+    .maybeSingle();
   if (decisionError) {
-    if (decisionError.code === '23505') return { ok: true }; // idempotent replay
+    if (decisionError.code === '23505') return { ok: true, decisionId: null, replayed: true }; // idempotent replay
     return { ok: false, reason: 'db_error' };
   }
 
@@ -537,7 +758,7 @@ export async function recordReviewDecision(params: {
     .eq('id', params.itemId)
     .eq('item_version', params.expectedItemVersion);
   if (updateError) return { ok: false, reason: 'db_error' };
-  return { ok: true };
+  return { ok: true, decisionId: (inserted?.id as string | undefined) ?? null, replayed: false };
 }
 
 // ---------------------------------------------------------------------------

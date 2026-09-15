@@ -75,11 +75,14 @@ import { buildInvestmentReconciliationRule } from './reconciliationRule';
 import { checkStatementPeriod } from './statementMatching';
 import { isDocumentClassCertified } from './documentCatalogue';
 import {
+  unresolvedItemForOwnerMismatch,
   unresolvedItemForOwnerUnresolved,
   unresolvedItemForStatementPeriod,
   unresolvedItemsForAccountMatches,
   unresolvedItemsForInstrumentMatches,
 } from './unresolvedItems';
+import { collapseOwnerEvidence, loadHouseholdMembersForMatching } from './householdContext';
+import { matchStatementOwner, PC5_DEFAULT_OWNER_MATCH_POLICY, type Pc5OwnerMatchOutcome } from './ownerMatching';
 import type { AieUnresolvedItemInput } from '../../types';
 
 /**
@@ -110,6 +113,13 @@ export type DispatchOutcome =
       parserCode: string;
       documentClass: string | null;
       certifiedDocumentClass: boolean;
+      /** PC5 (M4): the owner-match verdict, or null when no owner was
+       * declared at intake (in which case the pre-existing
+       * `owner_unresolved` item is what blocks). Reported so a caller —
+       * and PC5's own live-DEV matrix — can observe WHICH owner outcome a
+       * run reached without re-deriving it. Never carries a holder name,
+       * masked or otherwise: this value crosses an HTTP boundary. */
+      ownerMatchKind: 'exact_match' | 'mismatch' | 'ambiguous' | 'joint_holding' | 'no_owner_evidence' | null;
     };
 
 export interface DispatchParams {
@@ -241,11 +251,48 @@ export async function dispatchInvestmentDocument(params: DispatchParams): Promis
   // account, an ambiguous instrument, an unstated owner, an unusable
   // statement period. They go through the SAME AIE-1.1 lifecycle
   // (`createUnresolvedItems`) — no second exception system.
+  // --- PC5 (M4), K.4/K.7 — OWNER MATCHING -------------------------------
+  // The half of PC4-INV-12 that did not exist before this phase. Until now
+  // `ownerMemberId` was taken entirely on trust: supplying ANY value at all
+  // silenced the only owner check there was (`unresolvedItemForOwnerUnresolved`
+  // fires only when NOTHING was supplied), so a statement belonging to a
+  // different person was ingested with no signal. `holderName` was parsed by
+  // three certified parsers and discarded.
+  //
+  // The comparison runs ONLY when the user has actually declared an owner.
+  // With no declared owner the `owner_unresolved` item below already blocks,
+  // and raising a mismatch as well would be two items for one problem.
+  const ownerEvidence = collapseOwnerEvidence(parsed.accounts);
+  const householdMembers = ownerMemberId ? await loadHouseholdMembersForMatching(userId) : [];
+  const ownerMatch = ownerMemberId
+    ? matchStatementOwner(ownerEvidence, householdMembers, PC5_DEFAULT_OWNER_MATCH_POLICY)
+    : null;
+  // An `exact_match` against a DIFFERENT member than the declared one is
+  // still a mismatch — the document names a real household member, just not
+  // the one this upload was filed against. Silently re-filing it would be
+  // the "plausible guess" global invariant D.5 forbids, so it is reported
+  // for the user to confirm.
+  const ownerMatchForItems =
+    ownerMatch && ownerMatch.kind === 'exact_match' && ownerMatch.memberId !== ownerMemberId
+      ? ({
+          kind: 'ambiguous',
+          maskedHolderName: ownerMatch.maskedHolderName,
+          candidateMemberIds: [ownerMatch.memberId],
+          // The document names a REAL household member — just not the one
+          // this upload was filed against. `duplicate_member_names` is the
+          // closest existing ambiguity reason and is accurate in the sense
+          // that matters: more than one plausible owner is in play and the
+          // system must not pick.
+          reason: 'duplicate_member_names',
+        } satisfies Pc5OwnerMatchOutcome)
+      : ownerMatch;
+
   const matchingItems: AieUnresolvedItemInput[] = [
     ...unresolvedItemsForAccountMatches(context.accountMatches.outcomes),
     ...unresolvedItemsForInstrumentMatches(context.instrumentMatches),
     ...unresolvedItemForStatementPeriod(checkStatementPeriod(parsed.metadata)),
     ...(ownerMemberId ? [] : unresolvedItemForOwnerUnresolved(context.accountMatches.outcomes.length > 0)),
+    ...(ownerMatchForItems ? unresolvedItemForOwnerMismatch(ownerMatchForItems, ownerMemberId) : []),
   ];
 
   let unresolvedItemIds = [...outcome.unresolvedItemIds];
@@ -310,5 +357,6 @@ export async function dispatchInvestmentDocument(params: DispatchParams): Promis
     parserCode: parsed.parserCode,
     documentClass: parsed.metadata.documentTypeDetected,
     certifiedDocumentClass: isDocumentClassCertified(parsed.parserCode),
+    ownerMatchKind: ownerMatchForItems?.kind ?? null,
   };
 }

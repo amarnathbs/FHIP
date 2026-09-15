@@ -30,8 +30,9 @@
  * default that "allows everything", which would defeat the whole point).
  */
 
-import { listOpenUnresolvedItemsForUser } from '../db/repository';
+import { listOpenUnresolvedItemsForUser, recordReviewDecision, getUnresolvedItemForUserPc5, type DecisionOutcome } from '../db/repository';
 import { decideOnItem, type DecideOnItemParams, type DecideOnItemOutcome } from '../review/decide';
+import type { AieUnresolvedItemStatus } from '../types';
 
 export interface Pc5ExceptionInterfaceDeps {
   /**
@@ -119,4 +120,116 @@ export async function resolveUnresolvedItemForPc5(params: Pc5ResolveParams, deps
     fieldName: params.fieldName,
     rawValue: params.rawValue,
   });
+}
+
+/* ==========================================================================
+ * M4 (PC5 FULL IMPLEMENTATION) — the seam PC5 actually turned out to need.
+ *
+ * WHAT THE TWO FUNCTIONS ABOVE COVER, AND WHERE THEY STOP. They were built
+ * against AIE-1.5's own three item-level actions (`correct` / `not_present`
+ * / `defer`), whose permitted VALUES are validated against a STATIC
+ * per-reason-code field allowlist. That is the whole reason `decideOnItem`
+ * can be adapter-agnostic.
+ *
+ * PC5's `choose_value` cannot work that way. Its permitted values are a
+ * user's own household member ids, or the account ids AIE itself recorded
+ * as match candidates — data that is per-tenant, per-run, and knowable only
+ * from canonical Investment Intelligence / household tables that `lib/aie/`
+ * neither reads nor should read. Routing it through `decideOnItem` would
+ * have meant one of two bad things: teaching AIE to query households
+ * (giving the gateway a domain dependency it exists to avoid), or
+ * validating a uuid as "a non-empty string" (letting a browser post any id
+ * at all — precisely K.20's forged-owner-id case).
+ *
+ * SO THE SPLIT IS: PC5 owns DOMAIN VALIDATION (which options exist for this
+ * user, right now, from canonical data — `lib/pc5/optionSets.ts`), and this
+ * function owns the LIFECYCLE (ownership, version check, the single
+ * decision-trail insert, the status transition). PC5 never touches
+ * `aie_unresolved_item` itself; the only write is `recordReviewDecision`'s,
+ * which is the SAME version-checked, idempotency-keyed, single-mutation
+ * path AIE's own `decideOnItem` and its own system-actor
+ * `resolveItemBySystem` already use. `AIE10-EXC-09`'s "PC5 cannot mutate
+ * statuses directly" is satisfied in the way it was meant: not by PC5 being
+ * unable to cause a status change, but by every status change it causes
+ * going through AIE's own gate with AIE's own checks.
+ *
+ * NOTE THE STATUS THIS FUNCTION IS ALLOWED TO WRITE. `newStatus` is typed
+ * to `'in_review'` ONLY. PC5 cannot write `'resolved'` or `'superseded'` —
+ * those mean "the underlying condition no longer exists", and only a real
+ * re-reconciliation that stopped reproducing the condition may assert that
+ * (AIE's own `resolveItemBySystem`, from `revalidateRun`). A user's answer
+ * is an INPUT to that recheck, never a substitute for it. This is K.13's
+ * "Acknowledge/Dismiss must never masquerade as resolution" enforced at the
+ * type level, one layer below the UI that also enforces it.
+ * ========================================================================== */
+
+export interface Pc5GovernedResolutionParams {
+  callerId: string;
+  targetUserId: string;
+  itemId: string;
+  /** The decision verb recorded in `aie_review_decision.decision_type`. */
+  decisionType: string;
+  itemVersion: number;
+  idempotencyKey: string;
+  rationale?: string;
+  /** Already validated by PC5 against a server-resolved option set. */
+  chosenFieldName?: string;
+  chosenValue?: string;
+  /** K.12 provenance, captured by the caller at decision time. */
+  originalValueAtDecision?: string | null;
+  parserVersionAtDecision?: string | null;
+}
+
+export type Pc5GovernedResolutionOutcome =
+  | { ok: false; reason: 'capability_denied' | 'not_found' | 'stale_conflict' | 'db_error' | 'status_not_live' }
+  | { ok: true; decisionId: string | null; replayed: boolean };
+
+/** The AIE statuses a governed PC5 decision may be recorded against. A
+ * decision on an already-resolved or rejected item is a stale click, not a
+ * resolution, and is refused rather than appended. */
+const PC5_DECIDABLE_STATUSES: readonly AieUnresolvedItemStatus[] = ['open', 'in_review', 'deferred'];
+
+export async function recordGovernedResolutionForPc5(
+  params: Pc5GovernedResolutionParams,
+  deps: Pc5ExceptionInterfaceDeps,
+): Promise<Pc5GovernedResolutionOutcome> {
+  const allowed = await deps.checkCapability(params.callerId, params.targetUserId);
+  if (!allowed) return { ok: false, reason: 'capability_denied' };
+
+  // Ownership is proven BY THE QUERY, not assumed from the caller — the
+  // same `.eq('user_id', ...)` discipline every other read in this
+  // subsystem applies. A cross-tenant item id is `not_found`, which is
+  // indistinguishable from a nonexistent one, so this cannot be used to
+  // probe which ids exist.
+  const item = await getUnresolvedItemForUserPc5(params.itemId, params.targetUserId);
+  if (!item) return { ok: false, reason: 'not_found' };
+  if (!PC5_DECIDABLE_STATUSES.includes(item.status)) return { ok: false, reason: 'status_not_live' };
+  // Re-checked here as well as by the caller: the caller's copy may have
+  // been read a moment ago, and `recordReviewDecision` re-checks it a THIRD
+  // time inside its own transaction. Three checks is not redundancy for its
+  // own sake — the first two produce a clean typed refusal, the last is the
+  // one that is actually atomic.
+  if (item.itemVersion !== params.itemVersion) return { ok: false, reason: 'stale_conflict' };
+
+  const outcome: DecisionOutcome = await recordReviewDecision({
+    itemId: item.id,
+    intakeId: item.intakeId,
+    userId: item.userId,
+    expectedItemVersion: params.itemVersion,
+    decisionType: params.decisionType,
+    rationale: params.rationale,
+    idempotencyKey: params.idempotencyKey,
+    actorId: params.callerId,
+    // PC5 may only ever move an item to `in_review`. See this block's
+    // header.
+    newStatus: 'in_review',
+    correctionFieldName: params.chosenFieldName,
+    correctionValueRaw: params.chosenValue,
+    correctionValueNormalized: params.chosenValue,
+    originalValueAtDecision: params.originalValueAtDecision,
+    parserVersionAtDecision: params.parserVersionAtDecision,
+  });
+
+  if (!outcome.ok) return { ok: false, reason: outcome.reason === 'not_found' ? 'not_found' : outcome.reason };
+  return { ok: true, decisionId: outcome.decisionId, replayed: outcome.replayed };
 }

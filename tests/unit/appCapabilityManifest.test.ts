@@ -74,6 +74,19 @@ const API_FOLDER_MODULE_MAP: Record<string, ModuleKey> = {
   'investment-intelligence': 'INVESTMENT_INTELLIGENCE',
   investments: 'INVESTMENTS',
   liabilities: 'LIABILITIES',
+  // PC5 (M4): `app/api/pc5/**` is the governed resolution workflow for AIE
+  // unresolved ownership/reconciliation items. Mapped to
+  // INVESTMENT_INTELLIGENCE rather than added to the infra allowlist
+  // alongside 'aie', deliberately: 'aie' is genuinely cross-domain (it
+  // serves Insurance, FDH-bank and Investment Intelligence alike), whereas
+  // every PC5 route today is Investment-Intelligence-specific — the
+  // decision service refuses a non-`II_ADAPTER_ID` run, the option sets
+  // read `ii_accounts`, and the acceptance summary is an Investment
+  // Intelligence summary. Calling it infrastructure would overstate its
+  // reach and would exempt it from a module's capability gating for no
+  // reason. If a future phase genuinely generalises PC5 across adapters,
+  // THAT is the change that should move this line.
+  pc5: 'INVESTMENT_INTELLIGENCE',
   recommendations: 'RECOMMENDATIONS',
   reports: 'REPORTS',
   'report-exports': 'REPORTS',

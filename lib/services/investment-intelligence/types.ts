@@ -295,3 +295,23 @@ export type IiAuditEventTypeR9 =
   | 'review_item_resolved'
   | 'review_acknowledged'
   | 'review_dismissed';
+
+/**
+ * PC5 (M4) — the governed-resolution event types, added by migration 0153
+ * to `ii_audit_events`'s own CHECK constraint.
+ *
+ * Extended as a SEPARATE union alias rather than by widening
+ * `IiAuditEventTypeR9` in place, for the same reason R9 extended R3 rather
+ * than editing it: an existing caller typed to the R9 union keeps
+ * compiling and keeps being unable to emit a PC5 event by accident, while
+ * PC5's own call sites are typed to the wider union and are therefore
+ * greppable. The DB CHECK is the single authority on what is storable, and
+ * migration 0153 reproduces every prior value verbatim.
+ */
+export type IiAuditEventTypePc5 =
+  | IiAuditEventTypeR9
+  | 'pc5_resolution_decision_recorded'
+  | 'pc5_ownership_allocation_recorded'
+  | 'pc5_ownership_allocation_superseded'
+  | 'pc5_statement_discarded'
+  | 'pc5_re_reconciliation_triggered';

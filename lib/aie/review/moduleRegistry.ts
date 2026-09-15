@@ -59,7 +59,43 @@ const INVESTMENT_INTELLIGENCE_DESCRIPTOR: AieReviewModuleDescriptor = {
       humanQuestion: 'This statement appears to overlap one already imported.',
       explanation: 'The period or holdings on this statement overlap a statement you have already accepted, which could double-count activity.',
       severity: 'blocking',
-      allowedActions: ['reject_document'],
+      // PC5 (M4) — K.10. Before this phase the ONLY permitted action was
+      // `reject_document`, which is wrong in one of the three real cases:
+      // when the overlap is genuinely two separate events that happen to
+      // look alike, rejecting the statement discards real data. The
+      // deterministic evidence cannot tell the three cases apart — that is
+      // precisely why the item exists — so the user is asked, and the
+      // canonical dedup/reconciliation is re-run against their answer.
+      allowedActions: ['choose_value', 'reject_document', 'defer'],
+      choosableFields: [
+        { fieldName: 'duplicateResolution', label: 'Is this the same activity you have already imported?', optionSource: 'duplicate_resolution' },
+      ],
+    } },
+    // PC5 (M4) — NEW ENTRY for a shape that previously fell through to
+    // GENERIC_FALLBACK_REASON_META. `unresolvedItemsForDisagreements`
+    // (`disagreement.ts:206`) emits
+    // `ii_adapter:source_disagreement:<fieldName>` with BOTH candidate
+    // values recorded in `evidence_ref`, and the generic fallback offered
+    // no way to act on them — a reviewer could see that two readings
+    // disagreed and could only defer, reject or reprocess.
+    //
+    // HONESTY NOTE, carried forward from M3 and RE-VERIFIED against the
+    // current tree rather than trusted: this shape is REAL and REACHABLE in
+    // code, but no fixture in this repository currently produces one. It
+    // requires an AI-fallback candidate to disagree with a deterministic
+    // one, and the AI fallback is unreachable today behind two independent
+    // blockers (`AIE_MASK_TOKEN_ENCRYPTION_KEY` unset; every II parser
+    // declares `aiEligibleGaps: []`). So this entry is written from the
+    // emitter's own source, and PC5's own live matrix cannot exercise it.
+    // It is registered anyway because the alternative — leaving a real
+    // blocking shape rendering as "no specific guidance is registered" —
+    // is strictly worse.
+    { prefix: 'ii_adapter:source_disagreement:', meta: {
+      humanQuestion: 'Two readings of this statement disagree about one value.',
+      explanation:
+        'Our document reader and its checking pass read different values for the same field. We will not pick one for you on a financial figure, so this needs your decision before the statement can be accepted.',
+      severity: 'blocking',
+      allowedActions: ['reject_document', 'request_reprocessing', 'defer'],
     } },
   ],
 };
