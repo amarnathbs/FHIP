@@ -233,6 +233,17 @@ export interface LookThroughResult {
   currencyCode: string | null;
   perFundCoverage: FundCoverage[];
   snapshotIdsUsed: string[];
+  /**
+   * PC7/O.8 — SOURCE PROVENANCE. Every X-Ray result must expose source, as-of
+   * date and coverage. The latter two were already here; this is the first.
+   *
+   * One entry per fund that contributed a snapshot, carrying the source key,
+   * the holdings as-of date and that fund's own disclosed coverage — so the UI
+   * can answer "where did this come from and how old is it" per scheme and not
+   * only for the portfolio aggregate. A snapshot with no recorded source
+   * appears as `unattributed`, never as a plausible-looking source name.
+   */
+  sourcesUsed: Array<{ fundInstrumentId: string; sourceKey: string; holdingsAsOfDate: string; disclosedCoverage: number }>;
   method: typeof LOOKTHROUGH_METHOD_VERSION;
   thresholdConfigVersion: typeof XRAY_THRESHOLD_CONFIG_VERSION;
   detail?: string;
@@ -286,6 +297,7 @@ export function calculatePortfolioLookThrough(
     currencyCode,
     perFundCoverage: [],
     snapshotIdsUsed: [],
+    sourcesUsed: [],
     ...base,
   };
 
@@ -296,6 +308,8 @@ export function calculatePortfolioLookThrough(
   const exposureMap = new Map<string, EffectiveExposure>();
   const perFundCoverage: FundCoverage[] = [];
   const snapshotIdsUsed: string[] = [];
+  // PC7/O.8: per-fund source provenance, collected alongside the snapshot ids.
+  const sourcesUsed: LookThroughResult['sourcesUsed'] = [];
   const holdingsDates: string[] = [];
 
   let cashWeight = 0;
@@ -321,6 +335,12 @@ export function calculatePortfolioLookThrough(
 
     const cov = calculateFundCoverage(snapshot);
     perFundCoverage.push(cov);
+    sourcesUsed.push({
+      fundInstrumentId: pos.fundInstrumentId,
+      sourceKey: snapshot.sourceKey,
+      holdingsAsOfDate: snapshot.holdingsAsOfDate,
+      disclosedCoverage: cov.reportedHoldingsCoverage,
+    });
     coverageWeightedSum += portfolioWeight * cov.reportedHoldingsCoverage;
     undisclosedRemainderWeight += portfolioWeight * cov.undisclosedRemainder;
     cashWeight += portfolioWeight * cov.cashWeight;
@@ -432,6 +452,7 @@ export function calculatePortfolioLookThrough(
     currencyCode,
     perFundCoverage,
     snapshotIdsUsed,
+    sourcesUsed,
     ...base,
   };
 }

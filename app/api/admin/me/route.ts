@@ -9,6 +9,7 @@ import {
 } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
+import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -31,6 +32,34 @@ async function canViewReferenceDataQuality(): Promise<boolean> {
       .eq('user_id', user.id)
       .maybeSingle();
     return data?.[PC6_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * PC7/O.9 — the Underlying Fund Holdings quality capability.
+ *
+ * A SEPARATE read from the PC6 one, deliberately. Deriving it from
+ * canViewReferenceDataQuality() would make one grant silently confer the
+ * other, which is precisely the capability-implication Standard §2 prohibits.
+ *
+ * FAILS CLOSED: any error, a logged-out caller, or a missing row yields false.
+ * A missing COLUMN (migration 0157 not yet applied) also yields false, which
+ * is the correct fail-closed answer — an unapplied migration must not become a
+ * grant.
+ */
+async function canViewLookthroughDataQuality(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(PC7_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[PC7_ADMIN_CAPABILITY] === true;
   } catch {
     return false;
   }
@@ -85,6 +114,7 @@ export async function GET() {
       resourceDiscoveryAdmin: canViewResourceDiscovery(current),
       resourceAnalytics: canViewResourceAnalytics(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
+      lookthroughDataQuality: await canViewLookthroughDataQuality(),
     },
   });
 }
