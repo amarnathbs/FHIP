@@ -412,6 +412,9 @@ async function buildCalculatorInput(
       // on the whole-balance-sheet basis, not the household-only one. See the
       // net-worth wiring below for the full defect writeup.
       monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
+      // App Review 2026-09-15, item 8 — the household's own balance-weighted
+      // liability rate instead of a never-seeded assumption's hard-coded 6%.
+      liabilityRatePercent: dashboard.averageInterestRate,
       baselineNetWorthAtStart: dashboard.netWorth,
       baselineRetirementAtStart: dashboard.totalRetirement,
     };
@@ -431,8 +434,11 @@ async function buildCalculatorInput(
         .eq('is_active', true)
         .eq('currency_code', foreignCurrency),
       supabase
+        // App Review 2026-09-15, item 8: interest_rate added so the foreign
+        // leg can be amortised at the household's own recorded rates rather
+        // than the never-seeded assumption's hard-coded default.
         .from('liabilities')
-        .select('balance, monthly_repayment')
+        .select('balance, monthly_repayment, interest_rate')
         .eq('user_id', userId)
         .eq('is_active', true)
         .eq('currency_code', foreignCurrency),
@@ -460,6 +466,15 @@ async function buildCalculatorInput(
     const foreignInvestmentMonthlyContribution = (investmentsResult.data ?? []).reduce((sum, i) => sum + (i.annual_contribution ?? 0) / 12, 0);
     const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
     const foreignLiabilityMonthlyRepayment = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + (l.monthly_repayment ?? 0), 0);
+    // App Review 2026-09-15, item 8 — balance-weighted actual rate across the
+    // foreign-currency liabilities only, matching this leg's own population.
+    // null when none of them records a rate.
+    const foreignLiabilitiesWithRate = (liabilitiesResult.data ?? []).filter((l) => l.interest_rate !== null && l.interest_rate !== undefined);
+    const foreignBalanceWithRate = foreignLiabilitiesWithRate.reduce((sum, l) => sum + l.balance, 0);
+    const foreignLiabilityRatePercent =
+      foreignBalanceWithRate > 0
+        ? foreignLiabilitiesWithRate.reduce((sum, l) => sum + (l.interest_rate as number) * l.balance, 0) / foreignBalanceWithRate
+        : null;
     const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
     const foreignRetirementMonthlyContribution = (retirementResult.data ?? []).reduce((sum, r) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[r.contribution_frequency ?? 'monthly'] ?? 1;
@@ -480,6 +495,7 @@ async function buildCalculatorInput(
       monthlyForeignInvestmentContribution: foreignInvestmentMonthlyContribution,
       monthlyForeignRetirementContribution: foreignRetirementMonthlyContribution,
       monthlyForeignLoanRepayment: foreignLiabilityMonthlyRepayment,
+      liabilityRatePercent: foreignLiabilityRatePercent,
     };
     return { input, effectiveMonths: months };
   }
@@ -943,6 +959,15 @@ async function buildCalculatorInput(
     //   are equal by construction for every household now, not only ones
     //   with no SMSF rows, and no change was needed at this call site.
     monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
+    // App Review 2026-09-15, item 8 requirement 2, extended to Net Worth per
+    // requirement 4. This is the household's own balance-weighted actual
+    // liability rate (DashboardSummary.averageInterestRate, computed from
+    // liabilities.interest_rate). It replaces a 'liability_interest_rate'
+    // assumption that is seeded nowhere and therefore always resolved to a
+    // hard-coded 6% -- which meant the SAME loan was amortised at the user's
+    // real rate in the Debt section and at 6% in the Net Worth section of the
+    // same report. null only when no liability carries a recorded rate.
+    liabilityRatePercent: dashboard.averageInterestRate,
     assumptions,
     plannedEvents,
   };

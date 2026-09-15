@@ -35,6 +35,14 @@ export interface CrossBorderCalculatorInput {
   openingForeignInvestments: number;
   openingForeignRetirement: number;
   openingForeignLiabilities: number;
+  // App Review 2026-09-15, item 8 — the household's own balance-weighted
+  // liability rate. Same defect and same fix as netWorthCalculator's: the
+  // 'liability_interest_rate' assumption is seeded nowhere (zero rows in
+  // forecast_global_assumptions on DEV, verified live; no migration mentions
+  // the key), so this section always amortised every loan at the hard-coded
+  // default while the Debt section used the user's real per-loan rates.
+  // Optional and nullable: null means no rate is recorded on any liability.
+  liabilityRatePercent?: number | null;
   monthlyForeignAssetContribution: number;
   monthlyForeignInvestmentContribution: number;
   monthlyForeignRetirementContribution: number;
@@ -64,7 +72,13 @@ export function runCrossBorderForecast(input: CrossBorderCalculatorInput): { res
   const assetGrowth = getAssumptionValue(input.assumptions, 'property_growth', DEFAULT_ASSET_GROWTH);
   const investmentReturn = getAssumptionValue(input.assumptions, 'equity', DEFAULT_INVESTMENT_RETURN);
   const retirementReturn = getAssumptionValue(input.assumptions, 'retirement', DEFAULT_RETIREMENT_RETURN);
-  const liabilityRate = getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
+  // App Review 2026-09-15, item 8 — the user's own recorded rate wins; the
+  // never-seeded assumption below it survives only for a household that has
+  // recorded no liability rate at all.
+  const liabilityRate =
+    input.liabilityRatePercent !== null && input.liabilityRatePercent !== undefined
+      ? input.liabilityRatePercent
+      : getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
   const baseFxRate = getAssumptionValue(input.assumptions, 'fx_rate_aud_inr', DEFAULT_FX_RATE_AUD_INR);
   const fxDriftAnnualPercent = getAssumptionValue(input.assumptions, 'fx_drift_aud_inr', 0);
   const monthlyFxDrift = monthlyCompoundRate(fxDriftAnnualPercent);
@@ -124,7 +138,9 @@ export function runCrossBorderForecast(input: CrossBorderCalculatorInput): { res
       investmentReturn: round2(localReturnInReportingCurrency),
       fees: 0,
       fxGainLoss: currencyGainLoss,
-      otherMovement: round2(-convertToReporting(liabilityMonth.principalReduction, input.foreignCurrency, fxRate)),
+      // App Review 2026-09-15, item 8 requirement 4 — same sign defect and
+      // same fix as netWorthCalculator's (see the note there).
+      otherMovement: round2(convertToReporting(liabilityMonth.repayment, input.foreignCurrency, fxRate)),
       closingValue: round2(closingAtCurrentFx),
       targetValue: null,
       varianceValue: null,

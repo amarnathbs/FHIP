@@ -36,6 +36,25 @@ export interface NetWorthCalculatorInput {
   monthlyLoanRepayment: number;
   assumptions: ResolvedAssumptionSet;
   plannedEvents?: PlannedFinancialEvent[];
+  // App Review 2026-09-15, item 8 requirement 2 ("confirm the interest rate
+  // source for each loan is the user-entered rate, not a default") — extended
+  // to the other forecast sections as requirement 4 asks.
+  //
+  // The Debt section reads the real per-loan liabilities.interest_rate. This
+  // section did not: it resolved a 'liability_interest_rate' assumption that
+  // is seeded NOWHERE (zero rows in forecast_global_assumptions on DEV,
+  // verified live 2026-09-15; no SQL file in supabase/migrations mentions the
+  // key at all), so getAssumptionValue always fell through to the hard-coded
+  // 6% below. A household with a 3.2% mortgage therefore had that same loan
+  // amortised at 3.2% in the Debt report and 6.0% in the Net Worth report,
+  // off an identical opening balance — two sections of the same report that
+  // could not agree.
+  //
+  // This is the household's balance-weighted actual rate
+  // (DashboardSummary.averageInterestRate). Optional and nullable: null means
+  // the household has recorded no rate on any liability, which is the only
+  // case where falling back to an assumption is honest.
+  liabilityRatePercent?: number | null;
 }
 
 const DEFAULT_ASSET_GROWTH = 3;
@@ -55,10 +74,16 @@ export function runNetWorthForecast(input: NetWorthCalculatorInput): { results: 
   const assetGrowth = getAssumptionValue(input.assumptions, 'property_growth', DEFAULT_ASSET_GROWTH);
   const investmentReturn = getAssumptionValue(input.assumptions, 'equity', DEFAULT_INVESTMENT_RETURN);
   const retirementReturn = getAssumptionValue(input.assumptions, 'retirement', DEFAULT_RETIREMENT_RETURN);
-  // No seeded assumption for a blended liability interest rate yet (Phase 1
-  // net worth uses a single portfolio-wide liability balance, not itemised
-  // per-loan rates) — falls back to a fixed default until that's added.
-  const liabilityRate = getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
+  // App Review 2026-09-15, item 8 — the household's own balance-weighted
+  // liability rate wins. The 'liability_interest_rate' assumption is seeded
+  // nowhere (verified live against DEV), so the branch below it was in
+  // practice always the hard-coded DEFAULT_LIABILITY_RATE. It is kept only
+  // for a household that has recorded no interest rate on any liability, the
+  // one case where there is nothing truer to use.
+  const liabilityRate =
+    input.liabilityRatePercent !== null && input.liabilityRatePercent !== undefined
+      ? input.liabilityRatePercent
+      : getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
 
   let assets = input.openingAssets;
   let investments = input.openingInvestments;
@@ -126,11 +151,31 @@ export function runNetWorthForecast(input: NetWorthCalculatorInput): { results: 
       withdrawals: 0,
       income: 0,
       expenses: 0,
+      // App Review 2026-09-15, item 8 requirement 4 (verification extended to
+      // the other forecast sections) — CONFIRMED SIGN DEFECT, fixed here.
+      //
+      // These per-period movement columns are supposed to decompose the change
+      // in the headline value: closing = opening + contributions +
+      // investmentReturn + interest + otherMovement. The liability leg's
+      // contribution to NET WORTH is -(L_m - L_(m-1)) = +principalReduction,
+      // and principalReduction = repayment - interest. Recording BOTH
+      // `-interest` AND `-principalReduction` summed to `-repayment` instead,
+      // so the movement columns missed closingValue by (2 x repayment -
+      // interest) every single period -- 1,500/month on a 100,000 balance at
+      // 6% with a 1,000 repayment.
+      //
+      // The reconciling decomposition is `-interest` (net worth is reduced by
+      // the interest accrued) plus `+repayment` (cash moved into the debt),
+      // which sums to exactly +principalReduction. closingValue itself was
+      // always correct; only these two columns were wrong. No UI reads them
+      // today (the only consumer is the forecast_results write in
+      // lib/services/forecastData.ts), so this corrects stored data before
+      // anything is built on it.
       interest: -liabilityMonth.interest,
       investmentReturn: round2(assetMonth.investmentReturn + investmentMonth.investmentReturn + retirementMonth.investmentReturn),
       fees: 0,
       fxGainLoss: 0,
-      otherMovement: -liabilityMonth.principalReduction,
+      otherMovement: round2(liabilityMonth.repayment),
       closingValue: netWorthClosing,
       targetValue: null,
       varianceValue: null,
@@ -172,7 +217,16 @@ export function runNetWorthForecast(input: NetWorthCalculatorInput): { results: 
           entityId: null,
           explanationType: 'net_worth_projection',
           title: `Net worth projection — month ${m}`,
-          narrative: `Assets, investments and retirement balances are grown monthly using each category's assumed annual return, compounded monthly. Liabilities are amortised using the standard reducing-balance formula. Net worth = total assets (incl. investments and retirement) - total liabilities.`,
+          // App Review 2026-09-15, item 8(d): "the standard reducing-balance
+          // formula" invited the reader to assume their own loan terms were
+          // used. The rate is now named, and where it came from.
+          narrative:
+            `Assets, investments and retirement balances are grown monthly using each category's assumed annual return, compounded monthly. ` +
+            `Liabilities are amortised using the standard reducing-balance formula at ${round2(liabilityRate)}% p.a. — ` +
+            (input.liabilityRatePercent !== null && input.liabilityRatePercent !== undefined
+              ? 'your own recorded loan rates, weighted by balance.'
+              : 'a default rate, because no interest rate is recorded on any of your liabilities.') +
+            ` Net worth = total assets (incl. investments and retirement) - total liabilities.`,
           inputs: {
             assetGrowthPercent: assetGrowth,
             investmentReturnPercent: investmentReturn,
