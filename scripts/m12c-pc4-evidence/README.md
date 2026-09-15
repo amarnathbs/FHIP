@@ -10,6 +10,7 @@ distinguishable from a probe that did not run.**
 | File | Contents |
 |---|---|
 | `production_finding_taxonomy.txt` | The structural classification of the real CAS parse run's 251 `unparseable_transaction_row` findings, verbatim output of `scripts/m12c_pc4_warning_taxonomy_probe.mjs`. |
+| `production_rebaseline_aggregate_only.txt` | `scripts/m12c_pc4_readonly_probe.mjs prod`, with the **per-position reconciliation table filtered out** (`grep -vE "^[0-9a-f]{8} "`). What remains is aggregate only: status and blocking-reason counts, the parse-run breakdown, the source-document owner counts, and the reconciliation-case breakdown. No individual holding, unit balance or instrument identifier survives the filter. |
 
 `production_finding_taxonomy.txt` is safe to commit **by construction, not by
 review**: the probe that produces it never prints a source line. Every line is
@@ -17,9 +18,9 @@ reduced in-process to a shape skeleton in which every digit becomes `9` and
 every letter run becomes `A`, and only per-class counts are emitted. Nothing
 identifying can survive that transform.
 
-**Three other probes were run and their outputs are deliberately NOT committed:**
+**Three other outputs were produced and are deliberately NOT committed:**
 
-- `scripts/m12c_pc4_readonly_probe.mjs` — per-position reconciliation arithmetic
+- `scripts/m12c_pc4_readonly_probe.mjs` — its **per-position** reconciliation table (the aggregate remainder IS committed, above)
 - `scripts/m12c_pc4_residual_replay_probe.mjs` — per-position source-order replay
 - `scripts/m12c_pc4_residual_attribution_probe.mjs` — per-row attribution
 

@@ -95,11 +95,19 @@ if (!truth.ok) {
   const hist = {};
   for (const r of rows) hist[String(r.history_completeness)] = (hist[String(r.history_completeness)] ?? 0) + 1;
   console.log(`history_completeness            : ${JSON.stringify(hist)}`);
+  // `blocking_reasons` / `warning_reasons` are arrays of OBJECTS
+  // (`{code, message}`), not of strings — `certification.ts` builds them that
+  // way. A first version of this probe counted the elements directly and
+  // rendered every one as the literal `[object Object]`, i.e. it reported a
+  // single bucket of 57 and told the reader nothing. Reduced to the `code`
+  // here, with a string fallback so a future shape change degrades to
+  // something readable rather than to that same silent uselessness.
+  const reasonCode = (x) => (x === null || x === undefined ? 'null' : typeof x === 'string' ? x : (x.code ?? JSON.stringify(x)));
   const blocking = {};
-  for (const r of rows) for (const b of r.blocking_reasons ?? []) blocking[b] = (blocking[b] ?? 0) + 1;
+  for (const r of rows) for (const b of r.blocking_reasons ?? []) blocking[reasonCode(b)] = (blocking[reasonCode(b)] ?? 0) + 1;
   console.log(`blocking_reasons                : ${JSON.stringify(blocking)}`);
   const warning = {};
-  for (const r of rows) for (const w of r.warning_reasons ?? []) warning[w] = (warning[w] ?? 0) + 1;
+  for (const r of rows) for (const w of r.warning_reasons ?? []) warning[reasonCode(w)] = (warning[reasonCode(w)] ?? 0) + 1;
   console.log(`warning_reasons                 : ${JSON.stringify(warning)}`);
   console.log(`max last_evaluated_at           : ${rows.map((r) => r.last_evaluated_at).sort().at(-1) ?? 'n/a'}`);
 
@@ -112,8 +120,13 @@ if (!truth.ok) {
 }
 
 // ----------------------------------------------------- §8.2 warning taxonomy
+// Column names read from migration 0039, not guessed. A first version of this
+// probe asked for `status`, `parser_id`, `detected_format` and `confidence`,
+// none of which exists — the real names are `run_status`, `parser_code`,
+// `source_detected` and `source_confidence` — so the whole block reported
+// UNAVAILABLE and the reader learned nothing about parse runs at all.
 const runs = await get(
-  'ii_document_parse_runs?select=id,status,parser_id,parser_version,detected_format,confidence,warnings,accounts_found,schemes_found,transactions_found,holdings_found,created_at&order=created_at.desc&limit=40',
+  'ii_document_parse_runs?select=id,run_status,parser_code,parser_version,source_detected,source_confidence,warnings,accounts_found,schemes_found,transactions_found,holdings_found,started_at&order=started_at.desc&limit=200',
 );
 if (!runs.ok) {
   console.log(`\nii_document_parse_runs          : UNAVAILABLE (${runs.code} ${runs.message})`);
@@ -121,8 +134,8 @@ if (!runs.ok) {
   console.log(`\nii_document_parse_runs rows     : ${runs.data.length}`);
   const latestOk = runs.data.find((r) => (r.transactions_found ?? 0) > 0);
   if (latestOk) {
-    console.log(`latest run with transactions    : ${short(latestOk.id)} @ ${latestOk.created_at}`);
-    console.log(`  parser/format/confidence      : ${latestOk.parser_id}@${latestOk.parser_version} / ${latestOk.detected_format} / ${latestOk.confidence}`);
+    console.log(`latest run with transactions    : ${short(latestOk.id)} @ ${latestOk.started_at}`);
+    console.log(`  parser/detected/confidence    : ${latestOk.parser_code}@${latestOk.parser_version} / ${latestOk.source_detected} / ${latestOk.source_confidence}`);
     console.log(`  accounts/schemes/txns/holdings: ${latestOk.accounts_found}/${latestOk.schemes_found}/${latestOk.transactions_found}/${latestOk.holdings_found}`);
     const w = Array.isArray(latestOk.warnings) ? latestOk.warnings : [];
     const byCodeSeverity = {};
@@ -135,8 +148,8 @@ if (!runs.ok) {
     console.log('latest run with transactions    : none found');
   }
   const statusCounts = {};
-  for (const r of runs.data) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
-  console.log(`run status breakdown            : ${JSON.stringify(statusCounts)}`);
+  for (const r of runs.data) statusCounts[r.run_status] = (statusCounts[r.run_status] ?? 0) + 1;
+  console.log(`run_status breakdown            : ${JSON.stringify(statusCounts)}`);
 }
 
 // ------------------------------------------------ §8.1 owner-resolution state
@@ -152,19 +165,27 @@ if (!docs.ok) {
   console.log(`  status breakdown              : ${JSON.stringify(st)}`);
 }
 
-const cases = await get('ii_reconciliation_cases?select=id,case_type,status&limit=500');
+// Again from migration 0035, not guessed: the column is `discrepancy_type`,
+// and `severity` was added later. A first version asked for `case_type` and
+// reported UNAVAILABLE.
+const cases = await get('ii_reconciliation_cases?select=id,discrepancy_type,status,severity&limit=1000');
 if (!cases.ok) {
   console.log(`\nii_reconciliation_cases         : UNAVAILABLE (${cases.code} ${cases.message})`);
 } else {
   const byType = {};
   const byStatus = {};
+  const blockingOpen = {};
   for (const c of cases.data) {
-    byType[c.case_type] = (byType[c.case_type] ?? 0) + 1;
+    byType[c.discrepancy_type] = (byType[c.discrepancy_type] ?? 0) + 1;
     byStatus[c.status] = (byStatus[c.status] ?? 0) + 1;
+    if (c.status === 'open' && (c.severity === 'blocking' || c.severity === 'high')) {
+      blockingOpen[c.discrepancy_type] = (blockingOpen[c.discrepancy_type] ?? 0) + 1;
+    }
   }
   console.log(`\nii_reconciliation_cases rows    : ${cases.data.length}`);
-  console.log(`  by case_type                  : ${JSON.stringify(byType)}`);
+  console.log(`  by discrepancy_type           : ${JSON.stringify(byType)}`);
   console.log(`  by status                     : ${JSON.stringify(byStatus)}`);
+  console.log(`  OPEN and blocking/high        : ${JSON.stringify(blockingOpen)}`);
 }
 
 console.log('\n=== end — zero writes performed ===');
