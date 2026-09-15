@@ -239,7 +239,19 @@ check('ii_risk_free_methodology ships EMPTY (BLOCKER PO-PC6-2 unresolved)', rfm.
 const certified = await one('select count(*)::int as n from ii_risk_free_rates where is_certified = true');
 check('no risk-free rate is marked certified', certified.n === 0, `rows=${certified.n}`);
 const enabled = await all("select job_key, enabled from ii_reference_job_control");
-check('every PC6 job ships DISABLED', enabled.length === 2 && enabled.every((r) => r.enabled === false),
+// M11 (2026-09-15) — the original clause was `enabled.length === 2`, which was
+// correct when PC6 was the only owner of this ledger and became WRONG the
+// moment PC7's migration 0157 added `pc7_fund_holdings_disclosure` to the same
+// table. That extension is deliberate ("reuse, not a second stack", PC7 O.3),
+// so a hard row count was asserting the wrong thing: this check exists to prove
+// nothing ships ENABLED, not to pin how many jobs exist. Re-stated as the
+// property it is actually about — PC6's own two rows are present, and NOTHING
+// in the ledger is enabled. A future phase adding a row now extends this
+// safely; a future phase shipping an ENABLED row still fails.
+const PC6_JOB_KEYS = ['pc6_amfi_daily_nav', 'pc6_amfi_scheme_master'];
+const pc6JobsPresent = PC6_JOB_KEYS.every((k) => enabled.some((r) => r.job_key === k));
+check('every job in the shared reference ledger ships DISABLED (and PC6 owns two of them)',
+  pc6JobsPresent && enabled.length >= 2 && enabled.every((r) => r.enabled === false),
   enabled.map((r) => `${r.job_key}=${r.enabled}`).join(', '));
 const jobs = await one("select count(*)::int as n from cron.job where jobname like 'pc6%'");
 check('0155 registers NO pg_cron schedule', jobs.n === 0, `pc6 cron jobs = ${jobs.n}`);

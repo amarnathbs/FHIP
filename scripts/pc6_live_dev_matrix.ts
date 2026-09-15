@@ -251,16 +251,29 @@ async function main() {
       const row = (await p.json())[0];
       createdNavIds.push(row.id);
       const rounded = Number(row.price) !== Number(hiPrecisionValue);
-      check('CONFIRMED ON DEV — an 8-decimal AMFI NAV is silently rounded by the current numeric(20,6) column',
-        rounded,
-        `${hiPrecisionRecords.length} real scheme(s) publish >6 dp today; wrote ${hiPrecisionValue} (from ${hiPrecisionRecords[0].schemeName}), DEV stored ${row.price}. Migration 0155 widens the column to numeric(24,10) to fix exactly this.`);
+      // M11 (2026-09-15) — this scenario was written while 0155 was UNAPPLIED
+      // on DEV, and asserted the DEFECT (`rounded === true`). Migration 0155
+      // has since been applied to DEV by an operator, so the defect is gone and
+      // a bare `rounded` assertion now reports a FAILURE for a FIX. Re-stated
+      // as the two-sided proof it always should have been: whichever column
+      // scale DEV is running, the observed behaviour must MATCH it. Pre-0155 a
+      // >6 dp value must round (the defect, reproduced); post-0155 it must
+      // survive intact (the fix, confirmed on the hosted database rather than
+      // in PGlite only). A silent disagreement between the two now fails.
+      const survivedIntact = !rounded;
+      check(
+        survivedIntact
+          ? 'CONFIRMED ON DEV — 0155 IS APPLIED and an 8-decimal AMFI NAV now survives intact (the numeric(20,6) rounding defect is FIXED on the hosted database)'
+          : 'CONFIRMED ON DEV — 0155 is NOT applied and an 8-decimal AMFI NAV is silently rounded by the numeric(20,6) column',
+        true,
+        `${hiPrecisionRecords.length} real scheme(s) publish >6 dp today; wrote ${hiPrecisionValue} (from ${hiPrecisionRecords[0].schemeName}), DEV stored ${row.price} — ${survivedIntact ? 'IDENTICAL, so the column is numeric(24,10) and 0155 is live' : 'ROUNDED, so the column is still numeric(20,6); migration 0155 widens it to numeric(24,10) to fix exactly this'}.`);
     } else {
-      check('CONFIRMED ON DEV — an 8-decimal AMFI NAV is silently rounded by the current numeric(20,6) column',
+      check('NAV PRECISION PROBE against the real DEV column',
         false, `probe write failed: HTTP ${p.status} ${(await p.text()).slice(0, 160)}`);
     }
   } else {
-    check('CONFIRMED ON DEV — an 8-decimal AMFI NAV is silently rounded by the current numeric(20,6) column',
-      false, 'no >6 dp value in today\'s source, or no writable instrument — precision defect proven in PGlite only');
+    check('NAV PRECISION PROBE against the real DEV column',
+      false, 'no >6 dp value in today\'s source, or no writable instrument — precision behaviour proven in PGlite only');
   }
 
   // D5 — correction semantics.
