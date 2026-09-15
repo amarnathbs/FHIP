@@ -1,0 +1,73 @@
+=== M12C §8.2 — PROD parse-run finding taxonomy (READ-ONLY) ===
+
+NEGATIVE CONTROL : PASS (42703)
+
+parse runs returned : 35
+run_status breakdown: {"failed":25,"succeeded":10}
+
+--- the final successful run ---
+id                 : aa8d50fa
+started/completed  : 2026-09-07T13:06:36.79794+00:00 / 2026-09-07T13:07:02.933+00:00
+parser             : cams_detailed_v1@1.0.0
+detected/confidence: cams / 0.9
+accounts/schemes/txns/holdings: 12/17/964/17
+
+=== warnings: 259 entries ===
+by code/severity   : {"unparseable_transaction_row/error":251,"unclassified_transaction/warning":8}
+
+unparseable_transaction_row : 251
+raw line recovered from msg : 251/251
+
+STRUCTURAL SHAPE CLASSES (counts only; example is a redacted skeleton)
+   100  F_NO_DIGIT_AT_ALL                       e.g. ***A A A A A***
+    68  G_DIGITS_BUT_NO_DATE_NO_MONEY           e.g. A A.A A / A-A A A A 9 A A A A A A: A.A A A A A A A/A-A A A
+    56  A2_LEADING_DATE_NO_MONEY                e.g. 9-A-9
+    14  D_PAGE_FOOTER                           e.g. A 9 A 9
+     8  E_URL_OR_EMAIL                          e.g. A A A A A A A. A A A A A.A.A (A A A) A A A A A A A A. A
+     5  B2_MIDLINE_DATE_ONLY__PROSE             e.g. A A A: A 9-A-9 A A: A. A A: A A / A-A A A A A A 9 A A A A A 
+
+>>> ECONOMIC CANDIDATES (leading date AND money on one line): 0
+>>> STRUCTURALLY NON-ECONOMIC                               : 251
+
+ADJACENCY for the 56 bare-leading-date findings (by lineHint):
+    25  prev=PARSED_OR_ABSENT | next=F_NO_DIGIT_AT_ALL
+    16  prev=F_NO_DIGIT_AT_ALL | next=F_NO_DIGIT_AT_ALL
+    14  prev=F_NO_DIGIT_AT_ALL | next=D_PAGE_FOOTER
+     1  prev=PARSED_OR_ABSENT | next=B2_MIDLINE_DATE_ONLY__PROSE
+  both neighbours also unparsed: 30/56
+  distinct redacted skeletons in this class:
+       42  "9-A-9"  (len class 42)
+       14  "9-A-9 A 9-A-9"  (len class 14)
+  character-length distribution:
+     {"<=12 (a bare date, nothing else)":42,"13-30":14}
+
+=== errors: 251 entries ===
+by code/severity   : {"unparseable_transaction_row/error":251}
+
+unparseable_transaction_row : 251
+raw line recovered from msg : 251/251
+
+STRUCTURAL SHAPE CLASSES (counts only; example is a redacted skeleton)
+   100  F_NO_DIGIT_AT_ALL                       e.g. ***A A A A A***
+    68  G_DIGITS_BUT_NO_DATE_NO_MONEY           e.g. A A.A A / A-A A A A 9 A A A A A A: A.A A A A A A A/A-A A A
+    56  A2_LEADING_DATE_NO_MONEY                e.g. 9-A-9
+    14  D_PAGE_FOOTER                           e.g. A 9 A 9
+     8  E_URL_OR_EMAIL                          e.g. A A A A A A A. A A A A A.A.A (A A A) A A A A A A A A. A
+     5  B2_MIDLINE_DATE_ONLY__PROSE             e.g. A A A: A 9-A-9 A A: A. A A: A A / A-A A A A A A 9 A A A A A 
+
+>>> ECONOMIC CANDIDATES (leading date AND money on one line): 0
+>>> STRUCTURALLY NON-ECONOMIC                               : 251
+
+ADJACENCY for the 56 bare-leading-date findings (by lineHint):
+    25  prev=PARSED_OR_ABSENT | next=F_NO_DIGIT_AT_ALL
+    16  prev=F_NO_DIGIT_AT_ALL | next=F_NO_DIGIT_AT_ALL
+    14  prev=F_NO_DIGIT_AT_ALL | next=D_PAGE_FOOTER
+     1  prev=PARSED_OR_ABSENT | next=B2_MIDLINE_DATE_ONLY__PROSE
+  both neighbours also unparsed: 30/56
+  distinct redacted skeletons in this class:
+       42  "9-A-9"  (len class 42)
+       14  "9-A-9 A 9-A-9"  (len class 14)
+  character-length distribution:
+     {"<=12 (a bare date, nothing else)":42,"13-30":14}
+
+=== end — zero writes performed ===
