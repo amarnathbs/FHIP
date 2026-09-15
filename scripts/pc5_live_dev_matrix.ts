@@ -1315,7 +1315,19 @@ async function cleanup(): Promise<void> {
   }
   const totalResidue = Object.values(residue).reduce((a, b) => a + b, 0) + usersRemaining;
   record('CLEAN-1', '—', 'ZERO synthetic residue after cleanup, independently re-verified', totalResidue === 0 ? 'PASS' : 'FAIL', {
-    ...residue,
+    // What was created, counted rather than estimated, so the
+    // certification's "rows created and cleaned" figures are evidence
+    // rather than a hand count.
+    createdCounts: {
+      authUsers: created.users.length,
+      households: created.households.length,
+      householdMembers: created.householdMembers.length,
+      iiAccounts: created.iiAccounts.length,
+      intakes: created.intakes.length,
+      runs: created.runs.length,
+      unresolvedItems: created.items.length,
+    },
+    residueAfterCleanup: residue,
     authUsersRemaining: usersRemaining,
   });
 }
