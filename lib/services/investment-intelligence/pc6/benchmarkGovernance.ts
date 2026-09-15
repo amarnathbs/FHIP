@@ -263,12 +263,15 @@ export function checkReturnType(required: BenchmarkReturnType, actual: Benchmark
 // Gap reporting for the admin surface (N.11)
 // ---------------------------------------------------------------------------
 
+/** The reasons a scheme can be unmapped, extracted from MappingResolution itself. */
+export type UnmappedReason = Extract<MappingResolution, { state: 'unmapped' }>['reason'];
+
 export interface MappingGapRow {
   instrumentId: string;
   schemeName: string;
   amfiSchemeCode: string | null;
   categoryHeaderRaw: string | null;
-  reason: MappingResolution extends { state: 'unmapped'; reason: infer R } ? R : never;
+  reason: UnmappedReason;
   detail: string;
 }
 

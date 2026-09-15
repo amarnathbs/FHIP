@@ -46,6 +46,7 @@ import { attributeSipUnits } from '../lib/engines/investment-intelligence/sip/si
 import { SIP_DETECTION_METHOD_VERSION, type SipSeries, type SipCandidateTransaction } from '../lib/engines/investment-intelligence/sip/sipDetection';
 import { SIP_THRESHOLD_CONFIG_VERSION } from '../lib/config/investment-intelligence/sipThresholds';
 import { sinceInceptionXirrEligible } from '../lib/engines/investment-intelligence/dataQuality';
+import type { RiskFreeRatePoint } from '../lib/config/investment-intelligence/riskFreeRate';
 
 const CACHE = process.env.PC6_CACHE_DIR ?? 'C:/Users/user/AppData/Local/Temp/claude/D--FHIP/e1468c38-4b9f-45c2-b862-ab8725ccd725/scratchpad/pc6-history';
 fs.mkdirSync(CACHE, { recursive: true });
@@ -205,8 +206,19 @@ async function main() {
   });
   const benchmarkReturns = periodicReturnsFromLevels(benchmarkPoints);
 
-  const riskFreeSeries = [
-    { countryCode: 'IN', periodStart: new Date('2025-01-01T00:00:00Z'), periodEnd: new Date('2026-12-31T00:00:00Z'), annualisedRate: 0.065, source: 'DEV SEED — approximate RBI 91-day T-Bill annual average (not a certified feed)', version: 'dev-seed-v1' },
+  // The UNCERTIFIED DEV seed, reproduced verbatim including its own
+  // self-description. Using it here proves the engines activate; it does not
+  // make it fit for production — see BLOCKER PO-PC6-2.
+  const riskFreeSeries: RiskFreeRatePoint[] = [
+    {
+      countryCode: 'IN',
+      periodStart: new Date('2025-01-01T00:00:00Z'),
+      periodEnd: new Date('2026-12-31T00:00:00Z'),
+      annualisedRate: 0.065,
+      source: 'DEV SEED — approximate RBI 91-day T-Bill annual average (not a certified feed)',
+      method: 'period_average',
+      version: 'dev-seed-v1',
+    },
   ];
 
   const risk = computeRiskMetrics({

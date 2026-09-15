@@ -80,6 +80,13 @@ export const DISCOVERY_ITEMS: { label: string; href: string }[] = [
 // (A3-A8) are later, separately authorised waves.
 export const ANALYTICS_ITEMS: { label: string; href: string }[] = [{ label: 'Analytics', href: '/admin/resources/analytics' }];
 
+// PC6/N.11: the reference-market-data quality surface. One real destination —
+// Wave 3's own rule that a visible option must complete a task, so no
+// placeholder sub-links are added alongside it.
+export const REFERENCE_DATA_ITEMS: { label: string; href: string }[] = [
+  { label: 'Reference Data Quality', href: '/admin/investment-intelligence/reference-data-quality' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -93,6 +100,14 @@ export interface AdminCapabilities {
   resourceWorkflowAdmin: boolean;
   resourceDiscoveryAdmin: boolean;
   resourceAnalytics: boolean;
+  /**
+   * PC6/N.11 — the reference-market-data quality surface. Backed by
+   * admin_users.can_view_reference_data_quality (migration 0155) and the
+   * is_pc6_reference_data_admin() RLS predicate. Deliberately NOT implied by
+   * `isAdmin`: Standard §2 prohibits a broad flag as the basis for a new
+   * capability.
+   */
+  referenceDataQuality: boolean;
 }
 
 /**
@@ -107,6 +122,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   resourceWorkflowAdmin: false,
   resourceDiscoveryAdmin: false,
   resourceAnalytics: false,
+  referenceDataQuality: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -136,6 +152,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     resourceWorkflowAdmin: readBooleanField(source, 'resourceWorkflowAdmin'),
     resourceDiscoveryAdmin: readBooleanField(source, 'resourceDiscoveryAdmin'),
     resourceAnalytics: readBooleanField(source, 'resourceAnalytics'),
+    referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
   };
 }
 
@@ -181,6 +198,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceContentAdmin ? [{ label: 'Content', items: CONTENT_TYPE_ITEMS, matchMode: 'prefix' as const }] : []),
     ...(capabilities.resourceWorkflowAdmin ? [{ label: 'Workflow', items: WORKFLOW_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
+    ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

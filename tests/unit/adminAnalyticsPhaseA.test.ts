@@ -313,6 +313,10 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     resourceWorkflowAdmin: canViewResourceWorkflow(current),
     resourceDiscoveryAdmin: canViewResourceDiscovery(current),
     resourceAnalytics: canViewResourceAnalytics(current),
+    // PC6/N.11. This capability lives on admin_users, not on
+    // resource_user_roles, so a Resources role snapshot can never grant it —
+    // which is exactly the point of Standard §2. Always false here.
+    referenceDataQuality: false,
   };
 }
 
@@ -369,6 +373,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true,
     };
     expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
   });
@@ -400,17 +405,22 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true,
     };
+    // PC6/N.11 added a fifth capability-driven group, 'Reference Data', so the
+    // probe covers it too and the expected length is 5 minus the one turned
+    // off. resourceAnalytics still contributes no group.
     const expectedLabel: Record<string, string> = {
       resourcesDashboard: 'Resources',
       resourceContentAdmin: 'Content',
       resourceWorkflowAdmin: 'Workflow',
       resourceDiscoveryAdmin: 'Discovery',
+      referenceDataQuality: 'Reference Data',
     };
-    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin'] as (keyof AdminCapabilities)[]) {
+    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin', 'referenceDataQuality'] as (keyof AdminCapabilities)[]) {
       const labels = buildAdminNavGroups(false, { ...allTrue, [field]: false }).map((g) => g.label);
       expect(labels).not.toContain(expectedLabel[field]);
-      expect(labels).toHaveLength(3); // 4 real groups minus the one just turned off; resourceAnalytics never contributed one
+      expect(labels).toHaveLength(4); // 5 real groups minus the one just turned off
     }
   });
 
@@ -722,6 +732,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true,
     };
     expect(buildAdminNavGroups(false, allResources).map((g) => g.label)).not.toContain('General');
   });
@@ -765,14 +776,19 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true,
     };
     const groups = buildAdminNavGroups(true, all);
+    // The pre-existing five are unchanged in both order and match mode —
+    // PC6's 'Reference Data' group is APPENDED, never interleaved, so this
+    // assertion still protects what it was written to protect.
     expect(groups.map((g) => `${g.label}:${g.matchMode}`)).toEqual([
       'General:exact',
       'Resources:exact',
       'Content:prefix',
       'Workflow:exact',
       'Discovery:exact',
+      'Reference Data:exact',
     ]);
   });
 });

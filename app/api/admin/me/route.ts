@@ -7,6 +7,34 @@ import {
   canViewResourceDiscovery,
   canViewResourceAnalytics,
 } from '@/lib/resources/permissions';
+import { createClient } from '@/lib/supabase/server';
+import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
+
+/**
+ * PC6/N.11. The reference-data capability lives on admin_users, not on
+ * resource_user_roles, so it cannot be read from the Resources role snapshot
+ * above. It gets its own independent read — the route's own rule that each
+ * capability is a separately named evaluation, never a shared boolean.
+ *
+ * FAILS CLOSED: any error, a logged-out caller, or a missing row yields false.
+ * Consistent with this route's "never a 403" contract — it reports the absence
+ * of a capability rather than refusing.
+ */
+async function canViewReferenceDataQuality(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(PC6_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[PC6_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
 
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
@@ -56,6 +84,7 @@ export async function GET() {
       resourceWorkflowAdmin: canViewResourceWorkflow(current),
       resourceDiscoveryAdmin: canViewResourceDiscovery(current),
       resourceAnalytics: canViewResourceAnalytics(current),
+      referenceDataQuality: await canViewReferenceDataQuality(),
     },
   });
 }
