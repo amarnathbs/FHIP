@@ -106,7 +106,7 @@ function freshState(): SharedState {
       auditEvents: [],
     },
     quarantinedBytes: new Uint8Array(),
-    runStatus: 'awaiting_acceptance',
+    runStatus: 'none',
     blockingItemCount: 0,
     reconciliationOutcomes: [],
     writeBatchStatus: 'pending',
@@ -217,7 +217,13 @@ vi.mock('@/lib/aie/db/repository', async (importOriginal) => {
       rec().unresolvedItems.push(p);
       return p.items.map((_, i) => `item-${i}`);
     },
-    recordTransition: async () => {},
+    // recordTransition is what actually UPDATES aie_extraction_run.status in
+    // the real repository (repository.ts:267), so the fake mirrors it — the run
+    // reaches 'awaiting_acceptance' because the pipeline genuinely drove it
+    // there, not because the fake was seeded that way.
+    recordTransition: async (p: { toState: string }) => {
+      state().runStatus = p.toState;
+    },
     recordParserAttempt: async (p: { runId: string; adapterId: string; outcome: string }) => {
       rec().parserAttempts.push({ runId: p.runId, adapterId: p.adapterId, outcome: p.outcome });
     },
@@ -344,7 +350,7 @@ describe('M12A.3 — FDH-bank intake must never create a canonical FDH record', 
     // The configuration a production activation of this adapter would run in.
     // Under the OLD code this alone was enough to make intake write.
     process.env.AIE_FDH_BANK_ATOMIC_IMPORT_ENABLED = 'true';
-    process.env.AIE_CANONICAL_ACCEPTANCE_ENABLED = 'true';
+    process.env.AIE_REVIEW_CANONICAL_ACCEPTANCE_ENABLED = 'true';
     delete process.env.AIE_AI_FALLBACK_ENABLED;
     delete process.env.AIE_FDH_BANK_AI_FALLBACK_ENABLED;
   });
@@ -416,7 +422,7 @@ describe('M12A.3 — the canonical write moved to the shared acceptance gate, it
     process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
     process.env.AIE_PILOT_COHORT_USER_IDS = USER_ID;
     process.env.AIE_FDH_BANK_ATOMIC_IMPORT_ENABLED = 'true';
-    process.env.AIE_CANONICAL_ACCEPTANCE_ENABLED = 'true';
+    process.env.AIE_REVIEW_CANONICAL_ACCEPTANCE_ENABLED = 'true';
   });
 
   async function intakeCleanStatement() {
