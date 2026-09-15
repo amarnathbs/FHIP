@@ -91,7 +91,7 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
 // is honoured rather than accidentally bypassed.
 process.env.AIE_REVIEW_PC5_PROJECTION_ENABLED = 'true';
 
-/* eslint-disable @typescript-eslint/no-var-requires */
+
 import { decidePc5Resolution } from '@/lib/pc5/decide';
 import { projectItemContext, projectResolutionsForRun, projectResolutionsForUser } from '@/lib/pc5/projection';
 import { reReconcileInvestmentRun } from '@/lib/pc5/reReconciliation';

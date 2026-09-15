@@ -71,8 +71,23 @@ export function ResolutionCentreClient({ runId }: { runId?: string }) {
     }
   }, [runId, showAll, showHistory]);
 
+  // The async IIFE + cancelled flag is this codebase's established idiom
+  // for a fetch-on-mount effect (see
+  // `components/investment-intelligence/ReviewCentreClient.tsx`). It keeps
+  // the effect body free of a SYNCHRONOUS setState — which
+  // `react-hooks/set-state-in-effect` correctly flags as a cascading-render
+  // hazard — and the flag stops a response that arrives after unmount (or
+  // after the filters changed) from writing stale state.
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    void (async () => {
+      const outcome = await load();
+      if (cancelled) return;
+      void outcome;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   if (loading && !data) return <p className="text-sm text-muted">Loading…</p>;

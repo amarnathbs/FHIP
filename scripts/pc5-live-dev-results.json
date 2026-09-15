@@ -1,6 +1,6 @@
 {
   "mode": "SUBSTRATE",
-  "ranAt": "2026-09-15T00:56:49.578Z",
+  "ranAt": "2026-09-15T01:16:41.104Z",
   "tally": {
     "PASS": 41,
     "FAIL": 0,
@@ -39,8 +39,8 @@
       "description": "two real disposable DEV users created with real password sign-in",
       "status": "PASS",
       "detail": {
-        "owner": "30d9792c-6023-4318-b4c9-8a3cafda79db",
-        "attacker": "57821804-c087-46d4-91b0-0c02bd1bd91b"
+        "owner": "0a69cb83-a7c7-486a-b7f5-28a975ebe85c",
+        "attacker": "862af7ef-6f6f-4166-aef9-0a27bb60ed62"
       }
     },
     {
@@ -49,11 +49,11 @@
       "description": "household populated with self, spouse, partner, child and dependant",
       "status": "PASS",
       "detail": {
-        "selfId": "03628a8d-0113-4e5d-9b7e-51b033c1fa54",
-        "spouseId": "20aec898-468b-4d7a-80ed-016a5cba5f9e",
-        "partnerId": "25570253-ca00-40df-83ac-779b9dfc6b87",
-        "childId": "c740c5e5-f250-4122-9171-62b9a034c4b6",
-        "dependantId": "37c185ef-7305-4181-a9db-dbb0b4c86f1f"
+        "selfId": "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
+        "spouseId": "ccf78f54-482d-46b3-a6c0-27df769f699c",
+        "partnerId": "5655efbf-1e12-4d62-9b9a-d058adb6aa42",
+        "childId": "527bd5ca-4e02-4958-bfa6-ec3515604bea",
+        "dependantId": "3fef365f-5ff1-4b81-aa46-59aeea4ad9cb"
       }
     },
     {
@@ -105,7 +105,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "03628a8d-0113-4e5d-9b7e-51b033c1fa54",
+        "memberId": "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
         "maskedHolderName": "M** A*** S*****"
       }
     },
@@ -119,11 +119,11 @@
         "maskedHolderName": "V***** R**",
         "maskedJointHolders": [],
         "candidateMemberIds": [
-          "03628a8d-0113-4e5d-9b7e-51b033c1fa54",
-          "20aec898-468b-4d7a-80ed-016a5cba5f9e",
-          "c740c5e5-f250-4122-9171-62b9a034c4b6",
-          "25570253-ca00-40df-83ac-779b9dfc6b87",
-          "37c185ef-7305-4181-a9db-dbb0b4c86f1f"
+          "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
+          "ccf78f54-482d-46b3-a6c0-27df769f699c",
+          "527bd5ca-4e02-4958-bfa6-ec3515604bea",
+          "5655efbf-1e12-4d62-9b9a-d058adb6aa42",
+          "3fef365f-5ff1-4b81-aa46-59aeea4ad9cb"
         ]
       }
     },
@@ -134,7 +134,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "20aec898-468b-4d7a-80ed-016a5cba5f9e",
+        "memberId": "ccf78f54-482d-46b3-a6c0-27df769f699c",
         "maskedHolderName": "P**** S*****"
       }
     },
@@ -160,8 +160,8 @@
           "P**** S*****"
         ],
         "matchedMemberIds": [
-          "03628a8d-0113-4e5d-9b7e-51b033c1fa54",
-          "20aec898-468b-4d7a-80ed-016a5cba5f9e"
+          "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
+          "ccf78f54-482d-46b3-a6c0-27df769f699c"
         ]
       }
     },
@@ -205,7 +205,7 @@
       "description": "ACTIONABLE DEEP LINK — the item projects a link to its own case, not to a statement list",
       "status": "PASS",
       "detail": {
-        "href": "/investment-intelligence/resolutions/f4bdbdec-6c44-46d1-b559-a724ad5f3540"
+        "href": "/investment-intelligence/resolutions/79c87056-d089-45ea-bf67-06c062668aaf"
       }
     },
     {
@@ -369,7 +369,7 @@
         "itemStatus": "open",
         "resolved": 0,
         "failedResolutions": [
-          "d045ed89-17e2-47df-82c9-aa24c16e67e3"
+          "c2142098-1716-4c13-badd-8536cfba1ddb"
         ],
         "created": 0,
         "blockedBy0153": "aie_review_decision.original_value_at_decision"
@@ -589,7 +589,7 @@
           "status": "deleted",
           "storage_key": null,
           "purge_status": "purged",
-          "purged_at": "2026-09-15T00:56:30.464+00:00"
+          "purged_at": "2026-09-15T01:16:22.015+00:00"
         }
       }
     },

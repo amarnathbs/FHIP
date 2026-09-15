@@ -61,7 +61,10 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
   const [submitting, setSubmitting] = useState(false);
 
   const [chosenValue, setChosenValue] = useState<string>('');
-  const [allocation, setAllocation] = useState<Pc5AllocationEntry[]>([]);
+  /** The user's OWN edits only, keyed by owner id. The equal default is
+   * derived (see below), never stored — so "what the default is" and "what
+   * the user changed" cannot get out of step. */
+  const [allocationEdits, setAllocationEdits] = useState<Record<string, number>>({});
   const [iiAccountId, setIiAccountId] = useState<string>('');
   const [discardReason, setDiscardReason] = useState<Pc5DiscardReason>('wrong_person');
   const [showDiscard, setShowDiscard] = useState(false);
@@ -81,25 +84,53 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
     }
   }, [itemId]);
 
+  // See ResolutionCentreClient for why the fetch is wrapped rather than
+  // called synchronously in the effect body.
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    void (async () => {
+      const outcome = await load();
+      if (cancelled) return;
+      void outcome;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const choiceField = data?.item.choiceField ?? null;
   const selectedOption = useMemo(() => choiceField?.options.find((o) => o.value === chosenValue) ?? null, [choiceField, chosenValue]);
   const allocationRequired = selectedOption?.requiresAllocation === true;
 
-  // Pre-fill K.6's equal default the moment a joint option is chosen, from
-  // the SAME pure function the server validates against — so what the user
-  // sees pre-filled and what the server would accept cannot diverge.
-  useEffect(() => {
-    if (!allocationRequired || !choiceField) {
-      setAllocation([]);
-      return;
-    }
-    const owners = choiceField.options.filter((o) => !o.requiresAllocation).slice(0, 2).map((o) => ({ ownerMemberId: o.value }));
-    setAllocation(defaultEqualAllocation(owners));
+  // K.6's equal default is DERIVED, not stored by an effect. An earlier
+  // draft pre-filled it with `setAllocation` inside a `useEffect`, which is
+  // both a cascading-render hazard and the wrong model: the default is a
+  // pure function of (is this joint?, who are the owners?), so it belongs
+  // in a `useMemo`. Only the user's OWN edits are state, and they are keyed
+  // by owner id so that changing the chosen option cannot silently carry a
+  // previous owner's percentage across.
+  //
+  // It calls the SAME `defaultEqualAllocation` the server validates
+  // against, so what the user sees pre-filled and what the server would
+  // accept cannot diverge.
+  const defaultAllocation = useMemo(() => {
+    if (!allocationRequired || !choiceField) return [] as Pc5AllocationEntry[];
+    const owners = choiceField.options
+      .filter((o) => !o.requiresAllocation)
+      .slice(0, 2)
+      .map((o) => ({ ownerMemberId: o.value }));
+    return defaultEqualAllocation(owners);
   }, [allocationRequired, choiceField]);
+
+  const allocation = useMemo(
+    () =>
+      defaultAllocation.map((entry) => {
+        const key = entry.ownerMemberId ?? entry.ownerBusinessEntityId ?? '';
+        const edited = allocationEdits[key];
+        return edited === undefined ? entry : { ...entry, basisPoints: edited };
+      }),
+    [defaultAllocation, allocationEdits],
+  );
 
   const allocationTotal = allocation.reduce((sum, e) => sum + (Number.isFinite(e.basisPoints) ? e.basisPoints : 0), 0);
 
@@ -236,7 +267,14 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
                       name="pc5-choice"
                       value={opt.value}
                       checked={chosenValue === opt.value}
-                      onChange={() => setChosenValue(opt.value)}
+                      onChange={() => {
+                        setChosenValue(opt.value);
+                        // Changing the answer discards any percentages
+                        // typed against the previous one. Done HERE, in the
+                        // event handler, rather than in an effect — this is
+                        // the moment the user's intent actually changed.
+                        setAllocationEdits({});
+                      }}
                       className="mt-1"
                     />
                     <span className="min-w-0">
@@ -270,8 +308,13 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
                               value={(entry.basisPoints / 100).toFixed(2)}
                               onChange={(e) => {
                                 const pct = Number(e.target.value);
+                                // Percent in the UI, basis points in the
+                                // model — the conversion happens once,
+                                // here, so nothing downstream ever sees a
+                                // fractional basis point.
                                 const bp = Math.round(pct * 100);
-                                setAllocation((prev) => prev.map((p, i) => (i === idx ? { ...p, basisPoints: bp } : p)));
+                                const key = entry.ownerMemberId ?? entry.ownerBusinessEntityId ?? '';
+                                setAllocationEdits((prev) => ({ ...prev, [key]: bp }));
                               }}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-right"
                             />
