@@ -801,13 +801,31 @@ export const DATA_QUALITY_STATUS_LABELS: Record<DataQualityStatus, string> = {
 };
 
 // Weight an entered-but-unconfirmed section carries in the headline
-// completion percentage. Not 0 (the data exists and IS included in every
-// calculation, so reporting it as contributing nothing is exactly the defect
-// item 4 reports) and not 1 (the household has not yet told FHIP the section
-// is complete, and the "I've added everything relevant to me" confirmation
-// must keep meaning something). Named and exported so it is a visible product
-// decision rather than a magic number buried in a reduce().
-export const IN_PROGRESS_COMPLETENESS_WEIGHT = 0.5;
+// completion percentage.
+//
+// 1, deliberately. This percentage answers "does the report have the data",
+// and for an 'in_progress' section it does — the rows exist and are included
+// in every calculation. Item 4's requirement 2 says entered-but-unconfirmed
+// data must be included in calculations; counting it at less than full weight
+// here would contradict that in the one number the user actually reads.
+//
+// It is also the only value that cannot regress an existing household. Before
+// this change a populated section counted as 'complete' (weight 1) whether or
+// not it had been confirmed; anything below 1 would silently lower the
+// headline percentage for every household that has entered data but never
+// pressed "I've added everything relevant to me" — live-confirmed in
+// tests/live-dev/appReview0915LiveDev.test.ts, where an income+expenses-only
+// household dropped from 29% to 14% at weight 0.5 with no data change.
+//
+// The confirmation still means something: the row's own status reads
+// "In progress" rather than "Complete", and `outstanding` below stays true,
+// so the section narrative keeps telling the household what is unfinished.
+// Health-score eligibility is unaffected — that uses isReviewed()
+// (lib/engines/financialSectionStatus.ts), a separate and stricter test.
+//
+// Named and exported so this is a visible, tunable product decision rather
+// than a magic number buried in a reduce(). Flagged for Product Owner ruling.
+export const IN_PROGRESS_COMPLETENESS_WEIGHT = 1;
 
 export function buildDataQuality(
   source: Pick<ReportSourceData, 'dashboard' | 'dataFreshness' | 'healthScore'>

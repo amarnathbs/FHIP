@@ -174,11 +174,42 @@ export function xirr(cashFlowsInput: CashFlow[]): XirrResult {
   if (!hasPositive || !hasNegative) {
     return { status: 'unavailable', reason: 'ALL_SAME_SIGN', detail: 'Cash flows must include at least one inflow and one outflow.' };
   }
-  // The terminal flow (current value, if the position is still held) must
-  // be present and positive, OR the series must end in a real redemption —
-  // either way this is already covered by the sign check above; callers
-  // are responsible for appending the ending-value terminal flow before
-  // calling xirr() when the position is still open (see PerformanceEngine).
+  // App Review 2026-09-15, item 2, requirement 4 ("only show 'Could not be
+  // calculated' if, after the above, the series genuinely has fewer than one
+  // negative and one positive flow").
+  //
+  // A series can contain both signs and still have no root, and this is the
+  // single case where that happens in practice. As r -> +infinity every flow
+  // after date_0 is discounted away, so NPV tends to the sign of the earliest
+  // flow; as r -> -1+ the last flow's discount factor dominates everything
+  // else, so NPV tends to the sign of the LATEST flow. When those two signs
+  // agree, NPV(r) never crosses zero anywhere in the domain — no solver and
+  // no wider bracket can find a root, because there isn't one.
+  //
+  // In this app that condition means one specific, explainable thing: the
+  // series does not end in a valuation. Reporting it as NOT_BRACKETED with
+  // "No sign change found for NPV(r) across the search domain" told the user
+  // nothing they could act on. NO_TERMINAL_VALUE (already declared in
+  // XirrUnavailableReason, never previously emitted) says what is actually
+  // wrong and what would fix it.
+  const first = cashFlows[0];
+  const last = cashFlows[cashFlows.length - 1];
+  if (first.amount < 0 && last.amount < 0) {
+    return {
+      status: 'unavailable',
+      reason: 'NO_TERMINAL_VALUE',
+      detail:
+        'The most recent recorded event is money going in, with no later valuation to measure it against. A return cannot be calculated until a holding value dated on or after the last transaction is available.',
+    };
+  }
+  if (first.amount > 0 && last.amount > 0) {
+    return {
+      status: 'unavailable',
+      reason: 'NO_TERMINAL_VALUE',
+      detail:
+        'The recorded history begins and ends with money coming out, with no opening investment to measure the return against. The purchase history for this holding appears incomplete.',
+    };
+  }
 
   const date0 = cashFlows[0].date;
   const scale = scaleOf(cashFlows);

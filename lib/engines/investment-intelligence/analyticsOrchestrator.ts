@@ -48,6 +48,16 @@ export interface SchemeDataset {
   // between a switch's two legs can never leak a phantom external cash
   // flow into the household's own return.
   externalCashFlows: CashFlow[];
+  // App Review 2026-09-15, item 2. The same list as externalCashFlows but
+  // WITHOUT the synthetic terminal current-value flow. Portfolio-level
+  // aggregation needs the real flows separated from the per-scheme
+  // valuations, because a portfolio's terminal value is ONE inflow at the
+  // portfolio's own valuation date — not N per-scheme inflows at N different
+  // dates, which is what silently broke portfolio XIRR (see
+  // analysePortfolioCurrency below).
+  // Optional so a caller that predates this field (or a fixture) still works:
+  // schemeRealFlows() below derives it from externalCashFlows when absent.
+  externalCashFlowsExcludingTerminal?: CashFlow[];
   currentValue: number;
   currentValueDate: Date;
   navSeries: SeriesPoint[];
@@ -247,6 +257,25 @@ function computeSchemeActive(
   };
 }
 
+// App Review 2026-09-15, item 2 — a scheme's REAL external cash flows, with
+// the synthetic terminal current-value flow removed. Prefers the list the
+// repository now builds explicitly; falls back to removing the terminal flow
+// by its own (date, amount) identity so any caller that has not been updated
+// still gets the corrected portfolio series rather than the broken one.
+function schemeRealFlows(s: SchemeDataset): CashFlow[] {
+  if (s.externalCashFlowsExcludingTerminal) return s.externalCashFlowsExcludingTerminal;
+  if (s.currentValue <= 0) return s.externalCashFlows;
+  const terminalTime = s.currentValueDate.getTime();
+  let removed = false;
+  return s.externalCashFlows.filter((cf) => {
+    if (!removed && cf.date.getTime() === terminalTime && cf.amount === s.currentValue) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+}
+
 function analysePortfolioCurrency(
   currencyCode: string,
   group: SchemeDataset[],
@@ -301,6 +330,31 @@ function analysePortfolioCurrency(
   for (const s of group) {
     for (const cf of s.externalCashFlows) {
       flowMap.set(cf.date.getTime(), (flowMap.get(cf.date.getTime()) ?? 0) + -cf.amount);
+    }
+    // App Review 2026-09-15, item 2 — ROOT CAUSE of the portfolio XIRR card
+    // reading "Could not be calculated — No sign change found for NPV(r)
+    // across the search domain."
+    //
+    // This map used to be built from s.externalCashFlows, which INCLUDES each
+    // scheme's own synthetic terminal current-value flow, dated at that
+    // scheme's own valuation date. A household's statements do not all carry
+    // the same valuation date, so a purchase in one scheme can legitimately
+    // fall AFTER another scheme's valuation date. When that happens, the
+    // chronologically last flow in the netted portfolio series is negative.
+    //
+    // XIRR is then genuinely unsolvable, and not because of anything the
+    // solver does wrong: NPV(r) tends to the sign of the earliest flow as
+    // r -> infinity (a purchase, negative) and to the sign of the LATEST flow
+    // as r -> -1 (also negative here), so NPV never crosses zero anywhere in
+    // the domain even though the series contains both signs. Widening the
+    // search domain cannot fix it — reproduced directly against the real
+    // solver in tests/unit/iiXirrPortfolioTerminalValue.test.ts.
+    //
+    // The fix is the construction the review itself specifies: every purchase
+    // is an outflow on its own date, and the CURRENT PORTFOLIO VALUE is ONE
+    // inflow on the portfolio's valuation date. So real flows only here; the
+    // single terminal valuation is appended below.
+    for (const cf of schemeRealFlows(s)) {
       netInvestorFlowMap.set(cf.date.getTime(), (netInvestorFlowMap.get(cf.date.getTime()) ?? 0) + cf.amount);
     }
   }
@@ -311,10 +365,32 @@ function analysePortfolioCurrency(
     .filter(([, amount]) => amount !== 0)
     .map(([t, amount]) => ({ date: new Date(t), amount }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // One terminal inflow for the whole portfolio: the sum of every scheme's
+  // current value, dated at the LATEST valuation date in the group (the date
+  // as at which that total is true, and the same date the Overview and the
+  // Performance header already show). Placing it here — after netting the
+  // real flows — guarantees it is the chronologically last flow whenever the
+  // portfolio still holds value, which is precisely the condition XIRR needs.
+  const portfolioCurrentValue = group.reduce((sum, s) => sum + s.currentValue, 0);
+  const portfolioValuationDate = group.reduce<Date | null>(
+    (latest, s) => (s.currentValue > 0 && (!latest || s.currentValueDate > latest) ? s.currentValueDate : latest),
+    null
+  );
   const investorCashFlows: CashFlow[] = [...netInvestorFlowMap.entries()]
     .filter(([, amount]) => amount !== 0)
     .map(([t, amount]) => ({ date: new Date(t), amount }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (portfolioCurrentValue > 0 && portfolioValuationDate) {
+    // If a transaction is dated on or after the valuation date, the valuation
+    // is stale relative to it (already disclosed as a warning by
+    // analyticsRepository). Dating the terminal flow one day after the last
+    // recorded flow in that case would invent a valuation date that does not
+    // exist, so the real valuation date is used as-is and the series is left
+    // to fail honestly rather than be silently made solvable.
+    investorCashFlows.push({ date: portfolioValuationDate, amount: portfolioCurrentValue });
+    investorCashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
 
   const perf = computePortfolioPerformance({ valuations, externalFlows, investorCashFlows });
   const portfolioTwrr = fromTwrr(perf.portfolioTwrr, () => ({ twrr: perf.portfolioTwrr.twrr! }));
