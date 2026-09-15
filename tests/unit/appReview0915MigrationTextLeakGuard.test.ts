@@ -79,11 +79,11 @@ function literals(stmt: string): string[] {
 // The three historical offenders this review uncovered. They are already
 // applied to DEV and production, and this repo's rule is forward-only: an
 // applied migration is never edited, its effects are re-emitted forward.
-// Migration 0154 does exactly that — it cleans the rows they wrote. They stay
+// Migration 0156 does exactly that — it cleans the rows they wrote. They stay
 // listed here so the guard keeps protecting every NEW migration, and so the
 // list itself is the record of what was remediated. Nothing may be added to
-// this list: a new entry means a new leak, which is what 0154 exists to stop.
-const REMEDIATED_BY_0154 = new Set([
+// this list: a new entry means a new leak, which is what 0156 exists to stop.
+const REMEDIATED_BY_0156 = new Set([
   '0077_retirement_member_target_age.sql',
   '0078_property_liability_linking.sql',
   '0084_geo_jurisdiction_smsf.sql',
@@ -99,7 +99,7 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
   it('finds no provenance literal in a statement that targets a user-facing column', () => {
     const offenders: string[] = [];
     for (const file of files) {
-      if (REMEDIATED_BY_0154.has(file)) continue;
+      if (REMEDIATED_BY_0156.has(file)) continue;
       const src = fs.readFileSync(path.join(MIGRATIONS, file), 'utf8');
       for (const { stmt, offsetLine } of writingStatements(src)) {
         // Only an insert/update that actually targets a user-facing column
@@ -108,9 +108,9 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
         for (const lit of literals(stmt)) {
           if (!PROVENANCE.test(lit)) continue;
           if (lit.length < 25) continue; // an enum value or a key, not prose
-          // Migration 0154 is the fix: it matches the offending literals in
+          // Migration 0156 is the fix: it matches the offending literals in
           // order to clear or rewrite them, and never writes one anywhere.
-          if (file.startsWith('0154_')) continue;
+          if (file.startsWith('0156_')) continue;
           offenders.push(`${file}:~${offsetLine} -> ${lit.slice(0, 110)}`);
         }
       }
@@ -119,13 +119,13 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
       offenders,
       'A migration is writing internal provenance into a user-visible column.\n' +
         'Store it in an internal audit/metadata column instead (see\n' +
-        'smsf_funds.backfill_source, added by migration 0154).\n  ' +
+        'smsf_funds.backfill_source, added by migration 0156).\n  ' +
         offenders.join('\n  ')
     ).toEqual([]);
   });
 
-  it('migration 0154 remediates every one of the three known offenders', () => {
-    const src = fs.readFileSync(path.join(MIGRATIONS, '0154_app_review_0915_clear_leaked_migration_notes.sql'), 'utf8');
+  it('migration 0156 remediates every one of the three known offenders', () => {
+    const src = fs.readFileSync(path.join(MIGRATIONS, '0156_app_review_0915_clear_leaked_migration_notes.sql'), 'utf8');
     // Internal homes for the provenance, on the two tables that need one.
     expect(src).toMatch(/alter table smsf_funds[\s\S]*?add column if not exists backfill_source/);
     expect(src).toMatch(/alter table retirement_members[\s\S]*?add column if not exists backfill_source/);
@@ -142,7 +142,7 @@ describe('item 3 — no migration writes internal provenance into a user-facing 
   });
 
   it('the remediation list is exactly the three offenders found, and no more', () => {
-    expect([...REMEDIATED_BY_0154].sort()).toEqual([
+    expect([...REMEDIATED_BY_0156].sort()).toEqual([
       '0077_retirement_member_target_age.sql',
       '0078_property_liability_linking.sql',
       '0084_geo_jurisdiction_smsf.sql',

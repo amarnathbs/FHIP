@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 0154 — App Review 2026-09-15, item 3
+-- 0156 — App Review 2026-09-15, item 3
 -- "Internal migration text leaking into user-facing Notes field (SMSF)"
 --
 -- ROOT CAUSE
@@ -63,10 +63,24 @@
 -- `main`'s supabase/migrations folder ends at 0148, so its own
 -- scripts/check-migration-versions.mjs reports 0149 as next-free — that is
 -- WRONG here. 0149/0150/0151/0152 are claimed by the unmerged AIE-1 closure
--- work (commit 121cfd4 renumbered its 0147/0148 to 0149/0150) and 0153 by the
--- unmerged PC5 branch. A live read-only probe of DEV confirmed 0150's
--- aie_ai_cost_ledger and 0152's aie_ai_cost_attempt are both already applied
--- there. 0154 is therefore the true next-free version.
+-- work (commit 121cfd4 renumbered its 0147/0148 to 0149/0150), 0153 by the
+-- unmerged PC5 branch, 0154 by the unmerged HUF-entity-type branch (M4B),
+-- and 0155 by the unmerged PC6 market-data branch (M6). A live read-only
+-- probe of DEV confirmed 0150's aie_ai_cost_ledger and 0152's
+-- aie_ai_cost_attempt are both already applied there.
+--
+-- RENUMBERED 0154 -> 0156 (2026-09-15, post-authoring): this file was
+-- independently authored on a separate branch (`fix/app-review-findings-
+-- 2026-09-15`, branched straight off `origin/main`) with no visibility into
+-- the parallel, also-unmerged mission branches above, and both correctly
+-- concluded "0154 is next-free" relative to what each branch alone could
+-- see — an exact instance of the cross-branch migration-collision class
+-- this repository has hit several times before. Neither number had been
+-- applied to any database at the point of detection, so renumbering this
+-- (smaller, single-purpose) file was safe; the multi-phase mission's own
+-- internal 0153->0154->0155 sequence, which several already-completed
+-- phases' own reports cite by number, was left undisturbed. 0156 is
+-- therefore the true next-free version as of this renumbering.
 --
 -- APPLICATION: this file must be applied by hand via the Supabase SQL Editor
 -- (DEV first, then production). This environment cannot execute DDL.
@@ -78,7 +92,7 @@ alter table smsf_funds
   add column if not exists backfill_source text;
 
 comment on column smsf_funds.backfill_source is
-  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0154 after App Review 2026-09-15 item 3 found migration 0084 writing this same provenance text into the user-facing notes column. Any future backfill that needs an audit trail writes it HERE, never into notes.';
+  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 after App Review 2026-09-15 item 3 found migration 0084 writing this same provenance text into the user-facing notes column. Any future backfill that needs an audit trail writes it HERE, never into notes.';
 
 update smsf_funds
 set
@@ -115,7 +129,7 @@ alter table retirement_members
   add column if not exists backfill_source text;
 
 comment on column retirement_members.backfill_source is
-  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0154 (App Review 2026-09-15 item 3).';
+  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 (App Review 2026-09-15 item 3).';
 
 -- Case C: pure provenance, no user meaning. Cleared.
 -- Literal: 'Backfilled by migration 0077 from N consistent legacy
