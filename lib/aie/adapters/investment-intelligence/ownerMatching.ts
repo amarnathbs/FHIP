@@ -97,9 +97,18 @@ export function normaliseHolderName(raw: string | null | undefined): string {
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .toLowerCase()
-    // Punctuation a registrar uses decoratively: dots in initials, commas
-    // between surname and given name, apostrophes, hyphens, slashes.
-    .replace(/[.,''`´\-_/\\()[\]{}]+/g, ' ')
+    // APOSTROPHES ARE DELETED, NOT SPLIT ON — and the distinction is a real
+    // one that a first draft of this function got wrong. An apostrophe
+    // sits INSIDE a single name token ("O'Brien", "D'Souza", a very common
+    // surname shape in both the AU and IN user bases), so replacing it with
+    // a separator turns one token into two and makes "O'Brien" fail to
+    // match "OBrien" — the same person, printed two ways by two registrars.
+    // Every OTHER punctuation mark below genuinely separates tokens
+    // ("Anil-Kumar", "Sharma, Anil"), so those do become spaces.
+    .replace(/['’‘`´]+/g, '')
+    // Punctuation a registrar uses decoratively BETWEEN tokens: dots in
+    // initials, commas between surname and given name, hyphens, slashes.
+    .replace(/[.,\-_/\\()[\]{}]+/g, ' ')
     // Anything else non-alphanumeric collapses too (keeps digits: some
     // registrars append a numeric qualifier).
     .replace(/[^a-z0-9\s]+/g, ' ')

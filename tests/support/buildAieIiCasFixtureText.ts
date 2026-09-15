@@ -20,9 +20,18 @@ export interface CasFixtureOptions {
   closingUnits?: string;
   closingValue?: string;
   closingNav?: string;
+  /** PC5 (M4): the `Name:` line a real CAMS folio block prints, which
+   * `camsParser.parseAccounts` reads into `ParsedAccountRecord.holderName`
+   * (camsParser.ts's `extractLabelledField(lines[j], 'Name')`). Omitted by
+   * default so every existing fixture's parsed output is byte-identical to
+   * what it was before this option existed. */
+  holderName?: string;
+  /** PC5 (M4): the `Holding Mode:` line ('SI' single, 'JO' joint, 'AS'
+   * anyone-or-survivor). Same opt-in reasoning as `holderName`. */
+  holdingMode?: string;
 }
 
-const DEFAULTS: Required<CasFixtureOptions> = {
+const DEFAULTS: Required<Omit<CasFixtureOptions, 'holderName' | 'holdingMode'>> = {
   folioNumber: '1122334455',
   isin: 'INF999K01AB1',
   amcName: 'Prime Mutual Fund',
@@ -49,6 +58,12 @@ export function buildAieIiCasFixtureText(opts: CasFixtureOptions = {}): string {
     '',
     `Folio No: ${o.folioNumber}`,
     'PAN: AAAAA1111A',
+    // Emitted only when asked for, so fixtures written before PC5 parse
+    // exactly as they did. Both lines sit INSIDE the folio block (between
+    // `Folio No:` and the next folio/AMC header), which is the window
+    // `camsParser.parseAccounts` scans for labelled fields.
+    ...(opts.holderName ? [`Name: ${opts.holderName}`] : []),
+    ...(opts.holdingMode ? [`Holding Mode: ${opts.holdingMode}`] : []),
     '',
     o.amcName,
     `${o.schemeName} - ISIN: ${o.isin}(Advisor: ARN00001) Registrar : CAMS`,

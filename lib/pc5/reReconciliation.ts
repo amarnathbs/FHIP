@@ -127,6 +127,13 @@ export interface Pc5ReReconcileDeps {
   getAdapterIdForRun: typeof repo.getAdapterIdForRun;
   listFieldCandidatesForRun: typeof repo.listFieldCandidatesForRun;
   listUnresolvedItemsForRunPc5: typeof repo.listUnresolvedItemsForRunPc5;
+  /** Needed to find identity rules that have CLEARED since the last pass —
+   * see the `clearedIdentityResults` block below. Injected like every other
+   * side effect in this module rather than called on the repository
+   * directly: a direct call made the "an identity check that now passes"
+   * path untestable without a database, which is precisely the path most
+   * worth testing. */
+  latestReconciliationOutcomesForRun: typeof repo.latestReconciliationOutcomesForRun;
   transitionRunStatusCas: typeof repo.transitionRunStatusCas;
   recordReconciliationRuns: typeof repo.recordReconciliationRuns;
   resolveItemBySystem: typeof repo.resolveItemBySystem;
@@ -144,6 +151,7 @@ export function createDefaultPc5ReReconcileDeps(): Pc5ReReconcileDeps {
     getAdapterIdForRun: repo.getAdapterIdForRun,
     listFieldCandidatesForRun: repo.listFieldCandidatesForRun,
     listUnresolvedItemsForRunPc5: repo.listUnresolvedItemsForRunPc5,
+    latestReconciliationOutcomesForRun: repo.latestReconciliationOutcomesForRun,
     transitionRunStatusCas: repo.transitionRunStatusCas,
     recordReconciliationRuns: repo.recordReconciliationRuns,
     resolveItemBySystem: repo.resolveItemBySystem,
@@ -302,7 +310,7 @@ export async function reReconcileInvestmentRun(
     // absent from this pass would keep its old `fail` forever and the
     // acceptance gate would refuse the run for a condition that no longer
     // exists. This is the single most important line in the file.
-    const priorOutcomes = await repo.latestReconciliationOutcomesForRun(run.id);
+    const priorOutcomes = await deps.latestReconciliationOutcomesForRun(run.id);
     const stillFailingIdentityRuleIds = new Set(identityResults.map((r) => r.ruleId));
     const clearedIdentityResults: AieReconciliationRunResult[] = priorOutcomes
       .filter((p) => p.ruleId.startsWith(II_IDENTITY_RECONCILIATION_RULE_PREFIX) && !stillFailingIdentityRuleIds.has(p.ruleId))
