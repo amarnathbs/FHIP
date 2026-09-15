@@ -1,0 +1,473 @@
+{
+  "generatedBy": "tests/unit/m12bAiPrivacyProof.test.ts",
+  "liveProviderCallMade": false,
+  "liveProviderCallRationale": "The egress boundary is measured on the REAL OpenAiAieProvider's own outbound HTTP body with fetch intercepted, so every forbidden literal is checked exhaustively before anything could leave. No credential was read and no request was transmitted. See the M12B closure report section 6 for the full reasoning.",
+  "results": [
+    {
+      "adapter": "insurance",
+      "caseId": "INS-B13",
+      "egressOccurred": false,
+      "payloadCount": 0,
+      "categories": [
+        {
+          "category": "person_name",
+          "literalsChecked": 2,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "tax_id",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "aadhaar",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "email",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "phone",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "address",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        },
+        {
+          "category": "bank_account",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "ifsc",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "account_identifier",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "not_proven"
+        }
+      ],
+      "evidenceDestroyed": [],
+      "evidenceChecked": 5,
+      "strictJsonSchemaDeclared": false,
+      "storeDisabled": false,
+      "maskingPlaceholderPresent": false,
+      "verdict": "vacuous",
+      "failures": []
+    },
+    {
+      "adapter": "insurance",
+      "caseId": "INS-B05",
+      "egressOccurred": true,
+      "payloadCount": 1,
+      "categories": [
+        {
+          "category": "person_name",
+          "literalsChecked": 1,
+          "leaked": [
+            "policy owner name"
+          ],
+          "verdict": "fail"
+        },
+        {
+          "category": "tax_id",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "aadhaar",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "email",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "phone",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "address",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "bank_account",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "ifsc",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "account_identifier",
+          "literalsChecked": 1,
+          "leaked": [
+            "policy number"
+          ],
+          "verdict": "fail"
+        }
+      ],
+      "evidenceDestroyed": [],
+      "evidenceChecked": 3,
+      "strictJsonSchemaDeclared": true,
+      "storeDisabled": true,
+      "maskingPlaceholderPresent": false,
+      "verdict": "fail",
+      "failures": [
+        "person_name: leaked policy owner name",
+        "account_identifier: leaked policy number"
+      ]
+    },
+    {
+      "adapter": "fdh-bank",
+      "caseId": "FDH-A05",
+      "egressOccurred": true,
+      "payloadCount": 1,
+      "categories": [
+        {
+          "category": "person_name",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "tax_id",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "aadhaar",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "email",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "phone",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "address",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "bank_account",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "ifsc",
+          "literalsChecked": 0,
+          "leaked": [],
+          "verdict": "not_applicable"
+        },
+        {
+          "category": "account_identifier",
+          "literalsChecked": 1,
+          "leaked": [],
+          "verdict": "pass"
+        }
+      ],
+      "evidenceDestroyed": [],
+      "evidenceChecked": 2,
+      "strictJsonSchemaDeclared": true,
+      "storeDisabled": true,
+      "maskingPlaceholderPresent": true,
+      "verdict": "pass",
+      "failures": []
+    }
+  ],
+  "evidence": {
+    "masking-key-not-persisted": {
+      "envLocalPresentInWorktree": false,
+      "envLocalDeclaresMaskingKey": false,
+      "note": "This phase provisioned no key. The key used by the proofs below is generated per-test with crypto.randomBytes and dies with the process."
+    },
+    "insurance-INS-B13": {
+      "terminalStatus": "unresolved",
+      "aiWasUsed": true,
+      "aiCompletionAttempts": 0,
+      "payloadsCaptured": 0,
+      "egressUrls": [],
+      "result": {
+        "adapter": "insurance",
+        "caseId": "INS-B13",
+        "egressOccurred": false,
+        "payloadCount": 0,
+        "categories": [
+          {
+            "category": "person_name",
+            "literalsChecked": 2,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "tax_id",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "aadhaar",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "email",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "phone",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "address",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          },
+          {
+            "category": "bank_account",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "ifsc",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "account_identifier",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "not_proven"
+          }
+        ],
+        "evidenceDestroyed": [],
+        "evidenceChecked": 5,
+        "strictJsonSchemaDeclared": false,
+        "storeDisabled": false,
+        "maskingPlaceholderPresent": false,
+        "verdict": "vacuous",
+        "failures": []
+      }
+    },
+    "insurance-INS-B05": {
+      "terminalStatus": "unresolved",
+      "aiWasUsed": true,
+      "aiCompletionAttempts": 1,
+      "payloadsCaptured": 1,
+      "egressUrls": [
+        "https://api.openai.com/v1/chat/completions"
+      ],
+      "result": {
+        "adapter": "insurance",
+        "caseId": "INS-B05",
+        "egressOccurred": true,
+        "payloadCount": 1,
+        "categories": [
+          {
+            "category": "person_name",
+            "literalsChecked": 1,
+            "leaked": [
+              "policy owner name"
+            ],
+            "verdict": "fail"
+          },
+          {
+            "category": "tax_id",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "aadhaar",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "email",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "phone",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "address",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "bank_account",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "ifsc",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "account_identifier",
+            "literalsChecked": 1,
+            "leaked": [
+              "policy number"
+            ],
+            "verdict": "fail"
+          }
+        ],
+        "evidenceDestroyed": [],
+        "evidenceChecked": 3,
+        "strictJsonSchemaDeclared": true,
+        "storeDisabled": true,
+        "maskingPlaceholderPresent": false,
+        "verdict": "fail",
+        "failures": [
+          "person_name: leaked policy owner name",
+          "account_identifier: leaked policy number"
+        ]
+      }
+    },
+    "fdh-bank-FDH-A05": {
+      "terminalStatus": "unresolved",
+      "aiWasUsed": true,
+      "aiCompletionAttempts": 1,
+      "payloadsCaptured": 1,
+      "egressUrls": [
+        "https://api.openai.com/v1/chat/completions"
+      ],
+      "result": {
+        "adapter": "fdh-bank",
+        "caseId": "FDH-A05",
+        "egressOccurred": true,
+        "payloadCount": 1,
+        "categories": [
+          {
+            "category": "person_name",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "tax_id",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "aadhaar",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "email",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "phone",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "address",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "bank_account",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "ifsc",
+            "literalsChecked": 0,
+            "leaked": [],
+            "verdict": "not_applicable"
+          },
+          {
+            "category": "account_identifier",
+            "literalsChecked": 1,
+            "leaked": [],
+            "verdict": "pass"
+          }
+        ],
+        "evidenceDestroyed": [],
+        "evidenceChecked": 2,
+        "strictJsonSchemaDeclared": true,
+        "storeDisabled": true,
+        "maskingPlaceholderPresent": true,
+        "verdict": "pass",
+        "failures": []
+      }
+    },
+    "strict-schema-rejection": {
+      "schemaValidatesViolatingResponse": false,
+      "gatewayOutcome": "schema_rejected",
+      "gatewayReturnedData": null,
+      "note": "A response naming a field outside the adapter's closed enum is refused by schema shape, not by a policy check a call site could forget."
+    }
+  }
+}
