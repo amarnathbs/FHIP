@@ -353,9 +353,12 @@ intended user before making any claim, so none of these is hollow.
 ### 3.11 Performance activation (N.12)
 
 **No analytics were reimplemented.** Every number comes from an engine
-certified in R4/R5 and imported unmodified. A static check
-(`PC6-PERF-24`) scans all five PC6 modules for any metric implementation and
-finds none.
+certified in R4/R5 and imported unmodified. A static check (`PC6-PERF-24`)
+scans all seven PC6 modules — `amfiParser`, `benchmarkGovernance`,
+`referenceDataAdmin`, `referenceDataQuality`, `referenceImportRunner`,
+`referenceIngestJob`, `riskFreeSeries` — for any metric implementation and
+finds none. The check reads the directory rather than a hard-coded list, so a
+future module cannot slip past it.
 
 Driven with a **real** NAV series: 14 month-end NAVs for AMFI code 120503
 ("Axis ELSS Tax Saver Fund — Direct Plan — Growth Option"), assembled from 14

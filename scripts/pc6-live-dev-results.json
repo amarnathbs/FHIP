@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-09-15T09:19:39.793Z",
+  "ranAt": "2026-09-15T10:00:01.245Z",
   "asOf": "2026-09-15",
   "pass": 41,
   "fail": 0,
@@ -20,7 +20,7 @@
       "id": "PC6-LD-03",
       "verdict": "PASS",
       "label": "the raw source is fingerprinted (byte length + sha256 + retrieval time)",
-      "evidence": "sha256=b1a8be20149399454ec9a12f620af499657e9fde3c3b12cd85e755414f062cab bytes=1519199 retrievedAt=2026-09-15T09:19:33.786Z"
+      "evidence": "sha256=b1a8be20149399454ec9a12f620af499657e9fde3c3b12cd85e755414f062cab bytes=1519199 retrievedAt=2026-09-15T09:59:54.860Z"
     },
     {
       "id": "PC6-LD-04",
@@ -188,7 +188,7 @@
       "id": "PC6-LD-31",
       "verdict": "PASS",
       "label": "backoff is honoured, and is bounded rather than unbounded",
-      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T10:19:38.783Z"
+      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T11:00:00.349Z"
     },
     {
       "id": "PC6-LD-32",

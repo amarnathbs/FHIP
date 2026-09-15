@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-09-15T09:27:27.163Z",
+  "ranAt": "2026-09-15T10:00:18.586Z",
   "pass": 24,
   "fail": 0,
   "results": [
@@ -145,7 +145,7 @@
       "id": "PC6-PERF-24",
       "verdict": "PASS",
       "label": "N.12 — the PC6 modules contain no re-implementation of any certified metric",
-      "evidence": "5 PC6 module(s) scanned (amfiParser.ts, benchmarkGovernance.ts, referenceDataQuality.ts, referenceImportRunner.ts, riskFreeSeries.ts); 0 contain a metric implementation"
+      "evidence": "7 PC6 module(s) scanned (amfiParser.ts, benchmarkGovernance.ts, referenceDataAdmin.ts, referenceDataQuality.ts, referenceImportRunner.ts, referenceIngestJob.ts, riskFreeSeries.ts); 0 contain a metric implementation"
     }
   ]
 }
