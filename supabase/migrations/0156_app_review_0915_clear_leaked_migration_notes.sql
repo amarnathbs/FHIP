@@ -111,7 +111,7 @@
 -- business rule aimed at protecting real-time user-initiated writes.
 --
 -- FIX: bracket each table's UPDATE statements with
--- `disable trigger all` / `enable trigger all` for exactly that table, for
+-- `disable trigger user` / `enable trigger user` for exactly that table, for
 -- exactly the duration of this migration's own transaction. This is the
 -- standard, narrowly-scoped Postgres idiom for a data-fix migration that
 -- must bypass business-logic triggers without needing to know which
@@ -119,13 +119,13 @@
 -- deliberately more robust here than a targeted per-trigger bypass, since
 -- this migration's author could not obtain `enforce_country_confirmed()`'s
 -- exact definition or its exact table attachment before shipping this fix.
--- `disable trigger all` also suspends this table's `updated_at`-bump
+-- `disable trigger user` also suspends this table's `updated_at`-bump
 -- trigger (if one exists) for the same window, which is why every UPDATE
 -- below now sets `updated_at = now()` explicitly rather than relying on one
 -- -- `property_liability_links` did not do this in the original version of
 -- this file; it does now, for the same reason.
 --
--- `disable trigger all` requires table-owner privilege, which the
+-- `disable trigger user` requires table-owner privilege, which the
 -- Supabase SQL Editor's connection (`postgres` role) holds; RLS policies
 -- are unaffected by this (RLS is not trigger-based), and PostgREST/RLS
 -- behaviour for ordinary application traffic is unchanged both during and
@@ -141,7 +141,7 @@ alter table smsf_funds
 comment on column smsf_funds.backfill_source is
   'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 after App Review 2026-09-15 item 3 found migration 0084 writing this same provenance text into the user-facing notes column. Any future backfill that needs an audit trail writes it HERE, never into notes.';
 
-alter table smsf_funds disable trigger all;
+alter table smsf_funds disable trigger user;
 
 update smsf_funds
 set
@@ -153,7 +153,7 @@ set
   updated_at = now()
 where notes = 'Backfilled by migration 0084 from the pre-existing retirement_accounts row (Summary Mode, value unchanged).';
 
-alter table smsf_funds enable trigger all;
+alter table smsf_funds enable trigger user;
 
 -- ---------------------------------------------------------------------------
 -- property_liability_links.notes — migration 0078's three auto-link literals.
@@ -164,7 +164,7 @@ alter table smsf_funds enable trigger all;
 -- rows, which is the structured version of the same fact.
 -- ---------------------------------------------------------------------------
 
-alter table property_liability_links disable trigger all;
+alter table property_liability_links disable trigger user;
 
 update property_liability_links
 set notes = null,
@@ -175,7 +175,7 @@ where notes in (
   'Auto-linked by migration 0078: exactly one active Commercial Property and exactly one active Commercial Property Loan for this user, with matching owner/currency/country.'
 );
 
-alter table property_liability_links enable trigger all;
+alter table property_liability_links enable trigger user;
 
 -- ---------------------------------------------------------------------------
 -- retirement_members.notes — migration 0077's two literals.
@@ -187,7 +187,7 @@ alter table retirement_members
 comment on column retirement_members.backfill_source is
   'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 (App Review 2026-09-15 item 3).';
 
-alter table retirement_members disable trigger all;
+alter table retirement_members disable trigger user;
 
 -- Case C: pure provenance, no user meaning. Cleared.
 -- Literal: 'Backfilled by migration 0077 from N consistent legacy
@@ -216,7 +216,7 @@ set
 where notes like 'Migration 0077: legacy retirement\_accounts.target\_retirement\_age values conflicted across this member''s accounts (%'
   and substring(notes from 'accounts \(([^)]*)\)') is not null;
 
-alter table retirement_members enable trigger all;
+alter table retirement_members enable trigger user;
 
 commit;
 
