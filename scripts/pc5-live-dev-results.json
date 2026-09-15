@@ -1,21 +1,21 @@
 {
-  "mode": "SUBSTRATE",
-  "ranAt": "2026-09-15T01:16:41.104Z",
+  "mode": "FULL",
+  "ranAt": "2026-09-15T11:45:43.997Z",
   "tally": {
-    "PASS": 41,
+    "PASS": 54,
     "FAIL": 0,
-    "BLOCKED_ON_0153": 13,
+    "BLOCKED_ON_0153": 0,
     "NOT_APPLICABLE": 0
   },
   "results": [
     {
       "id": "GATE-1",
       "kItem": "—",
-      "description": "migration 0153 applied to DEV? NO — running in SUBSTRATE mode",
-      "status": "BLOCKED_ON_0153",
+      "description": "migration 0153 applied to DEV? YES — running in FULL mode",
+      "status": "PASS",
       "detail": {
-        "ii_ownership_allocation": "PGRST205",
-        "aie_review_decision.original_value_at_decision": "42703"
+        "ii_ownership_allocation": "PRESENT",
+        "aie_review_decision.original_value_at_decision": "PRESENT"
       }
     },
     {
@@ -39,8 +39,8 @@
       "description": "two real disposable DEV users created with real password sign-in",
       "status": "PASS",
       "detail": {
-        "owner": "0a69cb83-a7c7-486a-b7f5-28a975ebe85c",
-        "attacker": "862af7ef-6f6f-4166-aef9-0a27bb60ed62"
+        "owner": "bd2dfd1d-77e1-4d41-955b-06702fff6178",
+        "attacker": "a5927cc9-cf0f-4093-8178-afc9f3f540c4"
       }
     },
     {
@@ -49,11 +49,11 @@
       "description": "household populated with self, spouse, partner, child and dependant",
       "status": "PASS",
       "detail": {
-        "selfId": "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
-        "spouseId": "ccf78f54-482d-46b3-a6c0-27df769f699c",
-        "partnerId": "5655efbf-1e12-4d62-9b9a-d058adb6aa42",
-        "childId": "527bd5ca-4e02-4958-bfa6-ec3515604bea",
-        "dependantId": "3fef365f-5ff1-4b81-aa46-59aeea4ad9cb"
+        "selfId": "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
+        "spouseId": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+        "partnerId": "0fc85e13-1939-46a2-a945-195f0bbd01df",
+        "childId": "11002e4f-16ad-4856-acf9-83bf17017e7c",
+        "dependantId": "91f895fd-3568-49d9-b84d-efcefa9fdbd3"
       }
     },
     {
@@ -105,7 +105,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
+        "memberId": "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
         "maskedHolderName": "M** A*** S*****"
       }
     },
@@ -119,11 +119,11 @@
         "maskedHolderName": "V***** R**",
         "maskedJointHolders": [],
         "candidateMemberIds": [
-          "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
-          "ccf78f54-482d-46b3-a6c0-27df769f699c",
-          "527bd5ca-4e02-4958-bfa6-ec3515604bea",
-          "5655efbf-1e12-4d62-9b9a-d058adb6aa42",
-          "3fef365f-5ff1-4b81-aa46-59aeea4ad9cb"
+          "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
+          "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+          "11002e4f-16ad-4856-acf9-83bf17017e7c",
+          "0fc85e13-1939-46a2-a945-195f0bbd01df",
+          "91f895fd-3568-49d9-b84d-efcefa9fdbd3"
         ]
       }
     },
@@ -134,7 +134,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "ccf78f54-482d-46b3-a6c0-27df769f699c",
+        "memberId": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
         "maskedHolderName": "P**** S*****"
       }
     },
@@ -160,8 +160,8 @@
           "P**** S*****"
         ],
         "matchedMemberIds": [
-          "ad6570a8-fa0d-4ce1-b9e9-3cdb72b7e5e7",
-          "ccf78f54-482d-46b3-a6c0-27df769f699c"
+          "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
+          "b437761b-0613-4f84-b6b0-a9a695f7e2df"
         ]
       }
     },
@@ -205,7 +205,7 @@
       "description": "ACTIONABLE DEEP LINK — the item projects a link to its own case, not to a statement list",
       "status": "PASS",
       "detail": {
-        "href": "/investment-intelligence/resolutions/79c87056-d089-45ea-bf67-06c062668aaf"
+        "href": "/investment-intelligence/resolutions/7a8e427e-2cb3-4685-8916-a7ab501d2499"
       }
     },
     {
@@ -306,11 +306,11 @@
       "id": "S-21",
       "kItem": "K.1",
       "description": "ACKNOWLEDGE — recorded, and does NOT resolve or unblock (K.13's masquerade check, live)",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "aieStatus": "in_review",
+        "blockingBefore": 2,
+        "blockingAfter": 2
       }
     },
     {
@@ -327,65 +327,74 @@
       "id": "S-23",
       "kItem": "K.1",
       "description": "CHOOSE A VALUE — a real owner choice is recorded through AIE's own version-checked decision path",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "decision": {
+          "decision_type": "pc5_choose_value",
+          "correction_field_name": "ownerMemberId",
+          "correction_value_normalized": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+          "actor_id": "bd2dfd1d-77e1-4d41-955b-06702fff6178"
+        },
+        "reReconciliation": {
+          "ran": true,
+          "runStatus": "awaiting_acceptance",
+          "openBlockingItemCount": 0,
+          "newItemIds": [],
+          "resolvedItemIds": [
+            "7a8e427e-2cb3-4685-8916-a7ab501d2499"
+          ]
+        }
       }
     },
     {
       "id": "S-24",
       "kItem": "K.22",
       "description": "CONCURRENT RESOLUTION IDEMPOTENCY — the same decision twice produces ONE decision row",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "decisionRows": 0,
-        "first": "db_error",
-        "second": "db_error",
-        "firstDetail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache",
-        "secondDetail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "decisionRows": 1,
+        "first": "ok",
+        "second": "ok",
+        "firstDetail": null,
+        "secondDetail": null
       }
     },
     {
       "id": "S-25",
       "kItem": "K.1",
       "description": "STALE DECISION REFUSED — a decision against an old item_version loses cleanly",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
         "ok": false,
-        "reason": "db_error",
-        "detail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "reason": "stale_conflict"
       }
     },
     {
       "id": "S-26",
       "kItem": "K.19",
       "description": "RE-RECONCILIATION — a resolved owner clears the condition and moves the run to awaiting_acceptance",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "reported": "unresolved",
-        "stored": "unresolved",
-        "itemStatus": "open",
-        "resolved": 0,
-        "failedResolutions": [
-          "c2142098-1716-4c13-badd-8536cfba1ddb"
-        ],
+        "reported": "awaiting_acceptance",
+        "stored": "awaiting_acceptance",
+        "itemStatus": "resolved",
+        "resolved": 1,
+        "failedResolutions": [],
         "created": 0,
-        "blockedBy0153": "aie_review_decision.original_value_at_decision"
+        "blockedBy0153": null
       }
     },
     {
       "id": "S-27",
       "kItem": "K.19",
       "description": "REPEATED OBSERVATION — re-running the SAME re-reconciliation is refused as wrong_state, never double-applied",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "first": "unresolved",
-        "second": "ran again",
+        "first": "awaiting_acceptance",
+        "second": "wrong_state",
         "itemsOnRun": 1,
         "neverDuplicated": true,
-        "blockedBy0153": "aie_review_decision.original_value_at_decision — the first pass could not resolve, so the run stayed unresolved and the second pass legitimately ran"
+        "blockedBy0153": null
       }
     },
     {
@@ -402,22 +411,26 @@
       "id": "S-29",
       "kItem": "K.10",
       "description": "DUPLICATE CANDIDATE — \"separate genuine events\" is recorded and re-reconciliation reruns the dedup",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "ran": true,
+        "runStatus": "unresolved",
+        "openBlockingItemCount": 1,
+        "newItemIds": [
+          "fea1d2df-4b53-4366-94df-ad86f8594456"
+        ],
+        "resolvedItemIds": [
+          "8aceac25-e013-4bec-9e1f-a42cb16510d6"
+        ]
       }
     },
     {
       "id": "S-30",
       "kItem": "K.10",
       "description": "DUPLICATE CANDIDATE — \"same economic event\" is a DIFFERENT recorded answer with its own audit",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "PGRST204 Could not find the 'original_value_at_decision' column of 'aie_review_decision' in the schema cache"
+        "correction_value_normalized": "same_economic_event"
       }
     },
     {
@@ -435,32 +448,42 @@
       "id": "S-32",
       "kItem": "K.12",
       "description": "CORRECTION OVERLAY — the decision trail records provenance and states the original is unrecoverable",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "entries": 0,
-        "blockedBy": "aie_review_decision.original_value_at_decision — no decision could be recorded"
+        "entries": 3,
+        "chooseEntry": {
+          "fieldName": "ownerMemberId",
+          "originalValueMasked": "V***** R**",
+          "originalValueIsRecoverable": false,
+          "parserVersionAtDecision": "live-matrix-1",
+          "decisionType": "pc5_choose_value",
+          "userValue": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+          "reason": null,
+          "actorId": "bd2dfd1d-77e1-4d41-955b-06702fff6178",
+          "decidedAt": "2026-09-15T11:44:23.174899+00:00",
+          "resultingReconciliationAt": "2026-09-15T11:44:25.048+00:00"
+        }
       }
     },
     {
       "id": "S-33",
       "kItem": "K.6",
       "description": "JOINT DEFAULT ALLOCATION — an equal 50/50 split is recorded against a real account",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "Could not find the table 'public.ii_ownership_allocation' in the schema cache"
+        "rows": 2,
+        "total": 10000
       }
     },
     {
       "id": "S-34",
       "kItem": "K.6",
       "description": "EDITED ALLOCATION — a 70/30 amendment SUPERSEDES the previous group rather than editing it",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "ok": false,
-        "reason": "db_error",
-        "detail": "Could not find the table 'public.ii_ownership_allocation' in the schema cache"
+        "activeRows": 2,
+        "supersededRows": 2,
+        "newGroup": "aa1de6e3-d836-4b7c-9eff-30b6122853eb"
       }
     },
     {
@@ -487,9 +510,9 @@
       "id": "S-37",
       "kItem": "K.20",
       "description": "CROSS-TENANT ALLOCATION REFUSED AT THE DATABASE — a real member id belonging to someone else is rejected by the trigger",
-      "status": "BLOCKED_ON_0153",
+      "status": "PASS",
       "detail": {
-        "error": "Could not find the table 'public.ii_ownership_allocation' in the schema cache"
+        "error": "ii_ownership_allocation.owner_member_id does not belong to user_id bd2dfd1d-77e1-4d41-955b-06702fff6178"
       }
     },
     {
@@ -498,8 +521,8 @@
       "description": "ALLOCATIONS ARE SELECT-ONLY FOR THE BROWSER — even the owner's JWT cannot insert one",
       "status": "PASS",
       "detail": {
-        "status": 404,
-        "body": "{\"code\":\"PGRST205\",\"details\":null,\"hint\":\"Perhaps you meant the table 'public.ii_goal_allocations'\",\"message\":\"Could not find the table 'public.ii_ownership_all"
+        "status": 403,
+        "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_ownership_allocation\\\"\"}"
       }
     },
     {
@@ -530,7 +553,7 @@
       "description": "DISCARD BLOCKS PUBLICATION STRUCTURALLY — the terminal run can never reach awaiting_acceptance again",
       "status": "PASS",
       "detail": {
-        "decisionAfterDiscard": "db_error",
+        "decisionAfterDiscard": "allowed",
         "reconcile": "wrong_state"
       }
     },
@@ -589,7 +612,7 @@
           "status": "deleted",
           "storage_key": null,
           "purge_status": "purged",
-          "purged_at": "2026-09-15T01:16:22.015+00:00"
+          "purged_at": "2026-09-15T11:45:25.415+00:00"
         }
       }
     },

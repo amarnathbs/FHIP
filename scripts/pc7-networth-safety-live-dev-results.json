@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15T11:04:37.708Z",
+  "generatedAt": "2026-09-15T11:41:41.007Z",
   "host": "vqycarelcoijzwlpkpcz.supabase.co",
   "pass": 19,
   "fail": 0,
@@ -9,9 +9,9 @@
       "description": "Live precondition: is PC6 migration 0155 applied on DEV?",
       "status": "INFO",
       "detail": {
-        "applied": false,
-        "httpStatus": 404,
-        "note": "0155 is NOT applied — anything reading ii_scheme_master is out of live scope for this run. The O.7 proof below does not depend on it."
+        "applied": true,
+        "httpStatus": 200,
+        "note": "0155 IS applied."
       }
     },
     {
@@ -27,7 +27,7 @@
       "description": "Disposable synthetic tenant created (real createUser + real password sign-in)",
       "status": "PASS",
       "detail": {
-        "id": "896f585f-e160-4ef8-b36f-dd5f83a49429"
+        "id": "f0baee8b-8063-48b3-8340-89b56408abe8"
       }
     },
     {
@@ -36,7 +36,7 @@
       "status": "PASS",
       "detail": {
         "httpStatus": 200,
-        "body": "[{\"user_id\":\"896f585f-e160-4ef8-b36f-dd5f83a49429\",\"full_name\":null,\"date_of_birth\":null,\"country_of_residence\":\"IN\",\"secondary_country\":null,\"preferred_currency\":\"INR\",\"employment_status\":null,\"onboa"
+        "body": "[{\"user_id\":\"f0baee8b-8063-48b3-8340-89b56408abe8\",\"full_name\":null,\"date_of_birth\":null,\"country_of_residence\":\"IN\",\"secondary_country\":null,\"preferred_currency\":\"INR\",\"employment_status\":null,\"onboa"
       }
     },
     {
@@ -44,7 +44,7 @@
       "description": "The user holds ONE fund position worth exactly 1000000 INR",
       "status": "PASS",
       "detail": {
-        "investmentId": "840ceec5-0e52-4130-9358-5ff9879cc980"
+        "investmentId": "f6b77ddc-2267-4c39-adc6-759da2fb5213"
       }
     },
     {
@@ -67,7 +67,7 @@
       "detail": {
         "httpStatus": 201,
         "insertedLines": 9,
-        "snapshotId": "db4a3767-6cf3-4e9d-96a2-51b8fea8cb88"
+        "snapshotId": "c89da56c-eee1-4833-a051-324d7d4513cf"
       }
     },
     {

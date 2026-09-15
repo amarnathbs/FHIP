@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-09-15T10:00:01.245Z",
+  "ranAt": "2026-09-15T11:48:57.042Z",
   "asOf": "2026-09-15",
   "pass": 41,
   "fail": 0,
@@ -20,7 +20,7 @@
       "id": "PC6-LD-03",
       "verdict": "PASS",
       "label": "the raw source is fingerprinted (byte length + sha256 + retrieval time)",
-      "evidence": "sha256=b1a8be20149399454ec9a12f620af499657e9fde3c3b12cd85e755414f062cab bytes=1519199 retrievedAt=2026-09-15T09:59:54.860Z"
+      "evidence": "sha256=c43c3d5ebcc6805d2792db0d645ec62ff6ea98a84026baf0ec10668d6a9a04c5 bytes=1519199 retrievedAt=2026-09-15T11:48:50.921Z"
     },
     {
       "id": "PC6-LD-04",
@@ -109,8 +109,8 @@
     {
       "id": "PC6-LD-18",
       "verdict": "PASS",
-      "label": "CONFIRMED ON DEV — an 8-decimal AMFI NAV is silently rounded by the current numeric(20,6) column",
-      "evidence": "443 real scheme(s) publish >6 dp today; wrote 14.86269632 (from BANDHAN Arbitrage Fund), DEV stored 14.862696. Migration 0155 widens the column to numeric(24,10) to fix exactly this."
+      "label": "CONFIRMED ON DEV — 0155 IS APPLIED and an 8-decimal AMFI NAV now survives intact (the numeric(20,6) rounding defect is FIXED on the hosted database)",
+      "evidence": "443 real scheme(s) publish >6 dp today; wrote 14.86269632 (from BANDHAN Arbitrage Fund), DEV stored 14.86269632 — IDENTICAL, so the column is numeric(24,10) and 0155 is live."
     },
     {
       "id": "PC6-LD-19",
@@ -188,7 +188,7 @@
       "id": "PC6-LD-31",
       "verdict": "PASS",
       "label": "backoff is honoured, and is bounded rather than unbounded",
-      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T11:00:00.349Z"
+      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T12:48:56.142Z"
     },
     {
       "id": "PC6-LD-32",

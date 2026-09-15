@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-15T08:35:36.967Z",
-  "filesScanned": 2942,
+  "generatedAt": "2026-09-15T11:51:43.509Z",
+  "filesScanned": 2991,
   "phases": {
     "AIE-1.0": {
       "total": 258,
@@ -9,8 +9,8 @@
       "liveDev": 0,
       "migration": 6,
       "script": 10,
-      "doc": 24,
-      "tracedAnywhere": 49,
+      "doc": 26,
+      "tracedAnywhere": 50,
       "orphans": [
         "ADR-AIE-001",
         "ADR-AIE-003",
@@ -33,7 +33,6 @@
         "AIE10-AI-09",
         "AIE10-AI-11",
         "AIE10-AI-12",
-        "AIE10-API-01",
         "AIE10-API-02",
         "AIE10-API-04",
         "AIE10-API-05",
@@ -224,7 +223,7 @@
       ],
       "strictTraced": 7,
       "strictOrphanCount": 251,
-      "orphanCount": 209
+      "orphanCount": 208
     },
     "AIE-1.1": {
       "total": 332,
@@ -233,10 +232,9 @@
       "liveDev": 0,
       "migration": 22,
       "script": 8,
-      "doc": 17,
-      "tracedAnywhere": 75,
+      "doc": 21,
+      "tracedAnywhere": 76,
       "orphans": [
-        "AIE11-API-01",
         "AIE11-API-02",
         "AIE11-API-04",
         "AIE11-API-05",
@@ -494,9 +492,9 @@
         "AIE11-UPL-11",
         "AIE11-UPL-12"
       ],
-      "strictTraced": 2,
-      "strictOrphanCount": 330,
-      "orphanCount": 257
+      "strictTraced": 3,
+      "strictOrphanCount": 329,
+      "orphanCount": 256
     },
     "AIE-1.2": {
       "total": 334,
@@ -505,10 +503,9 @@
       "liveDev": 0,
       "migration": 6,
       "script": 2,
-      "doc": 16,
-      "tracedAnywhere": 27,
+      "doc": 18,
+      "tracedAnywhere": 28,
       "orphans": [
-        "AIE12-ACCT-01",
         "AIE12-ACCT-02",
         "AIE12-ACCT-04",
         "AIE12-ACCT-05",
@@ -816,9 +813,9 @@
         "AIE12-WRITE-11",
         "AIE12-WRITE-12"
       ],
-      "strictTraced": 1,
-      "strictOrphanCount": 333,
-      "orphanCount": 307
+      "strictTraced": 2,
+      "strictOrphanCount": 332,
+      "orphanCount": 306
     },
     "AIE-1.3": {
       "total": 346,
@@ -827,10 +824,9 @@
       "liveDev": 0,
       "migration": 6,
       "script": 4,
-      "doc": 13,
-      "tracedAnywhere": 37,
+      "doc": 14,
+      "tracedAnywhere": 38,
       "orphans": [
-        "AIE13-ACCT-01",
         "AIE13-ACCT-02",
         "AIE13-ACCT-04",
         "AIE13-ACCT-05",
@@ -1142,7 +1138,7 @@
       ],
       "strictTraced": 13,
       "strictOrphanCount": 333,
-      "orphanCount": 309
+      "orphanCount": 308
     },
     "AIE-1.4": {
       "total": 286,
@@ -1151,7 +1147,7 @@
       "liveDev": 0,
       "migration": 3,
       "script": 3,
-      "doc": 25,
+      "doc": 26,
       "tracedAnywhere": 41,
       "orphans": [
         "AIE14-BILL-01",
@@ -1410,9 +1406,9 @@
       "test": 23,
       "liveDev": 0,
       "migration": 5,
-      "script": 0,
-      "doc": 22,
-      "tracedAnywhere": 83,
+      "script": 12,
+      "doc": 24,
+      "tracedAnywhere": 95,
       "orphans": [
         "AIE15-ACPT-04",
         "AIE15-ACPT-06",
@@ -1596,18 +1592,6 @@
         "AIE15-NOTIF-10",
         "AIE15-NOTIF-11",
         "AIE15-NOTIF-12",
-        "AIE15-PERF-01",
-        "AIE15-PERF-02",
-        "AIE15-PERF-03",
-        "AIE15-PERF-04",
-        "AIE15-PERF-05",
-        "AIE15-PERF-06",
-        "AIE15-PERF-07",
-        "AIE15-PERF-08",
-        "AIE15-PERF-09",
-        "AIE15-PERF-10",
-        "AIE15-PERF-11",
-        "AIE15-PERF-12",
         "AIE15-PRIV-01",
         "AIE15-PRIV-03",
         "AIE15-PRIV-04",
@@ -1656,7 +1640,7 @@
       ],
       "strictTraced": 15,
       "strictOrphanCount": 307,
-      "orphanCount": 239
+      "orphanCount": 227
     },
     "AIE-1.6": {
       "total": 336,
@@ -1665,10 +1649,9 @@
       "liveDev": 0,
       "migration": 4,
       "script": 10,
-      "doc": 19,
-      "tracedAnywhere": 32,
+      "doc": 21,
+      "tracedAnywhere": 33,
       "orphans": [
-        "AIE16-ATOM-01",
         "AIE16-ATOM-02",
         "AIE16-ATOM-03",
         "AIE16-ATOM-04",
@@ -1973,9 +1956,9 @@
         "AIE16-TRACE-11",
         "AIE16-TRACE-12"
       ],
-      "strictTraced": 0,
-      "strictOrphanCount": 336,
-      "orphanCount": 304
+      "strictTraced": 1,
+      "strictOrphanCount": 335,
+      "orphanCount": 303
     }
   },
   "totals": {
@@ -1984,8 +1967,8 @@
     "test": 99,
     "liveDev": 0,
     "migration": 52,
-    "tracedAnywhere": 344,
-    "orphans": 1870,
-    "strictTraced": 53
+    "tracedAnywhere": 361,
+    "orphans": 1853,
+    "strictTraced": 56
   }
 }

@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-09-15T09:59:38.089Z",
-  "migrationsReplayed": 150,
+  "ranAt": "2026-09-15T11:48:12.290Z",
+  "migrationsReplayed": 151,
   "pass": 30,
   "fail": 0,
   "results": [
@@ -157,8 +157,8 @@
     {
       "id": "PC6-PG-26",
       "verdict": "PASS",
-      "label": "every PC6 job ships DISABLED",
-      "detail": "pc6_amfi_daily_nav=false, pc6_amfi_scheme_master=false"
+      "label": "every job in the shared reference ledger ships DISABLED (and PC6 owns two of them)",
+      "detail": "pc6_amfi_daily_nav=false, pc6_amfi_scheme_master=false, pc7_fund_holdings_disclosure=false"
     },
     {
       "id": "PC6-PG-27",
