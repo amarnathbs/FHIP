@@ -48,6 +48,19 @@ import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+// M12C §10 (`M2-OPEN-8`) — the SHARED, already-certified password-attempt
+// limiter and its already-certified threshold. Imported, never re-implemented:
+// a second counter with its own threshold is exactly the failure this closure
+// item exists to avoid. `password.ts` is pure decision logic with no I/O and no
+// FDH domain coupling, so importing it here introduces no module-boundary
+// violation (it is the same function the AIE unlock route already reuses).
+import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf/password';
+import { MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR } from '@/lib/financial-data-hub/bank-pdf/constants';
+
+/** The limiter's own rolling window, restated here only to bound the DB query
+ * that feeds it. `checkPasswordAttemptRateLimit` remains the single authority
+ * on whether an attempt is allowed. */
+const PASSWORD_ATTEMPT_WINDOW_MS = 60 * 60 * 1000;
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -239,6 +252,77 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     }
   }
 
+  // --- M12C §10 (`M2-OPEN-8`) — password brute-force limiter ----------------
+  //
+  // Until now this endpoint accepted an unlimited number of PDF password
+  // guesses on an authenticated document: `extractPdfText(bytes, password)`
+  // below was reached once per request with no counting of any kind, while the
+  // FDH-5 bank-PDF path and the newer AIE unlock endpoint had both been
+  // rate-limited for some time. That asymmetry is the whole of `M2-OPEN-8`.
+  //
+  // THE SHARED LIMITER, not a second counter. `checkPasswordAttemptRateLimit`
+  // is FDH-5's already-certified decision function, imported unchanged, with
+  // its already-certified threshold (`MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR`,
+  // a rolling hour) — no new constant, no new policy, no new storage.
+  //
+  // THE ATTEMPT IS RECORDED BEFORE DECRYPTION, deliberately: an attempt that
+  // crashes, times out or is aborted mid-flight must still count, or a caller
+  // could obtain unlimited free guesses simply by abandoning each request. The
+  // record IS the `ii_document_parse_runs` row inserted immediately below with
+  // `password_supplied` set — a column that has existed since migration 0039,
+  // is written before `extractPdfText` is ever called, and needs no migration.
+  // (`handleExtractionFailure` also sets it later on the failure path; setting
+  // it at insert is strictly earlier and stays consistent with that write.)
+  //
+  // THE PASSWORD VALUE ITSELF IS NEVER STORED, COUNTED OR LOGGED — only the
+  // boolean fact that a password accompanied this attempt, exactly as migration
+  // 0039's own comment requires ("only whether one was required/supplied, never
+  // the value").
+  //
+  // A REFUSED attempt does not itself consume a slot: the check runs before the
+  // run row is created, mirroring FDH-5, where the refusal throws before
+  // `recordDocumentAuditEvent`.
+  const passwordSupplied = typeof input.password === 'string' && input.password.length > 0;
+  if (passwordSupplied) {
+    const windowStartIso = new Date(Date.now() - PASSWORD_ATTEMPT_WINDOW_MS).toISOString();
+    const { data: priorAttempts } = await admin
+      .from('ii_document_parse_runs')
+      .select('started_at')
+      .eq('source_document_id', sourceDocumentId)
+      .eq('user_id', userId) // cross-user isolation: one user's guesses can never throttle or be counted against another's
+      .eq('password_supplied', true)
+      .gte('started_at', windowStartIso)
+      .order('started_at', { ascending: false })
+      .limit(MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR + 1);
+    const rateLimit = checkPasswordAttemptRateLimit({
+      // The shared limiter counts `pdf_password_required` events. This path's
+      // attempt signal is a parse run carrying `password_supplied = true`, so
+      // it is mapped onto that vocabulary rather than the limiter being
+      // widened — the identical adapter trick the AIE unlock route already
+      // uses, so there remains exactly ONE threshold and ONE window in the
+      // codebase.
+      recentAuditEvents: (priorAttempts ?? []).map((r) => ({ event_type: 'pdf_password_required', created_at: r.started_at as string })),
+      nowIso: new Date().toISOString(),
+    });
+    if (!rateLimit.allowed) {
+      await emitAuditEvent({
+        userId,
+        eventType: 'document_processing_failed',
+        subjectType: 'ii_source_documents',
+        subjectId: sourceDocumentId,
+        actorType: 'system',
+        // Metadata carries no information whatsoever about the value attempted.
+        metadata: { kind: 'password_rate_limited', attemptsInWindow: rateLimit.attemptsInWindow },
+      });
+      return {
+        ok: false,
+        status: 'password_rate_limited',
+        parseRunId: null,
+        error: 'Too many password attempts for this document recently. Please try again later.',
+      };
+    }
+  }
+
   const parserCode = 'r2-orchestrator'; // resolved to a real per-parser code once detection succeeds; placeholder until then
   const idempotencyKey = `${sourceDocumentId}:${parserCode}:${randomUUID()}`;
   const { data: run, error: runErr } = await admin
@@ -250,6 +334,9 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       parser_version: 'pending',
       run_status: 'running',
       idempotency_key: idempotencyKey,
+      // M12C §10: the attempt record, written before any decryption is
+      // attempted. Never the password, only that one accompanied this attempt.
+      password_supplied: passwordSupplied,
     })
     .select('id')
     .single();

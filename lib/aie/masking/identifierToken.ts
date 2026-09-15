@@ -66,6 +66,12 @@
  * means no AI egress.
  */
 
+// M12C §13 (`M2-OPEN-4`): this module reads the masking HMAC master SECRET from
+// `process.env`. The marker makes that explicit and enforceable — see
+// `lib/serverOnly.ts` for what it does, what it deliberately does not do, and
+// why the canonical `server-only` package is a named follow-up rather than a
+// silent omission.
+import '@/lib/serverOnly';
 import { createHmac } from 'node:crypto';
 
 /** Fixed domain-separation string. Changing it rotates every token; it is

@@ -167,7 +167,7 @@ describe('M12B.7 — Investment Intelligence AI fallback: no eligible extraction
     }
   });
 
-  it('CONDITION (a): the CAS opening-balance figure is deterministically READABLE, so it is a discard defect and not an AI-eligible ambiguity', async () => {
+  it('CONDITION (a): the CAS opening-balance figure is deterministically READABLE — and as of M12C §8.3 it is deterministically READ', async () => {
     // The claim under test is narrow and is the one that decides section 7:
     // this repository ALREADY contains a certified parser that reads the same
     // concept correctly. A fact one deterministic parser reads exactly is not
@@ -184,11 +184,32 @@ describe('M12B.7 — Investment Intelligence AI fallback: no eligible extraction
     );
     // The CAS pattern CAPTURES the figure in a group...
     expect(casSource).toMatch(/const OPENING_BALANCE_RE = .*\(.*\)/);
-    // ...and the use site discards it with `.test`. This assertion is expected
-    // to FAIL the day someone fixes M3-F1 deterministically, which is the
-    // correct outcome: at that point this test should be updated to record
+
+    // ...and, until M12C, the use site discarded that capture with `.test()`.
+    //
+    // M12B wrote this assertion as `expect(casSource).toContain(
+    // 'OPENING_BALANCE_RE.test(line)')` and said, in place, that it was
+    // "expected to FAIL the day someone fixes M3-F1 deterministically, which is
+    // the correct outcome: at that point this test should be updated to record
     // that the defect is closed, and section 7's conclusion — that no AI gap
-    // was warranted — is only reinforced.
-    expect(casSource).toContain('OPENING_BALANCE_RE.test(line)');
+    // was warranted — is only reinforced."
+    //
+    // THAT DAY IS M12C. §8.3 confirmed M3-F1 against production and fixed it in
+    // `camsParser.ts`: the use site now `.exec()`s the pattern and preserves
+    // the captured figure as an `adjustment` carrying
+    // `OPENING_BALANCE_SOURCE_REFERENCE` — the identical shape FS1 already
+    // used, which is what made the "deterministically readable" claim provable
+    // in the first place.
+    //
+    // The assertion is therefore INVERTED rather than deleted. Section 7's
+    // conclusion is not weakened by the fix; it is settled by it. A future
+    // change that reverted to `.test()` would re-open a discard defect, and
+    // this test would catch it.
+    expect(casSource, 'M3-F1 has regressed: the CAS opening balance is being discarded again').not.toContain('OPENING_BALANCE_RE.test(line)');
+    expect(casSource, 'the CAS parser must EXEC the opening-balance pattern and keep the capture').toContain('OPENING_BALANCE_RE.exec(line)');
+    // And it must preserve the value through the same certified sentinel FS1
+    // uses, never as a purchase, an amount or a tax lot.
+    expect(casSource).toContain('OPENING_BALANCE_SOURCE_REFERENCE');
+    expect(casSource).toMatch(/canonicalType: 'adjustment'/);
   });
 });

@@ -42,9 +42,46 @@
  * `success` result with bad JSON, which correctly produces `schema_rejected`
  * without this adapter needing to know anything about JSON Schema
  * semantics itself.
+ *
+ * COST ACCOUNTING ACROSS RETRIES (M12C `M2-OPEN-5`). Because those bounded
+ * retries mean ONE logical `generateStructured` call can send up to
+ * `getAieAiMaxTransientRetries() + 1` real HTTP requests, and OpenAI bills
+ * per request, this adapter accumulates `usage` across EVERY attempt and
+ * reports the CUMULATIVE totals as `inputTokens`/`outputTokens` — the figures
+ * `gateway.ts` settles against. Before this change only the final,
+ * successfully-returning attempt's usage was ever read, and on a fully
+ * exhausted retry budget (which throws) the accumulated usage was lost
+ * entirely and settled as zero.
+ *
+ * EXACTLY WHICH ATTEMPTS CAN CONTRIBUTE — stated explicitly so the accounting
+ * claim is honest rather than implied:
+ *   CAN contribute (a body exists and is read):
+ *     - the final 2xx attempt (success, refusal, or empty-content);
+ *     - a RETRIED 429 or 5xx attempt, IF that response carries a JSON body
+ *       with a `usage` object. OpenAI does not guarantee one on an error
+ *       response, so this is opportunistic: when present it is counted, when
+ *       absent it contributes zero.
+ *     - a terminal non-429 4xx attempt, whose body is read anyway for the
+ *       error message.
+ *   CANNOT contribute (no body exists at all, so any number would be
+ *   INVENTED — and inventing one is specifically not done here):
+ *     - an attempt that aborted on the client-side timeout;
+ *     - an attempt that failed with a network/transport error;
+ *     - a 401/403, which is rejected before any body is read.
+ * The uncertainty of the timeout case is handled ONE layer up, by
+ * `gateway.ts` settling a `timeout` outcome at the full conservative
+ * RESERVED amount (`treatAsFullReservedCost`) rather than at an assumed
+ * zero — that pre-existing behaviour is deliberately left untouched here.
  */
 
+// M12C §13 (`M2-OPEN-4`): this module reads the AIE provider credential from
+// `process.env`. The marker makes that explicit and enforceable — see
+// `lib/serverOnly.ts` for what it does, what it deliberately does not do, and
+// why the canonical `server-only` package is a named follow-up rather than a
+// silent omission.
+import '@/lib/serverOnly';
 import type { AieAiGenerateRequest, AieAiGenerateResult, AieAiProvider } from './types';
+import { attachAieCumulativeUsage } from './types';
 import { ProviderError, type ProviderHealth, type CostEstimate } from '@/lib/ai/providers/types';
 import { getAieAiMaxTransientRetries, getAieAiTimeoutMs, estimateOpenAiCostUsd } from '../config';
 import { getKnownOpenAiJsonSchema } from './openaiJsonSchema';
@@ -96,9 +133,39 @@ export class OpenAiAieProvider implements AieAiProvider {
     const timeoutMs = req.timeoutMs ?? getAieAiTimeoutMs();
 
     let lastError: ProviderError | null = null;
+    // M12C M2-OPEN-5: hoisted OUTSIDE the retry loop exactly as `lastError`
+    // already is, so usage survives a `continue` into the next attempt and a
+    // `throw` out of the loop entirely. Previously `inputTokens`/
+    // `outputTokens` were per-iteration `const`s, so only the one iteration
+    // that returned could ever contribute anything.
+    let cumulativeInputTokens = 0;
+    let cumulativeOutputTokens = 0;
+    let attemptCount = 0;
+    const addUsage = (body: OpenAiChatCompletionResponse | null): void => {
+      cumulativeInputTokens += body?.usage?.prompt_tokens ?? 0;
+      cumulativeOutputTokens += body?.usage?.completion_tokens ?? 0;
+    };
+    /** Read a body we are about to DISCARD (a retried 429/5xx) purely for its
+     * `usage`. Deliberately total: a non-JSON or missing body is simply "no
+     * usage reported", and can never turn a retryable status into a hard
+     * failure — the retry path must not become more fragile than it was
+     * before cost accounting was added. */
+    const absorbUsageFromDiscardedBody = async (res: Response): Promise<void> => {
+      try {
+        addUsage((await res.json()) as OpenAiChatCompletionResponse);
+      } catch {
+        /* no body, non-JSON body, or already-consumed body -> contributes 0 */
+      }
+    };
+    /** Stamp the usage incurred SO FAR onto an error on its way out, so the
+     * gateway can settle it instead of assuming zero. */
+    const withUsage = <E>(err: E): E =>
+      attachAieCumulativeUsage(err, { cumulativeInputTokens, cumulativeOutputTokens, attemptCount });
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) await sleep(backoffMs(attempt));
 
+      attemptCount += 1;
       const start = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -138,24 +205,34 @@ export class OpenAiAieProvider implements AieAiProvider {
         lastError = aborted
           ? new ProviderError('TIMEOUT', `OpenAI request exceeded ${timeoutMs}ms`)
           : new ProviderError('UNKNOWN', e instanceof Error ? e.message : 'network error calling OpenAI');
+        // No response object at all -> no `usage` exists to read. Contributes
+        // nothing rather than a guess (see module header).
         if (aborted && attempt < maxRetries) continue; // transient — retry
-        throw lastError;
+        throw withUsage(lastError);
       }
       clearTimeout(timer);
       const latencyMs = Date.now() - start;
 
       if (response.status === 401 || response.status === 403) {
-        throw new ProviderError('AUTH', 'OpenAI rejected the AIE API credential (401/403).');
+        // Terminal, never retried, and the body is not read — an auth
+        // rejection is not a billable completion.
+        throw withUsage(new ProviderError('AUTH', 'OpenAI rejected the AIE API credential (401/403).'));
       }
       if (response.status === 429) {
+        // M12C M2-OPEN-5: a 429 can still carry a JSON body reporting the
+        // tokens the provider already processed for this request. Read it
+        // (defensively) BEFORE discarding the response, whether we are about
+        // to retry or about to give up.
+        await absorbUsageFromDiscardedBody(response);
         lastError = new ProviderError('RATE_LIMIT', 'OpenAI rate-limited this request (429).');
         if (attempt < maxRetries) continue;
-        throw lastError;
+        throw withUsage(lastError);
       }
       if (response.status >= 500) {
+        await absorbUsageFromDiscardedBody(response);
         lastError = new ProviderError('PROVIDER_UNAVAILABLE', `OpenAI returned ${response.status}.`);
         if (attempt < maxRetries) continue;
-        throw lastError;
+        throw withUsage(lastError);
       }
       if (response.status >= 400) {
         // 4xx other than 401/403/429 is a request-shape problem, not
@@ -164,23 +241,31 @@ export class OpenAiAieProvider implements AieAiProvider {
         let detail = `OpenAI returned ${response.status}.`;
         try {
           const body = (await response.json()) as OpenAiChatCompletionResponse;
+          // This body IS read, so if it reports usage it is counted.
+          addUsage(body);
           if (body.error?.message) detail = body.error.message;
         } catch {
-          /* body not JSON — keep the generic detail */
+          /* body not JSON — keep the generic detail, contribute no usage */
         }
-        throw new ProviderError('INVALID_REQUEST', detail);
+        throw withUsage(new ProviderError('INVALID_REQUEST', detail));
       }
 
       let body: OpenAiChatCompletionResponse;
       try {
         body = (await response.json()) as OpenAiChatCompletionResponse;
       } catch {
-        throw new ProviderError('UNKNOWN', 'OpenAI returned a non-JSON response body.');
+        throw withUsage(new ProviderError('UNKNOWN', 'OpenAI returned a non-JSON response body.'));
       }
 
       const choice = body.choices?.[0];
-      const inputTokens = body.usage?.prompt_tokens ?? 0;
-      const outputTokens = body.usage?.completion_tokens ?? 0;
+      // M12C M2-OPEN-5: this attempt's OWN usage, kept separately and also
+      // folded into the cumulative running totals. Everything returned below
+      // reports the CUMULATIVE figures as `inputTokens`/`outputTokens` (what
+      // settlement must use) and this attempt's own as the explicit
+      // `finalAttempt*` fields.
+      const finalAttemptInputTokens = body.usage?.prompt_tokens ?? 0;
+      const finalAttemptOutputTokens = body.usage?.completion_tokens ?? 0;
+      addUsage(body);
       const modelVersion = body.model ?? req.model;
 
       if (choice?.message?.refusal) {
@@ -188,8 +273,11 @@ export class OpenAiAieProvider implements AieAiProvider {
         // outcome — never forced through JSON parsing.
         return {
           rawText: '',
-          inputTokens,
-          outputTokens,
+          inputTokens: cumulativeInputTokens,
+          outputTokens: cumulativeOutputTokens,
+          finalAttemptInputTokens,
+          finalAttemptOutputTokens,
+          attemptCount,
           latencyMs,
           modelVersion,
           finishReason: 'content_filter',
@@ -212,15 +300,39 @@ export class OpenAiAieProvider implements AieAiProvider {
         // treat as an error outcome rather than handing the gateway an
         // empty string it would otherwise fail JSON.parse on with a less
         // specific diagnosis.
-        return { rawText: '', inputTokens, outputTokens, latencyMs, modelVersion, finishReason: 'error' };
+        return {
+          rawText: '',
+          inputTokens: cumulativeInputTokens,
+          outputTokens: cumulativeOutputTokens,
+          finalAttemptInputTokens,
+          finalAttemptOutputTokens,
+          attemptCount,
+          latencyMs,
+          modelVersion,
+          finishReason: 'error',
+        };
       }
 
-      return { rawText, inputTokens, outputTokens, latencyMs, modelVersion, finishReason };
+      return {
+        rawText,
+        inputTokens: cumulativeInputTokens,
+        outputTokens: cumulativeOutputTokens,
+        finalAttemptInputTokens,
+        finalAttemptOutputTokens,
+        attemptCount,
+        // `latencyMs` stays deliberately PER-ATTEMPT (this attempt's own
+        // wall-clock), NOT a sum across retries: it is used as a provider
+        // responsiveness signal, and summing in backoff sleeps would make it
+        // dishonest. Only the token counts are cumulative.
+        latencyMs,
+        modelVersion,
+        finishReason,
+      };
     }
 
     // Unreachable in practice (every loop branch above either returns or
     // throws), but keeps the function's control flow provably total.
-    throw lastError ?? new ProviderError('UNKNOWN', 'OpenAI request failed with no captured error.');
+    throw withUsage(lastError ?? new ProviderError('UNKNOWN', 'OpenAI request failed with no captured error.'));
   }
 
   async validateProviderHealth(): Promise<ProviderHealth> {

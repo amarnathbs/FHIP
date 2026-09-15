@@ -19,6 +19,12 @@
  * production-safe default, not a fallback-after-failure.
  */
 
+// M12C §13 (`M2-OPEN-4`): this module reads a server-side SECRET from
+// `process.env`. The marker makes that explicit and enforceable — see
+// `lib/serverOnly.ts` for what it does, what it deliberately does not do, and
+// why the canonical `server-only` package is a named follow-up rather than a
+// silent omission.
+import '@/lib/serverOnly';
 import type { AieAiProvider } from './types';
 import { MockAieProvider, type MockAieProviderScript } from './mockAieProvider';
 import { OpenAiAieProvider } from './openaiAieProvider';

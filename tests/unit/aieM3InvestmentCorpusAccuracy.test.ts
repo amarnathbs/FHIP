@@ -178,44 +178,79 @@ describe('M3 I.12/I.13 — certified synthetic investment corpus vs sealed oracl
       expect(scaledToDecimalString(reconciliation.unitVarianceScaled!)).toBe(scaledToDecimalString(scaled('-75')));
     });
 
-    it('C4b (M3 FINDING): a CAS opening balance is DISCARDED, and the resulting variance equals it exactly', () => {
-      // Not a fixture the pipeline passes — this pins a real gap. See
-      // C4B_CAS_OPENING_BALANCE_GAP's own comment and the M3 report.
+    it('C4b (M3 FINDING, CLOSED BY M12C §8.3): the CAS opening balance is now PRESERVED, and the variance it used to cause is gone', () => {
+      // WHAT THIS TEST USED TO ASSERT, and why it changed.
+      //
+      // M3 wrote this case to pin a real, open gap: `camsParser.ts` matched the
+      // opening-balance line with `.test()` and threw the captured figure away,
+      // so the position reconciled short by EXACTLY that figure (−200.000 on
+      // this fixture). M12B then established, against the code, that the value
+      // was deterministically readable — a sibling certified parser already
+      // read the identical concept — and therefore that this was a discard
+      // defect rather than an AI-eligible ambiguity.
+      //
+      // M12C §8.3 confirmed it against PRODUCTION (`history_completeness =
+      // complete_from_inception` and `reconciled_opening_units = 0` on all 17
+      // real positions, because the marker this parser could never emit is the
+      // very thing `documentProcessing.ts` derives that flag from) and fixed
+      // it. This test was therefore FAILING CORRECTLY, which is the behaviour
+      // the fix exists to produce. It is inverted rather than deleted, so the
+      // fix cannot be silently reverted.
       const fixture = M3_INVESTMENT_CORPUS.find((f) => f.id === 'C4b')!;
       const parsed = parseFixture(fixture)!;
 
-      // 1. The opening balance is not a transaction, and carries no marker.
-      expect(parsed.transactions.length).toBe(1);
-      expect(parsed.transactions.some((t) => t.sourceReference === OPENING_BALANCE_SOURCE_REFERENCE)).toBe(false);
+      // 1. The opening balance is now a real row, carrying the shared sentinel.
+      const openingRows = parsed.transactions.filter((t) => t.sourceReference === OPENING_BALANCE_SOURCE_REFERENCE);
+      expect(openingRows).toHaveLength(1);
 
-      // 2. The line is not reported as an error either — it is silently
-      //    consumed, which is why this was invisible until now.
+      // 2. And it is an ADJUSTMENT and nothing else — never a purchase, never
+      //    an amount, never a NAV, so R6's tax-lot engine can never consume it.
+      expect(openingRows[0].canonicalType).toBe('adjustment');
+      expect(openingRows[0].amountScaled).toBe(ZERO);
+      expect(openingRows[0].navScaled).toBeNull();
+
+      // 3. The real transaction is still read — the fix added a row, it did not
+      //    reinterpret an existing one.
+      expect(parsed.transactions.length).toBe(2);
+
+      // 4. Still not an error: a successfully read opening balance is normal
+      //    data, not a finding.
       expect(parsed.errors.some((e) => /opening/i.test(e.message))).toBe(false);
 
-      // 3. The variance is EXACTLY the discarded opening balance. This is
-      //    what makes the finding actionable rather than a suspicion: the
-      //    size of the error is fully explained by the missing value.
+      // 5. THE POINT. The −200.000 variance this case was written to
+      //    demonstrate is now zero, and it is zero because the value reaches
+      //    reconciliation through the transaction stream exactly as FS1's does.
       const lastHolding = parsed.holdings[parsed.holdings.length - 1];
       const reconciliation = reconcilePosition({
         openingUnitsScaled: null,
         transactions: parsed.transactions.map((t) => ({ canonicalType: t.canonicalType, unitsScaled: t.unitsScaled })),
         statementClosingUnitsScaled: lastHolding.unitsScaled,
         historyCompleteness: determineHistoryCompleteness({
-          hasExplicitOpeningBalanceTransaction: false,
+          hasExplicitOpeningBalanceTransaction: parsed.transactions.some((t) => t.sourceReference === OPENING_BALANCE_SOURCE_REFERENCE),
           hasAnyTransactionHistory: true,
           hasClosingHoldingSnapshot: true,
-          statementCoversFromInception: true,
+          statementCoversFromInception: false,
         }),
         config: DEFAULT_RECONCILIATION_CONFIG,
       });
-      expect(reconciliation.withinTolerance).toBe(false);
-      expect(scaledToDecimalString(reconciliation.unitVarianceScaled!)).toBe(scaledToDecimalString(scaled('-200')));
+      expect(scaledToDecimalString(reconciliation.unitVarianceScaled!)).toBe(scaledToDecimalString(ZERO));
+      expect(reconciliation.withinTolerance).toBe(true);
     });
 
-    it('C4b (M3 FINDING, second mechanism): the CAS opening-balance pattern requires a colon, so a column-aligned line is not matched at all', () => {
-      // Two independent ways the same value is lost. Even if the discard at
-      // `camsParser.ts:842` were fixed, a statement that prints the label
-      // without a colon would still bypass the pattern entirely.
+    it('C4b (M3 FINDING, second mechanism — STILL OPEN after M12C §8.3): the CAS opening-balance pattern requires a colon, so a column-aligned line is not matched at all', () => {
+      // Two independent ways the same value could be lost, and M12C §8.3 closed
+      // only the first. M3 predicted this exactly: "even if the discard were
+      // fixed, a statement that prints the label without a colon would still
+      // bypass the pattern entirely." It does.
+      //
+      // Deliberately NOT widened here. `OPENING_BALANCE_RE` is `^`-anchored and
+      // colon-delimited, and relaxing the delimiter to "whitespace" would make
+      // it match prose and column-aligned report headers on real documents,
+      // trading a known, bounded gap for an unbounded false-positive surface —
+      // on the value that now feeds reconciliation directly. No fixture in this
+      // repository prints the colon-less form, so there is no failing real case
+      // to justify the risk. It stays pinned here as a named, open limitation
+      // rather than fixed opportunistically.
       const withoutColon = M3_INVESTMENT_CORPUS.find((f) => f.id === 'C4b')!.text.replace('Opening Unit Balance : 200.000', 'Opening Unit Balance        200.000');
       const parsed = parseFixture({ ...M3_INVESTMENT_CORPUS.find((f) => f.id === 'C4b')!, text: withoutColon })!;
       expect(parsed.transactions.length).toBe(1);

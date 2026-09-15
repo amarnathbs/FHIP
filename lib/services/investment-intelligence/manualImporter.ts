@@ -117,13 +117,33 @@ export function manualFixtureStoragePath(userId: string, fixtureKey: string): st
 // lives once the first submission wrote it.
 export async function findExistingManualImportByFixtureKey(userId: string, fixtureKey: string): Promise<{ id: string } | null> {
   const admin = createAdminClient();
+  // M12C §11 (`CG-10`) — this was the ONE place in the whole Investment
+  // Intelligence codebase where a source-document ROW was looked up by
+  // `storage_path`, and it used `.maybeSingle()`.
+  //
+  // `storage_path` carries no uniqueness guarantee: `ii_source_documents`
+  // (migration 0032) has a unique index on `(user_id, checksum)` and on `id`,
+  // and NO index of any kind on `storage_path`. So two rows CAN legitimately
+  // share one. When they do, PostgREST's `.maybeSingle()` returns an ERROR and
+  // `data === null` — and because the error was discarded, this function
+  // reported "no prior submission" for a fixture key that demonstrably HAD one,
+  // minting a duplicate chain rather than replaying the first.
+  //
+  // Fixed by asking the question this function actually means — "the FIRST row
+  // this user ever wrote under that key" — with a deterministic order and an
+  // explicit limit, so a collision is resolved consistently instead of
+  // silently failing open. The immutable `id` remains the authority; the
+  // storage path is a lookup hint, never identity.
   const { data } = await admin
     .from('ii_source_documents')
     .select('id')
     .eq('user_id', userId)
     .eq('storage_path', manualFixtureStoragePath(userId, fixtureKey))
-    .maybeSingle();
-  return (data as { id: string } | null) ?? null;
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true }) // tie-break, so the answer is stable even for same-instant rows
+    .limit(1);
+  const rows = (data as { id: string }[] | null) ?? [];
+  return rows[0] ?? null;
 }
 
 /** Public wrapper around buildReplayResult for a caller (manualDirectPositionService.ts) that found an existing submission via findExistingManualImportByFixtureKey. */
