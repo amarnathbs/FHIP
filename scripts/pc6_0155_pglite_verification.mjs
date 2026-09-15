@@ -56,10 +56,16 @@ for (const f of files) {
 }
 console.log(`fresh rebuild complete — ${files.length} migrations, ending at ${files.at(-1)}\n`);
 
-let pass = 0, fail = 0;
+// Stable IDs (Part W): every assertion gets one, so the certification can cite
+// a specific result rather than "the PGlite run passed".
+let pass = 0, fail = 0, seq = 0;
+const results = [];
 const check = (label, cond, detail = '') => {
-  if (cond) { pass++; console.log(`  PASS  ${label}${detail ? '  ' + detail : ''}`); }
-  else { fail++; console.log(`  FAIL  ${label}${detail ? '  ' + detail : ''}`); }
+  seq++;
+  const id = `PC6-PG-${String(seq).padStart(2, '0')}`;
+  results.push({ id, verdict: cond ? 'PASS' : 'FAIL', label, detail });
+  if (cond) { pass++; console.log(`  PASS  ${id}  ${label}${detail ? '\n        ' + detail : ''}`); }
+  else { fail++; console.log(`  FAIL  ${id}  ${label}${detail ? '\n        ' + detail : ''}`); }
 };
 
 /** Run a statement and return the error message, or null on success. */
@@ -273,5 +279,9 @@ const createdCount = await one(`
   where table_schema='public' and table_name in (${PC6_TABLES.map((t) => `'${t}'`).join(',')})`);
 check('all 8 PC6 tables exist after the chain', createdCount.n === 8, `found ${createdCount.n}/8`);
 
-console.log(`\n=== PC6 / 0155 PGlite verification: ${pass} PASS, ${fail} FAIL ===`);
+console.log(`\n=== PC6 / 0155 PGlite verification: ${pass} PASS, ${fail} FAIL, ${results.length} total ===`);
+fs.writeFileSync(
+  path.join(HERE, 'pc6-0155-pglite-results.json'),
+  JSON.stringify({ ranAt: new Date().toISOString(), migrationsReplayed: files.length, pass, fail, results }, null, 2)
+);
 process.exit(fail === 0 ? 0 : 1);

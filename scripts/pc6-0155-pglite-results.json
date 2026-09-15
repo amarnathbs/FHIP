@@ -1,0 +1,188 @@
+{
+  "ranAt": "2026-09-15T09:58:02.098Z",
+  "migrationsReplayed": 150,
+  "pass": 30,
+  "fail": 0,
+  "results": [
+    {
+      "id": "PC6-PG-01",
+      "verdict": "PASS",
+      "label": "chain 0001..0155 applied from empty",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-02",
+      "verdict": "PASS",
+      "label": "0155 re-applies cleanly (idempotent)",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-03",
+      "verdict": "PASS",
+      "label": "ii_prices_nav.price is numeric(24,10)",
+      "detail": "got numeric(24,10)"
+    },
+    {
+      "id": "PC6-PG-04",
+      "verdict": "PASS",
+      "label": "an 8-decimal-place AMFI NAV stores without rounding",
+      "detail": "stored '14.8626963200'"
+    },
+    {
+      "id": "PC6-PG-05",
+      "verdict": "PASS",
+      "label": "a forward-dated NAV is refused by the database",
+      "detail": "PC6: NAV date 2026-10-15 is in the future (today is 2026-09-15). Reference prices are never forward-dated."
+    },
+    {
+      "id": "PC6-PG-06",
+      "verdict": "PASS",
+      "label": "today's NAV is still accepted (the guard is not over-tight)",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-07",
+      "verdict": "PASS",
+      "label": "the same guard exists on ii_benchmark_series",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-08",
+      "verdict": "PASS",
+      "label": "first open scheme-master row inserts",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-09",
+      "verdict": "PASS",
+      "label": "a SECOND open row for the same AMFI code is refused",
+      "detail": "duplicate key value violates unique constraint \"uidx_ii_scheme_master_current\""
+    },
+    {
+      "id": "PC6-PG-10",
+      "verdict": "PASS",
+      "label": "a superseding period opens once the prior one is closed",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-11",
+      "verdict": "PASS",
+      "label": "a distinct plan/option variant coexists as its own row (not collapsed)",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-12",
+      "verdict": "PASS",
+      "label": "both variants remain separately current",
+      "detail": "open rows = 2"
+    },
+    {
+      "id": "PC6-PG-13",
+      "verdict": "PASS",
+      "label": "a 'merged' scheme with no merge target is unrepresentable",
+      "detail": "new row for relation \"ii_scheme_master\" violates check constraint \"ii_scheme_master_merged_requires_target\""
+    },
+    {
+      "id": "PC6-PG-14",
+      "verdict": "PASS",
+      "label": "an admin override with no actor/time/reason is refused by the database",
+      "detail": "new row for relation \"ii_instrument_benchmarks\" violates check constraint \"ii_instrument_benchmarks_override_a"
+    },
+    {
+      "id": "PC6-PG-15",
+      "verdict": "PASS",
+      "label": "an admin override with a token reason is refused",
+      "detail": "new row for relation \"ii_instrument_benchmarks\" violates check constraint \"ii_instrument_benchmarks_override_a"
+    },
+    {
+      "id": "PC6-PG-16",
+      "verdict": "PASS",
+      "label": "a properly audited admin override is accepted",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-17",
+      "verdict": "PASS",
+      "label": "a category default with no reasoned rationale is refused",
+      "detail": "new row for relation \"ii_benchmark_category_defaults\" violates check constraint \"ii_benchmark_category_default"
+    },
+    {
+      "id": "PC6-PG-18",
+      "verdict": "PASS",
+      "label": "an admin WITHOUT the capability sees zero import batches",
+      "detail": "rows=0"
+    },
+    {
+      "id": "PC6-PG-19",
+      "verdict": "PASS",
+      "label": "an admin WITH the capability sees the import batch",
+      "detail": "rows=1"
+    },
+    {
+      "id": "PC6-PG-20",
+      "verdict": "PASS",
+      "label": "an ordinary user sees zero import batches",
+      "detail": "rows=0"
+    },
+    {
+      "id": "PC6-PG-21",
+      "verdict": "PASS",
+      "label": "an ordinary user CAN read the scheme master (it is public reference data)",
+      "detail": "rows=3"
+    },
+    {
+      "id": "PC6-PG-22",
+      "verdict": "PASS",
+      "label": "no non-SELECT policy exists on ii_scheme_master (service-role write only)",
+      "detail": "policies=0"
+    },
+    {
+      "id": "PC6-PG-23",
+      "verdict": "PASS",
+      "label": "the RLS harness was not vacuous",
+      "detail": "vacuous assertions = 0"
+    },
+    {
+      "id": "PC6-PG-24",
+      "verdict": "PASS",
+      "label": "ii_risk_free_methodology ships EMPTY (BLOCKER PO-PC6-2 unresolved)",
+      "detail": "rows=0"
+    },
+    {
+      "id": "PC6-PG-25",
+      "verdict": "PASS",
+      "label": "no risk-free rate is marked certified",
+      "detail": "rows=0"
+    },
+    {
+      "id": "PC6-PG-26",
+      "verdict": "PASS",
+      "label": "every PC6 job ships DISABLED",
+      "detail": "pc6_amfi_daily_nav=false, pc6_amfi_scheme_master=false"
+    },
+    {
+      "id": "PC6-PG-27",
+      "verdict": "PASS",
+      "label": "0155 registers NO pg_cron schedule",
+      "detail": "pc6 cron jobs = 0"
+    },
+    {
+      "id": "PC6-PG-28",
+      "verdict": "PASS",
+      "label": "0155 executes no cron.schedule call",
+      "detail": ""
+    },
+    {
+      "id": "PC6-PG-29",
+      "verdict": "PASS",
+      "label": "no PC6 table carries a tenancy column (global reference data only)",
+      "detail": "none"
+    },
+    {
+      "id": "PC6-PG-30",
+      "verdict": "PASS",
+      "label": "all 8 PC6 tables exist after the chain",
+      "detail": "found 8/8"
+    }
+  ]
+}
