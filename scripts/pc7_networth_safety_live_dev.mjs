@@ -43,8 +43,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// BOM+CRLF-safe (M3-OPEN-3).
-const raw = fs.readFileSync(path.join(repoRoot, '.env.local'), 'utf8').replace(/^﻿/, '').replace(/\r\n/g, '\n');
+// BOM+CRLF-safe (M3-OPEN-3), and worktree-safe: a git worktree has no
+// .env.local of its own, so the shared checkout's copy is the fallback rather
+// than a credentials file having to be duplicated into every worktree.
+const ENV_CANDIDATES = [path.join(repoRoot, '.env.local'), path.join('D:', 'FHIP', '.env.local')];
+const envPath = ENV_CANDIDATES.find((c) => fs.existsSync(c));
+if (!envPath) { console.error('REFUSING: no .env.local found.'); process.exit(1); }
+const raw = fs.readFileSync(envPath, 'utf8').replace(/^﻿/, '').replace(/\r\n/g, '\n');
 const pick = (n) => raw.match(new RegExp(`^${n}=(.*)$`, 'm'))?.[1]?.trim();
 
 const BASE = pick('NEXT_PUBLIC_SUPABASE_URL');
