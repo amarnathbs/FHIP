@@ -1,4 +1,22 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-03      Create a proof that seeded PII is removed before a captured
+ *                    provider-bound payload — 7 PII sentinels asserted absent
+ *                    pre-egress against the REAL provider.
+ *   AIE11-GW-01      Expose one typed internal extraction operation; no public/browser
+ *                    provider endpoint — asserted by instanceof OpenAiAieProvider and
+ *                    NOT MockAieProvider through the real gateway.
+ *   AIE16-MASK-06    Capture exact provider-bound payloads in the certification
+ *                    environment.
+ */
+/**
  * M2 (H.6) — REAL OpenAI provider proof, through the REAL code path.
  *
  * OPT-IN ONLY. Skipped unless `AIE_M2_LIVE_PROVIDER_PROOF=1`, because it

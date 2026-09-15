@@ -1,4 +1,21 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-05      Create a proof that repeated jobs collapse to one provider attempt
+ *                    — on real Postgres, seeded from the repository's own full
+ *                    migration chain.
+ *   AIE11-CST-05     Collapse concurrent identical calls under one idempotency
+ *                    identity.
+ *   AIE16-IDEM-11    Verify one provider charge/decision/write and immutable conflict
+ *                    outcomes.
+ */
+/**
  * AIE-1 infrastructure-activation mission (section 11: "Test actual
  * database behaviour. SQL source inspection alone is not live
  * certification.") — real Postgres proof of migration 0152's

@@ -1,3 +1,18 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-AI-02      Prohibited uses: identity adjudication, ownership invention,
+ *                    security-master creation, undocumented FX, reconciliation
+ *                    override.
+ *   AIE12-WRITE-01   Use one domain-owned atomic import service, not direct scattered
+ *                    table writes — asserted as an executable guard, not a convention.
+ */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';

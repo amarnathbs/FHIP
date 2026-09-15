@@ -1,4 +1,22 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-AI-05      Prompt templates treat document content as hostile evidence and
+ *                    ignore embedded instructions.
+ *   AIE10-SEC-03     Model prompt injection in visible text, metadata, white-on-white
+ *                    text and table cells.
+ *   AIE16-INJ-01     Place instruction injection in visible document text.
+ *   AIE16-INJ-10     Verify no arbitrary tool/network action is available to extraction
+ *                    calls — no tools or functions are ever sent to the model, and the
+ *                    only fetch in lib/aie is a hardcoded module-level constant.
+ */
+/**
  * M2 (H.8) — prompt-injection and untrusted-document controls.
  *
  * WHY THIS FILE EXISTS. Before M2 the repository had several files named

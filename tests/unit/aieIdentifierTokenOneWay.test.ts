@@ -1,3 +1,21 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-MASK-03    Collision resistance — two distinct people/accounts cannot share a
+ *                    token within a reconciliation scope.
+ *   AIE10-MASK-04    Reversible versus irreversible masking. Resolved by PO-BLOCKER-2
+ *                    in favour of one-way HMAC; the reversible escrow was DELETED, so
+ *                    there are no reversible maps to key-separate.
+ *   AIE11-PII-06     Collision-resistant tokens preventing cross-user correlation — the
+ *                    same folio under two users yields two different tokens, and an
+ *                    untenanted call throws.
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { deriveIdentifierToken, isOneWayIdentifierToken, normaliseIdentifierForToken } from '@/lib/aie/masking/identifierToken';

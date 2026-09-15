@@ -1,4 +1,25 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-03      Create a proof that seeded PII is removed before a captured
+ *                    provider-bound payload — measured on the real provider's own
+ *                    outbound HTTP body, with only the network substituted.
+ *   AIE11-PII-11     Prevent raw/masked mapping from appearing in errors, logs, traces
+ *                    or analytics.
+ *   AIE16-MASK-05    Measure masking recall and precision by PII class — this
+ *                    measurement FOUND a genuine pre-egress leak (M12B-F1).
+ *   AIE16-MASK-06    Capture exact provider-bound payloads in the certification
+ *                    environment.
+ *   AIE16-MASK-08    Verify raw identifiers and reversible token maps are absent from
+ *                    prohibited surfaces.
+ */
+/**
  * M12B section 6 — REAL AI PRIVACY PROOF FOR FDH-BANK AND INSURANCE.
  *
  * WHAT IS REAL HERE, AND IT IS ALMOST EVERYTHING. The real deterministic

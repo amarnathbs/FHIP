@@ -1,3 +1,14 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE15-A11Y-03    Associate every input, error, help text and unit/currency label.
+ */
 import { describe, it, expect } from 'vitest';
 import { ariaLabelForUserState, ariaLabelForCorrectionInput, ariaLiveAnnouncementForRevalidation, textEquivalentForEvidenceRef } from '@/lib/aie/review/ariaLabels';
 import { AIE_USER_FACING_STATES } from '@/lib/aie/review/types';

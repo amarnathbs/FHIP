@@ -1,4 +1,27 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-02      Create a proof that deterministic route makes zero provider calls
+ *                    — L1 asserts aiWasUsed=false against real DEV infrastructure.
+ *   AIE10-QA-09      Create a proof that deletion racing with processing cannot
+ *                    resurrect data — L4 (delete, independently verify absent, then
+ *                    record), L5 (TTL fires on age alone on a NON-terminal run), L6
+ *                    (negative control: a row inside TTL survives the same sweep).
+ *   AIE11-DEV-02     Process a deterministic-complete synthetic PDF and prove zero
+ *                    provider calls.
+ *   AIE12-LIVE-02    Process a known deterministic native-text investment statement
+ *                    with zero provider calls.
+ *   AIE12-LIVE-12    Delete all synthetic users/documents/artifacts/items/canonical
+ *                    rows and independently verify zero residue — 8 tables re-queried,
+ *                    both runs.
+ */
+/**
  * M3 (Phase 4) — LIVE-DEV proof of the Investment Intelligence dispatch path.
  *
  * WHAT MAKES THIS DIFFERENT FROM `tests/unit/aieM3InvestmentDispatch.test.ts`.

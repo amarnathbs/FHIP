@@ -1,3 +1,17 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE11-FSM-06     Enforce allowed transitions server-side rather than trusting UI
+ *                    sequence.
+ *   AIE11-FSM-12     Test every legal transition and representative illegal
+ *                    transitions.
+ */
 import { describe, it, expect } from 'vitest';
 import {
   assertIntakeTransition,

@@ -1,4 +1,21 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE13-IMPORT-02  Validate tenant, account, accepted run version and reconciliation
+ *                    status server-side.
+ *   AIE13-IMPORT-12  Prevent direct AIE/AI writes to transaction tables outside this
+ *                    service — M2-OPEN-6 reproduced RED, then the inline intake-time
+ *                    write was removed along with its import.
+ *   AIE16-ATOM-08    Verify every canonical record links to AIE
+ *                    document/run/decision/write batch.
+ */
+/**
  * M12A section 3 — FDH-BANK AIE CONTRACT. The lifecycle gate, proved end to
  * end.
  *

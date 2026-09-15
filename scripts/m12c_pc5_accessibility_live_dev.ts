@@ -1,4 +1,27 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE15-A11Y-01    Semantic headings, landmarks and one clear page title — axe
+ *                    wcag2a+wcag2aa, 0 violations across all seven states.
+ *   AIE15-A11Y-02    Logical keyboard focus order — 37 tab stops, monotonic DOM order,
+ *                    reaching "Save this answer".
+ *   AIE15-A11Y-06    Announce processing/rechecking/success/failure through live
+ *                    regions — verified against a REAL API failure surfacing in
+ *                    role="alert".
+ *   AIE16-REV-10     Test WCAG conformance.
+ *   AIE15-A11Y-08    NOT discharged here. color-contrast returned INCOMPLETE (needs
+ *                    human review) on all seven states (M12C-O12).
+ *   AIE15-A11Y-12    NOT discharged here. No screen reader is installed or drivable in
+ *                    this environment; live-region behaviour was verified
+ *                    programmatically, which is not the same thing.
+ */
+/**
  * M12C §16 (`M5-OPEN-1`) — PC5 accessibility, for real, against a real running
  * app and real DEV data.
  *

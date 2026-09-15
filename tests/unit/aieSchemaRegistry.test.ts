@@ -1,3 +1,19 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-01      Create contract tests for example envelopes and strict schema
+ *                    behaviour.
+ *   AIE10-SCH-10     Default to rejecting additional JSON properties.
+ *   AIE11-JSC-01     Publish immutable schema versions with owner, adapter
+ *                    compatibility and status — the registry throws rather than
+ *                    guessing on an unknown schema.
+ */
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import {

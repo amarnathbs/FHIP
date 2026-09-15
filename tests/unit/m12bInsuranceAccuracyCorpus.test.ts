@@ -1,4 +1,24 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE14-INS-10     Create identity/ownership/coverage-date/value exceptions rather
+ *                    than guessing — and, after M12B-F4/F5, make that silence VISIBLE
+ *                    rather than silent.
+ *   AIE14-TEST-11    Insurance accuracy measurement — 100.00% field precision and
+ *                    recall (169/169) across 14 documents.
+ *   AIE16-OTH-01     Measure Insurance policy owner/insured/cover/premium/date
+ *                    extraction and reconciliation.
+ *   AIE14-TEST-12    Document fixture provenance, coverage gaps and limitations — only
+ *                    ONE bounded generic Label:Value layout is certified; no real
+ *                    insurer PDF has ever been sourced.
+ */
+/**
  * M12B section 5 — INSURANCE ACCURACY CERTIFICATION.
  *
  * Drives the sealed corpus (`tests/support/buildM12bInsuranceCorpus.ts`) through

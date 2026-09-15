@@ -1,4 +1,26 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-06      Create a proof that PC5 can consume and resolve one synthetic AIE
+ *                    ownership item.
+ *   AIE10-EXC-08     Governed read/query API or DB view — listUnresolvedItemsForPc5 is
+ *                    capability-gated and delegates to AIE's own repository read.
+ *   AIE10-EXC-09     PC5 cannot mutate statuses directly — every status change PC5
+ *                    causes goes through AIE's own version-checked, idempotency-keyed
+ *                    gate.
+ *   AIE10-EXC-10     No separate PC5 exception tables/counters/review UI unless
+ *                    projections over AIE truth — newStatus is typed to the literal
+ *                    'in_review' only.
+ *   AIE15-PC5-01     Expose a governed AIE query/view for ownership and reconciliation
+ *                    reason families.
+ */
+/**
  * AIE-1 closure mission (section 11) — unit coverage for the capability
  * gate itself (the part of `pc5ExceptionInterface.ts` this suite can prove
  * without a database: a denied capability check must short-circuit before

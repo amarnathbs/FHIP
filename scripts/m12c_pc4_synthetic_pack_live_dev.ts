@@ -1,4 +1,20 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-09      Create a proof that deletion racing with processing cannot
+ *                    resurrect data — S10 re-queried 26 tables and 11 storage objects
+ *                    to zero against a pre-cleanup control of 204 rows.
+ *   AIE12-LIVE-12    Delete all synthetic users/documents/artifacts/items/canonical
+ *                    rows and independently verify zero residue.
+ *   AIE16-RET-06     Delete a document in every processing/review/write state.
+ */
+/**
  * M12C — PC4 REDUCED SYNTHETIC PACK (M12 dispatch section 9), LIVE DEV.
  *
  * ===========================================================================

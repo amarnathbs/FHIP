@@ -1,4 +1,18 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-09      Create a proof that deletion racing with processing cannot
+ *                    resurrect data — the delete/verify-absent/record ORDER is asserted
+ *                    by source position so a reordering fails the test.
+ *   AIE16-RET-06     Delete a document in every processing/review/write state.
+ */
+/**
  * AIE-1 closure mission — unit coverage for `lib/aie/services/purge.ts`,
  * the retention/purge job AIE never had before this mission. DEV/production
  * live verification is BLOCKED (migration 0149, which adds the

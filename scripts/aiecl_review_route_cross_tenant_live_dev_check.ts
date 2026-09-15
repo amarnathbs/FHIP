@@ -1,4 +1,19 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-08      Create a proof that cross-tenant status/evidence access fails
+ *                    closed.
+ *   AIE10-SEC-05     Model cross-tenant IDOR across upload, status, preview, evidence,
+ *                    decision, cancel and delete.
+ *   AIE16-AUTH-02    Test user A access to user B identifiers across every route.
+ */
+/**
  * AIE-1 infrastructure-activation mission (section 19, scenario 6: "Cross-
  * tenant access is denied"). This exact property was previously proven
  * ONLY at the internal function level (`scripts/aiecl_pc5_interface_live_dev_check.ts`,

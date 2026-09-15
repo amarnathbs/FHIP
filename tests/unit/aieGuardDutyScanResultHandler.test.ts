@@ -1,4 +1,20 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE11-QUA-03     Malware scanning with signature/version recorded, failing closed
+ *                    on scanner failure. IMPORTANT: this suite proves the DECISION
+ *                    FUNCTION only — it has zero production callers and no scanner
+ *                    exists (PO-BLOCKER-1 / OA-2a).
+ *   AIE16-PDF-08     Verify malware scanner failure is fail-closed according to policy
+ *                    — proven in isolation, never in a live pipeline.
+ */
+/**
  * AIE-1 closure mission (section 6, section 14.A) — the GuardDuty
  * scan-result decision gate. Pure-logic tests against AWS's real,
  * documented event shapes (see scanResultTypes.ts's header for the exact

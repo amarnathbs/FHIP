@@ -1,3 +1,17 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-05      Create a proof that repeated jobs collapse to one provider attempt
+ *                    — live, against real DEV.
+ *   AIE16-IDEM-11    Verify one provider charge/decision/write and immutable conflict
+ *                    outcomes.
+ */
 // AIE-1 infrastructure-activation mission -- live-DEV verification of
 // migrations 0151/0152 (aie_reserve_ai_cost/aie_settle_ai_cost single-row +
 // idempotency fixes), run against real DEV Supabase after the PO applied

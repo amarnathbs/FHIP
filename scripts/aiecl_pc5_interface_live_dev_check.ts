@@ -1,4 +1,18 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-06      Create a proof that PC5 can consume and resolve one synthetic AIE
+ *                    ownership item.
+ *   AIE16-PC5-01     Search code, migrations, routes and UI for competing active PC5
+ *                    exception storage.
+ */
+/**
  * AIE-1 closure mission (section 11) — real DEV verification of
  * `lib/aie/pc5/pc5ExceptionInterface.ts` against the actual `aie_*` tables
  * on the real DEV Supabase project. PC5 itself does not exist to integrate

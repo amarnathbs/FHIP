@@ -1,4 +1,19 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-AI-11      Store provider/model/template/schema versions and token/cost
+ *                    totals without prohibited payload content.
+ *   AIE16-COST-03    Measure AI input/output tokens, calls, RETRIES/REPAIRS and cost —
+ *                    M2-OPEN-5 was an all-attempts-fail sequence settling ZERO tokens
+ *                    after up to three real HTTP requests.
+ */
+/**
  * M12C closure item `M2-OPEN-5` — cost accounting across provider retries
  * (M12 dispatch section 14).
  *

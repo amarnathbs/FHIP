@@ -1,4 +1,20 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-QA-03      Create a proof that seeded PII is removed before a captured
+ *                    provider-bound payload.
+ *   AIE11-PII-01     Run masking after local extraction and before any provider payload
+ *                    builder.
+ *   AIE16-MASK-06    Capture exact provider-bound payloads in the certification
+ *                    environment.
+ */
+/**
  * AIE-1 infrastructure-activation mission (section 13: "Verify masking
  * before network egress. Use synthetic identifiers in a controlled test
  * to establish: they occur in the input fixture; they are absent from

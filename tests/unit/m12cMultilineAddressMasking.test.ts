@@ -1,4 +1,22 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-MASK-06    Handle identifiers split across spans, table cells,
+ *                    headers/footers and repeated pages.
+ *   AIE10-MASK-07    Mask free-text narration and counterparties without destroying the
+ *                    debit/credit/table structure needed for extraction.
+ *   AIE11-PII-04     Detect identifiers split across spans, lines, table cells and OCR
+ *                    tokens.
+ *   AIE11-PII-09     Mask free-text narration/counterparties according to policy
+ *                    without destroying requested layout.
+ */
+/**
  * M12C — `M3-OPEN-2`: BOUNDED MULTI-LINE ADDRESS MASKING.
  *
  * WHAT WAS OPEN, AND WHY IT WAS NOT CLOSED EARLIER. `lib/aie/masking/

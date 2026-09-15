@@ -1,3 +1,21 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-TRUST-04   Identify service-role credentials and reduce each to least
+ *                    privilege.
+ *   AIE16-CFG-03     Inventory provider/OCR/storage/queue/database secrets without
+ *                    exposing their values.
+ *   AIE16-CFG-04     Verify secrets are environment-scoped and unavailable to browser
+ *                    bundles — proven by a value-import graph walk from every 'use
+ *                    client' component. CONDITIONAL: the canonical server-only package
+ *                    is not installed, so there is no build-time error (M12C-O4).
+ */
 // M12C §13 (`M2-OPEN-4`) — the server-only secret boundary for AIE.
 //
 // The claim this suite defends is narrow and checkable: **no environment

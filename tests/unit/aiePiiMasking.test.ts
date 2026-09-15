@@ -1,3 +1,21 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE10-MASK-01    Typed placeholder vocabulary for person, address, account, card,
+ *                    member/tax ID, email, phone, employer.
+ *   AIE10-MASK-09    Fail-closed masking admission threshold. NOTE:
+ *                    isBelowMaskingPolicy is tested here but is INERT in production —
+ *                    its only caller passes labelsSeenRaw: [] pending PO-BLOCKER-3.
+ *   AIE11-PII-02     Typed detection for person, address, account, card, member/tax id,
+ *                    email, phone and employer.
+ *   AIE11-PII-05     Document-local placeholder scope by default.
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { maskText, isForbiddenLabel, isBelowMaskingPolicy, containsUnmaskedPii, maskPanForDisplay } from '@/lib/aie/masking/piiMasking';
 

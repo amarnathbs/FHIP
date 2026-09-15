@@ -1,4 +1,28 @@
 /**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE13-AI-06      Forbid AI invention of missing transactions, balances, dates,
+ *                    signs, account identity or currency — unreadable rows are REPORTED
+ *                    as unreadable, never guessed.
+ *   AIE13-MET-12     Measure false-clean rate and predeclare thresholds by certified
+ *                    adapter — measured NON-ZERO (20.00% false accept, 8.33% false
+ *                    canonical write), fixed, re-measured 0.00%/0.00%.
+ *   AIE16-FDH-03     Measure transaction row recall/precision — 100.00% field precision
+ *                    and recall (215/215) across 12 documents.
+ *   AIE16-FDH-07     Measure opening, closing and running-balance exactness.
+ *   AIE16-FDH-10     Seed omitted/duplicated row, wrong sign and decimal-shift errors
+ *                    and prove blocking — FDH-A06/A08/A11.
+ *   AIE13-MET-10     NOT discharged here. Evidence-coordinate correctness cannot be
+ *                    measured: the parser bridge reports sourcePage: 1 for every row
+ *                    (M12A-O2).
+ */
+/**
  * M12A section 4 — FDH-BANK ACCURACY CERTIFICATION.
  *
  * Drives the sealed corpus (`tests/support/buildM12aFdhBankCorpus.ts`) through

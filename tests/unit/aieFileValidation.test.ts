@@ -1,3 +1,22 @@
+/**
+ * M12D TRACEABILITY — Product-Owner requirement ids this file is evidence for.
+ *
+ * Added by the M12 Phase D mapping pass. Each id below was checked against this
+ * file's ACTUAL assertions; ids it only touches incidentally are deliberately
+ * omitted, and where this file does NOT discharge a neighbouring requirement,
+ * that is said so explicitly rather than left to be assumed.
+ * Full matrix: docs/aie-programme/AIE_1_REQUIREMENT_TRACEABILITY_FINAL_2026-09-15.md
+ *
+ *   AIE11-QUA-02     Validate declared MIME, extension, magic bytes and parser
+ *                    recognition independently.
+ *   AIE11-QUA-04     Reject PDF JavaScript, launch actions, embedded executables —
+ *                    including inside deflate-compressed streams.
+ *   AIE11-QUA-05     Detect polyglot files and suspicious trailing content after %%EOF.
+ *   AIE11-QUA-06     Decompression, object count, nesting and page limits.
+ *   AIE16-PDF-01     Test MIME spoof and extension mismatch.
+ *   AIE16-PDF-04     Test embedded JavaScript, launch actions, files and executable
+ *                    content.
+ */
 import { describe, it, expect } from 'vitest';
 import { deflateSync } from 'node:zlib';
 import {
