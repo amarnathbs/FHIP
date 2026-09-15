@@ -1,6 +1,9 @@
 /**
  * AIE-1.1 — the document-processing state machine (FSM-01..12).
  *
+ * M12C adds a third machine below, the raw-document PURGE lifecycle
+ * (`aie_document_intake.purge_status`, migration 0149) — see its own header.
+ *
  * Split across two levels, matching the two-table split in migration 0140:
  *  - INTAKE level (`aie_document_intake.status`): the raw upload's own
  *    lifecycle, independent of any particular extraction attempt.
@@ -18,7 +21,7 @@
  * written").
  */
 
-import type { AieIntakeStatus, AieRunStatus } from './types';
+import type { AieIntakeStatus, AiePurgeStatus, AieRunStatus } from './types';
 
 export const AIE_INTAKE_TRANSITIONS: Record<AieIntakeStatus, readonly AieIntakeStatus[]> = {
   // M2 (H.1): `deleted` added to both. The retention/purge job's terminal
@@ -162,6 +165,102 @@ export function isAllowedRunTransition(from: AieRunStatus, to: AieRunStatus): bo
 export function assertRunTransition(from: AieRunStatus, to: AieRunStatus): void {
   if (!isAllowedRunTransition(from, to)) {
     throw new AieInvalidTransitionError(from, to, 'aie extraction run lifecycle');
+  }
+}
+
+/**
+ * M12C (M2-OPEN-2) — the THIRD AIE machine: the raw-document purge
+ * lifecycle (`aie_document_intake.purge_status`, migration 0149).
+ *
+ * WHY IT IS HERE AND NOT IN `services/purge.ts`. This module is already "the
+ * place where AIE declares its legal edges once and enforces them
+ * server-side", and the purge lifecycle is a genuine third state machine
+ * over the same intake row — not an implementation detail of one service.
+ * Keeping it here means all three AIE machines are reviewable side by side,
+ * share one `AieInvalidTransitionError`, and share one fail-closed
+ * convention; putting it in the service would have repeated the exact
+ * mistake that produced this gap, where the vocabulary lived inside the one
+ * file that happened to use it and nothing could check it. It mirrors FDH's
+ * own split precisely: vocabulary in the enums file
+ * (`lib/aie/types.ts`'s `AIE_PURGE_STATUSES` / FDH's `FDH_PURGE_STATUSES`),
+ * edges in the lifecycle module (here / FDH's
+ * `lib/financial-data-hub/domain/documentLifecycle.ts:118-136`).
+ *
+ * IT IS DELIBERATELY NOT AN IMPORT OF FDH'S TABLE. FDH has a sixth status,
+ * `legal_hold`, that AIE's CHECK constraint does not permit, and FDH's
+ * machine forbids `not_required -> purged` because FDH has no immediate
+ * deletion path. AIE's PRIMARY path is immediate deletion. Sharing the table
+ * would have meant either widening AIE's vocabulary beyond its own CHECK or
+ * declaring AIE's normal path illegal.
+ *
+ * EVERY EDGE BELOW IS ONE THE SHIPPED CODE ACTUALLY TAKES. This table
+ * describes `lib/aie/services/purge.ts` as it is; it does not impose an
+ * idealised machine on it. Where the real job takes an edge that looks
+ * untidy (`pending -> pending`, `in_progress -> pending`), the edge is
+ * declared and explained rather than quietly omitted — an FSM table that
+ * disagrees with the job it governs is exactly how the corresponding
+ * `AIE_INTAKE_TRANSITIONS` gap survived review (see the M2 (H.1) note above).
+ */
+export const AIE_PURGE_STATUS_TRANSITIONS: Record<AiePurgeStatus, readonly AiePurgeStatus[]> = {
+  // `-> pending`: the retry path of `finalizeDocumentBinaryAfterRun` and the
+  //   24-hour hard backstop both schedule a sweep from the default state.
+  // `-> purged`: the PRIMARY immediate-deletion path. A document whose bytes
+  //   are deleted the moment its pipeline run concludes is never scheduled at
+  //   all, so it goes straight from the column default to `purged`. This is
+  //   the NORMAL outcome for the vast majority of AIE documents, and the
+  //   single biggest difference from FDH's machine.
+  // NOT `-> in_progress`: `findDuePurges` only ever returns `pending`/
+  //   `failed` rows, so a purge attempt on a `not_required` row means someone
+  //   called `runPurgeAttempt` on a row nobody scheduled. Refusing it is a
+  //   real safety property, not an oversight.
+  // NOT `-> failed`: a failure verdict can only come from an attempt that was
+  //   actually in flight.
+  not_required: ['pending', 'purged'],
+
+  // `-> in_progress`: the sweep leases the row (`runPurgeAttempt`).
+  // `-> pending`: the hard backstop re-stamps `purge_due_at`/`purge_reason`
+  //   on a row that is already scheduled. A real self-edge, not a no-op.
+  // `-> purged`: an immediate-deletion call that succeeds after an earlier
+  //   one had already scheduled a retry.
+  pending: ['pending', 'in_progress', 'purged'],
+
+  // `-> purged`: the delete succeeded AND absence was independently
+  //   re-verified (never on the delete call alone).
+  // `-> failed`: `failAttempt`. Every one of its call sites runs after
+  //   `in_progress` has been set, so this is its only legal source.
+  // `-> pending`: `finalizeDocumentBinaryAfterRun` can reschedule a row that
+  //   a sweep is mid-attempt on. Benign (the sweep's own later write simply
+  //   supersedes it) but genuinely reachable, so it is declared.
+  in_progress: ['pending', 'purged', 'failed'],
+
+  // Retryable, exactly like FDH's: a transient storage error must never
+  // strand a document forever. `-> in_progress` is the sweep picking it back
+  // up after the bounded backoff; `-> pending` is the hard backstop
+  // force-scheduling it; `-> purged` is a later immediate-deletion success.
+  // NOT `-> failed`: consecutive failures always pass through `in_progress`.
+  failed: ['pending', 'in_progress', 'purged'],
+
+  // TERMINAL. The bytes are gone and `chk_aie_intake_purged_status` requires
+  // the intake itself to be `deleted`. Before M12C this was not enforced
+  // anywhere and `finalizeDocumentBinaryAfterRun`'s retry path could and did
+  // write `purged -> pending`, which put the row back into `findDuePurges`'
+  // result set on every sweep, forever.
+  purged: [],
+};
+
+/** M2 (H.1)'s fail-closed convention, applied to the third machine: an
+ * unrecognised `from` has no legal edges rather than crashing with a raw
+ * TypeError. This matters more here than for the other two machines, because
+ * `purge_status` is read back as untyped `text` and cast unchecked in
+ * `services/purge.ts`'s own row interface. */
+export function isAllowedPurgeTransition(from: AiePurgeStatus, to: AiePurgeStatus): boolean {
+  const allowed = AIE_PURGE_STATUS_TRANSITIONS[from] as readonly AiePurgeStatus[] | undefined;
+  return allowed !== undefined && allowed.includes(to);
+}
+
+export function assertPurgeTransition(from: AiePurgeStatus, to: AiePurgeStatus): void {
+  if (!isAllowedPurgeTransition(from, to)) {
+    throw new AieInvalidTransitionError(from, to, 'aie raw document purge lifecycle');
   }
 }
 

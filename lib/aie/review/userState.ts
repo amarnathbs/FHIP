@@ -8,7 +8,7 @@
  * state/questions/actions").
  */
 
-import type { AieReconciliationOutcome, AieRunStatus } from '../types';
+import type { AieIntakeStatus, AieReconciliationOutcome, AieRunStatus } from '../types';
 import type { AieUserFacingState } from './types';
 
 export interface UserStateInput {
@@ -93,13 +93,67 @@ export function computeUserFacingState(input: UserStateInput): AieUserFacingStat
   }
 }
 
-/** IA-11: honest empty/unavailable projection for an intake that never
+/**
+ * IA-11: honest empty/unavailable projection for an intake that never
  * produced a run at all (e.g. rejected at admission, or password-protected
- * and never processed). */
-export function computeUserFacingStateForIntakeWithoutRun(intakeStatus: 'received' | 'quarantined' | 'rejected' | 'cancelled' | 'deleted'): AieUserFacingState {
+ * and never processed).
+ *
+ * M12C (M2-OPEN-3) — the parameter is now `AieIntakeStatus`, the real
+ * vocabulary, instead of an inline FIVE-member literal union that silently
+ * omitted `'ready'`. Because the union was written out by hand rather than
+ * taken from `lib/aie/types.ts`, the compiler had nothing to object to: the
+ * `never` check below was exhaustive over the hand-written union, not over
+ * the type the database actually produces. A `'ready'` intake therefore fell
+ * through to `default:` and THREW.
+ *
+ * HONESTY ABOUT SEVERITY: this was latent, not live. At the time of the fix
+ * this function had zero production callers (only its own unit test), so no
+ * user ever saw the throw. It is worth fixing anyway precisely because it is
+ * the projection a future caller would reach for, and `'ready'` with no run
+ * is not an exotic state — five routes set the intake to `'ready'` and only
+ * THEN create the run (`app/api/aie/intake/route.ts:118`,
+ * `app/api/aie/insurance/intake/route.ts:160`,
+ * `app/api/aie/fdh-bank/intake/route.ts:161`,
+ * `app/api/aie/investment-intelligence/intake/route.ts:175`, and
+ * `.../[intakeId]/process/route.ts:137`), so every AIE upload passes through
+ * exactly this state, and a crash between the two leaves a row sitting in it.
+ */
+export function computeUserFacingStateForIntakeWithoutRun(intakeStatus: AieIntakeStatus): AieUserFacingState {
   switch (intakeStatus) {
     case 'received':
     case 'quarantined':
+    // M2-OPEN-3: `'ready'` belongs with the other two PRE-RUN admission
+    // states, and the reasoning is what makes it the only defensible answer:
+    //
+    //  - `'ready'` is the INTAKE's ADMISSION verdict — "these bytes were
+    //    accepted for processing" — NOT a review verdict about extracted
+    //    content. Reaching this function at all means no run exists, so
+    //    there are no field candidates, no reconciliation outcome and
+    //    nothing whatsoever to accept.
+    //  - `'ready_to_accept'` is therefore WRONG, and wrong in the dangerous
+    //    direction: it would invite the user to import a document nothing
+    //    has extracted or reconciled. That is precisely the TRI-11 /
+    //    AIE15-ACPT rule this module is built around ("never let a stale
+    //    summary imply acceptance is safe"), and the near-collision between
+    //    the DB value `ready` and the UI value `ready_to_accept` is most
+    //    likely how the gap was overlooked in the first place.
+    //  - `'unable_to_process_safely'` is equally WRONG, in the opposite
+    //    direction: nothing has failed. The document was ADMITTED. Telling
+    //    the user it cannot be processed would be a false negative that
+    //    pushes them to delete and re-upload a document that is genuinely
+    //    still in flight.
+    //  - `'processing'` is the honest answer: admitted, run not yet created.
+    //    From the user's side that is indistinguishable from `received` and
+    //    `quarantined`, which is why it maps with them.
+    //
+    // A row genuinely stuck here (the process died between the status write
+    // and the run insert) keeps reporting `processing` until the 24-hour
+    // retention backstop purges it and moves it to `deleted`
+    // (`lib/aie/services/purge.ts`'s `enforceAieRawFileHardBackstop`) — that
+    // backstop, not this projection, is the mechanism that resolves a stuck
+    // upload, and it is the same mechanism that already resolves a row stuck
+    // in `received` or `quarantined`.
+    case 'ready':
       return 'processing';
     case 'rejected':
     case 'cancelled':

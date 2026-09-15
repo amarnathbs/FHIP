@@ -119,6 +119,30 @@ describe('OpenAiAieProvider', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('M12C M2-OPEN-5: a retried 429 that reports usage is COUNTED, not silently dropped (regression pin)', async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) return okResponse({ usage: { prompt_tokens: 70, completion_tokens: 5 } }, 429);
+      return okResponse({
+        model: 'gpt-4o-mini-2024-07-18',
+        choices: [{ message: { content: JSON.stringify({ fields: [] }) }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 100, completion_tokens: 40 },
+      });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const provider = new OpenAiAieProvider();
+    const result = await provider.generateStructured(baseRequest);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Cumulative (settle-relevant) vs final-attempt figures are BOTH reported
+    // and are provably different numbers here.
+    expect(result.inputTokens).toBe(170);
+    expect(result.outputTokens).toBe(45);
+    expect(result.finalAttemptInputTokens).toBe(100);
+    expect(result.finalAttemptOutputTokens).toBe(40);
+    expect(result.attemptCount).toBe(2);
+  });
+
   it('recovers from a transient timeout that then succeeds within the retry budget', async () => {
     let calls = 0;
     global.fetch = vi.fn(async () => {

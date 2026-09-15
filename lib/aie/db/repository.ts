@@ -344,6 +344,27 @@ export async function recordMaskingSummary(params: {
  * migrate or strand.
  */
 
+/**
+ * M12C `M2-OPEN-5` — TOKEN SEMANTICS OF THIS ROW, stated explicitly because
+ * they changed without this function's signature changing.
+ *
+ * `inputTokens`/`outputTokens` reach here from
+ * `AieFieldCompletionResult.inputTokens`/`outputTokens`, which are now the
+ * CUMULATIVE totals across every provider attempt (including transiently
+ * retried ones) made inside that one logical gateway call — the same figures
+ * the cost ledger is settled against. That is deliberate: `input_tokens` on
+ * this row is the per-document cost-accounting number, so it should match
+ * what was billed, not what the last HTTP attempt happened to report. No
+ * column or migration change was needed for this, and none was made.
+ *
+ * `latencyMs` is NOT cumulative and must not be read as though it were: the
+ * provider reports the FINAL attempt's own wall-clock only, deliberately
+ * excluding earlier attempts and the backoff sleeps between them (summing
+ * those would make it a useless responsiveness signal). One row can therefore
+ * legitimately show tokens from 3 attempts alongside 1 attempt's latency.
+ * `aie_ai_cost_attempt` (migration 0152) remains the authoritative
+ * per-idempotency-key money record; this table is the evidence trail.
+ */
 export async function recordAiCompletionAttempt(params: {
   runId: string;
   intakeId: string;

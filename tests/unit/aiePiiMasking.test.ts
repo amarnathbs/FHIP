@@ -267,6 +267,11 @@ describe('AIE-1.1 PII masking engine (PII-01..12)', () => {
       // The address rule captures to end of line, so on a line where an
       // earlier rule already replaced something it must leave that token
       // alone rather than MAC-ing a token.
+      // M12C: the rule can now also take up to 3 BOUNDED continuation lines
+      // (`M3-OPEN-2`), which does not change anything asserted here — this
+      // input is a single line — but the same placeholder protection now has
+      // to hold across the continuation too. That is proved separately in
+      // `tests/unit/m12cMultilineAddressMasking.test.ts`.
       const result = maskText('Address: 12 MG Road  PAN: ABCDE1234F', TENANT_A);
       const tokenBodies = [...result.maskedText.matchAll(/\[MASKED:[a-z_]+:hmac:([a-p]+)\]/g)];
       expect(tokenBodies.length).toBeGreaterThanOrEqual(1);

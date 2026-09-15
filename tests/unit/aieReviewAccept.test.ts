@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { acceptRun, type AcceptRunDeps } from '@/lib/aie/review/accept';
+import { isAllowedRunTransition } from '@/lib/aie/stateMachine';
 import type { AieRunRow } from '@/lib/aie/db/repository';
 
 function baseRun(overrides: Partial<AieRunRow> = {}): AieRunRow {
@@ -14,7 +15,11 @@ function baseRun(overrides: Partial<AieRunRow> = {}): AieRunRow {
 }
 
 function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps; calls: Record<string, unknown[]> } {
-  const calls: Record<string, unknown[]> = { transitions: [], batches: [], writes: [], audits: [] };
+  // M12C (M2-OPEN-1): `fsmAudits` collects `aie_processing_transition` rows
+  // separately from the coarser `aie_audit_event` rows in `audits` — the two
+  // tables are different, and the defect this closes was precisely that
+  // accept.ts wrote only the latter.
+  const calls: Record<string, unknown[]> = { transitions: [], batches: [], writes: [], audits: [], fsmAudits: [] };
   const deps: AcceptRunDeps = {
     isCanonicalAcceptanceEnabled: () => true,
     getRunForUser: async () => baseRun(),
@@ -30,6 +35,9 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
     transitionRunStatusCas: async (p) => {
       calls.transitions.push(p);
       return true;
+    },
+    recordRunTransitionAudit: async (p) => {
+      calls.fsmAudits.push(p);
     },
     findOrCreateWriteBatch: async (p) => {
       calls.batches.push(p);
@@ -339,6 +347,140 @@ describe('AIE-1.5 accept.ts — acceptRun', () => {
       const { deps } = fakeDeps({ getAdapterIdForRun: async () => 'some_future_adapter_v1' });
       const outcome = await acceptRun(baseParams, deps);
       expect(outcome).toEqual({ ok: false, reason: 'unsupported_adapter' });
+    });
+  });
+
+  // ==========================================================================
+  // M12C — M2-OPEN-1: every run-status CAS in this file must leave an
+  // `aie_processing_transition` row behind.
+  //
+  // Before this fix, `acceptRun` performed up to three (insurance/II) or four
+  // (FDH-bank) CAS transitions per call and wrote ZERO rows to
+  // `aie_processing_transition`. The only audit it wrote was to
+  // `aie_audit_event`, a different and much coarser table, and it covered
+  // only the FIRST edge. The FSM audit trail for the most safety-critical
+  // state changes in the whole pipeline — the ones that lead to a canonical
+  // financial write — simply did not exist.
+  //
+  // `lib/aie/review/revalidate.ts:184-185` already established the intended
+  // pairing (`transitionRunStatusCas` + `recordRunTransitionAudit`); these
+  // tests pin that the same pairing now holds on EVERY edge here, in order,
+  // with a specific reason, and NEVER for a CAS that did not actually move
+  // the row.
+  // ==========================================================================
+  describe('M2-OPEN-1: aie_processing_transition audit on every accept CAS', () => {
+    type FsmAudit = { runId: string; intakeId: string; userId: string; fromState: string; toState: string; actorType: string; actorId?: string; reason?: string };
+    const edges = (calls: Record<string, unknown[]>) => (calls.fsmAudits as FsmAudit[]).map((a) => `${a.fromState}->${a.toState}`);
+
+    it('records the EXACT ordered edge sequence for a successful insurance accept, with a reason and actorType per edge', async () => {
+      const { deps, calls } = fakeDeps();
+      await acceptRun(baseParams, deps);
+      expect(calls.fsmAudits).toEqual([
+        // The ONE edge a human directly commands.
+        { runId: 'run-1', intakeId: 'intake-1', userId: 'user-1', fromState: 'awaiting_acceptance', toState: 'accepted', actorType: 'user', actorId: 'user-1', reason: 'user_accepted_document' },
+        // Machine-driven consequences of that single act — no user can
+        // command these, so they are attributed to the system.
+        { runId: 'run-1', intakeId: 'intake-1', userId: 'user-1', fromState: 'accepted', toState: 'write_pending', actorType: 'system', reason: 'canonical_write_started' },
+        { runId: 'run-1', intakeId: 'intake-1', userId: 'user-1', fromState: 'write_pending', toState: 'completed', actorType: 'system', reason: 'canonical_write_committed' },
+      ]);
+    });
+
+    it('every CAS has exactly one matching audit row, in the same order, on the happy path', async () => {
+      const { deps, calls } = fakeDeps();
+      await acceptRun(baseParams, deps);
+      expect(calls.fsmAudits).toHaveLength(calls.transitions.length);
+      const casEdges = calls.transitions.map((t) => `${(t as { fromStatus: string }).fromStatus}->${(t as { toStatus: string }).toStatus}`);
+      expect(edges(calls)).toEqual(casEdges);
+    });
+
+    it('NEVER audits a transition that did not happen: a lost CAS race on the first edge writes no audit row at all', async () => {
+      const { deps, calls } = fakeDeps({ transitionRunStatusCas: async () => false });
+      expect(await acceptRun(baseParams, deps)).toEqual({ ok: false, reason: 'stale_conflict' });
+      expect(calls.fsmAudits).toHaveLength(0);
+    });
+
+    it('NEVER audits a transition that did not happen: a lost CAS race on the FINAL write_pending -> completed edge audits only the two edges that did move', async () => {
+      let call = 0;
+      const { deps, calls } = fakeDeps({
+        transitionRunStatusCas: async (p) => {
+          calls.transitions.push(p);
+          call += 1;
+          return call < 3; // third CAS (write_pending -> completed) loses the race
+        },
+      });
+      const outcome = await acceptRun(baseParams, deps);
+      // FAIL-02: the write committed, so this is still reported as success.
+      expect(outcome).toEqual({ ok: true, alreadyCompleted: true, insurancePolicyId: 'policy-1' });
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending']);
+    });
+
+    it('audits the failure edge with the adapter\'s own reason code when a write fails terminally', async () => {
+      const { deps, calls } = fakeDeps({ acceptAndWriteInsurance: async () => ({ ok: false, reason: 'schema_validation_failed', message: 'bad row' }) });
+      await acceptRun(baseParams, deps);
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending', 'write_pending->failed_terminal']);
+      const last = (calls.fsmAudits as FsmAudit[])[2];
+      expect(last.actorType).toBe('system');
+      expect(last.reason).toBe('canonical_write_failed:schema_validation_failed');
+    });
+
+    it('audits the failure edge for an infrastructure-shaped (retryable) write failure too', async () => {
+      const { deps, calls } = fakeDeps({ acceptAndWriteInsurance: async () => ({ ok: false, reason: 'insurance_policy_save_failed', message: 'db down' }) });
+      await acceptRun(baseParams, deps);
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending', 'write_pending->failed_retryable']);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('canonical_write_failed:insurance_policy_save_failed');
+    });
+
+    it('audits the FAIL-10 replay edge (outer write batch already committed) with its own distinct reason', async () => {
+      const { deps, calls } = fakeDeps({ findOrCreateWriteBatch: async () => ({ id: 'batch-1', status: 'committed' }) });
+      await acceptRun(baseParams, deps);
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending', 'write_pending->completed']);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('idempotent_replay_write_batch_already_committed');
+    });
+
+    it('audits the adapter-reported "already_written" replay edge with its own distinct reason', async () => {
+      const { deps, calls } = fakeDeps({ acceptAndWriteInsurance: async () => ({ ok: false, reason: 'already_written', insurancePolicyId: 'policy-existing' }) });
+      await acceptRun(baseParams, deps);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('idempotent_replay_adapter_reported_already_written');
+    });
+
+    it('audits all three edges on the Investment Intelligence dispatch', async () => {
+      const { deps, calls } = fakeDeps({
+        getAdapterIdForRun: async () => 'ii_cas_kfintech_folio_v1',
+        getIntakeUploadMetadata: async () => ({ storageKey: 'user-1/intake-1', declaredMimeType: 'application/pdf', displayFilename: 'statement.pdf' }),
+      });
+      await acceptRun({ ...baseParams, ownerMemberId: 'member-1', countryCode: 'IN' }, deps);
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending', 'write_pending->completed']);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('canonical_write_committed');
+    });
+
+    it('audits all three edges on the FDH-bank dispatch', async () => {
+      const { deps, calls } = fakeDeps({
+        getAdapterIdForRun: async () => 'aie_fdh_bank_statement_bridge_v1',
+        getIntakeUploadMetadata: async () => ({ storageKey: 'user-1/intake-1', declaredMimeType: 'application/pdf', displayFilename: 'statement.pdf' }),
+        getFdhBankUploadMetadata: async () => ({ country_code: 'AU', currency_code: 'AUD' }),
+      });
+      await acceptRun(baseParams, deps);
+      expect(edges(calls)).toEqual(['awaiting_acceptance->accepted', 'accepted->write_pending', 'write_pending->completed']);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('canonical_write_committed');
+    });
+
+    it('audits the FDH-bank prior-committed-write guard edge with its own distinct reason (never confused with a fresh write)', async () => {
+      const { deps, calls } = fakeDeps({
+        getAdapterIdForRun: async () => 'aie_fdh_bank_statement_bridge_v1',
+        getIntakeUploadMetadata: async () => ({ storageKey: 'user-1/intake-1', declaredMimeType: 'application/pdf', displayFilename: 'statement.pdf' }),
+        getFdhBankUploadMetadata: async () => ({ country_code: 'AU', currency_code: 'AUD' }),
+        findCommittedFdhBankWriteForRun: async () => ({ canonicalReferenceId: 'statement-existing' }),
+      });
+      await acceptRun(baseParams, deps);
+      expect((calls.fsmAudits as FsmAudit[])[2].reason).toBe('idempotent_replay_prior_committed_fdh_bank_write');
+    });
+
+    it('every audited edge is a legal edge of the declared run state machine (the audit can never claim an impossible move)', async () => {
+      const { deps, calls } = fakeDeps();
+      await acceptRun(baseParams, deps);
+      for (const a of calls.fsmAudits as FsmAudit[]) {
+        expect(isAllowedRunTransition(a.fromState as never, a.toState as never), `${a.fromState}->${a.toState}`).toBe(true);
+      }
     });
   });
 });

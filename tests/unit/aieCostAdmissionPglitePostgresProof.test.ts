@@ -133,6 +133,30 @@ describe('migration 0152 — aie_reserve_ai_cost / aie_settle_ai_cost idempotenc
     expect(Number(afterDuplicate.total_input_tokens)).toBe(1000); // UNCHANGED, not 2000
   });
 
+  it('M12C M2-OPEN-5: a RETRY-SUMMED settlement replayed under the same key is still a single settlement (never double-settle the summed figure)', async () => {
+    // The M12C change makes a single settlement carry the SUM of every
+    // provider attempt's usage (e.g. a 429 reporting 70/5 followed by a
+    // success reporting 100/40 settles 170/45, not 100/40). That makes each
+    // settlement LARGER, so it matters more that a replay cannot apply it
+    // twice. This proves it against a real Postgres engine, not by inference
+    // from the TypeScript layer.
+    await resetLedger();
+    await reserve('m12c-retry-summed', 2.0);
+    // 170 input + 45 output tokens = the retry-summed figure.
+    await settle('m12c-retry-summed', 2.0, 1.25, 170, 45);
+    const afterFirst = await ledger();
+    expect(Number(afterFirst.settled_usd)).toBe(1.25);
+    expect(Number(afterFirst.total_input_tokens)).toBe(170);
+    expect(Number(afterFirst.total_output_tokens)).toBe(45);
+
+    // Genuine cross-process replay: same key, same summed params.
+    await settle('m12c-retry-summed', 2.0, 1.25, 170, 45);
+    const afterReplay = await ledger();
+    expect(Number(afterReplay.settled_usd)).toBe(1.25); // not 2.50
+    expect(Number(afterReplay.total_input_tokens)).toBe(170); // not 340
+    expect(Number(afterReplay.total_output_tokens)).toBe(45); // not 90
+  });
+
   it('two DIFFERENT idempotency keys are each honoured independently (the fix does not over-collapse unrelated attempts)', async () => {
     await resetLedger();
     await reserve('pglite-attempt-5a', 1.0);

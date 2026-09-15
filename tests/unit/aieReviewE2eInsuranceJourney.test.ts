@@ -153,7 +153,7 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
     };
 
     runRow.status = 'awaiting_acceptance';
-    const acceptCalls: Record<string, unknown[]> = { transitions: [] };
+    const acceptCalls: Record<string, unknown[]> = { transitions: [], fsmAudits: [] };
     const acceptDeps: AcceptRunDeps = {
       isCanonicalAcceptanceEnabled: () => true,
       getRunForUser: async () => runRow,
@@ -174,6 +174,12 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
         acceptCalls.transitions.push(p);
         runRow.status = p.toStatus;
         return true;
+      },
+      // M12C (M2-OPEN-1): accept.ts now pairs every CAS with an
+      // `aie_processing_transition` row, exactly as revalidate.ts already
+      // did above in this same journey.
+      recordRunTransitionAudit: async (p) => {
+        acceptCalls.fsmAudits.push(p);
       },
       findOrCreateWriteBatch: async () => ({ id: 'batch-e2e-1', status: 'pending' }),
       markWriteBatchStatus: async () => {},
@@ -201,5 +207,16 @@ describe('AIE-1.5 end-to-end journey — Insurance: unresolved -> correct -> rev
     // USD) is what actually reached the canonical row — proof the
     // correction genuinely flowed through revalidation into the write.
     expect(savedRow).toMatchObject({ currency_code: 'AUD', policy_name: 'Acme SecureLife Term Cover', owner: 'self' });
+
+    // M12C (M2-OPEN-1): the whole accept leg of this journey is now traceable
+    // in `aie_processing_transition` — one row per edge, in order, none of
+    // which existed before.
+    expect(acceptCalls.fsmAudits.map((a) => `${(a as { fromState: string }).fromState}->${(a as { toState: string }).toState}`)).toEqual([
+      'awaiting_acceptance->accepted',
+      'accepted->write_pending',
+      'write_pending->completed',
+    ]);
+    expect((acceptCalls.fsmAudits[0] as { actorType: string; actorId: string }).actorType).toBe('user');
+    expect((acceptCalls.fsmAudits[0] as { actorType: string; actorId: string }).actorId).toBe('user-e2e-1');
   });
 });

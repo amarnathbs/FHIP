@@ -19,6 +19,10 @@ function makeSharedFakeDb() {
     run: { id: 'run-1', intakeId: 'intake-1', userId: 'user-1', status: 'awaiting_acceptance', aiUsed: false, startedAt: new Date().toISOString() } as AieRunRow,
     writeBatch: null as null | { id: string; status: 'pending' | 'committed' | 'failed' },
     insuranceWriteCount: 0,
+    // M12C (M2-OPEN-1): the real `aie_processing_transition` table, as a
+    // list. Under a genuine race this is the strongest available check that
+    // a LOSING CAS never leaves an audit row behind.
+    fsmAudits: [] as Array<{ fromState: string; toState: string; actorType: string; reason?: string }>,
   };
 
   const deps: AcceptRunDeps = {
@@ -45,6 +49,9 @@ function makeSharedFakeDb() {
       if (state.run.status !== fromStatus) return false;
       state.run = { ...state.run, status: toStatus as AieRunRow['status'] };
       return true;
+    },
+    recordRunTransitionAudit: async (p) => {
+      state.fsmAudits.push({ fromState: p.fromState, toState: p.toState, actorType: p.actorType, reason: p.reason });
     },
     findOrCreateWriteBatch: async ({ idempotencyKey }) => {
       await new Promise((r) => setTimeout(r, 1));
@@ -114,5 +121,35 @@ describe('AIE-1.6 certification — adversarial concurrency probe (not part of a
     const replay = await acceptRun(params, deps);
     expect(replay).toEqual({ ok: true, alreadyCompleted: true });
     expect(state.insuranceWriteCount).toBe(1); // still exactly one — no duplicate write on replay
+
+    // M12C (M2-OPEN-1): the replay short-circuits on `run.status ===
+    // 'completed'` BEFORE any CAS, so it must add no audit row at all — the
+    // trail records three real edges from the first call and nothing else.
+    expect(state.fsmAudits.map((a) => `${a.fromState}->${a.toState}`)).toEqual([
+      'awaiting_acceptance->accepted',
+      'accepted->write_pending',
+      'write_pending->completed',
+    ]);
+  });
+
+  // M12C (M2-OPEN-1) — the adversarial form of "never audit a transition
+  // that did not happen", under a REAL race rather than a scripted `false`.
+  it('under a genuine two-caller race, the LOSING CAS leaves no aie_processing_transition row behind', async () => {
+    const { deps, state } = makeSharedFakeDb();
+    const params = { runId: 'run-1', userId: 'user-1', acceptedByUserId: 'user-1', ownerHouseholdRole: 'self' as const, idempotencyKey: 'run-1:accept:1' };
+
+    await Promise.all([acceptRun(params, deps), acceptRun(params, deps)]);
+
+    // Whatever the interleaving, the run moved through each edge exactly
+    // once, so each edge may be audited at most once. A losing caller that
+    // audited anyway would show up here as a duplicate.
+    const edges = state.fsmAudits.map((a) => `${a.fromState}->${a.toState}`);
+    expect(new Set(edges).size).toBe(edges.length);
+    // Every audited edge is one the shared fake DB actually applied: the
+    // run's status can only be what the last applied CAS set it to.
+    expect(state.run.status).toBe('completed');
+    expect(edges).toContain('awaiting_acceptance->accepted');
+    // Exactly one caller may claim the user-attributed acceptance edge.
+    expect(state.fsmAudits.filter((a) => a.actorType === 'user')).toHaveLength(1);
   });
 });

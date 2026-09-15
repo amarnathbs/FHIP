@@ -96,6 +96,185 @@ interface PiiPattern {
   valuePredicate?: (value: string) => boolean;
 }
 
+/** Field LABELS whose entire value must be dropped rather than redacted —
+ * carried over verbatim in substance from `FORBIDDEN_LABEL_TERMS`, extended
+ * with person/address terms AIE-1.1's own spec calls for.
+ *
+ * M12C: this declaration MOVED UP from below `PII_PATTERNS` (it used to sit
+ * next to `isForbiddenLabel`, which is a hoisted function declaration and so
+ * is unaffected). The move is mechanical — the array is a plain literal with
+ * no dependencies — and is required because `ADDRESS_STOP_TERMS` below reads
+ * it while building the address rule's stop-vocabulary, and a module-level
+ * `const` read before its own initialiser is a TDZ `ReferenceError`, not a
+ * silent `undefined`. Reusing this list rather than inventing a second one is
+ * deliberate: it is the vocabulary this module already treats as
+ * "value-bearing field label", which is exactly the question the address
+ * continuation has to ask of each candidate line. */
+const FORBIDDEN_LABEL_TERMS = [
+  'tax file number', 'tfn', 'pan number', 'pan no', 'aadhaar', 'aadhar',
+  'bank account', 'account number', 'account no', 'a/c no', 'ifsc', 'bsb',
+  'employee id', 'employee no', 'employee code', 'emp id', 'emp code',
+  'address', 'date of birth', 'dob', 'uan', 'esic', 'passport',
+  'next of kin', 'emergency contact', 'phone', 'mobile',
+  'name', 'account holder', 'card number', 'cvv',
+];
+
+// ---------------------------------------------------------------------------
+// M12C (`M3-OPEN-2`) — BOUNDED MULTI-LINE ADDRESS CONTINUATION.
+//
+// The address rule below used to capture its label's own line and nothing
+// else, and said so in place: "a postal address printed across several lines
+// is masked on its FIRST line only ... Lines two and three of a wrapped
+// address still reach the provider." The reason given for not extending it
+// was that going across newlines "would run on and swallow the next labelled
+// field" — the exact over-capture failure the folio rule had to be narrowed
+// for during M2. THAT REASONING IS NOT OVERTURNED HERE. An unbounded newline
+// capture is still wrong and is still not what this does.
+//
+// What M12C adds is the third option: a continuation that is bounded in BOTH
+// directions — a hard cap on how many lines it may take AND on how long each
+// of those lines may be — and that stops at the FIRST of several explicit
+// structural signals. The whole mechanism lives inside the rule's ordinary
+// `pattern` / `valueGroup` fields, which matters more than it looks: every
+// consumer of `PII_PATTERNS` (`maskText` AND the independent pre-egress guard
+// `firstResidualPiiType`) reads those two fields and nothing else, so the two
+// paths cannot desynchronise. A continuation mechanism bolted on OUTSIDE the
+// `PiiPattern` interface would have reintroduced M12B-F2 — a guard asking a
+// different question from the masker — by construction.
+//
+// COUNTING DECISION, STATED EXPLICITLY BECAUSE IT IS A JUDGEMENT CALL:
+// a wrapped address counts as **ONE** `address_label` in `coverageByType`,
+// not one per line, and yields ONE token covering all of its lines. The
+// alternative (one match per line) was rejected because `coverage_by_type` is
+// privacy evidence answering "how many identifiers did this document
+// contain?", and a household with one postal address printed over four lines
+// does not have four addresses — reporting 4 would overstate the document's
+// PII content just as surely as reporting 1 for four DIFFERENT addresses
+// would understate it. The guard agrees automatically: it shares the pattern,
+// so it sees the same single match.
+//
+// VISIBLE SIDE EFFECT, DISCLOSED: because one token replaces a span that
+// contained newlines, a 4-line address collapses to a single line in the
+// masked text. Everything BELOW the address keeps its own line structure
+// (the terminating newline is never consumed — the capture always ends at an
+// end-of-line, never across one). Address tokens are not used as join keys
+// anywhere (unlike folio/account tokens, whose stability the M3 contract
+// depends on), so the fact that a differently-wrapped copy of the same
+// address yields a different token costs nothing real. Stated rather than
+// discovered later.
+// ---------------------------------------------------------------------------
+
+/** Hard cap on continuation lines. 3 continuation lines + the label's own line
+ * = a 4-line address, which is the longest postal layout the AU/India
+ * statements this repository parses actually print (recipient / street /
+ * suburb-locality / state-postcode). A bigger number buys nothing real and
+ * enlarges the blast radius of every stop-condition miss. */
+const ADDRESS_MAX_CONTINUATION_LINES = 3;
+
+/** Hard cap on the LENGTH of a continuation line. A line longer than this is
+ * not consumed AT ALL — the capture requires the whole line (`(?=\r?\n|$)`)
+ * rather than a 120-character prefix of it. Taking a prefix would be strictly
+ * worse than taking nothing: it would leave the tail of the line in the text
+ * while destroying its head, which neither protects the user nor preserves
+ * structure. A wrapped postal line is short by construction; a 400-character
+ * paragraph after `Address:` is prose, not an address. */
+const ADDRESS_MAX_CONTINUATION_LINE_CHARS = 120;
+
+/** Terms that, at the start of a line, mean "this is the next FIELD, not more
+ * address". `FORBIDDEN_LABEL_TERMS` supplies the PII half for free; the rest
+ * is the financial/statement vocabulary this module sees in CAS, bank and
+ * insurance documents. Terms that are plausible as the first word of a real
+ * street line are deliberately ABSENT (`unit`, `block`, `branch`, `road`,
+ * `street`, `floor`, `plot`, `house`) — a stop-term that fires on a genuine
+ * address line under-captures, which is a leak. Two known imperfect entries
+ * are kept and disclosed rather than hidden: `mobile` (Mobile, Alabama) and
+ * `pan` (Pan Bazaar, Guwahati) can each begin a real address line somewhere
+ * in the world, but both are overwhelmingly field labels in the AU/India
+ * documents this module actually sees, and the cost of the rare miss is one
+ * unmasked line rather than a destroyed financial field. */
+const ADDRESS_STOP_TERMS: readonly string[] = [
+  ...FORBIDDEN_LABEL_TERMS,
+  'pan', 'folio', 'policy', 'certificate', 'premium', 'sum insured', 'sum assured',
+  'insurer', 'insured', 'nominee', 'investor', 'beneficiary', 'applicant', 'proposer',
+  'holder', 'scheme', 'fund', 'isin', 'arn', 'nav', 'units', 'balance', 'amount',
+  'total', 'sub total', 'subtotal', 'opening', 'closing', 'currency', 'date',
+  'statement', 'period', 'renewal', 'product', 'plan', 'type', 'frequency',
+  'gstin', 'gst', 'tax', 'transaction', 'deposit', 'withdrawal', 'interest',
+  'maturity', 'contact', 'customer', 'reference', 'page', 'signature',
+];
+
+const ADDRESS_STOP_TERM_ALTERNATION = ADDRESS_STOP_TERMS
+  // Escape regex metacharacters, then let any literal space in a multi-word
+  // term match runs of spaces WITHOUT crossing a line ending — the same
+  // `[^\S\r\n]` discipline M12B established everywhere else in this file.
+  .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ +/g, '[^\\S\\r\\n]+'))
+  .join('|');
+
+/**
+ * The stop-conditions, evaluated as lookaheads at the START of each candidate
+ * continuation line. Consumption ends at the FIRST line that trips any of
+ * them. Order here is cosmetic (they are all zero-width and all must pass);
+ * the list is what matters.
+ */
+const ADDRESS_CONTINUATION_GUARDS = [
+  // (a) SECTION BOUNDARY — a blank or whitespace-only line ends the field.
+  '(?=[^\\S\\r\\n]*\\S)',
+  // (b) ALREADY-MASKED CONTENT. A line carrying a placeholder an earlier rule
+  // wrote is never swallowed. Without this, one masked PAN three lines below
+  // an address would poison the ENTIRE multi-line capture via `maskText`'s
+  // `sensitive.includes('[MASKED:')` check, and the address would then be left
+  // wholly unmasked — a strictly worse outcome than not extending at all.
+  '(?![^\\r\\n]*\\[MASKED:)',
+  // (c) A RECOGNISED FIELD LABEL, colon or no colon. `PAN ABCDE1234F` on its
+  // own line is the next field even though it prints no separator.
+  `(?![^\\S\\r\\n]*(?:${ADDRESS_STOP_TERM_ALTERNATION})\\b)`,
+  // (d) ANY generic `Label:` line shape, for labels the vocabulary above does
+  // not know. Only `:` counts — `-` and `.` are common INSIDE address lines
+  // ("Flat 5 - B Wing", "St. Mary's Road") and would stop far too eagerly.
+  "(?![^\\S\\r\\n]*[A-Za-z][A-Za-z0-9 /#.&'()-]{0,40}:)",
+  // (e) TABLE: pipe- or tab-delimited.
+  '(?![^\\r\\n]*[|\\t])',
+  // (f) TABLE: a horizontal rule / separator line.
+  '(?![^\\S\\r\\n]*[-=_*~]{4,})',
+  // (g) TABLE: three or more whitespace-delimited columns (two runs of 2+
+  // spaces). Deliberately 3 columns and not 2 — PDF text extraction routinely
+  // leaves a double space inside one wrapped address line, so a 2-column
+  // threshold would stop on genuine addresses, whereas 3 aligned columns is a
+  // table header or row in every layout this repository parses.
+  '(?!(?:[^\\r\\n]*?\\S[^\\S\\r\\n]{2,}){2})',
+  // (h) MONEY-SHAPED — a currency symbol anywhere, or a 2-decimal amount.
+  // `(?!\\d)` after the cents keeps this off unit/NAV figures like `1234.567`,
+  // which are caught by (g) or by their own row's money column instead.
+  '(?![^\\r\\n]*(?:[$\\u20B9\\u00A3\\u20AC\\u00A5]|\\d[\\d,]*\\.\\d{2}(?!\\d)))',
+  // (i) DATE-LED — `31/08/2027`, `2027-08-31`, `31 Aug 2027`, `31 March 2027`.
+  // THE SPELLED-OUT-MONTH BRANCH IS WHY THIS IS NOT JUST `\d{1,2}\s+(jan|...)`:
+  // the rule runs case-insensitively, so that shorter form matched "12 Mar"
+  // inside `12 Marigold Avenue` and stopped the capture on the second line of
+  // a perfectly ordinary address. Caught by the 4-line test, which went from
+  // red to a DIFFERENT red rather than to green. The branch therefore also
+  // requires a trailing YEAR/day number, which prose after a house number
+  // does not have.
+  '(?![^\\S\\r\\n]*(?:\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}' +
+    '|\\d{1,2}[^\\S\\r\\n]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]{0,6}\\.?[^\\S\\r\\n]+\\d{2,4}\\b))',
+].join('');
+
+/** `{0,N}` repetitions of "a newline, then a line that trips no guard and is
+ * consumed IN FULL". Ending each repetition on `(?=\r?\n|$)` is what makes
+ * the cap a LINE cap rather than a character cap, and is also what keeps the
+ * terminating newline out of the capture so the document's line structure
+ * below the address survives. */
+const ADDRESS_CONTINUATION =
+  `(?:\\r?\\n${ADDRESS_CONTINUATION_GUARDS}[^\\r\\n]{1,${ADDRESS_MAX_CONTINUATION_LINE_CHARS}}(?=\\r?\\n|$))` +
+  `{0,${ADDRESS_MAX_CONTINUATION_LINES}}`;
+
+const ADDRESS_PATTERN = new RegExp(
+  '\\b(?<!e-?mail )' +
+    '((?:residential[^\\S\\r\\n]*address|correspondence[^\\S\\r\\n]*address|permanent[^\\S\\r\\n]*address' +
+    '|mailing[^\\S\\r\\n]*address|registered[^\\S\\r\\n]*address|address)[^\\S\\r\\n]*[:.\\-][^\\S\\r\\n]*)' +
+    `([^\\r\\n]{5,160}${ADDRESS_CONTINUATION})`,
+  'gi',
+);
+
 /** Carried over verbatim in substance from
  * `lib/financial-data-hub/payslip/privacy.ts`'s `SENSITIVE_PATTERNS`, plus
  * `textUtils.ts`'s PAN shape (already covered by the 5-letter/4-digit/
@@ -244,14 +423,27 @@ const PII_PATTERNS: PiiPattern[] = [
   // reliably has, so the only dependable signal is the label the document
   // itself prints. Captures to end of line.
   //
-  // DISCLOSED LIMITATION, not a silent one: a postal address printed across
-  // several lines is masked on its FIRST line only. Extending the capture
-  // across newlines would be worse, not better — with no reliable
-  // end-of-address signal it would run on and swallow the next labelled
-  // field (exactly the over-capture failure the folio rule already hit once
-  // during M2 and had to be narrowed for). Lines two and three of a wrapped
-  // address still reach the provider. This is an improvement on "no rule at
-  // all" and is stated here rather than implied to be complete.
+  // M3's DISCLOSED LIMITATION — "a postal address printed across several
+  // lines is masked on its FIRST line only", tracked as `M3-OPEN-2` — IS NOW
+  // CLOSED, conservatively. The capture extends across newlines, but ONLY via
+  // the bounded, stop-condition-terminated continuation defined above
+  // (`ADDRESS_CONTINUATION`): at most `ADDRESS_MAX_CONTINUATION_LINES` further
+  // lines, each at most `ADDRESS_MAX_CONTINUATION_LINE_CHARS` characters and
+  // consumed only in full, halting at the first recognised field label, table
+  // shape, blank line, money-shaped line, date-led line or already-masked
+  // line. M3's objection — that an open-ended newline capture "would run on
+  // and swallow the next labelled field" — is not answered by ignoring it but
+  // by refusing to be open-ended. See the block comment above
+  // `ADDRESS_MAX_CONTINUATION_LINES` for the counting decision (a wrapped
+  // address is ONE `address_label`, not one per line) and for what remains
+  // out of reach (a 5th line; a continuation line that genuinely begins with
+  // a stop term).
+  //
+  // WHAT IS STILL FIRST-LINE-ONLY, STATED PLAINLY: nothing about an
+  // UNLABELLED address. A postal address that the document never introduces
+  // with a recognisable label is not matched at all, before or after M12C —
+  // this rule has always been label-anchored because a street address has no
+  // reliable shape, and that is unchanged.
   //
   // The `(?<!e-?mail )` lookbehind is load-bearing, not defensive padding:
   // real statements print `Email Address: investor@example.com`, and without
@@ -262,17 +454,18 @@ const PII_PATTERNS: PiiPattern[] = [
   // failure M2 fixed for the AU-TFN-vs-folio ordering.
   //
   // M12B: the gap between the colon and the value is `[^\S\r\n]*`, not `\s*`,
-  // for exactly the reason given on the person-name rule above — the value is
-  // already constrained to a single line (`[^\r\n]`), so letting the GAP cross
-  // a line ending meant an empty `Residential Address:` line silently claimed
-  // the whole of the next line as an address. That is what kept
-  // `containsUnmaskedPii` reporting residual PII on fully-masked text after
-  // M12B-F2's strip. The rule was already documented as first-line-only, so
-  // requiring the value on the label's own line costs no intended coverage.
+  // for exactly the reason given on the person-name rule above — so that an
+  // EMPTY `Residential Address:` line cannot silently claim the whole of the
+  // next line as an address. That is what kept `containsUnmaskedPii`
+  // reporting residual PII on fully-masked text after M12B-F2's strip.
+  // M12C PRESERVES THIS EXACTLY and it is load-bearing for the new
+  // continuation too: the FIRST line of the value is still mandatory
+  // (`[^\r\n]{5,160}`) and still has to be on the label's own line, so a
+  // label with no value gets no continuation either — an empty address label
+  // cannot reach down and claim three lines instead of one.
   {
     type: 'address_label',
-    pattern:
-      /\b(?<!e-?mail )((?:residential[^\S\r\n]*address|correspondence[^\S\r\n]*address|permanent[^\S\r\n]*address|mailing[^\S\r\n]*address|registered[^\S\r\n]*address|address)[^\S\r\n]*[:.\-][^\S\r\n]*)([^\r\n]{5,160})/gi,
+    pattern: ADDRESS_PATTERN,
     valueGroup: 2,
   },
 
@@ -307,18 +500,10 @@ const PII_PATTERNS: PiiPattern[] = [
   { type: 'phone', pattern: /\b(?:\+?61|0)4\d{2}[ -]?\d{3}[ -]?\d{3}\b|\b\+?91[ -]?[6-9]\d{9}\b/g },
 ];
 
-/** Field LABELS whose entire value must be dropped rather than redacted —
- * carried over verbatim in substance from `FORBIDDEN_LABEL_TERMS`, extended
- * with person/address terms AIE-1.1's own spec calls for. */
-const FORBIDDEN_LABEL_TERMS = [
-  'tax file number', 'tfn', 'pan number', 'pan no', 'aadhaar', 'aadhar',
-  'bank account', 'account number', 'account no', 'a/c no', 'ifsc', 'bsb',
-  'employee id', 'employee no', 'employee code', 'emp id', 'emp code',
-  'address', 'date of birth', 'dob', 'uan', 'esic', 'passport',
-  'next of kin', 'emergency contact', 'phone', 'mobile',
-  'name', 'account holder', 'card number', 'cvv',
-];
-
+/** M12C: `FORBIDDEN_LABEL_TERMS` itself now lives ABOVE `PII_PATTERNS` (see
+ * the note on its declaration) because the address rule's stop-vocabulary
+ * reads it at module-initialisation time. Only the declaration moved; the
+ * list is byte-identical and this accessor is unchanged. */
 export function isForbiddenLabel(label: string): boolean {
   const lower = label.toLowerCase();
   return FORBIDDEN_LABEL_TERMS.some((term) => lower.includes(term));

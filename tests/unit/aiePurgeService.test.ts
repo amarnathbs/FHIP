@@ -92,6 +92,14 @@ function makeIntakeQuery() {
           updateFilters.push((r) => (r as never as Record<string, string>)[col] === val);
           return builder;
         },
+        // M12C (M2-OPEN-2): `finalizeDocumentBinaryAfterRun`'s retry path now
+        // guards its write with `.neq('purge_status', 'purged')` so it can
+        // never resurrect an already-purged row. Same lazy semantics as
+        // `.eq()` above — accumulate a filter, execute once on await.
+        neq(col: 'id' | 'status' | 'purge_status', val: string) {
+          updateFilters.push((r) => (r as never as Record<string, string>)[col] !== val);
+          return builder;
+        },
         then(resolve: (v: { error: unknown }) => void) {
           resolve(execute());
         },
@@ -274,5 +282,96 @@ describe('finalizeDocumentBinaryAfterRun (primary immediate-deletion path)', () 
     expect(result.status).toBe('scheduled_for_retry');
     expect(intakeRows[r.id].purge_status).toBe('pending');
     expect(auditEvents.some((e) => e.eventType === 'document_purge_scheduled')).toBe(true);
+  });
+});
+
+// ============================================================================
+// M12C — M2-OPEN-2: the purge-status transition validator, wired in.
+// ============================================================================
+describe('M2-OPEN-2 — purge_status transition validation is enforced at every write site', () => {
+  it('finalizeDocumentBinaryAfterRun can NEVER resurrect an already-purged row (purged is terminal)', async () => {
+    // Before this fix the retry path wrote `purge_status: 'pending'` filtered
+    // on `id` alone — no CAS, no from-state check. A row already `purged`
+    // (status `deleted`, storage_key null) therefore went back to `pending`,
+    // was re-selected by `findDuePurges` on every sweep, and generated a
+    // fresh `document_purge_scheduled` audit event each time, forever.
+    const r = row({ purge_status: 'purged', status: 'deleted', storage_key: null });
+    intakeRows[r.id] = r;
+    deleteShouldFail = true;
+
+    const result = await finalizeDocumentBinaryAfterRun({ intakeId: r.id, userId: r.user_id, storageKey: 'user-1/intake-1/intake-1.bin' });
+
+    expect(intakeRows[r.id].purge_status).toBe('purged');
+    // Honest reporting: nothing was scheduled because nothing needed to be.
+    expect(result.status).toBe('already_deleted');
+    expect(auditEvents.some((e) => e.eventType === 'document_purge_scheduled')).toBe(false);
+  });
+
+  it('runPurgeAttempt refuses a row whose purge_status is not a legal source for in_progress, and writes NOTHING', async () => {
+    // `findDuePurges` only ever returns pending/failed rows, so reaching this
+    // branch means a corrupt/hand-edited/legacy value. Fail CLOSED (no
+    // write at all) and let the sweep's `failed` count surface it — never
+    // guess, and never abort the rest of the sweep by throwing.
+    const r = row({ purge_status: 'not_required' });
+    intakeRows[r.id] = r;
+    storageObjects.add(r.storage_key!);
+
+    const result = await runPurgeAttempt(r);
+
+    expect(result.status).toBe('failed');
+    expect(intakeRows[r.id].purge_status).toBe('not_required');
+    expect(storageObjects.has(r.storage_key!)).toBe(true); // bytes untouched
+    expect(auditEvents.some((e) => e.eventType === 'document_purged')).toBe(false);
+  });
+
+  it('runPurgeAttempt refuses an unrecognised purge_status the same way (fail-closed on untyped DB text)', async () => {
+    const r = row({ purge_status: 'legal_hold' as never });
+    intakeRows[r.id] = r;
+    const result = await runPurgeAttempt(r);
+    expect(result.status).toBe('failed');
+    expect(intakeRows[r.id].purge_status).toBe('legal_hold');
+  });
+
+  it('runPurgeAttempt still accepts both legal source states (pending and failed) — retry semantics unchanged', async () => {
+    for (const from of ['pending', 'failed'] as const) {
+      intakeRows = {};
+      storageObjects = new Set();
+      const r = row({ id: `intake-${from}`, purge_status: from });
+      intakeRows[r.id] = r;
+      storageObjects.add(r.storage_key!);
+      const result = await runPurgeAttempt(r);
+      expect(result.status, from).toBe('purged');
+      expect(intakeRows[r.id].purge_status, from).toBe('purged');
+    }
+  });
+
+  it('the bounded-backoff failure path is unchanged: in_progress -> failed, attempt count incremented, next attempt scheduled', async () => {
+    const r = row({ purge_status: 'failed', purge_attempt_count: 2 });
+    intakeRows[r.id] = r;
+    storageObjects.add(r.storage_key!);
+    deleteShouldFail = true;
+
+    const result = await runPurgeAttempt(r);
+
+    expect(result.status).toBe('failed');
+    expect(intakeRows[r.id].purge_status).toBe('failed');
+    expect(intakeRows[r.id].purge_attempt_count).toBe(3);
+    expect(auditEvents.some((e) => e.eventType === 'document_purge_failed')).toBe(true);
+  });
+
+  it('the hard backstop skips a row whose current purge_status could not legally reach pending, without aborting the sweep', async () => {
+    const old = (id: string, purge_status: FakeIntakeRow['purge_status']) => row({ id, purge_status, created_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString() });
+    intakeRows['ok'] = old('ok', 'not_required');
+    // `purged` is excluded by the query's own `.not(...in (purged,in_progress))`
+    // filter, so the illegal source that can still reach the loop is a
+    // corrupt value — proven here with one.
+    intakeRows['bad'] = old('bad', 'legal_hold' as never);
+
+    const result = await enforceAieRawFileHardBackstop(24 * 60);
+
+    expect(result.scanned).toBe(2);
+    expect(result.forcedPurgeCount).toBe(1); // scanned > forced is the signal
+    expect(intakeRows['ok'].purge_status).toBe('pending');
+    expect(intakeRows['bad'].purge_status).toBe('legal_hold');
   });
 });

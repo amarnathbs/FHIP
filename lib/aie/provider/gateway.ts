@@ -24,6 +24,7 @@
  */
 
 import type { AieAiProvider } from './types';
+import { readAieCumulativeUsage } from './types';
 import { ProviderError } from '@/lib/ai/providers/types';
 import { containsUnmaskedPii } from '../masking/piiMasking';
 import { validateAiOutput } from '../schema/schemaRegistry';
@@ -147,6 +148,15 @@ export class AieDocumentAiGateway {
       }
       reservedUsd = reservation.reservedUsd;
     }
+    // M12C M2-OPEN-5: `settle` is called on EXACTLY ONE code path per
+    // `executeOnce` (throw / refused / schema_rejected / success are mutually
+    // exclusive and each returns immediately), and `executeOnce` itself runs
+    // once per idempotency key thanks to the in-flight collapse above --
+    // so "never double-settle" needs no new TypeScript mechanism here. The
+    // cross-process guarantee is separately enforced in SQL by
+    // `aie_ai_cost_attempt.idempotency_key` + the `v_already_settled` guard
+    // (migration 0152), and `req.idempotencyKey` is threaded through
+    // unchanged so a replay collapses there.
     const settle = (actualInputTokens: number, actualOutputTokens: number, treatAsFullReservedCost = false) =>
       this.options.costAdmission?.settle({ reservedUsd, actualInputTokens, actualOutputTokens, model: req.model, idempotencyKey: req.idempotencyKey, treatAsFullReservedCost }) ?? Promise.resolve();
 
@@ -168,12 +178,33 @@ export class AieDocumentAiGateway {
       // at the full conservative reserved amount rather than assumed zero.
       // Every other pre-response failure (auth/rate-limit/network) genuinely
       // never produced billable tokens.
-      await settle(0, 0, outcome === 'timeout');
-      await this.options.recordAttempt?.({ idempotencyKey: req.idempotencyKey, outcome });
+      // M12C M2-OPEN-5: the provider may have sent SEVERAL real HTTP requests
+      // (bounded transient retries) before giving up, and the provider bills
+      // per request. Any usage those attempts actually reported rides on the
+      // thrown error (see `attachAieCumulativeUsage` in ./types) and is
+      // settled here instead of the previous hard-coded `0, 0`, which
+      // under-billed the ledger on every exhausted-retry failure. An error
+      // carrying nothing (any non-AIE provider, or a failure before the first
+      // attempt) reads back as null and still settles zero -- never a guess.
+      const incurred = readAieCumulativeUsage(e);
+      await settle(incurred?.cumulativeInputTokens ?? 0, incurred?.cumulativeOutputTokens ?? 0, outcome === 'timeout');
+      await this.options.recordAttempt?.({
+        idempotencyKey: req.idempotencyKey,
+        outcome,
+        // Recorded only when genuinely observed, so the evidence row keeps
+        // saying "unknown" (null) rather than a fabricated 0 when the
+        // provider reported nothing at all.
+        ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}),
+      });
       // GW-10: never return the raw provider error to the caller.
-      return { outcome };
+      return { outcome, ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}) };
     }
 
+    // M12C M2-OPEN-5: `raw.inputTokens`/`raw.outputTokens` are CUMULATIVE
+    // across every provider attempt inside this one call (contract documented
+    // on `AieAiGenerateResult`), so all three settle sites below are already
+    // summing retries -- no call-site arithmetic here, which is what keeps
+    // "sum across attempts" and "settle exactly once" from fighting.
     if (raw.finishReason === 'content_filter' || raw.finishReason === 'error') {
       await settle(raw.inputTokens, raw.outputTokens);
       await this.options.recordAttempt?.({

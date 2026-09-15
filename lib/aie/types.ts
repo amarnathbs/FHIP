@@ -3,10 +3,40 @@
  *
  * Mirrors `supabase/migrations/0140_aie1_1_shared_document_gateway.sql`
  * exactly — every string-union below matches a CHECK constraint in that
- * migration. Kept in one file (like
+ * migration, with the single, labelled exception of `AIE_PURGE_STATUSES`,
+ * which mirrors the later migration `0149`. Kept in one file (like
  * `lib/financial-data-hub/constants/enums.ts`) so the DB vocabulary and the
  * TypeScript vocabulary can never silently drift apart.
  */
+
+/**
+ * M12C (M2-OPEN-2) — `aie_document_intake.purge_status`.
+ *
+ * ADDED BY A LATER MIGRATION THAN THE REST OF THIS FILE:
+ * `supabase/migrations/0149_aie1_closure_document_lifecycle_purge.sql:36`,
+ * not 0140. It lives here anyway, with the other two status vocabularies,
+ * because this file's whole purpose is to be the one place where "the DB
+ * vocabulary and the TypeScript vocabulary can never silently drift apart" —
+ * and until now this vocabulary had no TypeScript home at all: it was
+ * duplicated as an inline literal union inside a non-exported interface in
+ * `lib/aie/services/purge.ts`, where nothing could check it against the
+ * migration. `tests/unit/m12cAiePurgeStatusContract.test.ts` now asserts
+ * this constant equals 0149's CHECK list, exactly as
+ * `tests/unit/fdh1SchemaContract.test.ts:273` does for `FDH_PURGE_STATUSES`.
+ *
+ * The TRANSITIONS between these values live in `lib/aie/stateMachine.ts`
+ * alongside the other two machines — the same split this module already uses
+ * (vocabulary here, edges there) and the same split FDH uses
+ * (`constants/enums.ts` vs `domain/documentLifecycle.ts`).
+ */
+export const AIE_PURGE_STATUSES = [
+  'not_required',
+  'pending',
+  'in_progress',
+  'purged',
+  'failed',
+] as const;
+export type AiePurgeStatus = (typeof AIE_PURGE_STATUSES)[number];
 
 export const AIE_INTAKE_STATUSES = [
   'received',

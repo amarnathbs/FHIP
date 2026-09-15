@@ -35,6 +35,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { deleteFromQuarantine, verifyQuarantineObjectAbsent } from '../storage';
 import { purgeExpiredMaskTokenMapRows } from '../db/repository';
 import { recordAieAuditEvent } from '../audit';
+import { assertPurgeTransition, isAllowedPurgeTransition } from '../stateMachine';
+import type { AiePurgeStatus } from '../types';
 
 const AIE_PURGE_HARD_MAX_AGE_MINUTES = 24 * 60; // mission section 4.2 default
 const AIE_PURGE_FAILED_RETRY_DELAY_MINUTES = 5; // bounded backoff before a failed sweep attempt is retried
@@ -56,9 +58,31 @@ interface AiePurgeRow {
   user_id: string;
   status: string;
   storage_key: string | null;
-  purge_status: 'not_required' | 'pending' | 'in_progress' | 'purged' | 'failed';
+  // M12C (M2-OPEN-2): was an inline literal union duplicated here, where
+  // nothing could check it against migration 0149's CHECK constraint. Now the
+  // shared vocabulary from `lib/aie/types.ts`, contract-tested against that
+  // migration in `tests/unit/m12cAiePurgeStatusContract.test.ts`.
+  purge_status: AiePurgeStatus;
   purge_attempt_count: number;
   created_at: string;
+}
+
+/**
+ * M12C (M2-OPEN-2) — validate a purge-status write whose FROM-state came out
+ * of the database as untyped `text`.
+ *
+ * Uses `isAllowedPurgeTransition` rather than `assertPurgeTransition` on
+ * purpose. These call sites sit inside the scheduled sweep's per-row loop
+ * (`app/api/aie/cron/purge-sweep/route.ts` has no try/catch around it), so a
+ * throw on one corrupt row would abort every remaining row in the sweep and
+ * return a 500. Refusing the one row and continuing is strictly safer for a
+ * retention backstop. `assertPurgeTransition` IS used, and does throw, for
+ * the edges whose from-state is statically known in this file — there a
+ * refusal can only mean a programming error, and failing loudly is right.
+ */
+function purgeTransitionRefused(from: AiePurgeStatus, to: AiePurgeStatus): string | null {
+  if (isAllowedPurgeTransition(from, to)) return null;
+  return `refused illegal purge transition ${from} -> ${to}`;
 }
 
 function sanitiseError(message: string): string {
@@ -89,7 +113,15 @@ export async function finalizeDocumentBinaryAfterRun(params: {
         .from('aie_document_intake')
         .update({ status: 'deleted', storage_key: null, purge_status: 'purged', purged_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', params.intakeId)
-        .eq('status', 'ready'); // CAS-style: only transition from the expected prior state
+        // CAS-style: only transition from the expected prior state. M12C
+        // (M2-OPEN-2) note — this write needs NO additional purge-status
+        // guard. `purged` is terminal in the purge machine, and
+        // `chk_aie_intake_purged_status` (migration 0149) requires a `purged`
+        // row's status to be `deleted`, so an already-purged row can never
+        // satisfy `status = 'ready'` and this statement can never take an
+        // edge out of `purged`. Every other from-state (not_required,
+        // pending, in_progress, failed) legally reaches `purged`.
+        .eq('status', 'ready');
       if (!error) {
         await recordAieAuditEvent({ intakeId: params.intakeId, runId: null, userId: params.userId, eventType: 'document_deleted_immediate', actorType: 'system' });
         return { status: 'deleted' };
@@ -102,11 +134,38 @@ export async function finalizeDocumentBinaryAfterRun(params: {
   // drop this. Schedule an immediate-due retry for the sweep to pick up
   // (mission section 4.2: "bounded retries while the object remains within
   // TTL" — the sweep enforces the bound, this call site only schedules).
+  //
+  // M12C (M2-OPEN-2): this write is the one purge-status write in the module
+  // whose FROM-state is not available to validate — this function is given an
+  // intake id and a storage key, never the row, and reading the row first
+  // would add a query and a TOCTOU race without making the write any safer.
+  // So the check is pushed into the write itself, as a negative CAS. The
+  // purge machine declares `purged` TERMINAL, and `purged -> pending` is the
+  // ONLY edge out of this statement the table forbids (every other possible
+  // from-state — not_required, pending, in_progress, failed — legally reaches
+  // `pending`), so `.neq('purge_status', 'purged')` enforces the machine
+  // exactly and atomically.
+  //
+  // This is a real defect being closed, not a theoretical one: without the
+  // guard, an already-purged intake (status `deleted`, storage_key null, so
+  // its `.eq('status','ready')` CAS above can never match) was re-marked
+  // `pending`, re-selected by `findDuePurges` on every subsequent sweep, and
+  // re-audited as `document_purge_scheduled` each time — forever.
   const message = deleted.ok ? 'delete call succeeded but object presence could not be independently verified absent' : deleted.message;
-  await admin
+  const { error: scheduleError } = await admin
     .from('aie_document_intake')
     .update({ purge_status: 'pending', purge_due_at: new Date().toISOString(), purge_reason: 'immediate_deletion_retry', updated_at: new Date().toISOString() })
-    .eq('id', params.intakeId);
+    .eq('id', params.intakeId)
+    .neq('purge_status', 'purged');
+  if (scheduleError) {
+    // The id is a primary key, so the only way this filter pair matches
+    // nothing is that the row is already `purged` — i.e. the bytes are
+    // genuinely gone and there is nothing left to schedule. That is exactly
+    // what this function's existing `already_deleted` outcome means (see its
+    // doc comment), so report it honestly rather than claiming a retry was
+    // scheduled when none was.
+    return { status: 'already_deleted' };
+  }
   await recordAieAuditEvent({
     intakeId: params.intakeId,
     runId: null,
@@ -149,10 +208,29 @@ export type PurgeAttemptResult =
 export async function runPurgeAttempt(row: AiePurgeRow): Promise<PurgeAttemptResult> {
   if (row.purge_status === 'purged') return { status: 'already_purged' };
 
+  // M12C (M2-OPEN-2): this write was previously UNCONDITIONAL — no CAS, no
+  // from-state check of any kind. `findDuePurges` only returns `pending`/
+  // `failed` rows, so in normal operation the from-state is always legal;
+  // but `runPurgeAttempt` is exported and row values arrive as untyped text,
+  // so anything reaching here with another value is corrupt, legacy or
+  // hand-edited data. Fail CLOSED: refuse the row, write NOTHING (the bytes
+  // are left in place rather than deleted on the strength of a state nobody
+  // can explain), and let the sweep's `failed` count surface it. Deliberately
+  // NOT a CAS on the prior value: a CAS would also fail on a legitimate
+  // concurrent sweep and would change the bounded-retry semantics that
+  // `tests/unit/aiePurgeService.test.ts` and
+  // `tests/unit/aieM3Pc4SemanticPreservation.test.ts` pin.
+  const refused = purgeTransitionRefused(row.purge_status, 'in_progress');
+  if (refused) return { status: 'failed', errorMessage: sanitiseError(refused) };
+
   const admin = createAdminClient();
   await admin.from('aie_document_intake').update({ purge_status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', row.id);
+  // From here on the row's purge_status is `in_progress`, whatever it was
+  // when the sweep selected it. Every onward assertion in this function is
+  // against that, not against `row.purge_status`, which is now stale.
 
   if (!row.storage_key) {
+    assertPurgeTransition('in_progress', 'purged');
     const { error: noObjectError } = await admin
       .from('aie_document_intake')
       .update({ status: terminalStatusAfterPurge(), purge_status: 'purged', purged_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -166,6 +244,12 @@ export async function runPurgeAttempt(row: AiePurgeRow): Promise<PurgeAttemptRes
 
   const absent = await verifyQuarantineObjectAbsent(row.storage_key);
   if (!absent) return failAttempt(row, 'storage object still present after delete');
+
+  // M12C (M2-OPEN-2): a statically-known edge, so `assert` (which throws)
+  // rather than the fail-closed `purgeTransitionRefused` used above — a
+  // refusal here could only ever mean this function was edited into taking
+  // an edge the declared machine does not have.
+  assertPurgeTransition('in_progress', 'purged');
 
   // M2 (H.1) — the result of this update is now CHECKED. Previously it was
   // not, and that was a real audit-integrity defect, not a theoretical one:
@@ -220,6 +304,12 @@ function terminalStatusAfterPurge(): AiePurgeRow['status'] {
 }
 
 async function failAttempt(row: AiePurgeRow, rawMessage: string): Promise<PurgeAttemptResult> {
+  // M12C (M2-OPEN-2): the from-state here is always `in_progress`, never
+  // `row.purge_status` — every call site of this function runs after
+  // `runPurgeAttempt` has already leased the row. Asserted (throwing) for the
+  // same reason as the `-> purged` edges: a refusal could only mean a code
+  // edit introduced a `failAttempt` call before the lease.
+  assertPurgeTransition('in_progress', 'failed');
   const admin = createAdminClient();
   const sanitised = sanitiseError(rawMessage);
   await admin
@@ -311,6 +401,15 @@ export async function enforceAieRawFileHardBackstop(
 
   let forcedPurgeCount = 0;
   for (const row of candidates ?? []) {
+    // M12C (M2-OPEN-2): the query above already excludes `purged` and
+    // `in_progress`, so every row here should legally reach `pending`. A row
+    // that does not is corrupt/legacy data; skip it rather than throw, so one
+    // bad row cannot abort the backstop for every other row in the sweep (the
+    // cron route has no try/catch around this). The return shape is
+    // deliberately unchanged — `scanned` still counts the row while
+    // `forcedPurgeCount` does not, so `scanned > forcedPurgeCount` in the
+    // sweep's own response is the signal that something needs a human.
+    if (purgeTransitionRefused(row.purge_status, 'pending')) continue;
     await admin
       .from('aie_document_intake')
       .update({ purge_status: 'pending', purge_due_at: new Date().toISOString(), purge_reason: 'raw_retention_hard_backstop_24h', updated_at: new Date().toISOString() })

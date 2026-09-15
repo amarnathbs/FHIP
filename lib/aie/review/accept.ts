@@ -140,6 +140,42 @@ export interface AcceptRunDeps {
   listFieldCandidatesForRun: typeof repo.listFieldCandidatesForRun;
   listLatestCorrectionsForRun: typeof repo.listLatestCorrectionsForRun;
   transitionRunStatusCas: typeof repo.transitionRunStatusCas;
+  /**
+   * M12C (M2-OPEN-1) — the FSM audit partner of `transitionRunStatusCas`.
+   *
+   * `transitionRunStatusCas` (`lib/aie/db/repository.ts:894`) asserts the
+   * edge and compare-and-swaps the run's status; it writes NO
+   * `aie_processing_transition` row. `recordRunTransitionAudit`
+   * (`repository.ts:907`) is the audit-insert-only partner written for
+   * exactly that purpose, and `lib/aie/review/revalidate.ts:184-185` pairs
+   * them. This file did not: it performed up to four CAS transitions per
+   * accept — including the two that lead directly to a canonical financial
+   * write — and left a single, much coarser `aie_audit_event` row covering
+   * only the first. The FSM-level trail for the most consequential moves in
+   * the pipeline simply did not exist.
+   *
+   * ACTOR ATTRIBUTION, decided once and applied consistently below:
+   *   - `'user'` for `awaiting_acceptance -> accepted` ONLY. That is the one
+   *     edge a human commands; the user's act is "I accept this document".
+   *   - `'system'` for every other edge. No user can command "start the
+   *     write", "mark it completed" or "record the write as failed" — those
+   *     are the machine's own consequences of that single act, and the run
+   *     could equally reach them from a background retry. Attributing them
+   *     to the user would make the audit trail claim a person did something
+   *     they have no way to do, which is the failure mode an FSM audit
+   *     exists to prevent. This deliberately differs from the coarser
+   *     `aie_audit_event` rows in this file, which stay `'user'` because
+   *     they record the BUSINESS event ("this user's import completed"),
+   *     not the state move.
+   *   - `actorId` is supplied only on the `'user'` edge, matching
+   *     revalidate.ts, which omits it on its `'system'` edge.
+   *
+   * No migration is required for any of this: `aie_processing_transition`'s
+   * `from_state`/`to_state` are unconstrained `text` and `reason` is plain
+   * nullable `text` (migration 0140:232-236); its only CHECK is on
+   * `actor_type`, which already permits both `'user'` and `'system'`.
+   */
+  recordRunTransitionAudit: typeof repo.recordRunTransitionAudit;
   findOrCreateWriteBatch: typeof repo.findOrCreateWriteBatch;
   markWriteBatchStatus: typeof repo.markWriteBatchStatus;
   audit: typeof recordAieAuditEvent;
@@ -179,6 +215,7 @@ export function createDefaultAcceptRunDeps(): AcceptRunDeps {
     listFieldCandidatesForRun: repo.listFieldCandidatesForRun,
     listLatestCorrectionsForRun: repo.listLatestCorrectionsForRun,
     transitionRunStatusCas: repo.transitionRunStatusCas,
+    recordRunTransitionAudit: repo.recordRunTransitionAudit,
     findOrCreateWriteBatch: repo.findOrCreateWriteBatch,
     markWriteBatchStatus: repo.markWriteBatchStatus,
     audit: recordAieAuditEvent,
@@ -260,19 +297,61 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
     fdhBankStorageKey = intakeMetadata.storageKey;
   }
 
-  const movedToAccepted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'awaiting_acceptance', toStatus: 'accepted' });
+  // M12C (M2-OPEN-1) — the single choke point every run-status change in this
+  // function now passes through, so a CAS can never again be added here
+  // without its `aie_processing_transition` row. Two properties are
+  // structural rather than conventional:
+  //   1. The audit row is written ONLY when the CAS genuinely moved the row.
+  //      An audit row for a transition that did not happen is worse than no
+  //      audit row at all, because it is believed. Four of the CAS calls
+  //      below previously discarded their boolean result entirely.
+  //   2. The audited `fromState`/`toState` are the SAME literals the CAS was
+  //      issued with, so the trail cannot drift from the move it describes.
+  type CasEdge = Parameters<AcceptRunDeps['transitionRunStatusCas']>[0];
+  async function transitionAndAudit(edge: {
+    fromStatus: CasEdge['fromStatus'];
+    toStatus: CasEdge['toStatus'];
+    actorType: 'user' | 'system';
+    actorId?: string;
+    /** Always a fixed internal code (optionally suffixed with an adapter's
+     * own enumerated failure reason) — never user-supplied text, never
+     * document content. Same AUD-09 discipline the `aie_audit_event` rows in
+     * this file already apply. */
+    reason: string;
+  }): Promise<boolean> {
+    const moved = await deps.transitionRunStatusCas({ runId: run!.id, fromStatus: edge.fromStatus, toStatus: edge.toStatus });
+    if (!moved) return false;
+    await deps.recordRunTransitionAudit({
+      runId: run!.id,
+      intakeId: run!.intakeId,
+      userId: run!.userId,
+      fromState: edge.fromStatus,
+      toState: edge.toStatus,
+      actorType: edge.actorType,
+      ...(edge.actorId ? { actorId: edge.actorId } : {}),
+      reason: edge.reason,
+    });
+    return true;
+  }
+
+  // The ONE edge a human commands: the user accepted this document.
+  const movedToAccepted = await transitionAndAudit({ fromStatus: 'awaiting_acceptance', toStatus: 'accepted', actorType: 'user', actorId: params.acceptedByUserId, reason: 'user_accepted_document' });
   if (!movedToAccepted) return { ok: false, reason: 'stale_conflict' };
   await deps.audit({ intakeId: run.intakeId, runId: run.id, userId: run.userId, eventType: 'run_transition', actorType: 'user', actorId: params.acceptedByUserId, metadata: { toState: 'accepted' } });
 
-  const movedToWritePending = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'accepted', toStatus: 'write_pending' });
+  // From here on, every edge is the machine's own consequence of that single
+  // act — no user can command "begin the canonical write" — so `'system'`.
+  const movedToWritePending = await transitionAndAudit({ fromStatus: 'accepted', toStatus: 'write_pending', actorType: 'system', reason: 'canonical_write_started' });
   if (!movedToWritePending) return { ok: false, reason: 'stale_conflict' };
 
   const targetModule = isInvestmentIntelligence ? 'investment_intelligence' : isFdhBank ? 'fdh_bank' : 'other';
   const batch = await deps.findOrCreateWriteBatch({ runId: run.id, intakeId: run.intakeId, userId: run.userId, targetModule, idempotencyKey: params.idempotencyKey });
   if (batch.status === 'committed') {
     // Idempotent replay after a previous call already committed the write
-    // but the client never saw the response (FAIL-10).
-    await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+    // but the client never saw the response (FAIL-10). Audited with its own
+    // distinct reason so a reader can tell a replay apart from a fresh write
+    // that genuinely happened on this call.
+    await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'idempotent_replay_write_batch_already_committed' });
     return { ok: true, alreadyCompleted: true };
   }
 
@@ -308,7 +387,14 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   async function finishFailedWrite(reason: string): Promise<void> {
     await deps.markWriteBatchStatus(batch.id, 'failed');
     const terminal = TERMINAL_WRITE_REASONS.has(reason);
-    await deps.transitionRunStatusCas({ runId, fromStatus: 'write_pending', toStatus: terminal ? 'failed_terminal' : 'failed_retryable' });
+    // M12C (M2-OPEN-1): the failure edge is audited too, and carries the
+    // adapter's own enumerated failure code so the trail records WHY the run
+    // was retired terminally rather than left retryable — the distinction
+    // `TERMINAL_WRITE_REASONS` above encodes, which was previously visible
+    // only in the coarser `aie_audit_event` row and nowhere in the FSM
+    // history. `reason` is always one of the adapters' own fixed reason
+    // codes, never a message and never document content.
+    await transitionAndAudit({ fromStatus: 'write_pending', toStatus: terminal ? 'failed_terminal' : 'failed_retryable', actorType: 'system', reason: `canonical_write_failed:${reason}` });
     await deps.audit({ intakeId: runIntakeId, runId, userId: runUserId, eventType: 'run_failed', actorType: 'system', metadata: { reason } });
   }
 
@@ -337,7 +423,9 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
 
     if (!write.ok && write.reason === 'already_written') {
       await deps.markWriteBatchStatus(batch.id, 'committed');
-      await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+      // Distinct reason from the outer-batch replay above: this one means the
+      // ADAPTER found its own prior write, one level further down.
+      await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'idempotent_replay_adapter_reported_already_written' });
       return { ok: true, alreadyCompleted: true, insurancePolicyId: write.insurancePolicyId };
     }
     if (!write.ok) {
@@ -346,7 +434,7 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
     }
 
     await deps.markWriteBatchStatus(batch.id, 'committed');
-    const movedToCompleted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+    const movedToCompleted = await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'canonical_write_committed' });
     await deps.audit({ intakeId: run.intakeId, runId: run.id, userId: run.userId, eventType: 'run_completed', actorType: 'user', actorId: params.acceptedByUserId, metadata: { insurancePolicyId: write.insurancePolicyId } });
     if (!movedToCompleted) {
       // The write itself unquestionably succeeded (we have a real
@@ -379,7 +467,7 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
 
     if (!write.ok && write.reason === 'already_written') {
       await deps.markWriteBatchStatus(batch.id, 'committed');
-      await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+      await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'idempotent_replay_adapter_reported_already_written' });
       return { ok: true, alreadyCompleted: true, iiSourceDocumentId: write.iiSourceDocumentId };
     }
     if (!write.ok) {
@@ -392,7 +480,7 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
     // just durably persisted II's own copy of the document. See
     // `AcceptRunDeps.finalizeDocumentBinary`'s doc comment.
     await deps.finalizeDocumentBinary({ intakeId: run.intakeId, userId: run.userId, storageKey: investmentUploadMetadata!.storageKey });
-    const movedToCompleted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+    const movedToCompleted = await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'canonical_write_committed' });
     await deps.audit({ intakeId: run.intakeId, runId: run.id, userId: run.userId, eventType: 'run_completed', actorType: 'user', actorId: params.acceptedByUserId, metadata: { iiSourceDocumentId: write.iiSourceDocumentId } });
     if (!movedToCompleted) {
       // Same FAIL-02 reasoning as the Insurance branch above: the write
@@ -416,7 +504,12 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   const priorFdhBankWrite = await deps.findCommittedFdhBankWriteForRun(run.id);
   if (priorFdhBankWrite) {
     await deps.markWriteBatchStatus(batch.id, 'committed');
-    await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+    // A third, distinct replay reason: neither the outer batch nor an
+    // adapter return value, but this dispatch's own idempotency guard finding
+    // `commitFdhBankStatementImport`'s internal write batch already
+    // committed (see this file's header). Told apart in the audit trail
+    // because it identifies a specific crash window, not a generic retry.
+    await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'idempotent_replay_prior_committed_fdh_bank_write' });
     return { ok: true, alreadyCompleted: true, statementUploadId: priorFdhBankWrite.canonicalReferenceId ?? undefined };
   }
 
@@ -444,7 +537,7 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   // pipeline just durably persisted its own copy via `commitFdhBankImport`.
   // See `AcceptRunDeps.finalizeDocumentBinary`'s doc comment.
   await deps.finalizeDocumentBinary({ intakeId: run.intakeId, userId: run.userId, storageKey: fdhBankStorageKey! });
-  const movedToCompleted = await deps.transitionRunStatusCas({ runId: run.id, fromStatus: 'write_pending', toStatus: 'completed' });
+  const movedToCompleted = await transitionAndAudit({ fromStatus: 'write_pending', toStatus: 'completed', actorType: 'system', reason: 'canonical_write_committed' });
   await deps.audit({
     intakeId: run.intakeId,
     runId: run.id,
