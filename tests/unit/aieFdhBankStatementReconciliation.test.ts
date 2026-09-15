@@ -15,16 +15,31 @@ import {
   RECONCILIATION_STATUS_FIELD_NAME,
   RECONCILIATION_VARIANCE_FIELD_NAME,
   TRANSACTION_ROW_FIELD_PREFIX,
+  UNREADABLE_ROW_COUNT_FIELD_NAME,
+  UNREADABLE_ROW_EVIDENCE_FIELD_NAME,
 } from '@/lib/aie/adapters/fdhBankStatement/types';
-import type { AieFieldCandidate } from '@/lib/aie/types';
+import type { AieFieldCandidate, AieReconciliationRunResult } from '@/lib/aie/types';
 
-function statusCandidates(status: string, variance: string | null = '0'): AieFieldCandidate[] {
+/**
+ * M12A-F1 added a second always-emitted rule (row-extraction completeness), so
+ * a candidate set that omits its candidate now fails CLOSED — which is the
+ * point of the change, and is proved directly further down. These existing
+ * cases are about the BALANCE rule's vocabulary translation, so they supply the
+ * completeness candidate at its clean value (zero unreadable rows) rather than
+ * leaving it absent; that keeps each test testing the one thing it names.
+ */
+function statusCandidates(status: string, variance: string | null = '0', unreadableRowCount = '0'): AieFieldCandidate[] {
   return [
     { fieldName: RECONCILIATION_STATUS_FIELD_NAME, valueRaw: status, isNull: false, sourceMethod: 'deterministic' },
     { fieldName: RECONCILIATION_METHOD_FIELD_NAME, valueRaw: 'balance_rollforward', isNull: false, sourceMethod: 'deterministic' },
     { fieldName: RECONCILIATION_VARIANCE_FIELD_NAME, valueRaw: variance, isNull: variance === null, sourceMethod: 'deterministic' },
+    { fieldName: UNREADABLE_ROW_COUNT_FIELD_NAME, valueRaw: unreadableRowCount, isNull: false, sourceMethod: 'deterministic' },
   ];
 }
+
+/** The balance rule is always first; the completeness rule is always present. */
+const balanceRule = (results: readonly AieReconciliationRunResult[]) => results.find((r) => r.ruleId.includes('balance_reconciliation'))!;
+const completenessRule = (results: readonly AieReconciliationRunResult[]) => results.find((r) => r.ruleId.includes('row_extraction_completeness'))!;
 
 describe('AIE-1.3 FDH bank-statement reconciliation rule — FDH-5 status vocabulary translated to AIE outcomes', () => {
   it('reconciled -> pass', () => {
@@ -41,6 +56,7 @@ describe('AIE-1.3 FDH bank-statement reconciliation rule — FDH-5 status vocabu
     const blocking = blockingItemsForReconciliation(results);
     expect(blocking.length).toBe(1);
     expect(blocking[0].severity).toBe('blocking');
+    expect(blocking[0].reasonCode).toContain('balance_reconciliation');
   });
 
   it('pending (partial balance coverage) -> indeterminate, still blocking', () => {
@@ -90,11 +106,72 @@ describe('AIE-1.3 FDH bank-statement reconciliation rule — FDH-5 status vocabu
       { fieldName: DATE_RANGE_OVERLAP_FIELD_NAME, valueRaw: 'true', isNull: false, sourceMethod: 'deterministic' },
     ];
     const results = fdhBankStatementReconciliationRule({ runId: 'r1', candidates });
-    expect(results).toHaveLength(2);
-    expect(results.find((r) => r.ruleId.includes('balance'))?.outcome).toBe('pass');
+    expect(results).toHaveLength(3); // balance, row-extraction completeness, overlap
+    expect(balanceRule(results).outcome).toBe('pass');
+    expect(completenessRule(results).outcome).toBe('pass');
     expect(results.find((r) => r.ruleId.includes('overlap'))?.outcome).toBe('indeterminate');
-    // Overall worst-outcome across both rules is still indeterminate — never
+    // Overall worst-outcome across the rules is still indeterminate — never
     // silently swallowed by the passing balance rule.
+    expect(worstOutcome(results)).toBe('indeterminate');
+  });
+
+  // -------------------------------------------------------------------------
+  // M12A-F1 — row-extraction completeness. "Did the arithmetic close?" and
+  // "did we read every transaction the statement printed?" are two questions,
+  // and the corpus proved what it costs to answer only the first (FDH-A11).
+  // -------------------------------------------------------------------------
+
+  it('M12A-F1: zero unreadable rows -> an explicit PASS, asserted rather than left silent', () => {
+    const results = fdhBankStatementReconciliationRule({ runId: 'r1', candidates: statusCandidates('reconciled', '0', '0') });
+    const rule = completenessRule(results);
+    expect(rule.outcome).toBe('pass');
+    expect(rule.delta).toBe(0);
+    expect(rule.materiality).toBe('all_printed_rows_read');
+    expect(worstOutcome(results)).toBe('pass');
+    expect(blockingItemsForReconciliation(results)).toEqual([]);
+  });
+
+  it('M12A-F1: an unreadable printed row BLOCKS the run even though balance reconciliation itself passes', () => {
+    const candidates: AieFieldCandidate[] = [
+      ...statusCandidates('reconciled', '0', '1'),
+      {
+        fieldName: UNREADABLE_ROW_EVIDENCE_FIELD_NAME,
+        valueRaw: JSON.stringify([{ sourceRowNumber: 1, reason: 'invalid_transaction_date' }]),
+        isNull: false,
+        sourceMethod: 'deterministic',
+      },
+    ];
+    const results = fdhBankStatementReconciliationRule({ runId: 'r1', candidates });
+
+    // The balance rule is untouched — this is an ADDITIONAL question, not a
+    // reinterpretation of the existing answer.
+    expect(balanceRule(results).outcome).toBe('pass');
+    expect(completenessRule(results).outcome).toBe('indeterminate');
+    expect(completenessRule(results).delta).toBe(1);
+    // The reviewer is told WHICH row and WHY, never a guess at its contents.
+    expect(completenessRule(results).materiality).toContain('invalid_transaction_date');
+
+    // And the run cannot be accepted: one blocking item, from AIE-1.1 core's
+    // own unchanged derivation, not a second exception channel.
+    expect(worstOutcome(results)).toBe('indeterminate');
+    const blocking = blockingItemsForReconciliation(results);
+    expect(blocking.map((b) => b.reasonCode)).toContain('reconciliation_indeterminate:fdh_bank_statement_row_extraction_completeness');
+    expect(blocking.every((b) => b.severity === 'blocking')).toBe(true);
+  });
+
+  it('M12A-F1: an ABSENT completeness candidate fails closed — an unreported signal is never read as a clean one', () => {
+    // Exactly the shape a run from the pre-M12A parser produces. The defect
+    // this closes WAS an absent signal being treated as good news, so absence
+    // must block rather than pass.
+    const candidates: AieFieldCandidate[] = [
+      { fieldName: RECONCILIATION_STATUS_FIELD_NAME, valueRaw: 'reconciled', isNull: false, sourceMethod: 'deterministic' },
+      { fieldName: RECONCILIATION_METHOD_FIELD_NAME, valueRaw: 'balance_rollforward', isNull: false, sourceMethod: 'deterministic' },
+      { fieldName: RECONCILIATION_VARIANCE_FIELD_NAME, valueRaw: '0', isNull: false, sourceMethod: 'deterministic' },
+    ];
+    const results = fdhBankStatementReconciliationRule({ runId: 'r1', candidates });
+    expect(balanceRule(results).outcome).toBe('pass');
+    expect(completenessRule(results).outcome).toBe('indeterminate');
+    expect(completenessRule(results).materiality).toBe('row_extraction_completeness_not_reported');
     expect(worstOutcome(results)).toBe('indeterminate');
   });
 

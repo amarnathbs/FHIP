@@ -43,6 +43,35 @@ export const DATE_RANGE_OVERLAP_FIELD_NAME = '__fdh_bank_date_range_overlap';
 export const ACCOUNT_AMBIGUOUS_FIELD_NAME = '__fdh_bank_account_ambiguous';
 export const ADAPTER_ID_FIELD_NAME = 'detected_adapter_id';
 export const TRANSACTION_ROW_FIELD_PREFIX = 'transaction_row_';
+/**
+ * M12A (`M12A-F1`) — how many transaction blocks the statement PRINTED that
+ * this adapter could not read, and therefore did not turn into a candidate.
+ *
+ * WHY THIS HAD TO BECOME A CANDIDATE. The parser already computed a `partial`
+ * outcome when rows were rejected or blocks were unparseable, but nothing
+ * downstream could see it: `ReconciliationRule` receives CANDIDATES ONLY, so
+ * the one signal that the extraction was incomplete never reached the one
+ * place that decides whether a run may be accepted. The accuracy corpus proved
+ * the consequence rather than arguing it (FDH-A11): a statement whose FIRST
+ * printed transaction carried an impossible calendar date lost that row
+ * silently — the surviving rows still chained perfectly and the rollforward
+ * closed to the penny, so balance reconciliation returned `pass`, the run
+ * reached `awaiting_acceptance`, and an explicit accept wrote an incomplete
+ * statement to the canonical ledger. FDH-A06 is the same defect with the bad
+ * row in the MIDDLE, where the broken balance chain happens to catch it; the
+ * chain is blind at the edges, so it was never the safeguard it appeared to be.
+ *
+ * Making this a candidate — rather than adding a second exception channel —
+ * keeps every existing rule intact: the reconciliation rule reads it like any
+ * other field, and AIE-1.1 core's own `blockingItemsForReconciliation` turns
+ * the resulting outcome into the same unresolved item it already creates for
+ * every other indeterminate rule (P7: no second exception system).
+ */
+export const UNREADABLE_ROW_COUNT_FIELD_NAME = '__fdh_bank_unreadable_row_count';
+/** JSON evidence for the above: which printed rows were unreadable, and why.
+ * Never a guess at what they contained — AIE13-AI-06 forbids inventing a
+ * date/amount/sign, and a reviewer needs to know WHICH row to go and read. */
+export const UNREADABLE_ROW_EVIDENCE_FIELD_NAME = '__fdh_bank_unreadable_row_evidence';
 /** The one, narrow, non-transaction-data AI-eligible gap this adapter ever
  * declares (AIE13-AI-02/AI-05/AI-06): which of two-or-more already-CERTIFIED
  * institution layouts an ambiguous statement most likely belongs to. Never a

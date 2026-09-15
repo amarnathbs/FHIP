@@ -235,4 +235,19 @@ export const FDH_BANK_REASON_CODES: Record<string, AieReasonCodeMeta> = {
     severity: 'blocking',
     allowedActions: ['reject_document', 'request_reprocessing'],
   },
+  // M12A-F1. Registered with real copy rather than left to
+  // GENERIC_FALLBACK_REASON_META, because the generic text ("our automatic
+  // checks could not confirm this document is safe to accept as-is") gives a
+  // reviewer nothing to act on, and this condition has a precise, actionable
+  // meaning: we read the statement, and some of what it printed we could not
+  // read. The wording deliberately does NOT say the missing rows are wrong —
+  // we do not know that, and the evidence attached to the item names which
+  // rows and why, never a guess at what they contained.
+  fdh_bank_statement_row_extraction_completeness: {
+    humanQuestion: 'Some transactions printed on this statement could not be read.',
+    explanation:
+      'This statement prints transaction lines we were unable to read reliably — for example a date that is not a real calendar date, or an amount we could not interpret. The rest of the statement may still add up perfectly, so this is not the same as the figures being wrong: it means the import would be INCOMPLETE. We will not guess at what those lines said.',
+    severity: 'blocking',
+    allowedActions: ['reject_document', 'request_reprocessing'],
+  },
 };

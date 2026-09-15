@@ -78,7 +78,7 @@ interface OracleCase {
   terminalRunStatus: string;
   expectedRejectionReason?: string;
   acceptable: boolean;
-  expectedUnresolvedItemCount: number;
+  minimumUnresolvedItemCount: number;
   expectedAiCalls: number;
   requiresMaskingKey?: boolean;
   mustNotAppearInAiPrompt?: string;
@@ -621,6 +621,10 @@ describe('M12A.4 — FDH-bank accuracy certification against a sealed corpus', (
       // 8. The observed terminal state is the one the oracle demands.
       expect(obs.finalStatus).toBe(o.terminalRunStatus);
       if (o.expectedRejectionReason) expect(obs.rejectionReason).toBe(o.expectedRejectionReason);
+
+      // 9. A document that must not be accepted is genuinely blocked with at
+      //    least one item a reviewer can act on — never merely "not accepted".
+      expect(rec().unresolvedItems.filter((i) => i.severity === 'blocking').length).toBeGreaterThanOrEqual(o.minimumUnresolvedItemCount);
     });
   }
 

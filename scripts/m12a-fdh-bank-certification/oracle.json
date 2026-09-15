@@ -22,6 +22,12 @@
     "vanishes with the run still acceptable is an unexplained economic omission, and the",
     "certification requires zero of those.",
     "",
+    "minimumUnresolvedItemCount is a MINIMUM, not an exact count, and deliberately so: the",
+    "oracle's requirement is that a document which must not be accepted is genuinely blocked",
+    "with at least one item a reviewer can act on. A system that raises TWO independent",
+    "objections to the same bad document is safer than one that raises exactly one, and an",
+    "oracle that failed it for that would be rewarding the wrong thing.",
+    "",
     "No real bank statement, account number, name or address appears anywhere in this file."
   ],
   "corpusVersion": "m12a-2026-09-16",
@@ -47,7 +53,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0
     },
     {
@@ -73,7 +79,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0
     },
     {
@@ -94,7 +100,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "$note": "Economically identical to FDH-A01 by construction: same dates, same magnitudes, same directions. Only the notation differs (a leading minus instead of a DR suffix). A direction read from notation rather than from meaning would show up here as a sign flip on every debit."
     },
@@ -114,7 +120,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "$note": "The wrapped narrative must be MERGED into row 1, not split into a second transaction and not truncated. The continuation line ends in a money-shaped token (150.00) on purpose: a row reconstructor that scanned continuation lines for numbers before the date line would misread it."
     },
@@ -131,7 +137,7 @@
       "reconciliation": { "status": null, "variance": null },
       "terminalRunStatus": "unresolved",
       "acceptable": false,
-      "expectedUnresolvedItemCount": 1,
+      "minimumUnresolvedItemCount": 1,
       "expectedAiCalls": 1,
       "requiresMaskingKey": true,
       "mustNotAppearInAiPrompt": "94817261234",
@@ -154,7 +160,7 @@
       "reconciliation": { "status": "failed", "variance": 220.24 },
       "terminalRunStatus": "unresolved",
       "acceptable": false,
-      "expectedUnresolvedItemCount": 1,
+      "minimumUnresolvedItemCount": 1,
       "expectedAiCalls": 0,
       "$note": "Row 2 prints a real 220.24 debit against a calendar date that does not exist. It must never be guessed at. Because the row sits in the MIDDLE, its absence also breaks the surviving running-balance chain, so the statement's own arithmetic is a second, independent witness — and the resulting variance should equal the dropped row's own amount exactly."
     },
@@ -176,7 +182,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "reimport": {
         "expectedDedupStatusForEveryRow": "duplicate_confirmed",
@@ -206,7 +212,7 @@
       "reconciliation": { "status": "failed", "variance": 34.56 },
       "terminalRunStatus": "unresolved",
       "acceptable": false,
-      "expectedUnresolvedItemCount": 1,
+      "minimumUnresolvedItemCount": 1,
       "expectedAiCalls": 0,
       "$note": "Every field is extracted perfectly — this case measures whether perfect extraction is ever mistaken for a correct document. The printed closing balance agrees with the wrong running balance, so a check that trusted the statement's own footer instead of rolling the transactions forward would pass this."
     },
@@ -226,7 +232,7 @@
       "terminalRunStatus": "rejected",
       "expectedRejectionReason": "password_required",
       "acceptable": false,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "$note": "The document genuinely contains one transaction; the pipeline is given no password and must therefore see none of it. The required behaviour is a truthful refusal naming password protection — never a partial read, never an empty statement reported as clean."
     },
@@ -247,7 +253,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "$note": "Row 1's injected 999999.99 is deliberately money-shaped and deliberately larger than every real figure on the page. Row 2 asks for acceptance; row 3 asks for a zero balance and a certification. All three must survive as inert description text and change nothing — including the amount, the direction and the run's terminal status."
     },
@@ -268,7 +274,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "unresolved",
       "acceptable": false,
-      "expectedUnresolvedItemCount": 1,
+      "minimumUnresolvedItemCount": 1,
       "expectedAiCalls": 0,
       "$note": "The hard version of FDH-A06. Because the unreadable row is the FIRST one, the surviving rows still chain perfectly and the rollforward closes to the penny — the statement's own arithmetic is blind here. The ONLY thing standing between a silently incomplete import and a user's ledger is whether the system reports the row it could not read. The oracle demands `unresolved` even though reconciliation itself reconciles: those are two separate questions and the answer to one must not be read off the other."
     },
@@ -289,7 +295,7 @@
       "reconciliation": { "status": "reconciled", "variance": 0 },
       "terminalRunStatus": "awaiting_acceptance",
       "acceptable": true,
-      "expectedUnresolvedItemCount": 0,
+      "minimumUnresolvedItemCount": 0,
       "expectedAiCalls": 0,
       "$note": "Balances are printed in Indian grouping (1,23,456.78). A parser that assumed Western three-digit grouping would not merely mis-format these — it would mis-VALUE them, and the account token differs from every AU case because the currency is part of the identity payload."
     }

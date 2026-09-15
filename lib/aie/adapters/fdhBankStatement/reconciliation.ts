@@ -32,11 +32,16 @@ import {
   RECONCILIATION_STATUS_FIELD_NAME,
   RECONCILIATION_VARIANCE_FIELD_NAME,
   TRANSACTION_ROW_FIELD_PREFIX,
+  UNREADABLE_ROW_COUNT_FIELD_NAME,
+  UNREADABLE_ROW_EVIDENCE_FIELD_NAME,
 } from './types';
 
 export const RULE_BALANCE_RECONCILIATION = 'fdh_bank_statement_balance_reconciliation';
 export const RULE_LAYOUT_CERTIFICATION = 'fdh_bank_statement_layout_certification';
 export const RULE_DATE_RANGE_OVERLAP = 'fdh_bank_statement_date_range_overlap';
+/** M12A-F1 — see this rule's own block below, and
+ * `UNREADABLE_ROW_COUNT_FIELD_NAME`'s doc comment, for why it exists. */
+export const RULE_ROW_EXTRACTION_COMPLETENESS = 'fdh_bank_statement_row_extraction_completeness';
 export const RULE_VERSION = '1';
 
 function findCandidate(candidates: readonly AieFieldCandidate[], fieldName: string): AieFieldCandidate | undefined {
@@ -120,6 +125,49 @@ export const fdhBankStatementReconciliationRule: ReconciliationRule = ({ candida
   // independently of this signal; this rule exists purely so an overlapping
   // PERIOD is never invisible to a reviewer even when every individual row
   // dedups cleanly.
+  // M12A-F1 — ROW-EXTRACTION COMPLETENESS, AS ITS OWN RULE.
+  //
+  // "Did the statement's arithmetic close?" and "did we read every transaction
+  // the statement printed?" are two different questions, and the answer to the
+  // first must never be read off as an answer to the second. Before this rule
+  // existed only the first was ever asked, and the accuracy corpus showed what
+  // that costs: FDH-A11's statement prints three transactions, the first is
+  // unreadable, the surviving two chain perfectly to each other, the
+  // rollforward closes to the penny — and a `pass` carried an incomplete
+  // statement all the way to a canonical write. The running-balance chain
+  // catches a dropped row in the MIDDLE (FDH-A06) and is blind at the edges, so
+  // it was never the safeguard it looked like.
+  //
+  // `indeterminate`, never `fail`: this adapter does not know that the
+  // unreadable rows are WRONG, only that it could not read them — which is
+  // precisely what INDETERMINATE means everywhere else in this file. The
+  // resulting blocking unresolved item comes from AIE-1.1 core's own
+  // `blockingItemsForReconciliation`, unchanged, so no second exception channel
+  // is introduced (P7).
+  //
+  // The rule is emitted even when nothing was unreadable, as an explicit `pass`
+  // — a positive "every printed block was read" assertion rather than silence.
+  // A missing candidate (a run from an older parser version, or a future change
+  // that stops emitting it) is reported `indeterminate` rather than assumed
+  // clean: the whole defect this closes was an absent signal being read as a
+  // good one.
+  const unreadableCandidate = findCandidate(candidates, UNREADABLE_ROW_COUNT_FIELD_NAME);
+  const unreadableCount = unreadableCandidate && !unreadableCandidate.isNull ? Number(unreadableCandidate.valueRaw) : null;
+  const evidenceCandidate = findCandidate(candidates, UNREADABLE_ROW_EVIDENCE_FIELD_NAME);
+  results.push({
+    ruleId: RULE_ROW_EXTRACTION_COMPLETENESS,
+    ruleVersion: RULE_VERSION,
+    outcome: unreadableCount === 0 ? 'pass' : 'indeterminate',
+    delta: unreadableCount,
+    tolerance: 0,
+    materiality:
+      unreadableCount === null
+        ? 'row_extraction_completeness_not_reported'
+        : unreadableCount === 0
+          ? 'all_printed_rows_read'
+          : (evidenceCandidate && !evidenceCandidate.isNull ? evidenceCandidate.valueRaw : 'printed_rows_unreadable'),
+  });
+
   const overlapCandidate = findCandidate(candidates, DATE_RANGE_OVERLAP_FIELD_NAME);
   if (overlapCandidate?.valueRaw === 'true') {
     results.push({

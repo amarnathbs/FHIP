@@ -63,6 +63,8 @@ import {
   RECONCILIATION_STATUS_FIELD_NAME,
   RECONCILIATION_VARIANCE_FIELD_NAME,
   TRANSACTION_ROW_FIELD_PREFIX,
+  UNREADABLE_ROW_COUNT_FIELD_NAME,
+  UNREADABLE_ROW_EVIDENCE_FIELD_NAME,
   type FdhBankStatementParseContext,
 } from './types';
 
@@ -232,8 +234,31 @@ export function createFdhBankStatementParser(ctx: FdhBankStatementParseContext):
             )
           : false;
 
+      // M12A-F1. Every printed transaction block this adapter could NOT read,
+      // surfaced as a first-class candidate so the reconciliation rule — which
+      // sees candidates and nothing else — can act on it. `rejected` are blocks
+      // that normalised to a failure (an impossible date, an unparseable
+      // amount, an ambiguous direction); `unparseableBlocks` are blocks that
+      // opened on a date line and never located a numeric tail at all. Both are
+      // money the statement printed and this adapter did not produce. The count
+      // is emitted even when it is zero: a positive "every printed block was
+      // read" assertion is better evidence than silence, and it means a future
+      // change that stops emitting the field fails loudly instead of quietly
+      // restoring the silent-omission behaviour.
+      const unreadableRows = [
+        ...rejected.map((r) => ({ sourceRowNumber: r.sourceRowNumber, reason: r.reason })),
+        ...unparseableBlocks.map((b) => ({ sourceRowNumber: null, reason: 'no_amount_or_balance_found', pageNumber: b.pageNumber })),
+      ];
+
       const candidates: AieFieldCandidate[] = [
         { fieldName: ADAPTER_ID_FIELD_NAME, valueRaw: adapter.id, isNull: false, sourceMethod: 'deterministic' },
+        { fieldName: UNREADABLE_ROW_COUNT_FIELD_NAME, valueRaw: String(unreadableRows.length), isNull: false, sourceMethod: 'deterministic' },
+        {
+          fieldName: UNREADABLE_ROW_EVIDENCE_FIELD_NAME,
+          valueRaw: unreadableRows.length === 0 ? null : JSON.stringify(unreadableRows),
+          isNull: unreadableRows.length === 0,
+          sourceMethod: 'deterministic',
+        },
         { fieldName: RECONCILIATION_STATUS_FIELD_NAME, valueRaw: reconciliation.status, isNull: false, sourceMethod: 'deterministic' },
         { fieldName: RECONCILIATION_METHOD_FIELD_NAME, valueRaw: reconciliation.method, isNull: false, sourceMethod: 'deterministic' },
         {

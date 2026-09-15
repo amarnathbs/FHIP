@@ -7,12 +7,12 @@
     "fieldRecall": 1,
     "economicPrecision": 1,
     "economicRecall": 0.925,
-    "falseAcceptRate": 0.2,
-    "falseAcceptCount": 1,
+    "falseAcceptRate": 0,
+    "falseAcceptCount": 0,
     "falseAcceptDenominator": 5,
-    "falseCanonicalWriteRate": 0.08333333333333333,
-    "falseCanonicalWriteCount": 1,
-    "totalUnexplainedOmissions": 1
+    "falseCanonicalWriteRate": 0,
+    "falseCanonicalWriteCount": 0,
+    "totalUnexplainedOmissions": 0
   },
   "cases": [
     {
@@ -242,11 +242,9 @@
       "economicExpected": 3,
       "economicPrecision": 1,
       "economicRecall": 0.6666666666666666,
-      "unexplainedOmissions": [
-        1
-      ],
-      "falseAccept": true,
-      "falseCanonicalWrite": true,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
       "fieldDisagreements": [],
       "economicDisagreements": [
         {
@@ -302,6 +300,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -335,6 +341,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -368,6 +382,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -401,6 +423,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -467,6 +497,10 @@
         {
           "reasonCode": "reconciliation_fail:fdh_bank_statement_balance_reconciliation",
           "severity": "blocking"
+        },
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_row_extraction_completeness",
+          "severity": "blocking"
         }
       ],
       "reconciliationResults": [
@@ -477,6 +511,14 @@
           "delta": 220.24,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "tolerance": 0,
+          "materiality": "[{\"sourceRowNumber\":2,\"reason\":\"invalid_transaction_date\"}]"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -510,6 +552,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -549,6 +599,14 @@
           "delta": 34.56,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -606,6 +664,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -621,16 +687,22 @@
       ]
     },
     "FDH-A11": {
-      "observedTerminalStatus": "awaiting_acceptance",
+      "observedTerminalStatus": "unresolved",
       "observedRejectionReason": null,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "not_ready"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
-      "unresolvedItems": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_row_extraction_completeness",
+          "severity": "blocking"
+        }
+      ],
       "reconciliationResults": [
         {
           "ruleId": "fdh_bank_statement_balance_reconciliation",
@@ -639,6 +711,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "tolerance": 0,
+          "materiality": "[{\"sourceRowNumber\":1,\"reason\":\"invalid_transaction_date\"}]"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -672,6 +752,14 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
@@ -705,6 +793,14 @@
           "delta": null,
           "tolerance": 0,
           "materiality": "none"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "acceptOutcome": {
