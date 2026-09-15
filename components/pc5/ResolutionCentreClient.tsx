@@ -90,7 +90,19 @@ export function ResolutionCentreClient({ runId }: { runId?: string }) {
     };
   }, [load]);
 
-  if (loading && !data) return <p className="text-sm text-muted">Loading…</p>;
+  // M5 (L.2): the loading placeholder is itself the live region, so the
+  // "Loading… -> loaded" transition is ANNOUNCED rather than happening
+  // silently. Without this a screen-reader user who follows a deep link hears
+  // nothing at all until they re-navigate the page manually. Follows
+  // `components/aie/review/RunReviewPanel.tsx`'s own polite-live-region
+  // pattern rather than inventing a second one.
+  if (loading && !data) {
+    return (
+      <p role="status" aria-live="polite" className="text-sm text-muted">
+        Loading your resolutions…
+      </p>
+    );
+  }
   if (error) {
     return (
       <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">

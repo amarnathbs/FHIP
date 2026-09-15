@@ -43,7 +43,35 @@ frontend:
         # grant (migration 0129, unconditional once applied, independent of
         # these flags) has ever been live. Adding them here is what actually
         # makes the console configuration take effect for the first time.
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ >> .env.production
+        #
+        # AIE-1 terminal certification, M5 (2026-09-15): NO `AIE_*` variable
+        # was on this list either -- the same defect class as G4/G5B above,
+        # found by auditing Part L.9's "production rollout gate" requirement
+        # rather than by an incident. The 27 AIE_* variables include the
+        # global intake kill switch (AIE_DOCUMENT_INTAKE_ENABLED), the
+        # per-adapter enablement flags, the provider kill switch
+        # (AIE_AI_FALLBACK_ENABLED), the pilot-cohort allowlist
+        # (AIE_PILOT_COHORT_*) and the two AIE secrets.
+        #
+        # WHY THIS IS NOT MERELY COSMETIC, AND WHY A PARTIAL FIX WOULD BE
+        # WORSE THAN NONE. Every AIE flag defaults OFF when unset, so the
+        # CURRENT state is fail-safe: AIE is simply unreachable in production
+        # no matter what the console says. The danger is the partial
+        # remediation. `isUserInAiePilotCohort()` returns TRUE for everyone
+        # when `AIE_PILOT_COHORT_ENFORCED` is unset -- that is deliberate
+        # (two independent toggles), and it is correct when both variables
+        # travel together. If a future operator added only
+        # AIE_DOCUMENT_INTAKE_ENABLED to this list, intake would switch on
+        # while cohort enforcement stayed silently OFF, turning an
+        # allowlisted pilot into a rollout to every user -- a FAIL-OPEN
+        # combination. Forwarding the whole `AIE_` prefix is what keeps the
+        # kill switch and its allowlist inseparable.
+        #
+        # No AIE flag is SET in any environment today, so adding the prefix
+        # changes nothing about what is currently enabled; it makes the
+        # rollout gate operable for the first time, which Part L.9 requires
+        # before any production activation.
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         - npm run build
   artifacts:

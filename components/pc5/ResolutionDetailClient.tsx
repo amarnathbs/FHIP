@@ -204,7 +204,16 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
     }
   }
 
-  if (loading && !data) return <p className="text-sm text-muted">Loading…</p>;
+  // M5 (L.2): see the matching note in `ResolutionCentreClient.tsx`. The
+  // success path already carries a `role="status"` region (below); this
+  // closes the load transition, which did not.
+  if (loading && !data) {
+    return (
+      <p role="status" aria-live="polite" className="text-sm text-muted">
+        Loading this resolution…
+      </p>
+    );
+  }
   if (error && !data) {
     return (
       <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">
