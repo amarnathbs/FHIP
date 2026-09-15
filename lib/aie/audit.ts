@@ -68,7 +68,18 @@ export type AieAuditEventType =
   // AIE-1 closure mission (section 8) — atomic cost admission refused the
   // reservation; the provider was never called, same category as the
   // existing kill_switch/PII blocks above.
-  | 'ai_fallback_budget_exhausted';
+  | 'ai_fallback_budget_exhausted'
+  // M12B (M12A-F2) — the masking layer could not run at all, so no payload
+  // could be built and the AI fallback was skipped. Same category as the
+  // three blocks above: the provider was never called. Distinct from
+  // `masking_below_policy`, which is a verdict ABOUT THE DOCUMENT; this one
+  // is a fact about the ENVIRONMENT (`AIE_MASK_TOKEN_ENCRYPTION_KEY` unset or
+  // malformed), and conflating the two would permanently mark documents that
+  // are in fact fine. Metadata carries the failure message only — never the
+  // key, and never any document text. `event_type` has no DB CHECK constraint
+  // (migration 0140 declares it plain `text not null`), so this value needs no
+  // migration, exactly as recorded for the purge events above.
+  | 'ai_fallback_masking_unavailable';
 
 export async function recordAieAuditEvent(event: {
   intakeId: string | null;

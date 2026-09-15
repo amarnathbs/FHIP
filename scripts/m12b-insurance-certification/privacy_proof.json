@@ -6,44 +6,44 @@
     {
       "adapter": "insurance",
       "caseId": "INS-B13",
-      "egressOccurred": false,
-      "payloadCount": 0,
+      "egressOccurred": true,
+      "payloadCount": 1,
       "categories": [
         {
           "category": "person_name",
           "literalsChecked": 2,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "tax_id",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "aadhaar",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "email",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "phone",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "address",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         },
         {
           "category": "bank_account",
@@ -61,15 +61,15 @@
           "category": "account_identifier",
           "literalsChecked": 1,
           "leaked": [],
-          "verdict": "not_proven"
+          "verdict": "pass"
         }
       ],
       "evidenceDestroyed": [],
       "evidenceChecked": 5,
-      "strictJsonSchemaDeclared": false,
-      "storeDisabled": false,
-      "maskingPlaceholderPresent": false,
-      "verdict": "vacuous",
+      "strictJsonSchemaDeclared": true,
+      "storeDisabled": true,
+      "maskingPlaceholderPresent": true,
+      "verdict": "pass",
       "failures": []
     },
     {
@@ -81,10 +81,8 @@
         {
           "category": "person_name",
           "literalsChecked": 1,
-          "leaked": [
-            "policy owner name"
-          ],
-          "verdict": "fail"
+          "leaked": [],
+          "verdict": "pass"
         },
         {
           "category": "tax_id",
@@ -131,22 +129,17 @@
         {
           "category": "account_identifier",
           "literalsChecked": 1,
-          "leaked": [
-            "policy number"
-          ],
-          "verdict": "fail"
+          "leaked": [],
+          "verdict": "pass"
         }
       ],
       "evidenceDestroyed": [],
       "evidenceChecked": 3,
       "strictJsonSchemaDeclared": true,
       "storeDisabled": true,
-      "maskingPlaceholderPresent": false,
-      "verdict": "fail",
-      "failures": [
-        "person_name: leaked policy owner name",
-        "account_identifier: leaked policy number"
-      ]
+      "maskingPlaceholderPresent": true,
+      "verdict": "pass",
+      "failures": []
     },
     {
       "adapter": "fdh-bank",
@@ -227,50 +220,52 @@
     "insurance-INS-B13": {
       "terminalStatus": "unresolved",
       "aiWasUsed": true,
-      "aiCompletionAttempts": 0,
-      "payloadsCaptured": 0,
-      "egressUrls": [],
+      "aiCompletionAttempts": 1,
+      "payloadsCaptured": 1,
+      "egressUrls": [
+        "https://api.openai.com/v1/chat/completions"
+      ],
       "result": {
         "adapter": "insurance",
         "caseId": "INS-B13",
-        "egressOccurred": false,
-        "payloadCount": 0,
+        "egressOccurred": true,
+        "payloadCount": 1,
         "categories": [
           {
             "category": "person_name",
             "literalsChecked": 2,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "tax_id",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "aadhaar",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "email",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "phone",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "address",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           },
           {
             "category": "bank_account",
@@ -288,15 +283,15 @@
             "category": "account_identifier",
             "literalsChecked": 1,
             "leaked": [],
-            "verdict": "not_proven"
+            "verdict": "pass"
           }
         ],
         "evidenceDestroyed": [],
         "evidenceChecked": 5,
-        "strictJsonSchemaDeclared": false,
-        "storeDisabled": false,
-        "maskingPlaceholderPresent": false,
-        "verdict": "vacuous",
+        "strictJsonSchemaDeclared": true,
+        "storeDisabled": true,
+        "maskingPlaceholderPresent": true,
+        "verdict": "pass",
         "failures": []
       }
     },
@@ -317,10 +312,8 @@
           {
             "category": "person_name",
             "literalsChecked": 1,
-            "leaked": [
-              "policy owner name"
-            ],
-            "verdict": "fail"
+            "leaked": [],
+            "verdict": "pass"
           },
           {
             "category": "tax_id",
@@ -367,22 +360,17 @@
           {
             "category": "account_identifier",
             "literalsChecked": 1,
-            "leaked": [
-              "policy number"
-            ],
-            "verdict": "fail"
+            "leaked": [],
+            "verdict": "pass"
           }
         ],
         "evidenceDestroyed": [],
         "evidenceChecked": 3,
         "strictJsonSchemaDeclared": true,
         "storeDisabled": true,
-        "maskingPlaceholderPresent": false,
-        "verdict": "fail",
-        "failures": [
-          "person_name: leaked policy owner name",
-          "account_identifier: leaked policy number"
-        ]
+        "maskingPlaceholderPresent": true,
+        "verdict": "pass",
+        "failures": []
       }
     },
     "fdh-bank-FDH-A05": {

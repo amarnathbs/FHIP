@@ -64,6 +64,7 @@ export type AiePiiType =
   | 'bank_account'
   | 'ifsc' // M2 (H.9)
   | 'folio_number' // M2 (H.9)
+  | 'policy_number' // M12B (M12B-F1)
   | 'card_number'
   | 'email'
   | 'phone'
@@ -127,6 +128,48 @@ const PII_PATTERNS: PiiPattern[] = [
   // `coverage_by_type` describe the document inaccurately.
   { type: 'folio_number', pattern: /\b(folio(?:\s*(?:no|number|#))?\s*[:.\-]?\s*)([A-Z0-9][A-Z0-9/\-]{2,24})/gi, valueGroup: 2 },
 
+  // M12B (M12B-F1) — INSURANCE POLICY NUMBER. An account-class identifier
+  // with no rule of any kind before this phase. The generic numeric rules
+  // below cannot reach it: `long_digit_run` needs 11+ digits, `card_number`
+  // needs 13-19, `bank_account` needs a BSB-shaped 12-16, and the AU-TFN rule
+  // needs a word boundary after 8-9 — so a perfectly ordinary 10-digit policy
+  // number matched NOTHING and egressed verbatim. Proved on a real pipeline
+  // run by M12B's own egress-boundary privacy proof (`INS-B05`), not by
+  // inspection.
+  //
+  // LABEL-ANCHORED, for the same reason the folio rule is: policy-number
+  // formats are genuinely not uniform across insurers (pure digits, letter
+  // prefixes, slashed and hyphenated group/member forms), so a bare shape rule
+  // would either be uselessly narrow or would swallow sums insured and
+  // premiums. Only a value the document itself introduces as a policy number
+  // is tokenised, and the LABEL survives so an adapter can still see that the
+  // field was present — which is exactly what `insurance/parser.ts` needs for
+  // structure.
+  //
+  // The value charset deliberately excludes whitespace, carrying forward the
+  // fix the folio rule already needed: allowing spaces let it run across the
+  // gap on a real statement line and swallow the next field's label.
+  // `certificate no` and `member no` are included because renewal and group
+  // notices print the same identifier under those names.
+  //
+  // THE GAP BETWEEN LABEL AND VALUE IS `[^\S\r\n]*`, NOT `\s*`, AND THAT IS
+  // LOAD-BEARING. Written with `\s*` this rule produced a false positive the
+  // moment it started working: once the value is replaced by a placeholder and
+  // the guard strips placeholders before re-scanning, `Policy Number: <gone>`
+  // followed by `Policy Owner: ...` on the next line let `\s*` cross the line
+  // ending and match the literal word "Policy" as the value (the `i` flag
+  // makes `[A-Z0-9]` match lowercase too). `containsUnmaskedPii` then reported
+  // residual PII on fully-masked text and the gateway refused every payload —
+  // the same class of false alarm as M12B-F2 itself, reintroduced by its own
+  // fix. Requiring the value on the label's own line is also exactly the
+  // bounded generic layout `adapters/insurance/labels.ts` certifies ("plain
+  // Label: Value lines, one fact per line"), so this costs no real coverage.
+  {
+    type: 'policy_number',
+    pattern: /\b((?:policy|certificate|member)[^\S\r\n]*(?:no|number|#|ref|reference)\.?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Z0-9][A-Z0-9/\-]{3,24})/gi,
+    valueGroup: 2,
+  },
+
   // Person / holder / nominee NAME. Global invariant D.6 requires holder
   // names to be excluded or tokenised where not required, and nominee
   // details never to egress. Before M2 there was NO name rule of any kind —
@@ -143,8 +186,49 @@ const PII_PATTERNS: PiiPattern[] = [
   // listed. Bounded to 5 words so a runaway match cannot eat a paragraph.
   {
     type: 'person_name_label',
+    // M12B (M12B-F1) — INSURANCE LABELS ADDED. The alternation below was
+    // written for CAS/investment statements and contained only that
+    // vocabulary (`investor`, `unit holder`, `nominee`, ...). An insurance
+    // policy schedule names the same kind of person under entirely different
+    // labels — `Policy Owner:`, `Insured Person:`, `Life Insured:` — none of
+    // which appeared here, so an insurance document's policy-owner and
+    // insured-person names reached the provider VERBATIM. Found by M12B's own
+    // privacy proof at the egress boundary, on a real pipeline run, not by
+    // inspection: `INS-B05` egressed "Reese Ellis Vaughn" in the outbound
+    // OpenAI request body while `aie_masking_summary.coverage_by_type` for
+    // that run was literally `{}`.
+    //
+    // `insured` is deliberately NOT added as a bare alternative: `Sum Insured`
+    // is a MONEY field, and matching it here would tokenise the cover amount —
+    // exactly the mis-bucketing `labels.ts` already had to add an `unless`
+    // veto for on the adapter side. Only unambiguously person-bearing
+    // multi-word labels are listed.
+    //
+    // M12B (M12B-F3) — `\s` REPLACED BY AN EXPLICIT NON-NEWLINE CLASS in the
+    // value. `\s` matches `\n`, so on any document where a name is the last
+    // thing on its line this rule ran past the line ending and swallowed the
+    // NEXT line's LABEL into the token: on `INS-B13` it captured
+    // "Rohan Prakash Iyer\nPAN Number" as one person name, destroying the
+    // `PAN Number:` label a downstream adapter needs and making
+    // `coverage_by_type` describe the document inaccurately. That is the same
+    // over-capture failure the folio rule above was narrowed for during M2,
+    // and the same reasoning applies: over-capturing is not a leak, but it
+    // destroys structure and corrupts the privacy evidence. A person's name
+    // never spans a line break in these layouts, so the value is now bounded
+    // to its own line.
+    // The GAP BETWEEN THE COLON AND THE VALUE is `[^\S\r\n]*` for the same
+    // reason as the value's own internal spacing, and it is the half that
+    // actually bites: `\s*` there let the rule skip a line ending entirely, so
+    // a label with an EMPTY value — `Policy Owner:` on its own line — matched
+    // whatever was printed on the NEXT line and tokenised that instead.
+    // `Policy Owner:` followed by `Sum Insured: 42,000.00` masked the words
+    // "Sum Insured". This is latent in the raw-text path too (any document
+    // printing an empty labelled field), and it is what `containsUnmaskedPii`
+    // kept tripping on after M12B-F2's strip replaced each placeholder with
+    // whitespace. A person's name is on the label's own line in every layout
+    // this repository parses.
     pattern:
-      /\b((?:investor|account\s*holder|unit\s*holder|first\s*holder|second\s*holder|joint\s*holder|holder|nominee|beneficiary|applicant)(?:\s*name)?\s*[:.\-]\s*)([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+      /\b((?:investor|account[^\S\r\n]*holder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
     valueGroup: 2,
     // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
     // `investor:` all occur in real statements), so the value needs its
@@ -176,9 +260,19 @@ const PII_PATTERNS: PiiPattern[] = [
   // recorded as an `address_label` in `aie_masking_summary.coverage_by_type`,
   // which is the same "privacy evidence describes the document inaccurately"
   // failure M2 fixed for the AU-TFN-vs-folio ordering.
+  //
+  // M12B: the gap between the colon and the value is `[^\S\r\n]*`, not `\s*`,
+  // for exactly the reason given on the person-name rule above — the value is
+  // already constrained to a single line (`[^\r\n]`), so letting the GAP cross
+  // a line ending meant an empty `Residential Address:` line silently claimed
+  // the whole of the next line as an address. That is what kept
+  // `containsUnmaskedPii` reporting residual PII on fully-masked text after
+  // M12B-F2's strip. The rule was already documented as first-line-only, so
+  // requiring the value on the label's own line costs no intended coverage.
   {
     type: 'address_label',
-    pattern: /\b(?<!e-?mail )((?:residential\s*address|correspondence\s*address|permanent\s*address|mailing\s*address|registered\s*address|address)\s*[:.\-]\s*)([^\r\n]{5,160})/gi,
+    pattern:
+      /\b(?<!e-?mail )((?:residential[^\S\r\n]*address|correspondence[^\S\r\n]*address|permanent[^\S\r\n]*address|mailing[^\S\r\n]*address|registered[^\S\r\n]*address|address)[^\S\r\n]*[:.\-][^\S\r\n]*)([^\r\n]{5,160})/gi,
     valueGroup: 2,
   },
 
@@ -358,8 +452,67 @@ export function isBelowMaskingPolicy(input: { maskedText: string; labelsSeenRaw:
  * upstream caller that forgot to mask cannot silently reach the provider.
  */
 export function containsUnmaskedPii(text: string): boolean {
-  return PII_PATTERNS.some(({ pattern }) => {
-    pattern.lastIndex = 0; // global regexes carry state across .test() calls
-    return pattern.test(text);
-  });
+  return firstResidualPiiType(text) !== null;
+}
+
+/**
+ * M12B (M12B-F2). The guard now asks the ONE question it was always meant to
+ * ask: *would `maskText` still find something here to mask?* — and it answers
+ * it by applying `maskText`'s own per-match acceptance logic rather than a
+ * bare `pattern.test()`.
+ *
+ * THE DEFECT THIS CLOSES, AND WHY IT WAS NOT HARMLESS. `maskText` refuses to
+ * re-tokenise something an earlier pattern already replaced: the
+ * `sensitive.includes('[MASKED:')` check in its replace callback, added in M3
+ * for exactly this reason. `containsUnmaskedPii` had no equivalent check, and
+ * the address rule's value group is `[^\r\n]{5,160}` — it matches ANYTHING to
+ * end of line, including a placeholder the masker itself had just written. So
+ * on any document printing a labelled address, `Residential Address:
+ * [MASKED:...]` re-matched the address rule and the guard reported residual
+ * PII in text that was in fact completely masked.
+ *
+ * The consequence was not a leak — it fails CLOSED, and the gateway returned
+ * `unmasked_pii_detected` and never called the provider. It was harmful in a
+ * subtler way: it made a correctly-masked document INDISTINGUISHABLE from a
+ * leaking one, so the guard's own signal carried no information, and it made
+ * the AI fallback permanently unreachable for essentially every real insurance
+ * policy, all of which print an address. M12B's own privacy proof recorded
+ * exactly that on `INS-B13`, where no payload was ever built at all.
+ *
+ * WHY NOT SIMPLY STRIP THE PLACEHOLDERS FIRST. That was tried and is wrong,
+ * and the way it failed is worth recording because it is not obvious: removing
+ * a placeholder leaves an EMPTY value slot behind a label that is still
+ * printed, and every label-anchored rule then runs on and claims whatever text
+ * comes next. On a real CAS header, `Folio No: <stripped>   IFSC: <stripped>`
+ * made the folio rule match the literal word "IFSC" as a folio value, and the
+ * guard went on reporting residual PII — a DIFFERENT false positive with the
+ * same effect. Mirroring the masker's own logic has no such failure mode,
+ * because it evaluates the text the masker actually produced.
+ *
+ * FAIL-CLOSED IS PRESERVED EXACTLY. Every genuinely unmasked value still
+ * matches its pattern, still fails the `[MASKED:` check, still satisfies its
+ * `valuePredicate`, and is still reported. The only matches now excluded are
+ * ones `maskText` itself would decline to mask — i.e. ones that are already
+ * masked.
+ */
+function firstResidualPiiType(text: string): AiePiiType | null {
+  for (const { type, pattern, valueGroup, valuePredicate } of PII_PATTERNS) {
+    pattern.lastIndex = 0; // global regexes carry state across calls
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      // A zero-length match would loop forever on a global regex.
+      if (match[0] === '') {
+        pattern.lastIndex += 1;
+        continue;
+      }
+      const sensitive = valueGroup === undefined ? match[0] : match[valueGroup];
+      // Exactly the three conditions `maskText`'s replace callback applies,
+      // in the same order, for the same reasons.
+      if (sensitive === undefined || sensitive === '') continue;
+      if (sensitive.includes('[MASKED:')) continue;
+      if (valuePredicate !== undefined && !valuePredicate(sensitive)) continue;
+      return type;
+    }
+  }
+  return null;
 }

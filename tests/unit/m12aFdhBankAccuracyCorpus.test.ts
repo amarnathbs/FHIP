@@ -680,25 +680,52 @@ describe('M12A.4 — FDH-bank accuracy certification against a sealed corpus', (
     perCaseEvidence['CONTROL-corrupt-pdf'] = { observedTerminalStatus: obs.finalStatus, observedRejectionReason: obs.rejectionReason, intakeStatusUpdates: rec().intakeStatusUpdates };
   });
 
-  it('FDH-A05 CONDITIONAL — with AIE_MASK_TOKEN_ENCRYPTION_KEY unset (this environment), the ambiguous-layout run cannot complete at all', async () => {
+  it('FDH-A05 CONDITIONAL — with AIE_MASK_TOKEN_ENCRYPTION_KEY unset (this environment), the ambiguous-layout run degrades to `unresolved` instead of crashing (M12A-F2 fixed in M12B)', async () => {
     const c = M12A_FDH_BANK_CORPUS.find((x) => x.id === 'FDH-A05')!;
     // No key. No workaround. This is the environment as it actually stands.
     expect(process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY).toBeUndefined();
 
     const obs = await runLifecycle(c, c.bytes(), { attemptAccept: false });
 
-    // Masking fails CLOSED, which is the correct security posture — but the
-    // route has no handler for it, so the request does not degrade to
-    // `unresolved`: it does not return at all. Recorded exactly as observed.
-    expect(obs.intakeThrew).not.toBeNull();
+    // UPDATED BY M12B, AND THE ASSERTION WAS INVERTED DELIBERATELY.
+    //
+    // As written by M12A this test asserted `obs.intakeThrew` was NOT null,
+    // because that is what the code did: `maskText` failed closed by throwing
+    // — correct — and nothing anywhere caught it, so the intake request never
+    // returned and the run was stranded mid-pipeline in `masking`. M12A
+    // recorded that as `M12A-F2`, disclosed it as a SHARED AIE-1.1 core defect
+    // affecting all three adapters, and deliberately left it for whichever
+    // phase owned the shared gateway.
+    //
+    // M12B hit the identical crash in Insurance's own corpus — which is what
+    // confirmed the three-adapter blast radius rather than assuming it — and
+    // fixed it in `lib/aie/orchestrator.ts`, where it belongs. The run now
+    // degrades down the path the orchestrator ALREADY took for every other
+    // "no usable AI data" condition (GW-12), over the `masking -> reconciling`
+    // edge that `stateMachine.ts` already declared legal and that simply had
+    // no caller.
+    //
+    // This test was failing CORRECTLY after that fix. It is updated rather
+    // than deleted, because the properties that actually matter here are
+    // unchanged and still worth asserting: nothing is written, no AI call is
+    // made, and no transaction row is invented from an ambiguous layout. What
+    // changed is only that the user now gets an answer instead of a hung
+    // request.
+    expect(obs.intakeThrew).toBeNull();
+    expect(obs.finalStatus).toBe('unresolved');
     expect(obs.writeDuringIntake).toBe(0);
     expect(rec().aiAttempts).toBe(0);
     expect(observedRowCandidates()).toEqual([]);
+    // The reviewer is told something actionable rather than nothing.
+    expect(rec().unresolvedItems.filter((i) => i.severity === 'blocking').length).toBeGreaterThanOrEqual(1);
     perCaseEvidence['FDH-A05-no-masking-key'] = {
       intakeThrew: obs.intakeThrew,
+      observedTerminalStatus: obs.finalStatus,
       canonicalWrites: obs.writeDuringIntake,
       aiCompletionAttempts: rec().aiAttempts,
-      note: 'AIE_MASK_TOKEN_ENCRYPTION_KEY is unset in this environment and is a Product-Owner/operator-owned blocker; no workaround was attempted.',
+      unresolvedItems: rec().unresolvedItems,
+      note:
+        'AIE_MASK_TOKEN_ENCRYPTION_KEY is unset in this environment and is a Product-Owner/operator-owned blocker; no workaround was attempted and no key was provisioned. M12A-F2 (the crash) was fixed in M12B; the AI clarification itself remains NOT CERTIFIED, which is why FDH-A05 stays CONDITIONAL.',
     };
   });
 

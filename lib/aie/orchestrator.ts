@@ -184,7 +184,63 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
     // input, so pseudonyms are stable within one user's documents and
     // uncorrelatable between users (PII-06). Throws — and therefore aborts
     // the run before any payload is built — if the masking key is unset.
-    const masking = maskText(extractedText, { tenantKey: userId });
+    //
+    // M12B (M12A-F2). `maskText` failing closed is CORRECT and is not what is
+    // fixed here: no key means no tokenisation, which must mean no payload.
+    // What was wrong is that nothing caught the throw. The exception escaped
+    // `runExtractionPipeline` and then the intake route, so the HTTP request
+    // never returned and the run was stranded in `masking` — a state the FSM
+    // says is non-terminal, so nothing downstream would ever retire it. M12A
+    // reproduced exactly that for FDH-bank and disclosed it as a SHARED core
+    // defect affecting all three adapters; this phase hit the identical crash
+    // in Insurance's own corpus, which is what confirmed the blast radius.
+    //
+    // The fix degrades to the path this orchestrator ALREADY takes whenever no
+    // usable AI data can be produced — `kill_switch_blocked`,
+    // `unmasked_pii_detected`, `budget_exhausted`, a provider timeout or a
+    // refusal all do exactly this: skip the AI call, keep the deterministic
+    // candidates, and go to reconciliation (GW-12). `masking -> reconciling`
+    // is already a declared legal edge in `stateMachine.ts`, so no state, no
+    // edge and no migration is added — the edge existed and simply had no
+    // caller.
+    //
+    // WHY NOT `privacy_blocked`. That state means "the masking POLICY refused
+    // this document", and it is terminal. A missing environment key is an
+    // operator configuration fact about the deployment, not a verdict about
+    // the document, and recording it as a terminal privacy refusal would
+    // permanently mark documents that are in fact fine. Degrading instead
+    // leaves the run reconcilable, and — because the adapter's own rules see a
+    // candidate set that is still missing whatever the AI gap was for — it
+    // lands on `unresolved` with a blocking item a reviewer can act on, which
+    // is the outcome M12A said this case should have had all along.
+    let masking: ReturnType<typeof maskText>;
+    try {
+      masking = maskText(extractedText, { tenantKey: userId });
+    } catch (e) {
+      await deps.audit({
+        intakeId,
+        runId,
+        userId,
+        eventType: 'ai_fallback_masking_unavailable',
+        actorType: 'system',
+        metadata: { reason: e instanceof Error ? e.message.slice(0, 200) : 'masking failed' },
+      });
+      await transition(deps, { runId, intakeId, userId, from: current, to: 'reconciling', reason: 'masking_unavailable' });
+      current = 'reconciling';
+      const reconciliationResults = reconcile({ runId, candidates });
+      await deps.recordReconciliationRuns({ runId, intakeId, userId, results: reconciliationResults });
+      if (parserResult.candidates.length > 0) {
+        await deps.recordFieldCandidates({ runId, intakeId, userId, candidates: parserResult.candidates });
+      }
+      const blocking = blockingItemsForReconciliation(reconciliationResults);
+      if (blocking.length > 0) {
+        const ids = await deps.createUnresolvedItems({ runId, intakeId, userId, items: blocking });
+        await transition(deps, { runId, intakeId, userId, from: current, to: 'unresolved' });
+        return { finalStatus: 'unresolved', candidates, reconciliation: reconciliationResults, unresolvedItemIds: ids, aiWasUsed: false };
+      }
+      await transition(deps, { runId, intakeId, userId, from: current, to: 'awaiting_acceptance' });
+      return { finalStatus: 'awaiting_acceptance', candidates, reconciliation: reconciliationResults, unresolvedItemIds: [], aiWasUsed: false };
+    }
 
     // M2 (H.9): the policy verdict is now COMPUTED BEFORE the summary row is
     // written, and the real verdict is what gets recorded. It was previously
