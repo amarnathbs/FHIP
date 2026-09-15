@@ -1,0 +1,1314 @@
+{
+  "corpusVersion": "m12b-insurance-1",
+  "generatedBy": "tests/unit/m12bInsuranceAccuracyCorpus.test.ts",
+  "summary": {
+    "caseCount": 14,
+    "fieldPrecision": 0.9936305732484076,
+    "fieldRecall": 0.9936305732484076,
+    "economicPrecision": 1,
+    "economicRecall": 0.8275862068965517,
+    "falseAcceptRate": 0.2222222222222222,
+    "falseAcceptCount": 2,
+    "falseAcceptDenominator": 9,
+    "falseCanonicalWriteRate": 0.14285714285714285,
+    "falseCanonicalWriteCount": 2,
+    "totalUnexplainedOmissions": 1
+  },
+  "cases": [
+    {
+      "caseId": "INS-B01",
+      "scenario": "normal policy schedule",
+      "fieldTruePositives": 15,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B02",
+      "scenario": "multi-page policy schedule",
+      "fieldTruePositives": 15,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B03",
+      "scenario": "terminology variants",
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B04",
+      "scenario": "renewal notice with structured benefit fields",
+      "fieldTruePositives": 16,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B05",
+      "scenario": "missing policy name requiring AI clarification",
+      "fieldTruePositives": 12,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B06",
+      "scenario": "malformed policy — printed annual total contradicts the document's own premium",
+      "fieldTruePositives": 12,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B07",
+      "scenario": "password-protected policy schedule",
+      "fieldTruePositives": 0,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": null,
+      "fieldRecall": null,
+      "economicMatched": 0,
+      "economicObserved": 0,
+      "economicExpected": 2,
+      "economicPrecision": null,
+      "economicRecall": 0,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": [
+        {
+          "key": "cover:1",
+          "expected": {
+            "key": "cover:1",
+            "date": null,
+            "amount": 300000,
+            "direction": "cover",
+            "balance": null
+          },
+          "observed": null
+        },
+        {
+          "key": "premium:1",
+          "expected": {
+            "key": "premium:1",
+            "date": null,
+            "amount": 75,
+            "direction": "premium",
+            "balance": null
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "INS-B08",
+      "scenario": "adversarial prompt-injection text",
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B09",
+      "scenario": "deferred sub-class (product disclosure statement)",
+      "fieldTruePositives": 1,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 0,
+      "economicObserved": 0,
+      "economicExpected": 0,
+      "economicPrecision": null,
+      "economicRecall": null,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B10",
+      "scenario": "unsupported currency",
+      "fieldTruePositives": 12,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B11",
+      "scenario": "ADDITIVE — multi-component policy the flag can see",
+      "fieldTruePositives": 11,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 4,
+      "economicPrecision": 1,
+      "economicRecall": 0.5,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": [
+        {
+          "key": "cover:2",
+          "expected": {
+            "key": "cover:2",
+            "date": null,
+            "amount": 250000,
+            "direction": "cover",
+            "balance": null
+          },
+          "observed": null
+        },
+        {
+          "key": "premium:2",
+          "expected": {
+            "key": "premium:2",
+            "date": null,
+            "amount": 55,
+            "direction": "premium",
+            "balance": null
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "INS-B12",
+      "scenario": "ADDITIVE — money printed under an unrecognised label",
+      "fieldTruePositives": 11,
+      "fieldFalsePositives": 1,
+      "fieldFalseNegatives": 1,
+      "fieldPrecision": 0.9166666666666666,
+      "fieldRecall": 0.9166666666666666,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 3,
+      "economicPrecision": 1,
+      "economicRecall": 0.6666666666666666,
+      "unexplainedOmissions": [
+        "cover:2"
+      ],
+      "falseAccept": true,
+      "falseCanonicalWrite": true,
+      "fieldDisagreements": [
+        {
+          "fieldName": "multiComponentPolicyDetected",
+          "expected": "true",
+          "observed": "false"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": "cover:2",
+          "expected": {
+            "key": "cover:2",
+            "date": null,
+            "amount": 150000,
+            "direction": "cover",
+            "balance": null
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "INS-B13",
+      "scenario": "ADDITIVE — India / INR jurisdiction variant carrying PII, product name absent",
+      "fieldTruePositives": 14,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B14",
+      "scenario": "ADDITIVE — renewal date printed in a non-ISO format",
+      "fieldTruePositives": 11,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": true,
+      "falseCanonicalWrite": true,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    }
+  ],
+  "evidence": {
+    "INS-B01": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 14.4
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Protection Plus Life Cover",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 120,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-08-31",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Southern Cross Mutual Assurance",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B02": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 12.42
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Family Shield Home Cover",
+          "cover_type": "home",
+          "cover_amount": 850000,
+          "premium": 310.5,
+          "premium_frequency": "quarterly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-03-15",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Northern Reach Insurance Group",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B03": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 14.4
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Meridian Term Cover",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 120,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-08-31",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Meridian Life Assurance Society",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B04": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 22.984
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Aurora Salary Continuance",
+          "cover_type": "income_protection",
+          "cover_amount": 6500,
+          "premium": 88.4,
+          "premium_frequency": "fortnightly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-06-30",
+          "waiting_period_days": 30,
+          "benefit_period": "2 years",
+          "provider": "Aurora Income Protection Ltd",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B05": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 1,
+      "aiOutcomes": [
+        "success"
+      ],
+      "maskingSummaries": [
+        {
+          "coverageByType": {},
+          "belowPolicy": false
+        }
+      ],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:insurance_required_fields_present",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "fail"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 11.61
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B06": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:insurance_premium_totals_reconciled",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "fail",
+          "delta": 900,
+          "tolerance": 18
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B07": {
+      "observedTerminalStatus": "quarantined",
+      "observedRejectionReason": null,
+      "passwordRequired": true,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_found"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        }
+      ],
+      "binariesFinalized": [],
+      "canonicalRowsWritten": []
+    },
+    "INS-B08": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 25.2
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Bluestone Complete Cover",
+          "cover_type": "health",
+          "cover_amount": 250000,
+          "premium": 210,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-04-18",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Bluestone Assurance Company",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B09": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:insurance_document_class_supported",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "fail"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B10": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:insurance_currency_supported",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "fail"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 21.6
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B11": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:insurance_multi_component_not_supported",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "indeterminate"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B12": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 15.84
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Fairwater Protect",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 132,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-10-10",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Fairwater Life Group",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "INS-B13": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [
+        {
+          "coverageByType": {
+            "person_name_label": 1,
+            "address_label": 1,
+            "aadhaar": 1,
+            "tax_id": 1,
+            "bank_account": 1,
+            "email": 1,
+            "phone": 1
+          },
+          "belowPolicy": false
+        }
+      ],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:insurance_required_fields_present",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "fail"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 138
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": []
+    },
+    "INS-B14": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 7.71
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Wattle Grove Motor Cover",
+          "cover_type": "vehicle",
+          "cover_amount": 38500,
+          "premium": 64.25,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": null,
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Wattle Grove Insurance",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
+    "CONTROL-corrupt-pdf": {
+      "observedTerminalStatus": "rejected",
+      "observedRejectionReason": "corrupt",
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        },
+        {
+          "toStatus": "rejected",
+          "rejectionReason": "corrupt"
+        }
+      ]
+    },
+    "INS-B01-idempotent-replay": {
+      "secondAccept": {
+        "ok": true,
+        "alreadyCompleted": true
+      },
+      "canonicalWrites": 1
+    },
+    "MASKING-KEY-UNSET": {
+      "INS-B05": {
+        "observedTerminalStatus": "unresolved",
+        "intakeThrew": null,
+        "canonicalWrites": 0,
+        "aiCompletionAttempts": 0,
+        "unresolvedItems": [
+          {
+            "reasonCode": "reconciliation_fail:insurance_required_fields_present",
+            "severity": "blocking"
+          }
+        ]
+      },
+      "INS-B13": {
+        "observedTerminalStatus": "threw",
+        "intakeThrew": "AIE_MASK_TOKEN_ENCRYPTION_KEY is not set or is not a 64-character hex string (32 bytes). It is required before any identifier can be tokenised — masking fails closed without it, which also means no AI fallback can run. S",
+        "canonicalWrites": 0,
+        "aiCompletionAttempts": 0,
+        "unresolvedItems": []
+      },
+      "note": "AIE_MASK_TOKEN_ENCRYPTION_KEY is unset in this environment and is a Product-Owner/operator-owned blocker; no workaround was attempted and no key was provisioned."
+    }
+  }
+}
