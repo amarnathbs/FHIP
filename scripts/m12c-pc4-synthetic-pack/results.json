@@ -2,9 +2,9 @@
   "pack": "M12C PC4 reduced synthetic pack (M12 dispatch section 9, OA-7)",
   "environment": "DEV",
   "targetHost": "vqycarelcoijzwlpkpcz.supabase.co",
-  "runTag": "ZZP4Z1UVQ",
-  "runAt": "2026-09-15T17:54:45.782Z",
-  "completedAt": "2026-09-15T17:57:20.344Z",
+  "runTag": "ZZP4Z6VIG",
+  "runAt": "2026-09-15T17:58:39.880Z",
+  "completedAt": "2026-09-15T18:02:12.491Z",
   "cases": [
     {
       "id": "S00",
@@ -87,7 +87,7 @@
             "parseRuns": 1,
             "cases": [
               {
-                "id": "6dd93a36-c7b6-43e2-82b5-7bd6a1d1a544",
+                "id": "d3587312-a582-4cd4-949b-e9cabbfc59eb",
                 "discrepancy_type": "document_password_required",
                 "severity": "blocking",
                 "status": "open"
@@ -230,9 +230,9 @@
           "ok": true,
           "evidence": {
             "rows": [
-              "ZZP4Z1UVQS02T1",
-              "ZZP4Z1UVQS02T2",
-              "ZZP4Z1UVQS02T3"
+              "ZZP4Z6VIGS02T1",
+              "ZZP4Z6VIGS02T2",
+              "ZZP4Z6VIGS02T3"
             ],
             "allOriginatedFromDoc1": true
           }
@@ -286,8 +286,8 @@
           "evidence": {
             "instruments": [
               {
-                "id": "ddfb3fad",
-                "isin": "INZZZ1UVQ039"
+                "id": "ee095a3b",
+                "isin": "INZZZ6VIG034"
               }
             ]
           }
@@ -298,12 +298,12 @@
           "evidence": {
             "accounts": [
               {
-                "id": "d4ab244a",
-                "folio": "ZZP4Z1UVQ0003"
+                "id": "ae9d5054",
+                "folio": "ZZP4Z6VIG0003"
               },
               {
-                "id": "bc4a0e0a",
-                "folio": "ZZP4Z1UVQ0013"
+                "id": "92928cbb",
+                "folio": "ZZP4Z6VIG0013"
               }
             ]
           }
@@ -314,13 +314,13 @@
           "evidence": {
             "folioA": [
               {
-                "ref": "ZZP4Z1UVQS03A1",
+                "ref": "ZZP4Z6VIGS03A1",
                 "units": 30
               }
             ],
             "folioB": [
               {
-                "ref": "ZZP4Z1UVQS03B1",
+                "ref": "ZZP4Z6VIGS03B1",
                 "units": 70
               }
             ]
@@ -332,11 +332,11 @@
           "evidence": {
             "positions": [
               {
-                "account": "d4ab244a",
+                "account": "ae9d5054",
                 "status": "certified"
               },
               {
-                "account": "bc4a0e0a",
+                "account": "92928cbb",
                 "status": "certified"
               }
             ]
@@ -346,8 +346,8 @@
       "antiVacuityControl": {
         "label": "the same query against the OTHER scheme in the same document returns a different, second instrument",
         "produced": {
-          "sharedScheme": "ddfb3fad",
-          "otherScheme": "595c2502"
+          "sharedScheme": "ee095a3b",
+          "otherScheme": "933fc5e3"
         },
         "ok": true
       },
@@ -414,8 +414,8 @@
           "evidence": {
             "accounts": [
               {
-                "id": "368b2bc5",
-                "institution": "ZZ Synthetic ZZP4Z1UVQ Asset Management"
+                "id": "5e9be029",
+                "institution": "ZZ Synthetic ZZP4Z6VIG Asset Management"
               }
             ]
           }
@@ -426,8 +426,8 @@
           "evidence": {
             "instruments": [
               {
-                "id": "55abebcc",
-                "isin": "INZZZ1UVQ047"
+                "id": "4a7ccd12",
+                "isin": "INZZZ6VIG042"
               }
             ]
           }
@@ -438,16 +438,16 @@
           "evidence": {
             "rows": [
               {
-                "ref": "ZZP4Z1UVQS04T1",
+                "ref": "ZZP4Z6VIGS04T1",
                 "units": 50,
                 "status": "parsed",
-                "doc": "09c2d18a"
+                "doc": "4a55fe9f"
               },
               {
-                "ref": "ZZP4Z1UVQS04T2",
+                "ref": "ZZP4Z6VIGS04T2",
                 "units": 50,
                 "status": "parsed",
-                "doc": "f0e2ce36"
+                "doc": "9cc5bb4f"
               }
             ]
           }
@@ -506,7 +506,7 @@
           "evidence": {
             "accounts": [
               {
-                "id": "69dab359",
+                "id": "542a7a8b",
                 "institution": "Unknown AMC"
               }
             ]
@@ -545,8 +545,8 @@
           "evidence": {
             "accounts": [
               {
-                "id": "69dab359",
-                "institution": "ZZ Synthetic ZZP4Z1UVQ Asset Management"
+                "id": "542a7a8b",
+                "institution": "ZZ Synthetic ZZP4Z6VIG Asset Management"
               }
             ],
             "sameIdAsBefore": true
@@ -558,7 +558,7 @@
           "evidence": {
             "instruments": [
               {
-                "id": "42a81df4",
+                "id": "ba5ce9fe",
                 "isin": null
               }
             ]
@@ -570,16 +570,26 @@
           "evidence": {
             "rows": [
               {
-                "ref": "ZZP4Z1UVQS05T1",
+                "ref": "ZZP4Z6VIGS05T1",
                 "units": 50,
                 "status": "parsed"
               },
               {
-                "ref": "ZZP4Z1UVQS05T2",
+                "ref": "ZZP4Z6VIGS05T2",
                 "units": 50,
                 "status": "parsed"
               }
             ]
+          }
+        },
+        {
+          "label": "OBSERVATION: whether the later CAS (which DOES print the ISIN) backfills the identifier onto the already-minted instrument",
+          "ok": true,
+          "evidence": {
+            "instrumentIsin": null,
+            "instrumentStatus": "provisional",
+            "identifiers": [],
+            "isinRecovered": false
           }
         },
         {
@@ -600,7 +610,8 @@
         "ok": true
       },
       "findings": [
-        "FINDING (S05): the folio statement printed ISIN INZZZ1UVQ054 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect."
+        "FINDING (S05): the folio statement printed ISIN INZZZ6VIG059 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect.",
+        "FINDING (S05, continued): the ISIN is NOT recovered later either. After the CAS import — which prints ISIN INZZZ6VIG059 and resolves to this same instrument via normalised name — the instrument still carries isin=null and identifier rows []. schemeResolution's 'resolved' branch only MAPS to the existing instrument; only the 'unresolved' branch writes ii_instrument_identifiers. So an FS1-first position is permanently left without the ISIN that both of its source documents printed, and any future statement that carries ONLY an ISIN (no matching scheme name) would mint a SECOND instrument for the same real fund."
       ]
     },
     {
@@ -684,7 +695,7 @@
               {
                 "status": "certified_with_warnings",
                 "closing": 100,
-                "latestDoc": "f0e2ce36"
+                "latestDoc": "9cc5bb4f"
               }
             ]
           }
@@ -697,12 +708,12 @@
               {
                 "asOf": "2026-08-01",
                 "units": 50,
-                "doc": "09c2d18a"
+                "doc": "4a55fe9f"
               },
               {
                 "asOf": "2026-08-31",
                 "units": 100,
-                "doc": "f0e2ce36"
+                "doc": "9cc5bb4f"
               }
             ]
           }
@@ -784,52 +795,52 @@
           "label": "every transaction's originating link count matches the number of transactions that document actually created (no cross-attribution)",
           "ok": true,
           "evidence": {
-            "470720c1": {
-              "runs": 2,
-              "txns": 1,
-              "originatingLinks": 1
-            },
-            "eb600e5f": {
+            "34857289": {
               "runs": 2,
               "txns": 3,
               "originatingLinks": 3
             },
-            "f299dc99": {
+            "73909978": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "133a7bad": {
+              "runs": 2,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "5727fc04": {
               "runs": 1,
               "txns": 0,
               "originatingLinks": 0
             },
-            "7204c417": {
+            "9626052c": {
               "runs": 1,
               "txns": 1,
               "originatingLinks": 1
             },
-            "2f949ec8": {
+            "7a6e516c": {
               "runs": 1,
               "txns": 3,
               "originatingLinks": 3
             },
-            "09c2d18a": {
+            "4a55fe9f": {
               "runs": 1,
               "txns": 1,
               "originatingLinks": 1
             },
-            "f0e2ce36": {
+            "9cc5bb4f": {
               "runs": 1,
               "txns": 1,
               "originatingLinks": 1
             },
-            "5a3f1c4f": {
+            "cf5cedc9": {
               "runs": 1,
               "txns": 1,
               "originatingLinks": 1
             },
-            "aa554a51": {
-              "runs": 1,
-              "txns": 1,
-              "originatingLinks": 1
-            },
-            "6ec88541": {
+            "25a1cb69": {
               "runs": 1,
               "txns": 2,
               "originatingLinks": 2
@@ -1106,6 +1117,7 @@
   },
   "findings": [
     "FINDING (S01): after a wrong-password attempt, the blocking 'document_password_required' reconciliation case stays OPEN even once the correct password succeeds, so the position parses but is left status='reconciliation_required' with blocking reason 'open_blocking_reconciliation_case'. Nothing in processSourceDocument resolves that case on a later successful extraction of the same document. Observed truth row: [{\"status\":\"reconciliation_required\",\"blocking_reasons\":[{\"code\":\"open_blocking_reconciliation_case\",\"message\":\"An unresolved blocking-severity reconciliation case exists for this position.\"}]}].",
-    "FINDING (S05): the folio statement printed ISIN INZZZ1UVQ054 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect."
+    "FINDING (S05): the folio statement printed ISIN INZZZ6VIG059 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect.",
+    "FINDING (S05, continued): the ISIN is NOT recovered later either. After the CAS import — which prints ISIN INZZZ6VIG059 and resolves to this same instrument via normalised name — the instrument still carries isin=null and identifier rows []. schemeResolution's 'resolved' branch only MAPS to the existing instrument; only the 'unresolved' branch writes ii_instrument_identifiers. So an FS1-first position is permanently left without the ISIN that both of its source documents printed, and any future statement that carries ONLY an ISIN (no matching scheme name) would mint a SECOND instrument for the same real fund."
   ]
 }

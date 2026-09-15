@@ -462,10 +462,19 @@ Run against **DEV only**, through the real `processSourceDocument` pipeline, the
 > `buildScheme(name, null)`, because the Summary of Holdings block prints no
 > ISIN.
 >
-> Resolution still lands on the same instrument by normalised name plus
+> **And the loss is permanent, which the pack went on to prove rather than
+> assume.** A later CAS import that *does* print the same ISIN, and that
+> resolves to this same instrument by normalised name, **still leaves it
+> `isin: null` with zero identifier rows** — because `schemeResolution`'s
+> `resolved` branch only *maps* to the existing instrument, and only the
+> `unresolved` branch ever writes `ii_instrument_identifiers`. Nothing backfills.
+>
+> Resolution keeps landing on the right instrument by normalised name plus
 > plan/option plus country, **so this is a lost-identifier defect, not a
-> duplication defect** — which is why no existing test caught it and why it is
-> worth stating precisely rather than escalating.
+> duplication defect today** — which is why no existing test caught it. The
+> consequence is deferred rather than absent: a future statement carrying **only**
+> an ISIN, with no matching scheme name, would mint a **second** instrument for
+> the same real fund.
 
 Neither is fixed here. Both are **outside sections 8–16's scope**, both were found by running the system rather than reading it, and both are recorded as new open items (report §17) rather than quietly appended to this phase's work.
 
@@ -815,7 +824,7 @@ New items first, then inherited ones re-confirmed rather than restated from memo
 | **`M12B-O2`** *(inherited)* | The real-provider **response** path is uncertified for both adapters | PO | Unchanged |
 | **`M12B-O3`** / **`M12B-O4`** / **`M12B-O5`** / **`M12B-O6`** *(inherited)* | Insurance non-ISO renewal-date blocking; adapter flags OFF everywhere; only the bounded generic `Label: Value` layout certified; no OCR | PO / operator / disclosed | Unchanged |
 | **`M12C-F4`** *(new defect, report §8.1)* | **A `document_password_required` case is never resolved when the correct password later succeeds** — the position parses and is then blocked by the record of the earlier failure. **2 such cases are open in production now** | engineering | Found by S01. Not fixed: outside §§8–16's scope, and it would change certified behaviour on a path PC4 shipped |
-| **`M12C-F5`** *(new defect, report §8.1)* | **An FS1-first import drops the ISIN the document printed** — the holding scheme (which has no ISIN) overwrites the transaction scheme (which does) | engineering | Found by S05. A lost-identifier defect, **not** a duplication defect — resolution still lands on the same instrument, which is why nothing caught it |
+| **`M12C-F5`** *(new defect, report §8.1)* | **An FS1-first import permanently drops the ISIN the document printed** — the holding scheme (no ISIN) overwrites the transaction scheme (ISIN present), and **nothing backfills it**: `schemeResolution`'s `resolved` branch only maps, while only its `unresolved` branch writes identifiers | engineering | Found by S05. A lost-identifier defect, **not** a duplication defect *today* — which is why nothing caught it. The consequence is deferred: a future ISIN-only statement would mint a **second** instrument for the same real fund |
 | **`M12C-O8`** *(new)* | **`household_members` is empty in production and no screen in the product creates one** — the API exists with no UI consumer. The II upload form never sends an owner either | **Product Owner / engineering** | Blocker 1 and the root cause of `OA-8`. See the operator sheet's Part A |
 | **`M12C-O9`** *(new)* | **The PC5 resolution screen projects `aie_unresolved_item` only, and production has zero rows in the entire AIE pipeline.** The 120 open `owner_unmatched` cases live in the legacy `ii_reconciliation_cases`, whose own Review screen says the functionality *"is not yet available"* | **Product Owner / engineering** | Blocker 3. The two pipelines' exception stores are not bridged |
 | **`M12C-O10`** *(new, minor)* | **"Show resolved history" alone shows nothing** — `includeHistory` widens the status set but the request keeps the exception-only `materialOnly` default, and no terminal status is "material", so resolved items are fetched and filtered straight back out. Both toggles are needed | engineering | Found live during the axe pass. Documented as step 9 of the operator sheet so the PO is not left thinking their answer vanished |
