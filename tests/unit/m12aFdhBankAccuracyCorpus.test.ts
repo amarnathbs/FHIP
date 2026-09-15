@@ -201,6 +201,15 @@ vi.mock('@/lib/supabase/admin', () => ({
         rec().writeBatchUpserts.push(row.status);
         return { data: null, error: null };
       },
+      // M12C §12 (`M2-OPEN-1`): `acceptRun` now pairs every
+      // `transitionRunStatusCas` with `recordRunTransitionAudit`, which inserts
+      // into `aie_processing_transition`. This corpus drives the REAL accept
+      // path, so that insert reaches this fake, and a fake that knew only
+      // `upsert` failed with `admin.from(...).insert is not a function` on
+      // every case that reaches acceptance. The fake was out of date; the
+      // corpus's own metrics are unaffected, which the regenerated
+      // `results.json` confirms.
+      insert: async () => ({ data: null, error: null }),
     }),
     // The AI cost ledger. Left ADMITTING rather than refusing, deliberately:
     // a fake that refused every reservation would block the A05 provider call

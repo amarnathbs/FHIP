@@ -62,6 +62,8 @@ interface Recorded {
   quarantineDownloads: string[];
   binariesFinalized: string[];
   auditEvents: { eventType: string }[];
+  /** M12C section 12: the aie_processing_transition rows accept.ts now writes. */
+  fsmTransitionAudits: { from: string; to: string; actorType: string }[];
 }
 
 interface SharedState {
@@ -104,6 +106,7 @@ function freshState(): SharedState {
       quarantineDownloads: [],
       binariesFinalized: [],
       auditEvents: [],
+      fsmTransitionAudits: [],
     },
     quarantinedBytes: new Uint8Array(),
     runStatus: 'none',
@@ -151,9 +154,27 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
-    from: () => ({
+    from: (table: string) => ({
       upsert: async (row: { status: string; target_module: string }) => {
         rec().writeBatchUpserts.push({ status: row.status, target_module: row.target_module });
+        return { data: null, error: null };
+      },
+      // M12C §12 (`M2-OPEN-1`): `acceptRun` now pairs every
+      // `transitionRunStatusCas` with `recordRunTransitionAudit`, which inserts
+      // into `aie_processing_transition`. This test drives the REAL
+      // `createDefaultAcceptRunDeps()`, so that insert reaches this fake — and
+      // a fake that only knew `upsert` failed with
+      // `admin.from(...).insert is not a function`, which is the fake being
+      // out of date rather than the gate being broken.
+      //
+      // Recorded rather than swallowed, so this file's own claim — that the
+      // canonical write moved to the shared acceptance gate and did not
+      // disappear — is now backed by the FSM audit trail too, not only by the
+      // write-batch upserts.
+      insert: async (row: Record<string, unknown>) => {
+        if (table === 'aie_processing_transition') {
+          rec().fsmTransitionAudits.push({ from: String(row.from_state), to: String(row.to_state), actorType: String(row.actor_type) });
+        }
         return { data: null, error: null };
       },
     }),
@@ -456,6 +477,17 @@ describe('M12A.3 — the canonical write moved to the shared acceptance gate, it
       'write_pending->completed',
     ]);
     expect(state().runStatus).toBe('completed');
+
+    // M12C §12 (`M2-OPEN-1`): every one of those three edges now also leaves an
+    // `aie_processing_transition` row, in the same order — so the FSM audit
+    // table finally records what the CAS actually did, and the user-commanded
+    // edge is attributed to the user while the machine-driven ones are not.
+    expect(rec().fsmTransitionAudits.map((a) => `${a.from}->${a.to}`)).toEqual([
+      'awaiting_acceptance->accepted',
+      'accepted->write_pending',
+      'write_pending->completed',
+    ]);
+    expect(rec().fsmTransitionAudits.map((a) => a.actorType)).toEqual(['user', 'system', 'system']);
 
     // The write itself happened exactly once, at accept time, through FDH-5's
     // own unmodified services — re-fetching the SAME quarantined bytes.
