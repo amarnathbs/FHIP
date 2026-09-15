@@ -3,22 +3,22 @@
   "generatedBy": "tests/unit/m12bInsuranceAccuracyCorpus.test.ts",
   "summary": {
     "caseCount": 14,
-    "fieldPrecision": 0.9936305732484076,
-    "fieldRecall": 0.9936305732484076,
+    "fieldPrecision": 1,
+    "fieldRecall": 1,
     "economicPrecision": 1,
     "economicRecall": 0.8275862068965517,
-    "falseAcceptRate": 0.2222222222222222,
-    "falseAcceptCount": 2,
+    "falseAcceptRate": 0,
+    "falseAcceptCount": 0,
     "falseAcceptDenominator": 9,
-    "falseCanonicalWriteRate": 0.14285714285714285,
-    "falseCanonicalWriteCount": 2,
-    "totalUnexplainedOmissions": 1
+    "falseCanonicalWriteRate": 0,
+    "falseCanonicalWriteCount": 0,
+    "totalUnexplainedOmissions": 0
   },
   "cases": [
     {
       "caseId": "INS-B01",
       "scenario": "normal policy schedule",
-      "fieldTruePositives": 15,
+      "fieldTruePositives": 16,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -37,7 +37,7 @@
     {
       "caseId": "INS-B02",
       "scenario": "multi-page policy schedule",
-      "fieldTruePositives": 15,
+      "fieldTruePositives": 16,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -56,7 +56,7 @@
     {
       "caseId": "INS-B03",
       "scenario": "terminology variants",
-      "fieldTruePositives": 13,
+      "fieldTruePositives": 14,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -75,7 +75,7 @@
     {
       "caseId": "INS-B04",
       "scenario": "renewal notice with structured benefit fields",
-      "fieldTruePositives": 16,
+      "fieldTruePositives": 17,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -94,7 +94,7 @@
     {
       "caseId": "INS-B05",
       "scenario": "missing policy name requiring AI clarification",
-      "fieldTruePositives": 12,
+      "fieldTruePositives": 13,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -113,7 +113,7 @@
     {
       "caseId": "INS-B06",
       "scenario": "malformed policy — printed annual total contradicts the document's own premium",
-      "fieldTruePositives": 12,
+      "fieldTruePositives": 13,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -174,7 +174,7 @@
     {
       "caseId": "INS-B08",
       "scenario": "adversarial prompt-injection text",
-      "fieldTruePositives": 13,
+      "fieldTruePositives": 14,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -212,7 +212,7 @@
     {
       "caseId": "INS-B10",
       "scenario": "unsupported currency",
-      "fieldTruePositives": 12,
+      "fieldTruePositives": 13,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -231,7 +231,7 @@
     {
       "caseId": "INS-B11",
       "scenario": "ADDITIVE — multi-component policy the flag can see",
-      "fieldTruePositives": 11,
+      "fieldTruePositives": 12,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -273,28 +273,20 @@
     {
       "caseId": "INS-B12",
       "scenario": "ADDITIVE — money printed under an unrecognised label",
-      "fieldTruePositives": 11,
-      "fieldFalsePositives": 1,
-      "fieldFalseNegatives": 1,
-      "fieldPrecision": 0.9166666666666666,
-      "fieldRecall": 0.9166666666666666,
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
       "economicMatched": 2,
       "economicObserved": 2,
       "economicExpected": 3,
       "economicPrecision": 1,
       "economicRecall": 0.6666666666666666,
-      "unexplainedOmissions": [
-        "cover:2"
-      ],
-      "falseAccept": true,
-      "falseCanonicalWrite": true,
-      "fieldDisagreements": [
-        {
-          "fieldName": "multiComponentPolicyDetected",
-          "expected": "true",
-          "observed": "false"
-        }
-      ],
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
       "economicDisagreements": [
         {
           "key": "cover:2",
@@ -312,7 +304,7 @@
     {
       "caseId": "INS-B13",
       "scenario": "ADDITIVE — India / INR jurisdiction variant carrying PII, product name absent",
-      "fieldTruePositives": 14,
+      "fieldTruePositives": 15,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -331,7 +323,7 @@
     {
       "caseId": "INS-B14",
       "scenario": "ADDITIVE — renewal date printed in a non-ISO format",
-      "fieldTruePositives": 11,
+      "fieldTruePositives": 12,
       "fieldFalsePositives": 0,
       "fieldFalseNegatives": 0,
       "fieldPrecision": 1,
@@ -342,8 +334,8 @@
       "economicPrecision": 1,
       "economicRecall": 1,
       "unexplainedOmissions": [],
-      "falseAccept": true,
-      "falseCanonicalWrite": true,
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
       "fieldDisagreements": [],
       "economicDisagreements": []
     }
@@ -390,6 +382,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 14.4
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -462,6 +460,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 12.42
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -534,6 +538,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 14.4
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -606,6 +616,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 22.984
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -654,7 +670,10 @@
       ],
       "maskingSummaries": [
         {
-          "coverageByType": {},
+          "coverageByType": {
+            "policy_number": 1,
+            "person_name_label": 1
+          },
           "belowPolicy": false
         }
       ],
@@ -691,6 +710,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 11.61
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -753,6 +778,12 @@
           "outcome": "fail",
           "delta": 900,
           "tolerance": 18
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -833,6 +864,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 25.2
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -909,6 +946,11 @@
           "ruleId": "insurance_premium_totals_reconciled",
           "ruleVersion": "1",
           "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
         }
       ],
       "intakeStatusUpdates": [
@@ -971,6 +1013,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 21.6
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -1031,6 +1079,12 @@
           "ruleId": "insurance_premium_totals_reconciled",
           "ruleVersion": "1",
           "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -1047,19 +1101,25 @@
       "canonicalRowsWritten": []
     },
     "INS-B12": {
-      "observedTerminalStatus": "awaiting_acceptance",
+      "observedTerminalStatus": "unresolved",
       "observedRejectionReason": null,
       "passwordRequired": false,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "not_ready"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "aiOutcomes": [],
       "maskingSummaries": [],
-      "unresolvedItems": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:insurance_printed_fact_completeness",
+          "severity": "blocking"
+        }
+      ],
       "reconciliationResults": [
         {
           "ruleId": "insurance_document_class_supported",
@@ -1087,6 +1147,13 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 15.84
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "materiality": "printed_fact_unread"
         }
       ],
       "intakeStatusUpdates": [
@@ -1100,23 +1167,7 @@
       "binariesFinalized": [
         "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
       ],
-      "canonicalRowsWritten": [
-        {
-          "policy_name": "Fairwater Protect",
-          "cover_type": "life",
-          "cover_amount": 500000,
-          "premium": 132,
-          "premium_frequency": "monthly",
-          "currency_code": "AUD",
-          "renewal_date": "2027-10-10",
-          "waiting_period_days": null,
-          "benefit_period": null,
-          "provider": "Fairwater Life Group",
-          "owner": "self",
-          "master_item_key": null,
-          "notes": null
-        }
-      ]
+      "canonicalRowsWritten": []
     },
     "INS-B13": {
       "observedTerminalStatus": "unresolved",
@@ -1129,16 +1180,18 @@
       },
       "canonicalWritesDuringIntake": 0,
       "canonicalWritesAfterExplicitAccept": 0,
-      "aiCompletionAttempts": 0,
-      "aiOutcomes": [],
+      "aiCompletionAttempts": 1,
+      "aiOutcomes": [
+        "success"
+      ],
       "maskingSummaries": [
         {
           "coverageByType": {
-            "person_name_label": 1,
+            "policy_number": 1,
+            "person_name_label": 3,
             "address_label": 1,
             "aadhaar": 1,
             "tax_id": 1,
-            "bank_account": 1,
             "email": 1,
             "phone": 1
           },
@@ -1178,6 +1231,12 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 138
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
         }
       ],
       "intakeStatusUpdates": [
@@ -1194,19 +1253,25 @@
       "canonicalRowsWritten": []
     },
     "INS-B14": {
-      "observedTerminalStatus": "awaiting_acceptance",
+      "observedTerminalStatus": "unresolved",
       "observedRejectionReason": null,
       "passwordRequired": false,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "not_ready"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "aiOutcomes": [],
       "maskingSummaries": [],
-      "unresolvedItems": [],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:insurance_printed_fact_completeness",
+          "severity": "blocking"
+        }
+      ],
       "reconciliationResults": [
         {
           "ruleId": "insurance_document_class_supported",
@@ -1234,6 +1299,13 @@
           "outcome": "pass",
           "delta": 0,
           "tolerance": 7.71
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "materiality": "printed_fact_unread"
         }
       ],
       "intakeStatusUpdates": [
@@ -1247,23 +1319,7 @@
       "binariesFinalized": [
         "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
       ],
-      "canonicalRowsWritten": [
-        {
-          "policy_name": "Wattle Grove Motor Cover",
-          "cover_type": "vehicle",
-          "cover_amount": 38500,
-          "premium": 64.25,
-          "premium_frequency": "monthly",
-          "currency_code": "AUD",
-          "renewal_date": null,
-          "waiting_period_days": null,
-          "benefit_period": null,
-          "provider": "Wattle Grove Insurance",
-          "owner": "self",
-          "master_item_key": null,
-          "notes": null
-        }
-      ]
+      "canonicalRowsWritten": []
     },
     "CONTROL-corrupt-pdf": {
       "observedTerminalStatus": "rejected",
@@ -1302,11 +1358,16 @@
         ]
       },
       "INS-B13": {
-        "observedTerminalStatus": "threw",
-        "intakeThrew": "AIE_MASK_TOKEN_ENCRYPTION_KEY is not set or is not a 64-character hex string (32 bytes). It is required before any identifier can be tokenised — masking fails closed without it, which also means no AI fallback can run. S",
+        "observedTerminalStatus": "unresolved",
+        "intakeThrew": null,
         "canonicalWrites": 0,
         "aiCompletionAttempts": 0,
-        "unresolvedItems": []
+        "unresolvedItems": [
+          {
+            "reasonCode": "reconciliation_fail:insurance_required_fields_present",
+            "severity": "blocking"
+          }
+        ]
       },
       "note": "AIE_MASK_TOKEN_ENCRYPTION_KEY is unset in this environment and is a Product-Owner/operator-owned blocker; no workaround was attempted and no key was provisioned."
     }

@@ -11,11 +11,11 @@
 | INS-B09 | deferred sub-class (product disclosure statement) | 100.00% | 100.00% | n/a | n/a | 0 | no | no |
 | INS-B10 | unsupported currency | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | INS-B11 | ADDITIVE — multi-component policy the flag can see | 100.00% | 100.00% | 100.00% | 50.00% | 0 | no | no |
-| INS-B12 | ADDITIVE — money printed under an unrecognised label | 91.67% | 91.67% | 100.00% | 66.67% | 1 | **YES** | **YES** |
+| INS-B12 | ADDITIVE — money printed under an unrecognised label | 100.00% | 100.00% | 100.00% | 66.67% | 0 | no | no |
 | INS-B13 | ADDITIVE — India / INR jurisdiction variant carrying PII, product name absent | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
-| INS-B14 | ADDITIVE — renewal date printed in a non-ISO format | 100.00% | 100.00% | 100.00% | 100.00% | 0 | **YES** | **YES** |
-| **ALL 14** | — | **99.36%** | **99.36%** | **100.00%** | **82.76%** | **1** | **22.22%** | **14.29%** |
+| INS-B14 | ADDITIVE — renewal date printed in a non-ISO format | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
+| **ALL 14** | — | **100.00%** | **100.00%** | **100.00%** | **82.76%** | **0** | **0.00%** | **0.00%** |
 
-- unexplained economic omissions: **1**
-- false accept rate: **22.22%** (2 of 9 must-not-be-acceptable cases)
-- false canonical write rate: **14.29%** (2 of 14 cases)
+- unexplained economic omissions: **0**
+- false accept rate: **0.00%** (0 of 9 must-not-be-acceptable cases)
+- false canonical write rate: **0.00%** (0 of 14 cases)

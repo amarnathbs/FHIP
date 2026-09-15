@@ -68,4 +68,61 @@ describe('AIE-1.4 Insurance adapter — reconciliation rule', () => {
     const rule = buildInsuranceReconciliationRule();
     expect(rule.length).toBeLessThanOrEqual(1); // exactly one positional param: the request object
   });
+
+  // -------------------------------------------------------------------------
+  // M12B-F4 / M12B-F5 — `insurance_printed_fact_completeness`.
+  // -------------------------------------------------------------------------
+  describe('M12B — printed-fact completeness', () => {
+    it('a clean policy asserts completeness POSITIVELY rather than staying silent', () => {
+      const results = runRule(buildAieInsuranceFixtureText());
+      const r = results.find((x) => x.ruleId === 'insurance_printed_fact_completeness');
+      expect(r?.outcome).toBe('pass');
+      expect(r?.materiality).toBe('all_printed_facts_read');
+    });
+
+    it('money printed under a label the taxonomy does not recognise is reported indeterminate, not lost (M12B-F4)', () => {
+      const text = `${buildAieInsuranceFixtureText()}\nTrauma Cover: 150,000.00`;
+      const results = runRule(text);
+      const r = results.find((x) => x.ruleId === 'insurance_printed_fact_completeness');
+      expect(r?.outcome).toBe('indeterminate');
+      expect(r?.materiality).toBe('printed_fact_unread');
+      expect(r?.delta).toBe(1);
+      // And the other rules are untouched — "did the arithmetic close?" and
+      // "did we read everything?" stay two separate questions.
+      expect(outcomeFor(results, 'insurance_premium_totals_reconciled')).toBe('pass');
+      expect(outcomeFor(results, 'insurance_required_fields_present')).toBe('pass');
+    });
+
+    it('a NON-money value under an unrecognised label is NOT flagged — the rule is deliberately narrow', () => {
+      const text = `${buildAieInsuranceFixtureText()}\nBranch Reference: NORTH-4471\nCustomer Care: 1800 000 000`;
+      const results = runRule(text);
+      expect(outcomeFor(results, 'insurance_printed_fact_completeness')).toBe('pass');
+    });
+
+    it('a renewal date printed in an uncertified format is reported rather than silently dropped (M12B-F5)', () => {
+      const parsed = parseInsuranceDocument(buildAieInsuranceFixtureText({ renewalDate: '31/08/2027' }));
+      // Still never GUESSED at — no renewalDate candidate is invented.
+      expect(parsed.candidates.find((c) => c.fieldName === 'renewalDate')).toBeUndefined();
+      const evidence = parsed.candidates.find((c) => c.fieldName === 'unreadablePrintedFactEvidence');
+      expect(JSON.parse(evidence!.valueRaw as string)).toEqual([{ label: 'renewal date', reason: 'unsupported_date_format' }]);
+
+      const results = buildInsuranceReconciliationRule()({ runId: 'run-1', candidates: parsed.candidates });
+      expect(outcomeFor(results, 'insurance_printed_fact_completeness')).toBe('indeterminate');
+    });
+
+    it('an ABSENT completeness candidate fails CLOSED — a run from a pre-M12B parser must block, never sail through', () => {
+      // The entire defect was an absent signal being read as good news.
+      const parsed = parseInsuranceDocument(buildAieInsuranceFixtureText());
+      const withoutCandidate = parsed.candidates.filter((c) => c.fieldName !== 'unreadablePrintedFactCount');
+      const results = buildInsuranceReconciliationRule()({ runId: 'run-1', candidates: withoutCandidate });
+      const r = results.find((x) => x.ruleId === 'insurance_printed_fact_completeness');
+      expect(r?.outcome).toBe('indeterminate');
+      expect(r?.materiality).toBe('completeness_not_reported');
+    });
+
+    it('an out-of-scope document sub-class reports not_applicable — no noise on an already-rejected document', () => {
+      const results = runRule(buildAieInsurancePdsFixtureText());
+      expect(outcomeFor(results, 'insurance_printed_fact_completeness')).toBe('not_applicable');
+    });
+  });
 });

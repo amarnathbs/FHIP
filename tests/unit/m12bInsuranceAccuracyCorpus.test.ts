@@ -72,6 +72,7 @@ interface OracleCase {
   printedFactsNotExpectedInFields: Record<string, string>;
   expectedEconomic: OracleEconomic[];
   expectedReconciliation: Record<string, string>;
+  expectedUnreadablePrintedFacts?: { label: string; reason: string }[];
   expectedPremiumTotalDelta?: number;
   terminalRunStatus: string;
   expectedPasswordRequired?: boolean;
@@ -371,6 +372,18 @@ function candidateValue(fieldName: string): string | null | undefined {
   return found.isNull ? null : found.valueRaw;
 }
 
+/**
+ * The one field excluded from the precision/recall metric, and the exclusion is
+ * argued rather than convenient. `unreadablePrintedFactEvidence` is a JSON blob
+ * whose exact serialisation is an implementation detail; pinning it in the
+ * oracle would make the oracle agree with the code's formatting rather than
+ * with the document, which is the one thing a sealed oracle must never do. Its
+ * CONTENT is not unchecked — the oracle states which labels must appear in it
+ * and the driver asserts that directly (invariant 11), and the semantic
+ * `unreadablePrintedFactCount` stays fully inside the metric.
+ */
+const FIELD_EXCLUDED_FROM_METRIC = 'unreadablePrintedFactEvidence';
+
 /** Every field the system ASSERTED, in the harness's vocabulary. The
  * denominator of precision is what the system asserted, so this must be the
  * complete asserted set — not a curated subset. */
@@ -378,11 +391,20 @@ function observedFields(): FieldObservation[] {
   const seen = new Set<string>();
   const out: FieldObservation[] = [];
   for (const c of rec().fieldCandidates) {
+    if (c.fieldName === FIELD_EXCLUDED_FROM_METRIC) continue;
     if (seen.has(c.fieldName)) continue;
     seen.add(c.fieldName);
     out.push({ fieldName: c.fieldName, value: c.isNull ? null : c.valueRaw });
   }
   return out;
+}
+
+/** The labels the adapter reported it could not read, parsed back out of the
+ * evidence candidate. Never a guess at what they meant — a label and a reason. */
+function observedUnreadableFacts(): { label: string; reason: string }[] {
+  const raw = candidateValue(FIELD_EXCLUDED_FROM_METRIC);
+  if (raw === undefined || raw === null) return [];
+  return JSON.parse(raw) as { label: string; reason: string }[];
 }
 
 function expectedFields(o: OracleCase): FieldObservation[] {
@@ -548,6 +570,14 @@ describe('M12B.5 — Insurance accuracy certification against a sealed corpus', 
       // 10. A document that must not be accepted is genuinely blocked with at
       //     least one item a reviewer can act on — never merely "not accepted".
       expect(rec().unresolvedItems.filter((i) => i.severity === 'blocking').length).toBeGreaterThanOrEqual(o.minimumUnresolvedItemCount);
+
+      // 11. Every printed fact the adapter could not read is NAMED, and only
+      //     the ones the oracle says are genuinely unreadable. A reason code is
+      //     asserted alongside each label so "we could not read it" cannot
+      //     degrade into an unexplained flag.
+      if (o.expectedUnreadablePrintedFacts !== undefined) {
+        expect(observedUnreadableFacts()).toEqual(o.expectedUnreadablePrintedFacts);
+      }
     });
   }
 

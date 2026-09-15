@@ -23,7 +23,12 @@
 import type { ReconciliationHandoffRequest, ReconciliationRule } from '../../reconciliation/types';
 import type { AieFieldCandidate, AieReconciliationRunResult } from '../../types';
 import { isInsuranceDocumentClassCertified } from './documentCatalogue';
-import { INSURANCE_SUPPORTED_CURRENCIES, PERIODS_PER_YEAR, type InsurancePremiumFrequency } from './types';
+import {
+  INSURANCE_SUPPORTED_CURRENCIES,
+  INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD,
+  PERIODS_PER_YEAR,
+  type InsurancePremiumFrequency,
+} from './types';
 
 const RULE_VERSION = '1';
 
@@ -123,6 +128,58 @@ function premiumTotalsReconciledResult(fields: Map<string, string>): AieReconcil
   return { ruleId: 'insurance_premium_totals_reconciled', ruleVersion: RULE_VERSION, outcome, delta, tolerance };
 }
 
+export const RULE_PRINTED_FACT_COMPLETENESS = 'insurance_printed_fact_completeness';
+
+/**
+ * M12B (M12B-F4 / M12B-F5) — ITS OWN RULE, asking its own question.
+ *
+ * *"Did the arithmetic close?"* and *"did we read everything the policy
+ * printed?"* are two questions, and the answer to one must never be read off
+ * the other. INS-B12's premium arithmetic closes to the cent while 150,000.00
+ * of printed cover is missing, and INS-B14 reconciles perfectly with its
+ * renewal date gone — both reached `awaiting_acceptance` and both wrote an
+ * incomplete policy on an explicit accept. So the existing rules are untouched
+ * and this is added alongside them.
+ *
+ * Three deliberate choices, each one mirroring M12A-F1's own resolution on
+ * FDH-bank because the defect is the same shape:
+ *
+ *  1. `indeterminate`, NEVER `fail`. This adapter does not know the unread
+ *     facts are WRONG — only that it could not read them, which is precisely
+ *     what INDETERMINATE means everywhere else in this file.
+ *  2. Emitted even at zero, as an explicit `pass`. A positive assertion beats
+ *     silence, and the blocking item is produced by AIE-1.1 core's own
+ *     unchanged `blockingItemsForReconciliation`, so no second exception
+ *     channel is introduced (P7).
+ *  3. An ABSENT candidate is `indeterminate`, not `pass`. The entire defect was
+ *     an absent signal being read as good news, so a run produced by a
+ *     pre-M12B parser must block rather than sail through.
+ */
+function printedFactCompletenessResult(fields: Map<string, string>): AieReconciliationRunResult {
+  // Only meaningful once the document class itself is a supported one. An
+  // out-of-scope sub-class is already reported by `documentClassSupportedResult`
+  // and its parser returns before any line is read, so there is nothing to be
+  // complete ABOUT — reporting an unread-fact item on top would just be noise
+  // on an already-rejected document. Same reasoning, and same shape, as
+  // `requiredFieldsPresentResult` above.
+  const subClass = fields.get('documentSubClass');
+  if (!subClass || !isInsuranceDocumentClassCertified(subClass)) {
+    return { ruleId: RULE_PRINTED_FACT_COMPLETENESS, ruleVersion: RULE_VERSION, outcome: 'not_applicable' };
+  }
+  const raw = fields.get(INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD);
+  if (raw === undefined) {
+    return { ruleId: RULE_PRINTED_FACT_COMPLETENESS, ruleVersion: RULE_VERSION, outcome: 'indeterminate', materiality: 'completeness_not_reported' };
+  }
+  const count = Number(raw);
+  if (!Number.isFinite(count) || count < 0) {
+    return { ruleId: RULE_PRINTED_FACT_COMPLETENESS, ruleVersion: RULE_VERSION, outcome: 'indeterminate', materiality: 'completeness_not_reported' };
+  }
+  if (count === 0) {
+    return { ruleId: RULE_PRINTED_FACT_COMPLETENESS, ruleVersion: RULE_VERSION, outcome: 'pass', materiality: 'all_printed_facts_read' };
+  }
+  return { ruleId: RULE_PRINTED_FACT_COMPLETENESS, ruleVersion: RULE_VERSION, outcome: 'indeterminate', delta: count, materiality: 'printed_fact_unread' };
+}
+
 export function buildInsuranceReconciliationRule(): ReconciliationRule {
   return (req: ReconciliationHandoffRequest): AieReconciliationRunResult[] => {
     const fields = fieldMap(req.candidates);
@@ -132,6 +189,7 @@ export function buildInsuranceReconciliationRule(): ReconciliationRule {
       currencySupportedResult(fields),
       multiComponentResult(fields),
       premiumTotalsReconciledResult(fields),
+      printedFactCompletenessResult(fields),
     ];
   };
 }

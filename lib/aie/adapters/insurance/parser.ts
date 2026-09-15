@@ -22,7 +22,14 @@ import { aieParserRegistry } from '../../classifier/registry';
 import type { AieFieldCandidate } from '../../types';
 import { matchInsuranceLabel } from './labels';
 import { isInsuranceDocumentClassCertified } from './documentCatalogue';
-import { INSURANCE_COVER_TYPES, INSURANCE_PREMIUM_FREQUENCIES, type InsuranceCoverType, type InsurancePremiumFrequency } from './types';
+import {
+  INSURANCE_COVER_TYPES,
+  INSURANCE_PREMIUM_FREQUENCIES,
+  INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD,
+  INSURANCE_UNREADABLE_PRINTED_FACT_EVIDENCE_FIELD,
+  type InsuranceCoverType,
+  type InsurancePremiumFrequency,
+} from './types';
 
 export const INSURANCE_ADAPTER_ID = 'insurance_generic_schedule_v1';
 export const INSURANCE_ADAPTER_VERSION = '1';
@@ -86,6 +93,29 @@ function normaliseFrequency(raw: string): InsurancePremiumFrequency | null {
   return (INSURANCE_PREMIUM_FREQUENCIES as readonly string[]).includes(v) ? (v as InsurancePremiumFrequency) : null;
 }
 
+/**
+ * M12B (M12B-F4). Is this value a printed MONEY figure?
+ *
+ * Deliberately requires an explicit decimal fraction (or a currency symbol),
+ * so that ordinary bare integers a policy prints under unrecognised labels —
+ * `Page 1 of 3`, `Branch Code: 4471`, `Version: 2` — are not mistaken for
+ * amounts. An insurer prints a money figure with its cents. Grouping
+ * separators are allowed in both Western (`1,234,567.89`) and Indian
+ * (`12,50,000.00`) conventions, because this adapter is certified for AUD and
+ * INR alike.
+ */
+function isMoneyShaped(value: string): boolean {
+  const trimmed = value.trim();
+  if (/^[$₹]\s*[\d,]+(\.\d{1,2})?$/.test(trimmed)) return true;
+  return /^[\d,]*\d\.\d{2}$/.test(trimmed);
+}
+
+/** Evidence is a LABEL, never a value — bounded so a malformed document
+ * cannot push an unbounded span into a candidate row. */
+function normaliseForEvidence(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').slice(0, 60);
+}
+
 function extractNumber(raw: string): number | null {
   const cleaned = raw.replace(/[,$]/g, '').match(/-?\d+(\.\d+)?/);
   return cleaned ? Number(cleaned[0]) : null;
@@ -134,6 +164,10 @@ export function parseInsuranceDocument(extractedText: string): DeterministicPars
 
   const lines = extractedText.split(/\r?\n/);
   const fieldOccurrences = new Map<string, string[]>();
+  // M12B (M12B-F4) — printed facts this adapter could not read. Never a guess
+  // at what they meant; see types.ts's header for the two cases that made this
+  // necessary.
+  const unreadablePrintedFacts: { label: string; reason: string }[] = [];
   for (const line of lines) {
     const idx = line.indexOf(':');
     if (idx <= 0) continue;
@@ -141,7 +175,24 @@ export function parseInsuranceDocument(extractedText: string): DeterministicPars
     const value = line.slice(idx + 1).trim();
     if (!value) continue;
     const field = matchInsuranceLabel(label);
-    if (!field) continue; // unrecognised label — never guessed at (AIE14-INS-10)
+    if (!field) {
+      // Unrecognised label — still never guessed at (AIE14-INS-10). But an
+      // unrecognised label carrying MONEY is recorded, because that is the
+      // case where staying silent loses value off the document.
+      //
+      // DELIBERATELY NARROW, and the narrowness is the design. A policy
+      // document prints many unrecognised labelled lines that carry nothing
+      // economic — branch details, correspondence references, marketing
+      // footers — and flagging every one would be uselessly noisy and would
+      // train a reviewer to dismiss the signal. The claim made here is only
+      // the precise one worth a reviewer's attention: "this document printed a
+      // money figure under a label I do not understand, and I did not read
+      // it."
+      if (isMoneyShaped(value)) {
+        unreadablePrintedFacts.push({ label: normaliseForEvidence(label), reason: 'unrecognised_label_with_money_value' });
+      }
+      continue;
+    }
     const existing = fieldOccurrences.get(field) ?? [];
     existing.push(value);
     fieldOccurrences.set(field, existing);
@@ -181,6 +232,22 @@ export function parseInsuranceDocument(extractedText: string): DeterministicPars
   const renewalDateRaw = first('renewalDate');
   if (renewalDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(renewalDateRaw.trim())) {
     candidates.push(candidate('renewalDate', renewalDateRaw.trim()));
+  } else if (renewalDateRaw) {
+    // M12B (M12B-F5). The document PRINTED a renewal date and this adapter
+    // cannot read the format. Before M12B that was simply dropped: no
+    // candidate, no warning, and — because `renewalDate` is not in
+    // INSURANCE_REQUIRED_FIELDS and no reconciliation rule mentions it — the
+    // run sailed to `awaiting_acceptance` and wrote `renewal_date: null`.
+    // INS-B14 (`31/08/2027`) is that case.
+    //
+    // THE FIX IS TO REPORT IT, NOT TO PARSE MORE FORMATS, and that is a
+    // deliberate choice rather than a lazy one. `31/08/2027` happens to be
+    // unambiguous because 31 cannot be a month, but `05/08/2027` is not, and a
+    // parser that accepted the family would have to GUESS between DD/MM and
+    // MM/DD on exactly the dates where guessing wrong is invisible. Renewal
+    // date drives cover-lapse and reminder behaviour, so a wrong one is worse
+    // than an absent one. Reporting the gap is not the same act as filling it.
+    unreadablePrintedFacts.push({ label: 'renewal date', reason: 'unsupported_date_format' });
   }
 
   const waitingPeriodRaw = first('waitingPeriodDays');
@@ -209,6 +276,15 @@ export function parseInsuranceDocument(extractedText: string): DeterministicPars
   const annualPremiumTotalRaw = first('annualPremiumTotal');
   const annualPremiumTotal = annualPremiumTotalRaw ? extractNumber(annualPremiumTotalRaw) : null;
   if (annualPremiumTotal !== null) candidates.push(candidate('printedAnnualPremiumTotal', String(annualPremiumTotal)));
+
+  // M12B (M12B-F4/F5) — EMITTED EVEN AT ZERO, as an explicit statement that
+  // every printed fact was read, exactly as M12A's own row-completeness
+  // candidate is. A positive assertion beats silence: a future change that
+  // stops emitting this candidate then fails loudly in reconciliation (which
+  // treats an ABSENT candidate as indeterminate) instead of quietly restoring
+  // the old behaviour, which was the whole defect.
+  candidates.push(candidate(INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD, String(unreadablePrintedFacts.length)));
+  candidates.push(candidate(INSURANCE_UNREADABLE_PRINTED_FACT_EVIDENCE_FIELD, JSON.stringify(unreadablePrintedFacts)));
 
   const requiredPresent = Boolean(productName) && coverAmount !== null && premium !== null && Boolean(frequency) && Boolean(currencyRaw);
 

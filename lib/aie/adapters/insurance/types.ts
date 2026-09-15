@@ -27,6 +27,40 @@ export const CANONICAL_INSURANCE_FIELD_NAMES = [
 ] as const;
 export type CanonicalInsuranceFieldName = (typeof CANONICAL_INSURANCE_FIELD_NAMES)[number];
 
+/**
+ * M12B (M12B-F4 / M12B-F5) — the two candidates below exist so that a fact the
+ * document PRINTED but this adapter could not read is reported rather than
+ * silently dropped.
+ *
+ * WHY THEY WERE NEEDED, from two cases that both wrote an incomplete policy to
+ * the canonical table after an explicit accept:
+ *
+ *   INS-B12 printed `Trauma Cover: 150,000.00`. `Trauma Cover` matches no rule
+ *   in `labels.ts`, so the line was ignored — correctly, because AIE14-INS-10
+ *   forbids guessing a bucket for an unrecognised label. But
+ *   `multiComponentPolicyDetected` counts occurrences of RECOGNISED coverAmount
+ *   and premium labels, so it had nothing to count, every required field was
+ *   present, every rule passed, and 150,000.00 of printed cover disappeared
+ *   without a word.
+ *
+ *   INS-B14 printed `Renewal Date: 31/08/2027`. The parser admits a renewal
+ *   date only when it already matches `^\d{4}-\d{2}-\d{2}$`, and `renewalDate`
+ *   is not a required field, so the date was dropped, nothing noticed, and the
+ *   canonical row was written with `renewal_date: null`.
+ *
+ * THIS IS THE SAME DEFECT SHAPE AS M12A-F1 ON FDH-BANK, and it is fixed the
+ * same way, deliberately: the parser already KNEW in both cases, and the
+ * knowledge never reached the one place that decides whether a run may be
+ * accepted, because `ReconciliationRule` receives candidates only.
+ *
+ * NEITHER CANDIDATE EVER GUESSES A VALUE. The evidence records WHICH label and
+ * WHY it could not be read — never what it might have meant. Inventing a
+ * bucket, a date or an amount is exactly what AIE14-INS-10 forbids, and
+ * reporting the gap is not the same act as filling it.
+ */
+export const INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD = 'unreadablePrintedFactCount';
+export const INSURANCE_UNREADABLE_PRINTED_FACT_EVIDENCE_FIELD = 'unreadablePrintedFactEvidence';
+
 export const EVIDENCE_ONLY_INSURANCE_FIELD_NAMES = [
   'documentSubClass',
   'policyNumberMasked',
@@ -37,6 +71,8 @@ export const EVIDENCE_ONLY_INSURANCE_FIELD_NAMES = [
   'excessAmount',
   'printedAnnualPremiumTotal',
   'multiComponentPolicyDetected',
+  INSURANCE_UNREADABLE_PRINTED_FACT_COUNT_FIELD,
+  INSURANCE_UNREADABLE_PRINTED_FACT_EVIDENCE_FIELD,
 ] as const;
 export type EvidenceOnlyInsuranceFieldName = (typeof EVIDENCE_ONLY_INSURANCE_FIELD_NAMES)[number];
 

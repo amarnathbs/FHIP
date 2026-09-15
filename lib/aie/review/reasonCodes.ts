@@ -102,6 +102,32 @@ export const INSURANCE_REASON_CODES: Record<string, AieReasonCodeMeta> = {
       { fieldName: 'premiumFrequency', label: 'Premium frequency', type: 'enum', enumValues: ['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off'] },
     ],
   },
+  // M12B-F4 / M12B-F5. Registered with real copy rather than left to
+  // GENERIC_FALLBACK_REASON_META, for the same reason M12A registered its
+  // FDH-bank counterpart: the generic text ("our automatic checks could not
+  // confirm this document is safe to accept as-is") gives a reviewer nothing
+  // to act on, and this condition has a precise, actionable meaning — we read
+  // the policy, and something it printed we could not read.
+  //
+  // The wording deliberately does NOT say the unread facts are wrong; we do
+  // not know that. The evidence attached to the item names WHICH label and
+  // WHY, never a guess at what it meant.
+  //
+  // `correct` is offered on renewalDate specifically: the commonest instance
+  // of this item is a renewal date printed in a format this reader has not
+  // been certified against, which a human can read off the document at a
+  // glance and type in unambiguously — whereas the reader must not guess
+  // between DD/MM and MM/DD on the reviewer's behalf. Where the unread fact is
+  // an unrecognised money label instead, the reviewer still has
+  // reject/reprocess, and the evidence names the label.
+  insurance_printed_fact_completeness: {
+    humanQuestion: 'Something printed on this policy could not be read.',
+    explanation:
+      'This document prints a detail we were unable to read reliably — for example a renewal date in a format we have not been certified against, or a money amount under a heading we do not recognise. The rest of the policy may still reconcile perfectly, so this is not the same as the figures being wrong: it means the saved policy would be INCOMPLETE. We will not guess at what it said.',
+    severity: 'blocking',
+    allowedActions: ['correct', 'reject_document', 'request_reprocessing'],
+    correctableFields: [{ fieldName: 'renewalDate', label: 'Renewal date', type: 'date' }],
+  },
 };
 
 // ---------------------------------------------------------------------------
