@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15T11:41:41.007Z",
+  "generatedAt": "2026-09-15T18:58:44.057Z",
   "host": "vqycarelcoijzwlpkpcz.supabase.co",
   "pass": 19,
   "fail": 0,
@@ -27,7 +27,7 @@
       "description": "Disposable synthetic tenant created (real createUser + real password sign-in)",
       "status": "PASS",
       "detail": {
-        "id": "f0baee8b-8063-48b3-8340-89b56408abe8"
+        "id": "4e8fad92-ee34-4265-bbfb-0d8ba54e927a"
       }
     },
     {
@@ -36,7 +36,7 @@
       "status": "PASS",
       "detail": {
         "httpStatus": 200,
-        "body": "[{\"user_id\":\"f0baee8b-8063-48b3-8340-89b56408abe8\",\"full_name\":null,\"date_of_birth\":null,\"country_of_residence\":\"IN\",\"secondary_country\":null,\"preferred_currency\":\"INR\",\"employment_status\":null,\"onboa"
+        "body": "[{\"user_id\":\"4e8fad92-ee34-4265-bbfb-0d8ba54e927a\",\"full_name\":null,\"date_of_birth\":null,\"country_of_residence\":\"IN\",\"secondary_country\":null,\"preferred_currency\":\"INR\",\"employment_status\":null,\"onboa"
       }
     },
     {
@@ -44,7 +44,7 @@
       "description": "The user holds ONE fund position worth exactly 1000000 INR",
       "status": "PASS",
       "detail": {
-        "investmentId": "f6b77ddc-2267-4c39-adc6-759da2fb5213"
+        "investmentId": "6b362c36-9f54-448b-a430-9635422c9aa8"
       }
     },
     {
@@ -67,7 +67,7 @@
       "detail": {
         "httpStatus": 201,
         "insertedLines": 9,
-        "snapshotId": "c89da56c-eee1-4833-a051-324d7d4513cf"
+        "snapshotId": "5f94a41c-1417-454f-a71d-519b42eb0377"
       }
     },
     {

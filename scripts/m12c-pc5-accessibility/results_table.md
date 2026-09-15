@@ -1,6 +1,6 @@
 # M12C §16 — PC5 accessibility (`M5-OPEN-1`)
 
-Ran 2026-09-15T17:54:44.640Z against http://localhost:3958, database `vqycarelcoijzwlpkpcz.supabase.co`.
+Ran 2026-09-15T19:14:25.027Z against http://localhost:3958, database `vqycarelcoijzwlpkpcz.supabase.co`.
 Tool: `@axe-core/playwright`, tags `wcag2a` + `wcag2aa`, against the real rendered DOM of a real running app.
 
 ## Automated axe results, per state

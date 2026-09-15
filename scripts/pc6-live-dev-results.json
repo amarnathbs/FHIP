@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-09-15T11:48:57.042Z",
+  "ranAt": "2026-09-15T19:02:14.371Z",
   "asOf": "2026-09-15",
   "pass": 41,
   "fail": 0,
@@ -8,7 +8,7 @@
       "id": "PC6-LD-01",
       "verdict": "PASS",
       "label": "the configured AMFI endpoint is genuinely reachable and returns a plausible full-universe file",
-      "evidence": "url=https://portal.amfiindia.com/spages/NAVAll.txt http=200 bytes=1519199 licence=public_open"
+      "evidence": "url=https://portal.amfiindia.com/spages/NAVAll.txt http=200 bytes=1519064 licence=public_open"
     },
     {
       "id": "PC6-LD-02",
@@ -20,7 +20,7 @@
       "id": "PC6-LD-03",
       "verdict": "PASS",
       "label": "the raw source is fingerprinted (byte length + sha256 + retrieval time)",
-      "evidence": "sha256=c43c3d5ebcc6805d2792db0d645ec62ff6ea98a84026baf0ec10668d6a9a04c5 bytes=1519199 retrievedAt=2026-09-15T11:48:50.921Z"
+      "evidence": "sha256=f219735bab05e21b6d8d01c79eb5dc9d583f387736187d46e550f8bbb8ac5f09 bytes=1519064 retrievedAt=2026-09-15T19:02:07.996Z"
     },
     {
       "id": "PC6-LD-04",
@@ -134,7 +134,7 @@
       "id": "PC6-LD-22",
       "verdict": "PASS",
       "label": "staleness is judged PER SERIES, not per file — the same download contains both fresh and 18-year-stale rows",
-      "evidence": "newest row 2026-09-14 -> fresh (1d); oldest row 2008-10-02 -> stale (6557d); threshold 4d"
+      "evidence": "newest row 2026-09-15 -> fresh (0d); oldest row 2008-10-02 -> stale (6557d); threshold 4d"
     },
     {
       "id": "PC6-LD-23",
@@ -164,7 +164,7 @@
       "id": "PC6-LD-27",
       "verdict": "PASS",
       "label": "statement NAV and PC6 market NAV are presented side by side, each with its own as-of date",
-      "evidence": "Statement NAV 412.5500 as at 2026-03-31; market NAV 418.9100 as at 2026-09-14 (source: amfi)."
+      "evidence": "Statement NAV 412.5500 as at 2026-03-31; market NAV 418.9100 as at 2026-09-15 (source: amfi)."
     },
     {
       "id": "PC6-LD-28",
@@ -188,7 +188,7 @@
       "id": "PC6-LD-31",
       "verdict": "PASS",
       "label": "backoff is honoured, and is bounded rather than unbounded",
-      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T12:48:56.142Z"
+      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T20:02:13.579Z"
     },
     {
       "id": "PC6-LD-32",

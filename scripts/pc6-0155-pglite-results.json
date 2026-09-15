@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-09-15T11:48:12.290Z",
+  "ranAt": "2026-09-15T18:58:08.741Z",
   "migrationsReplayed": 151,
   "pass": 30,
   "fail": 0,
@@ -32,7 +32,7 @@
       "id": "PC6-PG-05",
       "verdict": "PASS",
       "label": "a forward-dated NAV is refused by the database",
-      "detail": "PC6: NAV date 2026-10-15 is in the future (today is 2026-09-15). Reference prices are never forward-dated."
+      "detail": "PC6: NAV date 2026-10-16 is in the future (today is 2026-09-16). Reference prices are never forward-dated."
     },
     {
       "id": "PC6-PG-06",

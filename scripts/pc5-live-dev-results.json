@@ -1,6 +1,6 @@
 {
   "mode": "FULL",
-  "ranAt": "2026-09-15T11:45:43.997Z",
+  "ranAt": "2026-09-15T19:00:51.682Z",
   "tally": {
     "PASS": 54,
     "FAIL": 0,
@@ -39,8 +39,8 @@
       "description": "two real disposable DEV users created with real password sign-in",
       "status": "PASS",
       "detail": {
-        "owner": "bd2dfd1d-77e1-4d41-955b-06702fff6178",
-        "attacker": "a5927cc9-cf0f-4093-8178-afc9f3f540c4"
+        "owner": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339",
+        "attacker": "b2b67fc3-2774-423d-9978-df13210a3870"
       }
     },
     {
@@ -49,11 +49,11 @@
       "description": "household populated with self, spouse, partner, child and dependant",
       "status": "PASS",
       "detail": {
-        "selfId": "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
-        "spouseId": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
-        "partnerId": "0fc85e13-1939-46a2-a945-195f0bbd01df",
-        "childId": "11002e4f-16ad-4856-acf9-83bf17017e7c",
-        "dependantId": "91f895fd-3568-49d9-b84d-efcefa9fdbd3"
+        "selfId": "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+        "spouseId": "2c71185e-73b8-4826-b57c-a2785321fc43",
+        "partnerId": "45739d2f-7bf1-43b2-ab58-ebb4d84d826b",
+        "childId": "4218b2cd-56a8-40d9-91e9-8d700734b2ac",
+        "dependantId": "4b773b1c-063c-4f99-afec-d6e0d577c498"
       }
     },
     {
@@ -105,7 +105,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
+        "memberId": "1e1362d1-4e76-495c-9533-aa3be34c6b10",
         "maskedHolderName": "M** A*** S*****"
       }
     },
@@ -119,11 +119,11 @@
         "maskedHolderName": "V***** R**",
         "maskedJointHolders": [],
         "candidateMemberIds": [
-          "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
-          "b437761b-0613-4f84-b6b0-a9a695f7e2df",
-          "11002e4f-16ad-4856-acf9-83bf17017e7c",
-          "0fc85e13-1939-46a2-a945-195f0bbd01df",
-          "91f895fd-3568-49d9-b84d-efcefa9fdbd3"
+          "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+          "2c71185e-73b8-4826-b57c-a2785321fc43",
+          "4218b2cd-56a8-40d9-91e9-8d700734b2ac",
+          "45739d2f-7bf1-43b2-ab58-ebb4d84d826b",
+          "4b773b1c-063c-4f99-afec-d6e0d577c498"
         ]
       }
     },
@@ -134,7 +134,7 @@
       "status": "PASS",
       "detail": {
         "kind": "exact_match",
-        "memberId": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+        "memberId": "2c71185e-73b8-4826-b57c-a2785321fc43",
         "maskedHolderName": "P**** S*****"
       }
     },
@@ -160,8 +160,8 @@
           "P**** S*****"
         ],
         "matchedMemberIds": [
-          "1372a717-23ca-4ae5-8454-6cb1ee4efd5e",
-          "b437761b-0613-4f84-b6b0-a9a695f7e2df"
+          "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+          "2c71185e-73b8-4826-b57c-a2785321fc43"
         ]
       }
     },
@@ -205,7 +205,7 @@
       "description": "ACTIONABLE DEEP LINK — the item projects a link to its own case, not to a statement list",
       "status": "PASS",
       "detail": {
-        "href": "/investment-intelligence/resolutions/7a8e427e-2cb3-4685-8916-a7ab501d2499"
+        "href": "/investment-intelligence/resolutions/c21fe53a-1661-4648-8e4d-9621f223e144"
       }
     },
     {
@@ -332,8 +332,8 @@
         "decision": {
           "decision_type": "pc5_choose_value",
           "correction_field_name": "ownerMemberId",
-          "correction_value_normalized": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
-          "actor_id": "bd2dfd1d-77e1-4d41-955b-06702fff6178"
+          "correction_value_normalized": "2c71185e-73b8-4826-b57c-a2785321fc43",
+          "actor_id": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339"
         },
         "reReconciliation": {
           "ran": true,
@@ -341,7 +341,7 @@
           "openBlockingItemCount": 0,
           "newItemIds": [],
           "resolvedItemIds": [
-            "7a8e427e-2cb3-4685-8916-a7ab501d2499"
+            "c21fe53a-1661-4648-8e4d-9621f223e144"
           ]
         }
       }
@@ -354,9 +354,8 @@
       "detail": {
         "decisionRows": 1,
         "first": "ok",
-        "second": "ok",
-        "firstDetail": null,
-        "secondDetail": null
+        "second": "stale_conflict",
+        "firstDetail": null
       }
     },
     {
@@ -417,10 +416,10 @@
         "runStatus": "unresolved",
         "openBlockingItemCount": 1,
         "newItemIds": [
-          "fea1d2df-4b53-4366-94df-ad86f8594456"
+          "996066b9-cf05-496d-8eb3-99dbbd77adcf"
         ],
         "resolvedItemIds": [
-          "8aceac25-e013-4bec-9e1f-a42cb16510d6"
+          "9495c5bb-e556-4b38-b29d-b6371d6ef792"
         ]
       }
     },
@@ -457,11 +456,11 @@
           "originalValueIsRecoverable": false,
           "parserVersionAtDecision": "live-matrix-1",
           "decisionType": "pc5_choose_value",
-          "userValue": "b437761b-0613-4f84-b6b0-a9a695f7e2df",
+          "userValue": "2c71185e-73b8-4826-b57c-a2785321fc43",
           "reason": null,
-          "actorId": "bd2dfd1d-77e1-4d41-955b-06702fff6178",
-          "decidedAt": "2026-09-15T11:44:23.174899+00:00",
-          "resultingReconciliationAt": "2026-09-15T11:44:25.048+00:00"
+          "actorId": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339",
+          "decidedAt": "2026-09-15T18:59:40.387854+00:00",
+          "resultingReconciliationAt": "2026-09-15T18:59:41.693+00:00"
         }
       }
     },
@@ -483,7 +482,7 @@
       "detail": {
         "activeRows": 2,
         "supersededRows": 2,
-        "newGroup": "aa1de6e3-d836-4b7c-9eff-30b6122853eb"
+        "newGroup": "9091a473-10f0-4f53-93a8-984b2d6bbdfc"
       }
     },
     {
@@ -512,7 +511,7 @@
       "description": "CROSS-TENANT ALLOCATION REFUSED AT THE DATABASE — a real member id belonging to someone else is rejected by the trigger",
       "status": "PASS",
       "detail": {
-        "error": "ii_ownership_allocation.owner_member_id does not belong to user_id bd2dfd1d-77e1-4d41-955b-06702fff6178"
+        "error": "ii_ownership_allocation.owner_member_id does not belong to user_id 6111d0a2-1b0d-4267-9ba3-fbba2bda2339"
       }
     },
     {
@@ -612,7 +611,7 @@
           "status": "deleted",
           "storage_key": null,
           "purge_status": "purged",
-          "purged_at": "2026-09-15T11:45:25.415+00:00"
+          "purged_at": "2026-09-15T19:00:34.485+00:00"
         }
       }
     },

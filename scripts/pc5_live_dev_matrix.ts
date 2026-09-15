@@ -64,8 +64,20 @@ import path from 'node:path';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const repoRoot = path.resolve(__dirname, '..');
+// M12E: an agent worktree has no `.env.local` of its own, and this mission's
+// standing discipline is that none is ever CREATED in a worktree (no secret is
+// written to any persisted config file). So the shared checkout's copy is used
+// as a fallback — the identical two-candidate pattern
+// `scripts/pc6_live_dev_matrix.ts` and `scripts/pc7_networth_safety_live_dev.mjs`
+// already use. No credential is copied, printed or committed.
+const ENV_CANDIDATES = [path.join(repoRoot, '.env.local'), path.join('D:', 'FHIP', '.env.local')];
 function loadEnv(): Record<string, string> {
-  const raw = fs.readFileSync(path.join(repoRoot, '.env.local'), 'utf8').replace(/^﻿/, '');
+  const envPath = ENV_CANDIDATES.find((p) => fs.existsSync(p));
+  if (!envPath) {
+    console.error('REFUSING: no .env.local found in the worktree or the shared checkout.');
+    process.exit(1);
+  }
+  const raw = fs.readFileSync(envPath, 'utf8').replace(/^﻿/, '');
   const env: Record<string, string> = {};
   for (const line of raw.split(/\r?\n/)) {
     const m = line.match(/^([A-Za-z0-9_]+)=(.*)$/);
