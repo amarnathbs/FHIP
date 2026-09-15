@@ -931,16 +931,26 @@ applied.
 | PC5's own tests | **10 files / 220 tests, all passing** |
 | Typecheck | `tsc --noEmit` clean |
 
+**What the 16 baseline failures actually are** — worth stating so a later phase does not
+inherit "16 files fail" as an opaque fact:
+
+| Kind | Files | Failing assertions |
+|---|---|---|
+| Suite fails at **collection** time — `supabaseUrl is required` / `NEXT_PUBLIC_SUPABASE_URL resolves to ""`. These are live-DEV suites that need DEV env vars a plain `npx vitest run` does not supply. **Environmental, not defects.** | 9 (`resources*`) | 0 |
+| Genuine assertion failures, all pre-existing and all in SMSF/debt-ratio/isolation territory, none touched by PC5 | 7 | 22 |
+
 One route-manifest test **did** fail on first run (`app/api/pc5` had no `ModuleKey` mapping)
 and was fixed by mapping PC5 to `INVESTMENT_INTELLIGENCE` — mapped rather than added to the
 infra allowlist alongside `aie`, because `aie` is genuinely cross-domain while every PC5 route
 today is II-specific.
 
-*Disclosure:* one intermediate full-suite run reported 17 files / 23 tests. A JSON-reporter run
-and two subsequent plain runs all reported 16 / 22, and the 17th file in that run was one of
-the nine `resources*` suites that fail at **collection** time (0 failing assertions — an import
-failure, not an assertion failure). Treated as a transient in that environment, and recorded
-here rather than omitted.
+*Disclosure on run variance.* Two intermediate full-suite runs reported 17/23 and 19/25. Both
+occurred while another heavy process (the live-DEV matrix, or `next build`) was running
+concurrently on the same machine. **Five subsequent runs — one with the JSON reporter and four
+plain, none concurrent with anything else — all reported exactly 16 files / 22 tests**, and
+the extra files in the outlier runs were `resources*` suites failing at collection time
+(0 failing assertions), i.e. the same environmental class as the nine above. Attributed to
+resource contention, and recorded here rather than omitted.
 
 PC4's 19-invariant regression contract is not broken. PC5 **advances** two of its named gaps:
 **CG-2** ("owner *mismatch* is not implemented at all; `holderName` is parsed and discarded")
