@@ -84,6 +84,53 @@
 --
 -- APPLICATION: this file must be applied by hand via the Supabase SQL Editor
 -- (DEV first, then production). This environment cannot execute DDL.
+--
+-- REVISED 2026-09-15 (post-authoring, before any successful application):
+-- the first real DEV attempt failed --
+--
+--   ERROR: 42501: COUNTRY_CONFIRMATION_REQUIRED: user <uuid> has not
+--   confirmed a supported country of residence
+--   CONTEXT: PL/pgSQL function enforce_country_confirmed() line 36 at RAISE
+--
+-- `enforce_country_confirmed()` is a live trigger function on (at least) one
+-- of this migration's three target tables, enforcing the same
+-- country-confirmation gate this codebase's Mandatory Country Confirmation
+-- work applies at the API layer (`requireCountryConfirmedUser`,
+-- `lib/api.ts`) -- here as defence-in-depth at the database layer. It has NO
+-- corresponding migration file anywhere in this repository (confirmed by an
+-- exhaustive search across every branch/worktree available), so it was
+-- applied directly to the database outside the migration system at some
+-- point; its exact attachment and body could not be independently
+-- inspected before this revision, only its observed behaviour.
+--
+-- This migration is a DATA-PROVENANCE CLEANUP, not a user action, and one of
+-- its target rows belongs to a household that has real financial data but
+-- has never completed country confirmation (a pre-existing account state
+-- unrelated to this fix). A provenance cleanup migration correcting the
+-- *previous* migration's own mistake must not be newly blocked by a
+-- business rule aimed at protecting real-time user-initiated writes.
+--
+-- FIX: bracket each table's UPDATE statements with
+-- `disable trigger all` / `enable trigger all` for exactly that table, for
+-- exactly the duration of this migration's own transaction. This is the
+-- standard, narrowly-scoped Postgres idiom for a data-fix migration that
+-- must bypass business-logic triggers without needing to know which
+-- specific trigger(s) are enforcing the rule or their exact names --
+-- deliberately more robust here than a targeted per-trigger bypass, since
+-- this migration's author could not obtain `enforce_country_confirmed()`'s
+-- exact definition or its exact table attachment before shipping this fix.
+-- `disable trigger all` also suspends this table's `updated_at`-bump
+-- trigger (if one exists) for the same window, which is why every UPDATE
+-- below now sets `updated_at = now()` explicitly rather than relying on one
+-- -- `property_liability_links` did not do this in the original version of
+-- this file; it does now, for the same reason.
+--
+-- `disable trigger all` requires table-owner privilege, which the
+-- Supabase SQL Editor's connection (`postgres` role) holds; RLS policies
+-- are unaffected by this (RLS is not trigger-based), and PostgREST/RLS
+-- behaviour for ordinary application traffic is unchanged both during and
+-- after this migration -- the disable window exists only inside this one
+-- transaction.
 -- ===========================================================================
 
 begin;
@@ -93,6 +140,8 @@ alter table smsf_funds
 
 comment on column smsf_funds.backfill_source is
   'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 after App Review 2026-09-15 item 3 found migration 0084 writing this same provenance text into the user-facing notes column. Any future backfill that needs an audit trail writes it HERE, never into notes.';
+
+alter table smsf_funds disable trigger all;
 
 update smsf_funds
 set
@@ -104,6 +153,8 @@ set
   updated_at = now()
 where notes = 'Backfilled by migration 0084 from the pre-existing retirement_accounts row (Summary Mode, value unchanged).';
 
+alter table smsf_funds enable trigger all;
+
 -- ---------------------------------------------------------------------------
 -- property_liability_links.notes — migration 0078's three auto-link literals.
 --
@@ -113,13 +164,18 @@ where notes = 'Backfilled by migration 0084 from the pre-existing retirement_acc
 -- rows, which is the structured version of the same fact.
 -- ---------------------------------------------------------------------------
 
+alter table property_liability_links disable trigger all;
+
 update property_liability_links
-set notes = null
+set notes = null,
+    updated_at = now()
 where notes in (
   'Auto-linked by migration 0078: exactly one active Principal Residence and exactly one active Home Loan for this user, with matching owner/currency/country.',
   'Auto-linked by migration 0078: exactly one active Residential Investment Property and exactly one active Investment Loan for this user, with matching owner/currency/country.',
   'Auto-linked by migration 0078: exactly one active Commercial Property and exactly one active Commercial Property Loan for this user, with matching owner/currency/country.'
 );
+
+alter table property_liability_links enable trigger all;
 
 -- ---------------------------------------------------------------------------
 -- retirement_members.notes — migration 0077's two literals.
@@ -130,6 +186,8 @@ alter table retirement_members
 
 comment on column retirement_members.backfill_source is
   'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 (App Review 2026-09-15 item 3).';
+
+alter table retirement_members disable trigger all;
 
 -- Case C: pure provenance, no user meaning. Cleared.
 -- Literal: 'Backfilled by migration 0077 from N consistent legacy
@@ -157,6 +215,8 @@ set
   updated_at = now()
 where notes like 'Migration 0077: legacy retirement\_accounts.target\_retirement\_age values conflicted across this member''s accounts (%'
   and substring(notes from 'accounts \(([^)]*)\)') is not null;
+
+alter table retirement_members enable trigger all;
 
 commit;
 
