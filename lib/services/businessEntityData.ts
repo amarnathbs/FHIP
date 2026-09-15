@@ -28,6 +28,14 @@ export async function getBusinessEntity(entityId: string, userId: string, supaba
 // Trust) rather than being hardcoded — businessEntityCreateSchema already
 // defaults it to 'company', so every pre-LR-13 caller keeps working
 // byte-for-byte.
+//
+// M4B: 'huf' passes through this same path unchanged — this function is, and
+// stays, entity_type-agnostic. The India restriction is NOT enforced here
+// deliberately: this layer has no request context and no authoritative
+// country, and a data-access function that silently refused writes would
+// hide the reason from the caller. It is enforced in
+// `app/api/business-entities/route.ts` (readable 403) and by
+// `trg_business_entities_huf_india_gate` (migration 0154, unbypassable).
 export async function createBusinessEntity(userId: string, input: BusinessEntityCreateInput, supabase: SupabaseClient) {
   return supabase
     .from('business_entities')

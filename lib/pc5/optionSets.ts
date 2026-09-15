@@ -3,7 +3,8 @@
  * server-side from canonical data.
  *
  * ================================================================
- * K.5 ASKED FOR SEVEN THINGS. SIX EXIST. ONE DOES NOT. THIS IS WHICH.
+ * K.5 ASKED FOR SEVEN THINGS. SIX EXISTED; THE SEVENTH (HUF) NOW DOES TOO,
+ * BY PRODUCT-OWNER DECISION. THIS IS WHERE EACH ONE LIVES.
  * ================================================================
  * K.5: *"Support: self; spouse/partner; joint; child/dependent; HUF;
  * trust/family trust; other existing household entity types. Do not invent
@@ -23,7 +24,8 @@
  *   child / dependent  -> relationships `'child'` and `'other_dependant'`,
  *                         mapping to `'child'` and `'other'`.           EXISTS
  *   trust / family trust -> `business_entities.entity_type = 'family_trust'`
- *                         (migration 0136). NOTE this is the REAL entity path;
+ *                         (migration 0136). NOTE this is the REAL entity path,
+ *                         and the one HUF was told to copy;
  *                         the `OWNER_VALUES` value `'family_trust'` is a
  *                         LEGACY cosmetic tag (`LEGACY_ENTITY_OWNER_RESTRICTIONS`,
  *                         `lib/constants.ts`) that is no longer offered for new
@@ -32,34 +34,37 @@
  *                         'company'`, and `retirement_members` / SMSF for the
  *                         retirement domain.                             EXISTS
  *
- *   HUF                -> **DOES NOT EXIST AS AN OWNERSHIP CONCEPT ANYWHERE IN
- *                         THIS REPOSITORY.** The only HUF in the codebase is
- *                         `RESIDENT_HUF`, a value of `ii_tax_profiles.
- *                         taxpayer_type` (migration 0061) — an India income-tax
- *                         filing status, not an owner, not an entity, and not
- *                         referenced by any register's `owner` column.
+ *   HUF                -> `business_entities.entity_type = 'huf'`
+ *                         (migration 0154), INDIA-ONLY.        EXISTS (M4B)
  *
- * So PC5 does NOT offer HUF as an owner, and this is a deliberate refusal
- * rather than an oversight. Adding it would mean either (a) widening the
- * `owner` CHECK constraint on all seven registers plus
- * `ii_fhip_publications.published_owner`, inventing a ninth ownership value
- * with no valuation, consolidation or net-worth semantics behind it —
- * exactly the "invent a new entity type" K.5's own second sentence
- * forbids and exactly the mistake `'family_trust'`/`'company'` already are
- * (they were added as cosmetic tags, backed nothing, and had to be
- * retired into `LEGACY_ENTITY_OWNER_RESTRICTIONS`); or (b) quietly mapping
- * HUF onto `'other'`, which would record a Hindu Undivided Family's
- * holdings under a label that carries none of its distinct tax treatment
- * and would be wrong in exactly the jurisdiction where it matters.
+ * ---------------------------------------------------------------------------
+ * HUF — WHAT CHANGED, AND ON WHOSE DECISION
+ * ---------------------------------------------------------------------------
+ * PC5 originally recorded HUF as the one thing K.5 asked for that this
+ * repository did not model, and REFUSED to invent it, raising it instead as
+ * named open decision PO-PC5-1. The Product Owner closed it on 2026-09-15:
+ * *"it is similar to family trust, create this in similar line for only
+ * Indian users. All features of family trust need to adopt for HUF which is
+ * similar in nature."* That is PC5's own option (a) — record an HUF-held
+ * folio as a `business_entities` row, widening `entity_type` — and migration
+ * 0154 implements exactly that and nothing more.
  *
- * An Indian user whose folio is genuinely held by an HUF can today record
- * it as a `business_entities` row and attribute the position to it —
- * `ii_ownership_allocation.owner_business_entity_id` supports that — but
- * `entity_type` is CHECK-constrained to `('company','family_trust')`, so
- * that entity would have to be mislabelled. PC5 therefore surfaces
- * business entities as owners and leaves HUF as a NAMED, OPEN product
- * decision for the Product Owner, reported in the certification rather than
- * silently closed. See K.5's verdict there.
+ * WHAT DID NOT CHANGE: `OWNER_VALUES` is still the canonical EIGHT. HUF is
+ * an `entity_type`, never a ninth owner role — the option PC5 called
+ * indefensible (a ninth cosmetic tag with no valuation, consolidation or
+ * net-worth semantics, requiring the `owner` CHECK on all seven registers
+ * plus `ii_fhip_publications.published_owner` to be widened) is still
+ * refused, and migration 0154 touches none of them. See
+ * `businessEntityOwnerRole()` below for how an HUF entity's coarse
+ * register-level role is resolved and why, and
+ * `docs/investment-intelligence/PC5_HUF_ADDENDUM_2026-09-15.md` §4 for the
+ * full decision record.
+ *
+ * `RESIDENT_HUF`, a value of `ii_tax_profiles.taxpayer_type` (migration
+ * 0061), remains a separate thing entirely and is deliberately NOT linked:
+ * it is an India income-tax FILING STATUS, not an owner and not an entity. A
+ * user may file as an HUF without every folio being HUF-held, and may hold
+ * an HUF folio while filing as an individual.
  *
  * ================================================================
  * WHY OPTIONS ARE RESOLVED HERE AND NEVER IN A STATIC REGISTRY
@@ -93,6 +98,54 @@ export interface Pc5OwnerOption extends Pc5ChoiceOption {
 /** The synthetic option value meaning "more than one of the above, with a
  * split". Not a member id, so it can never collide with one. */
 export const PC5_JOINT_OPTION_VALUE = 'joint';
+
+/** Human-readable entity kind, shown as the option's `detail` line.
+ *  Exported so a test reads the real map rather than a copy. */
+export const BUSINESS_ENTITY_TYPE_DETAIL: Record<string, string> = {
+  company: 'Company',
+  family_trust: 'Family trust',
+  huf: 'Hindu Undivided Family (HUF)',
+};
+
+/**
+ * M4B — the register-level owner ROLE for an entity-held position.
+ *
+ * `'huf'` resolves to `'other'`, NOT to a ninth `OWNER_VALUES` value and NOT
+ * to `'family_trust'`. Both of those alternatives were considered and
+ * rejected on evidence:
+ *
+ *   * A ninth value would mean widening the `owner` CHECK on all seven
+ *     financial-data-grid registers plus `ii_fhip_publications.
+ *     published_owner`, minting an ownership tag with no valuation or
+ *     consolidation semantics behind it. That is exactly what `'company'`
+ *     and `'family_trust'` already are — cosmetic tags that backed nothing
+ *     and had to be RETIRED from new rows by LR-11B. Migration 0136, the
+ *     Family Trust precedent the Product Owner asked HUF to follow, added
+ *     its value to `business_entities.entity_type` ONLY and to nothing else.
+ *
+ *   * `'family_trust'` would be a factual falsehood. A Hindu Undivided
+ *     Family is not a trust: different formation, different governing law,
+ *     different tax treatment under the Income Tax Act. Filing an HUF's
+ *     position under the trust role in exactly the jurisdiction where the
+ *     distinction is legally operative is worse than filing it under a
+ *     deliberately unspecific one.
+ *
+ * `'other'` is the honest coarse bucket, and — critically — it is NOT where
+ * the HUF's identity lives. This role is a register-level tag with no
+ * financial behaviour attached (nothing in `lib/engines/householdContext.ts`
+ * or any valuation engine branches on it; only `'smsf'` is ever
+ * discriminated). The HUF's real identity travels as
+ * `owner_business_entity_id` -> `business_entities.entity_type = 'huf'`,
+ * which is what the UI displays and what consolidation actually reads. PC5's
+ * own objection to mapping HUF onto `'other'` was raised when HUF had NO
+ * entity representation at all, so `'other'` would have been the whole
+ * record; migration 0154 removes that premise.
+ */
+export function businessEntityOwnerRole(entityType: string): Owner {
+  if (entityType === 'family_trust') return 'family_trust';
+  if (entityType === 'huf') return 'other';
+  return 'company';
+}
 
 /**
  * K.10's three answers, verbatim from the dispatch: *"same economic event;
@@ -216,14 +269,14 @@ export async function resolveOwnerOptions(userId: string): Promise<Pc5OwnerOptio
   const entityOptions: Pc5OwnerOption[] = entities.map((e) => ({
     value: e.id,
     label: e.name,
-    detail: e.entity_type === 'family_trust' ? 'Family trust' : 'Company',
-    // The register-level owner role for an entity-held position. These are
-    // the two LEGACY tags — see this module's header. They are used here
-    // because they are the ONLY existing enum values that describe an
-    // entity-held position, and because the real entity identity travels
-    // separately as `owner_business_entity_id`, which is what actually
-    // drives consolidation.
-    ownerRole: (e.entity_type === 'family_trust' ? 'family_trust' : 'company') as Owner,
+    detail: BUSINESS_ENTITY_TYPE_DETAIL[e.entity_type] ?? 'Company',
+    // The register-level owner role for an entity-held position. `company`
+    // and `family_trust` are the two LEGACY tags — see this module's header.
+    // They are used here because they are the ONLY existing enum values that
+    // describe an entity-held position, and because the real entity identity
+    // travels separately as `owner_business_entity_id`, which is what
+    // actually drives consolidation.
+    ownerRole: businessEntityOwnerRole(e.entity_type),
     kind: 'business_entity' as const,
   }));
 

@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { computeDashboard, type DashboardInput } from '@/lib/engines/dashboard';
 import { computeBusinessEntityNetAssetValue, computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from '@/lib/engines/businessEntityValuation';
-import { businessEntityCreateInputSchema, businessEntityCreateSchema } from '@/lib/validation/businessEntity';
+import {
+  businessEntityCreateInputSchema,
+  businessEntityCreateSchema,
+  BUSINESS_ENTITY_TYPES,
+  BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY,
+} from '@/lib/validation/businessEntity';
 
 // ---------------------------------------------------------------------------
 // LR-11 (Company / Family Trust Entity Architecture) — WP-05 consolidation
@@ -272,6 +277,91 @@ describe('LR-13 — schema accepts family_trust as a valid entity_type', () => {
       summary_net_asset_value: 1000,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// ===========================================================================
+// M4B — HUF, mirroring LR-13's own coverage above one-for-one.
+// ===========================================================================
+describe('M4B — schema accepts huf as a valid entity_type', () => {
+  it('accepts entity_type: huf on creation', () => {
+    const result = businessEntityCreateInputSchema.safeParse({
+      name: 'Sharma HUF',
+      entity_type: 'huf',
+      currency_code: 'INR',
+      ownership_percentage: 100,
+      valuation_mode: 'summary',
+      summary_net_asset_value: 1000,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still rejects an arbitrary fourth entity_type', () => {
+    for (const bogus of ['partnership', 'HUF', 'huf_trust', 'llp', '']) {
+      const result = businessEntityCreateInputSchema.safeParse({
+        name: 'Bogus',
+        entity_type: bogus,
+        currency_code: 'AUD',
+        ownership_percentage: 100,
+        valuation_mode: 'summary',
+        summary_net_asset_value: 1000,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('BUSINESS_ENTITY_TYPES is exactly the three the DB CHECK allows, in migration 0154 order', () => {
+    expect([...BUSINESS_ENTITY_TYPES]).toEqual(['company', 'family_trust', 'huf']);
+  });
+
+  it('only huf carries a jurisdiction requirement — Company and Family Trust stay agnostic', () => {
+    expect(BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY.huf).toBe('IN');
+    expect(BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY.company).toBeUndefined();
+    expect(BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY.family_trust).toBeUndefined();
+  });
+
+  it('the schema itself does NOT encode the India restriction (it is a server-side gate, not a client-supplied country)', () => {
+    // A user in Australia can produce a well-FORMED huf payload; it is the
+    // route and the DB trigger that refuse it, never this schema. If this
+    // ever starts failing, the gate has been moved onto a client-supplied
+    // field — the exact defect class G3's negative controls forbid.
+    const result = businessEntityCreateInputSchema.safeParse({
+      name: 'Sharma HUF',
+      entity_type: 'huf',
+      country_code: 'AU',
+      currency_code: 'AUD',
+      ownership_percentage: 100,
+      valuation_mode: 'summary',
+      summary_net_asset_value: 1000,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('M4B — the valuation engine is entity_type-agnostic: an HUF consolidates exactly as a Family Trust does', () => {
+  it('scales an HUF by ownership_percentage, identically to Company and Family Trust', () => {
+    // BusinessEntityRow carries no entity_type field AT ALL, so this is a
+    // structural property, not a coincidence: the engine cannot branch on a
+    // field it never receives. Same inputs => same number for all three.
+    const huf = summaryEntity({ id: 'huf-1', ownership_percentage: 30, summary_net_asset_value: 400_000 });
+    expect(computeBusinessEntityOwnershipValue([huf], 'AUD', 56)).toBe(120_000);
+  });
+
+  it('a mixed household (Company + Family Trust + HUF) sums all three without cross-contamination', () => {
+    const company = summaryEntity({ id: 'company-1', ownership_percentage: 100, summary_net_asset_value: 100_000 });
+    const familyTrust = summaryEntity({ id: 'trust-1', ownership_percentage: 30, summary_net_asset_value: 400_000 });
+    const huf = summaryEntity({ id: 'huf-1', ownership_percentage: 50, summary_net_asset_value: 200_000 });
+    // 100,000 + 120,000 + 100,000 — each entity keeps its OWN percentage.
+    expect(computeBusinessEntityOwnershipValue([company, familyTrust, huf], 'AUD', 56)).toBe(320_000);
+    // Adding the HUF changed the total by exactly its own share and by
+    // nothing else: Family Trust's own contribution is untouched.
+    expect(computeBusinessEntityOwnershipValue([company, familyTrust], 'AUD', 56)).toBe(220_000);
+  });
+
+  it('an INR-denominated HUF converts through the same fx path as any other entity', () => {
+    const huf = summaryEntity({ id: 'huf-inr', ownership_percentage: 100, summary_net_asset_value: 560_000, currency_code: 'INR' });
+    // 560,000 INR at 56 INR/AUD = 10,000 AUD.
+    expect(computeBusinessEntityOwnershipValue([huf], 'AUD', 56)).toBe(10_000);
   });
 });
 

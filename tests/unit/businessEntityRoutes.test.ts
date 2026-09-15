@@ -52,6 +52,12 @@ function makeFakeSupabase(tables: Record<string, FakeRow[]>) {
           mode = 'delete';
           return builder;
         },
+        // M4B: added for `getUserFullExperienceHomeCountry`, which reads
+        // `user_profiles` with `.maybeSingle()`. Purely additive — no
+        // existing test's behaviour changes.
+        maybeSingle() {
+          return Promise.resolve({ data: filtered[0] ?? null, error: null });
+        },
         single() {
           if (mode === 'insert') {
             const newRow: FakeRow = { id: `row-${rows.length + 1}`, is_active: true, ...pendingWrite };
@@ -141,6 +147,141 @@ describe('GET/POST /api/business-entities', () => {
     const body = await created.json();
     expect(body.data.entity_type).toBe('family_trust');
     expect(body.data.user_id).toBe(USER_A);
+  });
+});
+
+// ===========================================================================
+// M4B — HUF (India-only). The Family Trust case above is the precedent these
+// mirror; the India gate is the one thing Family Trust did not need.
+//
+// THE GATE IS READ FROM `user_profiles.country_of_residence` ONLY. Every
+// negative control below therefore also proves what the route does NOT
+// consult: the entity's own `country_code`, its `currency_code`, or anything
+// else the client supplied. A caller who sends `country_code: 'IN'` and
+// `currency_code: 'INR'` while their authoritative residence is AU is still
+// refused — that is CTRL-3.
+// ===========================================================================
+function hufBody(extra: Record<string, unknown> = {}) {
+  return JSON.stringify({
+    name: 'Sharma HUF',
+    entity_type: 'huf',
+    ownership_percentage: 60,
+    currency_code: 'INR',
+    valuation_mode: 'summary',
+    summary_net_asset_value: 2_500_000,
+    ...extra,
+  });
+}
+
+async function postAs(profileRows: FakeRow[], body: string) {
+  vi.resetModules();
+  asUser(USER_A);
+  const fake = makeFakeSupabase({ business_entities: [], user_profiles: profileRows });
+  vi.doMock('@/lib/supabase/server', () => ({ createClient: async () => fake.client }));
+  const { POST } = await import('@/app/api/business-entities/route');
+  const res = await POST(new Request('http://x', { method: 'POST', body }));
+  return { res, body: await res.json(), tables: fake.tables };
+}
+
+describe('M4B — POST /api/business-entities, entity_type: huf is India-only', () => {
+  it('creates an HUF for a user whose country_of_residence is IN', async () => {
+    const { res, body } = await postAs([{ user_id: USER_A, country_of_residence: 'IN' }], hufBody());
+    expect(res.status).toBe(200);
+    expect(body.data.entity_type).toBe('huf');
+    expect(body.data.user_id).toBe(USER_A);
+    // Same ownership_percentage consolidation as Company/Family Trust — no
+    // HUF-specific valuation field was invented.
+    expect(body.data.ownership_percentage).toBe(60);
+  });
+
+  it('CTRL-1 — refuses an HUF with 403 for a user whose country_of_residence is AU, and writes nothing', async () => {
+    const { res, body, tables } = await postAs([{ user_id: USER_A, country_of_residence: 'AU' }], hufBody());
+    expect(res.status).toBe(403);
+    expect(body.errorCode ?? body.error_code ?? body.error).toBeTruthy();
+    expect(JSON.stringify(body)).toContain('ENTITY_TYPE_UNAVAILABLE_FOR_COUNTRY');
+    // The refusal happens BEFORE any insert — no orphan row.
+    expect(tables.business_entities).toHaveLength(0);
+  });
+
+  it('CTRL-2 — fails CLOSED for an unresolved country, and for a GENERIC-experience country', async () => {
+    const unresolved = await postAs([], hufBody());
+    expect(unresolved.res.status).toBe(403);
+    expect(unresolved.tables.business_entities).toHaveLength(0);
+
+    const nullCountry = await postAs([{ user_id: USER_A, country_of_residence: null }], hufBody());
+    expect(nullCountry.res.status).toBe(403);
+
+    // GB is an AUTHORITATIVE country but not a FULL-experience one, so
+    // getUserFullExperienceHomeCountry() narrows it to null — refused, never
+    // treated as India.
+    const generic = await postAs([{ user_id: USER_A, country_of_residence: 'GB' }], hufBody());
+    expect(generic.res.status).toBe(403);
+    expect(generic.tables.business_entities).toHaveLength(0);
+  });
+
+  it('CTRL-3 — a client-supplied country_code/currency_code cannot buy the gate off', async () => {
+    const { res, tables } = await postAs(
+      [{ user_id: USER_A, country_of_residence: 'AU' }],
+      hufBody({ country_code: 'IN', currency_code: 'INR' })
+    );
+    expect(res.status).toBe(403);
+    expect(tables.business_entities).toHaveLength(0);
+  });
+
+  it('CTRL-4 — Company and Family Trust stay jurisdiction-AGNOSTIC (Family Trust behaviour unchanged)', async () => {
+    // The exact same AU profile that refuses an HUF must still create both
+    // of the pre-existing types, and must still create them for an IN user.
+    for (const country of ['AU', 'IN'] as const) {
+      for (const entityType of ['company', 'family_trust'] as const) {
+        const { res, body } = await postAs(
+          [{ user_id: USER_A, country_of_residence: country }],
+          JSON.stringify({
+            name: `${entityType} in ${country}`,
+            entity_type: entityType,
+            ownership_percentage: 100,
+            currency_code: 'AUD',
+            valuation_mode: 'summary',
+            summary_net_asset_value: 1000,
+          })
+        );
+        expect(res.status).toBe(200);
+        expect(body.data.entity_type).toBe(entityType);
+      }
+    }
+
+    // And an entity type with no country requirement is not even looked up:
+    // a user with NO user_profiles row at all still creates a company.
+    const noProfile = await postAs(
+      [],
+      JSON.stringify({
+        name: 'No profile Co',
+        ownership_percentage: 100,
+        currency_code: 'AUD',
+        valuation_mode: 'summary',
+        summary_net_asset_value: 1000,
+      })
+    );
+    expect(noProfile.res.status).toBe(200);
+    expect(noProfile.body.data.entity_type).toBe('company');
+  });
+
+  it('CTRL-5 — entity_type is create-only: PATCH cannot convert an existing entity into an HUF', async () => {
+    vi.resetModules();
+    asUser(USER_A);
+    const fake = makeFakeSupabase({
+      business_entities: [{ id: 'e-a', user_id: USER_A, name: 'A Co', entity_type: 'company', is_active: true }],
+      user_profiles: [{ user_id: USER_A, country_of_residence: 'AU' }],
+    });
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: async () => fake.client }));
+    const { PATCH } = await import('@/app/api/business-entities/[id]/route');
+    const res = await PATCH(new Request('http://x', { method: 'PATCH', body: JSON.stringify({ entity_type: 'huf', name: 'Renamed' }) }), {
+      params: Promise.resolve({ id: 'e-a' }),
+    });
+    expect(res.status).toBe(200);
+    // The rename landed; the entity_type smuggled alongside it did not — the
+    // update schema has no entity_type key, so Zod strips it.
+    expect(fake.tables.business_entities[0].name).toBe('Renamed');
+    expect(fake.tables.business_entities[0].entity_type).toBe('company');
   });
 });
 

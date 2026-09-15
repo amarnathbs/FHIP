@@ -15,8 +15,11 @@ import {
   PC5_PERMITTED_OWNER_ROLES,
   PC5_SUMMARY_MISMATCH_OPTIONS,
   isPermittedChoice,
+  businessEntityOwnerRole,
+  BUSINESS_ENTITY_TYPE_DETAIL,
 } from '@/lib/pc5/optionSets';
 import { OWNER_VALUES } from '@/lib/constants';
+import { BUSINESS_ENTITY_TYPES } from '@/lib/validation/businessEntity';
 import {
   PC5_RESOLUTIONS_BASE,
   aieRunReviewHref,
@@ -35,19 +38,64 @@ describe('PC5 K.5 — PC5 introduces no new ownership vocabulary', () => {
     expect(PC5_PERMITTED_OWNER_ROLES).toHaveLength(8);
   });
 
-  it('HUF IS NOT AN OWNERSHIP VALUE ANYWHERE — K.5 asked for it, this repository does not model it, and PC5 refuses to invent it', () => {
+  // M4B (2026-09-15): HUF now EXISTS as an entity type (migration 0154, by
+  // Product Owner decision closing PO-PC5-1) — and this assertion is
+  // UNCHANGED, because it was never about whether HUF exists. It is about
+  // where HUF lives. `business_entities.entity_type` and the registers'
+  // `owner` enum are separate vocabularies; HUF belongs to the first and
+  // must stay out of the second. Only the title and comment below were
+  // edited, never the assertions.
+  it('HUF IS STILL NOT AN OWNER ROLE — it is an entity_type (migration 0154), and no ninth ownership value was ever invented', () => {
     // Recorded as an executable assertion rather than only as prose,
     // because the tempting "fix" is to add a ninth enum value with no
     // valuation, consolidation or net-worth semantics behind it — exactly
     // what `'company'`/`'family_trust'` already are, and exactly why they
-    // had to be retired into LEGACY_ENTITY_OWNER_RESTRICTIONS.
+    // had to be retired into LEGACY_ENTITY_OWNER_RESTRICTIONS. Migration
+    // 0136, the Family Trust precedent the Product Owner told M4B to copy,
+    // added its value to `entity_type` ONLY; 0154 does the same.
     expect(PC5_PERMITTED_OWNER_ROLES).not.toContain('huf');
     expect(PC5_PERMITTED_OWNER_ROLES.some((r) => r.toLowerCase().includes('huf'))).toBe(false);
+    expect(OWNER_VALUES).toHaveLength(8);
   });
 
   it('the joint sentinel is not a uuid and so can never collide with a member or entity id', () => {
     expect(PC5_JOINT_OPTION_VALUE).toBe('joint');
     expect(PC5_JOINT_OPTION_VALUE).not.toMatch(/^[0-9a-f]{8}-/i);
+  });
+});
+
+describe('M4B — an HUF business entity resolves to an existing owner role, never a new one', () => {
+  it('maps every entity_type migration 0154 allows onto one of the canonical eight', () => {
+    for (const entityType of BUSINESS_ENTITY_TYPES) {
+      expect(OWNER_VALUES).toContain(businessEntityOwnerRole(entityType));
+    }
+  });
+
+  it('huf resolves to \'other\' — not to a ninth value, and not to the factually wrong \'family_trust\'', () => {
+    // An HUF is not a trust: different formation, different governing law,
+    // different treatment under the Income Tax Act. Filing it under the
+    // trust role in the one jurisdiction where that distinction is legally
+    // operative would be a falsehood, not a simplification.
+    expect(businessEntityOwnerRole('huf')).toBe('other');
+    expect(businessEntityOwnerRole('huf')).not.toBe('family_trust');
+  });
+
+  it('Family Trust and Company keep their EXACT pre-M4B roles (behaviour unchanged)', () => {
+    expect(businessEntityOwnerRole('family_trust')).toBe('family_trust');
+    expect(businessEntityOwnerRole('company')).toBe('company');
+    // The pre-M4B code was a ternary whose else-branch was 'company'; an
+    // unknown type must still land there, so an entity_type added to the DB
+    // ahead of this map can never produce an invalid owner role.
+    expect(businessEntityOwnerRole('something_new')).toBe('company');
+  });
+
+  it('every allowed entity_type has its own distinct display detail, and HUF is spelled out in full', () => {
+    const details = BUSINESS_ENTITY_TYPES.map((t) => BUSINESS_ENTITY_TYPE_DETAIL[t]);
+    expect(new Set(details).size).toBe(BUSINESS_ENTITY_TYPES.length);
+    expect(BUSINESS_ENTITY_TYPE_DETAIL.huf).toBe('Hindu Undivided Family (HUF)');
+    // Family Trust's own detail string is untouched.
+    expect(BUSINESS_ENTITY_TYPE_DETAIL.family_trust).toBe('Family trust');
+    expect(BUSINESS_ENTITY_TYPE_DETAIL.company).toBe('Company');
   });
 });
 

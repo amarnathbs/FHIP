@@ -104,6 +104,17 @@ const NAV_GROUPS: NavGroup[] = [
       // not folded into Assets, since an entity's value only reaches
       // personal Net Worth via the ownership-% consolidation model, not as a
       // personally-held asset.
+      //
+      // M4B — HUF lives on this same route too, but the LABEL DELIBERATELY
+      // DOES NOT MENTION IT. This nav array is global and rendered before any
+      // country is known: `lib/nav/appNavCapability.ts` filters by CAPABILITY
+      // decision, never by country, and no India-only capability key exists in
+      // `country_capabilities` today. Naming HUF here would therefore
+      // advertise an India-only concept to every Australian user — the exact
+      // opposite of SMSF's established rule ("prefer removing irrelevant
+      // options entirely", spec s.34). The page itself is country-aware and
+      // retitles to "Companies, Trusts & HUF" for an India user; see
+      // `app/(app)/companies/page.tsx`.
       { type: 'link', label: 'Companies & Trusts', href: '/companies' },
     ],
   },

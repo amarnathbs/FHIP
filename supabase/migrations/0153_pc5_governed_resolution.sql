@@ -158,6 +158,28 @@ create table ii_ownership_allocation (
   -- mirrored by the CHECK on all seven registers since migration 0004),
   -- reproduced here verbatim rather than widened: PC5 introduces NO new
   -- ownership vocabulary.
+  --
+  -- M4B RE-CONFIRMATION (2026-09-15), recorded here because a reader who
+  -- knows migration 0154 exists will otherwise ask why `'huf'` is absent
+  -- from this list. It is absent DELIBERATELY, and this CHECK is left at
+  -- eight values unamended. `business_entities.entity_type` and this
+  -- `owner_role` are SEPARATE VOCABULARIES: `entity_type` names what an
+  -- entity IS, `owner_role` is the coarse register-level role tag that
+  -- already existed on all seven registers since migration 0004. The two
+  -- overlap on `'company'`/`'family_trust'` only by historical accident —
+  -- those were minted as cosmetic owner tags years before any entity
+  -- workspace existed and were RETIRED from new rows by LR-11B
+  -- (`LEGACY_ENTITY_OWNER_RESTRICTIONS`). Migration 0136, the Family Trust
+  -- precedent the Product Owner told M4B to follow, added its value to
+  -- `entity_type` ONLY. An HUF's identity travels on
+  -- `owner_business_entity_id` -> `business_entities.entity_type = 'huf'`,
+  -- which is what drives consolidation and what the UI displays; its coarse
+  -- role resolves to the existing `'other'` (see
+  -- `businessEntityOwnerRole()` in `lib/pc5/optionSets.ts`). Adding a ninth
+  -- value here would ALSO require widening the `owner` CHECK on all seven
+  -- registers plus `ii_fhip_publications.published_owner` to keep the
+  -- mirror true — a change nobody asked for and PC5 called indefensible.
+  -- Full evidence: `docs/investment-intelligence/PC5_HUF_ADDENDUM_2026-09-15.md` §4.
   owner_member_id uuid references household_members(id) on delete restrict,
   owner_business_entity_id uuid references business_entities(id) on delete restrict,
   owner_role text not null check (owner_role in ('self', 'spouse', 'joint', 'child', 'family_trust', 'company', 'smsf', 'other')),
