@@ -22,6 +22,7 @@ import { TrendLineChart } from '@/components/dashboard/charts';
 import { ReportTrendChart, ReportScenarioBarChart } from '@/components/forecast/ForecastReportCharts';
 import type { ReportContent } from '@/lib/services/reportContentData';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -39,6 +40,18 @@ interface Insight {
   title: string;
   explanation: string;
 }
+
+// App Review 2026-09-15, item 5 — same wording the Goals page itself uses
+// (components/goals/GoalCard.tsx's TRACK_LABEL), so the report and the page
+// describe the same goal with the same words.
+const GOAL_TRACK_LABEL: Record<string, string> = {
+  ahead_of_track: 'Ahead of Track',
+  on_track: 'On Track',
+  at_risk: 'At Risk',
+  off_track: 'Off Track',
+  fully_funded: 'Fully Funded',
+  unable_to_assess: 'Unable to Assess',
+};
 
 const STATUS_TEXT_COLOR: Record<'good' | 'caution' | 'risk' | 'neutral', string> = {
   good: 'text-progress',
@@ -693,7 +706,17 @@ export function ReportPreview({
                   the target under the approved forecast assumptions.
                 </p>
                 <div className="space-y-3">
-                  {(goals.sectionData.goals as { goalName: string; progressPct: number; targetDate: string | null; trackStatus: string }[]).map(
+                  {(
+                    goals.sectionData.goals as {
+                      goalName: string;
+                      progressPct: number;
+                      targetDate: string | null;
+                      trackStatus: string;
+                      targetAmount?: number;
+                      currentAmount?: number;
+                      currencyCode?: 'AUD' | 'INR';
+                    }[]
+                  ).map(
                     (g, i) => {
                       // A goal with no valid forecast (unable_to_assess) must
                       // not be silently folded into "on track" or "at risk" —
@@ -730,6 +753,17 @@ export function ReportPreview({
                           <div className="mt-1 h-2 w-full rounded-full bg-gray-100">
                             <div className="h-2 rounded-full bg-progress" style={{ width: `${Math.max(0, Math.min(100, g.progressPct))}%` }} />
                           </div>
+                          {/* App Review 2026-09-15, item 5 acceptance: the
+                              section must list each goal "with its target,
+                              funded amount and status". Only the progress
+                              percentage and target date were shown before. */}
+                          {typeof g.targetAmount === 'number' && (
+                            <p className="mt-1 text-xs text-gray-500">
+                              Target {formatMoneyWhole(g.targetAmount, g.currencyCode ?? currency)} · Currently funded{' '}
+                              {formatMoneyWhole(g.currentAmount ?? 0, g.currencyCode ?? currency)} ·{' '}
+                              {GOAL_TRACK_LABEL[g.trackStatus] ?? g.trackStatus}
+                            </p>
+                          )}
                           {g.targetDate && <p className="mt-1 text-xs text-gray-400">Target date: {g.targetDate}</p>}
                         </div>
                       );
@@ -738,7 +772,11 @@ export function ReportPreview({
                 </div>
               </>
             ) : (
-              <p className="text-sm text-gray-500">No active goals were recorded for this period.</p>
+              // App Review 2026-09-15, item 5: the Goals section has no period
+              // filter (it reads every goal whose status is 'active'), so
+              // "for this period" was misleading copy. Matches the engine's
+              // own narrative in lib/engines/reportSections.ts buildGoals().
+              <p className="text-sm text-gray-500">You have no active financial goals.</p>
             )}
           </SectionCard>
         )}
@@ -807,7 +845,7 @@ export function ReportPreview({
                 <thead className="text-left text-xs uppercase text-gray-500">
                   <tr>
                     <th className="py-1">Due date</th>
-                    <th className="py-1">Amount</th>
+                    <th className={`py-1 ${NUM_HEADER_CLASS}`}>Amount</th>
                     <th className="py-1">Type</th>
                   </tr>
                 </thead>
@@ -815,7 +853,7 @@ export function ReportPreview({
                   {(commitmentsTimeline.sectionData.commitments as { amount: number; due_date: string; is_mandatory: boolean }[]).map((c, i) => (
                     <tr key={i} className="border-t">
                       <td className="py-1">{new Date(c.due_date).toLocaleDateString(localeForReportingCurrency(currency), { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                      <td className="py-1">{fmt(c.amount)}</td>
+                      <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmt(c.amount)}</td>
                       <td className="py-1">{c.is_mandatory ? 'Mandatory' : 'Discretionary'}</td>
                     </tr>
                   ))}
@@ -1078,8 +1116,8 @@ export function ReportPreview({
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Cover type</th>
-                      <th className="py-1">Cover amount</th>
-                      <th className="py-1">Monthly premium</th>
+                      <th className={`py-1 ${NUM_HEADER_CLASS}`}>Cover amount</th>
+                      <th className={`py-1 ${NUM_HEADER_CLASS}`}>Monthly premium</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1093,14 +1131,14 @@ export function ReportPreview({
                     ).map((t, i) => (
                       <tr key={i} className="border-t">
                         <td className="py-1">{t.label}</td>
-                        <td className="py-1">
+                        <td className={`py-1 ${NUM_CELL_CLASS}`}>
                           {t.unit === 'no_lump_sum'
                             ? 'Policy recorded — no single lump-sum cover amount applies'
                             : t.unit === 'monthly_benefit'
                               ? `${fmt(t.coverAmount)}/month benefit`
                               : `${fmt(t.coverAmount)} lump sum`}
                         </td>
-                        <td className="py-1">{fmt(t.monthlyPremium)}</td>
+                        <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmt(t.monthlyPremium)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1257,9 +1295,9 @@ export function ReportPreview({
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Scenario</th>
-                      <th className="py-1">Monthly shortfall</th>
+                      <th className={`py-1 ${NUM_HEADER_CLASS}`}>Monthly shortfall</th>
                       <th className="py-1">Estimated survival</th>
-                      <th className="py-1">Net worth impact</th>
+                      <th className={`py-1 ${NUM_HEADER_CLASS}`}>Net worth impact</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1280,9 +1318,9 @@ export function ReportPreview({
                           </td>
                         ) : (
                           <>
-                            <td className="py-2">{s.monthlyShortfall > 0 ? fmt(s.monthlyShortfall) : 'No shortfall'}</td>
+                            <td className={`py-2 ${NUM_CELL_CLASS}`}>{s.monthlyShortfall > 0 ? fmt(s.monthlyShortfall) : 'No shortfall'}</td>
                             <td className="py-2">{s.survivalMonths === null ? 'Indefinite' : `${s.survivalMonths.toFixed(1)} months`}</td>
-                            <td className="py-2">{s.netWorthImpact < 0 ? `-${fmt(Math.abs(s.netWorthImpact))}` : s.netWorthImpact > 0 ? `+${fmt(s.netWorthImpact)}` : 'No change'}</td>
+                            <td className={`py-2 ${NUM_CELL_CLASS}`}>{s.netWorthImpact < 0 ? `-${fmt(Math.abs(s.netWorthImpact))}` : s.netWorthImpact > 0 ? `+${fmt(s.netWorthImpact)}` : 'No change'}</td>
                           </>
                         )}
                       </tr>

@@ -1377,7 +1377,40 @@ export interface CategoryVariance {
   // projected period — callers must disclose this rather than presenting
   // the final period as if it were a genuine same-date value.
   forecastHorizonExceeded: boolean;
+  // App Review 2026-09-15, item 6.1 — "Identify and document exactly which
+  // records/fields are summed to produce the Retirement Start/Actual value."
+  // The reviewer could not reconcile a Retirement actual of $271,000 against
+  // an SMSF value of $138,000, and the product gave them nothing to check it
+  // with. These two strings name the exact table and column each figure is
+  // summed from, and are rendered next to the row.
+  actualBasis: string;
+  finalTargetBasis: string;
 }
+
+// App Review 2026-09-15, item 6.1 — the literal lineage of "Actual Till Date"
+// per category, kept beside getCurrentActualValue() (the function that
+// implements it) so the two cannot drift.
+export const VARIANCE_ACTUAL_BASIS: Record<VarianceForecastCategory, string> = {
+  net_worth:
+    'The dated net worth from your most recent financial snapshot at or before the comparison date; live dashboard net worth when no snapshot exists yet.',
+  retirement:
+    'Sum of current_balance across every active row in your Retirement register (retirement_accounts), converted to your reporting currency. Your SMSF is one such row — its single canonical home — so its value is counted exactly once and is not added again from the SMSF fund record.',
+  investment: 'Sum of current_value across every active row in your Investments register (investments), converted to your reporting currency.',
+  debt: 'Sum of balance across every active household liability (liabilities), converted to your reporting currency. SMSF-linked loans are excluded here because their value is already netted inside the SMSF retirement figure.',
+  goal: 'Sum of current_amount across every active goal (user_goals), plus each goal’s allocated share of any linked investment, asset or retirement account.',
+  cross_border:
+    'Net foreign wealth: foreign-currency assets + investments + retirement balances, less foreign-currency liabilities, converted at the FX rate assumption.',
+};
+
+export const VARIANCE_FINAL_TARGET_BASIS: Record<VarianceForecastCategory, string> = {
+  net_worth: 'Net worth forecasts carry no separate target — the final projected value is the plan.',
+  retirement:
+    'The required retirement corpus from your retirement forecast: your desired annual retirement income divided by the withdrawal-rate assumption. Shown as — when no desired income or target corpus has been set, and when no essential expenses have been recorded to derive one from.',
+  investment: 'Investment forecasts carry no separate target — the final projected value is the plan.',
+  debt: 'Zero — the target for every debt is to be repaid in full.',
+  goal: 'Sum of target_amount across every active goal (user_goals).',
+  cross_border: 'Cross-border wealth forecasts carry no separate target — the final projected value is the plan.',
+};
 
 // Debt is the one category where a lower actual balance is favourable
 // (spec: "use inverse favourable logic for debt") — every other category
@@ -1572,6 +1605,8 @@ export async function getForecastVariance(
       finalTargetGap: null,
       primaryDriver: null,
       forecastHorizonExceeded: false,
+      actualBasis: VARIANCE_ACTUAL_BASIS[category],
+      finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
     };
   }
 
@@ -1637,6 +1672,8 @@ export async function getForecastVariance(
       finalTargetGap,
       primaryDriver: `A baseline was established as at ${effectiveComparisonDate}. Performance tracking will be available once a later comparison period exists.`,
       forecastHorizonExceeded: false,
+      actualBasis: VARIANCE_ACTUAL_BASIS[category],
+      finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
     };
   }
 
@@ -1691,5 +1728,7 @@ export async function getForecastVariance(
     finalTargetGap,
     primaryDriver,
     forecastHorizonExceeded,
+    actualBasis: VARIANCE_ACTUAL_BASIS[category],
+    finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
   };
 }

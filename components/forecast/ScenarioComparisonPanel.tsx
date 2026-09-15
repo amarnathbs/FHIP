@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 interface ScenarioComparison {
   scenarioId: string;
@@ -47,9 +48,9 @@ export function ScenarioComparisonPanel({ currency }: { currency: 'AUD' | 'INR' 
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Scenario</th>
-              <th className="py-1">1 year</th>
-              <th className="py-1">5 years</th>
-              <th className="py-1">10 years</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>1 year</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>5 years</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>10 years</th>
             </tr>
           </thead>
           <tbody>
@@ -58,9 +59,9 @@ export function ScenarioComparisonPanel({ currency }: { currency: 'AUD' | 'INR' 
                 <td className="py-2 font-medium text-gray-800">
                   {c.scenarioName} <span className="text-xs capitalize text-gray-400">({c.scenarioType})</span>
                 </td>
-                <td className="py-2">{c.oneYear !== null ? formatMoney(c.oneYear, currency) : '—'}</td>
-                <td className="py-2">{c.fiveYear !== null ? formatMoney(c.fiveYear, currency) : '—'}</td>
-                <td className="py-2">{c.tenYear !== null ? formatMoney(c.tenYear, currency) : '—'}</td>
+                <td className={`py-2 ${NUM_CELL_CLASS}`}>{c.oneYear !== null ? formatMoney(c.oneYear, currency) : '—'}</td>
+                <td className={`py-2 ${NUM_CELL_CLASS}`}>{c.fiveYear !== null ? formatMoney(c.fiveYear, currency) : '—'}</td>
+                <td className={`py-2 ${NUM_CELL_CLASS}`}>{c.tenYear !== null ? formatMoney(c.tenYear, currency) : '—'}</td>
               </tr>
             ))}
           </tbody>

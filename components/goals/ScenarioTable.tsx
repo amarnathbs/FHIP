@@ -1,6 +1,7 @@
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { CategoryForecastResult, ScenarioCode } from '@/lib/engines/goalForecast';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 const SCENARIO_LABEL: Record<ScenarioCode, string> = { conservative: 'Conservative', base: 'Base', optimistic: 'Optimistic' };
 
@@ -22,7 +23,7 @@ export function ScenarioTable({
           <tr>
             <th className="py-1">Scenario</th>
             <th className="py-1">Completion Date</th>
-            <th className="py-1">Required Contribution</th>
+            <th className={`py-1 ${NUM_HEADER_CLASS}`}>Required Contribution</th>
             <th className="py-1">Target-Date Result</th>
           </tr>
         </thead>
@@ -37,7 +38,7 @@ export function ScenarioTable({
                     ? new Date(f.projectedCompletionDate).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
                     : '—'}
                 </td>
-                <td className="py-1">
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>
                   {f.requiredMonthlyContribution !== null ? formatMoney(f.requiredMonthlyContribution, currency) : '—'}
                 </td>
                 <td className="py-1">{f.forecastFundingPct !== null ? `${f.forecastFundingPct.toFixed(0)}%` : '—'}</td>

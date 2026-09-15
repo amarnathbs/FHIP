@@ -41,9 +41,18 @@ export function InvestmentIntelligenceSubNav() {
           behind a menu toggle. Same "← Back to X" link/style already used by
           other deep workspace views (app/(app)/goals/[id]/page.tsx,
           financial-data-hub/review/ReviewWorkspace.tsx) — placed once here
-          since every one of the seven pages renders this shared component. */}
-      <Link href="/dashboard" className="mb-3 inline-block text-xs text-muted hover:underline">
-        ← Back to Dashboard
+          since every one of the seven pages renders this shared component.
+
+          App Review 2026-09-15, item 1: the target was /dashboard, which is
+          not where anyone arrives from. The only in-app entry point into this
+          workspace is the "India Investments" link on the Investment &
+          Retirement page's Investments tab (app/(app)/investments/page.tsx),
+          so the back link now returns there — /investments IS the Investments
+          tab (components/investments/InvestmentsSubNav.tsx selects by
+          pathname: /investments = Investments, /retirement = Retirement), so
+          no query string or hash is needed to land on the right tab. */}
+      <Link href="/investments" className="mb-3 inline-block text-xs text-muted hover:underline">
+        ← Back to Investments
       </Link>
       <nav aria-label="Investment Intelligence sections" className="border-b border-line">
         <ul className="-mb-px flex gap-x-1 overflow-x-auto whitespace-nowrap">

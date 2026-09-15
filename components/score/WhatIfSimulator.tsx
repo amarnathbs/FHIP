@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { SCENARIO_LABELS, type ScenarioType } from '@/lib/engines/whatIf';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 interface ScenarioSummary {
   score: number;
@@ -71,35 +72,35 @@ export function WhatIfSimulator({ currency }: { currency: 'AUD' | 'INR' }) {
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Measure</th>
-              <th className="py-1">Current</th>
-              <th className="py-1">Scenario</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>Current</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>Scenario</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-t">
               <td className="py-1">Financial Health Score</td>
-              <td className="py-1">{result.before.score}</td>
-              <td className="py-1 font-semibold text-trust">{result.after.score}</td>
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{result.before.score}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{result.after.score}</td>
             </tr>
             <tr className="border-t">
               <td className="py-1">Savings Rate</td>
-              <td className="py-1">{fmtPercent(result.before.savingsRate)}</td>
-              <td className="py-1 font-semibold text-trust">{fmtPercent(result.after.savingsRate)}</td>
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmtPercent(result.before.savingsRate)}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{fmtPercent(result.after.savingsRate)}</td>
             </tr>
             <tr className="border-t">
               <td className="py-1">Debt Service Ratio</td>
-              <td className="py-1">{fmtPercent(result.before.debtServiceRatio)}</td>
-              <td className="py-1 font-semibold text-trust">{fmtPercent(result.after.debtServiceRatio)}</td>
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmtPercent(result.before.debtServiceRatio)}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{fmtPercent(result.after.debtServiceRatio)}</td>
             </tr>
             <tr className="border-t">
               <td className="py-1">Emergency Coverage</td>
-              <td className="py-1">{fmtMonths(result.before.emergencyFundMonths)}</td>
-              <td className="py-1 font-semibold text-trust">{fmtMonths(result.after.emergencyFundMonths)}</td>
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmtMonths(result.before.emergencyFundMonths)}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{fmtMonths(result.after.emergencyFundMonths)}</td>
             </tr>
             <tr className="border-t">
               <td className="py-1">Monthly Surplus</td>
-              <td className="py-1">{formatMoney(result.before.monthlySurplus, currency)}</td>
-              <td className="py-1 font-semibold text-trust">{formatMoney(result.after.monthlySurplus, currency)}</td>
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoney(result.before.monthlySurplus, currency)}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{formatMoney(result.after.monthlySurplus, currency)}</td>
             </tr>
           </tbody>
         </table>

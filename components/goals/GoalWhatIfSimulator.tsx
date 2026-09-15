@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { CategoryForecastResult, ScenarioCode } from '@/lib/engines/goalForecast';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 export function GoalWhatIfSimulator({
   goalId,
@@ -66,19 +67,19 @@ export function GoalWhatIfSimulator({
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Measure</th>
-              <th className="py-1">Current Plan</th>
-              <th className="py-1">Scenario</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>Current Plan</th>
+              <th className={`py-1 ${NUM_HEADER_CLASS}`}>Scenario</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-t">
               <td className="py-1">Completion date</td>
-              <td className="py-1">
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>
                 {result.before.base.projectedCompletionDate
                   ? new Date(result.before.base.projectedCompletionDate).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
                   : '—'}
               </td>
-              <td className="py-1 font-semibold text-trust">
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>
                 {result.after.base.projectedCompletionDate
                   ? new Date(result.after.base.projectedCompletionDate).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
                   : '—'}
@@ -86,12 +87,12 @@ export function GoalWhatIfSimulator({
             </tr>
             <tr className="border-t">
               <td className="py-1">Required contribution</td>
-              <td className="py-1">
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>
                 {result.before.base.requiredMonthlyContribution !== null
                   ? formatMoney(result.before.base.requiredMonthlyContribution, currency)
                   : '—'}
               </td>
-              <td className="py-1 font-semibold text-trust">
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>
                 {result.after.base.requiredMonthlyContribution !== null
                   ? formatMoney(result.after.base.requiredMonthlyContribution, currency)
                   : '—'}
@@ -99,8 +100,8 @@ export function GoalWhatIfSimulator({
             </tr>
             <tr className="border-t">
               <td className="py-1">Target-date funding</td>
-              <td className="py-1">{result.before.base.forecastFundingPct !== null ? `${result.before.base.forecastFundingPct.toFixed(0)}%` : '—'}</td>
-              <td className="py-1 font-semibold text-trust">
+              <td className={`py-1 ${NUM_CELL_CLASS}`}>{result.before.base.forecastFundingPct !== null ? `${result.before.base.forecastFundingPct.toFixed(0)}%` : '—'}</td>
+              <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>
                 {result.after.base.forecastFundingPct !== null ? `${result.after.base.forecastFundingPct.toFixed(0)}%` : '—'}
               </td>
             </tr>

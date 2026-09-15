@@ -530,7 +530,6 @@ function buildResilience(source: ReportSourceData, status: SectionStatus, reason
 
 function buildGoals(source: ReportSourceData): BuiltSection {
   const g = source.goals;
-  const hasGoals = g.summary.activeGoalsCount > 0;
   const goalRows = g.goals
     .filter((goal) => goal.status === 'active')
     .map((goal) => ({
@@ -540,7 +539,21 @@ function buildGoals(source: ReportSourceData): BuiltSection {
       requiredContribution: goal.forecasts.base.requiredMonthlyContribution,
       trackStatus: goal.forecasts.base.trackStatus,
       targetDate: goal.targetDate,
+      // App Review 2026-09-15, item 5 acceptance: "lists the goal with its
+      // target, funded amount and status". Neither amount was carried into
+      // section_data_json before, so even a correctly-populated Goals section
+      // could not show them.
+      targetAmount: goal.targetAmount,
+      currentAmount: goal.currentAmount,
+      currencyCode: goal.currencyCode,
     }));
+  // App Review 2026-09-15, item 5: hasGoals used to read
+  // `g.summary.activeGoalsCount > 0` while the rendered table (and
+  // ReportPreview's own guard) read goalRows.length — two independent
+  // definitions of the same fact, which could disagree and leave the
+  // narrative claiming "No active goals" above a populated table (or the
+  // reverse). One source now.
+  const hasGoals = goalRows.length > 0;
   return {
     sectionCode: 'goals',
     sectionTitle: SECTION_TITLES.goals,
@@ -555,7 +568,15 @@ function buildGoals(source: ReportSourceData): BuiltSection {
       ? `${g.summary.onTrackCount} of ${g.summary.activeGoalsCount} active goals are on track.${
           g.affordability.status === 'overallocated' ? ` ${overallocationNarrative((g.affordability.usageRatio ?? 1) * 100)}` : ''
         }`
-      : 'No active goals were recorded for this period.',
+      : // App Review 2026-09-15, item 5: the old copy — "No active goals were
+        // recorded for this period." — implied a period filter this section
+        // has never had. It reads every goal whose status is 'active' at
+        // build time, with no date predicate whatsoever, so an active goal
+        // appears in every period's report regardless of when it was
+        // created. Saying "for this period" made a stale snapshot look like
+        // a deliberate period exclusion. The replacement states exactly what
+        // is true.
+        'You have no active financial goals.',
     chartData: hasGoals ? { goals: goalRows } : null,
     sourceReferences: {},
     confidenceLevel: null,
@@ -756,15 +777,37 @@ const FRESHNESS_LABELS: Record<string, string> = {
 // just have nothing to report there. Keeping these as their own states
 // stops a confirmed-zero Liabilities section from reading as "Missing" on
 // the same screen where the score already counts it as reviewed.
-export type DataQualityStatus = 'complete' | 'stale' | 'confirmed_zero' | 'not_applicable' | 'missing';
+//
+// App Review 2026-09-15, item 4 adds 'in_progress'. Assets, Liabilities,
+// Investments and Retirement were all reported as "Missing" / "Not provided"
+// / "Not included — not treated as zero" for a household that had genuinely
+// entered 8 assets, 4 liabilities, 2 investments and an SMSF — because this
+// table only had a binary present/absent vocabulary and nothing in between.
+// 'in_progress' is NOT a new concept invented here: it is already one of the
+// five canonical section statuses in lib/engines/financialSectionStatus.ts
+// ("data exists but hasn't been confirmed complete"), and it is already what
+// the section pages themselves tell the user ("This section counts as still
+// in progress until you confirm it's complete"). This table simply never
+// used it.
+export type DataQualityStatus = 'complete' | 'in_progress' | 'stale' | 'confirmed_zero' | 'not_applicable' | 'missing';
 
 export const DATA_QUALITY_STATUS_LABELS: Record<DataQualityStatus, string> = {
   complete: 'Complete',
+  in_progress: 'In progress',
   stale: 'Stale',
   confirmed_zero: 'Confirmed zero',
   not_applicable: 'Not applicable',
   missing: 'Missing',
 };
+
+// Weight an entered-but-unconfirmed section carries in the headline
+// completion percentage. Not 0 (the data exists and IS included in every
+// calculation, so reporting it as contributing nothing is exactly the defect
+// item 4 reports) and not 1 (the household has not yet told FHIP the section
+// is complete, and the "I've added everything relevant to me" confirmation
+// must keep meaning something). Named and exported so it is a visible product
+// decision rather than a magic number buried in a reduce().
+export const IN_PROGRESS_COMPLETENESS_WEIGHT = 0.5;
 
 export function buildDataQuality(
   source: Pick<ReportSourceData, 'dashboard' | 'dataFreshness' | 'healthScore'>
@@ -785,15 +828,53 @@ export function buildDataQuality(
 
   const rows = Object.keys(FRESHNESS_LABELS).map((category) => {
     const lastUpdated = source.dataFreshness[category] ?? null;
-    const present = hasFlags[category];
+    // App Review 2026-09-15, item 4 requirement 3 ("populate Last Updated from
+    // the actual last modified timestamp of records in each section") and the
+    // Assets asymmetry it exposed. `dataFreshness[category]` is the newest
+    // updated_at across that ONE register's active rows (see
+    // reportSnapshotResolver.loadDataFreshness) — so it is non-null exactly
+    // when the register this row is labelled for has records, and it is the
+    // very timestamp rendered in the Last Updated column.
+    //
+    // Presence is now keyed off that, not off dashboard.hasAssets et al.
+    // dashboard.hasAssets is deliberately true when investments OR retirement
+    // rows exist (it feeds report eligibility, where "any wealth at all"
+    // is the right question), which made the Assets row able to render the
+    // self-contradicting combination "Complete / Not provided / Included"
+    // for a household with no assets register rows at all. Status and Last
+    // Updated now cannot disagree, by construction.
+    const registerHasRows = lastUpdated !== null;
     const stale = lastUpdated !== null && new Date(lastUpdated) < sixMonthsAgo;
     const explicit = sectionStatus?.[category as FinancialSection];
+    // The household-scoped flag. Only ever NARROWER than registerHasRows, and
+    // only for income/expenses, whose SMSF-owned rows are excluded from every
+    // household figure (LR-FI-1). Used solely to describe the treatment
+    // honestly, never to decide presence.
+    const countedInHouseholdFigures = hasFlags[category];
 
     let status: DataQualityStatus;
     let reportTreatment: string;
-    if (present) {
-      status = stale ? 'stale' : 'complete';
-      reportTreatment = stale ? 'Included, limited confidence (stale)' : 'Included';
+    if (registerHasRows) {
+      if (stale) {
+        status = 'stale';
+        reportTreatment = 'Included, limited confidence (stale)';
+      } else if (explicit === 'reviewed_with_data' || explicit === 'not_applicable') {
+        // Confirmed complete by the household (or explicitly marked not
+        // applicable, which wins even over real rows — see
+        // effectiveSectionStatus's documented priority order).
+        status = explicit === 'not_applicable' ? 'not_applicable' : 'complete';
+        reportTreatment =
+          explicit === 'not_applicable' ? 'Excluded — marked not applicable by the user' : 'Included';
+      } else {
+        // Data entered, not yet confirmed complete. Item 4 requirement 2:
+        // this must NOT read as "Missing"/"Not provided", and the data IS
+        // included in the report's calculations.
+        status = 'in_progress';
+        reportTreatment = 'Included — not yet confirmed complete by you';
+      }
+      if (!countedInHouseholdFigures && status !== 'not_applicable') {
+        reportTreatment = 'Recorded, but every row is SMSF-owned and is excluded from household figures';
+      }
     } else if (explicit === 'reviewed_zero') {
       status = 'confirmed_zero';
       reportTreatment = 'Included as confirmed zero — reviewed by the user';
@@ -801,6 +882,8 @@ export function buildDataQuality(
       status = 'not_applicable';
       reportTreatment = 'Excluded — marked not applicable by the user';
     } else {
+      // Item 4: "Missing" is now reserved for sections with genuinely no
+      // records, which is the only case that reaches here.
       status = 'missing';
       reportTreatment = 'Not included — not treated as zero';
     }
@@ -810,10 +893,15 @@ export function buildDataQuality(
 
   // Confirmed-zero and not-applicable sections have been reviewed — they
   // count toward completeness the same way a populated section does. Only
-  // 'stale' and 'missing' represent something still outstanding.
-  const completeCount = rows.filter((r) => r.status === 'complete' || r.status === 'confirmed_zero' || r.status === 'not_applicable').length;
-  const dataCompletenessPct = (completeCount / rows.length) * 100;
-  const outstanding = rows.some((r) => r.status === 'stale' || r.status === 'missing');
+  // 'stale' and 'missing' represent something still outstanding; 'in_progress'
+  // carries partial credit (see IN_PROGRESS_COMPLETENESS_WEIGHT).
+  const completionCredit = rows.reduce((sum, r) => {
+    if (r.status === 'complete' || r.status === 'confirmed_zero' || r.status === 'not_applicable') return sum + 1;
+    if (r.status === 'in_progress') return sum + IN_PROGRESS_COMPLETENESS_WEIGHT;
+    return sum;
+  }, 0);
+  const dataCompletenessPct = (completionCredit / rows.length) * 100;
+  const outstanding = rows.some((r) => r.status === 'stale' || r.status === 'missing' || r.status === 'in_progress');
 
   return {
     sectionCode: 'data_quality',

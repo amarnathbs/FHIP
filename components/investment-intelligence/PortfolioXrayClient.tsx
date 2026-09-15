@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { fmtDate } from './dateDisplay';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 // R5 — Portfolio X-Ray UX (spec sections 98-99).
 //
@@ -219,7 +220,7 @@ export function PortfolioXrayClient() {
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
                         <th className="py-2 pr-4">Security</th>
                         <th className="py-2 pr-4">Effective weight</th>
-                        <th className="py-2 pr-4">Value</th>
+                        <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value</th>
                         <th className="py-2 pr-4">Held via</th>
                         <th className="py-2">Sector</th>
                       </tr>
@@ -229,7 +230,7 @@ export function PortfolioXrayClient() {
                         <tr key={h.canonicalId} className="border-b border-slate-100">
                           <td className="py-2 pr-4 font-medium text-ink">{h.name}</td>
                           <td className="py-2 pr-4">{fmtPct(h.effectiveWeight, 2)}</td>
-                          <td className="py-2 pr-4">{fmtMoney(h.effectiveValue, currency)}</td>
+                          <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(h.effectiveValue, currency)}</td>
                           <td className="py-2 pr-4">
                             {h.schemeCount} scheme{h.schemeCount === 1 ? '' : 's'}
                             <span className="block text-xs text-muted">{h.contributingFunds.map((f) => f.fundName).join(', ')}</span>

@@ -182,6 +182,58 @@ export async function loadDataFreshness(userId: string, client?: SupabaseServerC
   return dataFreshness;
 }
 
+// App Review 2026-09-15, items 4 and 5 — shared root cause.
+//
+// generateReport() short-circuits on an existing ready/published report for
+// the same user+type+month and returns its STORED report_sections verbatim.
+// That is correct idempotency, but it also meant a report could never reflect
+// anything the household entered after the first generation of that month:
+//   - item 4: Assets/Liabilities/Investments/Retirement still reported as
+//     "Missing / Not provided" long after 8 assets, 4 liabilities, 2
+//     investments and an SMSF had been entered;
+//   - item 5: "No active goals were recorded for this period." still shown
+//     while the Goals page said "You have 1 active goal".
+// Neither section has a period filter — both read live data at BUILD time —
+// so in both cases the stored text was simply built before the data existed.
+//
+// This returns the newest updated_at across every register the report reads,
+// so generateReport can tell whether its stored copy is behind the data.
+// Cheap: the same 7 one-row queries loadDataFreshness already runs, plus
+// goals and the section confirmations.
+const REPORT_INPUT_TABLES: string[] = [
+  ...FRESHNESS_TABLES.map((t) => t.table),
+  'user_goals',
+  'user_financial_section_status',
+];
+
+export async function loadReportInputsLastChangedAt(userId: string, client?: SupabaseServerClient): Promise<string | null> {
+  const supabase = client ?? (await createClient());
+  const results = await Promise.all(
+    REPORT_INPUT_TABLES.map(async (table) => {
+      // A table without an updated_at column, or any transient failure, must
+      // never make a report look artificially fresh OR artificially stale —
+      // it simply contributes nothing to the comparison.
+      try {
+        const r = await supabase
+          .from(table)
+          .select('updated_at')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return (r.data?.updated_at as string | undefined) ?? null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  let newest: string | null = null;
+  for (const ts of results) {
+    if (ts && (newest === null || ts > newest)) newest = ts;
+  }
+  return newest;
+}
+
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
