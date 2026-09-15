@@ -57,6 +57,20 @@ const CLEAN_CANDIDATES: AieFieldCandidate[] = [
   { fieldName: 'premium', valueRaw: '100', isNull: false, sourceMethod: 'deterministic' },
   { fieldName: 'premiumFrequency', valueRaw: 'monthly', isNull: false, sourceMethod: 'deterministic' },
   { fieldName: 'currencyCode', valueRaw: 'AUD', isNull: false, sourceMethod: 'deterministic' },
+  // M12B-F4/F5. This synthetic candidate set predates
+  // `insurance_printed_fact_completeness`, and once that rule existed these
+  // tests began failing CLOSED — which is exactly the behaviour the rule was
+  // added to produce: an ABSENT completeness candidate is `indeterminate`, not
+  // `pass`, because the whole defect being fixed was an absent signal being
+  // read as good news.
+  //
+  // The candidate is supplied here at its CLEAN value (zero unread facts), so
+  // each test below again tests the one thing its name says it tests — a
+  // currency correction, a multi-component outcome change — rather than
+  // incidentally re-testing the completeness rule. Nothing is weakened: the
+  // fail-closed behaviour itself is asserted directly in
+  // `aieInsuranceAdapterReconciliation.test.ts`.
+  { fieldName: 'unreadablePrintedFactCount', valueRaw: '0', isNull: false, sourceMethod: 'deterministic' },
 ];
 
 describe('AIE-1.5 revalidate.ts — resolveReconciliationRuleForAdapter safety property', () => {

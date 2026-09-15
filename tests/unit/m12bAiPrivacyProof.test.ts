@@ -34,8 +34,9 @@
  * before this phase — it is NOT a provisioning of DEV's real key.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -226,7 +227,6 @@ describe('M12B.6 — real AI privacy proof at the egress boundary', () => {
     // Asserted against the repository's own configuration rather than the
     // process environment this test has just seeded, so the claim in the
     // report is about the environment, not about this file.
-    const fs = require('node:fs') as typeof import('node:fs');
     const envLocal = path.resolve(__dirname, '../../.env.local');
     const exists = fs.existsSync(envLocal);
     const containsKey = exists ? fs.readFileSync(envLocal, 'utf8').includes('AIE_MASK_TOKEN_ENCRYPTION_KEY') : false;

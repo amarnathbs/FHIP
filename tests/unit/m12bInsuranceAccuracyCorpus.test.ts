@@ -477,7 +477,11 @@ describe('M12B.5 — Insurance accuracy certification against a sealed corpus', 
 
       const obs = await runLifecycle(c, c.bytes());
       const observed = observedEconomic();
-      const observedKeys = new Set(observed.map((e) => e.key));
+      // Economic keys are authored as strings on both sides (the harness's
+      // `EconomicItem.key` is deliberately `string | number` so FDH-bank can
+      // key on a row number); narrowed here so the comparison cannot silently
+      // become string-vs-number.
+      const observedKeys = new Set(observed.map((e) => String(e.key)));
 
       const measurement = measureCase({
         caseId: c.id,
