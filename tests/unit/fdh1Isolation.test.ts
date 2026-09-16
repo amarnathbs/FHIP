@@ -389,6 +389,29 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'storage.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'services', 'purge.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'aie', 'cron', 'purge-sweep', 'route.ts'),
+      // PC4/PC5 investment-statement intake (2026-09-15): these ARE real,
+      // intentional imports, not naive-substring false positives — both
+      // reuse FDH-5's already-certified password-attempt rate limiter
+      // (`checkPasswordAttemptRateLimit`, `MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR`
+      // from `lib/financial-data-hub/bank-pdf/password` and `constants`)
+      // rather than building a second one, the same "reuse it, do not
+      // duplicate it" reasoning already approved for AIE-1.3's
+      // fdhBankStatement adapter above.
+      path.join(REPO_ROOT, 'lib', 'services', 'investment-intelligence', 'documentProcessing.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'investment-intelligence', 'intake', '[intakeId]', 'process', 'route.ts'),
+      // PC5/PC6/HUF (2026-09-15): the same naive-substring limitation once
+      // more. `app/api/business-entities/route.ts` cites
+      // `app/api/financial-data-hub/investment-statement/upload/route.ts`,
+      // `app/api/investment-intelligence/cron/pc6-reference-ingest/route.ts`
+      // cites `app/api/financial-data-hub/documents/cron/purge-sweep/route.ts`,
+      // and `components/investment-intelligence/InvestmentIntelligenceSubNav.tsx`
+      // cites `financial-data-hub/review/ReviewWorkspace.tsx` — all three as
+      // prior-art placement/design patterns in prose, not as imports.
+      // Confirmed by hand and by `grep -n "from '@/lib/financial-data-hub"`
+      // against each file returning zero matches.
+      path.join(REPO_ROOT, 'app', 'api', 'business-entities', 'route.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'investment-intelligence', 'cron', 'pc6-reference-ingest', 'route.ts'),
+      path.join(REPO_ROOT, 'components', 'investment-intelligence', 'InvestmentIntelligenceSubNav.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
