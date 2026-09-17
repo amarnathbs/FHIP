@@ -42,7 +42,11 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { statementUploadsRepository } from '../repositories';
+import { statementUploadsRepository, documentAuditEventsRepository } from '../repositories';
+// M12C §10 (`M2-OPEN-8`) — the SHARED, already-certified limiter. Imported,
+// never re-implemented: one threshold and one window for every PDF password
+// surface in the product.
+import { checkPasswordAttemptRateLimit } from '../bank-pdf/password';
 import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
@@ -63,7 +67,10 @@ import type { FdhErrorCode } from '../constants/enums';
 
 export class PayslipProcessingError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_state' | 'wrong_document_type' | 'internal_error',
+    // M12C §10 (`M2-OPEN-8`): `rate_limited` mirrors BankPdfProcessingError's
+    // own code of the same name, so both PDF password surfaces refuse in the
+    // same vocabulary and a caller cannot have to learn two.
+    readonly code: 'not_found' | 'invalid_state' | 'wrong_document_type' | 'internal_error' | 'rate_limited',
     message: string,
   ) {
     super(message);
@@ -223,6 +230,34 @@ export async function processPayslipDocument(userId: string, documentId: string,
 
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new PayslipProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
+  }
+
+  // --- M12C §10 (`M2-OPEN-8`) — password brute-force limiter ----------------
+  //
+  // This endpoint accepted `password` (route schema `z.string().max(200)
+  // .optional()`) and handed it straight to `extractPdfPages` with no counting
+  // of any kind, while its sibling bank-PDF service — the same pipeline, the
+  // same extractor — has been rate-limited since FDH-5. Closed here with the
+  // SAME shared decision function and the SAME certified threshold; no second
+  // counter and no second policy is introduced.
+  //
+  // One deliberate difference from the bank-PDF call site, and it is stricter,
+  // not looser: that one gates on `document.error_code === 'password_required'`,
+  // so a guess made against a document not yet flagged is uncounted. This gates
+  // on a password actually having been SUPPLIED, which counts every guess.
+  // Behaviour for a call with no password is unchanged in every respect.
+  if (typeof password === 'string' && password.length > 0) {
+    const { data: allEvents } = await documentAuditEventsRepository.listForUser(userId, 500);
+    const recentForDoc = (allEvents ?? []).filter((e) => e.document_id === documentId);
+    const rateLimit = checkPasswordAttemptRateLimit({ recentAuditEvents: recentForDoc, nowIso: new Date().toISOString() });
+    if (!rateLimit.allowed) {
+      throw new PayslipProcessingError('rate_limited', 'Too many password attempts for this document recently. Please try again later.');
+    }
+    // RECORDED BEFORE DECRYPTION, deliberately: an attempt that crashes, times
+    // out or is abandoned mid-flight must still count, or a caller could obtain
+    // unlimited free guesses by aborting each request. The event records only
+    // that an attempt happened — never the value attempted.
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_password_required', actorType: 'system' });
   }
 
   if (document.processing_status === 'failed') {

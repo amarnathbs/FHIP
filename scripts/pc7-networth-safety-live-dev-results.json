@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2026-09-15T18:58:44.057Z",
+  "host": "vqycarelcoijzwlpkpcz.supabase.co",
+  "pass": 19,
+  "fail": 0,
+  "results": [
+    {
+      "id": "PC7-LD-00",
+      "description": "Live precondition: is PC6 migration 0155 applied on DEV?",
+      "status": "INFO",
+      "detail": {
+        "applied": true,
+        "httpStatus": 200,
+        "note": "0155 IS applied."
+      }
+    },
+    {
+      "id": "PC7-LD-01",
+      "description": "Precondition: migration 0044 look-through tables ARE live on DEV",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 200
+      }
+    },
+    {
+      "id": "PC7-LD-02",
+      "description": "Disposable synthetic tenant created (real createUser + real password sign-in)",
+      "status": "PASS",
+      "detail": {
+        "id": "4e8fad92-ee34-4265-bbfb-0d8ba54e927a"
+      }
+    },
+    {
+      "id": "PC7-LD-02b",
+      "description": "The synthetic tenant satisfies the Mandatory Country Confirmation gate (IN) via the real profile row",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 200,
+        "body": "[{\"user_id\":\"4e8fad92-ee34-4265-bbfb-0d8ba54e927a\",\"full_name\":null,\"date_of_birth\":null,\"country_of_residence\":\"IN\",\"secondary_country\":null,\"preferred_currency\":\"INR\",\"employment_status\":null,\"onboa"
+      }
+    },
+    {
+      "id": "PC7-LD-03",
+      "description": "The user holds ONE fund position worth exactly 1000000 INR",
+      "status": "PASS",
+      "detail": {
+        "investmentId": "6b362c36-9f54-448b-a430-9635422c9aa8"
+      }
+    },
+    {
+      "id": "PC7-LD-04",
+      "description": "Net worth measured BEFORE ingestion equals the fund position exactly",
+      "status": "PASS",
+      "detail": {
+        "label": "before look-through ingestion",
+        "totalAssets": 0,
+        "totalInvestments": 1000000,
+        "totalRetirement": 0,
+        "totalLiabilities": 0,
+        "netWorth": 1000000
+      }
+    },
+    {
+      "id": "PC7-LD-05",
+      "description": "A full look-through decomposition is ingested: 1 snapshot + 9 constituent lines",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 201,
+        "insertedLines": 9,
+        "snapshotId": "5f94a41c-1417-454f-a71d-519b42eb0377"
+      }
+    },
+    {
+      "id": "PC7-LD-06",
+      "description": "The ingested decomposition genuinely sums to 100% of the fund",
+      "status": "PASS",
+      "detail": {
+        "weightSum": 100
+      }
+    },
+    {
+      "id": "PC7-LD-07",
+      "description": "O.7 SATISFIED LIVE: ingesting a full look-through decomposition changed NET WORTH BY EXACTLY ZERO",
+      "status": "PASS",
+      "detail": {
+        "before": {
+          "label": "before look-through ingestion",
+          "totalAssets": 0,
+          "totalInvestments": 1000000,
+          "totalRetirement": 0,
+          "totalLiabilities": 0,
+          "netWorth": 1000000
+        },
+        "after": {
+          "label": "after look-through ingestion",
+          "totalAssets": 0,
+          "totalInvestments": 1000000,
+          "totalRetirement": 0,
+          "totalLiabilities": 0,
+          "netWorth": 1000000
+        },
+        "fieldsThatMoved": [],
+        "comparison": "exact equality, no tolerance"
+      }
+    },
+    {
+      "id": "PC7-LD-08",
+      "description": "Specifically: net worth is still exactly the ONE fund position, not double it",
+      "status": "PASS",
+      "detail": {
+        "netWorth": 1000000,
+        "doubleWouldBe": 2000000
+      }
+    },
+    {
+      "id": "PC7-LD-09",
+      "description": "Read back from the live database, the parts sum to exactly the whole (100%), never more",
+      "status": "PASS",
+      "detail": {
+        "bucket": {
+          "security": 97,
+          "cash": 2.5,
+          "derivative": 0,
+          "other": 0.5
+        },
+        "totalPct": 100,
+        "rowsReadBack": 9
+      }
+    },
+    {
+      "id": "PC7-LD-10",
+      "description": "In MONEY: the decomposed value equals the position value exactly — it is not added to it",
+      "status": "PASS",
+      "detail": {
+        "decomposedValue": 1000000,
+        "positionValue": 1000000,
+        "sumIfItDoubleCounted": 2000000
+      }
+    },
+    {
+      "id": "PC7-LD-11",
+      "description": "NEGATIVE CONTROL: an ordinary authenticated user CANNOT insert a look-through line",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 403,
+        "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_fund_holdings_lines\\\"\"}"
+      }
+    },
+    {
+      "id": "PC7-LD-12",
+      "description": "NEGATIVE CONTROL: an ordinary authenticated user CANNOT insert a look-through snapshot",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 403,
+        "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_fund_holdings_snapshots\\\"\"}"
+      }
+    },
+    {
+      "id": "PC7-LD-13",
+      "description": "POSITIVE CONTROL for the negative control: the same user CAN READ the same rows (so 12/13 is a WRITE denial, not a broken request)",
+      "status": "PASS",
+      "detail": {
+        "httpStatus": 200,
+        "rowsVisible": 9
+      }
+    },
+    {
+      "id": "PC7-LD-14",
+      "description": "POSITIVE CONTROL: the measurement DOES move when real wealth is genuinely added (so PC7-LD-07 is not vacuous)",
+      "status": "PASS",
+      "detail": {
+        "sensitised": {
+          "label": "with a 1-rupee probe investment",
+          "totalAssets": 0,
+          "totalInvestments": 1000001,
+          "totalRetirement": 0,
+          "totalLiabilities": 0,
+          "netWorth": 1000001
+        },
+        "expected": 1000001
+      }
+    },
+    {
+      "id": "PC7-LD-15",
+      "description": "and returns to the original figure when it is removed",
+      "status": "PASS",
+      "detail": {
+        "restored": {
+          "label": "after removing the probe",
+          "totalAssets": 0,
+          "totalInvestments": 1000000,
+          "totalRetirement": 0,
+          "totalLiabilities": 0,
+          "netWorth": 1000000
+        }
+      }
+    },
+    {
+      "id": "PC7-LD-16",
+      "description": "STRUCTURAL: the live investments row carries NO column referencing any look-through table",
+      "status": "PASS",
+      "detail": {
+        "columnCount": 27,
+        "leaking": []
+      }
+    },
+    {
+      "id": "PC7-LD-16b",
+      "description": "The II columns investments does carry are PUBLICATION/IDENTITY links, never constituent links",
+      "status": "PASS",
+      "detail": {
+        "iiLinks": [
+          "ii_publication_id",
+          "ii_canonical_account_id",
+          "ii_canonical_instrument_id",
+          "ii_linked_at",
+          "ii_last_refreshed_at",
+          "ii_source_quality_status"
+        ]
+      }
+    },
+    {
+      "id": "PC7-LD-17",
+      "description": "CLEANUP: independent re-query confirms ZERO synthetic rows remain on DEV",
+      "status": "PASS",
+      "detail": {
+        "residue": 0
+      }
+    }
+  ]
+}

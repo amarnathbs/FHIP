@@ -1,0 +1,839 @@
+{
+  "corpusVersion": "m12a-2026-09-16",
+  "generatedBy": "tests/unit/m12aFdhBankAccuracyCorpus.test.ts",
+  "summary": {
+    "caseCount": 12,
+    "fieldPrecision": 1,
+    "fieldRecall": 1,
+    "economicPrecision": 1,
+    "economicRecall": 0.925,
+    "falseAcceptRate": 0,
+    "falseAcceptCount": 0,
+    "falseAcceptDenominator": 5,
+    "falseCanonicalWriteRate": 0,
+    "falseCanonicalWriteCount": 0,
+    "totalUnexplainedOmissions": 0
+  },
+  "cases": [
+    {
+      "caseId": "FDH-A01",
+      "scenario": "normal bank PDF",
+      "fieldTruePositives": 23,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 4,
+      "economicObserved": 4,
+      "economicExpected": 4,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A02",
+      "scenario": "multi-page transaction history",
+      "fieldTruePositives": 48,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 9,
+      "economicObserved": 9,
+      "economicExpected": 9,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A03",
+      "scenario": "debit/credit terminology variant",
+      "fieldTruePositives": 23,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 4,
+      "economicObserved": 4,
+      "economicExpected": 4,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A04",
+      "scenario": "wrapped description",
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A05",
+      "scenario": "ambiguous institution requiring AI clarification",
+      "fieldTruePositives": 0,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": null,
+      "fieldRecall": null,
+      "economicMatched": 0,
+      "economicObserved": 0,
+      "economicExpected": 0,
+      "economicPrecision": null,
+      "economicRecall": null,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A06",
+      "scenario": "malformed statement",
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 3,
+      "economicPrecision": 1,
+      "economicRecall": 0.6666666666666666,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": [
+        {
+          "key": 2,
+          "expected": {
+            "key": 2,
+            "date": null,
+            "amount": 220.24,
+            "direction": "debit",
+            "balance": 734.56
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "FDH-A07",
+      "scenario": "duplicate / reimport",
+      "fieldTruePositives": 23,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 4,
+      "economicObserved": 4,
+      "economicExpected": 4,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A08",
+      "scenario": "opening/closing balance mismatch",
+      "fieldTruePositives": 23,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 4,
+      "economicObserved": 4,
+      "economicExpected": 4,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A09",
+      "scenario": "password-protected",
+      "fieldTruePositives": 0,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": null,
+      "fieldRecall": null,
+      "economicMatched": 0,
+      "economicObserved": 0,
+      "economicExpected": 1,
+      "economicPrecision": null,
+      "economicRecall": 0,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 45.2,
+            "direction": "debit",
+            "balance": 954.8
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "FDH-A10",
+      "scenario": "adversarial prompt-injection text",
+      "fieldTruePositives": 18,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 3,
+      "economicObserved": 3,
+      "economicExpected": 3,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A11",
+      "scenario": "ADDITIVE — silent-omission probe",
+      "fieldTruePositives": 13,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 3,
+      "economicPrecision": 1,
+      "economicRecall": 0.6666666666666666,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": null,
+            "amount": 45.2,
+            "direction": "debit",
+            "balance": 954.8
+          },
+          "observed": null
+        }
+      ]
+    },
+    {
+      "caseId": "FDH-A12",
+      "scenario": "ADDITIVE — India / INR jurisdiction variant",
+      "fieldTruePositives": 18,
+      "fieldFalsePositives": 0,
+      "fieldFalseNegatives": 0,
+      "fieldPrecision": 1,
+      "fieldRecall": 1,
+      "economicMatched": 3,
+      "economicObserved": 3,
+      "economicExpected": 3,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [],
+      "economicDisagreements": []
+    }
+  ],
+  "evidence": {
+    "FDH-A01": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A02": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A03": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A04": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A05": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 1,
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_layout_certification",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_layout_certification",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "materiality": "ambiguous_layout"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A06": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:fdh_bank_statement_balance_reconciliation",
+          "severity": "blocking"
+        },
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_row_extraction_completeness",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "fail",
+          "delta": 220.24,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "tolerance": 0,
+          "materiality": "[{\"sourceRowNumber\":2,\"reason\":\"invalid_transaction_date\"}]"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A07": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A08": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_fail:fdh_bank_statement_balance_reconciliation",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "fail",
+          "delta": 34.56,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A09": {
+      "observedTerminalStatus": "rejected",
+      "observedRejectionReason": "password_required",
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_found"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [],
+      "accountIdentityReuseObserved": [],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "rejected",
+          "rejectionReason": "password_required"
+        }
+      ]
+    },
+    "FDH-A10": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A11": {
+      "observedTerminalStatus": "unresolved",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_row_extraction_completeness",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": 1,
+          "tolerance": 0,
+          "materiality": "[{\"sourceRowNumber\":1,\"reason\":\"invalid_transaction_date\"}]"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A12": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": true
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 1,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A07R": {
+      "observedTerminalStatus": "unresolved",
+      "dedupStatuses": [
+        "duplicate_confirmed"
+      ],
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_balance_reconciliation",
+          "severity": "blocking"
+        }
+      ],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "indeterminate",
+          "delta": null,
+          "tolerance": 0,
+          "materiality": "none"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "not_ready"
+      },
+      "canonicalWrites": 0
+    },
+    "CONTROL-corrupt-pdf": {
+      "observedTerminalStatus": "rejected",
+      "observedRejectionReason": "corrupt",
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "rejected",
+          "rejectionReason": "corrupt"
+        }
+      ]
+    },
+    "FDH-A05-no-masking-key": {
+      "intakeThrew": null,
+      "observedTerminalStatus": "unresolved",
+      "canonicalWrites": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [
+        {
+          "reasonCode": "reconciliation_indeterminate:fdh_bank_statement_layout_certification",
+          "severity": "blocking"
+        }
+      ],
+      "note": "AIE_MASK_TOKEN_ENCRYPTION_KEY is unset in this environment and is a Product-Owner/operator-owned blocker; no workaround was attempted and no key was provisioned. M12A-F2 (the crash) was fixed in M12B; the AI clarification itself remains NOT CERTIFIED, which is why FDH-A05 stays CONDITIONAL."
+    }
+  }
+}

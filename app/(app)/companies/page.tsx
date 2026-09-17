@@ -1,16 +1,31 @@
 'use client';
 
 // LR-11 — Company entity workspace. LR-13 — Family Trust fast-follow: same
-// page/schema, entity_type widened at migration 0136.
+// page/schema, entity_type widened at migration 0136. M4B — HUF fast-follow
+// on exactly the same line, entity_type widened again at migration 0154,
+// with one difference Family Trust did not need: HUF is INDIA-ONLY.
+//
+// The client-side country check below is CONVENIENCE ONLY, and is written
+// the way `components/retirement/smsf/SmsfSection.tsx` already writes the
+// mirror-image AU-only check for SMSF: fetch `/api/user/profile`, read
+// `country_of_residence`, and simply do not offer the option. The real gates
+// are server-side — `app/api/business-entities/route.ts`'s 403 and
+// `trg_business_entities_huf_india_gate` (migration 0154) — and are tested
+// directly, not merely through this UI.
+//
+// Like SMSF's own rule, an EXISTING HUF stays fully visible and editable
+// after a move out of India: only the offer to create a NEW one follows the
+// user's current country. `ENTITY_TYPE_LABEL` therefore covers 'huf'
+// unconditionally.
 
 import { useEffect, useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
-
-type BusinessEntityType = 'company' | 'family_trust';
+import type { BusinessEntityType } from '@/lib/validation/businessEntity';
 
 const ENTITY_TYPE_LABEL: Record<BusinessEntityType, string> = {
   company: 'Company',
   family_trust: 'Family Trust',
+  huf: 'HUF (Hindu Undivided Family)',
 };
 
 interface BusinessEntity {
@@ -60,6 +75,9 @@ export default function CompaniesPage() {
   const [newMode, setNewMode] = useState<'summary' | 'detailed'>('summary');
   const [newNav, setNewNav] = useState('');
   const [busy, setBusy] = useState(false);
+  // M4B — null until the profile has loaded, so the HUF option is never
+  // flashed to a non-India user while the answer is still unknown.
+  const [countryOfResidence, setCountryOfResidence] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -76,8 +94,14 @@ export default function CompaniesPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await fetchJson<BusinessEntity[]>('/api/business-entities');
-        if (!cancelled) setEntities(data);
+        const [data, profile] = await Promise.all([
+          fetchJson<BusinessEntity[]>('/api/business-entities'),
+          fetchJson<{ country_of_residence: string | null }>('/api/user/profile'),
+        ]);
+        if (!cancelled) {
+          setEntities(data);
+          setCountryOfResidence(profile.country_of_residence);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load your companies.');
       } finally {
@@ -88,6 +112,10 @@ export default function CompaniesPage() {
       cancelled = true;
     };
   }, []);
+
+  // Fails CLOSED: an unresolved country offers no HUF option, exactly as a
+  // confirmed non-India one does.
+  const canCreateHuf = countryOfResidence === 'IN';
 
   async function submitCreate() {
     setBusy(true);
@@ -130,11 +158,11 @@ export default function CompaniesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-trust">Companies &amp; Trusts</h1>
+        <h1 className="text-2xl font-semibold text-trust">{canCreateHuf ? 'Companies, Trusts & HUF' : 'Companies & Trusts'}</h1>
         <p className="mt-1 text-muted">
-          Track a company or family trust you have an interest in, separate from your personal finances. Only your
-          own share of its net value is added to your household Net Worth — its own assets and debts are never
-          counted a second time as personally yours.
+          Track a company{canCreateHuf ? ', family trust or HUF' : ' or family trust'} you have an interest in,
+          separate from your personal finances. Only your own share of its net value is added to your household Net
+          Worth — its own assets and debts are never counted a second time as personally yours.
         </p>
       </div>
 
@@ -148,14 +176,21 @@ export default function CompaniesPage() {
             <CompanyCard key={entity.id} entity={entity} onChanged={load} onArchive={() => void archive(entity.id)} busy={busy} />
           ))}
 
-          <SectionCard title="Add a company or trust" description="Record a company or family trust you have an interest in.">
+          <SectionCard
+            title={canCreateHuf ? 'Add a company, trust or HUF' : 'Add a company or trust'}
+            description={
+              canCreateHuf
+                ? 'Record a company, family trust or Hindu Undivided Family you have an interest in.'
+                : 'Record a company or family trust you have an interest in.'
+            }
+          >
             {!creating ? (
               <button
                 type="button"
                 onClick={() => setCreating(true)}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               >
-                Add company or trust
+                {canCreateHuf ? 'Add company, trust or HUF' : 'Add company or trust'}
               </button>
             ) : (
               <div className="space-y-3">
@@ -169,6 +204,11 @@ export default function CompaniesPage() {
                     >
                       <option value="company">Company</option>
                       <option value="family_trust">Family Trust</option>
+                      {/* M4B: India-only. Following SMSF's own precedent
+                          (spec s.34, SmsfSection.tsx) the option is simply
+                          ABSENT for a non-India user — never rendered as a
+                          disabled or explained choice. */}
+                      {canCreateHuf && <option value="huf">HUF (Hindu Undivided Family)</option>}
                     </select>
                   </div>
                   <div>

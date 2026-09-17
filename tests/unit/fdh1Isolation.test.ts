@@ -295,6 +295,123 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // independent literal instead. It never imports anything from
       // `lib/financial-data-hub`.
       path.join(REPO_ROOT, 'lib', 'services', 'accountDeletionStorage.ts'),
+      // AIE-1.1 (2026-09-11): lib/aie/** and app/api/aie/intake/route.ts trip
+      // the identical naive-substring limitation the precedents above
+      // document, for the identical reason: several files' header comments
+      // explain a REUSE DECISION by naming
+      // `lib/financial-data-hub/domain/fileValidation.ts`,
+      // `lib/financial-data-hub/payslip/privacy.ts`, and similar existing
+      // FDH modules as prior art AIE-1.1 deliberately re-implements the
+      // technique of rather than importing (the same reasoning FDH-5's own
+      // bank-pdf/textExtraction.ts gives for not importing Investment
+      // Intelligence R2's pdfExtraction.ts directly — each domain keeps its
+      // own independent, non-coupled copy of a shared technique). None of
+      // these files has any `from '@/lib/financial-data-hub...'` import —
+      // confirmed by hand and by `grep -rn "from '@/lib/financial-data-hub"
+      // lib/aie app/api/aie` returning zero matches. Approved as exactly
+      // these ten files, not a directory, so a future lib/aie file that
+      // starts genuinely importing FDH code would still be caught.
+      path.join(REPO_ROOT, 'lib', 'aie', 'audit.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'classifier', 'registry.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'db', 'repository.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'extraction', 'textExtraction.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'featureFlags.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'masking', 'piiMasking.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'stateMachine.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'types.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'validation', 'fileValidation.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'intake', 'route.ts'),
+      // AIE-1.2 (2026-09-11): lib/aie/adapters/investment-intelligence/
+      // featureFlags.ts trips the identical naive-substring limitation as
+      // the AIE-1.1 precedent immediately above, for the identical reason —
+      // its own module header names `lib/financial-data-hub/constants/
+      // featureFlags.ts` in prose as the established house convention this
+      // file's own env-var-default-off pattern follows, not an import. No
+      // `from '@/lib/financial-data-hub...'` import exists in this file —
+      // confirmed by hand and by `grep -rn "from '@/lib/financial-data-hub"
+      // lib/aie/adapters/investment-intelligence` returning zero matches.
+      // Approved as exactly this one file, not a directory.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'investment-intelligence', 'featureFlags.ts'),
+      // AIE-1.3 (2026-09-11): lib/aie/adapters/fdhBankStatement/** and
+      // app/api/aie/fdh-bank/intake/route.ts are DIFFERENT IN KIND from the
+      // AIE-1.1 entries immediately above — these ARE real, intentional
+      // imports of FDH module code, not naive-substring false positives.
+      // This is the exact analogue of the `lib/investment-import-bridge/`
+      // and `lib/retirement-import-bridge/` precedents already approved
+      // above: AIE-1.3's whole job (per its own spec, section 2's binding
+      // scope decision) is to WRAP FDH-5's already-certified
+      // `lib/financial-data-hub/bank-pdf/**` classification/extraction/
+      // reconciliation primitives and FDH-5's own upload/processing
+      // services behind AIE-1.1's shared contract, and to commit through
+      // FDH's own existing atomic-import boundary — "reuse it, do not
+      // build a second one" is only meaningful if this adapter is actually
+      // allowed to import it. Approved as exactly these seven files, not a
+      // directory, so a future lib/aie file that starts importing FDH code
+      // for an unrelated reason would still be caught (this list does NOT
+      // include reconciliation.ts, which genuinely has no FDH import at
+      // all — it consumes only this adapter's own field-candidate
+      // vocabulary, per its own header).
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'atomicImport.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'featureFlags.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'index.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'parser.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'fdhBankStatement', 'types.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'fdh-bank', 'intake', 'route.ts'),
+      // AIE-1.4 (2026-09-11): lib/aie/adapters/insurance/documentCatalogue.ts
+      // and labels.ts trip the identical naive-substring limitation, for the
+      // identical reason as the AIE-1.1 exception directly above — their own
+      // header comments cite `lib/financial-data-hub/payslip/**`,
+      // `lib/financial-data-hub/liability/adapters/**` and
+      // `lib/financial-data-hub/retirement/**` as the reason payslip/income,
+      // loans/liabilities and retirement/SMSF were each ruled DEFER this pass
+      // (a mature, separate FDH pipeline for each already exists — see
+      // AIE_1_4_IMPLEMENTATION.md's eligibility scorecard), and
+      // `lib/financial-data-hub/payslip/labels.ts`'s own documented
+      // label-matching design rule as prior art this adapter's own
+      // `labels.ts` reuses IN SUBSTANCE, not by import. Confirmed by hand and
+      // by `grep -rn "from '@/lib/financial-data-hub" lib/aie/adapters/insurance`
+      // returning zero matches.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'documentCatalogue.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'insurance', 'labels.ts'),
+      // AIE-1 closure mission (2026-09-13): the same naive-substring
+      // limitation again. `lib/aie/storage.ts#verifyQuarantineObjectAbsent`
+      // and `lib/aie/services/purge.ts` (AIE's own new retention/purge
+      // service, reusing LR-1's DESIGN, not its CODE) both cite
+      // `lib/financial-data-hub/services/storage.ts#verifyDocumentObjectExists`
+      // and `lib/financial-data-hub/services/purge.ts` in header comments as
+      // the prior-art pattern being mirrored — neither file imports FDH code.
+      // `app/api/aie/cron/purge-sweep/route.ts` cites
+      // `app/api/financial-data-hub/documents/cron/purge-sweep/route.ts` the
+      // same way. Confirmed by hand and by
+      // `grep -n "from '@/lib/financial-data-hub" lib/aie/storage.ts lib/aie/services/purge.ts app/api/aie/cron/purge-sweep/route.ts`
+      // returning zero matches.
+      path.join(REPO_ROOT, 'lib', 'aie', 'storage.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'services', 'purge.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'cron', 'purge-sweep', 'route.ts'),
+      // PC4/PC5 investment-statement intake (2026-09-15): these ARE real,
+      // intentional imports, not naive-substring false positives — both
+      // reuse FDH-5's already-certified password-attempt rate limiter
+      // (`checkPasswordAttemptRateLimit`, `MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR`
+      // from `lib/financial-data-hub/bank-pdf/password` and `constants`)
+      // rather than building a second one, the same "reuse it, do not
+      // duplicate it" reasoning already approved for AIE-1.3's
+      // fdhBankStatement adapter above.
+      path.join(REPO_ROOT, 'lib', 'services', 'investment-intelligence', 'documentProcessing.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'aie', 'investment-intelligence', 'intake', '[intakeId]', 'process', 'route.ts'),
+      // PC5/PC6/HUF (2026-09-15): the same naive-substring limitation once
+      // more. `app/api/business-entities/route.ts` cites
+      // `app/api/financial-data-hub/investment-statement/upload/route.ts`,
+      // `app/api/investment-intelligence/cron/pc6-reference-ingest/route.ts`
+      // cites `app/api/financial-data-hub/documents/cron/purge-sweep/route.ts`,
+      // and `components/investment-intelligence/InvestmentIntelligenceSubNav.tsx`
+      // cites `financial-data-hub/review/ReviewWorkspace.tsx` — all three as
+      // prior-art placement/design patterns in prose, not as imports.
+      // Confirmed by hand and by `grep -n "from '@/lib/financial-data-hub"`
+      // against each file returning zero matches.
+      path.join(REPO_ROOT, 'app', 'api', 'business-entities', 'route.ts'),
+      path.join(REPO_ROOT, 'app', 'api', 'investment-intelligence', 'cron', 'pc6-reference-ingest', 'route.ts'),
+      path.join(REPO_ROOT, 'components', 'investment-intelligence', 'InvestmentIntelligenceSubNav.tsx'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

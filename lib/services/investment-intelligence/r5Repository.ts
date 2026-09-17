@@ -537,6 +537,7 @@ async function loadFundHoldingsSnapshots(
     id: string;
     fund_instrument_id: string;
     holdings_as_of_date: string;
+    source_id: string | null;
     source_data_version: string | null;
     classification_version: string | null;
     quality_status: string | null;
@@ -546,7 +547,10 @@ async function loadFundHoldingsSnapshots(
     snapRows = await fetchAllRows<SnapHeaderRow>(() =>
       supabase
         .from('ii_fund_holdings_snapshots')
-        .select('id, fund_instrument_id, holdings_as_of_date, source_data_version, classification_version, quality_status')
+        // PC7/O.8: `source_id` added. Every X-Ray result must expose its
+        // SOURCE alongside its as-of date and coverage, and this read was the
+        // reason it could not — see the sourceKey assignment below.
+        .select('id, fund_instrument_id, holdings_as_of_date, source_id, source_data_version, classification_version, quality_status')
         .in('fund_instrument_id', fundIds)
         .lte('holdings_as_of_date', asOfDate)
         .order('holdings_as_of_date', { ascending: false })
@@ -623,13 +627,33 @@ async function loadFundHoldingsSnapshots(
     linesBySnapshot.set(r.snapshot_id, list);
   }
 
+  // PC7/O.8 — RESOLVE THE REAL SOURCE.
+  //
+  // This block previously assigned the literal string 'db' to every snapshot's
+  // sourceKey. That is not a source: it says "it came from the database",
+  // which is true of everything and tells a user nothing about WHO disclosed
+  // the portfolio they are being shown. O.8 requires every X-Ray result to
+  // expose source, as-of date and coverage; as-of date and coverage were
+  // already honest, source was not.
+  //
+  // `unattributed` is used when a snapshot genuinely carries no source_id —
+  // which is the state of the 19 fixture snapshots on DEV. That is a DIFFERENT
+  // and more honest answer than 'db': it says the provenance is missing, which
+  // is exactly what the PC7 admin surface should be showing an operator.
+  const snapSourceIds = [...new Set(usableSnaps.map((s) => s.source_id).filter((v): v is string => !!v))];
+  const sourceKeyById = new Map<string, string>();
+  if (snapSourceIds.length > 0) {
+    const { data: sourceRows } = await supabase.from('ii_sources').select('id, source_key').in('id', snapSourceIds);
+    for (const row of sourceRows ?? []) sourceKeyById.set(row.id as string, row.source_key as string);
+  }
+
   for (const s of usableSnaps) {
     const list = snapshotsByFund.get(s.fund_instrument_id) ?? [];
     list.push({
       snapshotId: s.id,
       fundInstrumentId: s.fund_instrument_id,
       holdingsAsOfDate: s.holdings_as_of_date,
-      sourceKey: 'db',
+      sourceKey: (s.source_id ? sourceKeyById.get(s.source_id) : null) ?? 'unattributed',
       sourceDataVersion: s.source_data_version,
       classificationVersion: s.classification_version,
       holdings: linesBySnapshot.get(s.id) ?? [],

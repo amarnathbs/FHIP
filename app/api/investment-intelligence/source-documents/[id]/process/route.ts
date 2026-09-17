@@ -55,5 +55,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // `result` (ProcessSourceDocumentResult) has no such field by
   // construction (see documentProcessing.ts).
   if (!result.ok && result.status === 'not_found') return bad('Source document not found.', 404);
+  // M12C §10 (`M2-OPEN-8`): the shared password-attempt limiter refused this
+  // attempt. 429 matches the bank-PDF and AIE unlock routes exactly, so every
+  // PDF password surface in the product refuses in the same way.
+  if (!result.ok && result.status === 'password_rate_limited') return bad(result.error ?? 'Too many password attempts for this document.', 429, 'password_rate_limited');
   return ok(result);
 }

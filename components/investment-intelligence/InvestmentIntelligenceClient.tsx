@@ -142,6 +142,14 @@ function StatusBadge({ status }: { status: string }) {
 export function InvestmentIntelligenceClient() {
   const [documents, setDocuments] = useState<SourceDocument[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // M12C §11 (`CG-10`): a byte-identical re-upload is answered by the server
+  // with the FIRST document's id and `deduplicated: true`. That flag was
+  // returned and then ignored here, so the user was silently switched onto the
+  // existing document while believing they had just created a second one —
+  // which is exactly how "the Process button acted on the wrong document" is
+  // produced without any wrong-document lookup existing anywhere in the code.
+  // Surfaced as a notice, not an error: nothing failed.
+  const [notice, setNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
@@ -219,6 +227,7 @@ export function InvestmentIntelligenceClient() {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setNotice(null);
     try {
       const form = new FormData();
       form.append('file', file);
@@ -235,6 +244,11 @@ export function InvestmentIntelligenceClient() {
       if (!res.ok) throw new Error(json.error ?? 'Upload failed');
       setFile(null);
       await loadDocuments();
+      // M12C §11 (`CG-10`): say so, rather than silently selecting a different
+      // document than the one the user thinks they just uploaded.
+      if (json.data?.deduplicated) {
+        setNotice('This file is identical to one you have already uploaded, so no second document was created. You are now viewing the existing document.');
+      }
       selectDocument(json.data.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -384,6 +398,11 @@ export function InvestmentIntelligenceClient() {
   return (
     <div className="space-y-6">
       {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {notice && (
+        <div role="status" aria-live="polite" className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          {notice}
+        </div>
+      )}
 
       {/* Step 1: Upload */}
       <section className="rounded-lg border border-gray-200 bg-white p-4">

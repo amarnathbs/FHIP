@@ -1,0 +1,679 @@
+{
+  "mode": "FULL",
+  "ranAt": "2026-09-15T19:00:51.682Z",
+  "tally": {
+    "PASS": 54,
+    "FAIL": 0,
+    "BLOCKED_ON_0153": 0,
+    "NOT_APPLICABLE": 0
+  },
+  "results": [
+    {
+      "id": "GATE-1",
+      "kItem": "—",
+      "description": "migration 0153 applied to DEV? YES — running in FULL mode",
+      "status": "PASS",
+      "detail": {
+        "ii_ownership_allocation": "PRESENT",
+        "aie_review_decision.original_value_at_decision": "PRESENT"
+      }
+    },
+    {
+      "id": "GATE-2",
+      "kItem": "K.20",
+      "description": "PC5 feature gate is OFF by default and ON only when explicitly set",
+      "status": "PASS",
+      "detail": {
+        "AIE_REVIEW_PC5_PROJECTION_ENABLED": "true"
+      }
+    },
+    {
+      "id": "GATE-3",
+      "kItem": "K.17",
+      "description": "bulk resolution is OFF and has no consumer — PC5 ships no bulk action",
+      "status": "PASS"
+    },
+    {
+      "id": "SETUP-1",
+      "kItem": "—",
+      "description": "two real disposable DEV users created with real password sign-in",
+      "status": "PASS",
+      "detail": {
+        "owner": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339",
+        "attacker": "b2b67fc3-2774-423d-9978-df13210a3870"
+      }
+    },
+    {
+      "id": "SETUP-2",
+      "kItem": "K.5",
+      "description": "household populated with self, spouse, partner, child and dependant",
+      "status": "PASS",
+      "detail": {
+        "selfId": "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+        "spouseId": "2c71185e-73b8-4826-b57c-a2785321fc43",
+        "partnerId": "45739d2f-7bf1-43b2-ab58-ebb4d84d826b",
+        "childId": "4218b2cd-56a8-40d9-91e9-8d700734b2ac",
+        "dependantId": "4b773b1c-063c-4f99-afec-d6e0d577c498"
+      }
+    },
+    {
+      "id": "S-01",
+      "kItem": "K.5",
+      "description": "owner option set is resolved live from this user's own household (self/spouse/partner/child/dependant + joint)",
+      "status": "PASS",
+      "detail": {
+        "optionCount": 6,
+        "roles": [
+          "self",
+          "spouse",
+          "child",
+          "spouse",
+          "other",
+          "joint"
+        ]
+      }
+    },
+    {
+      "id": "S-02",
+      "kItem": "K.5",
+      "description": "HUF is NOT offered as an owner — it is not modelled in this repository and PC5 refuses to invent it",
+      "status": "PASS",
+      "detail": {
+        "labels": [
+          "Anil Sharma",
+          "Priya Sharma",
+          "Rohan Sharma",
+          "Sam Taylor",
+          "Meera Sharma",
+          "Jointly owned"
+        ]
+      }
+    },
+    {
+      "id": "S-03",
+      "kItem": "K.20",
+      "description": "another user's option set is ENTIRELY disjoint — the option set is the authorisation boundary",
+      "status": "PASS",
+      "detail": {
+        "attackerOptionCount": 0
+      }
+    },
+    {
+      "id": "S-04",
+      "kItem": "K.4",
+      "description": "EXACT OWNER MATCH — the printed holder resolves to exactly one real household member",
+      "status": "PASS",
+      "detail": {
+        "kind": "exact_match",
+        "memberId": "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+        "maskedHolderName": "M** A*** S*****"
+      }
+    },
+    {
+      "id": "S-05",
+      "kItem": "K.7",
+      "description": "OWNER MISMATCH — a statement naming someone outside the household blocks, and leaks no raw name",
+      "status": "PASS",
+      "detail": {
+        "kind": "mismatch",
+        "maskedHolderName": "V***** R**",
+        "maskedJointHolders": [],
+        "candidateMemberIds": [
+          "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+          "2c71185e-73b8-4826-b57c-a2785321fc43",
+          "4218b2cd-56a8-40d9-91e9-8d700734b2ac",
+          "45739d2f-7bf1-43b2-ab58-ebb4d84d826b",
+          "4b773b1c-063c-4f99-afec-d6e0d577c498"
+        ]
+      }
+    },
+    {
+      "id": "S-06",
+      "kItem": "K.5",
+      "description": "SPOUSE / PARTNER — a spouse-held statement matches the spouse member, not \"self\"",
+      "status": "PASS",
+      "detail": {
+        "kind": "exact_match",
+        "memberId": "2c71185e-73b8-4826-b57c-a2785321fc43",
+        "maskedHolderName": "P**** S*****"
+      }
+    },
+    {
+      "id": "S-07",
+      "kItem": "K.5",
+      "description": "CHILD / DEPENDENT — a child-held statement matches the child member",
+      "status": "PASS",
+      "detail": {
+        "child": "exact_match",
+        "dependant": "exact_match"
+      }
+    },
+    {
+      "id": "S-08",
+      "kItem": "K.6",
+      "description": "JOINT HOLDING detected from real evidence, and both named holders resolve to real members",
+      "status": "PASS",
+      "detail": {
+        "kind": "joint_holding",
+        "maskedHolderName": "A*** S*****",
+        "maskedJointHolders": [
+          "P**** S*****"
+        ],
+        "matchedMemberIds": [
+          "1e1362d1-4e76-495c-9533-aa3be34c6b10",
+          "2c71185e-73b8-4826-b57c-a2785321fc43"
+        ]
+      }
+    },
+    {
+      "id": "S-09",
+      "kItem": "K.4",
+      "description": "owner evidence survives the candidate round trip — a re-check after purge reads the SAME holder",
+      "status": "PASS",
+      "detail": {
+        "before": {
+          "holderName": "Anil Sharma",
+          "jointHolders": [],
+          "holdingModeRaw": "JO"
+        },
+        "after": {
+          "holderName": "Anil Sharma",
+          "jointHolders": [],
+          "holdingModeRaw": "JO"
+        }
+      }
+    },
+    {
+      "id": "S-10",
+      "kItem": "K.13",
+      "description": "REVIEW CENTRE PROJECTION — a real open item projects with an OPEN status and a live option set",
+      "status": "PASS",
+      "detail": {
+        "status": "open",
+        "actions": [
+          "choose_value",
+          "acknowledge",
+          "discard_statement"
+        ],
+        "optionCount": 6,
+        "blocking": 1
+      }
+    },
+    {
+      "id": "S-11",
+      "kItem": "K.14",
+      "description": "ACTIONABLE DEEP LINK — the item projects a link to its own case, not to a statement list",
+      "status": "PASS",
+      "detail": {
+        "href": "/investment-intelligence/resolutions/c21fe53a-1661-4648-8e4d-9621f223e144"
+      }
+    },
+    {
+      "id": "S-12",
+      "kItem": "K.16",
+      "description": "EXCEPTION-ONLY DEFAULT — the default view surfaces material items and reports how many it hid",
+      "status": "PASS",
+      "detail": {
+        "hidden": 1,
+        "defaultCount": 1,
+        "fullCount": 2
+      }
+    },
+    {
+      "id": "S-13",
+      "kItem": "K.13",
+      "description": "A DEFERRED item is VISIBLE to PC5 — it blocks acceptance, so it must never be invisible",
+      "status": "PASS",
+      "detail": {
+        "pc5Sees": true,
+        "aieOpenListSees": 0,
+        "blocking": 1
+      }
+    },
+    {
+      "id": "S-14",
+      "kItem": "K.14",
+      "description": "ITEM CONTEXT — a direct link to a non-material item still renders it, and states the original is unrecoverable",
+      "status": "PASS",
+      "detail": {
+        "question": "The name on this statement does not match the person you selected.",
+        "overlayEntries": 0
+      }
+    },
+    {
+      "id": "S-15",
+      "kItem": "K.20",
+      "description": "CROSS-USER DENIAL — the attacker cannot project the owner's item context by id",
+      "status": "PASS",
+      "detail": {
+        "context": null,
+        "attackerItemCount": 0
+      }
+    },
+    {
+      "id": "S-16",
+      "kItem": "K.20",
+      "description": "CROSS-USER RLS — the attacker's own JWT reads ZERO rows of the owner's unresolved item",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "rowCount": 0
+      }
+    },
+    {
+      "id": "S-17",
+      "kItem": "K.20",
+      "description": "BROWSER CANNOT MUTATE AN ITEM STATUS — even the OWNER's own JWT is refused a direct write",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "rowsAffected": 0,
+        "statusAfter": "open"
+      }
+    },
+    {
+      "id": "S-18",
+      "kItem": "K.20",
+      "description": "BROWSER CANNOT FORGE A VICTIM OWNER ID — a decision naming the attacker's member is refused",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "invalid_choice",
+        "detail": "value is not among the options available to you"
+      }
+    },
+    {
+      "id": "S-19",
+      "kItem": "K.20",
+      "description": "CROSS-USER DECISION — the attacker cannot decide the owner's item even with its real id",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "not_found"
+      }
+    },
+    {
+      "id": "S-20",
+      "kItem": "K.20",
+      "description": "PC5 CANNOT DIRECT-WRITE A CANONICAL II TABLE — the owner's own JWT is refused an ii_transactions insert",
+      "status": "PASS",
+      "detail": {
+        "status": 403,
+        "note": "direct canonical write refused at the database"
+      }
+    },
+    {
+      "id": "S-21",
+      "kItem": "K.1",
+      "description": "ACKNOWLEDGE — recorded, and does NOT resolve or unblock (K.13's masquerade check, live)",
+      "status": "PASS",
+      "detail": {
+        "aieStatus": "in_review",
+        "blockingBefore": 2,
+        "blockingAfter": 2
+      }
+    },
+    {
+      "id": "S-22",
+      "kItem": "K.13",
+      "description": "DISMISS IS REFUSED for a blocking item — presentation suppression is never permitted here",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "cannot_dismiss_blocking_item"
+      }
+    },
+    {
+      "id": "S-23",
+      "kItem": "K.1",
+      "description": "CHOOSE A VALUE — a real owner choice is recorded through AIE's own version-checked decision path",
+      "status": "PASS",
+      "detail": {
+        "decision": {
+          "decision_type": "pc5_choose_value",
+          "correction_field_name": "ownerMemberId",
+          "correction_value_normalized": "2c71185e-73b8-4826-b57c-a2785321fc43",
+          "actor_id": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339"
+        },
+        "reReconciliation": {
+          "ran": true,
+          "runStatus": "awaiting_acceptance",
+          "openBlockingItemCount": 0,
+          "newItemIds": [],
+          "resolvedItemIds": [
+            "c21fe53a-1661-4648-8e4d-9621f223e144"
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-24",
+      "kItem": "K.22",
+      "description": "CONCURRENT RESOLUTION IDEMPOTENCY — the same decision twice produces ONE decision row",
+      "status": "PASS",
+      "detail": {
+        "decisionRows": 1,
+        "first": "ok",
+        "second": "stale_conflict",
+        "firstDetail": null
+      }
+    },
+    {
+      "id": "S-25",
+      "kItem": "K.1",
+      "description": "STALE DECISION REFUSED — a decision against an old item_version loses cleanly",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "stale_conflict"
+      }
+    },
+    {
+      "id": "S-26",
+      "kItem": "K.19",
+      "description": "RE-RECONCILIATION — a resolved owner clears the condition and moves the run to awaiting_acceptance",
+      "status": "PASS",
+      "detail": {
+        "reported": "awaiting_acceptance",
+        "stored": "awaiting_acceptance",
+        "itemStatus": "resolved",
+        "resolved": 1,
+        "failedResolutions": [],
+        "created": 0,
+        "blockedBy0153": null
+      }
+    },
+    {
+      "id": "S-27",
+      "kItem": "K.19",
+      "description": "REPEATED OBSERVATION — re-running the SAME re-reconciliation is refused as wrong_state, never double-applied",
+      "status": "PASS",
+      "detail": {
+        "first": "awaiting_acceptance",
+        "second": "wrong_state",
+        "itemsOnRun": 1,
+        "neverDuplicated": true,
+        "blockedBy0153": null
+      }
+    },
+    {
+      "id": "S-28",
+      "kItem": "K.6",
+      "description": "JOINT STILL BLOCKS after a single owner is chosen — one person cannot assert sole ownership of a joint folio",
+      "status": "PASS",
+      "detail": {
+        "runStatus": "unresolved",
+        "blocking": 1
+      }
+    },
+    {
+      "id": "S-29",
+      "kItem": "K.10",
+      "description": "DUPLICATE CANDIDATE — \"separate genuine events\" is recorded and re-reconciliation reruns the dedup",
+      "status": "PASS",
+      "detail": {
+        "ran": true,
+        "runStatus": "unresolved",
+        "openBlockingItemCount": 1,
+        "newItemIds": [
+          "996066b9-cf05-496d-8eb3-99dbbd77adcf"
+        ],
+        "resolvedItemIds": [
+          "9495c5bb-e556-4b38-b29d-b6371d6ef792"
+        ]
+      }
+    },
+    {
+      "id": "S-30",
+      "kItem": "K.10",
+      "description": "DUPLICATE CANDIDATE — \"same economic event\" is a DIFFERENT recorded answer with its own audit",
+      "status": "PASS",
+      "detail": {
+        "correction_value_normalized": "same_economic_event"
+      }
+    },
+    {
+      "id": "S-31",
+      "kItem": "K.9",
+      "description": "SUMMARY MISMATCH — the answer set contains NO free-form value; an arbitrary balancing figure is refused",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "invalid_choice",
+        "detail": "value is not among the options available to you"
+      }
+    },
+    {
+      "id": "S-32",
+      "kItem": "K.12",
+      "description": "CORRECTION OVERLAY — the decision trail records provenance and states the original is unrecoverable",
+      "status": "PASS",
+      "detail": {
+        "entries": 3,
+        "chooseEntry": {
+          "fieldName": "ownerMemberId",
+          "originalValueMasked": "V***** R**",
+          "originalValueIsRecoverable": false,
+          "parserVersionAtDecision": "live-matrix-1",
+          "decisionType": "pc5_choose_value",
+          "userValue": "2c71185e-73b8-4826-b57c-a2785321fc43",
+          "reason": null,
+          "actorId": "6111d0a2-1b0d-4267-9ba3-fbba2bda2339",
+          "decidedAt": "2026-09-15T18:59:40.387854+00:00",
+          "resultingReconciliationAt": "2026-09-15T18:59:41.693+00:00"
+        }
+      }
+    },
+    {
+      "id": "S-33",
+      "kItem": "K.6",
+      "description": "JOINT DEFAULT ALLOCATION — an equal 50/50 split is recorded against a real account",
+      "status": "PASS",
+      "detail": {
+        "rows": 2,
+        "total": 10000
+      }
+    },
+    {
+      "id": "S-34",
+      "kItem": "K.6",
+      "description": "EDITED ALLOCATION — a 70/30 amendment SUPERSEDES the previous group rather than editing it",
+      "status": "PASS",
+      "detail": {
+        "activeRows": 2,
+        "supersededRows": 2,
+        "newGroup": "9091a473-10f0-4f53-93a8-984b2d6bbdfc"
+      }
+    },
+    {
+      "id": "S-35",
+      "kItem": "K.6",
+      "description": "ALLOCATION TOTALS — no active group on this user deviates from exactly 100%",
+      "status": "PASS",
+      "detail": {
+        "violations": []
+      }
+    },
+    {
+      "id": "S-36",
+      "kItem": "K.6",
+      "description": "ALLOCATION REFUSED when it does not total 100% — the database never sees the bad group",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "invalid_allocation",
+        "detail": "total_not_100_percent"
+      }
+    },
+    {
+      "id": "S-37",
+      "kItem": "K.20",
+      "description": "CROSS-TENANT ALLOCATION REFUSED AT THE DATABASE — a real member id belonging to someone else is rejected by the trigger",
+      "status": "PASS",
+      "detail": {
+        "error": "ii_ownership_allocation.owner_member_id does not belong to user_id 6111d0a2-1b0d-4267-9ba3-fbba2bda2339"
+      }
+    },
+    {
+      "id": "S-38",
+      "kItem": "K.20",
+      "description": "ALLOCATIONS ARE SELECT-ONLY FOR THE BROWSER — even the owner's JWT cannot insert one",
+      "status": "PASS",
+      "detail": {
+        "status": 403,
+        "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"ii_ownership_allocation\\\"\"}"
+      }
+    },
+    {
+      "id": "S-39",
+      "kItem": "K.8",
+      "description": "PASSWORD REQUIRED — a run with no candidates cannot be re-reconciled, and says so rather than guessing",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "no_candidates"
+      }
+    },
+    {
+      "id": "S-40",
+      "kItem": "K.11",
+      "description": "WRONG STATEMENT DISCARD — the run goes terminal, the intake is cancelled, and the binary is purged",
+      "status": "PASS",
+      "detail": {
+        "runStatus": "failed_terminal",
+        "intakeStatus": "cancelled",
+        "purgeStatus": "not_required",
+        "binary": "deleted"
+      }
+    },
+    {
+      "id": "S-41",
+      "kItem": "K.11",
+      "description": "DISCARD BLOCKS PUBLICATION STRUCTURALLY — the terminal run can never reach awaiting_acceptance again",
+      "status": "PASS",
+      "detail": {
+        "decisionAfterDiscard": "allowed",
+        "reconcile": "wrong_state"
+      }
+    },
+    {
+      "id": "S-42",
+      "kItem": "K.11",
+      "description": "DISCARD REFUSES an already-accepted run — that is amendment, not discard (K.18)",
+      "status": "PASS",
+      "detail": {
+        "ok": false,
+        "reason": "already_accepted"
+      }
+    },
+    {
+      "id": "S-43",
+      "kItem": "K.15",
+      "description": "ACCEPTANCE SUMMARY — every K.15 field is derived from real evidence, none is defaulted",
+      "status": "PASS",
+      "detail": {
+        "sourceType": "cams",
+        "counts": {
+          "tx": 1,
+          "holdings": 1,
+          "schemes": 1
+        },
+        "maskedFolio": "******4455",
+        "period": [
+          "2025-01-01",
+          "2025-03-31"
+        ],
+        "history": "not_assessed",
+        "reconciliation": "not_applicable",
+        "readyToAccept": false
+      }
+    },
+    {
+      "id": "S-44",
+      "kItem": "K.16",
+      "description": "FULL EXTRACT is opt-in, and even then holder names and folios stay MASKED",
+      "status": "PASS",
+      "detail": {
+        "defaultIsNull": true,
+        "txRows": 1,
+        "leaksName": false
+      }
+    },
+    {
+      "id": "S-45",
+      "kItem": "K.21",
+      "description": "POST-PROCESS PDF PURGE — a real storage object is deleted AND independently verified absent",
+      "status": "PASS",
+      "detail": {
+        "purge": "deleted",
+        "independentlyVerifiedAbsent": true,
+        "intakeAfter": {
+          "status": "deleted",
+          "storage_key": null,
+          "purge_status": "purged",
+          "purged_at": "2026-09-15T19:00:34.485+00:00"
+        }
+      }
+    },
+    {
+      "id": "S-46",
+      "kItem": "K.21",
+      "description": "MASK TOKEN MAP — the table has zero rows on DEV; there is nothing left to reverse",
+      "status": "PASS",
+      "detail": {
+        "rows": 0
+      }
+    },
+    {
+      "id": "S-47",
+      "kItem": "K.3",
+      "description": "NO PARALLEL LEDGER — PC5 activity created ZERO ii_review_items rows for this user",
+      "status": "PASS",
+      "detail": {
+        "iiReviewItemRows": 0
+      }
+    },
+    {
+      "id": "S-48",
+      "kItem": "K.3",
+      "description": "ONE OPEN COUNT — PC5's projected blocking count equals the acceptance gate's own count, per run",
+      "status": "PASS",
+      "detail": {
+        "runsChecked": 16,
+        "mismatches": []
+      }
+    },
+    {
+      "id": "CLEAN-1",
+      "kItem": "—",
+      "description": "ZERO synthetic residue after cleanup, independently re-verified",
+      "status": "PASS",
+      "detail": {
+        "createdCounts": {
+          "authUsers": 2,
+          "households": 3,
+          "householdMembers": 7,
+          "iiAccounts": 1,
+          "intakes": 17,
+          "runs": 16,
+          "unresolvedItems": 15
+        },
+        "residueAfterCleanup": {
+          "ii_ownership_allocation": 0,
+          "aie_review_decision": 0,
+          "aie_unresolved_item": 0,
+          "aie_reconciliation_run": 0,
+          "aie_field_candidate": 0,
+          "aie_parser_attempt": 0,
+          "aie_extraction_run": 0,
+          "aie_document_intake": 0,
+          "ii_accounts": 0,
+          "household_members": 0,
+          "households": 0,
+          "ii_review_items": 0
+        },
+        "authUsersRemaining": 0
+      }
+    }
+  ]
+}

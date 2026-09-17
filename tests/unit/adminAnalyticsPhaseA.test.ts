@@ -313,6 +313,10 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     resourceWorkflowAdmin: canViewResourceWorkflow(current),
     resourceDiscoveryAdmin: canViewResourceDiscovery(current),
     resourceAnalytics: canViewResourceAnalytics(current),
+    // PC6/N.11. This capability lives on admin_users, not on
+    // resource_user_roles, so a Resources role snapshot can never grant it —
+    // which is exactly the point of Standard §2. Always false here.
+    referenceDataQuality: false, lookthroughDataQuality: false,
   };
 }
 
@@ -369,6 +373,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true, lookthroughDataQuality: true,
     };
     expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
   });
@@ -400,18 +405,33 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true, lookthroughDataQuality: true,
     };
+    // PC6/N.11 added a fifth capability-driven group, 'Reference Data'; PC7/O.9
+    // added a sixth, 'Fund Look-Through'. The probe covers both, and the
+    // expected length is 6 minus the one turned off. resourceAnalytics still
+    // contributes no group.
     const expectedLabel: Record<string, string> = {
       resourcesDashboard: 'Resources',
       resourceContentAdmin: 'Content',
       resourceWorkflowAdmin: 'Workflow',
       resourceDiscoveryAdmin: 'Discovery',
+      referenceDataQuality: 'Reference Data',
+      lookthroughDataQuality: 'Fund Look-Through',
     };
-    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin'] as (keyof AdminCapabilities)[]) {
+    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin', 'referenceDataQuality', 'lookthroughDataQuality'] as (keyof AdminCapabilities)[]) {
       const labels = buildAdminNavGroups(false, { ...allTrue, [field]: false }).map((g) => g.label);
       expect(labels).not.toContain(expectedLabel[field]);
-      expect(labels).toHaveLength(3); // 4 real groups minus the one just turned off; resourceAnalytics never contributed one
+      expect(labels).toHaveLength(5); // 6 real groups minus the one just turned off
     }
+    // PC7/O.9 §2 specifically: PC6's grant must NOT confer PC7's group, and
+    // PC7's must not confer PC6's. Two capabilities, two surfaces.
+    const pc6Only = buildAdminNavGroups(false, { ...allTrue, lookthroughDataQuality: false }).map((g) => g.label);
+    expect(pc6Only).toContain('Reference Data');
+    expect(pc6Only).not.toContain('Fund Look-Through');
+    const pc7Only = buildAdminNavGroups(false, { ...allTrue, referenceDataQuality: false }).map((g) => g.label);
+    expect(pc7Only).toContain('Fund Look-Through');
+    expect(pc7Only).not.toContain('Reference Data');
   });
 
   it('the outer Admin menu is hidden when no group would render and no notice would show, and shown when either would', () => {
@@ -722,6 +742,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true, lookthroughDataQuality: true,
     };
     expect(buildAdminNavGroups(false, allResources).map((g) => g.label)).not.toContain('General');
   });
@@ -765,14 +786,21 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
+      referenceDataQuality: true, lookthroughDataQuality: true,
     };
     const groups = buildAdminNavGroups(true, all);
+    // The pre-existing five are unchanged in both order and match mode —
+    // PC6's 'Reference Data' and PC7's 'Fund Look-Through' groups are both
+    // APPENDED, never interleaved, so this assertion still protects what it
+    // was written to protect.
     expect(groups.map((g) => `${g.label}:${g.matchMode}`)).toEqual([
       'General:exact',
       'Resources:exact',
       'Content:prefix',
       'Workflow:exact',
       'Discovery:exact',
+      'Reference Data:exact',
+      'Fund Look-Through:exact',
     ]);
   });
 });

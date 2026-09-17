@@ -1,0 +1,1123 @@
+{
+  "pack": "M12C PC4 reduced synthetic pack (M12 dispatch section 9, OA-7)",
+  "environment": "DEV",
+  "targetHost": "vqycarelcoijzwlpkpcz.supabase.co",
+  "runTag": "ZZP41IUNP",
+  "runAt": "2026-09-15T19:03:57.877Z",
+  "completedAt": "2026-09-15T19:06:31.717Z",
+  "cases": [
+    {
+      "id": "S00",
+      "name": "Reconciliation config: the out-of-request fallback is a no-op (scope boundary, measured)",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the DB active config agrees with DEFAULT_RECONCILIATION_CONFIG (so the cookie-less fallback changes no tolerance)",
+          "ok": true,
+          "evidence": {
+            "dbUnitTolerance": 0.0001,
+            "dbFreshnessDays": 120,
+            "codeDefaultUnitTolerance": "0.0001",
+            "codeDefaultFreshnessDays": 120
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same query returns a real, non-null active config row (so the comparison had something to compare)",
+        "produced": {
+          "configVersion": "r2-default-1.0.0"
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S01",
+      "name": "Wrong password leaves ZERO partial economic state",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the wrong password was refused (ok=false)",
+          "ok": true,
+          "evidence": {
+            "ok": false,
+            "status": "password_required",
+            "error": "The supplied password did not open this document. Please check the password and try again."
+          }
+        },
+        {
+          "label": "the document's status became 'password_required', never 'parsed'",
+          "ok": true,
+          "evidence": "password_required"
+        },
+        {
+          "label": "ZERO economic rows were created by the refused attempt (accounts, transactions, links, holdings, truth statuses, instruments)",
+          "ok": true,
+          "evidence": {
+            "before": {
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_transaction_source_links": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_instruments_run_scoped": 0
+            },
+            "afterWrong": {
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_transaction_source_links": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_instruments_run_scoped": 0
+            },
+            "delta": {
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_transaction_source_links": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_instruments_run_scoped": 0
+            }
+          }
+        },
+        {
+          "label": "the refusal was recorded for audit: exactly one parse run and one blocking document_password_required case",
+          "ok": true,
+          "evidence": {
+            "parseRuns": 1,
+            "cases": [
+              {
+                "id": "c0abea5b-c147-41f7-bb2a-88157eb62973",
+                "discrepancy_type": "document_password_required",
+                "severity": "blocking",
+                "status": "open"
+              }
+            ]
+          }
+        },
+        {
+          "label": "OBSERVATION (not a pass/fail condition): the certification state reached after the corrected import",
+          "ok": true,
+          "evidence": {
+            "truth": [
+              {
+                "status": "reconciliation_required",
+                "blocking_reasons": [
+                  {
+                    "code": "open_blocking_reconciliation_case",
+                    "message": "An unresolved blocking-severity reconciliation case exists for this position."
+                  }
+                ]
+              }
+            ],
+            "blockingCodes": [
+              "open_blocking_reconciliation_case"
+            ]
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the SAME counters, on the SAME document, with the CORRECT password",
+        "produced": {
+          "ok": true,
+          "status": "parsed",
+          "delta": {
+            "ii_accounts": 1,
+            "ii_transactions": 1,
+            "ii_transaction_source_links": 1,
+            "ii_holding_snapshots": 1,
+            "ii_portfolio_truth_status": 1,
+            "ii_instruments_run_scoped": 1
+          }
+        },
+        "ok": true
+      },
+      "findings": [
+        "FINDING (S01): after a wrong-password attempt, the blocking 'document_password_required' reconciliation case stays OPEN even once the correct password succeeds, so the position parses but is left status='reconciliation_required' with blocking reason 'open_blocking_reconciliation_case'. Nothing in processSourceDocument resolves that case on a later successful extraction of the same document. Observed truth row: [{\"status\":\"reconciliation_required\",\"blocking_reasons\":[{\"code\":\"open_blocking_reconciliation_case\",\"message\":\"An unresolved blocking-severity reconciliation case exists for this position.\"}]}]."
+      ]
+    },
+    {
+      "id": "S02",
+      "name": "A byte-identical document imported twice creates no duplicated economic rows",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the first import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.8,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 3,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the first import genuinely inserted the three transactions it describes",
+          "ok": true,
+          "evidence": {
+            "transactions": 3
+          }
+        },
+        {
+          "label": "the DB re-upload guard rejects a second document row carrying the identical checksum",
+          "ok": true,
+          "evidence": {
+            "errorCode": "23505",
+            "message": "duplicate key value violates unique constraint \"uidx_ii_source_documents_user_checksum\""
+          }
+        },
+        {
+          "label": "a forced reparse of the same document inserted zero new transactions",
+          "ok": true,
+          "evidence": {
+            "before": 3,
+            "after": 3
+          }
+        },
+        {
+          "label": "the forced reparse LINKED all three rows as already-known rather than finding nothing",
+          "ok": true,
+          "evidence": {
+            "sourceDetected": "cams",
+            "sourceConfidence": 0.8,
+            "accountsFound": 1,
+            "schemesFound": 1,
+            "transactionsFound": 3,
+            "holdingsFound": 1,
+            "duplicateTransactionsLinked": 3,
+            "reconciliationCasesOpened": 0
+          }
+        },
+        {
+          "label": "the second document really does carry byte-identical content",
+          "ok": true,
+          "evidence": {
+            "identical": true
+          }
+        },
+        {
+          "label": "importing byte-identical content as a SEPARATE document inserted zero new transactions",
+          "ok": true,
+          "evidence": {
+            "before": 3,
+            "after": 3
+          }
+        },
+        {
+          "label": "all three rows were linked to the second document instead of duplicated",
+          "ok": true,
+          "evidence": {
+            "sourceDetected": "cams",
+            "sourceConfidence": 0.8,
+            "accountsFound": 1,
+            "schemesFound": 1,
+            "transactionsFound": 3,
+            "holdingsFound": 1,
+            "duplicateTransactionsLinked": 3,
+            "reconciliationCasesOpened": 0
+          }
+        },
+        {
+          "label": "the first import's rows are all STILL PRESENT (the zero is not a zero from having deleted everything)",
+          "ok": true,
+          "evidence": {
+            "rows": [
+              "ZZP41IUNPS02T1",
+              "ZZP41IUNPS02T2",
+              "ZZP41IUNPS02T3"
+            ],
+            "allOriginatedFromDoc1": true
+          }
+        },
+        {
+          "label": "the second document is recorded as corroborating evidence via ii_transaction_source_links (evidence kept, not discarded)",
+          "ok": true,
+          "evidence": {
+            "links": 3
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same counter, against a document with ONE extra transaction, moves by exactly 1",
+        "produced": {
+          "before": 3,
+          "after": 4,
+          "inserted": 1,
+          "linked": 3
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S03",
+      "name": "One scheme held under two folios resolves to ONE instrument and TWO accounts",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.9000000000000001,
+              "accountsFound": 2,
+              "schemesFound": 2,
+              "transactionsFound": 3,
+              "holdingsFound": 3,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the shared scheme resolved to exactly ONE canonical instrument",
+          "ok": true,
+          "evidence": {
+            "instruments": [
+              {
+                "id": "e865725b",
+                "isin": "INZZ1IUNP031"
+              }
+            ]
+          }
+        },
+        {
+          "label": "the two folios resolved to exactly TWO distinct accounts",
+          "ok": true,
+          "evidence": {
+            "accounts": [
+              {
+                "id": "472b0e67",
+                "folio": "ZZP41IUNP0003"
+              },
+              {
+                "id": "d2d639c1",
+                "folio": "ZZP41IUNP0013"
+              }
+            ]
+          }
+        },
+        {
+          "label": "each folio's transaction is attributed to ITS OWN account (30 units to folio A, 70 units to folio B)",
+          "ok": true,
+          "evidence": {
+            "folioA": [
+              {
+                "ref": "ZZP41IUNPS03A1",
+                "units": 30
+              }
+            ],
+            "folioB": [
+              {
+                "ref": "ZZP41IUNPS03B1",
+                "units": 70
+              }
+            ]
+          }
+        },
+        {
+          "label": "the account-scoped truth model gives this ONE instrument TWO position rows, one per folio",
+          "ok": true,
+          "evidence": {
+            "positions": [
+              {
+                "account": "472b0e67",
+                "status": "certified"
+              },
+              {
+                "account": "d2d639c1",
+                "status": "certified"
+              }
+            ]
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same query against the OTHER scheme in the same document returns a different, second instrument",
+        "produced": {
+          "sharedScheme": "e865725b",
+          "otherScheme": "c5e40bca"
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S04",
+      "name": "CAS first, then an overlapping folio statement: no economic duplication",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the CAS import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.8,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 1,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the CAS import inserted its single transaction",
+          "ok": true,
+          "evidence": {
+            "transactions": 1
+          }
+        },
+        {
+          "label": "the folio-statement import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.99,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 2,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 1,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the folio statement was recognised as the FS1 individual-folio document type, not as a CAS",
+          "ok": true,
+          "evidence": {
+            "sourceDetected": "cams"
+          }
+        },
+        {
+          "label": "both documents resolved to exactly ONE account for this folio (no AMC-blind duplicate)",
+          "ok": true,
+          "evidence": {
+            "accounts": [
+              {
+                "id": "c583a349",
+                "institution": "ZZ Synthetic ZZP41IUNP Asset Management"
+              }
+            ]
+          }
+        },
+        {
+          "label": "both documents resolved to exactly ONE canonical instrument",
+          "ok": true,
+          "evidence": {
+            "instruments": [
+              {
+                "id": "c8c7f1b4",
+                "isin": "INZZ1IUNP049"
+              }
+            ]
+          }
+        },
+        {
+          "label": "the overlapping transaction exists exactly ONCE and the folio-only transaction was added: 2 rows, not 3",
+          "ok": true,
+          "evidence": {
+            "rows": [
+              {
+                "ref": "ZZP41IUNPS04T1",
+                "units": 50,
+                "status": "parsed",
+                "doc": "54dcfe55"
+              },
+              {
+                "ref": "ZZP41IUNPS04T2",
+                "units": 50,
+                "status": "parsed",
+                "doc": "52d78fb3"
+              }
+            ]
+          }
+        },
+        {
+          "label": "the second import reported exactly one duplicate linked and one genuinely new row",
+          "ok": true,
+          "evidence": {
+            "sourceDetected": "cams",
+            "sourceConfidence": 0.99,
+            "accountsFound": 1,
+            "schemesFound": 1,
+            "transactionsFound": 2,
+            "holdingsFound": 1,
+            "duplicateTransactionsLinked": 1,
+            "reconciliationCasesOpened": 0
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same row counter rose from 1 to 2 across the second import (dedup suppressed the duplicate only, not the new row)",
+        "produced": {
+          "afterCas": 1,
+          "afterFolio": 2
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S05",
+      "name": "Folio statement first, then an overlapping CAS: no economic duplication, and order-independent",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the folio-statement import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.99,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 1,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the AMC-blind folio statement created one account under the Unknown AMC sentinel",
+          "ok": true,
+          "evidence": {
+            "accounts": [
+              {
+                "id": "94d21274",
+                "institution": "Unknown AMC"
+              }
+            ]
+          }
+        },
+        {
+          "label": "OBSERVATION: which identifiers the AMC-blind (FS1-first) import preserved",
+          "ok": true,
+          "evidence": {
+            "instrumentIsin": null,
+            "identifiers": [],
+            "isinCaptured": false
+          }
+        },
+        {
+          "label": "the CAS import succeeded",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.8,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 2,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 1,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the CAS adopted and upgraded the SAME account rather than creating a second one for the same folio",
+          "ok": true,
+          "evidence": {
+            "accounts": [
+              {
+                "id": "94d21274",
+                "institution": "ZZ Synthetic ZZP41IUNP Asset Management"
+              }
+            ],
+            "sameIdAsBefore": true
+          }
+        },
+        {
+          "label": "both documents resolved to exactly ONE canonical instrument",
+          "ok": true,
+          "evidence": {
+            "instruments": [
+              {
+                "id": "f1b80776",
+                "isin": null
+              }
+            ]
+          }
+        },
+        {
+          "label": "the overlapping transaction exists exactly ONCE and the CAS-only transaction was added: 2 rows, not 3",
+          "ok": true,
+          "evidence": {
+            "rows": [
+              {
+                "ref": "ZZP41IUNPS05T1",
+                "units": 50,
+                "status": "parsed"
+              },
+              {
+                "ref": "ZZP41IUNPS05T2",
+                "units": 50,
+                "status": "parsed"
+              }
+            ]
+          }
+        },
+        {
+          "label": "OBSERVATION: whether the later CAS (which DOES print the ISIN) backfills the identifier onto the already-minted instrument",
+          "ok": true,
+          "evidence": {
+            "instrumentIsin": null,
+            "instrumentStatus": "provisional",
+            "identifiers": [],
+            "isinRecovered": false
+          }
+        },
+        {
+          "label": "BOTH orders produce the identical economic shape: 1 account, 1 instrument, 2 transactions",
+          "ok": true,
+          "evidence": {
+            "casFirst": 2,
+            "folioFirst": 2
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same row counter rose from 1 to 2 across the second import (dedup suppressed the duplicate only, not the new row)",
+        "produced": {
+          "afterFolio": 1,
+          "afterCas": 2
+        },
+        "ok": true
+      },
+      "findings": [
+        "FINDING (S05): the folio statement printed ISIN INZZ1IUNP056 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect.",
+        "FINDING (S05, continued): the ISIN is NOT recovered later either. After the CAS import — which prints ISIN INZZ1IUNP056 and resolves to this same instrument via normalised name — the instrument still carries isin=null and identifier rows []. schemeResolution's 'resolved' branch only MAPS to the existing instrument; only the 'unresolved' branch writes ii_instrument_identifiers. So an FS1-first position is permanently left without the ISIN that both of its source documents printed, and any future statement that carries ONLY an ISIN (no matching scheme name) would mint a SECOND instrument for the same real fund."
+      ]
+    },
+    {
+      "id": "S06",
+      "name": "A document whose own arithmetic does not close is BLOCKED, never certified",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the import ran to completion (the pipeline did not simply crash)",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.8500000000000001,
+              "accountsFound": 2,
+              "schemesFound": 2,
+              "transactionsFound": 2,
+              "holdingsFound": 2,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            },
+            "error": null
+          }
+        },
+        {
+          "label": "the non-closing position was BLOCKED (status reconciliation_required)",
+          "ok": true,
+          "evidence": {
+            "status": "reconciliation_required",
+            "blockingReasons": [
+              "unit_variance_exceeds_tolerance"
+            ]
+          }
+        },
+        {
+          "label": "the blocking reason names the arithmetic: 'unit_variance_exceeds_tolerance'",
+          "ok": true,
+          "evidence": [
+            "unit_variance_exceeds_tolerance"
+          ]
+        },
+        {
+          "label": "the recorded variance is the real arithmetic difference (50 reconstructed vs 250 printed = -200)",
+          "ok": true,
+          "evidence": {
+            "reconciled": 50,
+            "statement": 250,
+            "variance": -200,
+            "withinTolerance": false
+          }
+        },
+        {
+          "label": "the blocked position was never certified (certified_at is null)",
+          "ok": true,
+          "evidence": "reconciliation_required"
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "in the SAME import, the arithmetically correct position DID reach a certified state (so this is discrimination, not a blanket block)",
+        "produced": {
+          "goodStatus": "certified",
+          "goodVariance": 0,
+          "goodBlocking": [],
+          "badStatus": "reconciliation_required"
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S07",
+      "name": "The same position contributes to net worth exactly once, not once per source document",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "the two-document position has exactly ONE canonical position row, not one per document",
+          "ok": true,
+          "evidence": {
+            "rows": [
+              {
+                "status": "certified_with_warnings",
+                "closing": 100,
+                "latestDoc": "52d78fb3"
+              }
+            ]
+          }
+        },
+        {
+          "label": "there is at most ONE holding snapshot per as-of date (a second document for the same date cannot add a second snapshot)",
+          "ok": true,
+          "evidence": {
+            "snapshots": [
+              {
+                "asOf": "2026-08-01",
+                "units": 50,
+                "doc": "54dcfe55"
+              },
+              {
+                "asOf": "2026-08-31",
+                "units": 100,
+                "doc": "52d78fb3"
+              }
+            ]
+          }
+        },
+        {
+          "label": "the position value carried forward is the statement closing balance (100 units), NOT the sum of both documents (150)",
+          "ok": true,
+          "evidence": {
+            "latestSnapshotUnits": 100,
+            "naiveSumIfDoubleCounted": 150
+          }
+        },
+        {
+          "label": "publishing the FIRST document's position is accepted",
+          "ok": true,
+          "evidence": {
+            "firstInsert": "accepted"
+          }
+        },
+        {
+          "label": "the database REFUSES to also publish the SECOND document's position for the same (account, instrument) — net worth cannot count it twice",
+          "ok": true,
+          "evidence": {
+            "secondInsert": "rejected 23505: duplicate key value violates unique constraint \"uidx_ii_fhip_publications_one_active_position\""
+          }
+        },
+        {
+          "label": "the same second position IS accepted with status superseded — the constraint targets two SIMULTANEOUSLY ACTIVE publications, not any second row",
+          "ok": true,
+          "evidence": {
+            "supersededInsert": "accepted"
+          }
+        },
+        {
+          "label": "SCOPE BOUNDARY (observation): publishPosition() itself was not driven — it requires a Next.js request context",
+          "ok": true,
+          "evidence": "investmentPublicationService.publishPosition uses lib/supabase/server createClient() (next/headers cookies). Proven here instead: single canonical position, single snapshot per as-of date, and the uidx_ii_fhip_publications_one_active_position unique index enforced live."
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same query without the position filter reports many positions for this user (the \"exactly 1\" is a genuine filter, not an empty table)",
+        "produced": {
+          "positionsForUser": 9
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S08",
+      "name": "Two distinct source documents are never confused for one another (database half)",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "this user has several distinct source documents to distinguish between",
+          "ok": true,
+          "evidence": {
+            "documents": 10
+          }
+        },
+        {
+          "label": "every storage path is distinct and namespaced under its OWN owner id",
+          "ok": true,
+          "evidence": {
+            "distinctPaths": 10,
+            "totalPaths": 10,
+            "allOwnerPrefixed": true
+          }
+        },
+        {
+          "label": "every parse run belongs to exactly one, existing source document of this user",
+          "ok": true,
+          "evidence": {
+            "runs": 12,
+            "orphanRuns": 0
+          }
+        },
+        {
+          "label": "every transaction's originating link count matches the number of transactions that document actually created (no cross-attribution)",
+          "ok": true,
+          "evidence": {
+            "e793d298": {
+              "runs": 2,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "f9e30aec": {
+              "runs": 2,
+              "txns": 3,
+              "originatingLinks": 3
+            },
+            "e36a351b": {
+              "runs": 1,
+              "txns": 0,
+              "originatingLinks": 0
+            },
+            "27762d1f": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "870e7153": {
+              "runs": 1,
+              "txns": 3,
+              "originatingLinks": 3
+            },
+            "54dcfe55": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "52d78fb3": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "5d811917": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "6d2dee08": {
+              "runs": 1,
+              "txns": 1,
+              "originatingLinks": 1
+            },
+            "79f541b7": {
+              "runs": 1,
+              "txns": 2,
+              "originatingLinks": 2
+            }
+          }
+        },
+        {
+          "label": "no transaction has more than one ORIGINATING document",
+          "ok": true,
+          "evidence": {
+            "transactionsWithLinks": 14,
+            "maxOriginatingPerTransaction": 1
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the same attribution query returns >0 for a real document and exactly 0 for a document id that does not exist",
+        "produced": {
+          "realDocumentWithTransactions": true,
+          "nonExistentDocumentRuns": 0
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S09",
+      "name": "User A can never see, process or download user B's document or rows",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "user B's own document processed successfully (so B genuinely has rows of its own)",
+          "ok": true,
+          "evidence": {
+            "status": "parsed",
+            "summary": {
+              "sourceDetected": "cams",
+              "sourceConfidence": 0.8,
+              "accountsFound": 1,
+              "schemesFound": 1,
+              "transactionsFound": 1,
+              "holdingsFound": 1,
+              "duplicateTransactionsLinked": 0,
+              "reconciliationCasesOpened": 0
+            }
+          }
+        },
+        {
+          "label": "processSourceDocument refuses to process another user's document (status 'not_found')",
+          "ok": true,
+          "evidence": {
+            "ok": false,
+            "status": "not_found",
+            "error": "Source document not found."
+          }
+        },
+        {
+          "label": "the refused cross-user attempt created nothing for B and changed nothing for A",
+          "ok": true,
+          "evidence": {
+            "bDelta": {
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_transaction_source_links": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_instruments_run_scoped": 0
+            },
+            "aDelta": {
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_transaction_source_links": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_instruments_run_scoped": 0
+            }
+          }
+        },
+        {
+          "label": "signed in as B, RLS returns ZERO of user A's rows on every II table",
+          "ok": true,
+          "evidence": {
+            "leaks": {
+              "ii_source_documents": 0,
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_document_parse_runs": 0
+            }
+          }
+        },
+        {
+          "label": "signed in as A, RLS returns ZERO of user B's rows on every II table",
+          "ok": true,
+          "evidence": {
+            "leaksAtoB": {
+              "ii_source_documents": 0,
+              "ii_accounts": 0,
+              "ii_transactions": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_document_parse_runs": 0
+            }
+          }
+        },
+        {
+          "label": "signed in as B, Storage refuses to return user A's object bytes",
+          "ok": true,
+          "evidence": {
+            "error": "Object not found",
+            "gotBytes": false
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the IDENTICAL probes, pointed at B's OWN rows and B's OWN object, return data — so a leak would have been visible",
+        "produced": {
+          "bSeesOwnRows": {
+            "ii_source_documents": 1,
+            "ii_accounts": 1,
+            "ii_transactions": 1,
+            "ii_holding_snapshots": 1,
+            "ii_portfolio_truth_status": 1,
+            "ii_document_parse_runs": 1
+          },
+          "bDownloadsOwnObjectBytes": 1542,
+          "bDownloadError": null
+        },
+        "ok": true
+      },
+      "findings": []
+    },
+    {
+      "id": "S10",
+      "name": "Zero-residue cleanup: everything this pack created is removed and independently re-queried",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "label": "every user-scoped table re-queries to zero after cleanup",
+          "ok": true,
+          "evidence": {
+            "after": {
+              "ii_transaction_source_links": 0,
+              "ii_transactions": 0,
+              "ii_holding_snapshots": 0,
+              "ii_portfolio_truth_status": 0,
+              "ii_tax_lot_consumptions": 0,
+              "ii_tax_lots": 0,
+              "ii_capital_gains_computations": 0,
+              "ii_sip_series": 0,
+              "ii_analytics_results": 0,
+              "ii_r5_analytics_results": 0,
+              "ii_insights": 0,
+              "ii_review_items": 0,
+              "ii_goal_allocations": 0,
+              "ii_ownership_allocation": 0,
+              "ii_fhip_publications": 0,
+              "ii_reconciliation_cases": 0,
+              "ii_document_parse_runs": 0,
+              "ii_accounts": 0,
+              "ii_source_documents": 0,
+              "ii_audit_events": 0,
+              "investments": 0,
+              "household_members": 0,
+              "households": 0,
+              "user_profiles": 0,
+              "ii_instruments (run-tagged, GLOBAL table)": 0,
+              "ii_instrument_identifiers (by this run's instrument ids, GLOBAL table)": 0
+            },
+            "leftovers": []
+          }
+        },
+        {
+          "label": "the GLOBAL ii_instruments / ii_instrument_identifiers rows this run minted are gone",
+          "ok": true,
+          "evidence": {
+            "instruments": 0,
+            "identifiers": 0
+          }
+        },
+        {
+          "label": "every Storage object this run uploaded is gone",
+          "ok": true,
+          "evidence": {
+            "uploaded": 11,
+            "remaining": 0,
+            "remainingObjectNames": []
+          }
+        },
+        {
+          "label": "every synthetic auth user is gone",
+          "ok": true,
+          "evidence": {
+            "created": 2,
+            "remaining": 0
+          }
+        },
+        {
+          "label": "no delete statement reported an error",
+          "ok": true,
+          "evidence": {}
+        },
+        {
+          "label": "a SECOND sweep, searching by synthetic CONTENT rather than by this run's ids, also finds nothing (catches residue from any earlier run too)",
+          "ok": true,
+          "evidence": {
+            "ii_instruments by synthetic name": 0,
+            "ii_accounts by synthetic institution": 0,
+            "ii_accounts by synthetic folio": 0,
+            "ii_transactions by synthetic reference": 0,
+            "ii_source_documents by synthetic filename": 0,
+            "ii_fhip_publications by synthetic key": 0,
+            "households by synthetic name": 0,
+            "household_members by synthetic name": 0
+          }
+        },
+        {
+          "label": "the content sweep is demonstrably capable of a non-zero (the same tables hold real, non-synthetic rows)",
+          "ok": true,
+          "evidence": {
+            "ii_instruments": 227,
+            "ii_accounts": 14,
+            "ii_transactions": 96,
+            "household_members": 126
+          }
+        }
+      ],
+      "antiVacuityControl": {
+        "label": "the IDENTICAL residue sweep reported a large non-zero BEFORE cleanup",
+        "produced": {
+          "rowsBeforeCleanup": 204,
+          "tablesSwept": 26,
+          "storageObjectsBefore": 11,
+          "authUsersBefore": 2
+        },
+        "ok": true
+      },
+      "findings": []
+    }
+  ],
+  "residue": {
+    "tables": {
+      "ii_transaction_source_links": 0,
+      "ii_transactions": 0,
+      "ii_holding_snapshots": 0,
+      "ii_portfolio_truth_status": 0,
+      "ii_tax_lot_consumptions": 0,
+      "ii_tax_lots": 0,
+      "ii_capital_gains_computations": 0,
+      "ii_sip_series": 0,
+      "ii_analytics_results": 0,
+      "ii_r5_analytics_results": 0,
+      "ii_insights": 0,
+      "ii_review_items": 0,
+      "ii_goal_allocations": 0,
+      "ii_ownership_allocation": 0,
+      "ii_fhip_publications": 0,
+      "ii_reconciliation_cases": 0,
+      "ii_document_parse_runs": 0,
+      "ii_accounts": 0,
+      "ii_source_documents": 0,
+      "ii_audit_events": 0,
+      "investments": 0,
+      "household_members": 0,
+      "households": 0,
+      "user_profiles": 0,
+      "ii_instruments (run-tagged, GLOBAL table)": 0,
+      "ii_instrument_identifiers (by this run's instrument ids, GLOBAL table)": 0
+    },
+    "storageObjects": 0,
+    "authUsers": 0,
+    "total": 0
+  },
+  "findings": [
+    "FINDING (S01): after a wrong-password attempt, the blocking 'document_password_required' reconciliation case stays OPEN even once the correct password succeeds, so the position parses but is left status='reconciliation_required' with blocking reason 'open_blocking_reconciliation_case'. Nothing in processSourceDocument resolves that case on a later successful extraction of the same document. Observed truth row: [{\"status\":\"reconciliation_required\",\"blocking_reasons\":[{\"code\":\"open_blocking_reconciliation_case\",\"message\":\"An unresolved blocking-severity reconciliation case exists for this position.\"}]}].",
+    "FINDING (S05): the folio statement printed ISIN INZZ1IUNP056 in its FINANCIAL TRANSACTIONS section, but the instrument minted from it carries isin=null and identifier rows []. documentProcessing.ts builds uniqueSchemes keyed by (normalisedName|plan|option|amc) and writes the TRANSACTION scheme first, then OVERWRITES it with the HOLDING scheme — and camsFolioStatementParser.parseHoldings deliberately emits buildScheme(name, null) because the Summary of Holdings block prints no ISIN. The globally-unique identifier present in the source document is therefore dropped for any FS1-first import. Subsequent resolution still lands on the same instrument (via normalised name + plan/option + country), so this is a lost-identifier defect, not a duplication defect.",
+    "FINDING (S05, continued): the ISIN is NOT recovered later either. After the CAS import — which prints ISIN INZZ1IUNP056 and resolves to this same instrument via normalised name — the instrument still carries isin=null and identifier rows []. schemeResolution's 'resolved' branch only MAPS to the existing instrument; only the 'unresolved' branch writes ii_instrument_identifiers. So an FS1-first position is permanently left without the ISIN that both of its source documents printed, and any future statement that carries ONLY an ISIN (no matching scheme name) would mint a SECOND instrument for the same real fund."
+  ]
+}

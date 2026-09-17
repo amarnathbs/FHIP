@@ -87,6 +87,28 @@ export const II_WORKSPACE_NAV: readonly IiWorkspaceNavItem[] = [
     href: `${II_WORKSPACE_ROOT}/review`,
     description: 'What needs your attention across your investment data',
   },
+  {
+    // PC5 (M4). A SEPARATE tab from "Review", deliberately, even though
+    // both are "things needing attention" — because they are different
+    // KINDS of thing and merging them would blur exactly the distinction
+    // K.13 exists to protect.
+    //
+    // "Review" (`ii_review_items`, migration 0067) holds deterministic
+    // ADVISORY observations over already-certified data: an
+    // under-allocated goal, a stale valuation, a benchmark gap. Nothing
+    // there blocks anything; a user may legitimately acknowledge or
+    // dismiss every one of them and their portfolio is unaffected.
+    //
+    // "Resolutions" projects AIE unresolved items: BLOCKING exceptions on
+    // statements that cannot be imported until they are decided. Dismissing
+    // one is not permitted at all. Putting the two in one list would mean a
+    // user could dismiss their way through a mixed queue and be left
+    // wondering why a statement still refused to import.
+    key: 'resolutions',
+    label: 'Resolutions',
+    href: `${II_WORKSPACE_ROOT}/resolutions`,
+    description: 'Statement questions you need to answer before those holdings can be imported',
+  },
 ] as const;
 
 /**

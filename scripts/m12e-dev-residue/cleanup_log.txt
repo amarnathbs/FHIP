@@ -1,0 +1,23 @@
+=== M12E section 19 — DEV residue cleanup — APPLY ===
+target: vqycarelcoijzwlpkpcz (DEV)   2026-09-15T19:16:24.537Z
+
+  CONTROL  PRODUCTION ii_fund_holdings_snapshots     = 0 rows (read-only GET; nothing here is ever deleted in production)
+  CONTROL  PRODUCTION aie_audit_event                = 0 rows (read-only GET; nothing here is ever deleted in production)
+
+--- OPS-PC7-2: ii_fund_holdings_snapshots ---
+  BEFORE: 19 rows
+  safety re-evaluated in-script: 19 deletable, 0 skipped
+  deleted 19 row(s) by explicit id
+  AFTER (independent re-query): 0 rows
+
+--- OPS-M11-1: aie_audit_event ---
+  BEFORE: 49 rows
+  live aie_document_intake rows: 0   live aie_extraction_run rows: 0
+  safety re-evaluated in-script: 49 deletable, 0 skipped
+  deleted 49 row(s) by explicit id
+  AFTER (independent re-query): 0 rows
+
+--- ANTI-VACUITY CONTROL: the same counting method still reports non-zero where rows genuinely exist ---
+  ii_prices_nav                = 258 rows (untouched by this cleanup)
+  ii_benchmarks                = 14 rows (untouched by this cleanup)
+  ii_fund_holdings             = 32 rows (untouched by this cleanup)

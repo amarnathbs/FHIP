@@ -45,7 +45,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {
-      const status = e.code === 'not_found' ? 404 : e.code === 'wrong_document_type' ? 422 : e.code === 'invalid_state' ? 409 : 500;
+      // M12C §10: `rate_limited` -> 429, matching the bank-PDF route's own
+      // mapping exactly so both PDF password surfaces refuse identically.
+      const status =
+        e.code === 'not_found' ? 404 : e.code === 'wrong_document_type' ? 422 : e.code === 'invalid_state' ? 409 : e.code === 'rate_limited' ? 429 : 500;
       return bad(e.message, status);
     }
     return bad('We could not process this payslip.', 500);

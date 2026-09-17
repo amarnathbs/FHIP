@@ -1,0 +1,274 @@
+{
+  "generatedAt": "2026-09-15T18:57:11.419Z",
+  "migrationsApplied": 151,
+  "lastMigration": "0157_pc7_lookthrough_foundation.sql",
+  "pass": 44,
+  "fail": 0,
+  "total": 44,
+  "results": [
+    {
+      "id": "PC7-PG-01",
+      "verdict": "PASS",
+      "label": "chain 0001..0157 applied from empty",
+      "detail": "last file: 0157_pc7_lookthrough_foundation.sql"
+    },
+    {
+      "id": "PC7-PG-02",
+      "verdict": "PASS",
+      "label": "0157 re-applies cleanly (idempotent)",
+      "detail": "second application was a no-op"
+    },
+    {
+      "id": "PC7-PG-03",
+      "verdict": "PASS",
+      "label": "0157 seeds both PC7 ii_sources rows",
+      "detail": "[{\"source_key\":\"amc_portfolio_disclosure\",\"source_category\":\"reference_data_provider\",\"is_active\":false,\"parser_available\":true},{\"source_key\":\"vendor_portfolio_data\",\"source_category\":\"reference_data_provider\",\"is_active\":false,\"parser_available\":false}]"
+    },
+    {
+      "id": "PC7-PG-04",
+      "verdict": "PASS",
+      "label": "both ship is_active = FALSE (licensing open)",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-05",
+      "verdict": "PASS",
+      "label": "both use 0155's 'reference_data_provider' category, not a sixth one",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-06",
+      "verdict": "PASS",
+      "label": "batch_kind 'fund_holdings_disclosure' is accepted",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-07",
+      "verdict": "PASS",
+      "label": "an invented batch_kind is still REFUSED by the CHECK",
+      "detail": "refused: new row for relation \"ii_reference_import_batches\" violates check constraint \"ii_reference_import_batches_batch_kind_che"
+    },
+    {
+      "id": "PC7-PG-08",
+      "verdict": "PASS",
+      "label": "ii_reference_corrections admits ii_fund_holdings_lines",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-09",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.scheme_master_id exists as uuid",
+      "detail": "found: uuid"
+    },
+    {
+      "id": "PC7-PG-10",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.batch_id exists as uuid",
+      "detail": "found: uuid"
+    },
+    {
+      "id": "PC7-PG-11",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.amc_name exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-12",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.source_url exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-13",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.source_sha256 exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-14",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.source_byte_length exists as bigint",
+      "detail": "found: bigint"
+    },
+    {
+      "id": "PC7-PG-15",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.source_retrieved_at exists as timestamp with time zone",
+      "detail": "found: timestamp with time zone"
+    },
+    {
+      "id": "PC7-PG-16",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.disclosure_period exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-17",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.market_value_unit exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-18",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.currency_code exists as character",
+      "detail": "found: character"
+    },
+    {
+      "id": "PC7-PG-19",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.content_checksum exists as text",
+      "detail": "found: text"
+    },
+    {
+      "id": "PC7-PG-20",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.resolved_weight_total_pct exists as numeric",
+      "detail": "found: numeric"
+    },
+    {
+      "id": "PC7-PG-21",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_snapshots.line_count exists as integer",
+      "detail": "found: integer"
+    },
+    {
+      "id": "PC7-PG-22",
+      "verdict": "PASS",
+      "label": "ii_fund_holdings_lines gains all 5 PC7 columns",
+      "detail": "missing: none"
+    },
+    {
+      "id": "PC7-PG-23",
+      "verdict": "PASS",
+      "label": "market_value_unit 'lakhs' is accepted",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-24",
+      "verdict": "PASS",
+      "label": "an unknown market_value_unit is REFUSED",
+      "detail": "refused: new row for relation \"ii_fund_holdings_snapshots\" violates check constraint \"ii_fund_holdings_snapshots_market_value_uni"
+    },
+    {
+      "id": "PC7-PG-25",
+      "verdict": "PASS",
+      "label": "a malformed source_sha256 is REFUSED",
+      "detail": "refused: new row for relation \"ii_fund_holdings_snapshots\" violates check constraint \"ii_fund_holdings_snapshots_sha256_shape\""
+    },
+    {
+      "id": "PC7-PG-26",
+      "verdict": "PASS",
+      "label": "a malformed disclosure_period is REFUSED",
+      "detail": "refused: new row for relation \"ii_fund_holdings_snapshots\" violates check constraint \"ii_fund_holdings_snapshots_period_shape\""
+    },
+    {
+      "id": "PC7-PG-27",
+      "verdict": "PASS",
+      "label": "disclosure_period '2026-08' is accepted",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-28",
+      "verdict": "PASS",
+      "label": "ii_pc7_networth_safety_violations() exists",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-29",
+      "verdict": "PASS",
+      "label": "O.7 SATISFIED on the real schema — zero violations",
+      "detail": "no FK from a register table into look-through data; no tenancy column on a look-through table"
+    },
+    {
+      "id": "PC7-PG-30",
+      "verdict": "PASS",
+      "label": "injecting a tenancy column MAKES the assertion fire",
+      "detail": "violations now: LOOKTHROUGH_HAS_TENANCY_COLUMN"
+    },
+    {
+      "id": "PC7-PG-31",
+      "verdict": "PASS",
+      "label": "removing it makes the assertion stop firing",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-32",
+      "verdict": "PASS",
+      "label": "injecting an FK from investments into look-through MAKES it fire",
+      "detail": "violations now: LOOKTHROUGH_FK_FROM_REGISTER"
+    },
+    {
+      "id": "PC7-PG-33",
+      "verdict": "PASS",
+      "label": "removing the FK returns the schema to SATISFIED",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-34",
+      "verdict": "PASS",
+      "label": "admin_users.can_view_lookthrough_data_quality exists",
+      "detail": "type boolean, default false"
+    },
+    {
+      "id": "PC7-PG-35",
+      "verdict": "PASS",
+      "label": "it defaults to FALSE and is NOT NULL",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-36",
+      "verdict": "PASS",
+      "label": "is_pc7_lookthrough_data_admin() exists",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-37",
+      "verdict": "PASS",
+      "label": "PC7 capability is SEPARATE from PC6 capability",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-38",
+      "verdict": "PASS",
+      "label": "the PC7 job-control row exists",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-39",
+      "verdict": "PASS",
+      "label": "it ships DISABLED",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-40",
+      "verdict": "PASS",
+      "label": "and carries a stated reason naming the blockers",
+      "detail": "reason: Shipped disabled by migration 0157. Two independent reasons: (1) every PC7 disclosure source awaits a Product Owner lice..."
+    },
+    {
+      "id": "PC7-PG-41",
+      "verdict": "PASS",
+      "label": "0157 contains no cron.schedule call",
+      "detail": ""
+    },
+    {
+      "id": "PC7-PG-42",
+      "verdict": "PASS",
+      "label": "a weight outside 0..100 is still REFUSED",
+      "detail": "refused: new row for relation \"ii_fund_holdings_lines\" violates check constraint \"ii_fund_holdings_lines_weight_pct_check\""
+    },
+    {
+      "id": "PC7-PG-43",
+      "verdict": "PASS",
+      "label": "an invented asset_kind is still REFUSED",
+      "detail": "refused: new row for relation \"ii_fund_holdings_lines\" violates check constraint \"ii_fund_holdings_lines_asset_kind_check\""
+    },
+    {
+      "id": "PC7-PG-44",
+      "verdict": "PASS",
+      "label": "a well-formed PC7 line inserts, using the new columns",
+      "detail": ""
+    }
+  ]
+}

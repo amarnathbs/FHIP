@@ -1,0 +1,35 @@
+=== M12C — PC4 PROD re-baseline (READ-ONLY, GET only) ===
+
+NEGATIVE CONTROL (bad column)   : PASS (42703)
+NEGATIVE CONTROL (bad table)    : PASS (PGRST205)
+
+ii_portfolio_truth_status rows  : 17
+status breakdown                : {"reconciliation_required":17}
+certified_at non-null           : 0
+unit_variance_within_tolerance  : {"true":12,"false":5}
+history_completeness            : {"complete_from_inception":17}
+blocking_reasons                : {"parser_fatal_error":17,"unresolved_owner":17,"open_blocking_reconciliation_case":17,"unit_variance_exceeds_tolerance":5,"material_unclassified_transaction":1}
+warning_reasons                 : {}
+max last_evaluated_at           : 2026-09-07T13:07:02.887+00:00
+
+--- reconciliation arithmetic, per position (units only, no names) ---
+instrument  opening        reconciled     statement      variance       within
+
+ii_document_parse_runs rows     : 35
+latest run with transactions    : aa8d50fa @ 2026-09-07T13:06:36.79794+00:00
+  parser/detected/confidence    : cams_detailed_v1@1.0.0 / cams / 0.9
+  accounts/schemes/txns/holdings: 12/17/964/17
+  warnings, by code/severity    : {"unparseable_transaction_row/error":251,"unclassified_transaction/warning":8}
+run_status breakdown            : {"failed":25,"succeeded":10}
+
+ii_source_documents rows        : 3
+  owner_member_id null          : 3
+  owner_member_id set           : 0
+  status breakdown              : {"uploaded":1,"parsed":1,"unsupported":1}
+
+ii_reconciliation_cases rows    : 127
+  by discrepancy_type           : {"owner_unmatched":120,"transaction_unclassified":4,"document_password_required":2,"unsupported_document":1}
+  by status                     : {"open":127}
+  OPEN and blocking/high        : {"owner_unmatched":120,"transaction_unclassified":4,"document_password_required":2,"unsupported_document":1}
+
+=== end — zero writes performed ===

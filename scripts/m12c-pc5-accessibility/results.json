@@ -1,0 +1,230 @@
+{
+  "mission": "M12C §16 — M5-OPEN-1, PC5 accessibility",
+  "ranAt": "2026-09-15T19:14:25.027Z",
+  "appUnderTest": "http://localhost:3958",
+  "database": "vqycarelcoijzwlpkpcz.supabase.co",
+  "tool": "@axe-core/playwright, tags wcag2a + wcag2aa",
+  "screenReader": {
+    "status": "NOT AVAILABLE",
+    "detail": "No screen reader (NVDA / JAWS / VoiceOver / Orca) is installed or drivable in this environment. No manual screen-reader pass was performed and none is claimed. The ARIA live-region behaviour below was verified programmatically (role/aria-live attributes and their rendered text), which is NOT the same as verifying what a screen reader actually announces."
+  },
+  "harnessNegativeControl": {
+    "ran": true,
+    "violationsWhenBroken": 2,
+    "ruleIds": [
+      "image-alt",
+      "label"
+    ],
+    "cleanAfterRemoval": true
+  },
+  "states": [
+    {
+      "key": "resolution_centre",
+      "label": "Resolution centre (listing, blocking items outstanding)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions",
+      "anchorAssertion": "the listing renders at least one item question",
+      "anchorFound": true,
+      "axePasses": 24,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "owner_choice",
+      "label": "Owner choice (radio group of household members)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions/b4b5443b-0545-4a4e-a81b-269b249fefd1",
+      "anchorAssertion": "a radio option exists for the \"self\" household member",
+      "anchorFound": true,
+      "axePasses": 26,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "blocking_unresolved",
+      "label": "Blocking-unresolved state (dismissal refused, statement still blocked)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions/b4b5443b-0545-4a4e-a81b-269b249fefd1",
+      "anchorAssertion": "the screen states this item cannot be hidden because it blocks the statement",
+      "anchorFound": true,
+      "axePasses": 26,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "joint_allocation",
+      "label": "Joint allocation editor (percentage split across owners)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions/b4b5443b-0545-4a4e-a81b-269b249fefd1",
+      "anchorAssertion": "the \"Who owns which share?\" editor with per-owner percentage inputs",
+      "anchorFound": true,
+      "axePasses": 26,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "duplicate_decision",
+      "label": "Duplicate decision (same event / separate events / wrong statement)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions/f9be1f3a-0020-40ae-8fac-cc6baee0ff81",
+      "anchorAssertion": "the three closed-vocabulary duplicate answers are offered as radios",
+      "anchorFound": true,
+      "axePasses": 26,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "correction_overlay",
+      "label": "Correction overlay (what has been decided so far, with masking disclosure)",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions/73dca344-495d-41b3-a0b6-0fcf2f8400dd",
+      "anchorAssertion": "the \"What has been decided on this so far\" decision history section",
+      "anchorFound": true,
+      "axePasses": 26,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    },
+    {
+      "key": "resolved_state",
+      "label": "Resolved state (history view showing a terminal item, badge \"Resolved\")",
+      "reached": true,
+      "notReachedReason": null,
+      "url": "/investment-intelligence/resolutions",
+      "anchorAssertion": "at least one item carries the \"Resolved\" status badge",
+      "anchorFound": true,
+      "axePasses": 24,
+      "axeIncomplete": 1,
+      "incompleteRuleIds": [
+        "color-contrast"
+      ],
+      "violations": [],
+      "byImpact": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "verdict": "PASS"
+    }
+  ],
+  "keyboard": [
+    {
+      "key": "radio_groups",
+      "label": "Radio groups — arrow keys move focus AND selection within the group",
+      "exercised": true,
+      "passed": true,
+      "detail": "ArrowDown moved focus from \"same_economic_event\" to \"separate_genuine_events\" (checked=true)"
+    },
+    {
+      "key": "focus_order",
+      "label": "Focus order — Tab traverses interactive elements in DOM order and reaches the primary action",
+      "exercised": true,
+      "passed": true,
+      "detail": "37 tab stops; DOM-order monotonic=true; reached \"Save this answer\"=true"
+    },
+    {
+      "key": "labels",
+      "label": "Labels — every form control has a programmatic accessible name",
+      "exercised": true,
+      "passed": true,
+      "detail": "3 control(s) inspected; 0 without a name"
+    },
+    {
+      "key": "loading_announcements",
+      "label": "Loading announcements — the load transition is inside a polite live region",
+      "exercised": true,
+      "passed": true,
+      "detail": "role=\"status\" aria-live=\"polite\" announced: \"Loading this resolution…\""
+    },
+    {
+      "key": "error_announcements",
+      "label": "Error announcements — a real API failure is surfaced in a role=\"alert\"",
+      "exercised": true,
+      "passed": true,
+      "detail": "role=\"alert\" announced: \"resolution item not found\""
+    },
+    {
+      "key": "save_announcements",
+      "label": "Save announcements — the post-save confirmation is inside a role=\"status\" region",
+      "exercised": true,
+      "passed": true,
+      "detail": "role=\"status\" announced: \"Answer recorded and the statement re-checked — nothing else is outstanding on it.\""
+    }
+  ],
+  "violationTotalsByImpact": {
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0
+  },
+  "checks": {
+    "passed": 38,
+    "failed": 0
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "ranAt": "2026-09-15T19:02:14.371Z",
+  "asOf": "2026-09-15",
+  "pass": 41,
+  "fail": 0,
+  "results": [
+    {
+      "id": "PC6-LD-01",
+      "verdict": "PASS",
+      "label": "the configured AMFI endpoint is genuinely reachable and returns a plausible full-universe file",
+      "evidence": "url=https://portal.amfiindia.com/spages/NAVAll.txt http=200 bytes=1519064 licence=public_open"
+    },
+    {
+      "id": "PC6-LD-02",
+      "verdict": "PASS",
+      "label": "the source URL comes from configuration, not a hard-coded literal",
+      "evidence": "pc6ReferenceSources.amfi_nav_daily.urlTemplate === the URL fetched"
+    },
+    {
+      "id": "PC6-LD-03",
+      "verdict": "PASS",
+      "label": "the raw source is fingerprinted (byte length + sha256 + retrieval time)",
+      "evidence": "sha256=f219735bab05e21b6d8d01c79eb5dc9d583f387736187d46e550f8bbb8ac5f09 bytes=1519064 retrievedAt=2026-09-15T19:02:07.996Z"
+    },
+    {
+      "id": "PC6-LD-04",
+      "verdict": "PASS",
+      "label": "the file parses deterministically into the expected shape",
+      "evidence": "dataLines=14361 accepted=14344 rejected=17 sections=103 amcs=54"
+    },
+    {
+      "id": "PC6-LD-05",
+      "verdict": "PASS",
+      "label": "malformed records are rejected with an exact, citable reason",
+      "evidence": "17 rejection(s): {\"MALFORMED_NAV\":17}; e.g. line 11498 — NAV value '10.' is not a well-formed non-negative decimal."
+    },
+    {
+      "id": "PC6-LD-06",
+      "verdict": "PASS",
+      "label": "parsing is deterministic (same bytes -> identical checksums)",
+      "evidence": "14344 records, all record checksums identical across two parses"
+    },
+    {
+      "id": "PC6-LD-07",
+      "verdict": "PASS",
+      "label": "every accepted record carries a canonical AMFI scheme code, and codes are unique per date",
+      "evidence": "14344 distinct codes across 14344 records (NAVAll is one row per scheme)"
+    },
+    {
+      "id": "PC6-LD-08",
+      "verdict": "PASS",
+      "label": "economically distinct options are NOT collapsed — every raw option string is preserved",
+      "evidence": "350 distinct raw option strings preserved behind 6 coarse filter values"
+    },
+    {
+      "id": "PC6-LD-09",
+      "verdict": "PASS",
+      "label": "Direct and Regular plans remain separate scheme identities",
+      "evidence": "direct=4294 regular=4312 unstated=5738"
+    },
+    {
+      "id": "PC6-LD-10",
+      "verdict": "PASS",
+      "label": "AMFI scheme structure and category are captured verbatim from the source taxonomy",
+      "evidence": "103 distinct category headers, e.g. \"Open Ended Schemes(Children’s Fund - Childrens' Fund)\""
+    },
+    {
+      "id": "PC6-LD-11",
+      "verdict": "PASS",
+      "label": "real AMFI records resolve to REAL DEV instruments by exact identifier",
+      "evidence": "resolved=11 unresolved=14333 (of 14344 parsed)"
+    },
+    {
+      "id": "PC6-LD-12",
+      "verdict": "PASS",
+      "label": "unresolved schemes are reported as a gap, never force-fitted",
+      "evidence": "14333 unresolved, all with an explicit reason; first: No instrument carries AMFI code 135762 or ISIN INF846K01WO1."
+    },
+    {
+      "id": "PC6-LD-13",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL — an invented scheme code resolves to nothing",
+      "evidence": "code 999999999 -> unresolved / NO_MATCHING_INSTRUMENT"
+    },
+    {
+      "id": "PC6-LD-14",
+      "verdict": "PASS",
+      "label": "a bounded set of real, resolvable, storable NAV facts is available to write",
+      "evidence": "11 record(s) selected for the live write"
+    },
+    {
+      "id": "PC6-LD-15",
+      "verdict": "PASS",
+      "label": "real AMFI NAV facts are genuinely written to DEV",
+      "evidence": "HTTP 201, 11/11 row(s) inserted into ii_prices_nav"
+    },
+    {
+      "id": "PC6-LD-16",
+      "verdict": "PASS",
+      "label": "SEALED ORACLE — every stored NAV equals the exact value in the source file",
+      "evidence": "11 row(s) compared against the source, 0 mismatch(es). Sample: 2022-08-07=34.2355, 2026-09-11=89.5712"
+    },
+    {
+      "id": "PC6-LD-17",
+      "verdict": "PASS",
+      "label": "re-importing identical content is a genuine no-op (idempotency by CONTENT, not by presence)",
+      "evidence": "11 previously-written record(s) re-planned; 11 skipped, 0 would rewrite"
+    },
+    {
+      "id": "PC6-LD-18",
+      "verdict": "PASS",
+      "label": "CONFIRMED ON DEV — 0155 IS APPLIED and an 8-decimal AMFI NAV now survives intact (the numeric(20,6) rounding defect is FIXED on the hosted database)",
+      "evidence": "443 real scheme(s) publish >6 dp today; wrote 14.86269632 (from BANDHAN Arbitrage Fund), DEV stored 14.86269632 — IDENTICAL, so the column is numeric(24,10) and 0155 is live."
+    },
+    {
+      "id": "PC6-LD-19",
+      "verdict": "PASS",
+      "label": "a DIFFERENT value for the same (scheme, date) is treated as a source CORRECTION, not an overwrite",
+      "evidence": "action=supersede reason=SOURCE_CORRECTION previousValue=34.2355"
+    },
+    {
+      "id": "PC6-LD-20",
+      "verdict": "PASS",
+      "label": "NAV dated after the ingestion as-of date is rejected (N.5 \"no future dates\")",
+      "evidence": "re-parsed with asOfDate=2020-01-01: 11983 FUTURE_DATE rejection(s), accepted fell 14344 -> 2361"
+    },
+    {
+      "id": "PC6-LD-21",
+      "verdict": "PASS",
+      "label": "no NAV row carries a user_id or any tenancy column (global reference data, D.1)",
+      "evidence": "ii_prices_nav has no tenancy column; one AMFI NAV is one global fact, never duplicated per user"
+    },
+    {
+      "id": "PC6-LD-22",
+      "verdict": "PASS",
+      "label": "staleness is judged PER SERIES, not per file — the same download contains both fresh and 18-year-stale rows",
+      "evidence": "newest row 2026-09-15 -> fresh (0d); oldest row 2008-10-02 -> stale (6557d); threshold 4d"
+    },
+    {
+      "id": "PC6-LD-23",
+      "verdict": "PASS",
+      "label": "a never-ingested series is a DISTINCT state from a stale one (never reported as zero)",
+      "evidence": "assessFreshness(null) -> never_ingested, \"No observation has ever been ingested for this series.\""
+    },
+    {
+      "id": "PC6-LD-24",
+      "verdict": "PASS",
+      "label": "weekend holes are recognised arithmetically; weekday holes are surfaced as gaps, never filled",
+      "evidence": "Fri->Mon = weekend_only; Tue->next Tue = long_gap (4 missing weekdays)"
+    },
+    {
+      "id": "PC6-LD-25",
+      "verdict": "PASS",
+      "label": "implausible moves are FLAGGED for review, not deleted or corrected",
+      "evidence": "2 finding(s): 2026-09-03:JUMP, 2026-09-04:NONZERO_TO_ZERO"
+    },
+    {
+      "id": "PC6-LD-26",
+      "verdict": "PASS",
+      "label": "a genuinely published NAV of 0.0000 is accepted as a real fact, not treated as missing",
+      "evidence": "241 real scheme(s) publish a NAV of exactly 0 (wound-up segregated portfolios)"
+    },
+    {
+      "id": "PC6-LD-27",
+      "verdict": "PASS",
+      "label": "statement NAV and PC6 market NAV are presented side by side, each with its own as-of date",
+      "evidence": "Statement NAV 412.5500 as at 2026-03-31; market NAV 418.9100 as at 2026-09-15 (source: amfi)."
+    },
+    {
+      "id": "PC6-LD-28",
+      "verdict": "PASS",
+      "label": "there is no code path that merges the two into one NAV",
+      "evidence": "presentDualNav returns both facts and a label; it has no parameter and no return field that could overwrite the statement value"
+    },
+    {
+      "id": "PC6-LD-29",
+      "verdict": "PASS",
+      "label": "a missing job-control row fails CLOSED (an unauthorised job does not run)",
+      "evidence": "No ii_reference_job_control row exists for 'pc6_amfi_daily_nav'. The job is treated as NOT authorised (fail closed)."
+    },
+    {
+      "id": "PC6-LD-30",
+      "verdict": "PASS",
+      "label": "the kill switch stops the job and reports the operator-supplied reason",
+      "evidence": "Kill switch is engaged for 'k': operator halted the feed"
+    },
+    {
+      "id": "PC6-LD-31",
+      "verdict": "PASS",
+      "label": "backoff is honoured, and is bounded rather than unbounded",
+      "evidence": "1 failure -> 15min, 3 -> 60min, 10 -> 360min (capped); next attempt 2026-09-15T20:02:13.579Z"
+    },
+    {
+      "id": "PC6-LD-32",
+      "verdict": "PASS",
+      "label": "a truncated or error-page response is treated as an OUTAGE, never parsed as a small day",
+      "evidence": "Source returned 1200 bytes, below the 200000-byte plausibility floor. Treated as an outage rather than parsed, so a truncated or error-page response cannot be recorded as a successful import."
+    },
+    {
+      "id": "PC6-LD-33",
+      "verdict": "PASS",
+      "label": "a PARTIAL batch is never reported as a success",
+      "evidence": "1 chunk(s) committed (500 row(s)) and 1 failed. Recorded as FAILED, not succeeded, so the job stays in backoff and the freshness surface keeps showing the gap. Re-running completes the tail: the committed rows are content-idempotent no-ops. First error: connection reset"
+    },
+    {
+      "id": "PC6-LD-34",
+      "verdict": "PASS",
+      "label": "all-or-nothing settlement reports rolled_back with zero rows, not a partial success",
+      "evidence": "1 chunk(s) failed under all-or-nothing semantics; the whole batch was rolled back. First error: constraint violation"
+    },
+    {
+      "id": "PC6-LD-35",
+      "verdict": "PASS",
+      "label": "alerting escalates a partial batch and a rejection-rate spike to critical",
+      "evidence": "critical:SOURCE_OUTAGE_IMPLAUSIBLY_SMALL, critical:PARTIAL_BATCH, critical:HIGH_REJECTION_RATE, info:UNRESOLVED_SCHEMES"
+    },
+    {
+      "id": "PC6-LD-36",
+      "verdict": "PASS",
+      "label": "the REAL run today raises no critical alert (the thresholds are not tuned to always fire)",
+      "evidence": "real rejection rate 0.118% vs 5% threshold; alerts raised: info:UNRESOLVED_SCHEMES"
+    },
+    {
+      "id": "PC6-LD-37",
+      "verdict": "PASS",
+      "label": "a licence-blocked benchmark source CANNOT be fetched, even by mistake",
+      "evidence": "PC6: source 'nse_index_tri' is disabled (licence=licence_required) and must not be fetched. BLOCKER PO-PC6-1. NIFTY index values are the property of NSE Indices Limited and are licensed, not"
+    },
+    {
+      "id": "PC6-LD-38",
+      "verdict": "PASS",
+      "label": "the risk-free source refuses to be fetched while the PO decision is open",
+      "evidence": "PC6: source 'india_risk_free' is disabled (licence=po_decision_required) and must not be fetched. BLOCKER PO-PC6-2. N.10 forbids silently choosing a proxy. At least three defensible candidat"
+    },
+    {
+      "id": "PC6-LD-39",
+      "verdict": "PASS",
+      "label": "PC6 has invented no NIFTY/SENSEX series in DEV",
+      "evidence": "14 benchmark row(s) in DEV, 0 of them named after a real licensed index (all existing rows are pre-PC6 R4/R5 test fixtures)"
+    },
+    {
+      "id": "PC6-LD-40",
+      "verdict": "PASS",
+      "label": "every risk-free row in DEV still self-declares as an uncertified seed (PC6 promoted nothing)",
+      "evidence": "16 row(s), all labelled: \"DEV SEED — approximate RBI 91-day T-Bill annual average (not a certified feed)...\""
+    },
+    {
+      "id": "PC6-LD-41",
+      "verdict": "PASS",
+      "label": "every row this run created is removed and DEV is left exactly as found",
+      "evidence": "created=12 remaining=0 ii_prices_nav before=258 after=258"
+    }
+  ]
+}
