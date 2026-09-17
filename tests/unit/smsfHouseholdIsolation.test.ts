@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeDashboard, computeInsuranceAdequacy, type DashboardInput, type DashboardSummary } from '@/lib/engines/dashboard';
-import { isHouseholdOperatingCashFlow, SMSF_OWNER } from '@/lib/engines/householdContext';
+import { applySmsfPropertyLoanLinkOverride, isHouseholdOperatingCashFlow, SMSF_OWNER } from '@/lib/engines/householdContext';
 import { computeHealthScore, type HealthScoreConfig, type HealthScoreInput } from '@/lib/engines/healthScore';
 import { computeResilience, type ResilienceConfig, type ResilienceInput } from '@/lib/engines/resilience';
 import {
@@ -326,6 +326,48 @@ describe('LR-FI-1 §5/§28 — SMSF economic value stays in household wealth', (
     expect(d.totalInvestments).toBe(250000);
     expect(d.totalRetirement).toBe(1050000);
     expect(d.netWorth).toBe(800000 + 250000 + 1050000 - 365000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LR-FI Financial-Integrity Recovery (2026-09-17) — regression test for the
+// P0-1 hotfix (commit ea95507, 2026-09-14) that briefly re-broke this exact
+// invariant. P0-1 pointed totalLiabilities/totalLiabilityMonthlyRepayments/
+// liabilityByType at the SAME owner-filtered array debtMonthlyRepayments
+// uses, to stop an SMSF fund's own linked property loan being subtracted
+// twice (once already netted inside the fund's own valuation via
+// totalRetirement, again via totalLiabilities). That live scenario was real,
+// but the fix was too broad: it silently zeroed the balance of ANY
+// SMSF-context liability — plain owner='smsf'-tagged OR LR-12R fund-linked —
+// out of Net Worth entirely whenever no netted fund valuation was present
+// to offset it, i.e. a real liability counted zero times instead of exactly
+// once. This reproduces that exact regression using the LR-12R override
+// path (applySmsfPropertyLoanLinkOverride), which is what dashboardData.ts
+// actually feeds computeDashboard() for a genuinely fund-linked loan.
+// ---------------------------------------------------------------------------
+describe('LR-FI Financial-Integrity Recovery — P0-1 regression guard', () => {
+  it('an LR-12R fund-linked liability still counts once in Net Worth, not zero times', () => {
+    const personal = { id: 'personal-1', balance: 20000, interest_rate: 6, monthly_repayment: 500, debt_type: 'personal_loan', master_item_key: 'personal_loan', currency_code: 'AUD', owner: 'self' };
+    // Deliberately NOT owner: SMSF_OWNER — mirrors the untagged, fund-linked
+    // liability LR-12R was written for (property_liability_links carries the
+    // context, not the row's own stored owner column).
+    const fundLinked = { id: 'fund-linked-1', balance: 365000, interest_rate: 6, monthly_repayment: 2000, debt_type: 'mortgage', master_item_key: 'investment_loan', currency_code: 'AUD', owner: 'self' };
+    const liabilitiesForHouseholdContext = applySmsfPropertyLoanLinkOverride([personal, fundLinked], new Set(['fund-linked-1']));
+
+    const d = computeDashboard({ ...EMPTY, income: [PERSONAL_SALARY], liabilities: liabilitiesForHouseholdContext }, 'AUD');
+
+    // DTI/DSR-side figures correctly exclude the fund-linked loan (LR-12R's
+    // own, unchanged contract).
+    expect(d.householdLiabilityBalance).toBe(20000);
+    expect(d.debtMonthlyRepayments).toBe(500);
+
+    // Net-Worth-side figures must NOT exclude it — no retirement/investment
+    // row in this fixture already nets it out, so excluding it here would
+    // delete $365,000 of real liability from Net Worth (P0-1's regression).
+    expect(d.totalLiabilities).toBe(385000);
+    expect(d.totalLiabilityMonthlyRepayments).toBe(2500);
+    expect(d.liabilityByType.find((l) => l.debtType === 'investment_loan')?.balance).toBe(365000);
+    expect(d.netWorth).toBe(-385000);
   });
 });
 

@@ -33,32 +33,39 @@
 // the future SMSF entity workspace, this module is the single place to
 // re-point — no engine hard-codes the string itself.
 //
-// SCOPE — CASH FLOW ONLY (LR-FI-1 §5, §28), CORRECTED for liability BALANCES
-// by the LR independent audit's P0-1 fix (2026-09-14). This module's own
-// filter (isHouseholdOperatingCashFlow/householdOperatingCashFlowRows) is
-// unchanged — still exactly `owner !== 'smsf'` on cash-flow fields. What
-// changed is which of dashboard.ts's OWN aggregates apply that filter to a
-// liability's *balance*, not just its repayment.
+// SCOPE — CASH FLOW ONLY (LR-FI-1 §5, §28). This module's own filter
+// (isHouseholdOperatingCashFlow/householdOperatingCashFlowRows) is exactly
+// `owner !== 'smsf'`, applied to income/expense rows and to a liability's
+// *repayment* (and, for DTI, its balance via householdLiabilityBalance) —
+// never to a liability's balance for Net Worth. A liability keeps its
+// balance in totalLiabilities/liabilityByType/Net Worth regardless of
+// owner, including owner='smsf' and including a liability whose EFFECTIVE
+// owner was forced to 'smsf' by applySmsfPropertyLoanLinkOverride() below.
 //
-// The original text asserted here was: "liability balances... are all
-// deliberately left untouched... a liability keeps its balance in Net
-// Worth." That was wrong for an SMSF-linked property loan specifically, and
-// is corrected, not merely restated: an SMSF fund's own valuation
-// (smsf_compute_detailed_net_value(), migration 0084) already SUBTRACTS its
-// linked loan before that net figure reaches totalRetirement, so also
-// keeping the loan's balance in totalLiabilities subtracted it a SECOND
-// time. Live-proven: a $500,000 SMSF property against a $365,000 linked
-// loan (nothing else) reported Net Worth −$230,000 instead of $135,000 —
-// off by exactly the loan balance, in both Summary and Detailed mode.
+// The LR independent audit's P0-1 fix (2026-09-14) briefly pointed
 // dashboard.ts's totalLiabilities/totalLiabilityMonthlyRepayments/
-// liabilityByType now all use the SAME household-only filter this module
-// already applied to cash flow, for exactly this reason — see their own
-// doc comments there for the full mechanism.
+// liabilityByType at this same owner-filtered array too, reasoning that an
+// SMSF fund's own valuation (smsf_compute_detailed_net_value(), migration
+// 0084) already subtracts its linked loan before that net figure reaches
+// totalRetirement, so also keeping the loan's balance in totalLiabilities
+// double-subtracted it (live-proven: a $500,000 SMSF property against a
+// $365,000 linked loan, nothing else, reported Net Worth −$230,000 instead
+// of $135,000). That scenario is real, but the fix was too broad — it
+// excluded EVERY SMSF-context liability from Net Worth, not only ones
+// actually netted elsewhere in the same computation, which zeroed out a
+// plain owner='smsf' (or LR-12R-linked) liability with no netted fund
+// valuation present. That is the $365,000 regression the LR-FI
+// Financial-Integrity Recovery (2026-09-17) found across
+// tests/unit/smsfHouseholdIsolation.test.ts, lrFi2HouseholdDebtRatios.test.ts
+// and lr12rSmsfPropertyLoanLinkOverride.test.ts, and reverted — see
+// dashboard.ts's totalLiabilities doc comment for the restored mechanism.
+// Correctly fixing the original double-subtraction needs a per-loan/
+// per-fund correlation this module does not have (or a gross, not netted,
+// fund valuation) and remains an open item for the PO.
 //
-// Assets, investments, retirement balances and Gross Assets remain
-// untouched by this rule, as originally stated — this correction is scoped
-// to liability balances only, because only a liability can be the OTHER
-// side of a fund's own already-netted valuation.
+// Assets, investments and retirement balances remain untouched by this
+// rule, as originally stated — an SMSF-owned one of those must keep
+// contributing to Net Worth (spec §5, §28).
 // ---------------------------------------------------------------------------
 
 /** The `owner` value denoting an SMSF-context row (migration 0004's CHECK). */
@@ -112,9 +119,13 @@ export function householdOperatingCashFlowRows<T extends OwnedRow>(rows: T[]): T
 // copy fed to computeDashboard(). The real, stored liabilities.owner
 // column — and every other reader of it, including the Liabilities
 // register's own display/edit UI — is completely untouched; only
-// computeDashboard()'s own input is enriched. Originally consumed by DTI/
-// DSR only; as of the P0-1 fix (2026-09-14) also determines Net Worth's own
-// totalLiabilities/liabilityByType — see dashboard.ts's doc comments there.
+// computeDashboard()'s own input is enriched. Consumed by DTI/DSR only —
+// certified by tests/unit/lr12rSmsfPropertyLoanLinkOverride.test.ts to leave
+// totalLiabilities/liabilityByType/Net Worth whole. The P0-1 fix
+// (2026-09-14) briefly also routed Net Worth through this override's
+// effective owner; the LR-FI Financial-Integrity Recovery (2026-09-17)
+// reverted that as an over-broad regression — see dashboard.ts's
+// totalLiabilities doc comment.
 /** Minimal shape of a liability row this override needs to see. */
 export interface LiabilityRowForSmsfLinkOverride {
   id: string;

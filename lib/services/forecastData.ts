@@ -921,17 +921,13 @@ async function buildCalculatorInput(
     //   reduces. Byte-identical for every household with no SMSF rows, where
     //   totalLiabilityMonthlyRepayments === debtMonthlyRepayments.
     //
-    //   ADDENDUM (LR independent audit P0-1, 2026-09-14): `totalLiabilities`
-    //   is no longer whole-balance-sheet either — it now excludes
-    //   SMSF-linked liabilities too (a fund's linked loan is already netted
-    //   into its own valuation before it reaches openingRetirement above;
-    //   keeping the loan's balance here as well double-subtracted it from
-    //   Net Worth). `totalLiabilityMonthlyRepayments` was updated in lockstep
-    //   (same household-only source array in dashboard.ts), so this pairing
-    //   still amortises whichever balance-sheet population totalLiabilities
-    //   itself now represents with a repayment on that same basis — the two
-    //   are equal by construction for every household now, not only ones
-    //   with no SMSF rows, and no change was needed at this call site.
+    //   `totalLiabilities` stays whole-balance-sheet (LR-FI-1 §5/§28 — see
+    //   dashboard.ts's own doc comment on that field for the P0-1 fix that
+    //   briefly narrowed it, and the LR-FI Financial-Integrity Recovery
+    //   (2026-09-17) that reverted it), and `totalLiabilityMonthlyRepayments`
+    //   stays on that same all-owner basis, so this pairing still amortises
+    //   the whole balance sheet with a repayment on that same basis — no
+    //   change needed at this call site.
     monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
     assumptions,
     plannedEvents,
