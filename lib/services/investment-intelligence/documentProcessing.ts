@@ -48,6 +48,8 @@ import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+import { detectMissingTransactions } from './missingTransactionDetection';
+import { openReconciliationCase } from './reconciliationCases';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
@@ -69,49 +71,25 @@ export interface ProcessSourceDocumentResult {
     holdingsFound: number;
     duplicateTransactionsLinked: number;
     reconciliationCasesOpened: number;
+    /** Genuinely new ii_transactions rows this run inserted (not a
+     * same-fingerprint duplicate of an already-recorded transaction). */
+    newTransactionsCount: number;
+    /** Previously-recorded transactions, dated within this statement's own
+     * coverage period, that this statement did not re-confirm — surfaced as
+     * 'transaction_missing_from_restatement' reconciliation cases, never
+     * deleted or auto-resolved (see step 6.5 below). */
+    missingTransactionsCount: number;
   };
   error: string | null;
   reconciliationCaseId?: string | null; // set when the failure IS a reconciliation case (password/unsupported/corrupt)
 }
 
-export async function openReconciliationCase(
-  userId: string,
-  input: {
-    subjectType: 'holding_snapshot' | 'transaction' | 'account';
-    subjectId: string;
-    discrepancyType: string;
-    severity: 'info' | 'low' | 'medium' | 'high' | 'blocking';
-    sourceDocumentId: string | null;
-    details: Record<string, unknown>;
-    evidence?: Record<string, unknown>;
-  }
-): Promise<string | null> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from('ii_reconciliation_cases')
-    .insert({
-      user_id: userId,
-      subject_type: input.subjectType,
-      subject_id: input.subjectId,
-      discrepancy_type: input.discrepancyType,
-      severity: input.severity,
-      source_document_id: input.sourceDocumentId,
-      discrepancy_details: input.details,
-      evidence: input.evidence ?? null,
-    })
-    .select('id')
-    .single();
-  if (error || !data) return null;
-  await emitAuditEvent({
-    userId,
-    eventType: 'reconciliation_case_created',
-    subjectType: 'ii_reconciliation_cases',
-    subjectId: data.id as string,
-    actorType: 'system',
-    metadata: { discrepancyType: input.discrepancyType, severity: input.severity, subjectType: input.subjectType, subjectId: input.subjectId },
-  });
-  return data.id as string;
-}
+// Moved to reconciliationCases.ts (2026-09-17, Holdings drilldown task) so
+// callers that only need this helper (aiFallbackReconciliation.ts, unit
+// tests) don't have to import this whole file's pdf-parse dependency chain.
+// Re-exported here, unchanged, so every existing `from './documentProcessing'`
+// import site keeps working.
+export { openReconciliationCase } from './reconciliationCases';
 
 export async function processSourceDocument(input: ProcessSourceDocumentInput): Promise<ProcessSourceDocumentResult> {
   const admin = createAdminClient();
@@ -231,8 +209,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
           schemesFound: priorSucceeded.schemes_found as number,
           transactionsFound: priorSucceeded.transactions_found as number,
           holdingsFound: priorSucceeded.holdings_found as number,
-          duplicateTransactionsLinked: 0,
+          duplicateTransactionsLinked: (priorSucceeded.duplicate_transactions_linked as number) ?? 0,
           reconciliationCasesOpened: 0,
+          newTransactionsCount: (priorSucceeded.new_transactions_count as number) ?? 0,
+          missingTransactionsCount: (priorSucceeded.missing_transactions_count as number) ?? 0,
         },
         error: null,
       };
@@ -595,6 +575,23 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const pendingTransactionInserts: Record<string, unknown>[] = [];
   const pendingSourceLinkInserts: Record<string, unknown>[] = [];
 
+  // Incremental-statement-upload support (task 2026-09-17): every fingerprint
+  // this run's OWN parsed transactions resolve to, per (account, instrument)
+  // position — whether that fingerprint turns out to be a fresh insert below
+  // or a match against a transaction some EARLIER document already wrote.
+  // Used after this loop to find previously-recorded transactions that this
+  // statement's coverage window ought to have re-confirmed but didn't
+  // (see "missing-transaction detection" below) — never to decide
+  // duplicate/new status itself, which the existing fingerprint-dedup logic
+  // immediately below already owns.
+  const confirmedFingerprintsByPosition = new Map<string, Set<string>>();
+  function markConfirmed(accountId: string, instrumentId: string, fingerprint: string) {
+    const key = `${accountId}:${instrumentId}`;
+    const set = confirmedFingerprintsByPosition.get(key) ?? new Set<string>();
+    set.add(fingerprint);
+    confirmedFingerprintsByPosition.set(key, set);
+  }
+
   for (const t of parsed.transactions) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
     const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
@@ -611,6 +608,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       navScaled: t.navScaled,
       sourceReference: t.sourceReference,
     });
+    markConfirmed(accountId, instrumentId, fingerprint);
 
     const existingTxnId = existingFingerprints.get(`${accountId}:${fingerprint}`);
     if (existingTxnId) {
@@ -866,6 +864,72 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     }
   }
 
+  // --- 6.5. Missing-transaction detection (incremental statement upload,
+  // task 2026-09-17) -----------------------------------------------------
+  //
+  // ii_transactions is append-only/immutable by design (0033's header
+  // comment) — a transaction this document's coverage window SHOULD have
+  // re-confirmed but didn't is never deleted or silently left alone; it is
+  // surfaced as an explicit, human-reviewable reconciliation case, the same
+  // "flag for a human, never auto-resolve" convention this file already
+  // uses for every other kind of discrepancy.
+  //
+  // Scope is deliberately conservative: only positions this statement
+  // actually PRINTS A HOLDING LINE FOR (parsed.holdings) are checked — that
+  // reliably means "this statement covers this position as of its own
+  // as-of date" (the same signal evaluatePositionAndCertify already treats
+  // as authoritative for reconciliation). A position with zero transactions
+  // in a period is not, by itself, evidence of anything missing. And only
+  // when the statement declares an explicit period (statementPeriodStartIso/
+  // EndIso) is any comparison attempted at all — without a stated coverage
+  // window there is no honest way to tell "genuinely no activity" apart
+  // from "this document simply doesn't cover that far back", so this step
+  // does nothing rather than guess.
+  let missingTransactionsCount = 0;
+  const missingTransactionCaseIds: string[] = [];
+  const periodStartIso = parsed.metadata.statementPeriodStartIso;
+  const periodEndIso = parsed.metadata.statementPeriodEndIso;
+  const coveredPositions: { accountId: string; instrumentId: string }[] = [];
+  for (const h of parsed.holdings) {
+    const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(h.folioNumber, h.scheme.amcName));
+    const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
+    if (accountId && instrumentId) coveredPositions.push({ accountId, instrumentId });
+  }
+
+  const missingCases = await detectMissingTransactions(
+    admin as unknown as import('./missingTransactionDetection').MissingTransactionQueryClient,
+    userId,
+    sourceDocumentId,
+    coveredPositions,
+    confirmedFingerprintsByPosition,
+    periodStartIso,
+    periodEndIso
+  );
+  for (const { accountId, instrumentId, missing } of missingCases) {
+    missingTransactionsCount += missing.length;
+    const caseId = await openReconciliationCase(userId, {
+      subjectType: 'account',
+      subjectId: accountId,
+      discrepancyType: 'transaction_missing_from_restatement',
+      severity: 'medium',
+      sourceDocumentId,
+      details: {
+        instrumentId,
+        statementPeriodStartIso: periodStartIso,
+        statementPeriodEndIso: periodEndIso,
+        missingTransactionIds: missing.map((m) => m.id),
+        missingTransactionCount: missing.length,
+        reason:
+          'One or more previously-recorded transactions for this position, dated within this new statement’s own coverage period, were not re-confirmed by this statement. Nothing was deleted or changed — this is a review item for a human to look at.',
+      },
+      evidence: { missingTransactions: missing },
+    });
+    if (caseId) {
+      missingTransactionCaseIds.push(caseId);
+      reconciliationCasesOpened++;
+    }
+  }
+
   // --- 7. Reconciliation + certification, per position ----------------------
   // II-PC3 finding (Q10 controlled-malformed-fixture probe): `parsed.errors`
   // (error-severity parser warnings, e.g. `unparseable_transaction_row` —
@@ -926,6 +990,9 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       holdings_found: parsed.holdings.length,
       warnings: parsed.warnings,
       errors: parsed.errors,
+      duplicate_transactions_linked: duplicateTransactionsLinked,
+      new_transactions_count: pendingTransactionInserts.length,
+      missing_transactions_count: missingTransactionsCount,
     })
     .eq('id', parseRunId);
 
@@ -952,6 +1019,8 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       holdingsFound: parsed.holdings.length,
       duplicateTransactionsLinked,
       reconciliationCasesOpened,
+      newTransactionsCount: pendingTransactionInserts.length,
+      missingTransactionsCount,
     },
     error: null,
   };

@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { HoldingsTable } from './HoldingsTable';
 
 // R4 — Performance UX (spec sections 60-65).
 //
@@ -265,6 +266,8 @@ export function PerformanceClient() {
       {r.portfolios.map((p) => (
         <PortfolioSection key={p.currencyCode} p={p} asOfDate={r.asOfDate} periodStart={r.periodStart} engineVersion={r.engineVersion} subVersions={r.subVersions} />
       ))}
+
+      <HoldingsTable />
 
       <SchemeTable schemes={r.schemes} />
     </div>
