@@ -51,16 +51,14 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { openReconciliationCase } from './reconciliationCases';
+import { isAiFallbackEnabled } from './aiFallbackFeatureFlag';
 
-/** Same convention as the Financial Data Hub module's own upload-enablement
- * flag and every AIE flag on the aie-1-* branches: must equal the literal string
- * 'true'; anything else (unset, misconfigured) leaves it OFF. Default OFF in
- * every environment, including DEV — a Product Owner/operator opts in
- * explicitly per the task brief ("default OFF in production, testable in
- * DEV"). */
-export function isAiFallbackReconciliationEnabled(): boolean {
-  return process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED === 'true';
-}
+// 2026-09-17 PO addendum: the flag now lives in aiFallbackFeatureFlag.ts,
+// shared with aiFallbackDocumentExtraction.ts, since the PO generalized the
+// trigger condition to ONE mechanism covering reconciliation failure, parse
+// failure, and format-unrecognized. Re-exported here under both names so
+// this file's own existing callers/tests keep working unchanged.
+export { isAiFallbackEnabled, isAiFallbackEnabled as isAiFallbackReconciliationEnabled };
 
 export interface ReconciliationFailureInput {
   status: string | null; // ii_portfolio_truth_status.status
@@ -174,7 +172,7 @@ async function findCachedResult(
  * honestly-reported outcome, not an error.
  */
 export async function getAiFallbackReconciliation(ctx: AiFallbackContext): Promise<AiFallbackOutcome> {
-  if (!isAiFallbackReconciliationEnabled()) return { outcome: 'disabled' };
+  if (!isAiFallbackEnabled()) return { outcome: 'disabled' };
 
   const admin = createAdminClient();
   const cached = await findCachedResult(admin, ctx.userId, ctx.accountId, ctx.instrumentId, ctx.sourceDocumentId);

@@ -50,12 +50,17 @@ import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
+import { getAiFallbackDocumentExtraction, describeUnmaskedDocumentTextForAudit, type AiFallbackDocumentOutcome, type AieDocumentProvider } from './aiFallbackDocumentExtraction';
 
 export interface ProcessSourceDocumentInput {
   userId: string;
   sourceDocumentId: string;
   password?: string;
   forceReparse?: boolean;
+  /** Test/DI seam for the generalized AI-fallback mechanism (2026-09-17 PO
+   * addendum) — defaults to the real (currently unavailable) provider
+   * resolution. Never set outside tests/manual DEV verification. */
+  aiDocumentProviderOverride?: AieDocumentProvider | null;
 }
 
 export interface ProcessSourceDocumentResult {
@@ -82,6 +87,35 @@ export interface ProcessSourceDocumentResult {
   };
   error: string | null;
   reconciliationCaseId?: string | null; // set when the failure IS a reconciliation case (password/unsupported/corrupt)
+  /** Set when status === 'ai_review_pending': the id of the
+   * ii_ai_extraction_reviews row the user must accept/reject before
+   * anything is written to their holdings (2026-09-17 PO addendum). */
+  aiExtractionReviewId?: string | null;
+}
+
+/** Honesty requirement (2026-09-17 PO addendum, point 4): the user-facing
+ * "format not recognized" / parse-failure message must say so plainly when
+ * AI-fallback was ALSO tried and ALSO failed, rather than silently reading
+ * identically to a document where AI-fallback was never attempted. Never
+ * claims an attempt was made when isAiFallbackEnabled() was simply off. */
+function honestFailureMessage(baseMessage: string, aiOutcome: AiFallbackDocumentOutcome): string {
+  switch (aiOutcome.outcome) {
+    case 'unavailable':
+      return `${baseMessage} An AI-assisted re-extraction was also attempted and is not available in this deployment.`;
+    case 'no_usable_data':
+      return `${baseMessage} An AI-assisted re-extraction was also attempted and could not produce usable scheme/cost-value/market-value/unit data either.`;
+    case 'still_failed':
+      return `${baseMessage} An AI-assisted re-extraction was also attempted and failed (${aiOutcome.reason}).`;
+    case 'already_decided':
+      return aiOutcome.status === 'rejected'
+        ? `${baseMessage} An AI-assisted extraction was previously attempted and reviewed, but you declined to accept its results.`
+        : baseMessage;
+    case 'disabled':
+    default:
+      // AI-fallback was never attempted at all — the original message is
+      // already accurate and must not claim an attempt that didn't happen.
+      return baseMessage;
+  }
 }
 
 // Moved to reconciliationCases.ts (2026-09-17, Holdings drilldown task) so
@@ -272,6 +306,32 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   });
 
   if (!detection.parser || !parsed) {
+    // 2026-09-17 PO addendum: try the generalized AI-fallback mechanism
+    // BEFORE showing "format not recognized" — the deterministic parser
+    // registry could not identify this document at all, which is an
+    // earlier, coarser failure than a per-scheme reconciliation mismatch,
+    // but the same "don't show the user a dead end without trying the AI
+    // path first" principle applies.
+    const aiOutcome = await getAiFallbackDocumentExtraction({
+      userId,
+      sourceDocumentId,
+      parseRunId,
+      triggerReason: 'format_unrecognized',
+      request: { maskedDocumentText: describeUnmaskedDocumentTextForAudit(text) },
+      providerOverride: input.aiDocumentProviderOverride,
+    });
+    if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
+      await updateDocumentStatusUnlessSucceeded({
+        status: 'ai_review_pending',
+        source_detected: detection.detection.sourceKey,
+        source_confidence: detection.detection.confidence,
+        extraction_method: extractionMethod,
+      });
+      await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, errors: [{ code: 'ai_review_pending', message: 'Format not recognized by the deterministic parser; an AI-assisted extraction is pending user review.', severity: 'info' }] }).eq('id', parseRunId);
+      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'format_unrecognized', reviewId: aiOutcome.reviewId, parseRunId } });
+      return { ok: false, status: 'ai_review_pending', parseRunId, error: null, aiExtractionReviewId: aiOutcome.reviewId };
+    }
+
     const status = detection.detection.confidence > 0 ? 'reconciliation_required' : 'unsupported';
     await updateDocumentStatusUnlessSucceeded({
       status,
@@ -285,11 +345,11 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       discrepancyType: 'unsupported_document',
       severity: 'blocking',
       sourceDocumentId,
-      details: { sourceConfidence: detection.detection.confidence, candidates: detection.allCandidates },
+      details: { sourceConfidence: detection.detection.confidence, candidates: detection.allCandidates, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence }).eq('id', parseRunId);
     await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'source_undetected_or_unsupported', parseRunId } });
-    return { ok: false, status, parseRunId, error: 'Statement source/format could not be confidently identified.', reconciliationCaseId: caseId };
+    return { ok: false, status, parseRunId, error: honestFailureMessage('Statement source/format could not be confidently identified.', aiOutcome), reconciliationCaseId: caseId };
   }
 
   await emitAuditEvent({
@@ -303,6 +363,30 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   const validation = detection.parser.validateParsedOutput(parsed);
   if (!validation.ok) {
+    // 2026-09-17 PO addendum: same generalized AI-fallback attempt as the
+    // format-unrecognized branch above, for the case where a parser WAS
+    // identified but its own validation rejected the result.
+    const aiOutcome = await getAiFallbackDocumentExtraction({
+      userId,
+      sourceDocumentId,
+      parseRunId,
+      triggerReason: 'parse_failed',
+      request: { maskedDocumentText: describeUnmaskedDocumentTextForAudit(text) },
+      providerOverride: input.aiDocumentProviderOverride,
+    });
+    if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
+      await updateDocumentStatusUnlessSucceeded({
+        status: 'ai_review_pending',
+        parse_error: validation.errors.join('; '),
+        source_detected: detection.detection.sourceKey,
+        source_confidence: detection.detection.confidence,
+        extraction_method: extractionMethod,
+      });
+      await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: [...validation.errors.map((e) => ({ code: 'validation_error', message: e, severity: 'error' as const })), { code: 'ai_review_pending', message: 'Parser validation failed; an AI-assisted extraction is pending user review.', severity: 'info' as const }] }).eq('id', parseRunId);
+      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'parse_failed', reviewId: aiOutcome.reviewId, parseRunId } });
+      return { ok: false, status: 'ai_review_pending', parseRunId, error: null, aiExtractionReviewId: aiOutcome.reviewId };
+    }
+
     await updateDocumentStatusUnlessSucceeded({
       status: 'parse_failed',
       parse_error: validation.errors.join('; '),
@@ -316,11 +400,11 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       discrepancyType: 'parse_incomplete',
       severity: 'blocking',
       sourceDocumentId,
-      details: { errors: validation.errors },
+      details: { errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: validation.errors }).eq('id', parseRunId);
     await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'validation_failed', errors: validation.errors, parseRunId } });
-    return { ok: false, status: 'parse_failed', parseRunId, error: validation.errors.join('; '), reconciliationCaseId: caseId };
+    return { ok: false, status: 'parse_failed', parseRunId, error: honestFailureMessage(validation.errors.join('; '), aiOutcome), reconciliationCaseId: caseId };
   }
 
   // --- 3. Folio/account resolution ---------------------------------------

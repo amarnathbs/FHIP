@@ -94,40 +94,40 @@ describe('schemeReconciliationFailed', () => {
 });
 
 describe('isAiFallbackReconciliationEnabled', () => {
-  const ORIGINAL = process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
+  const ORIGINAL = process.env.II_AI_FALLBACK_ENABLED;
   afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
-    else process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = ORIGINAL;
+    if (ORIGINAL === undefined) delete process.env.II_AI_FALLBACK_ENABLED;
+    else process.env.II_AI_FALLBACK_ENABLED = ORIGINAL;
   });
 
   it('defaults OFF when unset', () => {
-    delete process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
+    delete process.env.II_AI_FALLBACK_ENABLED;
     expect(isAiFallbackReconciliationEnabled()).toBe(false);
   });
   it('stays OFF for any value other than the literal string "true"', () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'TRUE';
+    process.env.II_AI_FALLBACK_ENABLED = 'TRUE';
     expect(isAiFallbackReconciliationEnabled()).toBe(false);
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = '1';
+    process.env.II_AI_FALLBACK_ENABLED = '1';
     expect(isAiFallbackReconciliationEnabled()).toBe(false);
   });
   it('is ON only when set to exactly "true"', () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'true';
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
     expect(isAiFallbackReconciliationEnabled()).toBe(true);
   });
 });
 
 describe('getAiFallbackReconciliation — trigger condition and caching', () => {
-  const ORIGINAL = process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
+  const ORIGINAL = process.env.II_AI_FALLBACK_ENABLED;
   beforeEach(() => {
     adminTables.current = {};
   });
   afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
-    else process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = ORIGINAL;
+    if (ORIGINAL === undefined) delete process.env.II_AI_FALLBACK_ENABLED;
+    else process.env.II_AI_FALLBACK_ENABLED = ORIGINAL;
   });
 
   it('never calls the provider when the feature flag is disabled (the default)', async () => {
-    delete process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED;
+    delete process.env.II_AI_FALLBACK_ENABLED;
     const provider = vi.fn().mockResolvedValue(FAKE_RESULT);
     const outcome = await getAiFallbackReconciliation({
       userId: 'user-1',
@@ -142,7 +142,7 @@ describe('getAiFallbackReconciliation — trigger condition and caching', () => 
   });
 
   it('calls the provider exactly once on a genuine reconciliation failure when enabled, and persists a resolved case', async () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'true';
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
     const provider = vi.fn().mockResolvedValue(FAKE_RESULT);
     const outcome = await getAiFallbackReconciliation({
       userId: 'user-1',
@@ -164,7 +164,7 @@ describe('getAiFallbackReconciliation — trigger condition and caching', () => 
   });
 
   it('does not call the provider again for the same position/document once cached — returns the cached result instead', async () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'true';
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
     const provider = vi.fn().mockResolvedValue(FAKE_RESULT);
     const ctx = {
       userId: 'user-1',
@@ -185,7 +185,7 @@ describe('getAiFallbackReconciliation — trigger condition and caching', () => 
   });
 
   it('reports "unavailable" (never a fabricated number) when no provider can be resolved', async () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'true';
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
     const outcome = await getAiFallbackReconciliation({
       userId: 'user-1',
       accountId: 'account-1',
@@ -198,7 +198,7 @@ describe('getAiFallbackReconciliation — trigger condition and caching', () => 
   });
 
   it('reports "still_failed" (not a fabricated number) when the provider itself throws', async () => {
-    process.env.II_AI_FALLBACK_RECONCILIATION_ENABLED = 'true';
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
     const provider = vi.fn().mockRejectedValue(new Error('provider timeout'));
     const outcome = await getAiFallbackReconciliation({
       userId: 'user-1',
