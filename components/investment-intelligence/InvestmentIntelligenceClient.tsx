@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fmtDate } from './dateDisplay';
+import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -110,6 +111,12 @@ const STATUS_LABEL: Record<string, string> = {
   unsupported: 'Unsupported document',
   superseded: 'Superseded by a newer statement',
   archived: 'Archived',
+  // 2026-09-17 PO addendum: the deterministic parser could not recognize
+  // this document's format (or its own validation rejected the result),
+  // but an AI-assisted re-extraction produced usable data and is waiting
+  // on this exact user's explicit review before anything is written to
+  // their holdings.
+  ai_review_pending: 'AI-extracted data awaiting your review',
 };
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -122,6 +129,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   unsupported: 'bg-red-100 text-red-700',
   superseded: 'bg-gray-100 text-gray-500',
   archived: 'bg-gray-100 text-gray-500',
+  ai_review_pending: 'bg-blue-100 text-blue-700',
 };
 
 const TRUTH_STATUS_LABEL: Record<string, string> = {
@@ -154,6 +162,9 @@ export function InvestmentIntelligenceClient() {
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  // 2026-09-17 PO addendum: the id of a pending AI-extraction review this
+  // user needs to explicitly accept/reject before anything is written.
+  const [aiReviewId, setAiReviewId] = useState<string | null>(null);
 
   // --- upload form state ---
   const [file, setFile] = useState<File | null>(null);
@@ -295,6 +306,16 @@ export function InvestmentIntelligenceClient() {
       // preserved.
       await loadDocuments();
       if (!res.ok) throw new Error(json.error ?? 'Processing failed');
+      // 2026-09-17 PO addendum: 'ai_review_pending' is `ok: false` (nothing
+      // was written to canonical holdings yet) but is NOT a processing
+      // failure — it is the deterministic parser handing off to the
+      // AI-fallback mechanism, which needs this exact user's explicit
+      // accept/reject before anything is written. Must not be thrown as an
+      // error banner like a genuine parse/format failure.
+      if (json.data && json.data.status === 'ai_review_pending' && json.data.aiExtractionReviewId) {
+        setAiReviewId(json.data.aiExtractionReviewId as string);
+        return;
+      }
       if (json.data && json.data.ok === false) throw new Error(json.data.error ?? 'Processing failed');
       await loadSummary(id);
     } catch (e) {
@@ -494,7 +515,16 @@ export function InvestmentIntelligenceClient() {
                       className="rounded border border-gray-300 px-2 py-1 text-xs"
                     />
                   )}
-                  {doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && (
+                  {doc.status === 'ai_review_pending' && (
+                    <button
+                      onClick={() => handleProcess(doc.id)}
+                      disabled={processing === doc.id}
+                      className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200 disabled:opacity-50"
+                    >
+                      {processing === doc.id ? 'Loading…' : 'Review AI-extracted data'}
+                    </button>
+                  )}
+                  {doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'ai_review_pending' && (
                     <button
                       onClick={() => handleProcess(doc.id)}
                       disabled={processing === doc.id}
@@ -779,6 +809,16 @@ export function InvestmentIntelligenceClient() {
           )}
         </section>
       )}
+
+      <AiExtractionReviewPanel
+        reviewId={aiReviewId}
+        onClose={() => setAiReviewId(null)}
+        onDecided={async () => {
+          setAiReviewId(null);
+          await loadDocuments();
+          if (selectedId) await loadSummary(selectedId);
+        }}
+      />
     </div>
   );
 }

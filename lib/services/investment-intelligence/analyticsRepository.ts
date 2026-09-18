@@ -27,10 +27,16 @@ import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/ris
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
 
-/** Transaction types that represent money leaving the investor (cost). */
-const OUTFLOW_TYPES = new Set(['purchase', 'sip', 'switch_in', 'reinvestment', 'fee', 'tax']);
-/** Transaction types that represent money returning to the investor. */
-const INFLOW_TYPES = new Set(['redemption', 'switch_out', 'dividend']);
+/**
+ * Transaction types that represent money leaving the investor (cost).
+ * Exported (unchanged) so the Holdings/transaction-ledger read path
+ * (transactionLedger.ts) uses the exact same cash-flow sign convention as
+ * this file's own XIRR cash-flow assembly, rather than a second
+ * hand-maintained copy of this classification drifting out of sync with it.
+ */
+export const OUTFLOW_TYPES = new Set(['purchase', 'sip', 'switch_in', 'reinvestment', 'fee', 'tax']);
+/** Transaction types that represent money returning to the investor. Exported — see OUTFLOW_TYPES. */
+export const INFLOW_TYPES = new Set(['redemption', 'switch_out', 'dividend']);
 // PC4 section 9 finding (2026-09-07): switch_in/switch_out are genuinely
 // external to the SINGLE SCHEME they touch (new money entering/leaving
 // that specific fund) -- correct for scheme-level cashFlows above, which
