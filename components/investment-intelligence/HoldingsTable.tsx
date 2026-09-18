@@ -58,6 +58,16 @@ interface HoldingsApiPayload {
   empty: boolean;
 }
 
+// Full scheme names routinely run 60-100+ characters and were wrapping
+// across 5-6 lines per row, making the table unreadable. Truncated for
+// this summary row only — the full name is still shown, untruncated, in
+// the transaction-detail popup's own heading (aria-label below is also
+// left untruncated for the same reason).
+const SCHEME_NAME_MAX_CHARS = 28;
+function truncateSchemeName(name: string): string {
+  return name.length > SCHEME_NAME_MAX_CHARS ? `${name.slice(0, SCHEME_NAME_MAX_CHARS).trimEnd()}…` : name;
+}
+
 function money(v: number | null, currency: string): string {
   if (v === null || !Number.isFinite(v)) return '—';
   try {
@@ -128,9 +138,16 @@ export function HoldingsTable() {
         What you actually hold, at cost and at today&apos;s market value, for each scheme. Select a row to see its full transaction history and how its
         XIRR was derived.
       </p>
-      <div className="overflow-x-auto">
+      {/* Bounded height with its own vertical scroll, not just horizontal —
+          without this, the horizontal scrollbar sits at the very bottom of
+          the FULL row list (17+ rows tall), forcing a user to scroll all the
+          way down before they can even reach it to see the right-hand
+          columns. Bounding the box keeps both scrollbars reachable together.
+          The header is sticky within this same box so column labels stay
+          visible while scrolling through rows. */}
+      <div className="max-h-[520px] overflow-auto rounded-card border border-line">
         <table className="w-full min-w-[960px] text-left text-sm">
-          <thead>
+          <thead className="sticky top-0 bg-white">
             <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
               <th className="py-2 pr-4 font-medium">Scheme</th>
               <th className="py-2 pr-4 font-medium whitespace-nowrap">Folio</th>
