@@ -55,6 +55,16 @@ function money(v: number, currency: string): string {
   }
 }
 
+// Accounting convention, matching the Product Owner's own reference
+// workbook: a negative amount shows parenthesized and in red, rather than
+// with a leading minus sign — outflows read at a glance without needing to
+// parse a "-" prefix.
+function moneySigned(v: number, currency: string): { text: string; negative: boolean } {
+  const negative = v < 0;
+  const text = negative ? `(${money(Math.abs(v), currency)})` : money(v, currency);
+  return { text, negative };
+}
+
 function pct(v: number): string {
   return `${(v * 100).toFixed(2)}%`;
 }
@@ -206,11 +216,19 @@ export function TransactionDetailModal({
                           {r.description}
                           {r.excludedFromXirr && <span className="ml-1 text-muted">(excluded — {r.status.replace(/_/g, ' ')})</span>}
                         </td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-ink">{money(r.amount, ledger.currencyCode)}</td>
+                        <td className={`py-2 pr-3 text-right tabular-nums ${moneySigned(r.amount, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'}`}>
+                          {moneySigned(r.amount, ledger.currencyCode).text}
+                        </td>
                         <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.units === null ? '—' : r.units.toFixed(3)}</td>
                         <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.navPrice === null ? '—' : r.navPrice.toFixed(4)}</td>
                         <td className="py-2 pr-3 text-right tabular-nums text-ink">{r.unitBalanceAfter.toFixed(3)}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-ink">{r.xirrCashFlow === null ? '—' : money(r.xirrCashFlow, ledger.currencyCode)}</td>
+                        <td
+                          className={`py-2 pr-3 text-right tabular-nums ${
+                            r.xirrCashFlow !== null && moneySigned(r.xirrCashFlow, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'
+                          }`}
+                        >
+                          {r.xirrCashFlow === null ? '—' : moneySigned(r.xirrCashFlow, ledger.currencyCode).text}
+                        </td>
                       </tr>
                     ))}
                     {ledger.terminal && (

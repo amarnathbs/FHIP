@@ -251,6 +251,8 @@ export function PerformanceClient() {
     <div className="space-y-10">
       <WarningList warnings={payload.warnings} />
 
+      <HoldingsTable />
+
       {r.portfolios.length > 1 && (
         <div className="rounded-card border border-attention bg-white p-4 text-sm leading-relaxed text-ink">
           {r.crossCurrency.detail}
@@ -260,8 +262,6 @@ export function PerformanceClient() {
       {r.portfolios.map((p) => (
         <PortfolioSection key={p.currencyCode} p={p} asOfDate={r.asOfDate} periodStart={r.periodStart} engineVersion={r.engineVersion} subVersions={r.subVersions} />
       ))}
-
-      <HoldingsTable />
 
       <SchemeTable schemes={r.schemes} />
     </div>

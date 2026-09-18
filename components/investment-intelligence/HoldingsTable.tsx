@@ -133,12 +133,12 @@ export function HoldingsTable() {
           <thead>
             <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
               <th className="py-2 pr-4 font-medium">Scheme</th>
-              <th className="py-2 pr-4 font-medium">Folio</th>
-              <th className="py-2 pr-4 font-medium">ISIN</th>
-              <th className="py-2 pr-4 font-medium">Registrar</th>
-              <th className="py-2 pr-4 font-medium text-right">Cost value</th>
-              <th className="py-2 pr-4 font-medium text-right">Units</th>
-              <th className="py-2 pr-4 font-medium">NAV date</th>
+              <th className="py-2 pr-4 font-medium whitespace-nowrap">Folio</th>
+              <th className="py-2 pr-4 font-medium whitespace-nowrap">ISIN</th>
+              <th className="py-2 pr-4 font-medium whitespace-nowrap">Registrar</th>
+              <th className="py-2 pr-4 font-medium text-right whitespace-nowrap">Cost value</th>
+              <th className="py-2 pr-4 font-medium text-right whitespace-nowrap">Units</th>
+              <th className="py-2 pr-4 font-medium whitespace-nowrap">NAV date</th>
               <th className="py-2 pr-4 font-medium text-right">NAV</th>
               <th className="py-2 pr-4 font-medium text-right">Market value</th>
               <th className="py-2 pr-4 font-medium text-right">Gain/(Loss)</th>
@@ -166,17 +166,17 @@ export function HoldingsTable() {
                   }}
                 >
                   <td className="py-3 pr-4 font-medium text-ink">{h.schemeName}</td>
-                  <td className="py-3 pr-4 text-muted">{h.folioNumber ?? '—'}</td>
-                  <td className="py-3 pr-4 text-muted">{h.isin ?? '—'}</td>
-                  <td className="py-3 pr-4 text-muted">{h.registrar ?? '—'}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{money(h.costValue, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{num(h.unitBalance)}</td>
-                  <td className="py-3 pr-4 text-muted">{h.navDate ? fmtDate(h.navDate) : '—'}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{num(h.nav, 4)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{money(h.marketValue, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{money(h.gainLoss, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">{pct(h.returnPct)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink">
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.folioNumber ?? '—'}</td>
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.isin ?? '—'}</td>
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.costValue, h.currencyCode)}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.unitBalance)}</td>
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.navDate ? fmtDate(h.navDate) : '—'}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{pct(h.returnPct)}</td>
+                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">
                     {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
                   </td>
                   <td className="py-3 pr-4">

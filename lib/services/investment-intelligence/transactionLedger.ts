@@ -28,7 +28,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { OUTFLOW_TYPES, INFLOW_TYPES } from './analyticsRepository';
 import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './reconciliation';
-import { xirr, type CashFlow, type XirrResult } from '@/lib/engines/investment-intelligence/xirr';
+import { xirr, type CashFlow } from '@/lib/engines/investment-intelligence/xirr';
+import { fromXirr, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import type { IiTransactionType } from './types';
 
 export interface LedgerRow {
@@ -60,7 +61,7 @@ export interface LedgerResult {
   openingUnitsScaled: string | null; // decimal string, for display/debugging only
   rows: LedgerRow[];
   terminal: TerminalRow | null;
-  investorXirr: XirrResult;
+  investorXirr: CalculationOutcome<{ rate: number }>;
   methodologyNote: string;
 }
 
@@ -182,7 +183,8 @@ export async function buildTransactionLedger(
     };
   }
 
-  const investorXirr = xirr(cashFlows);
+  const xirrResult = xirr(cashFlows);
+  const investorXirr = fromXirr(xirrResult, () => ({ rate: xirrResult.rate as number }));
 
   return {
     accountId,

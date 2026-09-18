@@ -22,6 +22,8 @@ import { loadAnalyticsDataset } from './analyticsRepository';
 import { runAnalytics } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
 import { schemeReconciliationFailed, getAiFallbackReconciliation, describeUnmaskedLedgerForAudit } from './aiFallbackReconciliation';
 import { insufficientHistory, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
+import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './reconciliation';
+import { computeCostValue, type CostBasisTransaction } from './costBasis';
 
 type XirrOutcome = CalculationOutcome<{ rate: number }>;
 
@@ -87,11 +89,12 @@ interface SnapshotRow {
   quality_status: string;
 }
 
-interface TaxLotRow {
+interface CostTxRow {
   account_id: string;
   instrument_id: string;
-  units_remaining: number;
-  cost_per_unit: number;
+  transaction_type: string;
+  gross_amount: number;
+  units: number | null;
 }
 
 export async function loadHoldingsTable(supabase: SupabaseClient, userId: string): Promise<HoldingsTableResult> {
@@ -129,15 +132,40 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
     if (!latestSnapshotByPosition.has(key)) latestSnapshotByPosition.set(key, s); // first hit is the latest, thanks to the descending order
   }
 
-  const { data: taxLotRows } = await supabase
-    .from('ii_tax_lots')
-    .select('account_id, instrument_id, units_remaining, cost_per_unit')
-    .eq('user_id', userId);
+  // Cost Value — computed directly from each position's own transaction
+  // history (average-cost, see costBasis.ts), NOT from ii_tax_lots.
+  // Found live: ii_tax_lots is only ever populated as a side effect of the
+  // Tax & Cost tab's capital-gains simulation, which does nothing at all
+  // for a position with zero disposals — the overwhelmingly common case,
+  // and every position in the Product Owner's own real statement. Under
+  // that design, Cost Value could never appear for a pure buy-and-hold
+  // holding no matter which tab was visited. This needs no tax-lot record
+  // at all — see costBasis.ts's own header for why that is the deliberate,
+  // correct choice for this display-only purpose.
+  const { data: costTxRows } = await supabase
+    .from('ii_transactions')
+    .select('account_id, instrument_id, transaction_type, gross_amount, units')
+    .eq('user_id', userId)
+    .order('transaction_date', { ascending: true })
+    .order('id', { ascending: true });
   const costValueByPosition = new Map<string, number>();
-  for (const lot of (taxLotRows ?? []) as TaxLotRow[]) {
-    const key = `${lot.account_id}:${lot.instrument_id}`;
-    const cost = Number(lot.units_remaining) * Number(lot.cost_per_unit);
-    costValueByPosition.set(key, (costValueByPosition.get(key) ?? 0) + cost);
+  const txsByPosition = new Map<string, CostBasisTransaction[]>();
+  for (const t of (costTxRows ?? []) as CostTxRow[]) {
+    const key = `${t.account_id}:${t.instrument_id}`;
+    const unitsNum = t.units === null ? null : Number(t.units);
+    const delta = Number(
+      unitDeltaForTransaction({
+        canonicalType: t.transaction_type as ReconciliationTransactionInput['canonicalType'],
+        unitsScaled: unitsNum === null ? null : BigInt(Math.round(unitsNum * 1_000_000)),
+      })
+    ) / 1_000_000;
+    const list = txsByPosition.get(key) ?? [];
+    list.push({ grossAmount: Number(t.gross_amount), unitDelta: delta });
+    txsByPosition.set(key, list);
+  }
+  for (const [key, txs] of txsByPosition) {
+    const { costValue } = computeCostValue(txs);
+    if (costValue !== null) costValueByPosition.set(key, costValue);
   }
 
   // Registrar — the certified source document's own detected source key,

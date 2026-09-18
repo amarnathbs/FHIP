@@ -89,12 +89,21 @@ describe('buildTransactionLedger — running balance', () => {
     expect(ledger!.terminal!.date).toBe('2022-01-01');
   });
 
-  it('computes a real XIRR from the assembled cash flows (not a stub)', async () => {
+  it('computes a real XIRR from the assembled cash flows, in the shared CalculationOutcome shape the modal actually reads', async () => {
+    // Regression test for a real bug found live: this used to assert
+    // ledger.investorXirr.status === 'ok' (the raw xirr() engine's own
+    // vocabulary) and ledger.investorXirr.rate directly — which passed here
+    // but silently disagreed with TransactionDetailModal.tsx, which reads
+    // the shared CalculationOutcome contract (status === 'CALCULATED',
+    // value.rate) that every other calculated metric in this feature uses.
+    // A real, successfully-computed XIRR (11.797%, reproduced from the
+    // Product Owner's own real B92/Aditya Birla statement) showed
+    // "XIRR: Not available" in production because of exactly this mismatch.
     const { client } = makeFakeSupabase(baseTables());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ledger = await buildTransactionLedger(client as any, USER_ID, ACCOUNT_ID, INSTRUMENT_ID);
-    expect(ledger!.investorXirr.status).toBe('ok');
-    expect(typeof ledger!.investorXirr.rate).toBe('number');
+    expect(ledger!.investorXirr.status).toBe('CALCULATED');
+    expect(typeof ledger!.investorXirr.value?.rate).toBe('number');
   });
 
   it('excludes reversed/review_required rows from the XIRR cash-flow list but still shows them in the ledger', async () => {

@@ -28,10 +28,12 @@ describe('loadHoldingsTable', () => {
       ii_transactions: [
         {
           user_id: USER_ID,
+          account_id: 'account-1',
           instrument_id: 'instrument-1',
           transaction_type: 'purchase',
           transaction_date: '2020-01-01',
           gross_amount: 10000,
+          units: 500,
           currency_code: 'INR',
           status: 'parsed',
         },
@@ -51,7 +53,6 @@ describe('loadHoldingsTable', () => {
       ],
       ii_instruments: [{ id: 'instrument-1', instrument_name: 'Test Flexi Cap Fund', base_currency: 'INR', country_of_domicile: 'IN', isin: 'INF123456789' }],
       ii_accounts: [{ id: 'account-1', user_id: USER_ID, folio_number: 'FOLIO-XYZ', institution_name: 'Test AMC', currency_code: 'INR' }],
-      ii_tax_lots: [{ user_id: USER_ID, account_id: 'account-1', instrument_id: 'instrument-1', units_remaining: 500, cost_per_unit: 20 }],
       ii_source_documents: [{ id: 'doc-1', source_detected: 'cams' }],
       ii_instrument_benchmarks: [],
       ii_risk_free_rates: [],
@@ -67,7 +68,7 @@ describe('loadHoldingsTable', () => {
     expect(h.folioNumber).toBe('FOLIO-XYZ');
     expect(h.isin).toBe('INF123456789');
     expect(h.registrar).toBe('CAMS');
-    expect(h.costValue).toBe(10000); // 500 units * 20 cost/unit
+    expect(h.costValue).toBe(10000); // sum of purchase transactions for units still held, no disposals — see costBasis.ts
     expect(h.unitBalance).toBe(500);
     expect(h.navDate).toBe('2022-01-01');
     expect(h.nav).toBe(30); // 15000 / 500
@@ -95,10 +96,12 @@ describe('loadHoldingsTable', () => {
       ii_transactions: [
         {
           user_id: USER_ID,
+          account_id: 'account-2',
           instrument_id: 'instrument-2',
           transaction_type: 'purchase',
           transaction_date: '2020-01-01',
           gross_amount: 5000,
+          units: 156.618,
           currency_code: 'INR',
           status: 'parsed',
         },
@@ -118,7 +121,6 @@ describe('loadHoldingsTable', () => {
       ],
       ii_instruments: [{ id: 'instrument-2', instrument_name: 'Disputed Axis Fund', base_currency: 'INR', country_of_domicile: 'IN', isin: 'INF987654321' }],
       ii_accounts: [{ id: 'account-2', user_id: USER_ID, folio_number: 'FOLIO-ABC', institution_name: 'Test AMC', currency_code: 'INR' }],
-      ii_tax_lots: [{ user_id: USER_ID, account_id: 'account-2', instrument_id: 'instrument-2', units_remaining: 156.618, cost_per_unit: 25 }],
       ii_source_documents: [{ id: 'doc-2', source_detected: 'cams' }],
       ii_instrument_benchmarks: [],
       ii_risk_free_rates: [],
