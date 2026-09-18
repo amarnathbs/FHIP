@@ -73,6 +73,20 @@ frontend:
         # before any production activation.
         - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
+        # 2026-09-19: the last two deploys both failed here with
+        # "FATAL ERROR: Ineffective mark-compacts near heap limit ...
+        # JavaScript heap out of memory" -> "Next.js build worker exited
+        # with code: null and signal: SIGABRT" (confirmed from the actual
+        # Amplify build logs, not assumed). Root cause: the codebase has
+        # grown substantially (the AIE-1/PC4-PC10 mission's own ~400 files
+        # plus everything since) and Next.js's internal "Running TypeScript"
+        # build step now exceeds Node's default old-space heap limit on this
+        # build compute -- reproduced locally too, where the same crash was
+        # fixed the same way. Never silently retried without this: two
+        # consecutive production deploys already went out this way with
+        # nobody aware production was still serving the OLD build until a
+        # live user-facing feature 404'd and was traced back to it.
+        - export NODE_OPTIONS="--max-old-space-size=5120"
         - npm run build
   artifacts:
     baseDirectory: .next
