@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { StressScenarioType } from '@/lib/engines/resilienceStress';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 const SCENARIOS: { value: StressScenarioType; label: string }[] = [
   { value: 'income_stops', label: 'Primary income stops' },
@@ -73,29 +74,29 @@ export function StressTestPanel({ currency }: { currency: 'AUD' | 'INR' }) {
             <thead className="text-left text-xs uppercase text-gray-500">
               <tr>
                 <th className="py-1">Measure</th>
-                <th className="py-1">Current</th>
-                <th className="py-1">Under shock</th>
+                <th className={`py-1 ${NUM_HEADER_CLASS}`}>Current</th>
+                <th className={`py-1 ${NUM_HEADER_CLASS}`}>Under shock</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-t">
                 <td className="py-1">Resilience Score</td>
-                <td className="py-1">
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>
                   {result.before.overallScore} ({result.before.statusLabel})
                 </td>
-                <td className="py-1 font-semibold text-trust">
+                <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>
                   {result.after.overallScore} ({result.after.statusLabel})
                 </td>
               </tr>
               <tr className="border-t">
                 <td className="py-1">Monthly Surplus</td>
-                <td className="py-1">{formatMoney(result.before.monthlySurplus, currency)}</td>
-                <td className="py-1 font-semibold text-trust">{formatMoney(result.after.monthlySurplus, currency)}</td>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoney(result.before.monthlySurplus, currency)}</td>
+                <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{formatMoney(result.after.monthlySurplus, currency)}</td>
               </tr>
               <tr className="border-t">
                 <td className="py-1">Accessible Liquid Resources</td>
-                <td className="py-1">{formatMoney(result.before.accessibleLiquidResources, currency)}</td>
-                <td className="py-1 font-semibold text-trust">{formatMoney(result.after.accessibleLiquidResources, currency)}</td>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoney(result.before.accessibleLiquidResources, currency)}</td>
+                <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{formatMoney(result.after.accessibleLiquidResources, currency)}</td>
               </tr>
             </tbody>
           </table>

@@ -3,6 +3,7 @@ import { formatMoneyWhole } from '@/lib/engines/money';
 import type { ForecastReportData } from '@/lib/services/forecastReportData';
 import { ReportTrendChart, ReportAllocationChart, ReportScenarioBarChart, ReportVarianceBarChart } from '@/components/forecast/ForecastReportCharts';
 import { formatDateTimeShort } from '@/lib/engines/date';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 // The Consolidated Forecasting Report's body — extracted so both the
 // interactive page (app/(app)/forecast/report/page.tsx, wrapped in AppShell
@@ -264,31 +265,40 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
             <thead className="text-left text-xs uppercase text-muted">
               <tr>
                 <th className="py-1 pr-3">Category</th>
-                <th className="py-1 pr-3">Start Value</th>
-                <th className="py-1 pr-3">Forecast Till Date</th>
-                <th className="py-1 pr-3">Actual Till Date</th>
-                <th className="py-1 pr-3">Variance %</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Start Value</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Forecast Till Date</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Actual Till Date</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Variance %</th>
                 <th className="py-1 pr-3">Status</th>
-                <th className="py-1 pr-3">Final Target</th>
-                <th className="py-1">Remaining Gap</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Final Target</th>
+                <th className={`py-1 ${NUM_HEADER_CLASS}`}>Remaining Gap</th>
               </tr>
             </thead>
             <tbody>
               {visibleVariances.map((v) => (
                 <tr key={v.forecastCategory} className="border-t align-top">
-                  <td className="py-2 pr-3 font-medium text-gray-800">{VARIANCE_LABEL[v.forecastCategory] ?? v.forecastCategory}</td>
-                  <td className="py-2 pr-3">{fmt(v.startValue, currency)}</td>
-                  <td className="py-2 pr-3">
+                  <td className="py-2 pr-3 font-medium text-gray-800">
+                    {VARIANCE_LABEL[v.forecastCategory] ?? v.forecastCategory}
+                    {/* App Review 2026-09-15, item 6.1 — name the exact register each figure is summed from. */}
+                    <span className="mt-1 block max-w-[20rem] whitespace-normal text-xs font-normal text-muted">{v.actualBasis}</span>
+                  </td>
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.startValue, currency)}</td>
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
                     {fmt(v.forecastTillDate, currency)}
                     {v.forecastHorizonExceeded ? <sup className="ml-0.5 text-caution">†</sup> : null}
                   </td>
-                  <td className="py-2 pr-3">{fmt(v.actualTillDate, currency)}</td>
-                  <td className="py-2 pr-3">
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.actualTillDate, currency)}</td>
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
                     {v.variancePercentage !== null ? `${v.variancePercentage >= 0 ? '+' : ''}${v.variancePercentage.toFixed(1)}%` : 'N/A'}
                   </td>
                   <td className="py-2 pr-3">{STATUS_LABEL[v.status] ?? v.status}</td>
-                  <td className="py-2 pr-3">{fmt(v.finalTarget, currency)}</td>
-                  <td className="py-2">{fmt(v.finalTargetGap, currency)}</td>
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                    {fmt(v.finalTarget, currency)}
+                    {v.finalTarget === null ? (
+                      <span className="mt-1 block max-w-[16rem] whitespace-normal text-left text-xs font-normal text-muted">{v.finalTargetBasis}</span>
+                    ) : null}
+                  </td>
+                  <td className={`py-2 ${NUM_CELL_CLASS}`}>{fmt(v.finalTargetGap, currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -386,18 +396,18 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
               <thead className="text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="py-1 pr-3">Scenario</th>
-                  <th className="py-1 pr-3">In 1 year</th>
-                  <th className="py-1 pr-3">In 5 years</th>
-                  <th className="py-1">In 10 years</th>
+                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>In 1 year</th>
+                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>In 5 years</th>
+                  <th className={`py-1 ${NUM_HEADER_CLASS}`}>In 10 years</th>
                 </tr>
               </thead>
               <tbody>
                 {data.scenarioComparison.map((s) => (
                   <tr key={s.scenarioId} className="border-t">
                     <td className="py-2 pr-3 font-medium text-gray-800">{s.scenarioName}</td>
-                    <td className="py-2 pr-3">{fmt(s.oneYear, currency)}</td>
-                    <td className="py-2 pr-3">{fmt(s.fiveYear, currency)}</td>
-                    <td className="py-2">{fmt(s.tenYear, currency)}</td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(s.oneYear, currency)}</td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(s.fiveYear, currency)}</td>
+                    <td className={`py-2 ${NUM_CELL_CLASS}`}>{fmt(s.tenYear, currency)}</td>
                   </tr>
                 ))}
               </tbody>

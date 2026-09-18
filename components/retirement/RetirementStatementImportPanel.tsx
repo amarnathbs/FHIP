@@ -22,6 +22,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatMoneyExact } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 type Phase =
   | 'form'
@@ -182,7 +184,9 @@ function money(value: string | null | undefined, currency: string): string {
   if (value === null || value === undefined || value === '') return 'Not shown on statement';
   const n = Number(value);
   if (!Number.isFinite(n)) return value;
-  return n.toLocaleString(undefined, { style: 'currency', currency, minimumFractionDigits: 2 });
+  // App Review 2026-09-15 G1 sanctioned exception (a): literal statement
+  // transcription shown for verification. See lib/engines/money.ts.
+  return formatMoneyExact(n, currency);
 }
 
 function displayValue(value: string | null, kind: string, currency: string): string {
@@ -612,7 +616,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
                   <tr className="border-b border-gray-200 text-left">
                     <th scope="col" className="py-2 pr-2">Date</th>
                     <th scope="col" className="py-2 pr-2">What happened</th>
-                    <th scope="col" className="py-2 pr-2">Amount</th>
+                    <th scope="col" className={`py-2 pr-2 ${NUM_HEADER_CLASS}`}>Amount</th>
                     <th scope="col" className="py-2">Matched payslip</th>
                   </tr>
                 </thead>
@@ -629,8 +633,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
                           <span className="block text-xs text-muted">{ACTIVITY_NOTES[a.activity_type]}</span>
                         )}
                       </th>
-                      <td className="py-2 pr-2">{money(a.amount, a.currency_code)}</td>
-                      <td className="py-2">
+                      <td className={`py-2 pr-2 ${NUM_CELL_CLASS}`}>{money(a.amount, a.currency_code)}</td>
+                      <td className={`py-2 ${NUM_CELL_CLASS}`}>
                         {/* spec section 148: ONE financial event, annotated —
                             never two. */}
                         {a.payslip_match_status === 'matched' && 'Yes'}

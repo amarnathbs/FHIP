@@ -6,6 +6,7 @@
 import type Stripe from 'stripe';
 import { getStripeClient } from '@/lib/services/payments/stripeClient';
 import { getRazorpayClient } from '@/lib/services/payments/razorpayClient';
+import { formatMoneyExact } from '@/lib/engines/money';
 
 export interface BillingReceipt {
   id: string;
@@ -44,7 +45,9 @@ export async function listRazorpayReceipts(subscriptionId: string): Promise<Bill
 function formatMinorUnits(amountMinorUnits: number, currencyCode: string): string {
   const upper = currencyCode.toUpperCase();
   try {
-    return new Intl.NumberFormat('en', { style: 'currency', currency: upper }).format(amountMinorUnits / 100);
+    // App Review 2026-09-15 G1 sanctioned exception (b): a receipt/invoice
+    // line echoes the exact amount charged. See lib/engines/money.ts.
+    return formatMoneyExact(amountMinorUnits / 100, upper);
   } catch {
     return `${(amountMinorUnits / 100).toFixed(2)} ${upper}`;
   }

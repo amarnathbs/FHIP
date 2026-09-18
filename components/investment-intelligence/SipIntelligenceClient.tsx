@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 // R5 — SIP Intelligence UX (spec sections 98-100).
 //
@@ -80,7 +82,8 @@ function fmtPct(v: number | null | undefined, dp = 2): string {
 }
 function fmtMoney(v: number | null | undefined, currency: string): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-AU', { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
+  // App Review 2026-09-15 G1: single shared whole-unit helper.
+  return formatMoneyCode(v, currency);
 }
 
 /** The ONLY way an unavailable metric is ever rendered. Never a zero. */
@@ -503,8 +506,8 @@ function SimulationPanel({ data, currency }: { data: Record<string, unknown>; cu
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
                   <th className="py-2 pr-4">Schedule</th>
                   <th className="py-2 pr-4">Contributions</th>
-                  <th className="py-2 pr-4">Total contributed</th>
-                  <th className="py-2 pr-4">Value at end</th>
+                  <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Total contributed</th>
+                  <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value at end</th>
                   <th className="py-2">Return</th>
                 </tr>
               </thead>
@@ -513,8 +516,8 @@ function SimulationPanel({ data, currency }: { data: Record<string, unknown>; cu
                   <tr key={i} className="border-b border-slate-100">
                     <td className="py-2 pr-4 font-medium text-ink">{v.label}</td>
                     <td className="py-2 pr-4">{v.contributionCount}</td>
-                    <td className="py-2 pr-4">{fmtMoney(v.totalContributed, currency)}</td>
-                    <td className="py-2 pr-4">{fmtMoney(v.terminalValue, currency)}</td>
+                    <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.totalContributed, currency)}</td>
+                    <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.terminalValue, currency)}</td>
                     <td className="py-2">{fmtPct(v.xirrRate)}</td>
                   </tr>
                 ))}

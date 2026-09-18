@@ -2,6 +2,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { GoalPayload } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from '@/lib/engines/goalAffordability';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 const STATUS_COPY: Record<string, { label: string; color: string }> = {
   comfortable: { label: 'Comfortable', color: '#0F6B41' },
@@ -65,9 +66,9 @@ export function MonthlyAllocationPanel({
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Goal</th>
-            <th className="py-1">Planned</th>
-            <th className="py-1">Required</th>
-            <th className="py-1">Difference</th>
+            <th className={`py-1 ${NUM_HEADER_CLASS}`}>Planned</th>
+            <th className={`py-1 ${NUM_HEADER_CLASS}`}>Required</th>
+            <th className={`py-1 ${NUM_HEADER_CLASS}`}>Difference</th>
           </tr>
         </thead>
         <tbody>
@@ -77,9 +78,9 @@ export function MonthlyAllocationPanel({
             return (
               <tr key={g.id} className="border-t">
                 <td className="py-1">{g.goalName}</td>
-                <td className="py-1">{formatMoney(g.plannedContributionAmount, currency)}</td>
-                <td className="py-1">{required !== null ? formatMoney(required, currency) : '—'}</td>
-                <td className={`py-1 font-medium ${diff !== null && diff < 0 ? 'text-risk' : 'text-progress'}`}>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoney(g.plannedContributionAmount, currency)}</td>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{required !== null ? formatMoney(required, currency) : '—'}</td>
+                <td className={`py-1 font-medium ${diff !== null && diff < 0 ? 'text-risk' : 'text-progress'} ${NUM_CELL_CLASS}`}>
                   {diff !== null ? `${diff >= 0 ? '+' : ''}${formatMoney(diff, currency)}` : '—'}
                 </td>
               </tr>

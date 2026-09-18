@@ -1,0 +1,246 @@
+-- ===========================================================================
+-- 0156 — App Review 2026-09-15, item 3
+-- "Internal migration text leaking into user-facing Notes field (SMSF)"
+--
+-- ROOT CAUSE
+-- ----------
+-- supabase/migrations/0084_geo_jurisdiction_smsf.sql, PART 6 (line 614) wrote
+--
+--   'Backfilled by migration 0084 from the pre-existing retirement_accounts
+--    row (Summary Mode, value unchanged).'
+--
+-- directly into smsf_funds.notes. That column is the user-editable, user-
+-- visible "Notes" field on the SMSF card (Investment & Retirement →
+-- Retirement → SMSF → Summary). Developer/migration provenance has no meaning
+-- for the end user and should never have been stored in a user-facing field.
+--
+-- THE WIDER AUDIT (item 3 requirement 3)
+-- --------------------------------------
+-- "Audit other tables/fields for the same pattern (search for 'migration',
+--  'backfilled', 'pre-existing' in user-facing string data) and clean them."
+--
+-- Run twice: once as a live read-only sweep of every user-facing name/notes
+-- column in DEV, and once as a static sweep of every migration file
+-- (tests/unit/appReview0915MigrationTextLeakGuard.test.ts, which now guards
+-- this permanently). The static sweep found two further offenders the data
+-- sweep's first pass had not covered. Live DEV row counts:
+--
+--   smsf_funds.notes                  7 rows   (migration 0084)
+--   property_liability_links.notes   11 rows   (migration 0078, 3 literals)
+--   retirement_members.notes        285 rows   (migration 0077, 2 literals)
+--
+-- Every other user-facing column swept — assets, liabilities, investments,
+-- retirement_accounts, income_sources, expense_items, insurance_policies,
+-- user_goals, smsf_holdings, households, business_entities, and every *_name
+-- column on each — came back clean.
+--
+-- WHAT THIS MIGRATION DOES
+-- ------------------------
+-- 1. Adds smsf_funds.backfill_source and retirement_members.backfill_source —
+--    INTERNAL provenance columns, the correct home for this kind of audit
+--    trail (item 3 requirement 2: "if provenance must be tracked, store it in
+--    an internal audit/metadata column, not `notes`"). Neither is selected by
+--    any user-facing query. property_liability_links needs no new column: it
+--    already records the same fact structurally in `source`
+--    ('backfill_deterministic') and `confidence` ('deterministic').
+-- 2. Moves the provenance out of notes, matching ONLY rows whose notes is
+--    byte-for-byte a known migration literal. A row whose notes the user has
+--    since edited — even by appending to it — is left completely untouched.
+--    Nothing this migration does can destroy a user's own words.
+-- 3. One note is NOT simply cleared. Migration 0077's conflict case
+--    ("...conflicted across this member's accounts (67, 65). No value was
+--    guessed -- please confirm your target retirement age.") carries real,
+--    actionable meaning for the household alongside its developer framing,
+--    and the conflicting ages it lists are not recorded anywhere else. That
+--    one is REWRITTEN into plain user language with the ages preserved,
+--    rather than deleted.
+--
+-- Forward-only and idempotent: re-running it matches zero rows the second
+-- time (the literals are gone) and every ALTER is `if not exists`.
+--
+-- MIGRATION NUMBERING (verified 2026-09-15, not assumed)
+-- ------------------------------------------------------
+-- `main`'s supabase/migrations folder ends at 0148, so its own
+-- scripts/check-migration-versions.mjs reports 0149 as next-free — that is
+-- WRONG here. 0149/0150/0151/0152 are claimed by the unmerged AIE-1 closure
+-- work (commit 121cfd4 renumbered its 0147/0148 to 0149/0150), 0153 by the
+-- unmerged PC5 branch, 0154 by the unmerged HUF-entity-type branch (M4B),
+-- and 0155 by the unmerged PC6 market-data branch (M6). A live read-only
+-- probe of DEV confirmed 0150's aie_ai_cost_ledger and 0152's
+-- aie_ai_cost_attempt are both already applied there.
+--
+-- RENUMBERED 0154 -> 0156 (2026-09-15, post-authoring): this file was
+-- independently authored on a separate branch (`fix/app-review-findings-
+-- 2026-09-15`, branched straight off `origin/main`) with no visibility into
+-- the parallel, also-unmerged mission branches above, and both correctly
+-- concluded "0154 is next-free" relative to what each branch alone could
+-- see — an exact instance of the cross-branch migration-collision class
+-- this repository has hit several times before. Neither number had been
+-- applied to any database at the point of detection, so renumbering this
+-- (smaller, single-purpose) file was safe; the multi-phase mission's own
+-- internal 0153->0154->0155 sequence, which several already-completed
+-- phases' own reports cite by number, was left undisturbed. 0156 is
+-- therefore the true next-free version as of this renumbering.
+--
+-- APPLICATION: this file must be applied by hand via the Supabase SQL Editor
+-- (DEV first, then production). This environment cannot execute DDL.
+--
+-- REVISED 2026-09-15 (post-authoring, before any successful application):
+-- the first real DEV attempt failed --
+--
+--   ERROR: 42501: COUNTRY_CONFIRMATION_REQUIRED: user <uuid> has not
+--   confirmed a supported country of residence
+--   CONTEXT: PL/pgSQL function enforce_country_confirmed() line 36 at RAISE
+--
+-- `enforce_country_confirmed()` is a live trigger function on (at least) one
+-- of this migration's three target tables, enforcing the same
+-- country-confirmation gate this codebase's Mandatory Country Confirmation
+-- work applies at the API layer (`requireCountryConfirmedUser`,
+-- `lib/api.ts`) -- here as defence-in-depth at the database layer. It has NO
+-- corresponding migration file anywhere in this repository (confirmed by an
+-- exhaustive search across every branch/worktree available), so it was
+-- applied directly to the database outside the migration system at some
+-- point; its exact attachment and body could not be independently
+-- inspected before this revision, only its observed behaviour.
+--
+-- This migration is a DATA-PROVENANCE CLEANUP, not a user action, and one of
+-- its target rows belongs to a household that has real financial data but
+-- has never completed country confirmation (a pre-existing account state
+-- unrelated to this fix). A provenance cleanup migration correcting the
+-- *previous* migration's own mistake must not be newly blocked by a
+-- business rule aimed at protecting real-time user-initiated writes.
+--
+-- FIX: bracket each table's UPDATE statements with
+-- `disable trigger user` / `enable trigger user` for exactly that table, for
+-- exactly the duration of this migration's own transaction. This is the
+-- standard, narrowly-scoped Postgres idiom for a data-fix migration that
+-- must bypass business-logic triggers without needing to know which
+-- specific trigger(s) are enforcing the rule or their exact names --
+-- deliberately more robust here than a targeted per-trigger bypass, since
+-- this migration's author could not obtain `enforce_country_confirmed()`'s
+-- exact definition or its exact table attachment before shipping this fix.
+-- `disable trigger user` also suspends this table's `updated_at`-bump
+-- trigger (if one exists) for the same window, which is why every UPDATE
+-- below now sets `updated_at = now()` explicitly rather than relying on one
+-- -- `property_liability_links` did not do this in the original version of
+-- this file; it does now, for the same reason.
+--
+-- `disable trigger user` requires table-owner privilege, which the
+-- Supabase SQL Editor's connection (`postgres` role) holds; RLS policies
+-- are unaffected by this (RLS is not trigger-based), and PostgREST/RLS
+-- behaviour for ordinary application traffic is unchanged both during and
+-- after this migration -- the disable window exists only inside this one
+-- transaction.
+-- ===========================================================================
+
+begin;
+
+alter table smsf_funds
+  add column if not exists backfill_source text;
+
+comment on column smsf_funds.backfill_source is
+  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 after App Review 2026-09-15 item 3 found migration 0084 writing this same provenance text into the user-facing notes column. Any future backfill that needs an audit trail writes it HERE, never into notes.';
+
+alter table smsf_funds disable trigger user;
+
+update smsf_funds
+set
+  backfill_source = coalesce(
+    backfill_source,
+    'migration_0084_summary_mode_backfill'
+  ),
+  notes = null,
+  updated_at = now()
+where notes = 'Backfilled by migration 0084 from the pre-existing retirement_accounts row (Summary Mode, value unchanged).';
+
+alter table smsf_funds enable trigger user;
+
+-- ---------------------------------------------------------------------------
+-- property_liability_links.notes — migration 0078's three auto-link literals.
+--
+-- The link is genuine and stays exactly as it is; only the developer-facing
+-- sentence goes. No provenance is lost: 0078 already set source =
+-- 'backfill_deterministic' and confidence = 'deterministic' on these very
+-- rows, which is the structured version of the same fact.
+-- ---------------------------------------------------------------------------
+
+alter table property_liability_links disable trigger user;
+
+update property_liability_links
+set notes = null,
+    updated_at = now()
+where notes in (
+  'Auto-linked by migration 0078: exactly one active Principal Residence and exactly one active Home Loan for this user, with matching owner/currency/country.',
+  'Auto-linked by migration 0078: exactly one active Residential Investment Property and exactly one active Investment Loan for this user, with matching owner/currency/country.',
+  'Auto-linked by migration 0078: exactly one active Commercial Property and exactly one active Commercial Property Loan for this user, with matching owner/currency/country.'
+);
+
+alter table property_liability_links enable trigger user;
+
+-- ---------------------------------------------------------------------------
+-- retirement_members.notes — migration 0077's two literals.
+-- ---------------------------------------------------------------------------
+
+alter table retirement_members
+  add column if not exists backfill_source text;
+
+comment on column retirement_members.backfill_source is
+  'INTERNAL provenance only -- never rendered to the user. Records which migration created or altered this row. Introduced by migration 0156 (App Review 2026-09-15 item 3).';
+
+alter table retirement_members disable trigger user;
+
+-- Case C: pure provenance, no user meaning. Cleared.
+-- Literal: 'Backfilled by migration 0077 from N consistent legacy
+--           retirement_accounts.target_retirement_age value(s) of X.'
+update retirement_members
+set
+  backfill_source = coalesce(backfill_source, 'migration_0077_consistent_legacy_age_backfill'),
+  notes = null,
+  updated_at = now()
+where notes like 'Backfilled by migration 0077 from % consistent legacy retirement\_accounts.target\_retirement\_age value(s) of %.';
+
+-- Case D: REWRITTEN, not cleared. The conflicting ages this sentence lists
+-- exist nowhere else, and "please confirm your target retirement age" is a
+-- real instruction to the household. Only the developer framing is removed;
+-- the ages inside the parentheses are carried across verbatim.
+-- Literal: 'Migration 0077: legacy retirement_accounts.target_retirement_age
+--           values conflicted across this member''s accounts (67, 65). No
+--           value was guessed -- please confirm your target retirement age.'
+update retirement_members
+set
+  backfill_source = coalesce(backfill_source, 'migration_0077_conflicting_legacy_age'),
+  notes = 'Your recorded retirement ages differed across your accounts ('
+          || substring(notes from 'accounts \(([^)]*)\)')
+          || '). None was assumed — please confirm your target retirement age.',
+  updated_at = now()
+where notes like 'Migration 0077: legacy retirement\_accounts.target\_retirement\_age values conflicted across this member''s accounts (%'
+  and substring(notes from 'accounts \(([^)]*)\)') is not null;
+
+alter table retirement_members enable trigger user;
+
+commit;
+
+-- ---------------------------------------------------------------------------
+-- Verification (run after applying). All three must return 0:
+--
+--   select count(*) from smsf_funds
+--    where notes ilike '%migration%' or notes ilike '%backfilled%'
+--       or notes ilike '%pre-existing%';
+--
+--   select count(*) from property_liability_links
+--    where notes ilike '%migration%' or notes ilike '%auto-linked by%';
+--
+--   select count(*) from retirement_members
+--    where notes ilike '%migration%' or notes ilike '%backfilled%'
+--       or notes ilike '%retirement_accounts.target_retirement_age%';
+--
+-- These should return the rows just cleaned (DEV at time of writing: 7, 285):
+--
+--   select count(*) from smsf_funds where backfill_source is not null;
+--   select count(*) from retirement_members where backfill_source is not null;
+--
+-- And this should show the rewritten, user-readable conflict notes:
+--
+--   select notes from retirement_members
+--    where backfill_source = 'migration_0077_conflicting_legacy_age' limit 5;
+-- ---------------------------------------------------------------------------

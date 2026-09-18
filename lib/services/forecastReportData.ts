@@ -100,7 +100,30 @@ export async function buildForecastReportData(userId: string, requestedScenarioI
       safeRunDetail(userId, { scenarioId, forecastType: 'net_worth' }, supabase),
       safeRunDetail(
         userId,
-        { scenarioId, forecastType: 'retirement', retirementTargetMethod: 'desired_income', retirementDesiredAnnualIncome: Math.max(1, dashboard.essentialMonthlyExpenses * 12) },
+        // App Review 2026-09-15, item 6.2 — ROOT CAUSE of "Final Target $25".
+        //
+        // This used to be `Math.max(1, dashboard.essentialMonthlyExpenses * 12)`.
+        // For a household with no essential expenses recorded, that floor fed
+        // the retirement calculator a desired retirement income of ONE dollar
+        // a year, which resolveRequiredCorpus() then divided by the 4%
+        // withdrawal-rate assumption: 1 / 0.04 = 25. That 25 was written to
+        // every retirement forecast_results row's target_value, read back by
+        // getForecastVariance() as finalTarget, and rendered as a confident
+        // "Final Target $25" next to a Remaining Gap of -$4,258,956.
+        //
+        // resolveRequiredCorpus() already documents the correct contract —
+        // "Returns null when the method's required inputs weren't supplied —
+        // callers must treat that as 'Insufficient Information', not as a
+        // zero target" — and this floor was the one caller defeating it.
+        // Passing undefined restores that contract: no recorded essential
+        // expenses means no derivable retirement target, which the variance
+        // row now shows as "—" with an explanation, rather than as $25.
+        {
+          scenarioId,
+          forecastType: 'retirement',
+          retirementTargetMethod: 'desired_income',
+          retirementDesiredAnnualIncome: dashboard.essentialMonthlyExpenses > 0 ? dashboard.essentialMonthlyExpenses * 12 : undefined,
+        },
         supabase
       ),
       safeRunDetail(userId, { scenarioId, forecastType: 'goal' }, supabase),

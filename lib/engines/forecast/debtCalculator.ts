@@ -10,8 +10,18 @@
 // completed run for a liability IS the retained original plan, the same
 // mechanism goal and net-worth forecasts already rely on.
 import { buildExplanation } from './explain';
-import { addMonthsToDateString, firstOfMonth, interestOnlyPayment, levelPaymentForPayoff, projectLoanMonth, round2 } from './monthlyPrimitives';
+import {
+  addMonthsToDateString,
+  derivePayoffTerm,
+  firstOfMonth,
+  formatTerm,
+  interestOnlyPayment,
+  levelPaymentForPayoff,
+  projectLoanMonth,
+  round2,
+} from './monthlyPrimitives';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
+import { formatMoneyNarrative } from '../money';
 
 export type DebtRiskLevel = 'high' | 'medium' | 'low';
 
@@ -26,6 +36,11 @@ export interface DebtCalculatorInputEntry {
   // Added for FHIP-FC-DEBT-001/002/003's risk ranking — all three are
   // already on the liabilities table, this calculator just didn't read them
   // before. All optional/nullable since older rows may not have them set.
+  // App Review 2026-09-15 item 8: false when liabilities.interest_rate is
+  // null, i.e. the user never entered a rate and the projection is running
+  // interest-free. Optional so existing callers/tests stay valid; treated as
+  // "provided" when absent, which is what every pre-existing caller meant.
+  interestRateProvided?: boolean;
   interestRateType?: 'fixed' | 'variable' | null;
   fixedRateExpiry?: string | null; // ISO date
   creditLimit?: number | null; // relevant for revolving debt types (credit cards, BNPL)
@@ -136,23 +151,72 @@ export function runDebtForecast(input: DebtCalculatorInput): { results: Forecast
     const higherRate = projectPayoff(liability.currentBalance, liability.annualInterestRatePercent + 1, liability.monthlyRepayment, input.months);
     const lowerRate = projectPayoff(liability.currentBalance, Math.max(0, liability.annualInterestRatePercent - 1), liability.monthlyRepayment, input.months);
 
-    const payoffNarrative =
-      payoffMonth === null
-        ? `At the current repayment of ${liability.monthlyRepayment}/month, this debt is not projected to be paid off within the ${input.months}-month forecast horizon.`
-        : payoffMonth === 0
-          ? 'This debt is already paid off.'
-          : `At the current repayment of ${liability.monthlyRepayment}/month, this debt is projected to be paid off in month ${payoffMonth} of the forecast, with ${round2(totalInterest)} in total interest.`;
+    // App Review 2026-09-15, items 8 + 9 + G1.
+    //
+    // Item 9 — the payoff term is now DERIVED from the amortisation formula
+    // (derivePayoffTerm, same reducing-balance step and rounding as the
+    // stored loop above) instead of being clipped to the forecast window.
+    // Before this change every card, whatever its balance or repayment, ended
+    // with the identical "within the 120-month forecast horizon" clause, which
+    // carried no information about the loan and read — as the reviewer read
+    // it — as if 120 months were this loan's term. The forecast window is now
+    // presented only as a window ("beyond the 120-month forecast window.
+    // Balance after 120 months: …"), never as the payoff statement.
+    //
+    // Item 8 — wording. The old sentence was literally true (not paid off
+    // within the horizon) but was misread as claiming the loan IS tied to 120
+    // months, because it never said what the real term was. Each branch below
+    // now states the derived term, or says explicitly that there isn't one.
+    //
+    // G1 — every amount in these sentences goes through the shared whole-unit
+    // formatter with this liability's own currency (previously raw floats:
+    // "2500/month", "53471.34", "333.95", "1240.3").
+    const money = (n: number) => formatMoneyNarrative(n, liability.currency);
+    const derived = derivePayoffTerm(liability.currentBalance, liability.annualInterestRatePercent, liability.monthlyRepayment);
+    const balanceAtHorizon = balance; // the loop above leaves this at period `input.months` when not paid off
+    // The minimum payment that stops the balance growing, and the payment
+    // that clears it in 3 years — both already computed below for the
+    // negative-amortisation case; hoisted so the narrative can use them.
+    const curePaymentForNarrative = liability.currentBalance > 0 ? interestOnlyPayment(liability.currentBalance, liability.annualInterestRatePercent) : 0;
+    const clearIn3yrPayment = levelPaymentForPayoff(liability.currentBalance, liability.annualInterestRatePercent, 36);
+
+    let payoffNarrative: string;
+    if (payoffMonth === 0) {
+      payoffNarrative = 'This debt is already paid off.';
+    } else if (payoffMonth !== null) {
+      // Paid off inside the forecast window — the derived term and the
+      // in-window month agree by construction (same step, same rounding).
+      payoffNarrative =
+        `At the current repayment of ${money(liability.monthlyRepayment)}/month, this debt is projected to be paid off in ` +
+        `${formatTerm(payoffMonth)} (${payoffMonth} months), with ${money(round2(totalInterest))} in total interest.`;
+    } else if (derived.balanceGrowing) {
+      payoffNarrative =
+        `At the current repayment of ${money(liability.monthlyRepayment)}/month, this debt is not reducing — the repayment does not cover the interest accruing on it, ` +
+        `so the balance grows to ${money(balanceAtHorizon)} in ${formatTerm(input.months)}. ` +
+        `A minimum of ${money(curePaymentForNarrative)}/month stops it growing; ${money(clearIn3yrPayment)}/month clears it in 3 years.`;
+    } else if (derived.months !== null) {
+      payoffNarrative =
+        `At the current repayment of ${money(liability.monthlyRepayment)}/month, this debt is projected to be paid off in ` +
+        `${formatTerm(derived.months)} (${derived.months} months) — beyond the ${input.months}-month forecast window. ` +
+        `Balance after ${formatTerm(input.months)}: ${money(balanceAtHorizon)}.`;
+    } else {
+      // Reduces, but not to zero inside the 100-year search cap.
+      payoffNarrative =
+        `At the current repayment of ${money(liability.monthlyRepayment)}/month, this debt reduces so slowly that it is not projected to be paid off within 100 years. ` +
+        `Balance after ${formatTerm(input.months)}: ${money(balanceAtHorizon)}. ` +
+        `${money(clearIn3yrPayment)}/month would clear it in 3 years.`;
+    }
 
     const acceleratedNarrative =
       accelerated && accelerated.payoffMonth !== null
         ? payoffMonth !== null
-          ? ` Adding ${input.additionalMonthlyRepayment}/month would bring the payoff forward to month ${accelerated.payoffMonth} (${payoffMonth - accelerated.payoffMonth} months sooner) and save approximately ${round2(totalInterest - accelerated.totalInterest)} in interest.`
-          : ` Adding ${input.additionalMonthlyRepayment}/month would bring this debt within the forecast horizon, paid off by month ${accelerated.payoffMonth} instead of remaining outstanding — saving approximately ${round2(totalInterest - accelerated.totalInterest)} in interest over the ${input.months}-month horizon.`
+          ? ` Adding ${money(input.additionalMonthlyRepayment)}/month would bring the payoff forward to ${formatTerm(accelerated.payoffMonth)} (${payoffMonth - accelerated.payoffMonth} months sooner) and save approximately ${money(round2(totalInterest - accelerated.totalInterest))} in interest.`
+          : ` Adding ${money(input.additionalMonthlyRepayment)}/month would bring this debt within the forecast window, paid off in ${formatTerm(accelerated.payoffMonth)} instead of remaining outstanding — saving approximately ${money(round2(totalInterest - accelerated.totalInterest))} in interest over the ${input.months}-month window.`
         : accelerated && input.additionalMonthlyRepayment > 0
-          ? ` Even with an extra ${input.additionalMonthlyRepayment}/month, this debt is still not projected to be paid off within the ${input.months}-month forecast horizon.`
+          ? ` Even with an extra ${money(input.additionalMonthlyRepayment)}/month, this debt is still not projected to be paid off within the ${input.months}-month forecast window.`
           : '';
 
-    const rateNarrative = ` A 1% rate rise would add approximately ${round2(higherRate.totalInterest - totalInterest)} in total interest; a 1% rate cut would save approximately ${round2(totalInterest - lowerRate.totalInterest)}.`;
+    const rateNarrative = ` A 1% rate rise would add approximately ${money(round2(higherRate.totalInterest - totalInterest))} in total interest; a 1% rate cut would save approximately ${money(round2(totalInterest - lowerRate.totalInterest))}.`;
 
     // FHIP-FC-DEBT-001/002/003 — negative amortisation, risk ranking, and
     // payoff alternatives. isNegativeAmortization checks the FIRST month's
@@ -167,9 +231,18 @@ export function runDebtForecast(input: DebtCalculatorInput): { results: Forecast
     const payoffPayment3yr = levelPaymentForPayoff(liability.currentBalance, liability.annualInterestRatePercent, 36);
     const payoffPayment5yr = levelPaymentForPayoff(liability.currentBalance, liability.annualInterestRatePercent, 60);
 
-    const riskNarrative = isNegativeAmortization
-      ? ` This debt's current repayment does not cover accruing interest, so the balance is growing rather than reducing — a payment of at least ${round2(curePayment)}/month would stop it from growing further; ${round2(payoffPayment3yr)}/month would clear it in 3 years, ${round2(payoffPayment5yr)}/month in 5 years.`
-      : '';
+    // The "balance is growing", cure-payment and clear-in-3-years facts moved
+    // into payoffNarrative above (item 9's third template), so this clause
+    // adds only what is not already stated, rather than repeating it.
+    const riskNarrative = isNegativeAmortization ? ` ${money(payoffPayment5yr)}/month would clear it in 5 years.` : '';
+
+    // App Review 2026-09-15 item 8 requirement 2 — a projection run at 0%
+    // because no rate was ever entered must say so, rather than presenting an
+    // interest-free amortisation as if it were this loan's real trajectory.
+    const rateSourceNarrative =
+      liability.interestRateProvided === false
+        ? ' No interest rate is recorded for this debt, so it is projected interest-free. Add the rate to get an accurate payoff term.'
+        : '';
 
     explanations.push(
       buildExplanation({
@@ -177,12 +250,21 @@ export function runDebtForecast(input: DebtCalculatorInput): { results: Forecast
         entityId: liability.id,
         explanationType: 'debt_payoff_forecast',
         title: `${liability.name} — payoff forecast`,
-        narrative: payoffNarrative + acceleratedNarrative + rateNarrative + riskNarrative,
+        narrative: payoffNarrative + rateSourceNarrative + acceleratedNarrative + rateNarrative + riskNarrative,
         inputs: {
           currentBalance: liability.currentBalance,
           annualInterestRatePercent: liability.annualInterestRatePercent,
+          interestRateSource: liability.interestRateProvided === false ? 'not_recorded_projected_interest_free' : 'user_entered',
           monthlyRepayment: liability.monthlyRepayment,
           payoffMonth,
+          // App Review 2026-09-15 item 9 — the DERIVED term, unclipped by the
+          // forecast window, alongside the in-window month. Persisted on the
+          // explanation row so the figure in the sentence is auditable.
+          derivedPayoffMonths: derived.months,
+          derivedPayoffBalanceGrowing: derived.balanceGrowing,
+          derivedPayoffBeyondSearchCap: derived.beyondSearchCap,
+          balanceAtForecastHorizon: round2(balanceAtHorizon),
+          forecastHorizonMonths: input.months,
           totalInterest: round2(totalInterest),
           isNegativeAmortization,
           riskLevel,
@@ -195,7 +277,9 @@ export function runDebtForecast(input: DebtCalculatorInput): { results: Forecast
           higherRateTotalInterest: higherRate.totalInterest,
           lowerRateTotalInterest: lowerRate.totalInterest,
         },
-        formula: 'Monthly Interest = Opening x Annual Rate / 12; Principal Reduction = Repayment - Interest - Fees; Closing = max(0, Opening - Principal Reduction)',
+        formula:
+          'Monthly Interest = Opening x Annual Rate / 12; Principal Reduction = Repayment - Interest - Fees; Closing = max(0, Opening - Principal Reduction). ' +
+          'Payoff term = the smallest n for which Closing(n) <= 0 under that same recurrence, searched to 1200 months and NOT clipped to the forecast window.',
         priority: 10,
       })
     );

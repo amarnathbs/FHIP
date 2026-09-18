@@ -17,6 +17,7 @@ import { GoalLinkControl } from '@/components/investments/GoalLinkControl';
 import type { ModuleKey } from '@/lib/services/appCapability';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 interface MasterItem {
   item_key: string;
@@ -1119,7 +1120,7 @@ export function FinancialDataGrid({
                 <tr>
                   <th className="px-3 py-2">Item</th>
                   <th className="px-3 py-2">Owner</th>
-                  <th className="px-3 py-2">{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
+                  <th className={`px-3 py-2 ${NUM_HEADER_CLASS}`}>{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
                   <th className="px-3 py-2">Currency</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -1146,7 +1147,7 @@ export function FinancialDataGrid({
                       )}
                     </td>
                     <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
-                    <td className="px-3 py-2">{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
+                    <td className={`px-3 py-2 ${NUM_CELL_CLASS}`}>{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
                     <td className="px-3 py-2">{row.currency_code}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">

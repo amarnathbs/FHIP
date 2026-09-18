@@ -286,6 +286,9 @@ export async function loadAnalyticsDataset(
 
     const cashFlows: CashFlow[] = [];
     const externalCashFlows: CashFlow[] = [];
+    // App Review 2026-09-15, item 2 — the real flows, kept separate from the
+    // synthetic terminal valuation appended below.
+    const externalCashFlowsExcludingTerminal: CashFlow[] = [];
     for (const t of txs) {
       const amount = Number(t.gross_amount);
       const type = t.transaction_type as string;
@@ -294,11 +297,17 @@ export async function loadAnalyticsDataset(
       if (OUTFLOW_TYPES.has(type)) {
         const flow: CashFlow = { date, amount: -Math.abs(amount) };
         cashFlows.push(flow);
-        if (!isInternalTransfer) externalCashFlows.push(flow);
+        if (!isInternalTransfer) {
+          externalCashFlows.push(flow);
+          externalCashFlowsExcludingTerminal.push(flow);
+        }
       } else if (INFLOW_TYPES.has(type)) {
         const flow: CashFlow = { date, amount: Math.abs(amount) };
         cashFlows.push(flow);
-        if (!isInternalTransfer) externalCashFlows.push(flow);
+        if (!isInternalTransfer) {
+          externalCashFlows.push(flow);
+          externalCashFlowsExcludingTerminal.push(flow);
+        }
       }
       // 'transfer', 'merger', 'adjustment' are unit-movement events with no
       // investor cash impact; deliberately excluded rather than guessed at.
@@ -319,7 +328,23 @@ export async function loadAnalyticsDataset(
     }
     cashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
     externalCashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
+    externalCashFlowsExcludingTerminal.sort((a, b) => a.date.getTime() - b.date.getTime());
     if (cashFlows.length && (!earliest || cashFlows[0].date < earliest)) earliest = cashFlows[0].date;
+
+    // App Review 2026-09-15, item 2 — stale-valuation disclosure. A scheme
+    // whose newest holding snapshot pre-dates one of its own transactions is
+    // being valued as at a date on which that transaction had not happened
+    // yet. Any return computed from it terminates on a valuation that does
+    // not include money the household has since put in, which is exactly the
+    // condition that used to leave the portfolio XIRR unsolvable with an
+    // opaque "No sign change found for NPV(r)" message and nothing the user
+    // could act on. Disclosed rather than silently patched over.
+    if (currentValue > 0 && externalCashFlowsExcludingTerminal.some((f) => f.date > currentValueDate)) {
+      warnings.push({
+        scope: 'valuation',
+        detail: `${inst.instrument_name as string}: transactions are recorded after its latest valuation date (${currentValueDate.toISOString().slice(0, 10)}). Upload a more recent statement so returns can include them.`,
+      });
+    }
 
     schemes.push({
       instrumentId,
@@ -331,6 +356,7 @@ export async function loadAnalyticsDataset(
       hasDistributionAdjustment: false,
       cashFlows,
       externalCashFlows,
+      externalCashFlowsExcludingTerminal,
       currentValue,
       currentValueDate,
       navSeries: navByInstrument.get(instrumentId) ?? [],

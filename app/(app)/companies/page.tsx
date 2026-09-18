@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import type { BusinessEntityType } from '@/lib/validation/businessEntity';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 const ENTITY_TYPE_LABEL: Record<BusinessEntityType, string> = {
   company: 'Company',
@@ -55,12 +56,11 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+// App Review 2026-09-15 G1: routed through the shared whole-unit helper
+// instead of a local Intl instance (which defaulted to the currency's minor
+// unit, i.e. 2 decimals) and a toFixed(2) fallback.
 function formatCurrency(value: number, currencyCode: string): string {
-  try {
-    return new Intl.NumberFormat('en', { style: 'currency', currency: currencyCode }).format(value);
-  } catch {
-    return `${value.toFixed(2)} ${currencyCode}`;
-  }
+  return formatMoneyCode(value, currencyCode);
 }
 
 export default function CompaniesPage() {

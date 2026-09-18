@@ -412,6 +412,9 @@ async function buildCalculatorInput(
       // on the whole-balance-sheet basis, not the household-only one. See the
       // net-worth wiring below for the full defect writeup.
       monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
+      // App Review 2026-09-15, item 8 — the household's own balance-weighted
+      // liability rate instead of a never-seeded assumption's hard-coded 6%.
+      liabilityRatePercent: dashboard.averageInterestRate,
       baselineNetWorthAtStart: dashboard.netWorth,
       baselineRetirementAtStart: dashboard.totalRetirement,
     };
@@ -431,8 +434,11 @@ async function buildCalculatorInput(
         .eq('is_active', true)
         .eq('currency_code', foreignCurrency),
       supabase
+        // App Review 2026-09-15, item 8: interest_rate added so the foreign
+        // leg can be amortised at the household's own recorded rates rather
+        // than the never-seeded assumption's hard-coded default.
         .from('liabilities')
-        .select('balance, monthly_repayment')
+        .select('balance, monthly_repayment, interest_rate')
         .eq('user_id', userId)
         .eq('is_active', true)
         .eq('currency_code', foreignCurrency),
@@ -460,6 +466,15 @@ async function buildCalculatorInput(
     const foreignInvestmentMonthlyContribution = (investmentsResult.data ?? []).reduce((sum, i) => sum + (i.annual_contribution ?? 0) / 12, 0);
     const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
     const foreignLiabilityMonthlyRepayment = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + (l.monthly_repayment ?? 0), 0);
+    // App Review 2026-09-15, item 8 — balance-weighted actual rate across the
+    // foreign-currency liabilities only, matching this leg's own population.
+    // null when none of them records a rate.
+    const foreignLiabilitiesWithRate = (liabilitiesResult.data ?? []).filter((l) => l.interest_rate !== null && l.interest_rate !== undefined);
+    const foreignBalanceWithRate = foreignLiabilitiesWithRate.reduce((sum, l) => sum + l.balance, 0);
+    const foreignLiabilityRatePercent =
+      foreignBalanceWithRate > 0
+        ? foreignLiabilitiesWithRate.reduce((sum, l) => sum + (l.interest_rate as number) * l.balance, 0) / foreignBalanceWithRate
+        : null;
     const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
     const foreignRetirementMonthlyContribution = (retirementResult.data ?? []).reduce((sum, r) => {
       const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[r.contribution_frequency ?? 'monthly'] ?? 1;
@@ -480,6 +495,7 @@ async function buildCalculatorInput(
       monthlyForeignInvestmentContribution: foreignInvestmentMonthlyContribution,
       monthlyForeignRetirementContribution: foreignRetirementMonthlyContribution,
       monthlyForeignLoanRepayment: foreignLiabilityMonthlyRepayment,
+      liabilityRatePercent: foreignLiabilityRatePercent,
     };
     return { input, effectiveMonths: months };
   }
@@ -699,7 +715,17 @@ async function buildCalculatorInput(
         id: l.id,
         name: l.liability_name,
         currentBalance: l.balance,
+        // App Review 2026-09-15, item 8 requirement 2 ("confirm the interest
+        // rate source for each loan is the user-entered rate, not a default"):
+        // it IS the user-entered rate — liabilities.interest_rate — and no
+        // product default is ever substituted. The `?? 0` below is the only
+        // fallback and it applies solely when the user has left the field
+        // blank, in which case the loan is projected interest-free. That was
+        // previously invisible: the card showed a confident amortisation with
+        // no indication the rate was missing. It is now passed through as an
+        // explicit flag so debtCalculator can say so in the explanation.
         annualInterestRatePercent: l.interest_rate ?? 0,
+        interestRateProvided: l.interest_rate !== null && l.interest_rate !== undefined,
         monthlyRepayment: l.monthly_repayment ?? 0,
         debtType: l.debt_type,
         currency: l.currency_code,
@@ -929,6 +955,15 @@ async function buildCalculatorInput(
     //   the whole balance sheet with a repayment on that same basis — no
     //   change needed at this call site.
     monthlyLoanRepayment: dashboard.totalLiabilityMonthlyRepayments,
+    // App Review 2026-09-15, item 8 requirement 2, extended to Net Worth per
+    // requirement 4. This is the household's own balance-weighted actual
+    // liability rate (DashboardSummary.averageInterestRate, computed from
+    // liabilities.interest_rate). It replaces a 'liability_interest_rate'
+    // assumption that is seeded nowhere and therefore always resolved to a
+    // hard-coded 6% -- which meant the SAME loan was amortised at the user's
+    // real rate in the Debt section and at 6% in the Net Worth section of the
+    // same report. null only when no liability carries a recorded rate.
+    liabilityRatePercent: dashboard.averageInterestRate,
     assumptions,
     plannedEvents,
   };
@@ -1363,7 +1398,40 @@ export interface CategoryVariance {
   // projected period — callers must disclose this rather than presenting
   // the final period as if it were a genuine same-date value.
   forecastHorizonExceeded: boolean;
+  // App Review 2026-09-15, item 6.1 — "Identify and document exactly which
+  // records/fields are summed to produce the Retirement Start/Actual value."
+  // The reviewer could not reconcile a Retirement actual of $271,000 against
+  // an SMSF value of $138,000, and the product gave them nothing to check it
+  // with. These two strings name the exact table and column each figure is
+  // summed from, and are rendered next to the row.
+  actualBasis: string;
+  finalTargetBasis: string;
 }
+
+// App Review 2026-09-15, item 6.1 — the literal lineage of "Actual Till Date"
+// per category, kept beside getCurrentActualValue() (the function that
+// implements it) so the two cannot drift.
+export const VARIANCE_ACTUAL_BASIS: Record<VarianceForecastCategory, string> = {
+  net_worth:
+    'The dated net worth from your most recent financial snapshot at or before the comparison date; live dashboard net worth when no snapshot exists yet.',
+  retirement:
+    'Sum of current_balance across every active row in your Retirement register (retirement_accounts), converted to your reporting currency. Your SMSF is one such row — its single canonical home — so its value is counted exactly once and is not added again from the SMSF fund record.',
+  investment: 'Sum of current_value across every active row in your Investments register (investments), converted to your reporting currency.',
+  debt: 'Sum of balance across every active household liability (liabilities), converted to your reporting currency. SMSF-linked loans are excluded here because their value is already netted inside the SMSF retirement figure.',
+  goal: 'Sum of current_amount across every active goal (user_goals), plus each goal’s allocated share of any linked investment, asset or retirement account.',
+  cross_border:
+    'Net foreign wealth: foreign-currency assets + investments + retirement balances, less foreign-currency liabilities, converted at the FX rate assumption.',
+};
+
+export const VARIANCE_FINAL_TARGET_BASIS: Record<VarianceForecastCategory, string> = {
+  net_worth: 'Net worth forecasts carry no separate target — the final projected value is the plan.',
+  retirement:
+    'The required retirement corpus from your retirement forecast: your desired annual retirement income divided by the withdrawal-rate assumption. Shown as — when no desired income or target corpus has been set, and when no essential expenses have been recorded to derive one from.',
+  investment: 'Investment forecasts carry no separate target — the final projected value is the plan.',
+  debt: 'Zero — the target for every debt is to be repaid in full.',
+  goal: 'Sum of target_amount across every active goal (user_goals).',
+  cross_border: 'Cross-border wealth forecasts carry no separate target — the final projected value is the plan.',
+};
 
 // Debt is the one category where a lower actual balance is favourable
 // (spec: "use inverse favourable logic for debt") — every other category
@@ -1558,6 +1626,8 @@ export async function getForecastVariance(
       finalTargetGap: null,
       primaryDriver: null,
       forecastHorizonExceeded: false,
+      actualBasis: VARIANCE_ACTUAL_BASIS[category],
+      finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
     };
   }
 
@@ -1623,6 +1693,8 @@ export async function getForecastVariance(
       finalTargetGap,
       primaryDriver: `A baseline was established as at ${effectiveComparisonDate}. Performance tracking will be available once a later comparison period exists.`,
       forecastHorizonExceeded: false,
+      actualBasis: VARIANCE_ACTUAL_BASIS[category],
+      finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
     };
   }
 
@@ -1677,5 +1749,7 @@ export async function getForecastVariance(
     finalTargetGap,
     primaryDriver,
     forecastHorizonExceeded,
+    actualBasis: VARIANCE_ACTUAL_BASIS[category],
+    finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
   };
 }

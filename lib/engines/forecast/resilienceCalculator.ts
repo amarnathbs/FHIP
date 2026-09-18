@@ -12,6 +12,7 @@ import { addMonthsToDateString, firstOfMonth, projectInvestmentMonth, projectLoa
 import { getAssumptionValue } from './assumptions';
 import { bandFor, type ScoreBand } from '../scoring';
 import type { ForecastExplanationRow, ForecastResultRow, ResolvedAssumptionSet } from './types';
+import { formatMoneyNarrative } from '../money';
 
 export interface ResilienceCalculatorInput {
   baselineDate: string;
@@ -23,6 +24,14 @@ export interface ResilienceCalculatorInput {
   openingInvestments: number;
   openingRetirement: number;
   openingLiabilities: number;
+  // App Review 2026-09-15, item 8 — the household's own balance-weighted
+  // liability rate. Same defect and same fix as netWorthCalculator's: the
+  // 'liability_interest_rate' assumption is seeded nowhere (zero rows in
+  // forecast_global_assumptions on DEV, verified live; no migration mentions
+  // the key), so this section always amortised every loan at the hard-coded
+  // default while the Debt section used the user's real per-loan rates.
+  // Optional and nullable: null means no rate is recorded on any liability.
+  liabilityRatePercent?: number | null;
   monthlyEssentialExpenses: number;
   baselineMonthlySurplus: number; // pre-shock, or same as shocked if scenario === 'none'
   shockedMonthlySurplus: number;
@@ -62,7 +71,13 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
   const assetGrowth = getAssumptionValue(input.assumptions, 'property_growth', DEFAULT_ASSET_GROWTH);
   const investmentReturn = getAssumptionValue(input.assumptions, 'equity', DEFAULT_INVESTMENT_RETURN);
   const retirementReturn = getAssumptionValue(input.assumptions, 'retirement', DEFAULT_RETIREMENT_RETURN);
-  const liabilityRate = getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
+  // App Review 2026-09-15, item 8 — the user's own recorded rate wins; the
+  // never-seeded assumption below it survives only for a household that has
+  // recorded no liability rate at all.
+  const liabilityRate =
+    input.liabilityRatePercent !== null && input.liabilityRatePercent !== undefined
+      ? input.liabilityRatePercent
+      : getAssumptionValue(input.assumptions, 'liability_interest_rate', DEFAULT_LIABILITY_RATE);
 
   let liquidAssets = input.openingLiquidAssets;
   let otherAssets = input.openingOtherAssets;
@@ -121,11 +136,31 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
       withdrawals: round2(Math.max(0, -currentSurplus)),
       income: 0,
       expenses: input.monthlyEssentialExpenses,
+      // App Review 2026-09-15, item 8 requirement 4 (verification extended to
+      // the other forecast sections) — CONFIRMED SIGN DEFECT, fixed here.
+      //
+      // These per-period movement columns are supposed to decompose the change
+      // in the headline value: closing = opening + contributions +
+      // investmentReturn + interest + otherMovement. The liability leg's
+      // contribution to NET WORTH is -(L_m - L_(m-1)) = +principalReduction,
+      // and principalReduction = repayment - interest. Recording BOTH
+      // `-interest` AND `-principalReduction` summed to `-repayment` instead,
+      // so the movement columns missed closingValue by (2 x repayment -
+      // interest) every single period -- 1,500/month on a 100,000 balance at
+      // 6% with a 1,000 repayment.
+      //
+      // The reconciling decomposition is `-interest` (net worth is reduced by
+      // the interest accrued) plus `+repayment` (cash moved into the debt),
+      // which sums to exactly +principalReduction. closingValue itself was
+      // always correct; only these two columns were wrong. No UI reads them
+      // today (the only consumer is the forecast_results write in
+      // lib/services/forecastData.ts), so this corrects stored data before
+      // anything is built on it.
       interest: -liabilityMonth.interest,
       investmentReturn: round2(otherAssetMonth.investmentReturn + investmentMonth.investmentReturn + retirementMonth.investmentReturn + liquidMonth.investmentReturn),
       fees: 0,
       fxGainLoss: 0,
-      otherMovement: -liabilityMonth.principalReduction,
+      otherMovement: round2(liabilityMonth.repayment),
       closingValue: netWorth,
       targetValue: null,
       varianceValue: null,
@@ -157,10 +192,12 @@ export function runResilienceForecast(input: ResilienceCalculatorInput): { resul
 
   const narrativeParts: string[] = [`Scenario: ${input.scenarioLabel}.`, `Resilience Health: ${resilienceHealth.label}.`];
   if (netWorthImpact !== 0) {
-    narrativeParts.push(`Immediate net worth impact from the shock: ${netWorthImpact.toLocaleString()}.`);
+    // App Review 2026-09-15 G1/item 7 — shared whole-unit formatter instead of
+    // a raw toLocaleString() float in user-facing narrative text.
+    narrativeParts.push(`Immediate net worth impact from the shock: ${netWorthImpact >= 0 ? '' : '-'}${formatMoneyNarrative(Math.abs(netWorthImpact), input.currency)}.`);
   }
   if (retirementImpact !== 0) {
-    narrativeParts.push(`Retirement balance impact: ${retirementImpact.toLocaleString()}.`);
+    narrativeParts.push(`Retirement balance impact: ${retirementImpact >= 0 ? '' : '-'}${formatMoneyNarrative(Math.abs(retirementImpact), input.currency)}.`);
   }
   narrativeParts.push(
     depletionMonth === null

@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatMoneyExact } from '@/lib/engines/money';
 
 type Phase =
   | 'form'
@@ -84,7 +85,10 @@ const FIELD_LABELS: Record<string, string> = {
 
 function money(value: number | null | undefined, currency: string) {
   if (value === null || value === undefined) return 'Not shown on payslip';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  // App Review 2026-09-15 G1 sanctioned exception (a): this renders the
+  // value as printed on the payslip, next to the payslip, for
+  // character-for-character verification. See lib/engines/money.ts.
+  return formatMoneyExact(value, currency);
 }
 
 function displayValue(v: string | null, kind: string) {

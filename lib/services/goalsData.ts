@@ -570,7 +570,14 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
 // directly to avoid writing a new history row on every view.
 export async function loadGoalsPage(userId: string): Promise<GoalsPagePayload> {
   const supabase = await createClient();
-  const { payload, rawGoalsById, config, reportingCurrency } = await computeGoalsPagePayload(userId);
+  // App Review 2026-09-15, item 5 requirement 1 ("trace the query the report
+  // uses and the query the Goals page uses, and align them"). Both paths
+  // already run this one function, so the rows and the status === 'active'
+  // filter are identical by construction. The one latent divergence was
+  // here: loadGoalsPage resolved a client and then let computeGoalsPagePayload
+  // resolve a second one independently, so the reads and the writes below
+  // could in principle run under different clients. Threaded through.
+  const { payload, rawGoalsById, config, reportingCurrency } = await computeGoalsPagePayload(userId, supabase);
 
   for (const goal of payload.goals) {
     if (goal.status !== 'active') continue;

@@ -1,7 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
-import { resolveReportSourceData, buildEligibilityInput, isEligibleForOfficialMonthlyReport } from '@/lib/services/reportSnapshotResolver';
+import {
+  resolveReportSourceData,
+  buildEligibilityInput,
+  isEligibleForOfficialMonthlyReport,
+  loadReportInputsLastChangedAt,
+} from '@/lib/services/reportSnapshotResolver';
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
 import { localeForReportingCurrency } from '@/lib/engines/money';
 
@@ -123,6 +128,24 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     // otherwise a period whose active report is itself a revision (the normal
     // state after /revise) would fail to be recognised as already generated,
     // producing a second, independent report lineage for the same period.
+    //
+    // App Review 2026-09-15, items 4 and 5 — this short-circuit is also what
+    // froze both reported defects in place. Every section is built from LIVE
+    // data at build time (neither buildDataQuality nor buildGoals has any
+    // period filter), so a report generated before the household entered its
+    // assets/liabilities/investments/retirement, or before it created its
+    // first goal, kept serving that stale text for the rest of the month:
+    // "Missing / Not provided" beside eight real assets, and "No active goals
+    // were recorded for this period." beside "You have 1 active goal".
+    //
+    // Idempotency is still honoured — the same report is returned unchanged
+    // while it is current. When the underlying data has moved on, the report
+    // is regenerated through the EXISTING revision mechanism (new version,
+    // original marked 'superseded', lineage preserved via revises_report_id)
+    // rather than being silently overwritten or duplicated. This cannot loop:
+    // the regenerated row's generated_at is newer than every input timestamp
+    // it was built from, so the very next call short-circuits again.
+    let autoReviseReportId: string | null = null;
     if (!params.reviseReportId) {
       const { data: existing } = await supabase
         .from('reports')
@@ -133,11 +156,18 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         .in('status', ['ready', 'published'])
         .maybeSingle();
       if (existing) {
-        await finishRun(supabase, runRow?.id, existing.id, 'already_exists');
-        const { data: sections } = await supabase.from('report_sections').select('*').eq('report_id', existing.id).order('display_order');
-        return { report: existing as ReportRow, sections: (sections ?? []).map(fromSectionRow), alreadyExisted: true };
+        const inputsChangedAt = await loadReportInputsLastChangedAt(params.userId, supabase);
+        const generatedAt = (existing.generated_at as string | null) ?? (existing.created_at as string | null);
+        const stale = Boolean(inputsChangedAt && generatedAt && inputsChangedAt > generatedAt);
+        if (!stale) {
+          await finishRun(supabase, runRow?.id, existing.id, 'already_exists');
+          const { data: sections } = await supabase.from('report_sections').select('*').eq('report_id', existing.id).order('display_order');
+          return { report: existing as ReportRow, sections: (sections ?? []).map(fromSectionRow), alreadyExisted: true };
+        }
+        autoReviseReportId = existing.id as string;
       }
     }
+    const effectiveReviseReportId = params.reviseReportId ?? autoReviseReportId;
 
     const source = await resolveReportSourceData(params.userId, reportMonth, supabase);
     const eligibilityInput = buildEligibilityInput(source);
@@ -191,8 +221,8 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
 
     let revisesReportId: string | null = null;
     let versionNumber = 1;
-    if (params.reviseReportId) {
-      const { data: original } = await supabase.from('reports').select('*').eq('id', params.reviseReportId).eq('user_id', params.userId).single();
+    if (effectiveReviseReportId) {
+      const { data: original } = await supabase.from('reports').select('*').eq('id', effectiveReviseReportId).eq('user_id', params.userId).single();
       if (!original) throw new Error('Original report not found');
       revisesReportId = original.id;
       versionNumber = original.version_number + 1;
@@ -211,7 +241,11 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         status: 'ready',
         version_number: versionNumber,
         revises_report_id: revisesReportId,
-        revision_reason: params.revisionReason ?? null,
+        revision_reason:
+          params.revisionReason ??
+          (autoReviseReportId
+            ? 'Automatically revised: your financial data changed after this report was generated.'
+            : null),
         reporting_currency: source.currency,
         // G7 Contract 1 (docs/country-programme/g7-data-contracts.md) —
         // resolved from the same source (source.profile.countryOfResidence)

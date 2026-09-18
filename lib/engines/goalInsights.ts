@@ -1,5 +1,6 @@
 import type { GoalPayload, GoalSummary } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from './goalAffordability';
+import { formatMoney } from './money';
 
 // Deterministic, data-supported observations — never AI-generated. AI may
 // later rephrase these, but the underlying facts always come from here.
@@ -11,7 +12,10 @@ export function generateGoalInsights(
 ): string[] {
   const insights: string[] = [];
   const active = goals.filter((g) => g.status === 'active');
-  const fmt = (n: number) => new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-AU', { style: 'currency', currency }).format(n);
+  // App Review 2026-09-15 G1: these strings are rendered verbatim as
+  // user-facing insight copy, so they go through the shared whole-unit
+  // helper rather than a local Intl instance that defaulted to cents.
+  const fmt = (n: number) => formatMoney(n, currency);
 
   for (const g of active) {
     const req = g.forecasts.base.requiredMonthlyContribution;

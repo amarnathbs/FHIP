@@ -5,6 +5,11 @@ import type { BuiltSection } from '@/lib/engines/reportSections';
 
 const STATUS_COLOR: Record<DataQualityStatus, string> = {
   complete: '#198754',
+  // App Review 2026-09-15 item 4 — entered but not yet confirmed complete.
+  // Amber (same family as 'stale'): something is outstanding, but the data
+  // is present and included, so it is deliberately not the red used for a
+  // genuinely missing section.
+  in_progress: '#B7791F',
   confirmed_zero: '#0D6EFD',
   not_applicable: '#6C757D',
   stale: '#B7791F',

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { fmtDate } from './dateDisplay';
+import { formatMoneyCode } from '@/lib/engines/money';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
 //
@@ -76,7 +77,8 @@ interface TaxLotView {
 
 function fmtInr(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+  // App Review 2026-09-15 G1: single shared whole-unit helper.
+  return formatMoneyCode(v, 'INR');
 }
 
 function NotAvailable({ text }: { text: string }) {
