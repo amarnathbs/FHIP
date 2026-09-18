@@ -18,7 +18,7 @@
 --
 -- Not applied to DEV or production by this task — this sandbox has no
 -- DDL-execution mechanism (same standing wall as every migration in this
--- repo's history since R1; see e.g. 0086/0149's own headers).
+-- repo's history since R1; see e.g. 0086/0159's own headers).
 
 create table ii_ai_extraction_reviews (
   id uuid primary key default gen_random_uuid(),
