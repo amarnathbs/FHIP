@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoney, toMonthly, type Frequency } from '@/lib/engines/money';
+import { formatMoneyWhole, toMonthly, type Frequency } from '@/lib/engines/money';
 import { OWNER_OPTIONS, expectedCurrencyForCountry, ownerDisplayLabel } from '@/lib/constants';
 import { validateRow, findDuplicateCustomNames, type GridRow } from '@/lib/engines/data-quality';
 import { currencyMismatch, currencyMismatchBlocked, currencyMismatchCountryLabel } from '@/lib/validation/currencyCountry';
@@ -1146,7 +1146,7 @@ export function FinancialDataGrid({
                       )}
                     </td>
                     <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
-                    <td className="px-3 py-2">{formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
+                    <td className="px-3 py-2">{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
                     <td className="px-3 py-2">{row.currency_code}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
@@ -1186,7 +1186,7 @@ export function FinancialDataGrid({
                   <div>
                     <p className="font-medium text-ink">{row.item_label}</p>
                     <p className="text-xs text-muted">
-                      {ownerDisplayLabel(row.owner)} · {formatMoney(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
+                      {ownerDisplayLabel(row.owner)} · {formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
                     </p>
                     {isIiPublished(row) && (
                       <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
@@ -1229,7 +1229,7 @@ export function FinancialDataGrid({
           </div>
           <div>
             <p className="text-muted">{config.isFlow ? 'Total annual value' : 'Total value'}</p>
-            <p className="font-semibold text-ink">{formatMoney(total, defaultCurrency)}</p>
+            <p className="font-semibold text-ink">{formatMoneyWhole(total, defaultCurrency)}</p>
           </div>
           <div>
             <p className="text-muted">Missing fields</p>
