@@ -117,8 +117,17 @@ describe('FDH-12 module shape', () => {
 
 describe('FDH-12 rule 1 — no second Retirement engine', () => {
   it('imports no FHIP calculation engine', () => {
+    // App Review 2026-09-15 G1 — RetirementStatementImportPanel.tsx imports
+    // `formatMoneyExact` from `lib/engines/money.ts` for display formatting
+    // only (currency/frequency helpers, no retirement projection, readiness
+    // or adequacy math). This naive path-based check can't distinguish that
+    // from a real calculation engine import, so it's the same class of false
+    // positive the sibling FDH-1 isolation test already carries a
+    // documented allow-list for. Scoped to this one module, not a directory,
+    // so a future FDH-12 file importing an actual engine is still caught.
+    const ENGINE_IMPORT_RE = /from '@\/lib\/engines(?!\/money')/;
     FDH12_CODE.forEach((code, i) => {
-      expect(/from '@\/lib\/engines/.test(code), `${FDH12_FILES[i]} imports a calculation engine`).toBe(false);
+      expect(ENGINE_IMPORT_RE.test(code), `${FDH12_FILES[i]} imports a calculation engine`).toBe(false);
     });
   });
 
