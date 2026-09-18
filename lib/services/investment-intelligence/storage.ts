@@ -83,6 +83,23 @@ export async function deleteSourceDocumentObject(objectKey: string): Promise<{ e
   return { error: error?.message ?? null };
 }
 
+// Independent existence check after a delete — never trust a delete call's
+// own success response alone. Same "delete -> independently verify absent"
+// pattern already used by the AIE pipeline's verifyQuarantineObjectAbsent
+// (lib/aie/storage.ts). A listing error means we genuinely cannot confirm
+// absence, so it fails closed (treated as still present) rather than
+// marking a row purged that might not be.
+export async function verifySourceDocumentObjectAbsent(objectKey: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const lastSlash = objectKey.lastIndexOf('/');
+  const dir = objectKey.slice(0, lastSlash);
+  const name = objectKey.slice(lastSlash + 1);
+  const { data, error } = await admin.storage.from(II_STORAGE_BUCKET).list(dir, { search: name, limit: 1 });
+  if (error) return false; // cannot confirm absence -> fail closed
+  const stillPresent = (data ?? []).some((f) => f.name === name);
+  return !stillPresent;
+}
+
 // R2 — server-side byte download for real processing (the parser needs the
 // actual bytes in-process; a signed URL is for browser/download use only).
 // Service-role-only, called exclusively from the processing pipeline

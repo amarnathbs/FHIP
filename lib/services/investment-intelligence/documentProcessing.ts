@@ -31,6 +31,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { downloadSourceDocumentObject } from './storage';
+import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
 import type { ParsedInstrumentRecord } from './parsers/types';
@@ -1142,6 +1143,15 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       statement_as_of_date: parsed.metadata.statementAsOfDateIso,
     })
     .eq('id', sourceDocumentId);
+
+  // The raw statement bytes have done their job — every transaction/holding
+  // they contained is now in the canonical registers above. Purge them from
+  // storage rather than retaining them indefinitely (2026-09-19: found live
+  // that this call was never wired up anywhere despite the delete function
+  // having existed since R1 — every previously "processed" document's raw
+  // PDF was still sitting in storage). Never blocks or fails the request:
+  // a purge failure is recorded for retry, not surfaced to the caller.
+  await purgeSourceDocumentStorage(admin, sourceDocumentId, doc.storage_path as string);
 
   await admin
     .from('ii_document_parse_runs')

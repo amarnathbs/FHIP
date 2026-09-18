@@ -111,7 +111,15 @@ export function HoldingsTable() {
 
   if (loading) return <p className="text-sm text-muted">Loading holdings…</p>;
   if (error) return <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>;
-  if (!payload || payload.empty) return null;
+  if (!payload) return null;
+  if (payload.empty || payload.holdings.length === 0) {
+    return (
+      <p className="rounded-card border border-line bg-white p-4 text-sm text-muted">
+        No holdings could be matched to a resolved position yet. If you have just processed a statement, this can take a moment to catch up —
+        try reloading. If it persists, this is worth reporting.
+      </p>
+    );
+  }
 
   return (
     <section>
