@@ -182,7 +182,9 @@ export function HoldingsTable() {
                     }
                   }}
                 >
-                  <td className="py-3 pr-4 font-medium text-ink">{h.schemeName}</td>
+                  <td className="py-3 pr-4 font-medium text-ink" title={h.schemeName}>
+                    {truncateSchemeName(h.schemeName)}
+                  </td>
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.folioNumber ?? '—'}</td>
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.isin ?? '—'}</td>
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
