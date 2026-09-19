@@ -1,0 +1,72 @@
+-- Data fix: reclassify already-persisted "Sys. Investment" transactions
+-- that were incorrectly stored as 'unclassified' (2026-09-19).
+--
+-- ROOT CAUSE (fixed in code the same day, transactionTypeMapping.ts):
+-- the transaction-type classifier's SIP rule only matched the full word
+-- "systematic investment" or the standalone word "sip" -- it never
+-- recognized the abbreviated real-world wording "Sys. Investment (N/M)",
+-- which a real CAMS statement genuinely uses. Every transaction parsed
+-- with that exact wording, before today's code fix, was persisted as
+-- 'unclassified' instead of 'sip' -- silently dropped from cost-basis
+-- calculation, unit-balance replay, and the reconciliation check alike.
+-- For one real scheme (UTI MNC Fund) this was 4 of its 8 total
+-- transactions -- half its real history -- which is exactly why that
+-- scheme failed reconciliation and showed a "Data quality issue" badge:
+-- not a genuine data discrepancy, but half its real contributions being
+-- invisible to the system.
+--
+-- WHY A DIRECT UPDATE, NOT A REPROCESS. ii_transactions is deliberately
+-- append-only at the application layer (documentProcessing.ts never
+-- issues an UPDATE, only INSERT) -- but that convention is an
+-- application-level discipline, not a database-enforced constraint (RLS
+-- only blocks the authenticated role's own writes; there is no trigger
+-- preventing a service-role/migration-level UPDATE). Re-running the
+-- document through the now-fixed parser would NOT correct these rows in
+-- place: transaction_type is one of the components of this system's own
+-- duplicate-detection fingerprint (fingerprint.ts), so a reprocess would
+-- classify these lines correctly on the NEW attempt and insert them as
+-- NEW rows alongside the old wrong ones, double-counting every affected
+-- transaction -- strictly worse than today's bug. This is a pure LABEL
+-- correction (transaction_type only; date/amount/units/every other
+-- column is untouched and was already correct), not a change to any
+-- economic fact, which is why a direct, narrowly-scoped UPDATE is the
+-- right tool here rather than a new inserted row.
+--
+-- SCOPE. Not limited to one user or one document -- this was a genuine
+-- parser defect that would have misclassified this exact wording for
+-- ANY statement, from ANY user, that used it. Matched purely on the
+-- current (wrong) transaction_type plus the exact wording pattern the
+-- fixed classifier now recognizes -- nothing else about the row is
+-- inspected or required to match.
+--
+-- SAFETY. Scoped to transaction_type = 'unclassified' only -- this can
+-- never touch a row already correctly classified as anything else
+-- (including 'reversal': a "Sys. Investment Rejection" row was already
+-- correctly classified as 'reversal' by the pre-existing reversal rule,
+-- which is checked before the SIP rule in both the old and new code, so
+-- no such row was ever 'unclassified' in the first place and none will
+-- match this UPDATE).
+
+-- Run BEFORE applying, and record the count:
+--   select count(*) from ii_transactions
+--   where transaction_type = 'unclassified'
+--     and source_description ~* 'sys\.?\s*investment';
+
+update ii_transactions
+set transaction_type = 'sip'
+where transaction_type = 'unclassified'
+  and source_description ~* 'sys\.?\s*investment';
+
+-- Run AFTER applying, and confirm it reads 0:
+--   select count(*) from ii_transactions
+--   where transaction_type = 'unclassified'
+--     and source_description ~* 'sys\.?\s*investment';
+--
+-- And confirm the previously-affected scheme's total unclassified count
+-- (should be 0 for UTI MNC Fund specifically, ISIN INF789F01844, if that
+-- is the only scheme this affected in your data):
+--   select ii_transactions.transaction_type, count(*)
+--   from ii_transactions
+--   join ii_instruments on ii_instruments.id = ii_transactions.instrument_id
+--   where ii_instruments.isin = 'INF789F01844'
+--   group by ii_transactions.transaction_type;
