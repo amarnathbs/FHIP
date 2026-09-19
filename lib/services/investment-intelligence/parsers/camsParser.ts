@@ -554,32 +554,117 @@ function requireScaled(raw: string, warnings: ParsedWarning[], code: string): bi
 // mechanically-provable rule, never a guess from description text alone:
 // a reversal transaction's own running Unit Balance (printed by the
 // statement itself) exactly restores the balance to what it was BEFORE
-// the immediately preceding transaction. When the preceding transaction
-// is a same-date, same-folio, same-scheme, exact-negated-amount purchase-
+// the transaction it is reversing. When some earlier transaction is a
+// same-date, same-folio, same-scheme, exact-negated-amount purchase-
 // family transaction, that pairing is structurally proven by the
 // statement's own numbers, not inferred from wording — so the paired
 // purchase is reclassified to 'reversal' too. A transaction with no such
 // pairing (no matching reversal, or a balance that doesn't cancel exactly)
 // is left completely untouched, per the same never-guess discipline.
+//
+// WIDENED SEARCH, real production incident 2026-09-19 (two independent
+// real schemes, same underlying cause): the original version only ever
+// checked `transactions[i - 1]` — the single row immediately before the
+// reversal. That silently mispairs whenever an UNRELATED transaction sits
+// between the real purchase and its own later reversal in the statement's
+// own printed order:
+//   - Two same-day rejected instalments in a row for one scheme (Axis
+//     Large Cap Fund, 2016-02-08): the second rejection's true match was
+//     TWO positions back (the first rejection's own pairing had already
+//     consumed the immediately-preceding slot), so the first purchase of
+//     the pair was left stuck as a permanent 'sip' contribution.
+//   - A second, parallel SIP series for the same scheme (Franklin India
+//     Mid Cap Fund, 2016-02-08: overlapping "6/7" and "5/33" instalment
+//     series both firing that day): the row immediately before the "6/7"
+//     reversal was the UNRELATED "5/33" purchase, which happened to share
+//     the exact same amount/units and got wrongly reclassified as the
+//     reversal's pair instead of the real "6/7" purchase two rows back.
+// Now searches backward from the reversal, skipping already-paired
+// ('reversal'-typed) rows and non-matching scheme/folio/date candidates.
+//
+// The balance-restoration proof is computed relative to the REVERSAL, not
+// the candidate: because a running balance is a pure sum, "the balance
+// this reversal restores to" is always (balance right before the
+// reversal) minus (candidate's own units) — regardless of what else, if
+// anything, happened between the candidate and the reversal. Checking
+// "balance right before the candidate itself" instead (the original
+// formula) is only equivalent when candidate and reversal are adjacent,
+// and silently fails to match a genuinely-correct non-adjacent candidate
+// whenever a real, differently-sized transaction sits between them.
+//
+// A further wrinkle, found while building this fix: when TWO OR MORE
+// unpaired candidates satisfy that same arithmetic proof (only possible
+// when they coincidentally share the exact same units/amount — e.g.
+// Franklin's "6/7" and "5/33" instalments happened to both be 1.598
+// units that month, or Axis's two same-value monthly instalments),
+// arithmetic alone cannot tell them apart: removing either one's
+// identical-sized contribution from the running total produces the
+// identical resulting balance. Real CAMS SIP narratives print their own
+// instalment sequence number on both the original and its later
+// rejection (e.g. "Sys. Investment (6/7)" / "Sys. Investment Rejection
+// (6/7)") — an explicit, literal, shared token the statement itself
+// prints, not an inferred keyword — so that token is used as a tie
+// breaker ONLY when the arithmetic proof alone is ambiguous. If it still
+// doesn't uniquely resolve, every candidate is left untouched: the
+// never-guess discipline applies here exactly as it does to the
+// zero-candidate case.
+function balanceBeforeIndex(transactions: ParsedTransactionRecord[], index: number): bigint {
+  for (let k = index - 1; k >= 0; k--) {
+    if (transactions[k].scheme.normalisedSchemeName === transactions[index].scheme.normalisedSchemeName && transactions[k].folioNumber === transactions[index].folioNumber) {
+      return transactions[k].balanceUnitsAfterScaled ?? BigInt(0);
+    }
+  }
+  return BigInt(0); // first transaction for this scheme/folio — pre-purchase balance is genuinely zero, never guessed otherwise
+}
+
+// A literal "N/M" instalment-sequence token as CAMS itself prints it
+// (e.g. "(6/7)", "Instalment 6 / 7") — matched as an explicit shared
+// identifier between a reversal and its candidate, never as a fuzzy or
+// inferred signal.
+const INSTALMENT_TOKEN_RE = /\b(\d+)\s*\/\s*(\d+)\b/g;
+function extractInstalmentTokens(text: string): Set<string> {
+  const tokens = new Set<string>();
+  for (const match of text.matchAll(INSTALMENT_TOKEN_RE)) tokens.add(`${match[1]}/${match[2]}`);
+  return tokens;
+}
+function shareInstalmentToken(a: Set<string>, b: Set<string>): boolean {
+  for (const token of a) if (b.has(token)) return true;
+  return false;
+}
+
 function reclassifyReversedPurchasePairs(transactions: ParsedTransactionRecord[]): void {
   for (let i = 1; i < transactions.length; i++) {
     const reversal = transactions[i];
     if (reversal.canonicalType !== 'reversal') continue;
-    const prior = transactions[i - 1];
-    if (prior.canonicalType === 'reversal') continue; // already correctly classified — nothing to fix
-    if (prior.transactionDateIso !== reversal.transactionDateIso) continue;
-    if (prior.folioNumber !== reversal.folioNumber) continue;
-    if (prior.scheme.normalisedSchemeName !== reversal.scheme.normalisedSchemeName) continue;
-    if (prior.unitsScaled === null || reversal.unitsScaled === null) continue;
-    if (prior.unitsScaled !== -reversal.unitsScaled) continue; // exact unit negation
-    if (prior.amountScaled !== -reversal.amountScaled) continue; // exact amount negation
+    if (reversal.unitsScaled === null) continue;
     if (reversal.balanceUnitsAfterScaled === null) continue;
-    const balanceBeforePrior = i >= 2 && transactions[i - 2].scheme.normalisedSchemeName === prior.scheme.normalisedSchemeName && transactions[i - 2].folioNumber === prior.folioNumber
-      ? transactions[i - 2].balanceUnitsAfterScaled
-      : BigInt(0); // first transaction for this scheme/folio — pre-purchase balance is genuinely zero, never guessed otherwise
-    if (balanceBeforePrior === null) continue;
-    if (reversal.balanceUnitsAfterScaled !== balanceBeforePrior) continue; // reversal must fully restore the pre-purchase balance, not just cancel units in isolation
-    transactions[i - 1] = { ...prior, canonicalType: 'reversal', classificationConfidence: 1 };
+
+    const balanceBeforeReversal = balanceBeforeIndex(transactions, i);
+    const matches: number[] = [];
+    for (let j = i - 1; j >= 0; j--) {
+      const candidate = transactions[j];
+      if (candidate.canonicalType === 'reversal') continue; // already paired to a different reversal — never rematch
+      if (candidate.transactionDateIso !== reversal.transactionDateIso) continue;
+      if (candidate.folioNumber !== reversal.folioNumber) continue;
+      if (candidate.scheme.normalisedSchemeName !== reversal.scheme.normalisedSchemeName) continue;
+      if (candidate.unitsScaled === null) continue;
+      if (candidate.unitsScaled !== -reversal.unitsScaled) continue; // exact unit negation
+      if (candidate.amountScaled !== -reversal.amountScaled) continue; // exact amount negation
+      if (balanceBeforeReversal - candidate.unitsScaled !== reversal.balanceUnitsAfterScaled) continue; // reversal must fully restore the balance to what it would be with THIS candidate's own contribution removed, everything else in between left intact
+      matches.push(j);
+    }
+
+    if (matches.length === 0) continue; // no arithmetically-proven candidate at all — leave unpaired, never guess
+
+    let chosen = matches[0];
+    if (matches.length > 1) {
+      const reversalTokens = extractInstalmentTokens(reversal.rawTransactionTypeText);
+      const tagged = matches.filter((idx) => shareInstalmentToken(extractInstalmentTokens(transactions[idx].rawTransactionTypeText), reversalTokens));
+      if (tagged.length !== 1) continue; // still genuinely ambiguous even with the instalment token — never guess, leave every candidate as-is
+      chosen = tagged[0];
+    }
+
+    transactions[chosen] = { ...transactions[chosen], canonicalType: 'reversal', classificationConfidence: 1 };
   }
 }
 
