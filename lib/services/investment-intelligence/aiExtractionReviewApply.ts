@@ -41,7 +41,7 @@ const VALID_TRANSACTION_TYPES = new Set<IiTransactionType>([
  * enforces. An unrecognised value degrades to 'unclassified' (already an
  * existing, certification-visible category) rather than being rejected or
  * silently coerced into something economically wrong like 'purchase'. */
-function validateCanonicalType(raw: string): IiTransactionType {
+export function validateCanonicalType(raw: string): IiTransactionType {
   return VALID_TRANSACTION_TYPES.has(raw as IiTransactionType) ? (raw as IiTransactionType) : 'unclassified';
 }
 

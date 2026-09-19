@@ -181,6 +181,15 @@ export function InvestmentIntelligenceClient() {
   const [publishChoice, setPublishChoice] = useState<'new' | string>('new'); // 'new' or a candidate investmentId
   const [publishResultMessage, setPublishResultMessage] = useState<string | null>(null);
 
+  // 2026-09-20: an 'owner_unmatched' reconciliation case had no way to
+  // actually be resolved — the generic Resolve button below only ever
+  // marked the case resolved without setting a real owner. This state
+  // backs the inline owner-picker that replaces it for this one
+  // discrepancy type (see the reconciliation-cases list below).
+  const [householdMembers, setHouseholdMembers] = useState<{ id: string; full_name: string }[]>([]);
+  const [ownerSelections, setOwnerSelections] = useState<Record<string, string>>({}); // caseId -> chosen household_members.id
+  const [assigningOwner, setAssigningOwner] = useState<string | null>(null); // caseId currently being assigned
+
   async function loadDocuments() {
     try {
       const res = await fetch('/api/investment-intelligence/source-documents');
@@ -217,6 +226,46 @@ export function InvestmentIntelligenceClient() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/household-members');
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok) setHouseholdMembers(json.data ?? []);
+      } catch {
+        // Non-fatal: the owner-picker below just shows no options, matching
+        // the "never blocks the rest of the page" convention this component
+        // already follows for its own load failures.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAssignOwner(caseObj: ReconciliationCase) {
+    const ownerMemberId = ownerSelections[caseObj.id];
+    if (!ownerMemberId) return;
+    setError(null);
+    setAssigningOwner(caseObj.id);
+    try {
+      const res = await fetch(`/api/investment-intelligence/accounts/${caseObj.subject_id}/owner`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerMemberId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not assign owner');
+      if (selectedId) await loadSummary(selectedId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setAssigningOwner(null);
+    }
+  }
 
   async function loadSummary(id: string) {
     try {
@@ -616,19 +665,48 @@ export function InvestmentIntelligenceClient() {
                   <p className="mt-1 text-sm text-gray-500">No issues raised for this statement.</p>
                 ) : (
                   <ul className="mt-1 space-y-1">
-                    {summary.reconciliationCases.map((c) => (
-                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
-                        <span>
-                          <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
-                          <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
-                        </span>
-                        {c.status !== 'resolved' && c.status !== 'dismissed' && (
-                          <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
-                            Resolve
-                          </button>
-                        )}
-                      </li>
-                    ))}
+                    {summary.reconciliationCases.map((c) => {
+                      const open = c.status !== 'resolved' && c.status !== 'dismissed';
+                      return (
+                        <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
+                          <span>
+                            <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
+                            <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
+                          </span>
+                          {open && c.discrepancy_type === 'owner_unmatched' && (
+                            <span className="flex items-center gap-2">
+                              <select
+                                value={ownerSelections[c.id] ?? ''}
+                                onChange={(e) => setOwnerSelections((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                                className="rounded border border-gray-300 px-2 py-1 text-xs"
+                              >
+                                <option value="">Who owns this account?</option>
+                                {householdMembers.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.full_name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => handleAssignOwner(c)}
+                                disabled={!ownerSelections[c.id] || assigningOwner === c.id}
+                                className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                              >
+                                {assigningOwner === c.id ? 'Assigning…' : 'Assign'}
+                              </button>
+                            </span>
+                          )}
+                          {open && c.discrepancy_type === 'document_password_required' && (
+                            <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
+                          )}
+                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && (
+                            <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
+                              Resolve
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

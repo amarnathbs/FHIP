@@ -314,4 +314,7 @@ export type IiAuditEventTypePc5 =
   | 'pc5_ownership_allocation_recorded'
   | 'pc5_ownership_allocation_superseded'
   | 'pc5_statement_discarded'
-  | 'pc5_re_reconciliation_triggered';
+  | 'pc5_re_reconciliation_triggered'
+  // 2026-09-20: AI-fallback document extraction was applied automatically
+  // (no customer-facing confirmation) — see aiFallbackDocumentExtraction.ts.
+  | 'ai_fallback_applied';

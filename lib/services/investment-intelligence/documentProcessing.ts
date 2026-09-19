@@ -59,7 +59,8 @@ import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf
 import { MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR } from '@/lib/financial-data-hub/bank-pdf/constants';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
-import { getAiFallbackDocumentExtraction, describeUnmaskedDocumentTextForAudit, type AiFallbackDocumentOutcome, type AieDocumentProvider } from './aiFallbackDocumentExtraction';
+import { getAiFallbackDocumentExtraction, type AiFallbackDocumentOutcome, type AieDocumentProvider, type AiFallbackDocumentContext } from './aiFallbackDocumentExtraction';
+import { maskText } from '@/lib/aie/masking/piiMasking';
 
 /** The limiter's own rolling window, restated here only to bound the DB query
  * that feeds it. `checkPasswordAttemptRateLimit` remains the single authority
@@ -72,9 +73,12 @@ export interface ProcessSourceDocumentInput {
   password?: string;
   forceReparse?: boolean;
   /** Test/DI seam for the generalized AI-fallback mechanism (2026-09-17 PO
-   * addendum) — defaults to the real (currently unavailable) provider
-   * resolution. Never set outside tests/manual DEV verification. */
+   * addendum, wired to the real AIE pipeline 2026-09-20) — defaults to the
+   * real provider resolution. Never set outside tests/manual verification. */
   aiDocumentProviderOverride?: AieDocumentProvider | null;
+  /** Test/DI seam for the auto-apply step (2026-09-20) — defaults to the
+   * real applyAiExtractionReview(). Never set outside tests. */
+  aiApplyOverride?: AiFallbackDocumentContext['applyOverride'];
 }
 
 export interface ProcessSourceDocumentResult {
@@ -405,9 +409,33 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceDocumentId,
       parseRunId,
       triggerReason: 'format_unrecognized',
-      request: { maskedDocumentText: describeUnmaskedDocumentTextForAudit(text) },
+      request: { maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText },
       providerOverride: input.aiDocumentProviderOverride,
+      applyOverride: input.aiApplyOverride,
     });
+    if (aiOutcome.outcome === 'applied') {
+      await admin.from('ii_document_parse_runs').update({ run_status: 'succeeded', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, errors: [{ code: 'ai_fallback_applied', message: 'Format not recognized by the deterministic parser; an AI-assisted extraction was applied automatically.', severity: 'info' }] }).eq('id', parseRunId);
+      await emitAuditEvent({ userId, eventType: 'ai_fallback_applied', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { triggerReason: 'format_unrecognized', reviewId: aiOutcome.reviewId, parseRunId, ...aiOutcome.summary } });
+      return {
+        ok: true,
+        status: 'parsed',
+        parseRunId,
+        error: null,
+        aiExtractionReviewId: aiOutcome.reviewId,
+        summary: {
+          sourceDetected: detection.detection.sourceKey,
+          sourceConfidence: detection.detection.confidence,
+          accountsFound: aiOutcome.summary.accountsFound,
+          schemesFound: aiOutcome.summary.schemesFound,
+          transactionsFound: aiOutcome.summary.newTransactionsCount,
+          holdingsFound: aiOutcome.summary.schemesFound,
+          duplicateTransactionsLinked: aiOutcome.summary.duplicateTransactionsLinked,
+          reconciliationCasesOpened: 0,
+          newTransactionsCount: aiOutcome.summary.newTransactionsCount,
+          missingTransactionsCount: aiOutcome.summary.missingTransactionsCount,
+        },
+      };
+    }
     if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
       await updateDocumentStatusUnlessSucceeded({
         status: 'ai_review_pending',
@@ -459,8 +487,9 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceDocumentId,
       parseRunId,
       triggerReason: 'parse_failed',
-      request: { maskedDocumentText: describeUnmaskedDocumentTextForAudit(text) },
+      request: { maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText },
       providerOverride: input.aiDocumentProviderOverride,
+      applyOverride: input.aiApplyOverride,
     });
     if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
       await updateDocumentStatusUnlessSucceeded({
@@ -1143,6 +1172,24 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       statement_as_of_date: parsed.metadata.statementAsOfDateIso,
     })
     .eq('id', sourceDocumentId);
+
+  // A genuinely successful parse proves whatever blocked an earlier attempt
+  // on THIS document no longer does — most concretely, a 'document_password_
+  // required' case from an earlier wrong/missing password attempt. Found
+  // live 2026-09-20: this case had no path to resolution at all — the
+  // generic "Resolve" button marked it resolved without ever checking
+  // whether the document could actually now be read, and this success path
+  // never closed it either, leaving a stale blocking case sitting open
+  // forever even after the real problem was fixed. auto_resolved_on_reparse
+  // already existed in the resolution_method enum for exactly this, unused
+  // until now.
+  await admin
+    .from('ii_reconciliation_cases')
+    .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolution_method: 'auto_resolved_on_reparse', resolved_by_actor_type: 'system' })
+    .eq('user_id', userId)
+    .eq('source_document_id', sourceDocumentId)
+    .eq('discrepancy_type', 'document_password_required')
+    .eq('status', 'open');
 
   // The raw statement bytes have done their job — every transaction/holding
   // they contained is now in the canonical registers above. Purge them from

@@ -119,8 +119,14 @@ describe('processSourceDocument — generalized AI-fallback wiring (format_unrec
       statementPeriodEndIso: null,
       holdings: [{ schemeName: 'Some Fund', isin: null, amcName: null, folioNumber: null, costValue: 100, marketValue: 110, units: 5, asOfDateIso: '2026-09-11', transactions: [] }],
     });
+    // 2026-09-20: extraction now auto-applies by default (see
+    // aiFallbackDocumentExtraction.ts) — this test is specifically about the
+    // STAGING step (a pending review row genuinely gets created), so the
+    // apply step itself is stubbed to fail, isolating exactly what this test
+    // asserts. The auto-apply path itself has its own dedicated test below.
+    const applyOverride = vi.fn().mockResolvedValue({ ok: false, error: 'apply not exercised by this test' });
     const { processSourceDocument } = await import('@/lib/services/investment-intelligence/documentProcessing');
-    const result = await processSourceDocument({ userId: USER_ID, sourceDocumentId: DOC_ID, aiDocumentProviderOverride: provider });
+    const result = await processSourceDocument({ userId: USER_ID, sourceDocumentId: DOC_ID, aiDocumentProviderOverride: provider, aiApplyOverride: applyOverride });
 
     expect(provider).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(false); // nothing written to holdings yet
