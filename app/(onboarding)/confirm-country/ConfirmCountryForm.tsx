@@ -4,50 +4,9 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { SectionCard } from '@/components/dashboard/SectionCard';
-import { PENDING_GOAL_STORAGE_KEY } from '@/lib/constants';
 import { resolveConfirmCountryPreselect, type CountryGateState } from '@/lib/services/countryGate';
 import type { CountryCoverageDisclosure } from '@/lib/services/countryDisclosure';
 import type { CountryCode } from '@/lib/services/jurisdiction';
-
-// Mandatory Country Confirmation, round-3 closure (Gap 1) — creates the
-// onboarding wizard's optional "first goal" here, immediately AFTER
-// confirmation succeeds, instead of during onboarding itself. By this
-// point the caller is genuinely CONFIRMED (this request just made them so),
-// so POST /api/goals goes through the exact same guard every other goal
-// creation does — no DB-trigger or API-layer onboarding exemption is
-// involved at all. A failure here never blocks the redirect to /dashboard;
-// losing an optional draft goal is a much smaller problem than trapping a
-// user who has successfully confirmed their country.
-//
-// G3: only attempted for a FULL-experience country. A generic-country user
-// cannot hold goals at all (the database refuses them — migration 0127's
-// header), so attempting the write would produce a guaranteed, confusing
-// failure rather than a best-effort success.
-async function createPendingGoalIfAny(): Promise<void> {
-  let raw: string | null = null;
-  try {
-    raw = sessionStorage.getItem(PENDING_GOAL_STORAGE_KEY);
-  } catch {
-    return;
-  }
-  if (!raw) return;
-  try {
-    const pending = JSON.parse(raw);
-    await fetch('/api/goals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pending),
-    });
-  } catch {
-    // Best-effort only — see function comment.
-  } finally {
-    try {
-      sessionStorage.removeItem(PENDING_GOAL_STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
-}
 
 export interface ConfirmCountryOption {
   value: CountryCode;
@@ -177,11 +136,14 @@ export function ConfirmCountryForm({
         }),
       });
       // The destination is decided by the SERVER's returned experience level,
-      // not by what the client thought it selected.
+      // not by what the client thought it selected. A full-experience user
+      // goes into the guided setup tour (Income first, Goals last — see
+      // ONBOARDING_TOUR_STEPS, lib/constants.ts) rather than straight to a
+      // still-empty Dashboard; a generic-experience user's flow is
+      // unchanged.
       const generic = result?.experience_level === 'GENERIC';
-      if (!generic) await createPendingGoalIfAny();
       setDone(true);
-      router.push(generic ? '/global-setup' : '/dashboard');
+      router.push(generic ? '/global-setup' : '/income?setupTour=1');
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';

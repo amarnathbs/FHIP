@@ -1,11 +1,25 @@
 import type { SupportedCurrency } from '@/lib/engines/fx';
 
-// Mandatory Country Confirmation, round-3 closure (Gap 1) — the sessionStorage
-// key OnboardingWizard.tsx stashes an optional first-goal draft under, and
-// ConfirmCountryForm.tsx reads it back from once the user has genuinely
-// confirmed their country. Shared here (not duplicated as a magic string in
-// both files) so the two stay in sync by construction.
-export const PENDING_GOAL_STORAGE_KEY = 'fhip_pending_first_goal';
+// Guided new-user setup tour (2026-09-19, PO instruction): after a
+// full-experience user confirms their country, they are walked through
+// every financial input register once, in this order, before Goals —
+// ending with Goals rather than starting with it, since a goal is easiest
+// to set meaningfully once at least some real numbers exist. Matches
+// AppShell's own "Your finances" nav group order (components/ui/AppShell.tsx)
+// with Goals (normally in "Plan & improve") appended last.
+export const ONBOARDING_TOUR_STEPS: readonly { href: string; label: string }[] = [
+  { href: '/income', label: 'Income' },
+  { href: '/expenses', label: 'Expenses' },
+  { href: '/assets', label: 'Assets' },
+  { href: '/liabilities', label: 'Liabilities' },
+  { href: '/investments', label: 'Investment & Retirement' },
+  { href: '/insurance', label: 'Insurance' },
+  { href: '/companies', label: 'Companies & Trusts' },
+  { href: '/goals', label: 'Goals' },
+];
+// Present only while this query param is '1' — an ordinary visit to any of
+// these pages (not mid-tour) must never show tour chrome.
+export const ONBOARDING_TOUR_QUERY_PARAM = 'setupTour';
 
 // G3 (spec section 5.3): this file used to declare its own, second
 // `export type CountryCode = 'AU' | 'IN'` alongside the authoritative one in

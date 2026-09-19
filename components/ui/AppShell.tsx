@@ -17,6 +17,7 @@ import {
 } from '@/lib/admin/adminNav';
 import { isNavHrefVisible, parseNavDecisions, EMPTY_NAV_DECISIONS } from '@/lib/nav/appNavCapability';
 import type { CapabilityDecision } from '@/lib/services/appCapability';
+import { GuidedSetupTour } from '@/components/onboarding/GuidedSetupTour';
 
 type NavLink = { type: 'link'; label: string; href: string };
 type NavDropdown = { type: 'dropdown'; id: string; label: string; items: { label: string; href: string }[] };
@@ -583,7 +584,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="px-4 py-8 lg:ml-[248px] lg:px-8">
-        <div className="mx-auto max-w-[1480px]">{children}</div>
+        <div className="mx-auto max-w-[1480px]">
+          <GuidedSetupTour />
+          {children}
+        </div>
       </main>
 
       <ConfirmDialog

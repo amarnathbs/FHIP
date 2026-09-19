@@ -5,17 +5,21 @@ import { useRouter } from 'next/navigation';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SelectWithOther, type SelectOption } from '@/components/ui/SelectWithOther';
-import { PENDING_GOAL_STORAGE_KEY } from '@/lib/constants';
 import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
 import type { CountryCode } from '@/lib/services/jurisdiction';
 
-const STEPS = ['Profile', 'Household', 'Countries & Currency', 'Goals', 'Review'] as const;
+// Goals (2026-09-19, PO instruction): removed from this wizard entirely —
+// goals are now the LAST stop of the guided setup tour that runs after
+// country confirmation (see ONBOARDING_TOUR_STEPS in lib/constants.ts),
+// once the user actually has some real numbers entered to set a
+// meaningful target against, rather than asked blind during account
+// creation.
+const STEPS = ['Profile', 'Household', 'Countries & Currency', 'Review'] as const;
 
 const STEP_DESCRIPTIONS: Record<number, string> = {
   0: 'Tell us a little about yourself.',
   1: "Who's in your household? This shapes how we benchmark and forecast for you.",
   2: 'Where you live and which currency your numbers should show in.',
-  3: 'Optional — you can always add or refine goals later from Planning.',
 };
 
 // Client-side hints only — lib/validation/profile.ts's Zod refine is the
@@ -70,9 +74,6 @@ type FormState = {
   // will not advance without a choice.
   country_of_residence: CountryCode | '';
   preferred_currency: 'AUD' | 'INR' | '';
-  goal_name: string;
-  goal_type: string;
-  target_amount: number;
 };
 
 const INITIAL: FormState = {
@@ -86,9 +87,6 @@ const INITIAL: FormState = {
   residence_type: '',
   country_of_residence: '',
   preferred_currency: '',
-  goal_name: '',
-  goal_type: 'starter_emergency_fund',
-  target_amount: 0,
 };
 
 // Per-step required fields — a lightweight client-side gate before the user
@@ -177,41 +175,16 @@ export function OnboardingWizard() {
       });
       if (!householdRes.ok) throw new Error((await householdRes.json()).error ?? 'Could not save household');
 
-      // Mandatory Country Confirmation, round-3 closure (Gap 1): this optional
-      // first goal is deliberately NOT posted to /api/goals here. Doing so
-      // required the database trigger backstop to carry a blanket
-      // onboarding_completed=false exemption covering ALL 80+ financial
-      // tables (not just user_goals) — a real, exploitable bypass a
-      // defective or malicious client could use to write into ANY
-      // backstopped table while onboarding_completed stayed false. Instead,
-      // the goal is stashed client-side and created by
-      // ConfirmCountryForm.tsx immediately AFTER the user genuinely
-      // confirms their country — the exact point country confirmation
-      // becomes real for this user, with no DB-level exemption required at
-      // all. See PENDING_GOAL_STORAGE_KEY in that file.
-      if (form.goal_name) {
-        try {
-          sessionStorage.setItem(
-            PENDING_GOAL_STORAGE_KEY,
-            JSON.stringify({
-              goal_name: form.goal_name,
-              goal_type: form.goal_type,
-              target_amount: form.target_amount,
-              currency_code: form.preferred_currency,
-            })
-          );
-        } catch {
-          // sessionStorage can throw in a locked-down browser context
-          // (private mode, disabled storage) — the goal is simply not
-          // pre-filled after confirmation in that case; never blocks
-          // onboarding itself over a convenience feature.
-        }
-      }
-
       const completeRes = await fetch('/api/onboarding/complete', { method: 'POST' });
       if (!completeRes.ok) throw new Error('Could not complete onboarding');
 
-      router.push('/dashboard');
+      // Mandatory country confirmation still gates every app/(app) route
+      // (app/(app)/layout.tsx) and will redirect to /confirm-country first
+      // when needed — this push only matters for the (rare) case where
+      // country is already confirmed by the time onboarding finishes, and
+      // it goes straight into the guided setup tour rather than a still-
+      // empty Dashboard (see ONBOARDING_TOUR_STEPS, lib/constants.ts).
+      router.push('/income?setupTour=1');
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -413,34 +386,6 @@ export function OnboardingWizard() {
       )}
 
       {step === 3 && (
-        <SectionCard title="Goals" description={STEP_DESCRIPTIONS[3]}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="goal_name" className="block text-sm text-gray-600">First goal (optional)</label>
-              <input
-                id="goal_name"
-                value={form.goal_name}
-                onChange={(e) => update({ goal_name: e.target.value })}
-                placeholder="e.g. Build a 3-month emergency fund"
-                className="mt-1 w-full rounded border border-line px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="target_amount" className="block text-sm text-gray-600">Target amount</label>
-              <input
-                id="target_amount"
-                type="number"
-                min={0}
-                value={form.target_amount}
-                onChange={(e) => update({ target_amount: Number(e.target.value) })}
-                className="mt-1 w-full rounded border border-line px-3 py-2"
-              />
-            </div>
-          </div>
-        </SectionCard>
-      )}
-
-      {step === 4 && (
         <SectionCard title="Review" description="Check everything looks right before you finish.">
           <div className="space-y-2 text-sm">
             <p>
@@ -448,12 +393,6 @@ export function OnboardingWizard() {
               {form.preferred_currency}
             </p>
             <p>Household: {form.household_type || 'not set'}, {form.dependants_count} dependants</p>
-            {form.goal_name && (
-              <p>
-                Goal: {form.goal_name} ({form.preferred_currency} {form.target_amount}) — created once you confirm
-                your country of residence, right after this.
-              </p>
-            )}
           </div>
         </SectionCard>
       )}
