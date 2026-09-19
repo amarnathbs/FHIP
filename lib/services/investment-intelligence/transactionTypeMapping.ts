@@ -83,7 +83,18 @@ const RULES: Rule[] = [
   { code: 'dividend_reinvestment', test: /(idcw|dividend).*(reinvest)/i, type: 'reinvestment' },
   { code: 'reinvestment_generic', test: /\breinvest(ment)?\b/i, type: 'reinvestment' },
   { code: 'dividend', test: /\bidcw\b|\bdividend\b/i, type: 'dividend' },
-  { code: 'sip_purchase', test: /\bsip\b|systematic investment/i, type: 'sip' },
+  // Real production incident, 2026-09-19: a real CAMS statement's actual
+  // wording for a SIP instalment is the abbreviated "Sys. Investment
+  // (1/4)" -- "Sys." not the full word "Systematic" -- which the existing
+  // `systematic investment` clause never matched. 4 of this scheme's 8
+  // real transactions (half its history) fell through to 'unclassified'
+  // as a result, silently dropping them from cost basis, unit-balance
+  // replay, and reconciliation alike -- the scheme then failed its own
+  // reconciliation check because half its real contributions were
+  // invisible to it, not because of any genuine data discrepancy.
+  // `sys\.?\s*investment` matches with or without the trailing period and
+  // with any amount of whitespace before "investment".
+  { code: 'sip_purchase', test: /\bsip\b|systematic investment|sys\.?\s*investment/i, type: 'sip' },
   { code: 'purchase', test: /\bpurchase\b|\bfresh purchase\b|\badditional purchase\b|\bsubscription\b/i, type: 'purchase' },
   { code: 'redemption', test: /\bredemption\b|\bredeem\b/i, type: 'redemption' },
   { code: 'transfer_in', test: /transfer.*\bin\b/i, type: 'transfer_in' },

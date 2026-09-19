@@ -8,6 +8,13 @@ describe('classifyTransactionType (spec section 19 — canonical transaction tax
     ['Additional Purchase', 'purchase'],
     ['SIP Purchase', 'sip'],
     ['Systematic Investment', 'sip'],
+    // Real production incident, 2026-09-19: a real CAMS statement's
+    // abbreviated wording — "Sys." not the full word "Systematic" — fell
+    // through to 'unclassified' entirely, dropping 4 of 8 real transactions
+    // (half a scheme's history) from cost basis, unit-balance replay, and
+    // reconciliation alike.
+    ['Sys. Investment (1/4) 19.505', 'sip'],
+    ['Sys Investment (2/4) 32.750', 'sip'], // no trailing period is also seen in the wild
     ['Redemption', 'redemption'],
     ['Redeem', 'redemption'],
     ['Switch In From XYZ Fund', 'switch_in'],
@@ -78,6 +85,10 @@ describe('classifyTransactionType (spec section 19 — canonical transaction tax
   // from a real 1,000 to a wrong 71,000 for one real fund.
   it('classifies "Systematic Investment Rejection" as reversal, not sip (real production incident, 2026-09-07)', () => {
     expect(classifyTransactionType('Systematic Investment Rejection').canonicalType).toBe('reversal');
+  });
+
+  it('classifies "Sys. Investment Rejection" (the abbreviated form) as reversal, not sip', () => {
+    expect(classifyTransactionType('Sys. Investment Rejection (4/4) 60.254').canonicalType).toBe('reversal');
   });
 
   it('classifies bare "Rejected" (no co-occurring "units" mention) as reversal', () => {
