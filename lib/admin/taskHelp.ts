@@ -417,6 +417,42 @@ export const ADMIN_TASK_HELP: Record<string, AdminTaskHelp> = {
     nextStep: 'Open the content and act on it from its Workflow panel.',
     availability: 'operational',
   },
+  // A2A5 independent-verification finding (A2A5_07 §7/§9): these two PC6/PC7
+  // Data Governance destinations were reachable and correctly gated before
+  // this entry existed, but had no in-product task help — closed here so
+  // lib/admin/navigationRegistry.ts's taskManualId references resolve.
+  'ADM-47': {
+    taskId: 'ADM-47',
+    name: 'Review reference-market-data quality',
+    purpose: 'Check freshness and coverage of reference market data (e.g. NAV history, risk-free series) so downstream performance calculations can be trusted.',
+    eligibleRoles: 'Super Admin holders of the reference-data-quality capability.',
+    prerequisites: [],
+    steps: [
+      'Open Reference Data under Data Governance.',
+      'Review the freshness and coverage indicators shown for each tracked series.',
+      'Follow up outside this page on anything flagged stale or incomplete — this page is read-only.',
+    ],
+    successEvidence: 'Not applicable — this page makes no changes.',
+    reversal: 'Not applicable.',
+    nextStep: 'None — this is a monitoring destination.',
+    availability: 'operational',
+  },
+  'ADM-48': {
+    taskId: 'ADM-48',
+    name: 'Review fund look-through data quality',
+    purpose: 'Check the quality of underlying-fund look-through holdings data used for portfolio look-through calculations.',
+    eligibleRoles: 'Super Admin holders of the lookthrough-data-quality capability.',
+    prerequisites: [],
+    steps: [
+      'Open Fund Look-Through under Data Governance.',
+      'Review the quality signals shown for underlying-fund holdings data.',
+      'Follow up outside this page on anything flagged incomplete or inconsistent — this page is read-only.',
+    ],
+    successEvidence: 'Not applicable — this page makes no changes.',
+    reversal: 'Not applicable.',
+    nextStep: 'None — this is a monitoring destination.',
+    availability: 'operational',
+  },
 };
 
 export function getTaskHelp(taskId: string): AdminTaskHelp | null {

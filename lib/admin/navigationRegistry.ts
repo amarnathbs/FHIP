@@ -364,6 +364,43 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     matchMode: 'exact',
     hasChildren: false,
   },
+  // A2A5 independent-verification finding (A2A5_07 §7/§9): these two PC6/PC7
+  // destinations were wired into buildAdminAreas()'s live output but were
+  // missing from this metadata registry — closed here. Per this file's own
+  // header comment, getVisibleDestinations() cross-references by `route`
+  // against buildAdminAreas()'s actual output, so this entry can never show
+  // more than that function already decided to show; it only attaches
+  // description/manual metadata to an already-correctly-gated destination.
+  {
+    id: 'data-governance-reference-data-quality',
+    area: 'Data Governance',
+    label: 'Reference Data',
+    description: 'Review reference-market-data freshness, coverage and quality signals (PC6).',
+    route: '/admin/investment-intelligence/reference-data-quality',
+    capability: 'referenceDataQuality',
+    applicableRolesForDocs: 'Super Admin holders of the reference-data-quality admin_users flag.',
+    visibilityState: 'available',
+    availabilityState: 'operational',
+    taskManualId: 'ADM-47',
+    order: 2,
+    matchMode: 'exact',
+    hasChildren: false,
+  },
+  {
+    id: 'data-governance-lookthrough-data-quality',
+    area: 'Data Governance',
+    label: 'Fund Look-Through',
+    description: 'Review underlying-fund look-through holdings data quality signals (PC7).',
+    route: '/admin/investment-intelligence/lookthrough-data-quality',
+    capability: 'lookthroughDataQuality',
+    applicableRolesForDocs: 'Super Admin holders of the lookthrough-data-quality admin_users flag.',
+    visibilityState: 'available',
+    availabilityState: 'operational',
+    taskManualId: 'ADM-48',
+    order: 3,
+    matchMode: 'exact',
+    hasChildren: false,
+  },
   // -- Administration ------------------------------------------------------
   {
     id: 'administration-users',

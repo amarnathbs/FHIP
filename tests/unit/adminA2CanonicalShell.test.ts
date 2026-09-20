@@ -96,6 +96,50 @@ describe('A2 — buildAdminAreas() canonical area order', () => {
   });
 });
 
+// A2A5 independent-verification finding (A2A5_07 §7/§9): the prior dispatch
+// fixed the AdminCapabilities-shape drift (added referenceDataQuality/
+// lookthroughDataQuality to every test fixture) but never added a dedicated
+// test asserting the two new Data Governance sub-groups this drift-fix
+// itself introduced actually appear/disappear by their OWN capability,
+// independently of isAdmin and of each other. Closed here.
+describe('A2A5 — Data Governance PC6/PC7 sub-groups are capability-driven, not isAdmin-driven', () => {
+  const BASE = { resourcesDashboard: false, resourceContentAdmin: false, resourceWorkflowAdmin: false, resourceDiscoveryAdmin: false, resourceAnalytics: false, referenceDataQuality: false, lookthroughDataQuality: false };
+
+  function dataGovernanceSubGroupLabels(areas: ReturnType<typeof buildAdminAreas>): string[] {
+    return areas.find((a) => a.label === 'Data Governance')?.subGroups.map((g) => g.label) ?? [];
+  }
+
+  it('both PC6/PC7 sub-groups appear for a non-admin caller holding both capabilities, with Benchmarks correctly absent (Data Governance visibility is capability-driven per Standard §2, not derived from isAdmin — a non-Super-Admin capability holder is not silently denied)', () => {
+    const areas = buildAdminAreas(false, { ...BASE, referenceDataQuality: true, lookthroughDataQuality: true }, false);
+    expect(dataGovernanceSubGroupLabels(areas)).toEqual(['Reference Data', 'Fund Look-Through']);
+  });
+
+  it('Reference Data alone appears when only referenceDataQuality is true (isAdmin false, so Benchmarks is absent)', () => {
+    const areas = buildAdminAreas(false, { ...BASE, referenceDataQuality: true }, false);
+    expect(dataGovernanceSubGroupLabels(areas)).toEqual(['Reference Data']);
+  });
+
+  it('Fund Look-Through alone appears when only lookthroughDataQuality is true', () => {
+    const areas = buildAdminAreas(false, { ...BASE, lookthroughDataQuality: true }, false);
+    expect(dataGovernanceSubGroupLabels(areas)).toEqual(['Fund Look-Through']);
+  });
+
+  it('all three sub-groups appear together, in order, for a Super Admin holding both PC6/PC7 capabilities', () => {
+    const areas = buildAdminAreas(true, { ...BASE, referenceDataQuality: true, lookthroughDataQuality: true }, false);
+    expect(dataGovernanceSubGroupLabels(areas)).toEqual(['Benchmarks', 'Reference Data', 'Fund Look-Through']);
+  });
+
+  it('Data Governance is absent entirely when isAdmin is false and both PC6/PC7 capabilities are false (no sub-group would exist)', () => {
+    const areas = buildAdminAreas(false, BASE, false);
+    expect(areaLabels(areas)).not.toContain('Data Governance');
+  });
+
+  it('a Super Admin with neither PC6 nor PC7 capability still sees Data Governance, with only Benchmarks (regression guard for the pre-existing behaviour)', () => {
+    const areas = buildAdminAreas(true, BASE, false);
+    expect(dataGovernanceSubGroupLabels(areas)).toEqual(['Benchmarks']);
+  });
+});
+
 describe('A2 — buildAdminAreas() persona matrix (today state)', () => {
   const CASES: [string, CurrentResourceRoles, string[]][] = [
     ['role-less authenticated user', roles([]), []],
