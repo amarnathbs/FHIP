@@ -276,3 +276,13 @@ begin
       and (country_applicability is null or country_applicability <> array['AU']::char(2)[]);
   end if;
 end $$;
+
+-- PO instruction, 2026-09-20 (see migration 0164 for the full rationale):
+-- a mortgage/car-loan repayment is already captured via the Liabilities
+-- register's own EMI logic. Deprecated here (is_active = false, never
+-- deleted, per this file's own header convention) so a FRESH environment
+-- seeded from this file lands in the same state as one that applied 0164.
+update master_financial_items
+set is_active = false
+where category = 'expense'
+  and item_key in ('mortgage', 'car_loan_repayments');
