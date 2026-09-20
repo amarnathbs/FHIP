@@ -1,9 +1,9 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { validateDatasetForActivation } from '@/lib/services/benchmarkGovernance';
 import { ok, bad } from '@/lib/api';
 
 export const POST = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   if (!body.dataset_id) return bad('dataset_id is required', 422);

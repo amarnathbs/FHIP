@@ -1,5 +1,5 @@
 // Module 11.3 — admin-triggered Insight Pack generation (spec sections 66,
-// 75, 91). Capability-gated (requireAdmin(), same pattern as every other
+// 75, 91). Capability-gated (requireAIPlatformAdmin(), same pattern as every other
 // /api/admin/ai/* route), auditable (every outcome is an ai_insight_packs
 // row + an ai_runs row via the gateway), respects the same cost/entitlement/
 // kill-switch controls as any other generation path, and never touches a
@@ -9,7 +9,7 @@
 // No consumer-facing "Regenerate AI" button exists anywhere in this phase
 // (spec section 91) — this route is DEV/admin-only.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { bad, ok } from '@/lib/api';
 import { buildFinancialContextObject } from '@/lib/ai/context/financialContextObject';
 import { AIPersonalisedInsightPackService } from '@/lib/ai/insightPack/insightPackService';
@@ -32,7 +32,7 @@ function resolveProvider(ctx: FinancialContextObject, model: ModelRegistryRow) {
 }
 
 export const POST = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const body = await req.json().catch(() => ({}));

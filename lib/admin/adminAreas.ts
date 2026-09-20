@@ -150,12 +150,39 @@ export function buildAdminAreas(isAdmin: boolean, capabilities: AdminCapabilitie
   // Same Super-Admin-only gate as the old "General" group's Benchmarks
   // entry. The FDH-governance portion (ADM-30-36,40) has no operational
   // task yet, so it contributes no sub-group here at all today.
+  //
+  // A2A5 reconciliation finding: PC6/PC7 (Investment Intelligence Reference
+  // Data / Fund Look-Through quality) shipped real pages
+  // (app/(app)/admin/investment-intelligence/{reference-data-quality,
+  // lookthrough-data-quality}/page.tsx) on `main` after this branch was
+  // originally cut, gated on their own capability booleans
+  // (referenceDataQuality/lookthroughDataQuality) — separate from isAdmin,
+  // per Standard §2 ("capabilities may share lower-level role-resolution
+  // helpers... but each remains separately named/tested"). Without this,
+  // the canonical shell would have zero entry point to two real, authorized,
+  // usable destinations for whoever holds those capabilities — exactly the
+  // "route exists but is not falsely hidden" failure mode A2-WP's own
+  // binding instructions (capability-driven visibility) exist to prevent.
+  const dataGovernanceSubGroups: AdminAreaSubGroup[] = [];
   if (isAdmin) {
-    areas.push({
-      key: 'data-governance',
-      label: 'Data Governance',
-      subGroups: [{ label: 'Benchmarks', items: [{ label: 'Benchmarks', href: '/admin/benchmarks' }], matchMode: 'exact' }],
+    dataGovernanceSubGroups.push({ label: 'Benchmarks', items: [{ label: 'Benchmarks', href: '/admin/benchmarks' }], matchMode: 'exact' });
+  }
+  if (capabilities.referenceDataQuality) {
+    dataGovernanceSubGroups.push({
+      label: 'Reference Data',
+      items: [{ label: 'Reference Data Quality', href: '/admin/investment-intelligence/reference-data-quality' }],
+      matchMode: 'exact',
     });
+  }
+  if (capabilities.lookthroughDataQuality) {
+    dataGovernanceSubGroups.push({
+      label: 'Fund Look-Through',
+      items: [{ label: 'Fund Look-Through Quality', href: '/admin/investment-intelligence/lookthrough-data-quality' }],
+      matchMode: 'exact',
+    });
+  }
+  if (dataGovernanceSubGroups.length > 0) {
+    areas.push({ key: 'data-governance', label: 'Data Governance', subGroups: dataGovernanceSubGroups });
   }
 
   // Operations, Analytics, Security & Support — intentionally absent. See

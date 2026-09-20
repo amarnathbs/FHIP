@@ -36,6 +36,57 @@ export async function requireAdmin(): Promise<{ user: User | null; forbidden: Re
   return { user, forbidden: null };
 }
 
+// --- A2/A3.3 named-capability split (FHIP Admin Redesign A2-A5, A3-WP-03/13/23/33/43/53 —
+// "requireAdmin() capability split, execution") -----------------------------------------
+//
+// A1_02_CAPABILITY_CATALOGUE.md §"Finding — Standard §2 violation" recorded that CAP-16
+// (`requireAdmin`) was a single broad boolean gating 3 unrelated functional domains
+// (Benchmarks, Recommendations, AI Admin) — exactly the "broad flag/boolean" pattern the
+// Admin Architecture Standard §2 prohibits as the sole basis for authorization ("one broad
+// boolean must never gate multiple, otherwise-unrelated Admin functions"). Account
+// deletion is NOT part of this split — `app/api/admin/account-deletions/**` already uses
+// its own separately-named `requireAccountDeletionAdmin()` (`lib/services/
+// accountDeletionAdmin.ts`, from LR-9) and never called the generic `requireAdmin()`.
+//
+// A1_20_ROADMAP_A2_A5.md's own A2 package description is explicit that this split must be
+// ADDITIVE, not access-changing: "new named capabilities that initially resolve
+// identically to the old broad check". Each function below is therefore a thin, separately
+// named wrapper around the exact same `requireAdmin()` authorization logic — same
+// authenticated-admin-row check, same country-confirmation gate, same allow/deny outcome
+// for every caller today. Nothing about who is let in or kept out changes in this step.
+//
+// What this DOES buy, per Standard §2's own reasoning: each domain now has an
+// independently named, independently documented, independently testable capability
+// predicate. A future change to (for example) Benchmarks' authorization rule can no
+// longer silently change Recommendations' or AI Admin's, because they are no longer the
+// same function call.
+//
+// Full 9-caller-type live-DEV re-verification (Standard §4, A1_20's "Test requirements")
+// has NOT been run for this change — no Supabase DEV credentials are available in this
+// execution environment (no `.env.local`, no `SUPABASE_*` env vars). The change is
+// unit-tested for behavioral equivalence with `requireAdmin()` (see
+// `tests/unit/adminCapabilitySplit.test.ts`) and is a pure rename at every call site (no
+// route file's authorization *logic* was touched), which bounds the regression risk, but
+// this is disclosed as an evidence gap, not asserted as a live-verified PASS.
+async function requireNamedCapability(): Promise<{ user: User | null; forbidden: Response | null }> {
+  return requireAdmin();
+}
+
+/** CAP-16a — Benchmarks & reference-data administration (10 routes: cohorts, datasets, sources, target-ranges, update-runs, validate, values). */
+export async function requireBenchmarksAdmin(): Promise<{ user: User | null; forbidden: Response | null }> {
+  return requireNamedCapability();
+}
+
+/** CAP-16b — Recommendations administration (4 routes: list/detail, gaps, upload). */
+export async function requireRecommendationsAdmin(): Promise<{ user: User | null; forbidden: Response | null }> {
+  return requireNamedCapability();
+}
+
+/** CAP-16c — AI platform administration (20 routes under `ai/**`: models, prompts, providers, cost limits, kill-switch, evaluations, safety events, etc.). */
+export async function requireAIPlatformAdmin(): Promise<{ user: User | null; forbidden: Response | null }> {
+  return requireNamedCapability();
+}
+
 export function adminClient() {
   return createAdminClient();
 }

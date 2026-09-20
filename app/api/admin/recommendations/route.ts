@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
+import { requireRecommendationsAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { validateEditConditions } from '@/lib/services/recommendationEditValidation';
 
@@ -68,7 +68,7 @@ async function fetchAllConditionRows(client: AdminClient): Promise<Record<string
 }
 
 export async function GET() {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
   const client = adminClient();
   let masterRows: Record<string, unknown>[];
@@ -96,7 +96,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   const required = ['recommendation_code', 'sub_category', 'scenario_name', 'severity', 'action_type', 'action_title_template', 'action_content_template'];

@@ -1,9 +1,9 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { createModelRegistryEntry, listModelRegistry, type UpsertModelInput } from '@/lib/ai/modelRegistry';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const rows = await listModelRegistry(adminClient());
   return ok(rows);
@@ -19,7 +19,7 @@ const REQUIRED_FIELDS: (keyof UpsertModelInput)[] = [
 ];
 
 export const POST = adminRoute(async (req: Request) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   for (const field of REQUIRED_FIELDS) {

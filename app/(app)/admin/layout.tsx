@@ -12,6 +12,7 @@ import {
 import { buildAdminAreas } from '@/lib/admin/adminAreas';
 import { AdminShell } from '@/components/admin/AdminShell';
 import type { AdminCapabilities } from '@/lib/admin/adminNav';
+import { canViewReferenceDataQuality, canViewLookthroughDataQuality } from '@/lib/admin/investmentIntelligenceAdminCapabilities';
 
 // Admin A2 — Canonical Admin Shell and Navigation.
 //
@@ -41,12 +42,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const current = await getCurrentResourceRoles();
   const isAdmin = current.isSuperAdmin;
+  // A2A5 reconciliation finding: `main` gained two AdminCapabilities fields
+  // (referenceDataQuality/lookthroughDataQuality, PC6/PC7) after this A2
+  // branch was cut. Both are admin_users-held capabilities, independent of
+  // the Resources role snapshot above, so they need their own read — same
+  // shared predicate `app/api/admin/me/route.ts` already used (see
+  // lib/admin/investmentIntelligenceAdminCapabilities.ts), not a new one.
+  const [referenceDataQuality, lookthroughDataQuality] = await Promise.all([
+    canViewReferenceDataQuality(),
+    canViewLookthroughDataQuality(),
+  ]);
   const capabilities: AdminCapabilities = {
     resourcesDashboard: canViewResourceDashboard(current),
     resourceContentAdmin: canViewResourceContent(current),
     resourceWorkflowAdmin: canViewResourceWorkflow(current),
     resourceDiscoveryAdmin: canViewResourceDiscovery(current),
     resourceAnalytics: canViewResourceAnalytics(current),
+    referenceDataQuality,
+    lookthroughDataQuality,
   };
   const canManageResourceUsers = canManageResources(current);
 

@@ -1,9 +1,9 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok } from '@/lib/api';
 
 export const POST = adminRoute(async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const supabase = adminClient();
   const { data, error } = await supabase

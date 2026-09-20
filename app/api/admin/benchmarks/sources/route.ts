@@ -1,15 +1,15 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient().from('benchmark_sources').select('*').order('created_at', { ascending: false });
   return error ? safeDbError(error, 'Benchmark sources list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   if (!body.source_name || !body.source_type || !body.publisher || !body.source_title || !body.citation_text) {

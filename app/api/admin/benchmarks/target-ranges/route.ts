@@ -1,8 +1,8 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const url = new URL(req.url);
   const metricCode = url.searchParams.get('metric_code');
@@ -17,7 +17,7 @@ export const GET = adminRoute(async (req: Request) => {
 });
 
 export const POST = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   if (!body.metric_definition_id || !body.band_label || !body.band_tier) {

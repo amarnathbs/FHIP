@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/services/adminAuth';
+import { requireRecommendationsAdmin } from '@/lib/services/adminAuth';
 
 // Recommendation Gap Review — WITHHELD PENDING PRIVACY-SAFE REIMPLEMENTATION.
 //
@@ -58,7 +58,7 @@ export const GAP_REVIEW_UNAVAILABLE_MESSAGE =
 export async function GET() {
   // Authorization first, and unchanged — 401/403 precedence is preserved for
   // every caller who is not entitled to this surface at all.
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
 
   // Authorized Super Admin: an honest, stable "withheld" response. No query

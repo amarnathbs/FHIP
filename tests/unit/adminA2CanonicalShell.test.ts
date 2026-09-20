@@ -51,6 +51,14 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     resourceWorkflowAdmin: canViewResourceWorkflow(current),
     resourceDiscoveryAdmin: canViewResourceDiscovery(current),
     resourceAnalytics: canViewResourceAnalytics(current),
+    // Not derivable from a Resources role snapshot (PC6/PC7 live on
+    // admin_users, read independently — see
+    // lib/admin/investmentIntelligenceAdminCapabilities.ts). This test
+    // suite is about Resources-role-driven areas only; PC6/PC7's own
+    // Data Governance sub-groups have their own coverage need if/when this
+    // suite is extended for them.
+    referenceDataQuality: false,
+    lookthroughDataQuality: false,
   };
 }
 
@@ -80,7 +88,7 @@ describe('A2 — buildAdminAreas() canonical area order', () => {
   });
 
   it('every area buildAdminAreas() can ever emit appears in CANONICAL_AREA_ORDER, in that relative order', () => {
-    const all = buildAdminAreas(true, { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true }, true);
+    const all = buildAdminAreas(true, { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: false, lookthroughDataQuality: false }, true);
     const labels = areaLabels(all);
     const indices = labels.map((l) => (CANONICAL_AREA_ORDER as readonly string[]).indexOf(l));
     expect(indices.every((i) => i >= 0)).toBe(true);
@@ -117,7 +125,7 @@ describe('A2 — buildAdminAreas() persona matrix (today state)', () => {
       expect(labels).not.toContain('Security & Support');
     }
     // Even a caller with every legacy capability true and isAdmin true.
-    const all = buildAdminAreas(true, { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true }, true);
+    const all = buildAdminAreas(true, { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: false, lookthroughDataQuality: false }, true);
     expect(areaLabels(all)).not.toContain('Operations');
     expect(areaLabels(all)).not.toContain('Analytics');
     expect(areaLabels(all)).not.toContain('Security & Support');
@@ -128,7 +136,7 @@ describe('A2 — buildAdminAreas() persona matrix (today state)', () => {
   });
 
   it('Content area sub-groups reuse the exact pre-existing item lists (same hrefs, no route change per A1_08 §10)', () => {
-    const superAdminCaps: AdminCapabilities = { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true };
+    const superAdminCaps: AdminCapabilities = { resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: false, lookthroughDataQuality: false };
     const areas = buildAdminAreas(true, superAdminCaps, true);
     const content = areas.find((a) => a.label === 'Content');
     expect(content).toBeDefined();
@@ -169,13 +177,22 @@ describe('A2 — buildAdminAreas() persona matrix (today state)', () => {
 });
 
 describe('A2 — pre-existing lib/admin/adminNav.ts contract is untouched', () => {
-  it('NO_ADMIN_CAPABILITIES still has exactly its original 5 keys, all false', () => {
+  // A2A5 reconciliation finding: this assertion was written when
+  // AdminCapabilities had exactly 5 keys. PC6/PC7 (Investment Intelligence
+  // Reference Data / Fund Look-Through quality) added 2 more
+  // (referenceDataQuality/lookthroughDataQuality) on `main` after this
+  // branch was originally cut — both real, both correctly `false` in
+  // NO_ADMIN_CAPABILITIES. Updated to 7 keys rather than deleted, so this
+  // test still catches an UNEXPECTED 8th key appearing later.
+  it('NO_ADMIN_CAPABILITIES still has exactly its original 5 keys plus PC6/PC7\'s 2, all false (7 total)', () => {
     expect(NO_ADMIN_CAPABILITIES).toEqual({
       resourcesDashboard: false,
       resourceContentAdmin: false,
       resourceWorkflowAdmin: false,
       resourceDiscoveryAdmin: false,
       resourceAnalytics: false,
+      referenceDataQuality: false,
+      lookthroughDataQuality: false,
     });
   });
 

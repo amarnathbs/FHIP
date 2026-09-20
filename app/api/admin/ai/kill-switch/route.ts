@@ -11,7 +11,7 @@
 // (trigger-written, per field) and ai_operational_events carry the reason
 // forward.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { getPlatformControls, updatePlatformControls, type PlatformControlsPatch } from '@/lib/ai/entitlement/platformControls';
 import { recordKillSwitchActivation } from '@/lib/ai/observability/operationalEvents';
@@ -30,7 +30,7 @@ const SWITCHES: Record<string, keyof PlatformControlsPatch> = {
 };
 
 export const POST = adminRoute(async (req: Request) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const body = await req.json().catch(() => null);

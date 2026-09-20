@@ -6,17 +6,17 @@
 // the tables the enforcement path itself writes — so a number here cannot
 // drift from what the gate actually did.
 //
-// Admin-only, via the existing requireAdmin() + adminRoute() convention
+// Admin-only, via the existing requireAIPlatformAdmin() + adminRoute() convention
 // (spec section 34: integrate with the existing Admin architecture, do not
 // build a parallel admin-security model).
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { buildUsageDashboard, listOperationalEvents } from '@/lib/ai/entitlement/platformControls';
 import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 
 export const GET = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const url = new URL(req.url);

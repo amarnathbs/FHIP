@@ -12,7 +12,7 @@
 // list below is nonetheless written as an allowlist rather than `select('*')`,
 // so a future secret-bearing column could not begin leaking here by default.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -30,7 +30,7 @@ const MODEL_PRICE_COLUMNS = [
 ].join(', ');
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const admin = createAdminClient();

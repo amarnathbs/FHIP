@@ -1,8 +1,8 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Number(searchParams.get('limit') ?? 50), 200);

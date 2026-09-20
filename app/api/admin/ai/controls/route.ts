@@ -8,7 +8,7 @@
 // This route is NOT a user-facing AI surface. It exposes no AI capability —
 // only the switches and limits that govern one.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import {
   getPlatformControls,
@@ -23,7 +23,7 @@ import { recordKillSwitchActivation, recordConfigValidationRejection } from '@/l
 import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const billingPeriod = currentBillingPeriod();
@@ -78,7 +78,7 @@ const NULLABLE_NUMERIC_FIELDS = [
 ] as const;
 
 export const PUT = adminRoute(async (req: Request) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const body = await req.json().catch(() => null);

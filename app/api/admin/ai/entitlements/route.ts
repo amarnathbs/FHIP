@@ -17,7 +17,7 @@
 // there is no code path that could roll anything over, and presenting a
 // toggle that does nothing would be worse than presenting a fact.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPlatformControls, summariseUsageForPeriod } from '@/lib/ai/entitlement/platformControls';
@@ -25,7 +25,7 @@ import { AI_COACH_PREMIUM, AI_SUB_CAPABILITIES, AI_CAPABILITY_IMPLEMENTED } from
 import { currentBillingPeriod } from '@/lib/ai/billingPeriod';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const admin = createAdminClient();

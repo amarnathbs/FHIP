@@ -10,13 +10,13 @@
 // that reroutes a refused request to a different provider. A disabled provider
 // is a refusal, never a redirect.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { upsertProviderControl, type ProviderControlPatch } from '@/lib/ai/entitlement/platformControls';
 import { recordProviderOrModelDisabled } from '@/lib/ai/observability/operationalEvents';
 
 export const PUT = adminRoute(async (req: Request, { params }: { params: Promise<{ provider: string }> }) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const { provider } = await params;

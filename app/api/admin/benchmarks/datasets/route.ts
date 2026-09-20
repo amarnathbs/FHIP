@@ -1,8 +1,8 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient()
     .from('benchmark_datasets')
@@ -12,7 +12,7 @@ export const GET = adminRoute(async () => {
 });
 
 export const POST = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   if (!body.benchmark_source_id || !body.dataset_name || !body.version || !body.benchmark_class) {

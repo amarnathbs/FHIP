@@ -5,7 +5,7 @@
 // admin action against a specific row, recorded with who did it and when,
 // rather than something a code path can decide for itself.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { updateTaskCostLimit, type TaskCostLimitPatch } from '@/lib/ai/entitlement/platformControls';
 import type { ModelTier } from '@/lib/ai/modelRegistry';
@@ -13,7 +13,7 @@ import type { ModelTier } from '@/lib/ai/modelRegistry';
 const TIERS: ModelTier[] = ['LOW_COST', 'STANDARD', 'ADVANCED'];
 
 export const PUT = adminRoute(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
 
   const { id } = await params;

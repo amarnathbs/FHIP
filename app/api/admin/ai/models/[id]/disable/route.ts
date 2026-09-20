@@ -14,13 +14,13 @@
 //     unavailable" is the existing default and no unapproved fallback can be
 //     selected silently.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { updateModelRegistryEntry } from '@/lib/ai/modelRegistry';
 import { recordProviderOrModelDisabled } from '@/lib/ai/observability/operationalEvents';
 
 export const POST = adminRoute(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const { id } = await params;
   const body = await req.json().catch(() => ({}));

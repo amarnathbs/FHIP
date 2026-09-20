@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
+import { requireRecommendationsAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { parseCsv, splitList } from '@/lib/utils/csv';
 import { validateConditionsImport, buildImportPayload, MAX_CSV_BYTES } from '@/lib/services/recommendationsConditionsImport';
@@ -25,7 +25,7 @@ function toNullable(v: string | undefined): string | null {
 }
 
 export async function POST(req: Request) {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   const fileType = body.fileType as FileType;

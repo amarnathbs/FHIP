@@ -1,9 +1,9 @@
-import { requireAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
+import { requireRecommendationsAdmin, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { validateEditConditions } from '@/lib/services/recommendationEditValidation';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireRecommendationsAdmin();
   if (forbidden) return forbidden;
   const { id } = await params;
   const client = adminClient();

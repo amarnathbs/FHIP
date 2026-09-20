@@ -1,8 +1,8 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient()
     .from('benchmark_update_runs')

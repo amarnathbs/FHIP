@@ -25,6 +25,10 @@ const ALL_CAPS: AdminCapabilities = {
   resourceWorkflowAdmin: true,
   resourceDiscoveryAdmin: true,
   resourceAnalytics: true,
+  // PC6/PC7 (Investment Intelligence) — added to AdminCapabilities on `main`
+  // after this branch was cut; see docs/admin/A2A5_00_PROGRAMME_RECONCILIATION.md.
+  referenceDataQuality: true,
+  lookthroughDataQuality: true,
 };
 
 describe('A2 — navigation registry structural integrity', () => {

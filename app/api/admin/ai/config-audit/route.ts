@@ -12,12 +12,12 @@
 // NO SECRETS (section 59). The audited tables hold switches, ceilings and
 // prices only; no provider API key is stored in the database at any point.
 
-import { requireAdmin, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 import { listConfigAudit } from '@/lib/ai/entitlement/platformControls';
 
 export const GET = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const limit = Number(new URL(req.url).searchParams.get('limit') ?? 200);
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return bad('limit must be an integer between 1 and 1000', 422);

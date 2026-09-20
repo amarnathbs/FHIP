@@ -1,4 +1,4 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { createClient } from '@/lib/supabase/server';
 import { ok, bad } from '@/lib/api';
 
@@ -48,7 +48,7 @@ const VALID_STATUSES = ['draft', 'under_review', 'approved', 'active', 'supersed
 // Called via the CALLER's own authenticated session (createClient(), never
 // the service-role adminClient()) — Pattern A's whole point is that
 // auth.uid() inside the function resolves to the real signed-in caller, not
-// a service-role context with no caller identity at all. requireAdmin() is
+// a service-role context with no caller identity at all. requireBenchmarksAdmin() is
 // still called first as defence-in-depth (Standard §4: every layer enforces
 // independently) even though the RPC re-checks admin_users itself.
 async function callTransitionRpc(sourceId: string, newStatus: string): Promise<{ data: unknown; error: null } | { data: null; error: Response }> {
@@ -81,7 +81,7 @@ async function callTransitionRpc(sourceId: string, newStatus: string): Promise<{
 
 export const PUT = adminRoute(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
 

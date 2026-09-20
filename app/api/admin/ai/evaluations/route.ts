@@ -1,8 +1,8 @@
-import { requireAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
+import { requireAIPlatformAdmin, adminClient, adminRoute } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const client = adminClient();
   const { data, error } = await client.from('ai_evaluations').select('*').order('created_at', { ascending: false }).limit(200);
@@ -11,7 +11,7 @@ export const GET = adminRoute(async () => {
 });
 
 export const POST = adminRoute(async (req: Request) => {
-  const { user, forbidden } = await requireAdmin();
+  const { user, forbidden } = await requireAIPlatformAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   const required = ['ai_run_id', 'evaluation_type', 'result', 'reviewer_type'];

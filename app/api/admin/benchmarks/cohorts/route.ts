@@ -1,15 +1,15 @@
-import { requireAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
+import { requireBenchmarksAdmin, adminClient, adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { ok, bad } from '@/lib/api';
 
 export const GET = adminRoute(async () => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const { data, error } = await adminClient().from('benchmark_cohorts').select('*, benchmark_datasets(dataset_name)').order('cohort_tier').order('cohort_code');
   return error ? safeDbError(error, 'Benchmark cohorts list') : ok(data);
 });
 
 export const POST = adminRoute(async (req: Request) => {
-  const { forbidden } = await requireAdmin();
+  const { forbidden } = await requireBenchmarksAdmin();
   if (forbidden) return forbidden;
   const body = await req.json().catch(() => ({}));
   if (!body.cohort_code || !body.cohort_description || !body.cohort_tier) {
