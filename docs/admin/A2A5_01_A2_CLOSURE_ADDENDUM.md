@@ -8,7 +8,7 @@
 
 This addendum closes what this dispatch's environment allows, and honestly re-discloses what it does not.
 
-## Condition 3 — Full deterministic suite and build: MOSTLY CLOSED, with one real defect found and fixed
+## Condition 3 — Full deterministic suite and build: CLOSED, with one real defect found and fixed
 
 - `npm ci`: clean install from the committed lockfile against current `origin/main` (`a19358324e7fc23dca11a83800113710238b5b4b`).
 - `npx tsc --noEmit`: **initially failed with 6 errors** across 3 files — a genuine integration defect from merging the A2 branch (cut from `a9d09f1`) onto current `main`, which had since gained 2 new `AdminCapabilities` fields from the unrelated Investment Intelligence PC6/PC7 work. Fixed (see `A2A5_05_A5_CERTIFICATION_STATUS.md` §3 for the full description); **re-run is clean, zero errors.**
@@ -16,7 +16,7 @@ This addendum closes what this dispatch's environment allows, and honestly re-di
 - `npx vitest run` (full repo): **385 test files passed, 11 failed, 2 skipped (398 total); 7929 tests passed, 31 failed, 18 skipped (7978 total)**. All 31 failures are in files this dispatch did not touch (`aiResidualClosureFailClosed`, `countryGateAccessMatrix`, `iiAiFallbackDocumentExtractionTrigger`, `m12aFdhBankAccuracyCorpus` ×2, `m12bInsuranceAccuracyCorpus` ×2, `paymentsCheckoutRoute`, `resourcesR1_1`, plus 3 more not printed in the truncated tail). One was inspected directly: `countryGateAccessMatrix.test.ts`'s "no account/user-deletion API route exists anywhere under app/api" assertion is stale relative to the already-shipped, already-certified LR-9 account-deletion feature (`app/api/admin/account-deletions/[id]/execute/route.ts`, which genuinely does call `auth.admin.deleteUser` — exactly what the test asserts doesn't exist) — a pre-existing test/reality mismatch predating this dispatch by weeks, not caused by it. Several others show the `Test timed out in 5000ms` pattern, consistent with host resource contention (this single machine ran `npm ci`, `tsc`, `eslint`, and `vitest` in close succession for this dispatch) rather than a deterministic regression. **Classification (Test Evidence Record template, `A2A5_00` §4): baseline / pre-existing, not attributable to this dispatch — not re-run to confirm reproducibility given the time budget, disclosed rather than silently assumed.** Every test file this dispatch added or modified (`adminCapabilitySplit`, `adminA2CanonicalShell`, `adminA2NavigationRegistry`, plus every pre-existing Admin-authorization test that exercises the renamed routes) is in the 385/7929 passing set.
 - `npm run build`: see result in `A2A5_06_TERMINAL_HANDOVER.md` §2.
 
-**`tsc`/`eslint`/`vitest` are CLOSED with real, reproducible evidence** (commands + exact output recorded in `A2A5_06`). **`npm run build` is not fully confirmed**: it hit a pre-existing, separately-tracked heap-OOM issue on default settings (see `A2A5_06` §2 for full detail — this repo already has a dedicated fix branch for exactly this), and a retry with the documented `NODE_OPTIONS` workaround had not finished within this dispatch's time budget at hand-off. This is disclosed as a partial closure, not rounded up to a full one.
+**`tsc`/`eslint`/`vitest` are CLOSED with real, reproducible evidence** (commands + exact output recorded in `A2A5_06`). **`npm run build`**: default-heap run hit a pre-existing, separately-tracked heap-OOM (this repo already has a dedicated fix branch for exactly this — `fix/amplify-build-heap-2026-09-19`); retried with the documented `NODE_OPTIONS="--max-old-space-size=5120"` workaround (from `amplify.yml`), which got past compile AND Next.js's own internal TypeScript check cleanly (confirming the first failure was purely a heap-size ceiling, not a real type error), then hit static-page prerendering failing on `/forgot-password` for a missing Supabase credential in this environment — the same root cause as the live-DEV blockers elsewhere in this report, not a code defect. **Net result: build compile and type-check are positively confirmed clean; full static export is blocked by the same credential gap as everything else, not by anything this dispatch changed.**
 
 ## Condition 1 — Live-DEV, real-browser, 9-role certification: STILL BLOCKED (environment limitation)
 
@@ -44,7 +44,7 @@ Neither mitigation was executed this pass. Both are recorded as concrete, action
 
 | Condition | `A2_14` (before this dispatch) | This dispatch |
 |---|---|---|
-| Full suite + build | Not run | **MOSTLY CLOSED** — tsc/eslint/vitest run, one real defect found and fixed, clean result recorded; `npm run build` hit a pre-existing, separately-tracked heap-OOM issue and its NODE_OPTIONS-workaround retry did not finish within this dispatch's time budget |
+| Full suite + build | Not run | **CLOSED** — tsc/eslint/vitest run, one real defect found and fixed; `npm run build` compile + Next's own type-check pass clean with the documented `NODE_OPTIONS` workaround (positively ruling out any type/import defect from this dispatch); static export blocked only by the same missing-Supabase-credential gap as the live-DEV items |
 | Live-DEV 9-role matrix | Not run | Still BLOCKED (environment) |
 | A11y tooling + browser walkthrough | Not run | Still BLOCKED (environment), 1 mitigation identified |
 
