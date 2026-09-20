@@ -4,11 +4,14 @@
 // mapping gaps; NAV freshness; failed import batches; unusual jumps/outliers;
 // source corrections; risk-free freshness; last successful job.
 //
-// READ-ONLY. There is no POST/PATCH/DELETE in this file. A surface that lets
-// an admin CORRECT reference data is a different, separately-named capability
-// (Admin Standard §5/§14) and is not in PC6's scope; when it is built, its
-// writes must land in ii_reference_corrections, whose CHECK already refuses an
-// admin correction without an actor and a >=20-character reason.
+// GET is read-only. POST (added 2026-09-20, PO instruction) is NOT "correct
+// reference data" -- it never touches ii_reference_corrections or writes a
+// value an admin chose. It re-runs the EXACT SAME deterministic ingest job
+// the nightly cron calls, through the same runReferenceIngest() and the same
+// kill switch (a disabled job still refuses to run, even from this button),
+// for the case the cron run failed and an admin wants to retry the tail
+// without a terminal. Gated on the identical PC6_ADMIN_CAPABILITY as GET --
+// no new capability, no new privilege.
 //
 // ADMIN STANDARD §9 (personal/financial data boundary) — ANALYSIS.
 // Every table this route reads is GLOBAL REFERENCE DATA with no tenancy
@@ -28,12 +31,14 @@
 // §13 SAFE FAILURE. A missing table (0155 not yet applied) is reported as
 // `unavailable` with the reason, not as an empty healthy dashboard.
 
+import { z } from 'zod';
 import { adminRoute, adminClient, safeDbError } from '@/lib/services/adminAuth';
 import { requireReferenceDataAdmin } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
-import { ok, bad } from '@/lib/api';
+import { ok, bad, badValidation } from '@/lib/api';
 import { assessFreshness } from '@/lib/services/investment-intelligence/pc6/referenceDataQuality';
 import { classifyRiskFree, riskFreeFreshness } from '@/lib/services/investment-intelligence/pc6/riskFreeSeries';
 import { PC6_REFERENCE_SOURCES, blockedSources } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import { runReferenceIngest } from '@/lib/services/investment-intelligence/pc6/referenceIngestJob';
 
 export const dynamic = 'force-dynamic';
 
@@ -230,4 +235,43 @@ export const GET = adminRoute(async (req: Request) => {
   }
 
   return ok(out);
+});
+
+// --- POST: manual re-run (2026-09-20 PO instruction) -----------------------
+const rerunSchema = z.object({
+  sourceConfigId: z.string(),
+  jobKey: z.string(),
+  dryRun: z.boolean().optional(),
+});
+
+export const POST = adminRoute(async (req: Request) => {
+  const { forbidden } = await requireReferenceDataAdmin();
+  if (forbidden) return forbidden;
+
+  const parsed = rerunSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return badValidation(parsed.error, 422);
+  if (!(parsed.data.sourceConfigId in PC6_REFERENCE_SOURCES)) {
+    return bad(`Unknown PC6 source '${parsed.data.sourceConfigId}'. Allowed: ${Object.keys(PC6_REFERENCE_SOURCES).join(', ')}`, 422);
+  }
+
+  try {
+    const result = await runReferenceIngest({
+      jobKey: parsed.data.jobKey,
+      sourceConfigId: parsed.data.sourceConfigId,
+      asOfDate: new Date().toISOString().slice(0, 10),
+      dryRun: parsed.data.dryRun === true,
+    });
+    // Same sanitised-output discipline as the cron route: counts and alert
+    // codes only, never a source URL or credential.
+    return ok({
+      jobKey: result.jobKey,
+      status: result.status,
+      batchId: result.batchId,
+      detail: result.detail,
+      counts: result.counts,
+      alerts: result.alerts.map((a) => ({ severity: a.severity, code: a.code })),
+    });
+  } catch (err) {
+    return bad(err instanceof Error ? err.message : 'Unexpected ingest error', 500);
+  }
 });

@@ -21,6 +21,7 @@ function makeFakeDb(schemeMasterRows: Row[]) {
 
     const builder = {
       select: () => builder,
+      order: () => builder,
       eq(col: string, val: unknown) {
         filtered = filtered.filter((r) => r[col] === val);
         return builder;
@@ -35,6 +36,14 @@ function makeFakeDb(schemeMasterRows: Row[]) {
           // update(...).in(...) resolves immediately (no further chaining needed)
           then: (resolve: (v: unknown) => unknown) => resolve(applyPendingUpdate()),
         });
+      },
+      // fetchAllRows() (lib/services/investment-intelligence/pagination.ts)
+      // pages via .range(). Fixtures here are always far under one page, so
+      // returning the whole (already-filtered) slice in one go is correct --
+      // fetchAllRows terminates as soon as a page comes back shorter than
+      // the page size, which this always is.
+      range(from: number, to: number) {
+        return Promise.resolve({ data: filtered.slice(from, to + 1), error: null });
       },
       insert(payload: Row[]) {
         calls.push({ table, verb: 'insert', payload });

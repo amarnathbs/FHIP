@@ -41,24 +41,37 @@ async function pg(path, init) {
   return res.json();
 }
 
+// PostgREST's own default response cap (1000) truncates a plain select
+// silently -- must be paged explicitly everywhere, not just for the
+// existing-rows check this was originally written for. Found the hard way:
+// the instrument-universe queries below had the exact same unpaged bug,
+// silently capping "resolvable instruments" at 1000 each even with the full
+// ~14,358-scheme AMFI universe already created.
+const PAGE_SIZE = 1000;
+async function pgAll(path) {
+  const out = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const rows = await pg(`${path}&limit=${PAGE_SIZE}&offset=${offset}`);
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
 console.log('Loading resolved instrument universe (by AMFI scheme code and by ISIN, same as the PC6 ingest job resolves against)...');
-const instruments = await pg('ii_instruments?select=id,isin&instrument_class=eq.mutual_fund&isin=not.is.null');
+const instruments = await pgAll('ii_instruments?select=id,isin&instrument_class=eq.mutual_fund&isin=not.is.null');
 const isinToInstrument = new Map(instruments.map((i) => [i.isin, i.id]));
-const identifierRows = await pg('ii_instrument_identifiers?select=identifier_value,instrument_id&identifier_scheme=eq.amfi_scheme_code&is_active=eq.true');
+const identifierRows = await pgAll('ii_instrument_identifiers?select=identifier_value,instrument_id&identifier_scheme=eq.amfi_scheme_code&is_active=eq.true');
 const codeToInstrument = new Map(identifierRows.map((r) => [r.identifier_value, r.instrument_id]));
 console.log(`  ${isinToInstrument.size} instruments resolvable by ISIN, ${codeToInstrument.size} by AMFI scheme code.`);
 
 console.log('Loading already-imported (instrument, date) pairs to avoid duplicates...');
 const existingSet = new Set();
 const instrumentIds = [...new Set([...isinToInstrument.values(), ...codeToInstrument.values()])];
-const PAGE_SIZE = 1000; // PostgREST's own default response cap -- must be paged explicitly, or a heavily-backfilled instrument's rows past the first page are silently missed
 for (let i = 0; i < instrumentIds.length; i += 50) {
   const slice = instrumentIds.slice(i, i + 50);
-  for (let offset = 0; ; offset += PAGE_SIZE) {
-    const rows = await pg(`ii_prices_nav?select=instrument_id,price_date&instrument_id=in.(${slice.join(',')})&limit=${PAGE_SIZE}&offset=${offset}`);
-    for (const r of rows) existingSet.add(`${r.instrument_id}|${r.price_date}`);
-    if (rows.length < PAGE_SIZE) break;
-  }
+  const rows = await pgAll(`ii_prices_nav?select=instrument_id,price_date&instrument_id=in.(${slice.join(',')})`);
+  for (const r of rows) existingSet.add(`${r.instrument_id}|${r.price_date}`);
 }
 console.log(`  ${existingSet.size} existing rows on file for these instruments.`);
 

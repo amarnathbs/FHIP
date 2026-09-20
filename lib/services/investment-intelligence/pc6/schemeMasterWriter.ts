@@ -21,6 +21,7 @@ import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AmfiSchemeNavRecord } from './amfiParser';
 import type { InstrumentResolutionIndex } from './referenceImportRunner';
+import { fetchAllRows } from '../pagination';
 
 export interface SchemeMasterWriteCounts {
   resolved: number;
@@ -82,17 +83,34 @@ export async function writeSchemeMasterRows(
 
   if (resolvedEntries.length === 0) return { counts, errors };
 
-  const { data: currentRows, error: currentErr } = await db
-    .from('ii_scheme_master')
-    .select('id, amfi_scheme_code, record_checksum')
-    .eq('country_code', opts.countryCode)
-    .is('effective_to', null)
-    .in('amfi_scheme_code', resolvedEntries.map((e) => e.record.amfiSchemeCode));
-  if (currentErr) {
-    errors.push(currentErr.message);
-    return { counts, errors };
+  // Chunked on the request side (an .in() filter with the full ~14,358-code
+  // AMFI universe in one call risks the request URL itself, not just the
+  // response, hitting a length limit) and fetchAllRows()'d on the response
+  // side -- the exact same silent-truncation defect class R4/R5/PC6's own
+  // referenceIngestJob.ts already hit: with the full universe resolved,
+  // most of it now has a "current" row on every subsequent run, and an
+  // unpaged select would only ever see the first page of it.
+  const currentRows: { id: string; amfi_scheme_code: string; record_checksum: string }[] = [];
+  const allCodes = resolvedEntries.map((e) => e.record.amfiSchemeCode);
+  for (let i = 0; i < allCodes.length; i += chunkSize) {
+    const codeSlice = allCodes.slice(i, i + chunkSize);
+    try {
+      const rows = await fetchAllRows<{ id: string; amfi_scheme_code: string; record_checksum: string }>(() =>
+        db
+          .from('ii_scheme_master')
+          .select('id, amfi_scheme_code, record_checksum')
+          .eq('country_code', opts.countryCode)
+          .is('effective_to', null)
+          .in('amfi_scheme_code', codeSlice)
+          .order('id')
+      );
+      currentRows.push(...rows);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'Could not read current scheme-master state.');
+      return { counts, errors };
+    }
   }
-  const currentByCode = new Map<string, CurrentRow>((currentRows ?? []).map((r) => [r.amfi_scheme_code as string, { id: r.id as string, record_checksum: r.record_checksum as string }]));
+  const currentByCode = new Map<string, CurrentRow>(currentRows.map((r) => [r.amfi_scheme_code, { id: r.id, record_checksum: r.record_checksum }]));
 
   const toClose: string[] = []; // ii_scheme_master.id
   const toInsert: Record<string, unknown>[] = [];

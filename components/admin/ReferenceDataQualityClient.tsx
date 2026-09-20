@@ -14,9 +14,11 @@ import { useEffect, useState } from 'react';
 // tenancy column at all, so there is no cohort to suppress and no person to
 // re-identify — see the API route's own §9 analysis.
 //
-// READ-ONLY. There is no control on this page that writes anything. A surface
-// that lets an admin CORRECT reference data is a separate, separately-named
-// capability and is out of PC6's scope (§5, §14).
+// One control (added 2026-09-20, PO instruction): "Re-run" next to each
+// scheduled job. It is NOT a way to correct reference data — it calls the
+// exact same deterministic ingest the nightly cron calls, through the same
+// kill switch, for when a night's run failed and an admin wants to retry the
+// tail without a terminal. See the API route's POST handler.
 
 interface Panel<T = unknown> {
   state: 'ok' | 'unavailable';
@@ -57,28 +59,64 @@ function Section({ title, panel, children }: { title: string; panel?: Panel<unkn
   );
 }
 
+// job_key -> the sourceConfigId that job runs. Not a mechanical string
+// transform (pc6_amfi_daily_nav's source is amfi_nav_daily, not
+// amfi_daily_nav), so kept as an explicit, honest lookup rather than a
+// pattern that would silently misfire if a new job's naming didn't match.
+const JOB_SOURCE_CONFIG: Record<string, string> = {
+  pc6_amfi_scheme_master: 'amfi_scheme_master',
+  pc6_amfi_daily_nav: 'amfi_nav_daily',
+};
+
 export default function ReferenceDataQualityClient() {
   const [payload, setPayload] = useState<QualityPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState<string | null>(null);
+  const [rerunResult, setRerunResult] = useState<{ jobKey: string; status: string; detail: string } | null>(null);
+
+  async function load() {
+    try {
+      const r = await fetch('/api/admin/investment-intelligence/reference-data-quality');
+      const j = await r.json();
+      if (!r.ok) {
+        setError(typeof j.error === 'string' ? j.error : `Request failed (${r.status})`);
+        return;
+      }
+      setPayload(j.data as QualityPayload);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load reference-data quality');
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const r = await fetch('/api/admin/investment-intelligence/reference-data-quality');
-        const j = await r.json();
-        if (cancelled) return;
-        if (!r.ok) {
-          setError(typeof j.error === 'string' ? j.error : `Request failed (${r.status})`);
-          return;
-        }
-        setPayload(j.data as QualityPayload);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load reference-data quality');
-      }
+      if (!cancelled) await load();
     })();
     return () => { cancelled = true; };
   }, []);
+
+  async function handleRerun(jobKey: string) {
+    const sourceConfigId = JOB_SOURCE_CONFIG[jobKey];
+    if (!sourceConfigId) return;
+    setRerunning(jobKey);
+    setRerunResult(null);
+    try {
+      const r = await fetch('/api/admin/investment-intelligence/reference-data-quality', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceConfigId, jobKey }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(typeof j.error === 'string' ? j.error : `Request failed (${r.status})`);
+      setRerunResult({ jobKey, status: j.data.status, detail: j.data.detail });
+      await load(); // refresh job_control/import_batches so the new attempt shows immediately
+    } catch (e) {
+      setRerunResult({ jobKey, status: 'error', detail: e instanceof Error ? e.message : 'Re-run failed' });
+    } finally {
+      setRerunning(null);
+    }
+  }
 
   if (error) return <main style={{ padding: '1.5rem' }}><h1>Reference Data Quality</h1><p><strong>Unavailable.</strong> {error}</p></main>;
   if (!payload) return <main style={{ padding: '1.5rem' }}><h1>Reference Data Quality</h1><p>Loading…</p></main>;
@@ -169,9 +207,26 @@ export default function ReferenceDataQualityClient() {
       <Section title="Scheduled jobs and kill switch" panel={payload.job_control}>
         <ul>
           {(payload.job_control?.data ?? []).map((j) => (
-            <li key={j.job_key}>
+            <li key={j.job_key} style={{ marginBottom: '0.5rem' }}>
               <code>{j.job_key}</code> — {j.enabled ? 'enabled' : 'DISABLED'}
               {j.disabled_reason ? `: ${j.disabled_reason}` : ''}. Last success {j.last_success_at ?? 'never'}; consecutive failures {j.consecutive_failures}.
+              {JOB_SOURCE_CONFIG[j.job_key] && (
+                <>
+                  {' '}
+                  <button
+                    onClick={() => handleRerun(j.job_key)}
+                    disabled={rerunning === j.job_key}
+                    style={{ marginLeft: '0.5rem', padding: '0.15rem 0.6rem', fontSize: '0.85rem' }}
+                  >
+                    {rerunning === j.job_key ? 'Running…' : 'Re-run'}
+                  </button>
+                  {rerunResult?.jobKey === j.job_key && (
+                    <span style={{ marginLeft: '0.5rem', opacity: 0.85 }}>
+                      → <code>{rerunResult.status}</code>: {rerunResult.detail}
+                    </span>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>

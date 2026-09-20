@@ -27,9 +27,10 @@ import {
   type InstrumentResolutionIndex,
   type JobControlRow,
 } from './referenceImportRunner';
-import type { ExistingObservation } from './referenceDataQuality';
+import type { ExistingObservation, NavQualityStatus } from './referenceDataQuality';
 import { buildUrl, getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { writeSchemeMasterRows } from './schemeMasterWriter';
+import { fetchAllRows } from '../pagination';
 
 export interface IngestJobArgs {
   jobKey: string;
@@ -223,21 +224,28 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   }
 
   // --- 5. Resolve and plan --------------------------------------------------
-  const { data: idRows } = await db
-    .from('ii_instrument_identifiers')
-    .select('identifier_value, instrument_id')
-    .eq('identifier_scheme', 'amfi_scheme_code')
-    .eq('country_code', source.countryCode)
-    .eq('is_active', true);
-  const { data: instRows } = await db
-    .from('ii_instruments')
-    .select('id, isin')
-    .eq('instrument_class', 'mutual_fund')
-    .not('isin', 'is', null);
+  // fetchAllRows(): a plain, unbounded select silently caps at PostgREST's
+  // db-max-rows (1000) -- the exact same defect class R4/R5 already found
+  // and built this helper for. Found here the same way: the full AMFI
+  // universe now has 14,358 resolvable instruments, and an unpaged select
+  // only ever resolved the first ~1,000-2,000 of them, silently leaving
+  // most of a genuinely-complete instrument universe unresolved.
+  const idRows = await fetchAllRows<{ identifier_value: string; instrument_id: string }>(() =>
+    db
+      .from('ii_instrument_identifiers')
+      .select('identifier_value, instrument_id')
+      .eq('identifier_scheme', 'amfi_scheme_code')
+      .eq('country_code', source.countryCode)
+      .eq('is_active', true)
+      .order('id')
+  );
+  const instRows = await fetchAllRows<{ id: string; isin: string | null }>(() =>
+    db.from('ii_instruments').select('id, isin').eq('instrument_class', 'mutual_fund').not('isin', 'is', null).order('id')
+  );
 
   const index: InstrumentResolutionIndex = {
-    byAmfiCode: new Map((idRows ?? []).map((r) => [r.identifier_value, r.instrument_id])),
-    byIsin: new Map((instRows ?? []).filter((r) => r.isin).map((r) => [r.isin as string, r.id])),
+    byAmfiCode: new Map(idRows.map((r) => [r.identifier_value, r.instrument_id])),
+    byIsin: new Map(instRows.filter((r) => r.isin).map((r) => [r.isin as string, r.id])),
   };
 
   // Scheme identity (a dimension table) and NAV price (a time series) have
@@ -289,16 +297,32 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     );
   }
 
-  // Existing state for exactly the instruments this run could touch, so
-  // idempotency is decided against the database rather than assumed.
+  // Existing state for exactly the instruments AND DATES this run could
+  // touch, so idempotency is decided against the database rather than
+  // assumed. Scoped to price_date (not just instrument_id): with the full
+  // AMFI universe resolved and years of backfilled history per instrument,
+  // an unscoped-by-date query here would need to fetch every historical row
+  // for 200 instruments just to check "does today's row already exist" --
+  // both needlessly expensive and, per fetchAllRows's own header, exactly
+  // the silent-truncation risk it exists to remove. fetchAllRows() is kept
+  // as defense in depth regardless (a NAV-history backfill window can still
+  // span enough dates to exceed one page even after this narrowing).
   const candidateIds = [...new Set(parsed.records.map((r) => index.byAmfiCode.get(r.amfiSchemeCode) ?? (r.isinGrowthOrPayout ? index.byIsin.get(r.isinGrowthOrPayout) : undefined)).filter(Boolean) as string[])];
+  const candidateDates = [...new Set(parsed.records.map((r) => r.navDate))];
   const existing = new Map<string, ExistingObservation>();
-  for (let i = 0; i < candidateIds.length; i += 200) {
-    const { data: rows } = await db
-      .from('ii_prices_nav')
-      .select('instrument_id, price_date, price, record_checksum, quality_status')
-      .in('instrument_id', candidateIds.slice(i, i + 200));
-    for (const r of rows ?? []) {
+  const RESOLUTION_BATCH = 100; // 200 UUIDs in one .in() filter produced a request the network layer itself rejected ("fetch failed", not an HTTP error) against the full AMFI universe -- halved for headroom
+  for (let i = 0; i < candidateIds.length; i += RESOLUTION_BATCH) {
+    const idSlice = candidateIds.slice(i, i + RESOLUTION_BATCH);
+    const rows = await fetchAllRows<{ instrument_id: string; price_date: string; price: number; record_checksum: string | null; quality_status: NavQualityStatus }>(() =>
+      db
+        .from('ii_prices_nav')
+        .select('instrument_id, price_date, price, record_checksum, quality_status')
+        .in('instrument_id', idSlice)
+        .in('price_date', candidateDates)
+        .order('instrument_id')
+        .order('price_date')
+    );
+    for (const r of rows) {
       existing.set(`${r.instrument_id}|${r.price_date}`, {
         value: String(r.price),
         recordChecksum: r.record_checksum ?? '',
@@ -331,7 +355,16 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
 
   for (let i = 0; i < inserts.length; i += chunkSize) {
     const slice = inserts.slice(i, i + chunkSize);
-    const { error } = await db.from('ii_prices_nav').insert(
+    // ignoreDuplicates: defense in depth alongside the existing-state check
+    // above -- with the full AMFI universe resolved, a row this plan
+    // believes is new but that in fact already exists (however that
+    // divergence arises) now skips silently instead of failing the WHOLE
+    // chunk and losing every other genuinely-new row alongside it. Never
+    // masks a genuine correction: a row with DIFFERENT data for the same
+    // (instrument, price_date) is planImport's 'supersede' action, a
+    // completely separate code path below that this ignoreDuplicates never
+    // touches.
+    const { error } = await db.from('ii_prices_nav').upsert(
       slice.map((w) => ({
         instrument_id: w.instrumentId,
         currency_code: w.currencyCode,
@@ -342,7 +375,8 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
         record_checksum: w.recordChecksum,
         import_batch_id: batchId,
         quality_status: 'ok',
-      }))
+      })),
+      { onConflict: 'instrument_id,price_date', ignoreDuplicates: true }
     );
     chunks.push({ chunkIndex: chunks.length, attempted: slice.length, succeeded: error ? 0 : slice.length, error: error?.message ?? null });
     if (!error) counts.inserted += slice.length;
