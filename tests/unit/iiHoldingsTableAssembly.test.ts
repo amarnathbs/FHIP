@@ -143,6 +143,30 @@ describe('loadHoldingsTable', () => {
     expect(h.xirr.status).not.toBe('CALCULATED');
   });
 
+  it('uses the PC6 scheme-master canonical name over the RTA-parsed name when a current scheme-master row exists (2026-09-20)', async () => {
+    const tables = {
+      ii_portfolio_truth_status: [
+        { user_id: USER_ID, account_id: 'account-3', instrument_id: 'instrument-3', status: 'certified', unit_variance_within_tolerance: true, latest_source_document_id: 'doc-3', history_completeness: 'complete_from_inception' },
+      ],
+      ii_transactions: [{ user_id: USER_ID, account_id: 'account-3', instrument_id: 'instrument-3', transaction_type: 'purchase', transaction_date: '2020-01-01', gross_amount: 1000, units: 10, currency_code: 'INR', status: 'parsed' }],
+      ii_holding_snapshots: [{ user_id: USER_ID, account_id: 'account-3', instrument_id: 'instrument-3', as_of_date: '2022-01-01', units: 10, value: 1200, currency_code: 'INR', quality_status: 'certified', source_document_id: 'doc-3' }],
+      // The RTA's own printed name still carries its internal scheme-code
+      // prefix, exactly like real production data ("108MFGPG-UTI MNC Fund...").
+      ii_instruments: [{ id: 'instrument-3', instrument_name: '999XYZ-Messy RTA Fund Name', base_currency: 'INR', country_of_domicile: 'IN', isin: 'INF111111111' }],
+      ii_accounts: [{ id: 'account-3', user_id: USER_ID, folio_number: 'FOLIO-DEF', institution_name: 'Test AMC', currency_code: 'INR' }],
+      ii_source_documents: [{ id: 'doc-3', source_detected: 'cams' }],
+      ii_instrument_benchmarks: [],
+      ii_risk_free_rates: [],
+      ii_prices_nav: [],
+      ii_scheme_master: [{ instrument_id: 'instrument-3', scheme_name: 'Clean AMFI Canonical Fund Name', effective_to: null }],
+    };
+    const { client } = makeFakeSupabase(tables);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await loadHoldingsTable(client as any, USER_ID);
+    expect(result.holdings).toHaveLength(1);
+    expect(result.holdings[0].schemeName).toBe('Clean AMFI Canonical Fund Name');
+  });
+
   it('returns empty when the user has no investment positions', async () => {
     const { client } = makeFakeSupabase({});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -121,6 +121,19 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
     : { data: [] as InstrumentRow[] };
   const instrumentById = new Map(((instrumentRows ?? []) as InstrumentRow[]).map((i) => [i.id, i]));
 
+  // PC6 scheme master (migration 0155, real write path added 2026-09-20):
+  // AMFI's own canonical scheme name, cross-referenced by instrument_id
+  // (the same FK the ingest job resolved the real ISIN/AMFI code against).
+  // A statement's own RTA-printed name routinely carries an internal scheme
+  // code prefix ("108MFGPG-UTI MNC Fund...") the customer never sees on any
+  // real document, aggregator or website -- this is real evidence, never
+  // guessed, and only used when a current (effective_to is null) row
+  // actually exists for this instrument; otherwise the parsed name is kept.
+  const { data: schemeMasterRows } = instrumentIds.length
+    ? await supabase.from('ii_scheme_master').select('instrument_id, scheme_name').in('instrument_id', instrumentIds).is('effective_to', null)
+    : { data: [] as { instrument_id: string; scheme_name: string }[] };
+  const canonicalNameByInstrument = new Map((schemeMasterRows ?? []).map((r) => [r.instrument_id, r.scheme_name]));
+
   const { data: snapshotRows } = await supabase
     .from('ii_holding_snapshots')
     .select('account_id, instrument_id, as_of_date, units, value, source_document_id, quality_status')
@@ -259,7 +272,7 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
       folioNumber: account.folio_number,
       isin: instrument.isin,
       schemeCode: null,
-      schemeName: instrument.instrument_name,
+      schemeName: canonicalNameByInstrument.get(truth.instrument_id) ?? instrument.instrument_name,
       registrar: registrarKey ? registrarKey.toUpperCase() : null,
       costValue: displayCostValue,
       unitBalance: displayUnitBalance,
