@@ -1,6 +1,6 @@
 /**
- * Financial Data Hub — FDH-3 document-upload feature flag and PRODUCTION
- * HARD GATE (spec sections 60-62, 110).
+ * Financial Data Hub — FDH-3 document-upload feature flag and PROJECT
+ * ALLOWLIST GATE (spec sections 60-62, 110).
  *
  * This is deliberately TWO independent controls, not one:
  *
@@ -9,28 +9,33 @@
  *      can actually be developed and tested; can be turned off per
  *      environment without a code change.
  *
- *   2. `isKnownNonProductionSupabaseProject()` — a HARD, CODE-LEVEL gate that
- *      the env-var flag above CANNOT override. It checks the configured
- *      Supabase project against the one DEV project ref this phase was ever
- *      certified against ("vqycarelcoijzwlpkpcz" — see
- *      docs/financial-data-hub/FDH3_COMPLETION_REPORT.md). If FHIP is ever
- *      pointed at a different (e.g. production) Supabase project, real
- *      document uploads are refused regardless of any environment variable,
- *      because "production document uploads = disabled until explicit
- *      Product Owner release" is a permanent product decision, not a
- *      deployment-config toggle a misconfigured env var could accidentally
- *      flip.
+ *   2. `isKnownAllowedSupabaseProject()` — a HARD, CODE-LEVEL gate that the
+ *      env-var flag above CANNOT override. It checks the configured
+ *      Supabase project against an explicit allowlist, so a misconfigured
+ *      env var alone could never turn real document uploads on somewhere
+ *      unintended.
  *
- * `isFdhDocumentUploadEnabled()` is the single function every FDH-3 upload
- * API route calls; it is the AND of both controls.
+ * Until 2026-09-20 the allowlist held only the DEV project this phase was
+ * originally certified against ("vqycarelcoijzwlpkpcz" — see
+ * docs/financial-data-hub/FDH3_COMPLETION_REPORT.md), so uploads were
+ * refused in production regardless of any environment variable ("production
+ * document uploads = disabled until explicit Product Owner release"). The
+ * Product Owner gave that explicit release on 2026-09-20, so the production
+ * project ref is now on the same allowlist — this remains a hard,
+ * code-level gate, not an env-var toggle; extending it again to a further
+ * environment needs the same kind of explicit, named decision, recorded
+ * here.
  */
 
-/** The only Supabase project ref FDH-3 has ever been certified against. */
-const FDH3_CERTIFIED_DEV_PROJECT_REF = 'vqycarelcoijzwlpkpcz';
+/** Supabase project refs FDH-3 document uploads are allowed to run against. */
+const FDH3_ALLOWED_PROJECT_REFS = [
+  'vqycarelcoijzwlpkpcz', // DEV — originally certified against
+  'twwpnltizhtjxhamyoxt', // production — PO release, 2026-09-20
+];
 
-export function isKnownNonProductionSupabaseProject(): boolean {
+export function isKnownAllowedSupabaseProject(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  return url.includes(FDH3_CERTIFIED_DEV_PROJECT_REF);
+  return FDH3_ALLOWED_PROJECT_REFS.some((ref) => url.includes(ref));
 }
 
 function isEnvFlagEnabled(): boolean {
@@ -46,5 +51,5 @@ function isEnvFlagEnabled(): boolean {
  * have, even if new uploads are currently disabled.
  */
 export function isFdhDocumentUploadEnabled(): boolean {
-  return isEnvFlagEnabled() && isKnownNonProductionSupabaseProject();
+  return isEnvFlagEnabled() && isKnownAllowedSupabaseProject();
 }

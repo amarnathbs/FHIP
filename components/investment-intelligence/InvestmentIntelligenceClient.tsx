@@ -189,6 +189,39 @@ export function InvestmentIntelligenceClient() {
   const [householdMembers, setHouseholdMembers] = useState<{ id: string; full_name: string }[]>([]);
   const [ownerSelections, setOwnerSelections] = useState<Record<string, string>>({}); // caseId -> chosen household_members.id
   const [assigningOwner, setAssigningOwner] = useState<string | null>(null); // caseId currently being assigned
+  // No page anywhere in the app lets a user create a household_members row —
+  // the API existed with zero UI consumers until this fix — so the picker
+  // above needs its own minimal "add a person" capability or it is
+  // permanently empty for every user, not just one without existing data.
+  const ADD_NEW_MEMBER_VALUE = '__add_new__';
+  const [addMemberForCase, setAddMemberForCase] = useState<string | null>(null);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberRelationship, setNewMemberRelationship] = useState('self');
+  const [savingMember, setSavingMember] = useState(false);
+
+  async function handleAddMember(caseId: string) {
+    if (!newMemberName.trim()) return;
+    setError(null);
+    setSavingMember(true);
+    try {
+      const res = await fetch('/api/household-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: newMemberName.trim(), relationship: newMemberRelationship }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not add household member');
+      setHouseholdMembers((prev) => [...prev, json.data]);
+      setOwnerSelections((prev) => ({ ...prev, [caseId]: json.data.id }));
+      setAddMemberForCase(null);
+      setNewMemberName('');
+      setNewMemberRelationship('self');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setSavingMember(false);
+    }
+  }
 
   async function loadDocuments() {
     try {
@@ -673,11 +706,17 @@ export function InvestmentIntelligenceClient() {
                             <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
                             <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
                           </span>
-                          {open && c.discrepancy_type === 'owner_unmatched' && (
+                          {open && c.discrepancy_type === 'owner_unmatched' && addMemberForCase !== c.id && (
                             <span className="flex items-center gap-2">
                               <select
                                 value={ownerSelections[c.id] ?? ''}
-                                onChange={(e) => setOwnerSelections((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                                onChange={(e) => {
+                                  if (e.target.value === ADD_NEW_MEMBER_VALUE) {
+                                    setAddMemberForCase(c.id);
+                                    return;
+                                  }
+                                  setOwnerSelections((prev) => ({ ...prev, [c.id]: e.target.value }));
+                                }}
                                 className="rounded border border-gray-300 px-2 py-1 text-xs"
                               >
                                 <option value="">Who owns this account?</option>
@@ -686,6 +725,7 @@ export function InvestmentIntelligenceClient() {
                                     {m.full_name}
                                   </option>
                                 ))}
+                                <option value={ADD_NEW_MEMBER_VALUE}>+ Add a new person…</option>
                               </select>
                               <button
                                 onClick={() => handleAssignOwner(c)}
@@ -693,6 +733,40 @@ export function InvestmentIntelligenceClient() {
                                 className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
                               >
                                 {assigningOwner === c.id ? 'Assigning…' : 'Assign'}
+                              </button>
+                            </span>
+                          )}
+                          {open && c.discrepancy_type === 'owner_unmatched' && addMemberForCase === c.id && (
+                            <span className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="text"
+                                value={newMemberName}
+                                onChange={(e) => setNewMemberName(e.target.value)}
+                                placeholder="Full name"
+                                className="rounded border border-gray-300 px-2 py-1 text-xs"
+                              />
+                              <select
+                                value={newMemberRelationship}
+                                onChange={(e) => setNewMemberRelationship(e.target.value)}
+                                className="rounded border border-gray-300 px-2 py-1 text-xs"
+                              >
+                                <option value="self">Self</option>
+                                <option value="spouse">Spouse</option>
+                                <option value="partner">Partner</option>
+                                <option value="child">Child</option>
+                                <option value="parent">Parent</option>
+                                <option value="other_dependant">Other dependant</option>
+                                <option value="other">Other</option>
+                              </select>
+                              <button
+                                onClick={() => handleAddMember(c.id)}
+                                disabled={!newMemberName.trim() || savingMember}
+                                className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                              >
+                                {savingMember ? 'Saving…' : 'Save person'}
+                              </button>
+                              <button onClick={() => setAddMemberForCase(null)} className="text-xs text-gray-500 underline">
+                                Cancel
                               </button>
                             </span>
                           )}

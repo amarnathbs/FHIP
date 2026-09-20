@@ -58,6 +58,18 @@ interface HoldingsApiPayload {
   empty: boolean;
 }
 
+// RTA scheme names are consistently printed as "<internal scheme code>-<real
+// name>" (e.g. "108MFGPG-UTI MNC Fund...", "FTI037-Franklin India Flexi Cap
+// Fund..."). The code is an RTA-internal identifier, not something a user
+// recognises a fund by — stripped here so the truncated name below spends
+// its limited characters on the part that's actually meaningful. Only the
+// SUMMARY row is affected; the popup's own heading still shows the full,
+// untouched original name including its code, since that's useful evidence
+// there, not clutter.
+function stripSchemeCode(name: string): string {
+  return name.replace(/^[A-Z0-9]+-/, '');
+}
+
 // Full scheme names routinely run 60-100+ characters and were wrapping
 // across 5-6 lines per row, making the table unreadable. Truncated for
 // this summary row only — the full name is still shown, untruncated, in
@@ -65,7 +77,8 @@ interface HoldingsApiPayload {
 // left untruncated for the same reason).
 const SCHEME_NAME_MAX_CHARS = 28;
 function truncateSchemeName(name: string): string {
-  return name.length > SCHEME_NAME_MAX_CHARS ? `${name.slice(0, SCHEME_NAME_MAX_CHARS).trimEnd()}…` : name;
+  const stripped = stripSchemeCode(name);
+  return stripped.length > SCHEME_NAME_MAX_CHARS ? `${stripped.slice(0, SCHEME_NAME_MAX_CHARS).trimEnd()}…` : stripped;
 }
 
 function money(v: number | null, currency: string): string {
@@ -182,7 +195,7 @@ export function HoldingsTable() {
                     }
                   }}
                 >
-                  <td className="py-3 pr-4 font-medium text-ink" title={h.schemeName}>
+                  <td className="py-3 pr-4 font-medium text-ink whitespace-nowrap" title={h.schemeName}>
                     {truncateSchemeName(h.schemeName)}
                   </td>
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.folioNumber ?? '—'}</td>
