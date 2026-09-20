@@ -29,6 +29,7 @@ import {
 } from './referenceImportRunner';
 import type { ExistingObservation } from './referenceDataQuality';
 import { buildUrl, getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import { writeSchemeMasterRows } from './schemeMasterWriter';
 
 export interface IngestJobArgs {
   jobKey: string;
@@ -238,6 +239,55 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     byAmfiCode: new Map((idRows ?? []).map((r) => [r.identifier_value, r.instrument_id])),
     byIsin: new Map((instRows ?? []).filter((r) => r.isin).map((r) => [r.isin as string, r.id])),
   };
+
+  // Scheme identity (a dimension table) and NAV price (a time series) have
+  // genuinely different write shapes -- dispatched separately here rather
+  // than forced through the NAV-shaped plan/write path below, which this
+  // source kind was never actually compatible with (see schemeMasterWriter.ts
+  // header for the real incident this fixes).
+  if (source.kind === 'scheme_master') {
+    const schemeWrite = args.dryRun
+      ? { counts: { resolved: 0, unresolved: 0, inserted: 0, unchanged: 0, superseded: 0 }, errors: [] }
+      : await writeSchemeMasterRows(
+          db,
+          parsed.records,
+          index,
+          { countryCode: source.countryCode, currencyCode: source.currencyCode, sourceId: null, importBatchId: batchId, asOfDate: args.asOfDate },
+          chunkSize
+        );
+    // A dry run still needs an honest resolved/unresolved count without
+    // actually writing -- computed the same way writeSchemeMasterRows()
+    // would resolve, just without the DB round trip for current rows.
+    const dryResolved = args.dryRun
+      ? [...new Set(parsed.records.map((r) => r.amfiSchemeCode))].filter((code) => {
+          const r = parsed.records.find((x) => x.amfiSchemeCode === code)!;
+          return index.byAmfiCode.has(code) || (r.isinGrowthOrPayout ? index.byIsin.has(r.isinGrowthOrPayout) : false);
+        }).length
+      : schemeWrite.counts.resolved;
+    const schemeCounts: IngestJobResult['counts'] = {
+      sourceBytes: parsed.fingerprint.byteLength,
+      parsedAccepted: parsed.counts.accepted,
+      parsedRejected: parsed.counts.rejected,
+      resolved: dryResolved,
+      unresolved: new Set(parsed.records.map((r) => r.amfiSchemeCode)).size - dryResolved,
+      inserted: schemeWrite.counts.inserted,
+      unchanged: schemeWrite.counts.unchanged,
+      superseded: schemeWrite.counts.superseded,
+    };
+    if (args.dryRun) {
+      return finish('succeeded', `Dry run: ${dryResolved} scheme(s) resolved to an existing instrument. Nothing written.`, schemeCounts, parsed.fingerprint.sha256, []);
+    }
+    if (schemeWrite.errors.length > 0) {
+      return finish('failed', `Scheme-master write failed: ${schemeWrite.errors[0]}`, schemeCounts, parsed.fingerprint.sha256, [], { error_code: 'SCHEME_MASTER_WRITE_FAILED', error_detail: schemeWrite.errors.join('; ') });
+    }
+    return finish(
+      'succeeded',
+      `${schemeCounts.inserted} scheme-master row(s) written (${schemeCounts.superseded} superseding a prior identity), ${schemeCounts.unchanged} unchanged.`,
+      schemeCounts,
+      parsed.fingerprint.sha256,
+      []
+    );
+  }
 
   // Existing state for exactly the instruments this run could touch, so
   // idempotency is decided against the database rather than assumed.
