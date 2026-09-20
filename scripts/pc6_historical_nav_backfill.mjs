@@ -68,7 +68,25 @@ async function pgAll(path) {
 
 let isinToInstrument = new Map();
 let codeToInstrument = new Map();
-const existingSet = new Set();
+// Per-instrument Sets of already-seen price_date strings, NOT one flat
+// Set<"instrumentId|date"> -- a single Set of that shape blew past V8's
+// hard per-Set element ceiling ("RangeError: Set maximum size exceeded")
+// partway through a real production run at ~21.8M accumulated keys
+// (5.37M preloaded + ~16.4M matched-and-processed before the crash).
+// Splitting by instrument keeps every individual Set to a few thousand
+// entries (37M rows / ~14,358 instruments), well under any such ceiling,
+// while preserving the exact same in-memory dedup behaviour and avoiding
+// re-sending already-imported rows to the DB (which would make the
+// PGRST002 backend-load problem worse, not better).
+const existingByInstrument = new Map();
+function hasExisting(instrumentId, dateIso) {
+  return existingByInstrument.get(instrumentId)?.has(dateIso) ?? false;
+}
+function markExisting(instrumentId, dateIso) {
+  let set = existingByInstrument.get(instrumentId);
+  if (!set) { set = new Set(); existingByInstrument.set(instrumentId, set); }
+  set.add(dateIso);
+}
 
 if (!retryFailedOnly) {
   console.log('Loading resolved instrument universe (by AMFI scheme code and by ISIN, same as the PC6 ingest job resolves against)...');
@@ -80,12 +98,13 @@ if (!retryFailedOnly) {
 
   console.log('Loading already-imported (instrument, date) pairs to avoid duplicates...');
   const instrumentIds = [...new Set([...isinToInstrument.values(), ...codeToInstrument.values()])];
+  let existingCount = 0;
   for (let i = 0; i < instrumentIds.length; i += 50) {
     const slice = instrumentIds.slice(i, i + 50);
     const rows = await pgAll(`ii_prices_nav?select=instrument_id,price_date&instrument_id=in.(${slice.join(',')})`);
-    for (const r of rows) existingSet.add(`${r.instrument_id}|${r.price_date}`);
+    for (const r of rows) { markExisting(r.instrument_id, r.price_date); existingCount++; }
   }
-  console.log(`  ${existingSet.size} existing rows on file for these instruments.`);
+  console.log(`  ${existingCount} existing rows on file for these instruments.`);
 }
 
 const batchId = crypto.randomUUID();
@@ -218,9 +237,8 @@ for await (const line of rl) {
   const nav = Number(navStr);
   if (!Number.isFinite(nav) || nav <= 0) { skippedInvalid++; continue; }
   matched++;
-  const key = `${instrumentId}|${dateIso}`;
-  if (existingSet.has(key)) { skippedExisting++; continue; }
-  existingSet.add(key); // guard against duplicate rows within the file itself
+  if (hasExisting(instrumentId, dateIso)) { skippedExisting++; continue; }
+  markExisting(instrumentId, dateIso); // guard against duplicate rows within the file itself
   perInstrumentCounts.set(instrumentId, (perInstrumentCounts.get(instrumentId) ?? 0) + 1);
   buffer.push({
     instrument_id: instrumentId,
