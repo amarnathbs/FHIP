@@ -1,0 +1,33 @@
+# A4.1/4.2 — Migration `0165` Review and Audit/Security-Event Sink
+
+## 1. Migration `0165` review against mission §10.1's exact checklist
+
+| # | Check | Finding |
+|---|---|---|
+| 1 | Inspect schema and purpose | Two append-only tables (`admin_audit_events`, `admin_security_events`) matching `A1_12`'s already-approved contract field-for-field. Purpose: canonical, cross-domain audit/security-event sinks, replacing nothing existing yet (additive only). |
+| 2 | Compare with current main and all later migrations | Latest migration on `origin/main` is `0164`; `0165` is the next free number. No later migration exists to compare against (confirmed — `origin/main` unchanged since baseline, `A2A5_08`). |
+| 3 | Determine whether it remains necessary | Yes — `A1_12` §6 explicitly states A1 "does not create either table," deferring exactly this to A1.3/A4.1-4.2, which this migration drafts. |
+| 4 | Naming/numbering conflicts | None — re-confirmed this pass via `git log --all --diff-filter=A --name-only -- "supabase/migrations/0165*" "0166*" "0167*"` returning only this dispatch's own commit (see `A2A5_07` §1). |
+| 5 | Review grants | `REVOKE ALL FROM public, anon, authenticated`; `GRANT SELECT, INSERT TO service_role` only — matches Standard §6 ("never a bare view, never a directly-grantable table"). No `UPDATE`/`DELETE` grant to anyone, including `service_role` (enforced additionally by the trigger, not just by grant absence). |
+| 6 | Review RLS | Enabled on both tables, zero policies defined. This is deliberate defence-in-depth per the migration's own comment: even a future accidental `GRANT` would still deny all rows via RLS with no permissive policy. |
+| 7 | Review indexes | `(domain, occurred_at)`, `actor_id`, `correlation_id` (partial, `WHERE ... IS NOT NULL`), `(target_type, target_id)` (partial) on the audit table; equivalent set plus a `(severity, occurred_at)` partial index for high/critical rows on the security-event table. Reasonable for the query patterns `A1_12` describes (domain-scoped chronological reads, actor lookups, correlation-id joins, severity-filtered alerting). |
+| 8 | Review retention fields | `retention_classification` exists on the security-event table with a `CHECK` constraint enumerating the 5 tiers from `A1_12` §2.4. The audit-events table does not have its own `retention_classification` column — **this is a real, disclosed gap** relative to `A1_12` §2.1's contract, which does not explicitly list a retention-classification column for the audit table (only the security-event table's §5.2 contract does). Re-reading `A1_12` §2.1 confirms this omission is faithful to the source document, not an error introduced by this migration — but it does mean the audit table currently has no machine-readable way to apply the 5-tier retention schedule row-by-row. Flagged for a future schema addendum before any retention-automation logic is built (mission §10.6's own requirement), not fixed unilaterally here since it would mean deviating from `A1_12`'s literal contract without a recorded reason. |
+| 9 | Review immutability | Unconditional `BEFORE UPDATE OR DELETE` trigger on both tables, firing regardless of caller including `service_role` and the table owner — the proven `benchmark_update_runs_immutable()`/`ai_config_audit_immutable()` pattern (migrations `0125`/`0115`), copied exactly. |
+| 10 | Review metadata minimisation | `safe_metadata` (security-event table) is documented (column comment) as required to never carry a raw error object or request body, explicitly citing the CAP-17/D5-13 residual gap this must not repeat. `admin_audit_events.metadata` is documented the same way in `A1_12`. Neither table has a code path writing to it yet (§2 below), so minimisation cannot be proven in practice yet — only designed for. |
+| 11 | Review rollback | Both tables are new, empty, and unreferenced by any application code. Rollback is `DROP TABLE IF EXISTS` with zero data-loss risk, since nothing has ever written to them. |
+| 12 | Review application dependencies | **None** — confirmed by `grep -rn "admin_audit_events\|admin_security_events"` across `app/`, `lib/`, `components/` returning zero matches outside the migration file and this document set. No application code incorrectly assumes this migration is live. |
+| 13 | Confirm no raw document/unnecessary financial data | Column list contains no document-content field, no raw financial-figure field, and `metadata`/`safe_metadata` are explicitly documented (not merely assumed) to require an allow-list before any real data is ever written into them. |
+
+## 2. Disposition: schema/RLS/RPC change remains necessary before this can be considered complete
+
+Per mission §10.1's own rule: "If a schema/RLS/RPC change remains necessary, stop and return the migration proposal for explicit Product Owner authorization." The finding at checklist item 8 (no `retention_classification` column on `admin_audit_events`, while `A1_12`'s own retention schedule (§2.4) applies to audit events too, e.g. "Content approval, publication, Recommendations and master-data governance events" retention class) means: **a schema addendum is likely necessary before this migration should be treated as final**, even though it was drafted faithfully to `A1_12`'s literal (arguably incomplete) contract. This is surfaced here explicitly rather than silently patched, exactly because unilaterally adding a column not in the source architecture document would itself be an undocumented deviation.
+
+**This migration remains unapplied.** It is not applied to DEV in this pass because: (a) DEV credentials do not exist in this environment (the same blocker as every live gate in this report set — applying a migration requires a real database connection this environment cannot make), and (b) even if credentials existed, the retention-classification gap above should be resolved with the Product Owner first, per mission §10.1's own stop-and-return instruction.
+
+## 3. What remains to build (unchanged from `A2A5_03`, restated for completeness)
+
+No RPC exists to write to either table. No RPC exists to read from either table. `correlation_id` threading through any real API → RPC → audit-row call path does not exist. Repeated-denial detection and privilege-escalation-attempt distinction (`A1_12` §5.1, both confirmed to not exist anywhere in this codebase) are not implemented. All of this remains **NOT STARTED**, consistent with `A2A5_03`.
+
+## 4. Verdict
+
+**Schema: drafted, reviewed against the mission's own 13-point checklist, one real gap found (retention-classification column) and disclosed rather than silently patched. Not applied to any environment. RPC layer, detection logic, and any real data flow: NOT STARTED.**
