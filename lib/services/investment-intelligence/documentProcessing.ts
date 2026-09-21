@@ -69,6 +69,10 @@ const PASSWORD_ATTEMPT_WINDOW_MS = 60 * 60 * 1000;
 
 export interface ProcessSourceDocumentInput {
   userId: string;
+  /** Passed through to the AI-fallback pilot-cohort email allowlist
+   * (2026-09-21 fix) — optional so existing callers/tests that never touch
+   * the cohort gate keep compiling. */
+  userEmail?: string | null;
   sourceDocumentId: string;
   password?: string;
   forceReparse?: boolean;
@@ -118,6 +122,12 @@ export interface ProcessSourceDocumentResult {
  * claims an attempt was made when isAiFallbackEnabled() was simply off. */
 function honestFailureMessage(baseMessage: string, aiOutcome: AiFallbackDocumentOutcome): string {
   switch (aiOutcome.outcome) {
+    case 'cohort_denied':
+      // 2026-09-21 fix: honest about WHY no AI attempt was made, matching
+      // this function's own "never claim an attempt was made when it
+      // wasn't" rule — a cohort denial is a deliberate, disclosed
+      // restriction, not a failed attempt.
+      return `${baseMessage} AI-assisted re-extraction is not yet available for your account.`;
     case 'unavailable':
       return `${baseMessage} An AI-assisted re-extraction was also attempted and is not available in this deployment.`;
     case 'no_usable_data':
@@ -406,6 +416,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // path first" principle applies.
     const aiOutcome = await getAiFallbackDocumentExtraction({
       userId,
+      userEmail: input.userEmail ?? null,
       sourceDocumentId,
       parseRunId,
       triggerReason: 'format_unrecognized',
@@ -484,6 +495,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // identified but its own validation rejected the result.
     const aiOutcome = await getAiFallbackDocumentExtraction({
       userId,
+      userEmail: input.userEmail ?? null,
       sourceDocumentId,
       parseRunId,
       triggerReason: 'parse_failed',
@@ -520,7 +532,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       details: { errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: validation.errors }).eq('id', parseRunId);
-    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'validation_failed', errors: validation.errors, parseRunId } });
+    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'validation_failed', errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome, parseRunId } });
     return { ok: false, status: 'parse_failed', parseRunId, error: honestFailureMessage(validation.errors.join('; '), aiOutcome), reconciliationCaseId: caseId };
   }
 

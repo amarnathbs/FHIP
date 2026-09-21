@@ -91,7 +91,30 @@ frontend:
         # non-functional in production. Forwarding the whole prefix (not
         # just today's known var names) avoids this recurring a fourth time
         # the next time a new STRIPE_*/RAZORPAY_* var is introduced.
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ >> .env.production
+        #
+        # M13A/2026-09-21 fix (the OLD, pre-AIE Investment Intelligence
+        # AI-fallback path): `II_AI_FALLBACK_ENABLED`
+        # (lib/services/investment-intelligence/aiFallbackFeatureFlag.ts) does
+        # not contain the substring `AIE_` (it is spelled `II_`, for
+        # "Investment Intelligence", not the AIE-1 gateway's own prefix), so
+        # the existing `-e AIE_` term never matched it -- the exact same
+        # defect class as every occurrence above. This same fix also adds
+        # this path's own pilot-cohort gate,
+        # `II_AI_FALLBACK_PILOT_COHORT_ENFORCED` /
+        # `II_AI_FALLBACK_PILOT_COHORT_USER_IDS` /
+        # `II_AI_FALLBACK_PILOT_COHORT_EMAILS`, and the SAME fail-open trap
+        # documented above for AIE_ applies here too: forwarding only
+        # `II_AI_FALLBACK_ENABLED` without its paired cohort-enforcement
+        # variables would let the AI-fallback kill switch be turned on from
+        # the console while cohort enforcement stayed silently unforwardable
+        # (and therefore permanently OFF) -- turning an intended allowlisted
+        # pilot into a rollout to every user. Using the whole `II_AI_FALLBACK_`
+        # prefix (rather than each variable by exact name) keeps the kill
+        # switch and its allowlist inseparable, exactly like the `AIE_` prefix
+        # does for that pipeline. Every one of these flags still defaults OFF
+        # when unset, so today's production behaviour is unchanged either
+        # way; this only makes the switches operable at all.
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         # 2026-09-19: the last two deploys both failed here with
         # "FATAL ERROR: Ineffective mark-compacts near heap limit ...
