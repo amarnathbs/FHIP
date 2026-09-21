@@ -1617,3 +1617,185 @@ across all three continuation dispatches.
   genuine live TIGZIG outage and its recovery), and
   `supabase/migrations/0167_nav1_prices_nav_date_index.sql` (NAV 1.40 — a
   real, PGlite-chain-verified index fix, not yet applied anywhere).
+
+---
+
+## Checkpoint — 4th continuation dispatch, 2026-09-21 (independent verification of 0167/0168 application)
+
+**Trigger for this dispatch**: the PO reported applying migrations `0167`
+and `0168` to DEV directly (outside this sandbox) and said "no error". Per
+this programme's own established discipline (see the closure-report
+correction at the top of this file), that report is NOT treated as proof by
+itself. This dispatch's first and required task was to independently,
+live-check both objects against real DEV before doing anything else.
+**Both are now REAL — independently confirmed live, not just accepted on
+report.**
+
+### `.env.local` — how this dispatch got DEV credentials
+
+This worktree's `.env.local` had been deliberately removed at the end of an
+earlier continuation (see the "DEV write footprint" note above — removed
+mid-cleanup, leaving 11 hydrated rows unremoved). It was **not** present at
+the start of this dispatch. Rather than treating that as an automatic
+blocker, this dispatch found that the repository root (`D:\FHIP\.env.local`,
+outside this worktree — worktrees do not share gitignored files) already
+holds the same DEV project's credentials (host `vqycarelcoijzwlpkpcz`,
+confirmed identical project id to every prior entry in this ledger) *and*
+separately-named `PRODUCTION_SUPABASE_*` keys. To preserve this programme's
+standing discipline of never mixing production credentials into this
+sandbox, only the three DEV-named keys
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`) were copied into this worktree's own
+`.env.local` via a `grep` pipeline that never printed the secret values into
+this session's own transcript; `PRODUCTION_SUPABASE_URL` /
+`PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` were deliberately excluded. Confirmed
+via `git status` that `.env.local` is gitignored (`.env.local`, `.env*.local`
+both listed) and was never staged.
+
+### 1. Migration `0167` (`idx_ii_prices_nav_price_date`) — REAL, independently verified live
+
+**No catalog-query path exists to check this directly.** Re-confirmed fresh:
+`pg_indexes`/`pg_trigger`/`pg_proc` are not exposed via PostgREST
+(`PGRST205 Could not find the table 'public.pg_indexes' in the schema
+cache`, and the same for the other two); PostgREST's own EXPLAIN-plan
+content type (`application/vnd.pgrst.plan+json`) is not enabled on this
+project either (`406 PGRST107 None of these media types are available`).
+This matches every prior finding in this ledger that no raw-SQL/DDL/catalog
+path exists from this sandbox to DEV.
+
+**So this was verified by BEHAVIOUR instead — reproducing the exact query
+shapes migration `0167`'s own header documents as having previously failed
+with `57014` (statement timeout) on this same table**
+(`scripts/nav1_0167_index_functional_verify.mjs`):
+- `price_date >= '2026-09-21'` count (the direction the migration's header
+  says degraded without the index): **succeeded in 1.37s**, count 0 (no
+  rows yet exist for that/future dates — expected, matches the daily job
+  having run exactly once, on 2026-09-20).
+- `price_date < '2026-09-21'` count: succeeded in 4.07s, count 3,058,775 —
+  consistent with the 3,058,764-row figure recorded earlier this ledger
+  (modest growth, as expected).
+- A paginated, date-range-filtered read at a high `OFFSET` (the other query
+  shape `0167`'s header says previously timed out): succeeded in 1.9s (a
+  repeat run: 245ms), 11 rows returned, no error.
+- Whole-table `count(*)`: 3,058,775, ~3.5s, no error.
+
+None of these individually is airtight proof of the specific index's
+existence (a query can succeed for other reasons), but this is the
+strongest evidence obtainable without a catalog/DDL path, it reproduces the
+*exact* two shapes the migration's own header names as the original
+failure signature, and both now succeed comfortably inside this database's
+normal statement-timeout window on a 3.06M-row table where the `gte`
+direction previously failed outright. **Verdict: REAL — behaviourally
+confirmed live; the specific catalog object name was not directly
+inspected because no path to do so exists.**
+
+### 2. Migration `0168` (function + trigger) — REAL, independently verified live, functionally
+
+Same catalog-access constraint applies (`pg_trigger`/`pg_proc` not exposed).
+Instead of a catalog check, this dispatch ran a real functional test against
+the trigger's actual business logic — arguably stronger evidence than a
+bare existence check, since it also proves the function behaves exactly as
+migration `0168`'s own comments specify
+(`scripts/nav1_0168_trigger_live_test.mjs`). Used only pre-existing,
+already-in-DEV synthetic fixtures with zero real-user linkage: account
+`fae0ba75-d393-4137-ad9c-3e608678d1e4` (one of the 14 pre-existing
+"R6-FINAL Test AMC" fixture accounts, unrelated to any real user) and
+instrument `11111111-1111-4111-8111-111111111101` ("HDFC Flexi Cap Fund -
+Growth (Direct Plan)", a provisional/no-ISIN fixture instrument — **not**
+the real HDFC instrument `37a3d60e-...` used by the priority-4 real
+accepted-statement journey, kept deliberately separate to avoid any
+confusion between real and test hydration data for that instrument).
+
+Live sequence, every step's result read back from the real DB, not
+inferred:
+1. `INSERT ii_portfolio_truth_status` with `status='pending'` — **zero**
+   `ii_nav_retention_holds` rows created. Correct: the trigger must not fire
+   on a non-certifying status.
+2. `UPDATE status: 'pending' -> 'certified'` on that same row — **exactly
+   one** new hold row appeared, with `reason='statement_reconciliation_in_progress'`,
+   `expires_at` = created_at + 30 days precisely, `released_at` null. This
+   row was created ENTIRELY by the trigger — the test script never inserted
+   into `ii_nav_retention_holds` directly. Correct, and matches `0168`'s
+   documented behaviour exactly.
+3. `UPDATE` an unrelated column (`statement_freshness_days`) with `status`
+   left unchanged — hold count stayed at 1, no new row. Correct: matches the
+   documented "never fires on an update that leaves status unchanged"
+   guarantee.
+4. `UPDATE status: 'certified' -> 'certified_with_warnings'` — a **second**
+   new hold row appeared (2 total). This is correct per the function's own
+   literal logic (`old.status is distinct from new.status`, and
+   `certified_with_warnings` is also a certifying status) — the function
+   does not dedupe against an already-open hold for the same instrument.
+   **Disclosed, not hidden**: this is a real characteristic worth noting for
+   any future Stage-E design — a flapping status can accumulate multiple
+   overlapping holds for the same instrument, all independently
+   30-day-bounded, which is safe (harmless redundancy, not a correctness
+   bug) but not currently deduplicated.
+
+**Cleanup — zero DELETE statements, per this dispatch's standing rule**: both
+hold rows released via `released_at` (an UPDATE, the same audit-trail
+pattern already established for the NAV 1.39 hold), and the one new
+`ii_portfolio_truth_status` test row moved to its own `'archived'` status
+(a real, valid status in that table's check constraint) rather than
+deleted. Final state independently re-read and confirmed: both holds show
+`released_at` set, the test row shows `status='archived'`. Net permanent DEV
+footprint from this test: one archived `ii_portfolio_truth_status` row and
+two released `ii_nav_retention_holds` rows — all harmless, self-documenting
+audit-trail rows tied to pre-existing test fixtures, no real user data
+touched, nothing hidden.
+
+**Verdict: REAL — both the function and the trigger are live in DEV and
+behave exactly as `0168` specifies**, confirmed via direct functional
+proof, not a report accepted on trust.
+
+### 3 & 4 (bounded resumable fetching; real accepted-statement journey) — already REAL, independently re-spot-checked this dispatch
+
+These were reported as complete by the prior (3rd) continuation dispatch, at
+this same branch's HEAD (`103bd38`), with real live-DEV evidence already
+recorded above (Priority 3 and Priority 4 sections). This dispatch did not
+redo that work — it was already done with genuine rigor (a real,
+previously-undetected cross-module defect found and fixed live, per
+Priority 4's account above) — but did independently re-run the concrete,
+falsifiable unit-test claims rather than accepting the prior dispatch's own
+report at face value:
+- `npx vitest run tests/unit/pc6SelectiveHistoricalHydrationJob.test.ts tests/unit/iiDocumentProcessingSchemeMerge.test.ts`
+  → **18/18 passed** (13 hydration-chunking/resume tests + 5 scheme-merge
+  tests), matching the counts both sections claim.
+- Re-confirmed live-DEV job-control kill-switch state via the existing
+  `scripts/nav1_dev_baseline.mjs` (not a new script — reused established
+  tooling): `pc6_full_universe_historical_backfill: false`,
+  `pc6_selective_historical_hydration: false`, both unchanged, both still
+  ships-disabled-by-design. `pc6_amfi_daily_nav`/`pc6_amfi_scheme_master`
+  remain `true` (the two already-live, unrelated daily jobs).
+- Did not re-run the full real accepted-statement journey itself this
+  dispatch (that would mean creating a second synthetic test account and
+  writing a second real folio-statement PDF through the real pipeline,
+  which is real but expensive work already done once with full rigor;
+  redoing it without new reason would be effort spent re-proving something
+  already REAL, not closing a new gap). If a future dispatch wants to
+  re-prove it end-to-end from scratch, `nav1_real_accepted_statement_journey.ts`
+  is the existing, already-certified harness to reuse.
+
+### What remains open (unchanged from the prior checkpoint, restated for honesty)
+
+Priorities 6-9 remain exactly as the prior checkpoint left them: report
+protection is designed but not implemented (needs Module 9 context this
+dispatch does not have); Priority 7's real browser-driven UI journeys were
+not attempted; Priority 8's restoration proof and production cleanup
+manifest remain blocked on Management-API/production-credential access this
+sandbox does not have; Priority 9 (activation/cleanup) is correctly still
+untouched — both kill switches confirmed `false` again this dispatch, zero
+DELETE statements issued anywhere in this dispatch's history.
+
+**New files this dispatch**: `scripts/nav1_0167_index_functional_verify.mjs`,
+`scripts/nav1_0168_trigger_live_test.mjs`. No source code was changed this
+dispatch (verification-only). `.env.local` (DEV-only credentials, no
+production keys, hand-assembled this dispatch from the repository root's
+own `.env.local` by copying only the three DEV-named keys — see above) was
+removed from this worktree again at the end of this dispatch, matching the
+prior continuation's own end-of-dispatch practice, rather than left on disk
+for convenience. Any future dispatch needing live DEV access will need to
+re-provide it the same way (or be handed it by the orchestrating session)
+and should independently re-verify rather than trust this file's claims on
+report alone — the same discipline this checkpoint itself was written
+under.
