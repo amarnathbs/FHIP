@@ -37,6 +37,7 @@ import {
 } from '../domain/uploadSession';
 import { deriveUploadSubstate, deriveDocumentStatusLabel } from '../domain/uploadSubstate';
 import { buildStatementUploadPurgePatch } from '../domain/privacy';
+import { runFdhRealMalwareScanGate } from './malwareScanGate';
 import type { FdhCreateUploadSessionInput } from '../validation/uploadSession';
 import type { FdhStatementUpload } from '../domain/types';
 
@@ -240,6 +241,22 @@ export async function completeUpload(
 
   assertDocumentTransition('uploaded', 'validating');
   await statementUploadsRepository.update(userId, document.id, { processing_status: 'validating' } as never);
+
+  // Real-malware-gate wiring (2026-09-21): runs ALONGSIDE the existing
+  // structural validation above, never instead of it — structural
+  // validation already ran (cheap, synchronous) and passed by this point;
+  // this is the slower, asynchronous real-scanner call. Shipped disabled
+  // (shared kill switch off by default) — see malwareScanGate.ts's header.
+  const malwareGate = await runFdhRealMalwareScanGate({
+    userId,
+    documentId: document.id,
+    bytes,
+    contentType: validation.detectedMimeType,
+    contentHash: validation.fileHash,
+  });
+  if (!malwareGate.proceed) {
+    return (malwareGate.document as FdhStatementUpload | null) ?? document;
+  }
 
   // Validation phase (spec section 22, 84): FDH-3 inspects structure only —
   // is this a plausible file, is it password-protected — never document

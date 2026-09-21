@@ -14,6 +14,7 @@ import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
+import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 
 // One shared gateway per process, matching the other AIE intake routes. The
 // provider is constructed HERE, in the route, not inside the adapter —
@@ -141,6 +142,16 @@ export async function POST(req: Request) {
   }
   await updateIntakeStatus({ intakeId, toStatus: 'quarantined', storageKey, detectedMimeType: admission.detectedMimeType });
   await recordAieAuditEvent({ intakeId, runId: null, userId: user.id, eventType: 'intake_quarantined', actorType: 'system' });
+
+  // Real-malware-gate wiring (2026-09-21): shipped disabled — see
+  // lib/aie/malware/aieGateAdapter.ts's header.
+  const malwareGate = await runAieRealMalwareScanGate({ intakeId, userId: user.id, bytes, contentHash: admission.fileHash });
+  if (!malwareGate.proceed) {
+    if (malwareGate.outcome === 'pending_scan') {
+      return ok({ intake_id: intakeId, status: 'quarantined', malware_scan_status: 'pending', duplicate_classification: duplicateClassification });
+    }
+    return ok({ intake_id: intakeId, status: 'rejected', failure_code: malwareGate.failureCode, duplicate_classification: duplicateClassification });
+  }
 
   if (admission.passwordRequired) {
     // The document stays quarantined and unprocessed. Unlike the three
