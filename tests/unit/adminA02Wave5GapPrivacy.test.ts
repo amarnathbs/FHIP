@@ -55,11 +55,21 @@ const PROHIBITED_FIELDS = [
 // 1. The authoritative server boundary
 // ---------------------------------------------------------------------------
 
+// A2A5 regression fix (independent-verification finding, 2026-09-21): the
+// gaps route was renamed from requireAdmin() to requireRecommendationsAdmin()
+// by the A3.3 capability-split (docs/admin/A2A5_02A) — same authorization
+// behaviour, different exported name (both ultimately delegate to the exact
+// same requireAdmin() implementation, see lib/services/adminAuth.ts). This
+// mock must provide whichever name the route under test actually imports;
+// requireAdmin is kept too since other pre-existing tests in this repo still
+// import it directly from this same mocked module path.
 const requireAdmin = vi.fn();
+const requireRecommendationsAdmin = requireAdmin;
 const adminClient = vi.fn();
 
 vi.mock('@/lib/services/adminAuth', () => ({
   requireAdmin: (...args: unknown[]) => requireAdmin(...args),
+  requireRecommendationsAdmin: (...args: unknown[]) => requireRecommendationsAdmin(...args),
   adminClient: (...args: unknown[]) => adminClient(...args),
   safeDbError: () => {
     throw new Error('safeDbError must never be reached: the handler must not query at all.');
@@ -85,7 +95,7 @@ describe('Wave 5 privacy closure — the gaps endpoint fails closed', () => {
 
   it('returns the caller’s own denial unchanged for an authenticated non-admin (403 precedence preserved)', async () => {
     // Analyst, Resource Admin, Author, Editor, Compliance Reviewer, Publisher
-    // and any ordinary authenticated user all reach requireAdmin's 403 path.
+    // and any ordinary authenticated user all reach requireRecommendationsAdmin's 403 path.
     const denial = new Response(JSON.stringify({ error: 'Admin access required' }), { status: 403 });
     requireAdmin.mockResolvedValue({ user: null, forbidden: denial });
 
@@ -151,9 +161,13 @@ describe('Wave 5 privacy closure — source invariants', () => {
       expect(code, `route code must not reference ${field}`).not.toContain(field);
     }
 
-    // Authorization is still enforced, and still first.
-    expect(code).toContain('requireAdmin');
-    expect(code.indexOf('requireAdmin')).toBeLessThan(code.indexOf('503'));
+    // Authorization is still enforced, and still first. The gaps route was
+    // renamed from requireAdmin() to requireRecommendationsAdmin() by the
+    // A3.3 capability-split (docs/admin/A2A5_02A) — same underlying
+    // authorization behaviour (requireRecommendationsAdmin delegates to the
+    // exact same requireAdmin() implementation), different exported name.
+    expect(code).toContain('requireRecommendationsAdmin');
+    expect(code.indexOf('requireRecommendationsAdmin')).toBeLessThan(code.indexOf('503'));
   });
 
   it('the Admin client neither requests nor renders individual gap data', () => {
@@ -252,13 +266,19 @@ describe('Wave 5 privacy closure — no collateral damage', () => {
   it('the other Recommendations routes are untouched by this closure', () => {
     // Only the gaps route changed; the Pattern-B RPC routes and their
     // integrity invariants are outside this closure's scope entirely.
+    // All 4 Recommendations routes (including gaps) were renamed from
+    // requireAdmin() to requireRecommendationsAdmin() by the A3.3
+    // capability-split (docs/admin/A2A5_02A) — a pure rename, verified
+    // behaviourally identical (tests/unit/adminCapabilitySplit.test.ts) —
+    // so "untouched by THIS closure" still means "still enforces admin
+    // authorization via the current, correctly-named guard."
     for (const route of [
       'app/api/admin/recommendations/route.ts',
       'app/api/admin/recommendations/[id]/route.ts',
       'app/api/admin/recommendations/upload/route.ts',
     ]) {
       const src = read(route);
-      expect(src, `${route} still enforces admin authorization`).toContain('requireAdmin');
+      expect(src, `${route} still enforces admin authorization`).toContain('requireRecommendationsAdmin');
     }
     expect(read('app/api/admin/recommendations/route.ts')).toContain('admin_upsert_recommendation_atomic');
     expect(read('app/api/admin/recommendations/upload/route.ts')).toContain('admin_import_recommendation_conditions');

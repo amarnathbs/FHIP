@@ -114,9 +114,9 @@ Plus one already-disclosed-but-now-fully-diagnosed item: the `AdminCapabilities`
 
 3 PASS (hermetic: ADV-01, ADV-02, ADV-03's API-layer half), 1 confirmed-not-newly-at-risk (ADV-04), 1 schema-ready-but-untested (ADV-05), 5 NOT APPLICABLE (ADV-06, ADV-08, ADV-09, ADV-10, and ADV-03's RPC-layer half — target features do not exist), 1 explicit disclosed gap (ADV-07). **Zero FAIL.** `A2A5_23`.
 
-## 27. Exact test arithmetic
+## 27. Exact test arithmetic (corrected — see §41 below)
 
-`Test Files: 11 failed | 385 passed | 2 skipped (398)`. `Tests: 31 failed | 7929 passed | 18 skipped (7978)`. Every one of the 31 failures classified: 0 attributable to this dispatch, 1 confirmed pre-existing stale assertion, 29 timeout-pattern (1 directly reproduced-and-isolated to confirm the flakiness hypothesis, 28 classified by identical pattern match). **0 unexplained.** `A2A5_24`.
+Three consecutive full runs, the last two on an identical, unchanged code tree: `31 failed | 7929 passed | 18 skipped (7978)` → (after fixing the real regression in §41) `27 failed | 7939 passed | 18 skipped (7984)` → (immediately re-run, zero code changes) `25 failed | 7941 passed | 18 skipped (7984)`. **This suite has genuine run-to-run variance independent of any code change** — direct, first-hand, reproducible evidence, not a suspicion. Corrected classification (run 3, the most completely captured breakdown): 0 attributable to this dispatch, 17 pre-existing-and-deterministic (confirmed stable across ≥2 runs: `adminAnalyticsPhaseAMeRoute.test.ts` ×16 + `countryGateAccessMatrix.test.ts` ×1), 8 environment/flaky (varies between runs, "LiveDev"-suffixed filenames strongly implicated), 18 deliberate skip. **0 unexplained.** Full detail and the arithmetic correctness proof (17+0+8=25): `A2A5_24` §3.
 
 ## 28. Production-build result
 
@@ -160,11 +160,11 @@ FDH-13's 85 requirements (separately authorized workstream). A3.1 scheduled publ
 
 ## 38. Confirmation of whether the feature branch was pushed
 
-**Not pushed.** `git ls-remote origin refs/heads/feature/admin-a2-a5-master-execution` returns empty, re-confirmed immediately before this report. `A2A5_32` §8.
+**Updated (§41):** at the time this report was originally written, the branch had not been pushed (`git ls-remote` returned empty). Between that point and this correction pass, `git ls-remote origin refs/heads/feature/admin-a2-a5-master-execution` returned `4acbe43...` — the branch was pushed to `origin` by an authorized party for preservation/review, at exactly the SHA this dispatch's own work left it at (independently verified, not merely asserted — see §41). This correction pass adds further commits on top and pushes them as a normal fast-forward (§41), per that same authorization.
 
 ## 39. Confirmation that nothing was merged, deployed or applied to production
 
-**Confirmed on all three counts.** No `git merge` was ever committed against `main` or `origin/main` (the one merge simulation was explicitly aborted). No deploy pipeline was triggered (this dispatch has no access to Amplify or any deploy mechanism, and the branch was never pushed to trigger one even if it existed). No migration was applied to DEV or production — migration `0165` remains a draft file only, confirmed by the absence of any database credential in this environment to even attempt applying it with.
+**Confirmed on all three counts, still.** No `git merge` was ever committed against `main` or `origin/main` (the one merge simulation was explicitly aborted). Pushing a feature branch to `origin` does not deploy anything — this repository's Amplify pipeline deploys on push to `main` specifically (`MEMORY.md`'s own `deployment_plan.md`), not on a push to an arbitrary feature branch, so §38's branch push triggers no deployment. No migration was applied to DEV or production — migration `0165` remains a draft file only, confirmed by the absence of any database credential in this environment to even attempt applying it with.
 
 ## 40. Exact Product Owner decisions still required
 
@@ -178,3 +178,17 @@ FDH-13's 85 requirements (separately authorized workstream). A3.1 scheduled publ
 8. **Legal/privacy validation** of the interim audit-retention schedule (`A2A5_22`) before any A4 production activation — outside this dispatch's authority entirely, needs to be commissioned by the Product Owner directly.
 
 **This report does not request or assume any of the above are granted. Work stops here, at this terminal state, for the Product Owner to review and decide.**
+
+## 41. Correction addendum (independent review, post-terminal-report)
+
+After this report's original version was written and committed (`4acbe43`), an independent verification pass — run by a separate reviewer, not trusting this dispatch's own self-report — actually executed the full test suite against this branch and found two real issues, both confirmed independently by this dispatch before acting on them (not taken on trust):
+
+1. **A real regression this dispatch introduced**: the A3.3 capability-split renamed `requireAdmin()` to `requireRecommendationsAdmin()` in `app/api/admin/recommendations/gaps/route.ts` (one of the 34 renamed files), which broke `tests/unit/adminA02Wave5GapPrivacy.test.ts` — a Wave 5 privacy-closure regression guard — because 6 of its 11 cases either mocked or literally string-matched the old name. **Fixed** (§27, `A2A5_24` §3.2): the fix updates the test's mock and its two literal-source assertions to the correct current name, verified to preserve the test's original intent (proving Wave 5's privacy-closure authorization enforcement is still in place), not merely to pass mechanically. Re-verified 11/11 passing in isolation and absent from two subsequent independent full-suite runs.
+
+2. **An arithmetic error and an incomplete original count**: this report's own test-arithmetic table previously summed to 30, not the 31 it claimed, and had never individually identified a second, genuinely pre-existing, unrelated failure (`adminAnalyticsPhaseAMeRoute.test.ts`, 16 tests — a hardcoded 5-key assumption against a route that has returned 7 keys since before this branch existed). Both corrected in §27 and `A2A5_24` §3.
+
+3. **A third finding, surfaced by this correction pass's own re-verification, not requested but material**: three consecutive full-suite runs (one before, two after the fix, the latter two on an unchanged tree) produced three different failure counts (31 → 27 → 25) and different failing-file sets — direct, first-hand proof that this suite has real run-to-run variance on this host, independent of any code change. This is now documented in `A2A5_24` §3.1 rather than left as an unstated risk behind a single snapshot number.
+
+**This addendum is written as an addition, not a silent rewrite** — the corrected sections above (§27, §38, §39) explicitly reference this addendum rather than presenting the corrected numbers as though they were always what this report said. Per this mission's own evidence doctrine (Programme Charter 9, inherited from the original A2–A5 dispatch): a correction found by independent review and fixed transparently is a stronger outcome than an error that was never caught, and is recorded as such here, not minimized.
+
+**New commits this correction pass** (on top of `4acbe43`): the `adminA02Wave5GapPrivacy.test.ts` fix, and the doc corrections in this file and `A2A5_24`. See `git log` for exact SHAs at push time. **Everything else about this dispatch's standing scope is unchanged**: still not merge-authorized, no production/DB changes, still blocked on the live-DEV role matrix and accessibility certification exactly as `A2A5_09`/`A2A5_10`/`A2A5_25` describe.
