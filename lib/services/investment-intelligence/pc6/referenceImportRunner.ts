@@ -42,7 +42,73 @@ export interface JobControlRow {
 export type StartDecision =
   | { start: true }
   | { start: false; status: 'skipped_kill_switch'; detail: string }
-  | { start: false; status: 'skipped_backoff'; detail: string };
+  | { start: false; status: 'skipped_backoff'; detail: string }
+  | { start: false; status: 'skipped_already_running'; detail: string };
+
+// ---------------------------------------------------------------------------
+// Stuck-batch reconciliation (NAV 1 continuation, 2026-09-21).
+//
+// REAL DEFECT FOUND LIVE IN DEV: two ii_reference_import_batches rows for
+// pc6_amfi_daily_nav, both status='running', both with parser_version and
+// source_sha256/source_byte_length already populated (i.e. fetch+parse
+// completed) but finished_at still null and every row count still 0 — the
+// exact shape a batch has immediately after runReferenceIngest()'s parse
+// step, before the (slower) instrument-resolution/existing-state/write
+// steps complete. Their start timestamps are 35 SECONDS apart, both
+// attempt=1 -- two independent invocations, not one job retrying itself.
+// runReferenceIngest() had NO check anywhere for "is a batch for this
+// job_key already running" before opening a new one, and no reconciliation
+// for a batch that never reached a terminal status (most likely a
+// serverless function execution-time limit killing the process mid-run,
+// given exactly where the surviving fields stop). This function closes
+// both gaps: it treats a 'running' batch older than staleAfterMinutes as
+// abandoned (marks it 'failed' so it stops silently occupying a "job is
+// running" slot forever), and refuses to start a NEW run while a batch
+// younger than that is still genuinely in flight -- preventing the exact
+// overlap this dispatch found evidence of.
+// ---------------------------------------------------------------------------
+
+export interface StaleBatchRow {
+  id: string;
+  started_at: string;
+}
+
+export interface ReconcileStaleRunningResult {
+  /** IDs of batches reconciled (marked failed) as abandoned/stale. */
+  reconciledIds: string[];
+  /** True if a genuinely-recent 'running' batch still blocks a new start. */
+  stillRunning: boolean;
+  detail: string;
+}
+
+/**
+ * Pure decision function: given every currently-'running' batch row for a
+ * job_key, decide which are stale (abandoned) and whether a new run may
+ * start. The caller performs the actual UPDATE for reconciledIds and the
+ * actual INSERT for a new run — this function only decides.
+ */
+export function reconcileStaleRunningBatches(
+  rows: StaleBatchRow[],
+  nowIso: string,
+  staleAfterMinutes: number
+): ReconcileStaleRunningResult {
+  const staleCutoff = Date.parse(nowIso) - staleAfterMinutes * 60_000;
+  const reconciledIds: string[] = [];
+  let stillRunning = false;
+  for (const row of rows) {
+    if (Date.parse(row.started_at) < staleCutoff) {
+      reconciledIds.push(row.id);
+    } else {
+      stillRunning = true;
+    }
+  }
+  const detail = stillRunning
+    ? `A batch is still genuinely running (started within the last ${staleAfterMinutes} minute(s)) -- refusing to start a second concurrent run.`
+    : reconciledIds.length > 0
+      ? `Reconciled ${reconciledIds.length} stale 'running' batch(es) older than ${staleAfterMinutes} minute(s) -- treated as abandoned, not double-counted as still in flight.`
+      : 'No running batches found.';
+  return { reconciledIds, stillRunning, detail };
+}
 
 /**
  * FAILS CLOSED. A missing job-control row means the job does not run — not

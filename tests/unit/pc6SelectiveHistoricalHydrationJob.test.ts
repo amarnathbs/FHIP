@@ -3,7 +3,7 @@
 // and no network call.
 
 import { describe, it, expect, vi } from 'vitest';
-import { runSelectiveHistoricalHydration, HISTORICAL_FLOOR_DATE, type HydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJob';
+import { runSelectiveHistoricalHydration, chunkDateWindow, HISTORICAL_FLOOR_DATE, MAX_FETCH_WINDOW_DAYS, type HydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJob';
 import { BENCHMARK_LOOKBACK_DAYS } from '@/lib/services/investment-intelligence/pc6/navRetentionPolicy';
 import type { HistoricalNavAdapter, HistoricalNavAdapterResult } from '@/lib/services/investment-intelligence/pc6/adapters/historicalNavAdapter';
 
@@ -95,15 +95,16 @@ describe('runSelectiveHistoricalHydration', () => {
       provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 200, retrievedAt: 'now', rawResponseChecksum: 'abcdef123456' },
     });
     await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
-    const call = (adapter.fetchHistory as any).mock.calls[0][0];
-    // The job now passes changeoverDate as the benchmark-lookback anchor, so
-    // a benchmark-only dependency resolves to the grounded rolling-window
-    // lookback, NOT the unbounded HISTORICAL_FLOOR_DATE (2006) — a real,
-    // code-grounded tightening (see navRetentionPolicy.ts's
-    // BENCHMARK_LOOKBACK_DAYS header for the traced formula).
-    expect(call.fromDate).toBe(subtractDaysForTest(C, BENCHMARK_LOOKBACK_DAYS));
-    expect(call.fromDate).not.toBe(HISTORICAL_FLOOR_DATE);
-    expect(call.toDate).toBe('2026-09-20'); // C minus one day
+    const calls = (adapter.fetchHistory as any).mock.calls.map((c: any) => c[0]);
+    // The overall window is now walked in bounded chunks (NAV 1.23), newest
+    // first: the FIRST call's toDate is C-1, and the LAST call's fromDate is
+    // the grounded rolling-window lookback boundary, NOT the unbounded
+    // HISTORICAL_FLOOR_DATE (2006) — a real, code-grounded tightening (see
+    // navRetentionPolicy.ts's BENCHMARK_LOOKBACK_DAYS header for the traced
+    // formula).
+    expect(calls[0].toDate).toBe('2026-09-20'); // C minus one day
+    expect(calls.at(-1).fromDate).toBe(subtractDaysForTest(C, BENCHMARK_LOOKBACK_DAYS));
+    expect(calls.at(-1).fromDate).not.toBe(HISTORICAL_FLOOR_DATE);
   });
 
   it('an accepted complete_from_inception dependency still uses the unbounded floor date, unaffected by the benchmark tightening', async () => {
@@ -118,8 +119,11 @@ describe('runSelectiveHistoricalHydration', () => {
       provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 200, retrievedAt: 'now', rawResponseChecksum: 'abcdef123456' },
     });
     await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
-    const call = (adapter.fetchHistory as any).mock.calls[0][0];
-    expect(call.fromDate).toBe(HISTORICAL_FLOOR_DATE);
+    const calls = (adapter.fetchHistory as any).mock.calls.map((c: any) => c[0]);
+    // A ~20-year unbounded window is now chunked too (NAV 1.23) -- the last,
+    // oldest chunk still correctly reaches the true floor date.
+    expect(calls.at(-1).fromDate).toBe(HISTORICAL_FLOOR_DATE);
+    expect(calls.length).toBeGreaterThan(1);
   });
 
   it('records a fetch failure without writing anything', async () => {
@@ -160,6 +164,72 @@ describe('runSelectiveHistoricalHydration', () => {
     });
     const result = await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps, maxInstruments: 1 });
     expect(result.instrumentsNeedingHydration).toBe(2);
-    expect((adapter.fetchHistory as any).mock.calls.length).toBe(1);
+    expect(result.perInstrument).toHaveLength(1); // only ONE instrument actually processed, even though it needs the fetch chunked into several calls
+  });
+
+  it('a chunk that fails midway leaves earlier chunks committed and reports a precise resume point', async () => {
+    const deps = makeDeps({
+      fetchBenchmarkDependencies: vi.fn().mockResolvedValue(new Map([['inst-partial', { instrumentId: 'inst-partial', everBenchmarked: true }]])),
+      fetchEarliestExistingDate: vi.fn().mockResolvedValue(null),
+      writeRows: vi.fn().mockResolvedValue({ inserted: 1, error: null }),
+    });
+    // 3 chunks expected for the ~2030-day benchmark window at 730 days/chunk.
+    // Succeed on the first (newest) chunk, fail on the second.
+    let call = 0;
+    const adapter: HistoricalNavAdapter = {
+      providerKey: 'tigzig', adapterVersion: '1',
+      fetchHistory: vi.fn().mockImplementation(async (req: any) => {
+        call++;
+        if (call === 1) {
+          return {
+            ok: true, schemeIdentifier: req.schemeIdentifier, providerSchemeName: null, coverage: 'unknown',
+            observations: [{ date: req.toDate, nav: '100.0' }],
+            provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 200, retrievedAt: 'now', rawResponseChecksum: 'abcdef123456' },
+          };
+        }
+        return { ok: false, schemeIdentifier: req.schemeIdentifier, kind: 'rate_limited', detail: 'simulated outage on chunk 2', provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 429, retrievedAt: 'now' } };
+      }),
+    };
+    const result = await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
+    expect(result.instrumentsPartiallyHydrated).toBe(1);
+    expect(result.instrumentsFailed).toBe(0);
+    const outcome = result.perInstrument[0];
+    expect(outcome.outcome).toBe('partially_hydrated');
+    expect(outcome.rowsInserted).toBe(1); // the one row from the successfully-completed first chunk
+    expect(outcome.resumeFromDate).toBeDefined();
+    // The committed chunk's write must have actually been called (not skipped).
+    expect(deps.writeRows).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('chunkDateWindow', () => {
+  it('returns a single chunk when the window fits within maxDays', () => {
+    const chunks = chunkDateWindow('2026-01-01', '2026-06-01', 365);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toEqual({ fromDate: '2026-01-01', toDate: '2026-06-01' });
+  });
+
+  it('splits a large window into multiple descending-order chunks that exactly cover the range with no gaps or overlaps', () => {
+    const chunks = chunkDateWindow('2020-01-01', '2026-01-01', MAX_FETCH_WINDOW_DAYS);
+    expect(chunks.length).toBeGreaterThan(1);
+    // Newest first.
+    expect(chunks[0].toDate).toBe('2026-01-01');
+    expect(chunks.at(-1)!.fromDate).toBe('2020-01-01');
+    // No gaps: each chunk's fromDate is exactly one day after the next (older) chunk's toDate.
+    for (let i = 0; i < chunks.length - 1; i++) {
+      const prevFrom = new Date(`${chunks[i].fromDate}T00:00:00.000Z`);
+      const nextTo = new Date(`${chunks[i + 1].toDate}T00:00:00.000Z`);
+      expect(prevFrom.getTime() - nextTo.getTime()).toBe(86_400_000); // exactly 1 day apart
+    }
+    // No chunk exceeds maxDays.
+    for (const c of chunks) {
+      const days = (Date.parse(`${c.toDate}T00:00:00Z`) - Date.parse(`${c.fromDate}T00:00:00Z`)) / 86_400_000 + 1;
+      expect(days).toBeLessThanOrEqual(MAX_FETCH_WINDOW_DAYS);
+    }
+  });
+
+  it('handles a single-day window', () => {
+    const chunks = chunkDateWindow('2026-01-01', '2026-01-01', 730);
+    expect(chunks).toEqual([{ fromDate: '2026-01-01', toDate: '2026-01-01' }]);
   });
 });

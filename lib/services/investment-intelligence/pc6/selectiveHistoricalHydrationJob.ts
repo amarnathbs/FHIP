@@ -28,6 +28,38 @@ import { decideUpsert, type ExistingObservation } from './referenceDataQuality';
 /** AMFI's own earliest published history, per this programme's own governing brief ("April 2006 to present"). Used only as a floor when a dependency asks for "from inception" and no more specific date is known. */
 export const HISTORICAL_FLOOR_DATE = '2006-04-01';
 
+/**
+ * NAV 1.23/1.26 — bounded, resumable fetching (built after this dispatch's
+ * own disclosed limitation: an inception-requiring dependency could compute
+ * an ~18-20 year single window, untested at that size against TIGZIG).
+ * MAX_FETCH_WINDOW_DAYS caps every SINGLE adapter request to roughly 2
+ * years, regardless of how large the overall required window is. A large
+ * requirement is walked in DESCENDING date order (newest chunk first, since
+ * that is the boundary already-existing coverage abuts) and each chunk is
+ * validated+written BEFORE the next, older chunk is even fetched — so an
+ * interruption after chunk N leaves chunks 1..N genuinely committed, not
+ * rolled back, and RESUMABLE: because `fetchEarliestExistingDate()` reflects
+ * real DB state, the next invocation (whether seconds or days later) simply
+ * sees a smaller remaining gap and continues from exactly where the last
+ * one stopped, using the same "already_covered vs. gap to fetch" logic that
+ * already existed — no separate checkpoint table was needed.
+ */
+export const MAX_FETCH_WINDOW_DAYS = 730;
+
+/** Split [fromDate, toDate] into descending-order sub-windows of at most `maxDays` each. The FIRST element is the newest (closest to toDate) chunk. */
+export function chunkDateWindow(fromDate: string, toDate: string, maxDays: number): Array<{ fromDate: string; toDate: string }> {
+  const chunks: Array<{ fromDate: string; toDate: string }> = [];
+  let currentTo = toDate;
+  while (currentTo >= fromDate) {
+    const candidateFrom = addDays(currentTo, -(maxDays - 1));
+    const chunkFrom = candidateFrom < fromDate ? fromDate : candidateFrom;
+    chunks.push({ fromDate: chunkFrom, toDate: currentTo });
+    if (chunkFrom === fromDate) break;
+    currentTo = addDays(chunkFrom, -1);
+  }
+  return chunks;
+}
+
 export interface HydrationDeps {
   /** True if the job may proceed at all (kill-switch check). */
   isEnabled(): Promise<{ enabled: boolean; reason: string | null }>;
@@ -67,7 +99,9 @@ export interface PerInstrumentOutcome {
   instrumentId: string;
   reasons: string[];
   requiredFromDate: string | null;
-  outcome: 'already_covered' | 'hydrated' | 'unresolvable_identifier' | 'fetch_failed' | 'planned_dry_run' | 'no_gap_to_fetch';
+  outcome: 'already_covered' | 'hydrated' | 'partially_hydrated' | 'unresolvable_identifier' | 'fetch_failed' | 'planned_dry_run' | 'no_gap_to_fetch';
+  /** Present when outcome is 'partially_hydrated': the earliest date successfully written before a later (older) chunk failed — the exact resume point for the next invocation. */
+  resumeFromDate?: string;
   detail: string;
   rowsInserted: number;
 }
@@ -78,6 +112,7 @@ export interface HydrationJobResult {
   instrumentsNeedingHydration: number;
   instrumentsAlreadyCovered: number;
   instrumentsHydrated: number;
+  instrumentsPartiallyHydrated: number;
   instrumentsFailed: number;
   totalRowsInserted: number;
   detail: string;
@@ -92,7 +127,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     return {
       status: 'skipped_kill_switch',
       instrumentsConsidered: 0, instrumentsNeedingHydration: 0, instrumentsAlreadyCovered: 0,
-      instrumentsHydrated: 0, instrumentsFailed: 0, totalRowsInserted: 0,
+      instrumentsHydrated: 0, instrumentsPartiallyHydrated: 0, instrumentsFailed: 0, totalRowsInserted: 0,
       detail: `pc6_selective_historical_hydration is disabled: ${control.reason ?? '(no reason recorded)'}`,
       perInstrument: [],
     };
@@ -103,7 +138,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
   const candidateIds = new Set<string>([...accepted.keys(), ...benchmarked.keys()]);
 
   const perInstrument: PerInstrumentOutcome[] = [];
-  let hydrated = 0, failed = 0, alreadyCovered = 0, totalInserted = 0, needing = 0;
+  let hydrated = 0, partiallyHydrated = 0, failed = 0, alreadyCovered = 0, totalInserted = 0, needing = 0;
   let processed = 0;
 
   for (const instrumentId of candidateIds) {
@@ -143,45 +178,90 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       continue;
     }
 
-    const fetchResult = await adapter.fetchHistory({ schemeIdentifier: identifier, fromDate: requiredFrom, toDate });
-    if (!fetchResult.ok) {
-      failed++;
-      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'fetch_failed', detail: `${fetchResult.kind}: ${fetchResult.detail}`, rowsInserted: 0 });
+    // Bounded, resumable fetching (NAV 1.23): the overall [requiredFrom,
+    // toDate] window is walked in descending-date chunks of at most
+    // MAX_FETCH_WINDOW_DAYS. Each chunk is fetched AND WRITTEN before the
+    // next (older) chunk is even requested, so an interruption or failure
+    // partway through leaves every already-completed chunk's rows genuinely
+    // committed -- never rolled back -- and the failure point is reported
+    // precisely enough that the next invocation resumes from there via the
+    // ordinary already-covered/gap-to-fetch check (no separate checkpoint
+    // state needed).
+    const windowChunks = chunkDateWindow(requiredFrom, toDate, MAX_FETCH_WINDOW_DAYS);
+    let instrumentRowsInserted = 0;
+    let chunksCompleted = 0;
+    let stoppedAt: string | null = null; // the requiredFrom of the chunk that failed, if any
+    let stopDetail: string | null = null;
+
+    for (const chunk of windowChunks) {
+      const fetchResult = await adapter.fetchHistory({ schemeIdentifier: identifier, fromDate: chunk.fromDate, toDate: chunk.toDate });
+      if (!fetchResult.ok) {
+        stoppedAt = chunk.fromDate;
+        stopDetail = `${fetchResult.kind}: ${fetchResult.detail} (chunk [${chunk.fromDate}, ${chunk.toDate}])`;
+        break;
+      }
+
+      const existingObs = await deps.fetchExistingObservations(instrumentId, chunk.fromDate, chunk.toDate);
+      const importBatchId = crypto.randomUUID();
+      const dataVersion = `${adapter.providerKey}:${adapter.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
+      const rowsToWrite: HydrationWriteRow[] = [];
+      for (const obs of fetchResult.observations) {
+        const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
+        const decision = decideUpsert(existingObs.get(`${instrumentId}|${obs.date}`) ?? null, { value: obs.nav, recordChecksum });
+        if (decision.action === 'insert') {
+          rowsToWrite.push({ instrumentId, priceDate: obs.date, price: obs.nav, currencyCode: 'INR', recordChecksum, dataVersion, importBatchId });
+        }
+        // 'skip'/'supersede' handling for a hydration job intentionally does
+        // not re-implement correction semantics here -- a hydration fetch
+        // finding a DIFFERENT value for a date the daily/backfill job already
+        // wrote is a cross-source discrepancy for a human to review (N.11
+        // quality surface), not something this job silently overwrites.
+      }
+
+      if (rowsToWrite.length > 0) {
+        const writeResult = await deps.writeRows(rowsToWrite);
+        if (writeResult.error) {
+          stoppedAt = chunk.fromDate;
+          stopDetail = `write failed: ${writeResult.error} (chunk [${chunk.fromDate}, ${chunk.toDate}])`;
+          break;
+        }
+        instrumentRowsInserted += writeResult.inserted;
+      }
+      chunksCompleted++;
+    }
+
+    if (stoppedAt !== null) {
+      totalInserted += instrumentRowsInserted;
+      if (chunksCompleted > 0) {
+        partiallyHydrated++;
+        // Partial progress is real and committed -- reported distinctly
+        // from a total failure so an operator (and the next invocation)
+        // knows exactly how far it got, not just that it didn't finish.
+        perInstrument.push({
+          instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'partially_hydrated',
+          detail: `${chunksCompleted}/${windowChunks.length} chunk(s) completed (${instrumentRowsInserted} row(s) inserted) before stopping: ${stopDetail}`,
+          rowsInserted: instrumentRowsInserted, resumeFromDate: stoppedAt,
+        });
+      } else {
+        failed++;
+        perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'fetch_failed', detail: stopDetail ?? 'unknown failure', rowsInserted: 0 });
+      }
       continue;
     }
 
-    const existingObs = await deps.fetchExistingObservations(instrumentId, requiredFrom, toDate);
-    const importBatchId = crypto.randomUUID();
-    const dataVersion = `${adapter.providerKey}:${adapter.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
-    const rowsToWrite: HydrationWriteRow[] = [];
-    for (const obs of fetchResult.observations) {
-      const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
-      const decision = decideUpsert(existingObs.get(`${instrumentId}|${obs.date}`) ?? null, { value: obs.nav, recordChecksum });
-      if (decision.action === 'insert') {
-        rowsToWrite.push({ instrumentId, priceDate: obs.date, price: obs.nav, currencyCode: 'INR', recordChecksum, dataVersion, importBatchId });
-      }
-      // 'skip'/'supersede' handling for a hydration job intentionally does
-      // not re-implement correction semantics here -- a hydration fetch
-      // finding a DIFFERENT value for a date the daily/backfill job already
-      // wrote is a cross-source discrepancy for a human to review (N.11
-      // quality surface), not something this job silently overwrites.
-    }
-
-    if (rowsToWrite.length === 0) {
+    if (instrumentRowsInserted === 0) {
       perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'already_covered', detail: 'provider returned only already-on-file dates', rowsInserted: 0 });
       alreadyCovered++;
       continue;
     }
 
-    const writeResult = await deps.writeRows(rowsToWrite);
-    if (writeResult.error) {
-      failed++;
-      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'fetch_failed', detail: `write failed: ${writeResult.error}`, rowsInserted: 0 });
-      continue;
-    }
     hydrated++;
-    totalInserted += writeResult.inserted;
-    perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'hydrated', detail: `inserted ${writeResult.inserted} row(s) for [${requiredFrom}, ${toDate}]`, rowsInserted: writeResult.inserted });
+    totalInserted += instrumentRowsInserted;
+    perInstrument.push({
+      instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'hydrated',
+      detail: `inserted ${instrumentRowsInserted} row(s) for [${requiredFrom}, ${toDate}] across ${windowChunks.length} chunk(s) of up to ${MAX_FETCH_WINDOW_DAYS} days each`,
+      rowsInserted: instrumentRowsInserted,
+    });
   }
 
   const result: HydrationJobResult = {
@@ -190,11 +270,12 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     instrumentsNeedingHydration: needing,
     instrumentsAlreadyCovered: alreadyCovered,
     instrumentsHydrated: hydrated,
+    instrumentsPartiallyHydrated: partiallyHydrated,
     instrumentsFailed: failed,
     totalRowsInserted: totalInserted,
     detail: dryRun
       ? `Dry run: ${needing} instrument(s) need hydration, ${processed} planned this invocation (max ${maxInstruments}).`
-      : `${hydrated} hydrated, ${alreadyCovered} already covered, ${failed} failed, out of ${needing} needing hydration (${processed} processed this invocation, max ${maxInstruments}).`,
+      : `${hydrated} hydrated, ${partiallyHydrated} partially hydrated (resumable), ${alreadyCovered} already covered, ${failed} failed, out of ${needing} needing hydration (${processed} processed this invocation, max ${maxInstruments}).`,
     perInstrument,
   };
   if (!dryRun) await deps.recordBatch(result);

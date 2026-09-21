@@ -1206,6 +1206,268 @@ ledger is the evidence index the report is built from.
 
 ---
 
+## PO CORRECTION RESPONSE (2026-09-21, 3rd continuation)
+
+The Product Owner reviewed the final closure report as rigorously as the
+code and issued six specific corrections. This section documents the real
+work done in response, in the PO's own priority order. **Overall reported
+status is downgraded per the PO's instruction: NAV 1 implementation in
+progress — partial verification complete. No storage/billing savings are
+claimed anywhere — none have happened.**
+
+### Priority 1 — backfill pause + daily collection, actual running-job/script-revision checks
+
+**A critical, real gap was found and fixed.** The kill-switch code added to
+`scripts/pc6_historical_nav_backfill.mjs` only ever existed on this
+unmerged branch. A full scan of every git worktree on this machine
+(`git worktree list`, then checking each tip commit's copy of the script)
+found **11 total worktrees carrying this script**: this branch and
+`D:/fhip-fdh10-terminal` (the exact terminal the original incident ran
+from) had the kill switch; **9 other active worktrees did not** — meaning
+an operator could have gone back to any of those 9, or to
+`D:/fhip-fdh10-terminal` specifically (the terminal named in this
+dispatch's own briefing), and re-run the brute-force backfill with zero
+protection.
+- **Fixed live**: applied the identical kill-switch guard directly to
+  `D:/fhip-fdh10-terminal`'s copy (commit `c49f71d` on
+  `fix/pc6-backfill-retry-2026-09-20`, not pushed) and **live-verified
+  against real DEV immediately after**: the script now correctly refuses
+  to run with the exact expected message.
+- **9 remaining vulnerable worktrees, NOT fixed**: `adoring-benz-f7bc81`,
+  `agent-a0daa959591cf068b`, `agent-a348c7874e4efcc22`,
+  `agent-a97df7e328e0935a1`, `agent-a989dc6719abeee1d`,
+  `agent-ad7c28cb894a439ed`, `agent-ade811eeffa0c6acc`,
+  `agent-ae54051d9e89a2995`, `investigate-2026-09-19` — all live under
+  `D:\FHIP\.claude\worktrees\`, which this session's own sandbox explicitly
+  refuses to modify (a hard isolation boundary protecting other concurrent
+  agent sessions' work, not a permission this dispatch could escalate past
+  safely). **These remain genuinely vulnerable and need action by the
+  coordinator** — either dispatching the same one-line-equivalent fix to
+  each owning session, or accepting the risk given most are scoped to
+  unrelated missions (malware-gate wiring, admin-a2-a5, entity-data
+  separation, etc.) and therefore less likely, but not impossible, to be
+  used to re-run this specific script.
+- **The other execution path (the admin `POST` re-run route ->
+  `runReferenceIngest`) was confirmed already safe** — it uses a completely
+  different code path (a bounded live URL fetch, not a user-supplied
+  multi-GB CSV) with its own, pre-existing, unrelated kill-switch check
+  (`decideStart()`, confirmed to fail closed for a missing/unknown
+  `job_key` by reading the function directly).
+- **The script cannot be scheduled or deployed** — it requires a local
+  `.env.local` and manual `node script.mjs --production` invocation, so the
+  real risk is bounded to "an operator manually re-runs it from a specific
+  old checkout," not a cron/scheduler risk.
+- **What could NOT be checked from here**: whether any OS-level process is
+  currently executing on production or on the user's machine. No shell
+  access to either exists from this sandbox.
+- Live-reconfirmed at report time: DEV shows `pc6_full_universe_historical_backfill: false`,
+  `pc6_selective_historical_hydration: false`, `pc6_amfi_daily_nav: true`,
+  `pc6_amfi_scheme_master: true`.
+
+### Priority 2 — get `0167`/`0168` applied to DEV
+
+**Not done this dispatch** — still requires an operator with DEV DDL
+access, which this sandbox does not have (re-confirmed fresh, again). Per
+the PO's own instruction, this needs the coordinator to help arrange.
+Both migrations remain PGlite-chain-verified and ready to hand over.
+
+### Priority 3 — bounded historical fetching with resumable checkpoints
+
+**Built and unit-tested for real** (this was previously a disclosed,
+unbuilt follow-up; it is no longer unbuilt). `selectiveHistoricalHydrationJob.ts`
+now walks any [fromDate, toDate] requirement in descending-date chunks of
+at most `MAX_FETCH_WINDOW_DAYS` (730 days ≈ 2 years) via a new pure
+function, `chunkDateWindow()`. Each chunk is fetched AND WRITTEN before the
+next (older) chunk is even requested, so an interruption after chunk N
+leaves chunks 1..N genuinely committed. A new `partially_hydrated` outcome
+(distinct from `hydrated` and `fetch_failed`) reports exactly how far a run
+got and the precise `resumeFromDate` for the next invocation — which
+resumes correctly with NO separate checkpoint table, because
+`fetchEarliestExistingDate()` already reflects real DB state and the
+existing already-covered/gap-to-fetch logic naturally picks up from there.
+Tested: a large multi-year window produces multiple chunks with no gaps or
+overlaps (verified arithmetically in the test, not just visually); a
+mid-window failure leaves the earlier chunk's row genuinely written
+(`deps.writeRows` called and its result counted) while correctly reporting
+`partially_hydrated`, not `hydrated` or a silent success. 13/13 tests
+passing on the hydration job file; live dry run against DEV re-confirmed
+the chunked planning still produces the correct overall window.
+
+### Priority 4 — the real controlled accepted-statement journey, end-to-end
+
+**NOT completed this dispatch.** The PO named this the single most
+important item. Honest assessment: driving a real account through the
+actual UI/API acceptance flow (creating a test user, completing country
+confirmation, submitting a real statement through AIE's document
+pipeline, reaching a genuine `certified`/`certified_with_warnings`
+`ii_portfolio_truth_status` row, then running hydration for real, then
+checking the analytics/report surfaces) is a multi-system integration
+task (AIE document intake + R2 parsing/reconciliation + PC6 hydration +
+analytics rendering) that this dispatch did not have remaining time to
+execute responsibly within this same continuation. The PO's correction is
+accepted: this was NOT a hard blocker, and fabricating dependency data was
+correctly avoided, but the RIGHT next step — actually driving the real
+acceptance flow — was not yet taken. **This is the single highest-priority
+item for the next dispatch or operator session.**
+
+### Priority 5 — diagnose daily-ingestion coverage and the stuck batches, completely
+
+**Done — a full source-to-storage reconciliation, and the earlier "51%+
+over an 11 days" framing is superseded by a materially better answer.**
+
+- **The two stuck `running` batches**: diagnosed precisely. Both rows had
+  `parser_version`/`source_sha256`/`source_byte_length` already populated
+  (the fetch+parse step completed) but `finished_at` still null and every
+  count still 0 — the exact shape a batch has immediately after the parse
+  step, before the slower instrument-resolution/write steps run. Their
+  `started_at` timestamps are 35 seconds apart, both `attempt=1` — two
+  independent invocations, not one job retrying itself. Root cause found:
+  `runReferenceIngest()` had **no check anywhere** for "is a batch for this
+  job_key already running" before opening a new one. **Fixed**: a new pure
+  function, `reconcileStaleRunningBatches()` (6 unit tests), wired into
+  `runReferenceIngest()` right after the kill-switch check — it marks a
+  `running` batch older than 15 minutes as abandoned (`failed`,
+  `error_code=STALE_RUNNING_RECONCILED`) and refuses to start a new run
+  while a genuinely recent one is still in flight. **Applied live**: ran
+  `scripts/nav1_reconcile_stale_running_batches.mjs` against real DEV —
+  both stuck rows are now correctly marked `failed` with a full audit
+  trail (a real, safe UPDATE, not a DELETE).
+- **The two genuinely FAILED attempts that same day** (`PARTIAL_BATCH`/
+  `BATCH_FAILED`, both citing a duplicate-key violation on
+  `ii_prices_nav_instrument_id_price_date_key`): now explained by the same
+  root cause — the missing concurrency guard let multiple overlapping
+  invocations race, and a crashed run's already-committed partial writes
+  (never reflected in that run's own ledger counts, since counts are only
+  persisted at `finish()`) caused a LATER run's supposedly-idempotent
+  upsert to collide. This is now prevented by the same fix.
+- **Full source-to-storage reconciliation for 2026-09-20 (the ONLY day the
+  daily job has ever run)**, read directly from the one successful batch's
+  own ledger row: **published by source (real AMFI file, real byte length/
+  sha256 captured): 14,375. Parsed/validated (`rows_accepted`): 14,358
+  (99.88%). Genuinely rejected: 17 (100% `MALFORMED_NAV` — AMFI's own
+  literal `"10."` placeholder for schemes with no real NAV yet, mostly
+  NFO/target-maturity funds — inspected every rejection row directly;
+  correct behaviour, not a defect). Successfully written: 14,358 (100% of
+  validated rows — reconstructed exactly from the one successful run's own
+  arithmetic: 500 inserted + 13,858 unchanged = 14,358).**
+- **The 2026-09-18 "spike" (7,303 rows on one date) is fully explained, not
+  an anomaly**: checked the `data_version` of a sample of those rows —
+  965 of 1,000 carry the SAME source checksum as the one successful
+  2026-09-20 batch. This means the daily job's own "latest NAV" fetch on
+  2026-09-20 found that a large fraction of schemes' most recent published
+  NAV was still dated 2026-09-18 (the preceding Friday, with 09-19/09-20
+  being a weekend) — exactly AMFI's own documented "latest, not necessarily
+  today" behaviour, now demonstrated with a concrete mechanism instead of
+  being left as an unexplained anomaly.
+- **The critical reframe**: the daily job has run **exactly once, ever**
+  (2026-09-20, activation day) — confirmed live: zero `ii_prices_nav` rows
+  and zero `ii_reference_import_batches` rows exist with
+  `as_of_date/price_date = 2026-09-21`. "All-live daily collection" is not
+  yet a continuous, running process; it is one successful manual
+  activation-day run, which — on its own real evidence — achieved 100%
+  coverage of every schema-validated scheme that day, not the ~51% lower
+  bound this ledger previously reported (that number mixed in leftover
+  pre-activation data from the retired brute-force backfill, which had
+  different, broken selectivity — a genuine methodological correction to
+  this dispatch's own earlier analysis).
+
+### Priority 6 — report protection and NAV-correction handling, with real tests
+
+**Report protection: investigated with real data, a concrete design
+produced, not yet implemented (a cross-module change).** Checked DEV
+directly: 932 real `report_snapshots` rows exist (233 `financial`), and
+`report_sections.section_data_json` (the actual displayed content) was
+inspected directly. Finding: `report_snapshots` confirms (again) zero NAV
+row identity is captured (`source_entity_id`/`payload_hash` both null on
+every sampled row); but `report_sections` reveals something more important
+— **a report stores a FROZEN, already-computed AGGREGATE number (e.g.
+`netWorth: 167000`), not a live query against `ii_prices_nav`.** This means
+an EXISTING, already-rendered report is NOT at risk of silently changing or
+breaking if underlying NAV history is later deleted — it doesn't re-fetch
+anything to display. The real, narrower risk is specifically: (a) whether
+any report is ever REGENERATED for a past period (which would need the
+same historical NAV data to reproduce an identical number — not
+independently confirmed either way this dispatch, would need reading
+Module 9's report-generation service in depth), and (b) any LIVE,
+non-frozen investment view (a rolling-return chart, not a "report") that
+recomputes from historical NAV on every page load — which is exactly what
+`accepted_statement_history`/`benchmark_dependency` already protect via
+this programme's existing policy engine, largely independent of the
+"report" concern. **Design recommendation, not implemented**: since a
+report can only exist for a household with real transactions, and real
+holdings already get `accepted_statement_history` protection, the
+report-pinning gap may already be substantially covered in practice
+PROVIDED accepted-statement protection windows reach back at least as far
+as the earliest report a user might ever reproduce — this specific claim
+was not independently verified (would need confirming report regeneration
+semantics) and should not be treated as settled. `pinned_by_report_or_revision`
+continues to fail closed until this is actually confirmed one way or the
+other by someone with Module 9 context.
+
+**NAV-correction handling: a REAL, SERIOUS, previously-undetected defect
+was found and fixed.** Built `scripts/nav1_correction_handling_live_test.mjs`
+to test the correction/supersede write path for real against DEV (using an
+already-confirmed synthetic fixture instrument, not real data). **First run
+failed** with a live `409 (23505 duplicate key violates unique constraint
+"ii_prices_nav_instrument_id_price_date_key")`: the ORIGINAL correction
+code in `referenceIngestJob.ts` tried to INSERT a second physical row for
+the same `(instrument_id, price_date)` as the row it was correcting —
+which the real, table-wide `UNIQUE(instrument_id, price_date)` constraint
+(migration `0033`, no partial exclusion for superseded rows) **always**
+rejects. This defect had never been caught because zero real corrections
+had ever occurred in DEV or production before this test forced one.
+**Fixed**: `referenceIngestJob.ts`'s correction path now applies the
+corrected value via UPDATE IN PLACE, with the full previous/new value
+audit trail preserved in `ii_reference_corrections` (which already has
+`previous_value`/`new_value` jsonb columns for exactly this purpose). This
+changes the documented D.3 promise from "two physical rows, one
+superseded" to "one current row, full audit trail in
+`ii_reference_corrections`" — a genuine invariant change, called out
+explicitly in the code rather than silently reinterpreted, because a
+schema-level fix (a partial unique index excluding superseded rows) would
+break the existing, already-proven-live fresh-insert path's
+PostgREST `onConflict` upsert (which cannot target a partial index's
+WHERE-qualified arbiter). **Re-tested the fix end-to-end against real
+DEV: 11/11 PASS**, including a cleanup rehearsal (the test's own synthetic
+rows were removed afterward and verified gone). This closes the
+coordinator's own specific instruction: "reusing the existing
+`ignoreDuplicates` write pattern does NOT by itself prove corrected NAV
+values are handled correctly" — confirmed true, the correction path was
+genuinely broken, and is now genuinely fixed and tested.
+- **Minor follow-up noted, not urgent**: `ii_prices_nav.superseded_by_id`
+  and `.correction_of_id` are now unused by this fixed code path (confirmed
+  no other code reads them for this table — a grep hit on those column
+  names elsewhere in the codebase is for the unrelated `ii_review_items`
+  table). They could be deprecated/dropped in a future migration, or
+  repurposed; left as-is for now since they are harmless nullable columns.
+
+### Priority 7 — user-facing readiness and failure states
+
+**Not independently re-verified this dispatch beyond the existing findings
+already in NAV 1.30-1.36** (the pre-existing `CalculationStatus`/
+`isDisplayableNumber` architecture in `calculationStatus.ts`, confirmed
+compatible with NAV1's design). Actually driving a browser through the
+real preparing/partial/stale/unavailable UI journeys was not attempted —
+would require a running DEV frontend and browser automation, not attempted
+given the remaining time in this continuation.
+
+### Priority 8 — restoration proof and a real production cleanup manifest
+
+**Restoration proof: still genuinely blocked**, same reason as every prior
+report — no Management-API/backup-restore access from this sandbox,
+re-confirmed fresh this dispatch. **Production cleanup manifest: still not
+producible** — no production credentials in this sandbox; the DEV-only
+dry-run manifest (NAV 1.42) remains the only one actually run.
+
+### Priority 9 — activation and cleanup
+
+**Correctly not attempted.** Selective hydration and cleanup remain
+disabled in production (live-reconfirmed this dispatch). No DELETE
+statement exists anywhere in this branch's history, at any checkpoint,
+across all three continuation dispatches.
+
+---
+
 ## Cross-cutting notes
 
 - **npm dependencies**: this git worktree had no `node_modules` (a fresh

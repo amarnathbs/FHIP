@@ -20,6 +20,7 @@ import {
   planImport,
   settleBatch,
   buildAlerts,
+  reconcileStaleRunningBatches,
   MIN_PLAUSIBLE_FULL_UNIVERSE_BYTES,
   PC6_RUNNER_VERSION,
   type Alert,
@@ -27,6 +28,9 @@ import {
   type InstrumentResolutionIndex,
   type JobControlRow,
 } from './referenceImportRunner';
+
+/** How long a 'running' batch may sit with no terminal status before a later invocation treats it as abandoned rather than still in flight. */
+export const STALE_RUNNING_BATCH_MINUTES = 15;
 import type { ExistingObservation, NavQualityStatus } from './referenceDataQuality';
 import { buildUrl, getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { writeSchemeMasterRows } from './schemeMasterWriter';
@@ -49,7 +53,7 @@ export interface IngestJobArgs {
 
 export interface IngestJobResult {
   jobKey: string;
-  status: 'succeeded' | 'failed' | 'rolled_back' | 'skipped_kill_switch' | 'skipped_backoff' | 'skipped_source_outage';
+  status: 'succeeded' | 'failed' | 'rolled_back' | 'skipped_kill_switch' | 'skipped_backoff' | 'skipped_source_outage' | 'skipped_already_running';
   batchId: string | null;
   detail: string;
   runnerVersion: string;
@@ -101,6 +105,37 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   const start = decideStart(control, args.jobKey, nowIso);
   if (!start.start) {
     return { ...base, status: start.status, detail: start.detail };
+  }
+
+  // --- 1b. Stuck-batch reconciliation (found live in DEV, 2026-09-21: two
+  // 'running' rows for this exact job_key, 35 seconds apart, neither ever
+  // reaching a terminal status). Reconcile any abandoned run BEFORE opening
+  // a new one, and refuse to overlap with one that is still genuinely
+  // in flight.
+  const { data: runningRows } = await db
+    .from('ii_reference_import_batches')
+    .select('id, started_at')
+    .eq('source_key', source.sourceKey)
+    .eq('batch_kind', source.kind)
+    .eq('status', 'running');
+  const reconciliation = reconcileStaleRunningBatches(
+    (runningRows ?? []).map((r) => ({ id: r.id, started_at: r.started_at })),
+    nowIso,
+    STALE_RUNNING_BATCH_MINUTES
+  );
+  if (reconciliation.reconciledIds.length > 0) {
+    await db
+      .from('ii_reference_import_batches')
+      .update({
+        status: 'failed',
+        finished_at: nowIso,
+        error_code: 'STALE_RUNNING_RECONCILED',
+        error_detail: `Reconciled by a later invocation after exceeding ${STALE_RUNNING_BATCH_MINUTES} minute(s) with no terminal status -- most likely an interrupted process (e.g. a function execution-time limit) rather than a real success or failure.`,
+      })
+      .in('id', reconciliation.reconciledIds);
+  }
+  if (reconciliation.stillRunning) {
+    return { ...base, status: 'skipped_already_running' as IngestJobResult['status'], detail: reconciliation.detail };
   }
 
   // --- 2. Open the batch ledger row ----------------------------------------
@@ -382,8 +417,38 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     if (!error) counts.inserted += slice.length;
   }
 
-  // Corrections: the prior row is marked superseded and the new value is
-  // inserted alongside it. Never an in-place overwrite (D.3).
+  // Corrections (FIXED 2026-09-21 -- see NAV1_PROGRESS_LEDGER.md).
+  //
+  // REAL DEFECT FOUND AND CONFIRMED LIVE THIS SESSION: this loop's original
+  // form inserted a SECOND ii_prices_nav row for the SAME (instrument_id,
+  // price_date) as the row it was correcting, then updated the first row to
+  // 'superseded' -- but ii_prices_nav has a table-wide UNIQUE(instrument_id,
+  // price_date) constraint (migration 0033) with no partial/WHERE clause
+  // excluding superseded rows. The insert step therefore ALWAYS fails with
+  // a 23505 duplicate-key violation the instant a real correction occurs --
+  // confirmed live against DEV (scripts/nav1_correction_handling_live_test.mjs):
+  // `duplicate key value violates unique constraint "ii_prices_nav_instrument_id_price_date_key"`.
+  // This had never been caught because zero real corrections had ever
+  // occurred in DEV or production to exercise it (confirmed: 0 rows with
+  // quality_status='superseded' anywhere, before this fix).
+  //
+  // FIX: update the existing row IN PLACE with the corrected value, and
+  // record the full before/after audit trail in ii_reference_corrections
+  // (which already has previous_value/new_value jsonb columns for exactly
+  // this). This changes the documented D.3 promise from "two physical rows,
+  // one superseded" to "one current row, full audit trail in
+  // ii_reference_corrections" -- a genuine invariant change, not a cosmetic
+  // one, and it is called out explicitly here rather than silently
+  // reinterpreted. Making BOTH rows coexist would require either (a) a
+  // partial unique index excluding superseded rows, which breaks the
+  // existing, already-proven-live fresh-insert path's
+  // `.upsert(..., {onConflict:'instrument_id,price_date'})` call (PostgREST's
+  // onConflict cannot target a partial index's WHERE-qualified arbiter), or
+  // (b) a schema change (e.g. an is_current flag) with the same onConflict
+  // consequence. Both are real options a schema owner could still choose
+  // instead of this one; this fix was selected because it requires no
+  // migration, does not touch the proven-live fresh-insert path at all, and
+  // fully preserves the audit trail's information content.
   for (const w of supersedes) {
     const { data: prior } = await db
       .from('ii_prices_nav')
@@ -392,23 +457,18 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       .eq('price_date', w.priceDate)
       .maybeSingle();
     if (!prior) continue;
-    const { data: fresh, error } = await db.from('ii_prices_nav').insert({
-      instrument_id: w.instrumentId,
-      currency_code: w.currencyCode,
-      price_date: w.priceDate,
+    const { error } = await db.from('ii_prices_nav').update({
       price: w.price,
       source_timestamp: retrievedAt,
       data_version: `${parsed.parserVersion}:${parsed.fingerprint.sha256.slice(0, 12)}`,
       record_checksum: w.recordChecksum,
       import_batch_id: batchId,
       quality_status: 'ok',
-      correction_of_id: prior.id,
-    }).select('id').single();
-    if (error || !fresh) {
-      chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 0, error: error?.message ?? 'correction insert failed' });
+    }).eq('id', prior.id);
+    if (error) {
+      chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 0, error: error?.message ?? 'correction update failed' });
       continue;
     }
-    await db.from('ii_prices_nav').update({ quality_status: 'superseded', superseded_by_id: fresh.id }).eq('id', prior.id);
     await db.from('ii_reference_corrections').insert({
       target_table: 'ii_prices_nav',
       target_row_id: prior.id,
@@ -416,7 +476,7 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       previous_value: { price: prior.price },
       new_value: { price: w.price },
       actor_kind: 'system_import',
-      reason: `Source ${source.sourceKey} republished a different NAV for ${w.priceDate}; the prior row is retained and marked superseded.`,
+      reason: `Source ${source.sourceKey} republished a different NAV for ${w.priceDate}; the prior value is preserved in this audit record (previous_value) since ii_prices_nav's unique (instrument_id, price_date) constraint does not permit a second physical row for the same key -- see the code comment above this loop.`,
       batch_id: batchId,
     });
     counts.superseded += 1;
