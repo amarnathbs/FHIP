@@ -1,5 +1,31 @@
 # LR Production Traceability Matrix
 
+## 2026-09-21 ADDENDUM
+
+Rows re-classified below reflect direct 2026-09-21 source/migration inspection (not a relabelling of 09-14 prose). All other rows in §A–§K are unchanged from 09-14 and were not independently re-verified this pass.
+
+| ID | 09-14 | 09-21 update |
+|---|---|---|
+| FI-02 Net Worth = Gross Assets − Liabilities | REGRESSED AFTER PRIOR CERTIFICATION (P0-1) | **Fixed for the reported scenario** (`ea95507`); superseding commit `368d98f` discloses a narrower, still-open correlation question (fund-level netting) explicitly flagged to the PO. Reclassify: **DEFERRED — EXPLICIT PO AUTHORIZATION EXISTS** for the residual question (not "regressed," not a clean pass) |
+| FI-07 SMSF liabilities not double-subtracted | REGRESSED (P0-1) | Same reclassification as FI-02 — same underlying fix |
+| S-03 Detailed valuation / holdings maintenance | REGRESSED (P0-2, `42501`) | **Fixed** — migration `0148` restores the dropped guard bracket, confirmed on `origin/main`. Reclassify: **IMPLEMENTED — MAIN ONLY** pending a fresh live-DEV re-run (this pass's toolchain could not execute the oracle; see Cannot-Verify register) |
+| S-05 Holdings gross minus canonical liabilities | REGRESSED (P0-1) | Same reclassification as FI-02 |
+| U-09 Purge covers every document-capable path | PARTIALLY IMPLEMENTED (P1-3, `ii_source_documents` had no purge at all) | **Upgraded to PARTIALLY IMPLEMENTED, going-forward only** — migration `0161` (2026-09-19) wires a real, independently-traced purge call (`documentProcessing.ts:1201`); pre-`0161` documents remain unpurged. The *gate/malware* half of P1-3 (the other reason this row was marked partial) is untouched — see the new row below |
+| *(new)* U-11 FDH-3 production upload gate state | not applicable at 09-14 (gate was correctly OFF) | **NEW FINDING**: gate deliberately opened in production 2026-09-20 (commit `c4891185`, explicit PO decision) while the malware-scanning prerequisite (§13.1) remains unmet system-wide. Classification: **SECURITY-GATED — INTENTIONALLY DISABLED PENDING PREREQUISITES does not apply (the gate is now open, not disabled)**; the correct Section-5 classification is **IMPLEMENTED DIFFERENTLY — EXPLICIT PO AUTHORIZATION EXISTS**, carrying a live, disclosed operational risk (no scanning) rather than a defect in the gate mechanism itself | **P1** (operational-risk severity, not a code defect) |
+| P-01 / P-02 / P-05 Payments configuration | APPLICATION CODE DEPLOYED — CONFIGURATION MISSING (P1-2) | **Unchanged, now precisely re-confirmed**: exact missing vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`), exact fail-closed behavior confirmed symmetric for both providers (`stripeClient.ts:31-48`, `razorpayClient.ts:18-35`), route-level confirmation both checkout and both webhooks fail closed correctly. New, smaller finding: `checkout/route.ts`'s error responses leak the raw `NOT_CONFIGURED`/`KEY_ENVIRONMENT_MISMATCH` code to the end user instead of an honest sentence (P2, see the master addendum) |
+
+**§L Migration reconciliation — rows to add** (0140–0164 were absent from main at 09-14 baseline `ff35f54`; see `LR_2026_09_21_RECONCILIATION_ADDENDUM.md` §0b for the full 27-migration reconciliation):
+
+| Migration | On main | DEV applied | PROD applied | Drift |
+|---|---|---|---|---|
+| `0148` LR P0-2 fix (`smsf_recompute_fund` guard bracket) | Y | Not re-probed this pass (toolchain blocked) | **Cannot verify — production credentials withheld from this pass** | Fixes `0137`'s regression |
+| `0154` HUF entity type (India-only, PO-authorized 2026-09-15) | Y | Not re-probed this pass | Migration's own header states **NONE** as of 2026-09-15 — not re-confirmed as still true on 2026-09-21 | Not an LR requirement |
+| `0161` II source-document purge tracking | Y | Not re-probed this pass | **Cannot verify — production credentials withheld** | Partially closes P1-3's retention half |
+
+**§M Cleanup** — this pass's own synthetic DEV users (4 total, across `z01`/`z02`) were deleted at the end of each script run, confirmed in script output (`cleanup: deleted N synthetic DEV users`). No production writes were made or attempted this pass; production credentials were not available to this session.
+
+---
+
 **Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54`
 One row per atomic requirement (Section 4). Classification values are the 19 allowed by Section 5.
 

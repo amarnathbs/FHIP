@@ -1,5 +1,28 @@
 # LR Full Requirements Reconciliation
 
+## 2026-09-21 ADDENDUM
+
+Re-read directly against current `origin/main` (`a193583`, then `4e17d61` on this audit branch), not relabelled. This pass's own environment identity (per Section 30, printed before verification): see `LR_2026_09_21_RECONCILIATION_ADDENDUM.md` §top. Full Section 38 regression suite (`tsc`, `vitest`) was **not** re-run this pass — this worktree's `node_modules` could not be reliably installed after several attempts (documented in the master addendum); §5's table below is 09-14 evidence, not reconfirmed today.
+
+**§2 Master matrix — rows that changed:**
+
+| Requirement area | 09-14 verdict | 09-21 update |
+|---|---|---|
+| Global financial invariants | **FAIL** (P0, SMSF loan double-subtracted) | **Reported scenario fixed** (`ea95507`); the fix's own follow-up (`368d98f`) discloses a narrower, still-open correlation question, explicitly flagged to the PO rather than silently resolved either way. No longer a clean FAIL, not yet a clean PASS — see `LR_FINANCIAL_ORACLE_CERTIFICATION.md`'s 09-21 addendum |
+| SMSF workspace | **FAIL** (P0, `0137` regression breaks Detailed-mode editing) | **Fixed** — migration `0148` (confirmed on `origin/main`) restores the dropped guard bracket |
+| Upload security / raw deletion | PARTIAL (correct for FDH; absent for II) | **Materially changed, not simply "improved":** FDH production upload gate is now intentionally **open** (PO decision, 2026-09-20) while the malware-scanning prerequisite remains unmet for both FDH and II — this is a larger, not smaller, exposure surface than 09-14 found, now precisely classified per Section 13.7 rather than left as "gate correctly off." Separately, the II pipeline's purge gap is now partially closed (migration `0161`, going-forward only) |
+| Payments | **FAIL in production** (env vars not forwarded) | **Unchanged, now doubly confirmed** with exact missing var names and exact fail-closed behavior — see the master addendum |
+
+All other matrix rows were not independently re-verified this pass.
+
+**§3 Cross-module missing-requirement search — status of the sixteen items:** re-checked the two most safety-relevant ones directly. "Malware / virus scanning before parsing" — **still None**, confirmed both for FDH and for the Investment Intelligence adapter, whose own source now explicitly documents the gap in its own header (`lib/aie/adapters/investment-intelligence/dispatch.ts:51-62`, "the S3 + GuardDuty swap remains blocked infrastructure"). "A parser worker to consume the FDH ingestion queue" — **still None** (re-confirmed via the same `grep` used in the Import Support Matrix's 09-21 addendum: zero UI callers of the process routes). The other fourteen items were not individually re-checked this pass.
+
+**§4 Proven-by-construction — one claim is now even more clearly false than 09-14 found it.** "Production uploads structurally disabled regardless" (`FDH14_RESIDUAL_RISK_REGISTER.md:10`) was already found false on 09-14 because of the ungated Investment Intelligence surface. As of 2026-09-20 it is false for a second, larger reason: FDH's own gate, which 09-14 confirmed was "correctly OFF", is now deliberately open in production by explicit PO decision. **This residual-risk document was not corrected** — confirmed by direct re-read this pass (`FDH14_RESIDUAL_RISK_REGISTER.md:10` and `FDH16_RESIDUAL_RISK_REGISTER.md:176` both still assert the now-doubly-false premise). Recorded precisely in `LR_DEFERRED_SCOPE_RECONCILIATION.md`'s 09-21 addendum (D-04).
+
+**§5 Full repo regression — not re-run this pass.** Attempted three times; blocked by an environment/toolchain issue installing `node_modules` in this worktree (not a credentials or network problem — a direct `curl` to the real DEV Supabase endpoint succeeded, and `npm`'s own verbose log showed real registry fetches completing). Recorded as a genuine Cannot-Verify for this pass rather than silently treated as still-passing.
+
+---
+
 **Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54` · **Branch:** `audit/lr-independent-completeness-2026-09-14`
 
 This document records the audit's method, its evidence base, the Section 44 master matrix, the Section 25 cross-module missing-requirement search, the Section 27 proven-by-construction audit, and the Section 38 regression baseline.

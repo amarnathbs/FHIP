@@ -1,5 +1,17 @@
 # LR Entity Capability Matrix
 
+## 2026-09-21 ADDENDUM
+
+Re-checked directly against current `origin/main`, not relabelled:
+
+- **Row 27, SMSF "Production readiness"**: update from "**NOT READY** — P0-1, P0-2" to **"P0-2 fixed (migration `0148`, confirmed on `origin/main`). P0-1 fixed for the reported double-subtraction scenario; the fixing engineer's own commit (`368d98f`) discloses one still-open architectural question (correctly correlating 'already netted inside a fund's own valuation' vs. 'not netted anywhere') that awaits a Product Owner ruling — see `LR_2026_09_21_RECONCILIATION_ADDENDUM.md`."** Not "READY" outright — the disclosed open question is real, not resolved.
+- **§7 line "Entity liabilities NOT in personal DTI/DSR — PASS (structural)"**: re-read `lib/engines/dashboard.ts` and `householdContext.ts` this pass — the structural exclusion (business-entity tables never joined into `householdLiabilities`) is unchanged. Not re-run as a live oracle this pass (see the master addendum's Cannot-Verify register on the JS toolchain).
+- **P2-15 (`/companies` missing from `NAV_HREF_MODULE_MAP`)**: re-checked directly — `grep -n "companies" lib/nav/appNavCapability.ts` still returns zero matches. **Unchanged, still open.**
+- **Not covered by this matrix, and arguably should be from here on**: migration `0154` (2026-09-15) added a fifth `business_entities.entity_type`, `'huf'` (Hindu Undivided Family, India-only), under an explicit, separate Product Owner decision ("similar to family trust... all features of family trust need to adopt for HUF") — not an LR-11 requirement, not evaluated row-by-row against this matrix's capability columns in this pass, and per its own migration header carries **no production authority** as of 2026-09-15. Flagged so a future pass adds it as a sixth column rather than it silently riding on Family Trust's numbers.
+- Migration `0136` (Family Trust)'s production-application status could not be re-checked this pass — production credentials were deliberately withheld (see Cannot-Verify register). Everything else in §2 below (the DEV-vs-PROD CHECK-constraint table) reflects the 09-14 finding, not a fresh 09-21 probe.
+
+---
+
 **Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54`
 Rows and columns per Section 42.
 

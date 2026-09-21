@@ -1,5 +1,16 @@
 # LR Deferred-Scope Reconciliation
 
+## 2026-09-21 ADDENDUM
+
+Re-checked directly against current `origin/main`:
+
+- **D-01 (production upload gated OFF)** — **no longer accurate for FDH as stated.** `isFdhDocumentUploadEnabled()`'s hard allowlist now includes the real production Supabase project (commit `c4891185`, 2026-09-20). This time there **is** explicit Product Owner authorisation — corroborated directly by the coordinating session, not only a commit message — so the "Explicit PO authorisation found?" answer for this specific row flips from "Not in this repository" to **"Yes, but not recorded anywhere durable besides the commit message and this audit"** (a real, if smaller, gap: a decision this consequential ought to leave a documentary trail independent of one git commit). "Still missing today?" flips from Yes to **No, for FDH** — it is enabled, with the malware-scanning prerequisite (D-04) now the operative, higher-priority gap. Unchanged for the Investment Intelligence surface, which was already live and ungated before 09-14.
+- **D-04 (malware scanning residual-risk acceptance)** — **the false premise this row already named has not been corrected anywhere.** Directly re-read this pass: `docs/financial-data-hub/FDH14_RESIDUAL_RISK_REGISTER.md:10` and `docs/financial-data-hub/FDH16_RESIDUAL_RISK_REGISTER.md:176` **still both assert "production uploads structurally disabled regardless"** as the reason the missing scanner is rated only "P2 (bounded)" — a claim that has been false since 2026-09-20 and was already false for the Investment Intelligence surface before that. These two documents are now actively misleading to anyone who reads them without this audit's context. Not corrected by this audit (editing another programme's certification documents is outside this audit's narrow-remediation authority per Section 36), but named here precisely so it is not missed.
+- **D-25 (`deleteSourceDocumentObject()` had zero callers)** — **fixed.** Migration `0161` (2026-09-19) plus `lib/services/investment-intelligence/sourceDocumentPurge.ts` wire a real caller, independently traced this pass to a genuine call site in `documentProcessing.ts:1201` (not dead code). "Still missing today?" flips to **No, going forward** — but retroactively: the row's own "structurally missing" characterization no longer applies to new uploads, while documents uploaded before `0161` shipped remain unpurged (the migration's own header states this was a deliberate choice, not an oversight, left for an operator to trigger).
+- All other rows (D-02, D-03, D-05 through D-24, D-26) were not independently re-verified this pass and are carried forward as still the best available evidence.
+
+---
+
 **Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54`
 Mandatory per Section 26. Every use of *deferred*, *future phase*, *out of scope*, *not built*, *not needed*, *N/A*, *by design*, *would require PO decision*, *not attempted*, *not independently verified*, *production disabled*, *gate remains off* that materially affects Live Recovery scope.
 

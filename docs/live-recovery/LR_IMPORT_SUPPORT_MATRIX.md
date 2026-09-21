@@ -1,7 +1,14 @@
 # LR Import Support Matrix
 
-**Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54`
-Columns per Section 41. "Production Enabled" means the surface is reachable and functional for a real production user today.
+## 2026-09-21 ADDENDUM
+
+Re-read directly against current `origin/main` (not relabelled from the 09-14 prose below). Two real changes, one non-change worth naming precisely:
+
+1. **"Production enabled?" flips from No to Yes-with-caveats for every FDH-3 row** (Expenses AU/IN CSV+PDF, Income/Payslip, Liabilities AU/IN, Investments AU, Retirement) — `isFdhDocumentUploadEnabled()`'s hard project-ref allowlist now includes the real production Supabase project (commit `c4891185`, 2026-09-20, explicit PO decision — see `LR_2026_09_21_RECONCILIATION_ADDENDUM.md`). This is **not** the same as "Production certified" — that column is unchanged (**No**, still) because the malware-scanning prerequisite the "Outstanding blocker" column already named is still unmet, confirmed by direct inspection this pass (no route in `app/api/financial-data-hub/**` references scanning). Whether uploads can complete a storage write in production (the `fdh-source-documents` bucket's current existence) is a genuine Cannot-Verify — production credentials were deliberately withheld from this audit pass.
+2. **P1-7 (Expenses: nothing parses the panel's upload) is confirmed UNCHANGED** — re-checked directly this pass (`grep` over `components/**` and `app/(app)/**` for any caller of the bank-csv/bank-pdf `.../process` routes returns zero, same as 09-14). This matters precisely because it means opening the production gate on 2026-09-20 did **not** fix the Expenses journey — a production user can now technically reach the upload endpoint (gate is open), but the upload still dead-ends exactly as it did in DEV on 09-14. The other four FDH surfaces (Income, Liabilities, Investments AU, Retirement) do not share this specific defect — their own panels do reach the process/apply routes.
+3. **India CAS/CAMS row's "Raw deletion?" column changes from "No — none" to "Partial, going-forward only"** — migration `0161` (2026-09-19, confirmed on `origin/main`) wires a real delete-after-parse call, independently traced this pass to a genuine call site in `documentProcessing.ts:1201`, not dead code. It does not retroactively purge documents already uploaded before `0161` shipped.
+
+None of the other cells below were independently re-verified this pass (named institutions coverage, liability field mapping, the import-bridge architecture) — they are carried forward from 09-14 as still the best available evidence.
 
 ---
 
