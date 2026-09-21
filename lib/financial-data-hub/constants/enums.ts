@@ -291,9 +291,30 @@ export const FDH_ERROR_CODES_FDH5_ADDED = [
   'ocr_failed',
 ] as const;
 
-/** The complete current error-code set (FDH-1 + FDH-5). Used everywhere
- * OUTSIDE the frozen fdh1SchemaContract.test.ts assertion. */
-export const FDH_ALL_ERROR_CODES = [...FDH_ERROR_CODES, ...FDH_ERROR_CODES_FDH5_ADDED] as const;
+/**
+ * FDH-3 MALWARE-SCAN-GAP REMEDIATION WIDENING (2026-09-21): 1 new error code,
+ * additive to the FDH-1/FDH-5 set above. An independent audit found FDH-3's
+ * upload routes had no structural PDF check at all (see
+ * `lib/financial-data-hub/domain/fileValidation.ts`'s 2026-09-21 module-header
+ * addition and `docs/financial-data-hub/FDH3_SHARED_MALWARE_GATE_DESIGN.md`).
+ * Deliberately NOT reusing the existing `malware_detected` code: that would
+ * overclaim a real malware-scanner verdict this codebase does not have.
+ * `structural_scan_rejected` names exactly what actually happened — a
+ * disclosed structural/heuristic scan rejected the file — nothing more.
+ * Migration `0165_fdh3_structural_scan_error_code.sql` (DRAFTED, NOT applied)
+ * widens the check constraints on `fdh_statement_uploads.error_code` and
+ * `fdh_upload_sessions.failure_code` to match.
+ */
+export const FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED = ['structural_scan_rejected'] as const;
+
+/** The complete current error-code set (FDH-1 + FDH-5 + FDH-3-structural-scan
+ * widening). Used everywhere OUTSIDE the frozen fdh1SchemaContract.test.ts
+ * assertion. */
+export const FDH_ALL_ERROR_CODES = [
+  ...FDH_ERROR_CODES,
+  ...FDH_ERROR_CODES_FDH5_ADDED,
+  ...FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED,
+] as const;
 export type FdhErrorCode = (typeof FDH_ALL_ERROR_CODES)[number];
 
 // --- Transactions -----------------------------------------------------------
@@ -821,6 +842,14 @@ export type FdhUploadSessionStatus = (typeof FDH_UPLOAD_SESSION_STATUSES)[number
  * never has to edit that frozen constraint. See migration 0058 for the full
  * rationale.
  */
+/**
+ * FROZEN — exactly the 8 values migration 0058 shipped.
+ * `tests/unit/fdh3SchemaContract.test.ts` asserts this list byte-for-byte
+ * against that migration's own (un-widened) check constraint text, same
+ * discipline as `FDH_ERROR_CODES` above. FDH-3's 2026-09-21 malware-scan-gap
+ * widening lives in `FDH_UPLOAD_SESSION_FAILURE_CODES_FDH3_STRUCTURAL_SCAN_ADDED`
+ * below — do not add to this array directly.
+ */
 export const FDH_UPLOAD_SESSION_FAILURE_CODES = [
   'unsupported_file_type',
   'file_too_large',
@@ -831,7 +860,28 @@ export const FDH_UPLOAD_SESSION_FAILURE_CODES = [
   'storage_error',
   'internal_error',
 ] as const;
-export type FdhUploadSessionFailureCode = (typeof FDH_UPLOAD_SESSION_FAILURE_CODES)[number];
+
+/**
+ * FDH-3 MALWARE-SCAN-GAP REMEDIATION WIDENING (2026-09-21): 1 new session
+ * upload-mechanics failure code, additive to the frozen set above. Mirrors
+ * `FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED`'s rationale exactly —
+ * `completeUpload()` (services/uploadLifecycle.ts) sets this same value on
+ * whichever of `fdh_upload_sessions.failure_code` /
+ * `fdh_statement_uploads.error_code` applies at the point of rejection.
+ * Migration `0165_fdh3_structural_scan_error_code.sql` (DRAFTED, NOT
+ * applied) widens the check constraint on `fdh_upload_sessions.failure_code`
+ * to match.
+ */
+export const FDH_UPLOAD_SESSION_FAILURE_CODES_FDH3_STRUCTURAL_SCAN_ADDED = ['structural_scan_rejected'] as const;
+
+/** The complete current session-failure-code set (FDH-3 original +
+ * structural-scan widening). Used everywhere OUTSIDE the frozen
+ * fdh3SchemaContract.test.ts assertion. */
+export const FDH_ALL_UPLOAD_SESSION_FAILURE_CODES = [
+  ...FDH_UPLOAD_SESSION_FAILURE_CODES,
+  ...FDH_UPLOAD_SESSION_FAILURE_CODES_FDH3_STRUCTURAL_SCAN_ADDED,
+] as const;
+export type FdhUploadSessionFailureCode = (typeof FDH_ALL_UPLOAD_SESSION_FAILURE_CODES)[number];
 
 /**
  * UX-facing upload substates (spec section 14). These are DERIVED display

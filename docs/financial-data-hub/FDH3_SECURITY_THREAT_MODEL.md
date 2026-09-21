@@ -28,3 +28,23 @@ scanner, #9 orphan report not yet run live, #12 log-PII review is manual not
 automated, #15 concurrency proven only at the domain-logic level, not under
 real load) — none of these four are silently omitted; each is named again in
 `FDH3_COMPLETION_REPORT.md`'s Known Findings section.
+
+## 2026-09-21 update — threat #6 partially addressed, not closed
+
+An independent audit re-confirmed threat #6 was still fully open in
+production (zero scanning of any kind on any FDH-3 upload route). This pass
+added `scanPdfStructure` (shared with the AI document-extraction pipeline —
+see `lib/shared/pdfStructuralScan.ts`) to `validateUploadedFile()`, run on
+every `application/pdf` upload before storage write or parser/OCR queueing.
+This closes ONE specific, demonstrated bypass class (embedded
+JavaScript/launch actions, including inside a `/FlateDecode`-compressed
+stream, plus polyglot trailing content after `%%EOF`) — it is
+STRUCTURAL/HEURISTIC validation, **not** a real malware/AV scanner. Row #6's
+own residual-risk wording above ("a well-formed malicious PDF/CSV that
+passes structural checks is not caught") remains true: this only narrows
+what counts as "passes structural checks," it does not add signature-based
+or behavioural scanning. CSV uploads are entirely unaffected — there is no
+equivalent scan for CSV's structure. See
+`FDH3_SHARED_MALWARE_GATE_DESIGN.md` for the proposed real fix (a shared
+S3-quarantine + GuardDuty Malware Protection gate) and why that remains
+blocked on AWS operator access, not application code.

@@ -13,7 +13,8 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
-  FDH_ALL_ERROR_CODES,
+  FDH_ERROR_CODES,
+  FDH_ERROR_CODES_FDH5_ADDED,
   FDH_PDF_CLASSIFICATIONS,
   FDH_PDF_EXTRACTION_METHODS,
 } from '@/lib/financial-data-hub/constants/enums';
@@ -30,6 +31,16 @@ const EVENT_TYPES_AS_OF_FDH5 = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R8_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH5_ADDED,
 ];
+
+// FDH-3 malware-scan-gap remediation (2026-09-21) found this same
+// "test the ever-growing ALL constant against one frozen migration" defect
+// class already present here: this file previously imported
+// `FDH_ALL_ERROR_CODES` directly, which broke the instant any LATER phase
+// (this one) widened that constant further, exactly the failure mode
+// `EVENT_TYPES_AS_OF_FDH5` above was already written to avoid for audit
+// event types. Fixed the same way — composed from the individual `_ADDED`
+// constants, frozen at exactly what migration 0071 declared.
+const ERROR_CODES_AS_OF_FDH5 = [...FDH_ERROR_CODES, ...FDH_ERROR_CODES_FDH5_ADDED];
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0071_fdh5_bank_pdf_engine_foundation.sql';
@@ -92,7 +103,7 @@ describe('FDH-5 new-column check constraints match their TypeScript vocabularies
     const slice = SQL.slice(idx, idx + 900);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_ERROR_CODES].sort());
+    expect(values.sort()).toEqual([...ERROR_CODES_AS_OF_FDH5].sort());
   });
 
   it('fdh_document_audit_events.event_type widened constraint matches exactly the FDH-3 + R7 + R8 + FDH-5 TypeScript vocabulary (as of this migration — not later widenings)', () => {
