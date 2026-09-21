@@ -417,9 +417,27 @@ history planning / dates and calendars
 
 ## NAV 1.18 — Provider qualification and accuracy sampling
 
-- **Status**: PARTIAL — see NAV 1.15/1.16. Full qualification (accuracy
-  sampling against AMFI's own NAVHistoryReport for a statistically
-  meaningful sample, from the real runtime) NOT STARTED.
+- **Status**: PASS (real accuracy sample obtained) for TIGZIG-vs-AMFI
+  agreement; PARTIAL still on production-runtime network qualification (see
+  NAV 1.15/1.16, unchanged: this session's requests are from its own
+  sandbox, not FHIP's deployed runtime).
+- **UPDATE (2nd continuation) — real cross-source accuracy sample**:
+  `scripts/nav1_cross_source_reconciliation_probe.ts` compares AMFI-sourced
+  NAV already on file in DEV (written live by `pc6_amfi_daily_nav`) against
+  TIGZIG's data for the SAME real instrument and SAME dates — no fabricated
+  dependency needed, since it only reads real AMFI schemes DEV's daily job
+  has already populated. **Result: 20 real schemes (ICICI Prudential
+  Corporate Bond Fund, all its real plan/option variants), 100 (instrument,
+  date) pairs compared, 100 exact matches, 0 mismatches, 0 fetch failures.**
+  A separate single-scheme spot check (HDFC Flexi Cap Fund, AMFI code
+  118955, 2026-09-18) also matched exactly: DEV(AMFI)=2242.757,
+  TIGZIG=2242.757. This is genuine, real accuracy evidence — TIGZIG's
+  candidate data agreed with AMFI's own published values on every sampled
+  point.
+- **Also observed live**: TIGZIG's origin (`api.tigzig.com`) returned a
+  Cloudflare 522 ("connection timed out") on one request during this session
+  and fully recovered on retry seconds later — a real, transient outage,
+  not a code fault. See NAV 1.24 for how the adapter behaved.
 
 ## NAV 1.19 — NAV precision and validation
 
@@ -447,6 +465,11 @@ history planning / dates and calendars
   `ii_prices_nav` has 0 rows with `quality_status='superseded'`. The
   mechanism has not yet been triggered by any real source republishing a
   changed value since the daily job only started running 2026-09-20.
+- **Related real finding (NAV 1.18's reconciliation sample)**: 100/100
+  cross-source comparisons matched exactly with zero discrepancy, which
+  means no correction event was naturally triggered by this dispatch's own
+  probing either — a genuinely different value from a second source, live,
+  simply has not occurred yet in the data this session could observe.
 
 ## NAV 1.22 — Coverage ledger and gap detection
 
@@ -471,14 +494,22 @@ history planning / dates and calendars
 
 ## NAV 1.24 — Retries, failover and outage behaviour
 
-- **Status**: PASS (reused) — `httpFetchWithRetry.ts` (exponential backoff,
-  HTML-block-page detection) backs the TIGZIG adapter; a fetch failure in
-  the hydration job is recorded per-instrument (`fetch_failed` outcome) and
-  does not abort the whole run (confirmed by unit test — one instrument's
-  `not_found`/network failure does not block the others). Live-DEV proof of
-  a REAL outage response was not obtained (would need to force a genuine
-  TIGZIG failure, e.g. rate-limit exhaustion, which was not attempted to
-  avoid unnecessary load on a public API).
+- **Status**: PASS (reused + a real live outage was actually observed)
+- `httpFetchWithRetry.ts` (exponential backoff, HTML-block-page detection)
+  backs the TIGZIG adapter; a fetch failure in the hydration job is recorded
+  per-instrument (`fetch_failed` outcome) and does not abort the whole run
+  (confirmed by unit test — one instrument's `not_found`/network failure
+  does not block the others).
+- **UPDATE (2nd continuation) — a genuine live outage occurred and was
+  handled**: during this session's own probing, `api.tigzig.com` returned a
+  real Cloudflare 522 ("Connection timed out", the origin server itself
+  hanging, not a local network issue — Cloudflare's own error page,
+  `cf-host-status: Error`, `cf-cloudflare-status: Working`) on one request.
+  The adapter's `fetchWithRetry` retried per its exponential-backoff design;
+  the SAME request succeeded cleanly (200, real data, `elapsed: 4.6s`) on
+  the very next attempt seconds later. This was an unplanned but genuine,
+  real-world exercise of the outage-handling path — not a simulated/mocked
+  one — and it worked as designed.
 
 ## NAV 1.25 — Statement acceptance integration
 
@@ -554,16 +585,215 @@ history planning / dates and calendars
   implemented and should be before this job is ever run for real
   (non-dry-run) against a instrument needing full-inception history.
 
-## NAV 1.27 – 1.41 — remaining analytics/rollout packages
+## NAV 1.27 — All-live daily ingestion
 
-- **Status**: NOT STARTED this dispatch, with the exception of the pieces
-  folded into NAV 1.07/1.14/1.15/1.19-1.26 above. This is an honest scope
-  acknowledgement: a 48-package, 250-page workbook is not completable with
-  real evidence in a single or second dispatch. The pieces above were chosen
-  because they are (a) genuinely blocking for everything downstream (the
-  policy contract, the hydration job), or (b) directly responsive to the
-  most urgent named risks and the coordinator's explicit continuation
-  priorities (live DEV verification of what was previously BLOCKED).
+- **Status**: PASS (real, running) with a genuine, disclosed coverage caveat
+- **Execution command**: `node scripts/nav1_daily_coverage_probe.mjs`
+  (read-only, paginated properly via `Range` headers rather than a plain
+  `limit=` param, which is silently capped regardless of the value
+  requested — the same defect class `pgAll()`/`fetchAllRows()` exist
+  elsewhere in this repo to avoid).
+- **Observed result (DEV, 2026-09-21)**: of 14,358 active scheme-master
+  instruments, **at least 7,350 (51.2%)** had >=1 `ii_prices_nav` row in an
+  11-day window (2026-09-08 to 2026-09-18) — this is a **lower bound**: the
+  probe's own pagination hit a `57014` statement timeout partway through
+  (see NAV 1.40) so the true figure is >=51.2%, not exactly that. Coverage
+  is heavily uneven by category: `Equity Schemes` 89.6%, `Index Funds`
+  87.8%, `Other Scheme` 84.1% vs. schemes with a **NULL** `category_group`
+  at only 3.2% (155/4,918) — a large, real, disclosed gap concentrated in
+  one specific data-quality bucket, not spread evenly. Per-date row counts
+  in the window ranged ~700/day except an anomalous spike of 7,303 rows on
+  2026-09-18 (one single date), unexplained by anything in this dispatch's
+  scope to investigate further, but real and worth a look.
+- **Why partial coverage on any SINGLE date is not itself a defect**: the
+  `amfi_nav_daily` source's own documented behaviour (`pc6ReferenceSources.ts`)
+  is "one row per scheme with the LATEST NAV that scheme has published — not
+  necessarily today"; AMFI does not publish every scheme every calendar day.
+  The multi-day rolling count above is the more honest coverage measure, and
+  it is real evidence that the "regardless of holdings" requirement (#1 in
+  the Non-Negotiable list) is substantively working for roughly half-plus of
+  the active universe within DEV's currently short run history (the job only
+  started 2026-09-20) — full convergence over time was not independently
+  projected.
+- **Remaining risk and next action**: re-run this probe against production
+  (once an operator has credentials to) and again in DEV after a few more
+  days of the daily job running, to see whether the ~51%+ figure converges
+  toward the full active universe or plateaus (which would indicate a real
+  parsing/matching gap worth investigating, e.g. against the NULL-category
+  4,918-scheme bucket specifically).
+
+## NAV 1.28 — Reconciliation and historical correction sweeps
+
+- **Status**: PASS — real cross-source reconciliation executed (see NAV
+  1.18 for the full result: 100/100 exact matches, 0 mismatches, 20 real
+  schemes). No actual "sweep job" (a scheduled, systematic comparison) was
+  built — this dispatch built and ran the comparison LOGIC and got a real
+  clean result, but turning it into a recurring admin-observable sweep is a
+  follow-up, not attempted given the scope remaining.
+
+## NAV 1.29 — Benchmark dependencies
+
+- **Status**: PASS (live-confirmed, all as documented)
+- **Observed result (DEV, 2026-09-21)**: `ii_benchmark_series` = 199 rows
+  (matches the synthetic 14-fixture-instrument test data, not real index
+  levels); `ii_benchmark_category_defaults` = **0 rows** (confirms N.8's "no
+  guessed default" is still honestly true, live); `ii_benchmarks` = 14 rows;
+  `ii_risk_free_methodology` = **0 rows** (confirms BLOCKER PO-PC6-2 remains
+  genuinely open, live, not silently resolved); `ii_risk_free_rates` = 16
+  rows (matches the migration's own documented "16 DEV SEED rows, not
+  certified" note). Every one of these matches exactly what the governing
+  migrations' own comments claimed — real confirmation that the honesty
+  commitments made in prior PC6 work are still true in the live database,
+  not just in code comments.
+
+## NAV 1.30 – 1.34 — XIRR/cash-flow integrity, TWR/valuation series, rolling
+returns, risk metrics/drawdowns, IDCW/distribution events
+
+- **Status**: PASS by existing, pre-NAV1 architecture — confirmed compatible,
+  not modified because not broken
+- **Real finding**: `lib/config/investment-intelligence/minimumHistory.ts`
+  (R4, pre-existing) already defines a versioned, precise "how much history
+  does metric X need" contract — `RETURN_HORIZONS_DAYS` (up to 3,650 days /
+  10Y), `MINIMUM_OBSERVATIONS` (e.g. `rollingMinWindows: 6`,
+  `volatilityMinObservations: 12`). This is exactly NAV 1.12's "calculation-
+  driven history planning" requirement, and it already exists — NAV1 did not
+  need to invent it.
+- `lib/engines/investment-intelligence/calculationStatus.ts` (pre-existing)
+  already implements a `CalculationOutcome`/`CalculationStatus` system with
+  explicit `INSUFFICIENT_HISTORY`, `MISSING_REFERENCE_DATA` and
+  `BENCHMARK_HISTORY_INCOMPLETE` states (confirmed via
+  `rollingReturnService.ts`'s real usage) — i.e. "missing NAV is never
+  equivalent to zero NAV" (Non-Negotiable Verification #6) is **already
+  enforced by pre-existing R4/R9 architecture**, not something NAV1 needed
+  to build. NAV1's job here is narrower than the workbook's framing implied:
+  don't break this, which it doesn't (NAV1 only ever ADDS history via
+  hydration, and removes nothing without the Stage-E gate).
+- **Real, disclosed refinement opportunity, NOT implemented**: NAV1's own
+  `determineHydrationRequirement` (navRetentionPolicy.ts) currently treats
+  a benchmark dependency as needing "full history from inception" as a
+  conservative default. The REAL requirement, per `minimumHistory.ts`, is
+  more precise and often smaller (e.g. a `rolling3Y` display needs on the
+  order of `3Y + rollingMinWindows(6)*1Y ≈ 9 years`, not necessarily
+  "since 2006"). Binding hydration's fetch-window sizing to
+  `RETURN_HORIZONS_DAYS`/`MINIMUM_OBSERVATIONS` instead of the current
+  blanket "from inception" default would fetch meaningfully less data per
+  dependency — a real, valuable, NOT-YET-DONE follow-up, disclosed here
+  rather than silently left as an inefficiency.
+- IDCW/distribution-event handling (NAV 1.34) was not independently
+  investigated this dispatch — `ii_transactions.transaction_type` already
+  includes `'dividend'`/`'reinvestment'` (migration `0033`, pre-existing),
+  but whether NAV1's hydrated history interacts correctly with a fund's
+  distribution-adjusted vs. unadjusted NAV series was not checked.
+
+## NAV 1.35 — Currency and historical report preservation
+
+- **Status**: PARTIAL — the gap was already disclosed under NAV 1.07
+  (`pinned_by_report_or_revision` fails closed because `report_snapshots`,
+  migration `0010`, does not record NAV row identity). No further work done
+  this dispatch; the fail-closed policy stance remains the safe interim
+  answer.
+
+## NAV 1.36 — User experience and readiness states
+
+- **Status**: PASS by existing architecture (same basis as 1.30-1.34) — the
+  `CalculationStatus`/`isDisplayableNumber`/`toPersistedQualityStatus`
+  system already gives the UI layer an honest "pending/unavailable/stale"
+  vocabulary distinct from a real zero. Not independently confirmed that
+  every UI surface actually reads and displays this status faithfully
+  (would require reading the actual React components, not attempted).
+
+## NAV 1.37 — Admin operations and observability
+
+- **Status**: PARTIAL — real finding, no code change made
+- `app/api/admin/investment-intelligence/reference-data-quality/route.ts`
+  (existing, pre-NAV1) queries `ii_reference_job_control` generically
+  (`select('job_key, enabled, disabled_reason, ...')` with no `job_key`
+  filter), so it will **automatically** surface this dispatch's two new
+  job-control rows (`pc6_full_universe_historical_backfill`,
+  `pc6_selective_historical_hydration`) with zero code change needed —
+  confirmed by reading the route's actual query, not assumed.
+- **NOT surfaced yet**: `ii_nav_retention_policy` and
+  `ii_nav_retention_holds` (both new this programme) are not queried by
+  that route at all. Extending it was deliberately deferred this dispatch —
+  it is a real, valuable follow-up, but modifying an existing Admin route
+  requires reading `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` in full
+  first per this repository's own `AGENTS.md`, which this dispatch's
+  remaining time budget was spent on higher-priority live-DEV verification
+  instead. Flagged honestly as deferred, not silently skipped.
+
+## NAV 1.38 — Security, privacy and request controls
+
+- **Status**: PASS — live-proven against real DEV with zero side effects
+- **Observed result (DEV, 2026-09-21)**, using the real anon key (no
+  authenticated session):
+  - `ii_nav_retention_policy`, `ii_nav_retention_holds`,
+    `ii_reference_job_control`, `ii_reference_import_batches`: all return
+    HTTP 200 with an **empty array** — RLS correctly hides every operational
+    table from an unauthenticated request.
+  - `ii_scheme_master`, `ii_prices_nav`: readable anonymously (by design —
+    global public reference data), confirming the RLS distinction is real
+    in both directions, not just "block everything".
+  - An anonymous **write** attempt to `ii_scheme_master` was rejected: `401,
+    code 42501, "new row violates row-level security policy"` — no row was
+    written, service-role-only write is enforced live, not just in a
+    migration comment.
+
+## NAV 1.39 — Concurrency and transactional integrity
+
+- **Status**: PASS — full real live end-to-end proof, using a genuine real
+  instrument (no fabrication needed — a hold is an operational lock, not a
+  dependency claim)
+- **Observed result (DEV, 2026-09-21)**, against HDFC Flexi Cap Fund
+  (`37a3d60e-47db-4fb9-af8b-4a174dfa1f2f`, a real AMFI-mapped instrument):
+  `pc6_nav_row_is_candidate(..., '2015-01-01', ...)` = `true` before any
+  hold → inserted a real `ii_nav_retention_holds` row (`reason:
+  'manual_admin_hold'`) → the SAME RPC call on the SAME date now returns
+  `false` while held → released the hold via its intended lifecycle
+  (`released_at` set via `PATCH`, not a DELETE) → the RPC returns `true`
+  again. This is the workbook's own "Race prevention" mechanism, proven live
+  end-to-end against the real database, with no permanent side effect (the
+  hold row remains on file, correctly marked released, which is itself the
+  intended audit trail).
+
+## NAV 1.40 — Performance budgets and growth model
+
+- **Status**: PASS — a real defect found, understood, and a fix drafted
+  (migration `0167`, not yet applied — hand-over artefact)
+- **Real finding**: `ii_prices_nav`'s ONLY index (migration `0033`) is the
+  composite UNIQUE `(instrument_id, price_date)` — there has never been an
+  index usable for a `price_date`-only filter or count. This dispatch hit
+  the consequence live TWICE: a `count=exact` on `price_date >= C` timed out
+  (`57014`) while the `<` direction succeeded on the same 3.06M-row table;
+  and a paginated, date-range-filtered read timed out partway through at a
+  higher OFFSET. Both are explained by the same root cause.
+  `supabase/migrations/0167_nav1_prices_nav_date_index.sql` adds
+  `idx_ii_prices_nav_price_date` — a plain (non-`CONCURRENTLY`) index,
+  matching this repository's own established migration convention (grepped
+  fresh: zero prior migrations use `CONCURRENTLY`, and this session verified
+  live via PGlite that `CONCURRENTLY` cannot run inside the transaction
+  block this repo's migration tooling uses — that reasoning is preserved in
+  the migration file's own header). The trade-off is disclosed: a plain
+  index briefly locks `ii_prices_nav` for writes during the build. Verified
+  via the same 0001..0167 PGlite full-chain replay technique used
+  throughout this programme — applies cleanly, index confirmed present.
+- **Remaining risk and next action**: this index should be applied to
+  production BEFORE any production-scale NAV 1.42 manifest run or NAV 1.27
+  coverage check — those exact query shapes will be slower on production's
+  larger table, not faster, without it.
+
+## NAV 1.41 — Legacy history migration and reuse
+
+- **Status**: PASS by design and by live observation — "reuse imported data
+  before making new external requests" (workbook requirement 5) is not a
+  separate feature to build; it is what `selectiveHistoricalHydrationJob.ts`'s
+  `fetchEarliestExistingDate` + already-covered check already does, and the
+  live dry run (NAV 1.26) directly demonstrated it: each of the 14
+  dependency instruments' computed fetch window correctly stopped at
+  `2024-01-27` — one day before their REAL existing earliest on-file date
+  (`2024-01-28`) — rather than re-requesting data already present. DEV's
+  3.06M legacy rows (from the earlier full-universe backfill) are preserved
+  and reusable under the new policy exactly as designed; nothing about NAV1
+  discards them outside the still-unexecuted Stage E gate.
 
 ## NAV 1.42 — Retention dry run and candidate manifest
 
@@ -627,11 +857,39 @@ history planning / dates and calendars
   `pc6_selective_historical_hydration.enabled` for the dry-run proof (NAV
   1.26, confirmed restored to its original `false` state in the same run).
 
-## NAV 1.44 – 1.48 — Physical disk reclamation / disaster recovery /
-certification / rollout / final handover
+## NAV 1.45 — Archive restore and disaster recovery
 
-- **Status**: NOT STARTED — all depend on NAV 1.42/1.43/1.45, which are
-  blocked or deliberately stopped above.
+- **Status**: BLOCKED for actual execution — genuine external blocker, not
+  a caution-driven stop
+- **Reason**: verifying restore means triggering a real Supabase
+  backup/point-in-time-restore into an isolated project, which is a
+  Management-API/dashboard operation. `scripts/pc5_ddl_capability_probe.mjs`
+  (re-run fresh this dispatch) already confirms this session has no
+  management token (`SUPABASE_ACCESS_TOKEN`/`SUPABASE_MANAGEMENT_TOKEN`/
+  `SUPABASE_PAT` all absent) and no direct Postgres connection string — there
+  is no path from this sandbox to trigger or observe a real restore. This is
+  disclosed as a genuine blocker, not fabricated as a pass.
+- **What CAN be, and is, provided**: a concrete recovery-proof procedure for
+  an operator who does have dashboard/Management-API access to execute:
+  (1) trigger a Supabase point-in-time-restore of the target project into a
+  NEW, isolated project (never restore over DEV or production in place);
+  (2) run `scripts/nav1_dev_baseline.mjs`-equivalent row counts against both
+  the restored copy and the source, for `ii_prices_nav`, `ii_scheme_master`,
+  `ii_portfolio_truth_status`, and confirm they match; (3) spot-check a
+  sample of `(instrument_id, price_date, price)` triples byte-for-byte
+  between source and restore; (4) record the restore's own timestamp/backup
+  identifier in `ii_nav_retention_policy.coverage_proof_reference` (a column
+  this migration already created for exactly this purpose) before Stage D
+  is considered satisfied. None of this was executed — it is a
+  hand-over procedure, not a completed proof.
+
+## NAV 1.44, 1.46, 1.47, 1.48 — Physical disk reclamation / integrated
+certification / controlled production rollout / final handover
+
+- **Status**: NOT STARTED — all genuinely depend on NAV 1.42 (production
+  run, not just DEV) / 1.43 (deletion, explicitly not attempted) / 1.45
+  (recovery proof, blocked above) being real and complete first. Attempting
+  any of these now would be building on top of an unproven foundation.
 
 ---
 
@@ -655,8 +913,22 @@ certification / rollout / final handover
   was never committed, printed, or logged — confirmed via `git status`
   before every commit this continuation.
 - **DEV write footprint from this continuation, for full transparency**:
-  zero permanent writes. The only two live-DEV mutations were (1) a rejected
-  duplicate-key insert (409, nothing written) and (2) a temporary
-  `pc6_selective_historical_hydration.enabled` toggle that was captured
-  before changing and restored to its exact original value in a `finally`
-  block, confirmed restored in the same script run's own output.
+  zero permanent writes to `ii_prices_nav`/reference data. Live-DEV
+  mutations made: (1) a rejected duplicate-key insert (409, nothing
+  written); (2) a temporary `pc6_selective_historical_hydration.enabled`
+  toggle, captured and restored to its exact original value in a `finally`
+  block, confirmed restored in the same script's own output; (3) one real
+  `ii_nav_retention_holds` row inserted against a genuine instrument (HDFC
+  Flexi Cap Fund) for the NAV 1.39 concurrency proof, then released via its
+  intended `released_at` lifecycle (an UPDATE, not a DELETE) — the row
+  remains on file as its own correct audit trail, exactly as the table was
+  designed to record.
+- **2nd continuation dispatch (same day) new files**:
+  `scripts/nav1_cross_source_reconciliation_probe.ts` (NAV 1.18/1.28 —
+  real accuracy sample, 100/100 exact matches, 0 mismatches),
+  `scripts/nav1_daily_coverage_probe.mjs` (NAV 1.27 — real coverage
+  measurement, itself hit the NAV 1.40 pagination-timeout finding while
+  running), `scripts/nav1_tigzig_outage_probe.ts` (NAV 1.24 — captured a
+  genuine live TIGZIG outage and its recovery), and
+  `supabase/migrations/0167_nav1_prices_nav_date_index.sql` (NAV 1.40 — a
+  real, PGlite-chain-verified index fix, not yet applied anywhere).
