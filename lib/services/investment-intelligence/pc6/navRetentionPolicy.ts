@@ -211,9 +211,62 @@ export interface HydrationRequirement {
   reasons: Extract<KeepReason, 'accepted_statement_history' | 'benchmark_dependency'>[];
 }
 
+// ---------------------------------------------------------------------------
+// Benchmark-only lookback: GROUNDED in the actual calculation code, not a
+// guess. Traced live (this session) through the real call chain a benchmark
+// comparison depends on:
+//
+//   lib/engines/investment-intelligence/rollingReturnService.ts
+//     -> ROLLING_HORIZON_YEARS = [1, 3, 5]  (the only horizons ever computed)
+//   lib/engines/investment-intelligence/rollingReturns.ts:rollingReturnSeries()
+//     -> for EVERY month-end observation `end` in the series, it looks
+//        `windowYears * 365` days back for a matching start point and forms
+//        ONE window per month-end `end` date (i.e. windows are stepped
+//        MONTHLY, one per available month-end observation -- NOT stepped by
+//        windowYears, and NOT windowYears*rollingMinWindows apart). A series
+//        needs `MINIMUM_OBSERVATIONS.rollingMinWindows` (6) such windows
+//        before it reports anything (`INSUFFICIENT_HISTORY` otherwise).
+//   lib/config/investment-intelligence/minimumHistory.ts
+//     -> rollingMinWindows = 6; the other benchmark-relevant metrics
+//        (volatility/Sharpe/Sortino/beta/tracking-error/information-ratio at
+//        12 periodic observations, Calmar at 365 days) all need LESS history
+//        than the rolling5Y+6-windows case, so that case is the true maximum.
+//
+// Therefore the REAL minimum lookback a benchmark-only dependency needs is:
+//   max(ROLLING_HORIZON_YEARS) * 365 days
+//   + (rollingMinWindows - 1) EXTRA MONTH-END OBSERVATIONS to have 6 valid
+//     window-end dates once the window itself becomes satisfiable
+// This is materially smaller than "from inception" for any scheme with more
+// than ~6 years of real history -- e.g. a 20-year-old scheme's benchmark
+// comparison does NOT need all 20 years, only ~6.
+//
+// This does NOT apply to an ACCEPTED-STATEMENT complete_from_inception
+// dependency, which is a genuinely different requirement (an investor's own
+// XIRR since their real first cash flow needs their real inception date,
+// regardless of any rolling-window formula) -- that case correctly stays
+// unbounded (fromDate: null) below.
+const MAX_ROLLING_HORIZON_YEARS = 5; // grounded: max(ROLLING_HORIZON_YEARS) in rollingReturnService.ts
+const ROLLING_MIN_WINDOWS = 6; // grounded: MINIMUM_OBSERVATIONS.rollingMinWindows in minimumHistory.ts
+// +31 days/month (calendar-safe upper bound, not 30.44 average) for the
+// extra month-end observations, plus the algorithm's own 20-day window-match
+// tolerance, plus a further 30-day safety margin for weekend/holiday gaps
+// between the daily NAV series and the monthly grid `toMonthEndSeries()`
+// derives from it. Every constant here traces to a cited line above or is
+// explicitly marked as an added safety margin -- never an unexplained number.
+export const BENCHMARK_LOOKBACK_DAYS =
+  MAX_ROLLING_HORIZON_YEARS * 365 + (ROLLING_MIN_WINDOWS - 1) * 31 + 20 /* window-match tolerance */ + 30 /* gap safety margin */;
+
+function subtractDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function determineHydrationRequirement(
   instrumentId: string,
-  ctx: Pick<PolicyContext, 'acceptedDependencies' | 'benchmarkDependencies'>
+  ctx: Pick<PolicyContext, 'acceptedDependencies' | 'benchmarkDependencies'>,
+  /** ISO date to measure a benchmark-only lookback from. Required only when a benchmark-only case is reached; the changeover date C is the correct anchor (the last date daily collection alone can't yet cover). */
+  benchmarkLookbackAnchorDate?: string
 ): HydrationRequirement {
   const reasons: HydrationRequirement['reasons'] = [];
   let fromDate: string | null = null;
@@ -241,10 +294,21 @@ export function determineHydrationRequirement(
 
   if (ctx.benchmarkDependencies.get(instrumentId)?.everBenchmarked) {
     reasons.push('benchmark_dependency');
-    // A benchmark comparison needs the same window as whatever accepted
-    // history it is comparing against; without a narrower reason already
-    // established above, be conservative and ask for full history.
-    if (reasons.length === 1) sawInceptionRequirement = true;
+    if (reasons.length === 1) {
+      // Benchmark-only: use the grounded rolling-window lookback rather than
+      // an unbounded "from inception" default, per the module's own header.
+      if (benchmarkLookbackAnchorDate) {
+        fromDate = subtractDays(benchmarkLookbackAnchorDate, BENCHMARK_LOOKBACK_DAYS);
+      } else {
+        // No anchor supplied: caller has not wired the real changeover date
+        // through. Fail conservative (from inception) rather than silently
+        // computing a wrong window from an assumed "today".
+        sawInceptionRequirement = true;
+      }
+    }
+    // else: an accepted-statement reason already established a narrower or
+    // unbounded requirement above; a benchmark comparison never NARROWS
+    // what an accepted statement already requires, so nothing to do here.
   }
 
   if (reasons.length === 0) return { required: false, fromDate: null, reasons: [] };

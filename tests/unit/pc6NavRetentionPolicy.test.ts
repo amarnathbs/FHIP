@@ -8,6 +8,7 @@ import {
   evaluateCandidate,
   withNoReportPinDependency,
   determineHydrationRequirement,
+  BENCHMARK_LOOKBACK_DAYS,
   type PolicyContext,
   type NavRow,
 } from '@/lib/services/investment-intelligence/pc6/navRetentionPolicy';
@@ -22,6 +23,16 @@ function baseCtx(overrides: Partial<PolicyContext> = {}): PolicyContext {
     retentionHolds: new Map(),
     ...overrides,
   });
+}
+
+/** Test-only mirror of the module's own date arithmetic, kept trivial on purpose. */
+function subtractDaysForTest(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function daysBetweenForTest(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00.000Z`) - Date.parse(`${a}T00:00:00.000Z`)) / 86_400_000);
 }
 
 describe('navRetentionPolicy — KEEP/CANDIDATE contract', () => {
@@ -147,7 +158,7 @@ describe('determineHydrationRequirement — NAV 1.26 fetch-window planning', () 
     expect(req.fromDate).toBe('2020-03-01');
   });
 
-  it('a benchmark-only dependency with no narrower accepted reason requires full history', () => {
+  it('a benchmark-only dependency with NO anchor date supplied fails conservative (from inception)', () => {
     const req = determineHydrationRequirement('c', {
       acceptedDependencies: new Map(),
       benchmarkDependencies: new Map([['c', { instrumentId: 'c', everBenchmarked: true }]]),
@@ -155,6 +166,38 @@ describe('determineHydrationRequirement — NAV 1.26 fetch-window planning', () 
     expect(req.required).toBe(true);
     expect(req.fromDate).toBeNull();
     expect(req.reasons).toEqual(['benchmark_dependency']);
+  });
+
+  it('a benchmark-only dependency WITH an anchor date uses the grounded rolling-window lookback, not full history', () => {
+    // Grounded in rollingReturns.ts/rollingReturnService.ts/minimumHistory.ts
+    // (see BENCHMARK_LOOKBACK_DAYS's own header) -- NOT an inference.
+    const req = determineHydrationRequirement(
+      'c',
+      { acceptedDependencies: new Map(), benchmarkDependencies: new Map([['c', { instrumentId: 'c', everBenchmarked: true }]]) },
+      '2026-09-21'
+    );
+    expect(req.required).toBe(true);
+    expect(req.fromDate).not.toBeNull();
+    expect(req.fromDate).toBe(subtractDaysForTest('2026-09-21', BENCHMARK_LOOKBACK_DAYS));
+    // Sanity bound: materially less than "from inception" (this system has
+    // real schemes with 20+ years of history), materially more than a
+    // single rolling5Y window (must cover rollingMinWindows too).
+    const days = daysBetweenForTest(req.fromDate!, '2026-09-21');
+    expect(days).toBeGreaterThan(5 * 365); // more than just one 5Y window
+    expect(days).toBeLessThan(8 * 365); // nowhere near "from inception" for an old scheme
+  });
+
+  it('an accepted complete_from_inception reason is never narrowed by an ALSO-present benchmark dependency', () => {
+    const req = determineHydrationRequirement(
+      'e',
+      {
+        acceptedDependencies: new Map([['e', { instrumentId: 'e', isAccepted: true, historyCompleteness: 'complete_from_inception', earliestTransactionDate: null, certifiedAsOfDate: null }]]),
+        benchmarkDependencies: new Map([['e', { instrumentId: 'e', everBenchmarked: true }]]),
+      },
+      '2026-09-21'
+    );
+    expect(req.fromDate).toBeNull(); // still "from inception", not narrowed to the benchmark's shorter window
+    expect(req.reasons).toEqual(['accepted_statement_history', 'benchmark_dependency']);
   });
 
   it('an unaccepted instrument (isAccepted: false) is not a hydration reason', () => {

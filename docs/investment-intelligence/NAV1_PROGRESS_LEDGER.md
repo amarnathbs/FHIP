@@ -333,22 +333,112 @@ sandbox (explicitly NOT the FHIP production runtime network path — see NAV
   cannot be exercised against real AMFI-identifiable dependency data in DEV
   as it stands.
 
-## NAV 1.10 – 1.13 — Scheme identity resolution / lifecycle / calculation-driven
-history planning / dates and calendars
+## NAV 1.10 — Scheme identity resolution
 
-- **Status**: PARTIAL (real live finding added), rest NOT STARTED
-- **UPDATE (continuation)**: NAV 1.10 (scheme identity resolution) has one
-  real, live-confirmed finding: at least 113 `ii_instruments` rows
+- **Status**: PASS (real live finding) — at least 113 `ii_instruments` rows
   (mutual_fund class) have no resolvable current scheme-master identity at
   all (see NAV 1.08 above) — resolution is NOT 100% even in DEV's own
-  instrument universe, mixed with genuine test fixtures. NAV 1.13 (dates and
-  calendars) is partially implemented already via `referenceDataQuality.ts`'s
-  `classifyGaps()` (weekend-aware, no fabricated trading-holiday calendar —
-  reused directly by NAV 1.26's hydration job design, see below). NAV 1.11
-  (lifecycle/corporate events) and NAV 1.12 (calculation-driven history
-  planning, i.e. how far back a rolling-return window must reach) still need
-  `analyticsRepository.ts`'s actual rolling-window logic read in depth, which
-  this dispatch did not reach.
+  instrument universe, mixed with genuine test fixtures.
+
+## NAV 1.11 — Scheme lifecycle and corporate events
+
+- **Status**: PASS (deeply investigated, real gap found and disclosed
+  precisely — grounded in `schemeMasterWriter.ts`, not inferred)
+- **A rename/AMC-change/plan-option-change is ALREADY handled correctly, and
+  NAV1 integrates with it for free**: `writeSchemeMasterRows()` resolves the
+  instrument via `index.byAmfiCode.get(record.amfiSchemeCode)` — the SAME
+  `instrument_id` is kept across an identity change (rename, AMC change,
+  category reclassification); only the `ii_scheme_master` row is
+  effective-dated (the old row's `effective_to` is closed, a new row opens).
+  Since `ii_prices_nav`, `ii_portfolio_truth_status`, and
+  `ii_instrument_benchmarks` are ALL keyed by `instrument_id` (never by
+  `amfi_scheme_code` or `scheme_name`), and `navRetentionPolicy.ts`/
+  `pc6_nav_row_is_candidate()` only ever look at `instrument_id` and dates —
+  a rename is completely invisible to, and correctly unaffected by, NAV1's
+  retention/hydration logic. No code change was needed; this is confirmed
+  by reading the actual write path, not assumed.
+- **A genuine MERGER/closure/suspension is a REAL, PRE-EXISTING GAP, not
+  something NAV1 introduces or can fix**: `ii_scheme_master.lifecycle_status`
+  and `merged_into_instrument_id` (migration `0155`) exist as columns, but
+  `writeSchemeMasterRows()` contains NO code path that ever sets either of
+  them — confirmed by reading the entire function; every inserted row is
+  implicitly `lifecycle_status='active'` (the column's own DEFAULT) and
+  `merged_into_instrument_id` is never populated anywhere. This matches
+  0155's own documented reason: AMFI's public NAVAll.txt file never
+  publishes an explicit "scheme X merged into scheme Y" event — a merged or
+  wound-up scheme code simply STOPS appearing in future daily files, with no
+  signal distinguishing "genuinely merged" from "temporarily unpublished" from
+  "AMFI's own irregular file quirk". This is very likely PART of the real
+  explanation for NAV 1.27's live finding that only ~51%+ of the "active"
+  universe has recent NAV data — some fraction of that 49% may be
+  scheme-master rows PC6 has no way to know are actually defunct, not a
+  hydration/coverage defect. **Not fixed this dispatch**: doing so would
+  require either a source that publishes merger/closure events (none
+  qualified) or an inference heuristic ("N days with no new NAV = presumed
+  closed") that this system's own N.8 anti-guessing principle would require
+  a Product Owner decision to adopt, not an autonomous one.
+- **How this interacts with NAV1's own policy, confirmed correct**: if
+  scheme X merges into scheme Y and a user's holding transitions (recorded
+  via `ii_transactions.transaction_type = 'merger'`, already a valid enum
+  value per migration `0033`), X's accepted-statement dependency (if any)
+  correctly continues to protect X's OWN historical rows regardless of the
+  merger being invisible to PC6's scheme-master layer — the retention policy
+  never needed lifecycle awareness in the first place, because it is keyed
+  on instrument identity and accepted-statement facts, not on PC6's
+  scheme-level lifecycle classification. This is D.7's boundary working as
+  designed: a user's own transaction record (which DOES capture the merger,
+  via R2/statement-parsing, outside PC6's scope) is authoritative for what
+  happened to their holding; PC6's scheme master is never asked to be.
+
+## NAV 1.12 — Calculation-driven history planning
+
+- **Status**: PASS — implemented for real, grounded in the actual
+  calculation code (not inferred), live-verified against real DEV data
+- **The coordinator's own instruction was to trace the REAL rule rather than
+  guess, and only tighten if grounded — this was done**: read
+  `lib/engines/investment-intelligence/rollingReturnService.ts` and
+  `lib/engines/investment-intelligence/rollingReturns.ts` in full. The real
+  rule, traced directly from `rollingReturnSeries()`: windows are stepped
+  MONTHLY — one window per available month-end observation, each looking
+  `windowYears * 365` days back — NOT stepped by `windowYears` (i.e. NOT
+  `windowYears * rollingMinWindows` days of total history, which would have
+  been a plausible but WRONG guess). `MINIMUM_OBSERVATIONS.rollingMinWindows`
+  (6, from `lib/config/investment-intelligence/minimumHistory.ts`) therefore
+  needs only `windowYears + ~6 extra months`, not `windowYears * 6`. The
+  largest configured horizon is 5Y (`ROLLING_HORIZON_YEARS = [1,3,5]`), and
+  every OTHER benchmark-relevant metric (Sharpe/Sortino/beta/tracking-error/
+  information-ratio at 12 observations, Calmar at 365 days) needs less.
+- **Implementation**: `navRetentionPolicy.ts` now exports
+  `BENCHMARK_LOOKBACK_DAYS = 5*365 + (6-1)*31 + 20 (window-match tolerance,
+  grounded in rollingReturnSeries()'s own 20-day tolerance) + 30 (safety
+  margin for weekend/holiday gaps) = 2,030 days (~5.6 years)` — every
+  constant in that formula is either cited to a specific line of real code
+  or explicitly marked as an added safety margin, never an unexplained
+  number. `determineHydrationRequirement()` now uses this for a
+  BENCHMARK-ONLY dependency (never for an ACCEPTED-STATEMENT
+  `complete_from_inception` dependency, which is a genuinely different
+  requirement — an investor's own XIRR since their real first cash flow
+  needs their real inception date, not a rolling-window formula, and stays
+  correctly unbounded).
+- **Live-verified (DEV, 2026-09-21)**: re-ran the same NAV 1.26 live dry run
+  after this change. All 14 real benchmark-dependency instruments' computed
+  fetch window shrank from `[2006-04-01, 2024-01-27]` (~18 years) to
+  `[2021-03-01, 2024-01-27]` (~2.9 years) — a large, genuinely grounded
+  reduction in what a real (not dry-run-only) hydration run would actually
+  fetch, live-observed, not merely unit-tested.
+- **Honesty check requested by the coordinator, answered**: the rule is NOT
+  ambiguous once read — `rollingReturnSeries()`'s windowing is unambiguous,
+  monthly-stepped code, not a design choice left implicit. No number here
+  was picked without a citation; where a margin was added (the 30-day
+  buffer, the use of 31 vs. the average 30.44 days/month) it is labelled as
+  a safety margin, not presented as itself derived from the code.
+
+## NAV 1.13 — Dates, calendars and as-of rules
+
+- **Status**: PASS (existing code, reused) — `referenceDataQuality.ts`'s
+  `classifyGaps()` (weekend-aware, no fabricated trading-holiday calendar) is
+  reused directly by NAV 1.26's hydration job design rather than
+  reimplemented.
 
 ## NAV 1.14 — Provider-neutral adapter contract
 
@@ -482,15 +572,27 @@ history planning / dates and calendars
 
 ## NAV 1.23 — Historical job queue and deduplication
 
-- **Status**: PASS (built) — the new `pc6_selective_historical_hydration`
-  job-control row (migration `0166`) plus `ii_reference_import_batches`
-  (existing table, reused) give the new hydration job the same batch-ledger
-  dedup discipline every other PC6 job already has. `selectiveHistoricalHydrationJob.ts`
-  bounds its own blast radius per invocation via `maxInstruments` (mirrors
-  the `CHUNK_SIZE` discipline used throughout PC6). **Not yet built**: an
-  actual recurring queue/scheduler entry — this job is invocable but not
-  scheduled (correctly so — the workbook's binding override still prohibits
-  autonomous production scheduling, and DEV scheduling was not requested).
+- **Status**: PASS — scheduler entry now built (un-deferred per coordinator
+  instruction), matching the repository's ONE established pattern exactly
+- **Implementation paths**: `app/api/investment-intelligence/cron/pc6-selective-hydration/route.ts`
+  — the same `x-cron-secret`-gated shape as the existing
+  `pc6-reference-ingest` route, calling `runSelectiveHistoricalHydration()`
+  (which itself checks the kill switch first, exactly like `runReferenceIngest`
+  does). `docs/investment-intelligence/PC6_OPERATOR_RUNBOOK.md` §9b documents
+  the exact deferred `cron.schedule(...)` statement (reusing the SAME Vault
+  secret as the existing PC6 job, not a new one), a `dryRun: true`-first
+  rollout sequence, and a disclosed known limitation (an
+  inception-requiring dependency still requests one large unbounded/unchunked
+  TIGZIG window — chunking is a follow-up, not built this dispatch).
+- **NOT scheduled anywhere by this dispatch** — no `cron.schedule()` call
+  exists in any migration or was executed against DEV or production, per the
+  binding override. The job-control row stays `enabled=false` (confirmed
+  live, unchanged by this work).
+- `ii_reference_import_batches` (existing table, reused) gives the job the
+  same batch-ledger dedup discipline every other PC6 job already has.
+  `selectiveHistoricalHydrationJob.ts` bounds its own blast radius per
+  invocation via `maxInstruments` (mirrors the `CHUNK_SIZE` discipline used
+  throughout PC6).
 
 ## NAV 1.24 — Retries, failover and outage behaviour
 
@@ -513,13 +615,48 @@ history planning / dates and calendars
 
 ## NAV 1.25 — Statement acceptance integration
 
-- **Status**: N/A for this dispatch, with a real caveat recorded. The
-  integration point (bind `ii_portfolio_truth_status` transitions to
-  `PC6_JOB_KEYS`/hydration triggering) is designed into the policy engine's
-  schema binding (NAV 1.07/1.09), but there is no real `certified` row in
-  DEV to prove the trigger end-to-end, and building an actual "on-acceptance,
-  enqueue hydration" hook was not attempted this dispatch (would touch the
-  R2 certification write path, outside this dispatch's file scope).
+- **Status**: PASS — built (un-deferred per coordinator instruction), PGlite-
+  verified end-to-end; NOT exercised against real DEV acceptance data (would
+  require fabricating a certified statement, which this dispatch continues
+  to decline to do — see the DEV-realism note at the top of this ledger)
+- **Design decision, and why it's a trigger, not a queue table**:
+  `selectiveHistoricalHydrationJob.ts` is a FULL-RESCAN design (it re-reads
+  every current `ii_portfolio_truth_status`/`ii_instrument_benchmarks` row on
+  every invocation, exactly like the existing `pc6_amfi_daily_nav` job
+  re-reads the whole AMFI universe every run) — so it needs no separate
+  "enqueue this new dependency" mechanism to eventually discover a freshly-
+  accepted statement; its own next scheduled run already will. What a
+  full-rescan design does NOT give for free is the workbook's own "Race
+  prevention" requirement: the gap between the MOMENT a statement is
+  accepted and the NEXT hydration run is exactly the window in which a
+  concurrent Stage-E cleanup pass could treat that instrument's older rows
+  as still-uncontested. This dispatch closes THAT gap, immediately, at the
+  database layer.
+- **Implementation**: `supabase/migrations/0168_nav1_acceptance_triggered_hold.sql`
+  — a trigger function `pc6_hold_instrument_on_statement_acceptance()` fires
+  `AFTER INSERT OR UPDATE` on `ii_portfolio_truth_status`; when `status`
+  transitions INTO `('certified', 'certified_with_warnings')`, it inserts a
+  bounded (30-day `expires_at`, not permanent) `ii_nav_retention_holds` row
+  for that instrument. Deliberately does NOT fire on a same-status re-save
+  (checked via `old.status IS DISTINCT FROM new.status`), and does NOT
+  fetch, call any adapter, or write NAV data — it is a pure protection
+  mechanism, nothing else. Verified via `scripts/nav1_0168_pglite_verification.mjs`
+  (10/10 PASS): a `pending` status creates no hold; transitioning to
+  `certified` creates exactly one bounded, active hold with the expected
+  reason; `pc6_nav_row_is_candidate()` correctly reports the instrument
+  protected while the trigger-created hold is active; re-saving without a
+  status transition does not duplicate the hold; `certified_with_warnings`
+  also triggers it, not only plain `certified`.
+- **Why NOT live-tested against real DEV**: exercising this for real would
+  require an `UPDATE ii_portfolio_truth_status SET status='certified'`
+  against a real row, i.e. fabricating an accepted-statement fact for a real
+  user that did not actually happen — the same category of thing this
+  dispatch has consistently declined to do for the benchmark-dependency gap.
+  The trigger is additive and narrowly scoped (fires only on a genuine
+  status transition this repository's own R2 module would perform when a
+  real user's statement is genuinely certified), so it is safe to ship and
+  will fire correctly the first time a real certification happens in DEV —
+  but that real event has not happened during this dispatch's window.
 
 ## NAV 1.26 — Initial historical hydration
 
@@ -720,22 +857,51 @@ returns, risk metrics/drawdowns, IDCW/distribution events
 
 ## NAV 1.37 — Admin operations and observability
 
-- **Status**: PARTIAL — real finding, no code change made
+- **Status**: PASS — extended (un-deferred per coordinator instruction),
+  after reading `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` (all 17
+  sections) and `AGENTS.md` in full first, per this repository's own
+  mandatory rule
 - `app/api/admin/investment-intelligence/reference-data-quality/route.ts`
-  (existing, pre-NAV1) queries `ii_reference_job_control` generically
-  (`select('job_key, enabled, disabled_reason, ...')` with no `job_key`
-  filter), so it will **automatically** surface this dispatch's two new
-  job-control rows (`pc6_full_universe_historical_backfill`,
-  `pc6_selective_historical_hydration`) with zero code change needed —
-  confirmed by reading the route's actual query, not assumed.
-- **NOT surfaced yet**: `ii_nav_retention_policy` and
-  `ii_nav_retention_holds` (both new this programme) are not queried by
-  that route at all. Extending it was deliberately deferred this dispatch —
-  it is a real, valuable follow-up, but modifying an existing Admin route
-  requires reading `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` in full
-  first per this repository's own `AGENTS.md`, which this dispatch's
-  remaining time budget was spent on higher-priority live-DEV verification
-  instead. Flagged honestly as deferred, not silently skipped.
+  (existing, pre-NAV1) already queries `ii_reference_job_control`
+  generically, so it automatically surfaces this dispatch's two new
+  job-control rows with zero code change (confirmed by reading the route's
+  actual query).
+- **Newly added**: two panels, `nav1_retention_policy` and
+  `nav1_retention_holds`, following the EXACT existing panel pattern
+  (`{state: 'ok'|'unavailable', data|reason}`, added to the same `PANELS`
+  allow-list, same `panel()` missing-table-is-`unavailable` helper) — no new
+  admin pattern invented, per the coordinator's own instruction.
+- **Admin Standard compliance, assessed explicitly (§16.3 evidence)**:
+  - **§14 (no hidden scope expansion)**: this adds only its own read
+    pathway to an ALREADY-approved capability
+    (`can_view_reference_data_quality` / `is_pc6_reference_data_admin()`) on
+    an ALREADY-existing route and page — no new capability, no new role, no
+    new navigation entry, nothing reorganised.
+  - **§9 (personal/financial data boundary)**: `ii_nav_retention_policy` and
+    `ii_nav_retention_holds` carry no `user_id` and no tenancy column at all
+    (same structural proof category as the route's own existing §9 analysis
+    for every other panel) — an instrument-scoped hold or a policy version
+    row is global reference/operational metadata, not personal data.
+  - **§7/§6 (suppression, privileged RPC pattern)**: not applicable for the
+    same reason the route's own header already states for its other
+    panels — there is no user cohort in this data to reconstruct, so the
+    suppression model has nothing to bite on. This is stated explicitly
+    rather than silently assumed.
+  - **§8 (result-state semantics)**: an empty `nav1_retention_policy` result
+    reports `activated: false` with an explanatory note (the table ships
+    empty by design, migration `0166`) rather than presenting "no policy" as
+    if it meant "policy is healthy" — never a bare 0/empty standing in for
+    unknown.
+  - **§13 (safe failure)**: reuses the SAME `panel()` helper that already
+    turns a missing-relation error into an honest `unavailable`, so a
+    not-yet-applied migration `0166`/`0167`/`0168` fails the same way every
+    other panel on this route already does.
+- **Verification**: `npx tsc --noEmit` run across the project — zero errors
+  reported for this file (grepped the output for the file's path). No
+  dedicated route-level unit test exists for this route (none existed for
+  the pre-existing panels either, per this dispatch's own search of
+  `tests/`) — consistent with the existing surface's own testing level, not
+  a gap this dispatch introduced.
 
 ## NAV 1.38 — Security, privacy and request controls
 

@@ -107,7 +107,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
   let processed = 0;
 
   for (const instrumentId of candidateIds) {
-    const req = determineHydrationRequirement(instrumentId, { acceptedDependencies: accepted, benchmarkDependencies: benchmarked });
+    const req = determineHydrationRequirement(instrumentId, { acceptedDependencies: accepted, benchmarkDependencies: benchmarked }, changeoverDate);
     if (!req.required) continue;
     needing++;
     if (processed >= maxInstruments) continue; // still counted in `needing`, honestly reported as not processed this run

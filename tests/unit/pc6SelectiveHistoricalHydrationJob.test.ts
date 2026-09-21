@@ -4,9 +4,16 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { runSelectiveHistoricalHydration, HISTORICAL_FLOOR_DATE, type HydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJob';
+import { BENCHMARK_LOOKBACK_DAYS } from '@/lib/services/investment-intelligence/pc6/navRetentionPolicy';
 import type { HistoricalNavAdapter, HistoricalNavAdapterResult } from '@/lib/services/investment-intelligence/pc6/adapters/historicalNavAdapter';
 
 const C = '2026-09-21';
+
+function subtractDaysForTest(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 function makeDeps(overrides: Partial<HydrationDeps> = {}): HydrationDeps {
   return {
@@ -55,13 +62,19 @@ describe('runSelectiveHistoricalHydration', () => {
   });
 
   it('hydrates a real gap: fetches, applies decideUpsert, and writes only genuinely new rows', async () => {
+    // Existing coverage starts well AFTER the grounded benchmark lookback
+    // boundary (BENCHMARK_LOOKBACK_DAYS back from C), so a real gap exists
+    // for the job to fetch -- unlike the "already covered" test above, which
+    // deliberately starts existing coverage BEFORE the requirement.
+    const existingEarliest = subtractDaysForTest(C, BENCHMARK_LOOKBACK_DAYS - 30);
+    const observationDate = subtractDaysForTest(existingEarliest, 1);
     const deps = makeDeps({
       fetchBenchmarkDependencies: vi.fn().mockResolvedValue(new Map([['inst-2', { instrumentId: 'inst-2', everBenchmarked: true }]])),
-      fetchEarliestExistingDate: vi.fn().mockResolvedValue('2015-01-01'),
+      fetchEarliestExistingDate: vi.fn().mockResolvedValue(existingEarliest),
     });
     const adapter = makeAdapter({
       ok: true, schemeIdentifier: '119551', providerSchemeName: 'Test Fund', coverage: 'unknown',
-      observations: [{ date: '2014-12-30', nav: '10.5' }, { date: '2014-12-31', nav: '10.6' }],
+      observations: [{ date: subtractDaysForTest(observationDate, 1), nav: '10.5' }, { date: observationDate, nav: '10.6' }],
       provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 200, retrievedAt: 'now', rawResponseChecksum: 'abcdef123456' },
     });
     const result = await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
@@ -72,10 +85,33 @@ describe('runSelectiveHistoricalHydration', () => {
     expect(deps.recordBatch).toHaveBeenCalledTimes(1);
   });
 
-  it('never fetches on or after the changeover date', async () => {
+  it('never fetches on or after the changeover date, and a benchmark-only case uses the grounded lookback (not the inception floor)', async () => {
     const deps = makeDeps({
       fetchBenchmarkDependencies: vi.fn().mockResolvedValue(new Map([['inst-3', { instrumentId: 'inst-3', everBenchmarked: true }]])),
-      fetchEarliestExistingDate: vi.fn().mockResolvedValue(null), // no coverage at all -> window is [floor, C-1]
+      fetchEarliestExistingDate: vi.fn().mockResolvedValue(null), // no coverage at all
+    });
+    const adapter = makeAdapter({
+      ok: true, schemeIdentifier: '119551', providerSchemeName: null, coverage: 'unknown', observations: [],
+      provider: { key: 'tigzig', adapterVersion: '1', requestUrl: 'x', httpStatus: 200, retrievedAt: 'now', rawResponseChecksum: 'abcdef123456' },
+    });
+    await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
+    const call = (adapter.fetchHistory as any).mock.calls[0][0];
+    // The job now passes changeoverDate as the benchmark-lookback anchor, so
+    // a benchmark-only dependency resolves to the grounded rolling-window
+    // lookback, NOT the unbounded HISTORICAL_FLOOR_DATE (2006) — a real,
+    // code-grounded tightening (see navRetentionPolicy.ts's
+    // BENCHMARK_LOOKBACK_DAYS header for the traced formula).
+    expect(call.fromDate).toBe(subtractDaysForTest(C, BENCHMARK_LOOKBACK_DAYS));
+    expect(call.fromDate).not.toBe(HISTORICAL_FLOOR_DATE);
+    expect(call.toDate).toBe('2026-09-20'); // C minus one day
+  });
+
+  it('an accepted complete_from_inception dependency still uses the unbounded floor date, unaffected by the benchmark tightening', async () => {
+    const deps = makeDeps({
+      fetchAcceptedDependencies: vi.fn().mockResolvedValue(new Map([
+        ['inst-6', { instrumentId: 'inst-6', isAccepted: true, historyCompleteness: 'complete_from_inception', earliestTransactionDate: null, certifiedAsOfDate: null }],
+      ])),
+      fetchEarliestExistingDate: vi.fn().mockResolvedValue(null),
     });
     const adapter = makeAdapter({
       ok: true, schemeIdentifier: '119551', providerSchemeName: null, coverage: 'unknown', observations: [],
@@ -84,7 +120,6 @@ describe('runSelectiveHistoricalHydration', () => {
     await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps });
     const call = (adapter.fetchHistory as any).mock.calls[0][0];
     expect(call.fromDate).toBe(HISTORICAL_FLOOR_DATE);
-    expect(call.toDate).toBe('2026-09-20'); // C minus one day
   });
 
   it('records a fetch failure without writing anything', async () => {
