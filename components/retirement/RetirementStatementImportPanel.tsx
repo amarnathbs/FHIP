@@ -21,14 +21,21 @@
  * SMSF section whose boundary it respects.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import {
+  waitForDocumentToLeaveValidating,
+  SCANNING_MESSAGE,
+  SCAN_TIMEOUT_MESSAGE,
+} from '@/components/financial-data-hub/scanStatusPolling';
 
 type Phase =
   | 'form'
   | 'uploading'
+  | 'scanning'
   | 'unable_to_read'
+  | 'scan_timeout'
   | 'duplicate'
   | 'routed_to_smsf'
   | 'review'
@@ -37,6 +44,17 @@ type Phase =
   | 'kept_existing'
   | 'stale'
   | 'error';
+
+// 2026-09-21 (real-malware-gate async fix) — same honest, non-technical
+// discipline as every other FDH-3 panel's failure copy: never "malware" or
+// "virus".
+const SCAN_REJECTION_MESSAGES: Record<string, string> = {
+  malware_detected: 'This file could not be accepted because it failed a security check. Please try a different file, or add this account manually above.',
+  malware_scan_suspicious: 'This file could not be accepted because it failed a security check. Please try a different file, or add this account manually above.',
+  malware_scan_failed: 'We could not finish checking this file for safety. Please try again, or add this account manually above.',
+  malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again, or add this account manually above.',
+  malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this account manually above.',
+};
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
 
@@ -228,6 +246,12 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
+  // poll if the panel unmounts mid-scan.
+  const scanPollCancelRef = useRef({ cancelled: false });
+  useEffect(() => () => {
+    scanPollCancelRef.current.cancelled = true;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -268,16 +292,60 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     setPhase('review');
   }, []);
 
+  /** Builds the same metadata query FDH-12's upload route reads, reusable
+   * for the real-malware-gate async fix's `.../process` resumption call
+   * (JSON body instead of query params, same field names). */
+  const buildStatementMetadataQuery = useCallback(() => {
+    const qs = new URLSearchParams({ jurisdiction, currency_code: jurisdiction === 'IN' ? 'INR' : 'AUD' });
+    if (fundName.trim()) qs.set('fund_name', fundName.trim());
+    if (maskedIdentifier.trim()) qs.set('masked_account_identifier', maskedIdentifier.trim());
+    if (periodStart) qs.set('statement_period_start', periodStart);
+    if (periodEnd) qs.set('statement_period_end', periodEnd);
+    return qs;
+  }, [jurisdiction, fundName, maskedIdentifier, periodStart, periodEnd]);
+
+  /**
+   * Handles the JSON body from EITHER the initial upload call or the
+   * real-malware-gate async fix's `.../process` resumption call.
+   *
+   * NOTE ON RESPONSE SHAPE: both routes return via this codebase's shared
+   * `ok()` helper (`lib/api.ts`), which wraps the payload as `{ data }`
+   * (confirmed against `lib/api.ts` and every sibling FDH-3 panel, which all
+   * read `json.data.xxx`). `data` below defensively falls back to the raw
+   * body if `.data` is absent so this function reads correctly either way —
+   * see this function's call sites for why that fallback matters here
+   * specifically.
+   */
+  const handleStatementOutcome = useCallback(async (body: Record<string, unknown>) => {
+    const data = ((body.data as Record<string, unknown> | undefined) ?? body);
+    const docId = String(data.document_id);
+    setDocumentId(docId);
+
+    if (data.pipeline_status === 'routed_to_smsf') {
+      setPhase('routed_to_smsf');
+      setMessage(String(data.failure_message ?? ''));
+      return;
+    }
+    if (data.pipeline_status === 'extraction_failed') {
+      setPhase('unable_to_read');
+      setMessage(String(data.failure_message ?? 'We could not read this statement.'));
+      return;
+    }
+    if (data.pipeline_status === 'duplicate_statement') {
+      setPhase('duplicate');
+      setMessage('You have already imported this exact statement, so nothing was added again.');
+      await loadReview(docId);
+      setPhase('duplicate');
+      return;
+    }
+    await loadReview(docId);
+  }, [loadReview]);
+
   const handleUpload = useCallback(async () => {
     if (!file) { setMessage('Choose a statement file first.'); return; }
     setBusy(true); setMessage(null); setPhase('uploading');
     try {
-      const qs = new URLSearchParams({ jurisdiction, currency_code: jurisdiction === 'IN' ? 'INR' : 'AUD' });
-      if (fundName.trim()) qs.set('fund_name', fundName.trim());
-      if (maskedIdentifier.trim()) qs.set('masked_account_identifier', maskedIdentifier.trim());
-      if (periodStart) qs.set('statement_period_start', periodStart);
-      if (periodEnd) qs.set('statement_period_end', periodEnd);
-
+      const qs = buildStatementMetadataQuery();
       const res = await fetch(`/api/financial-data-hub/retirement-statement/upload?${qs.toString()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/csv' },
@@ -286,29 +354,55 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       const body = await readJson(res);
       if (!res.ok) { setPhase('error'); setMessage(String(body.error ?? 'Could not read this statement.')); return; }
 
-      const docId = String(body.document_id);
-      setDocumentId(docId);
+      const data = ((body.data as Record<string, unknown> | undefined) ?? body);
 
-      if (body.pipeline_status === 'routed_to_smsf') {
-        setPhase('routed_to_smsf');
-        setMessage(String(body.failure_message ?? ''));
+      // Real-malware-gate async fix (2026-09-21): the upload route now
+      // returns `pipeline_status: 'pending_scan'` (statement_id: null, NOT
+      // a failure) instead of extracting immediately when the real
+      // S3+GuardDuty scan has not yet resolved — see
+      // retirementStatementProcessingService.ts's
+      // `resolveRetirementStatementDocument()`.
+      if (data.pipeline_status === 'pending_scan') {
+        const docId = String(data.document_id);
+        setDocumentId(docId);
+        setPhase('scanning');
+        setMessage(SCANNING_MESSAGE);
+        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+        if (waited.outcome === 'timeout') {
+          setMessage(SCAN_TIMEOUT_MESSAGE);
+          setPhase('scan_timeout');
+          return;
+        }
+        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+          setMessage(
+            (waited.errorCode && SCAN_REJECTION_MESSAGES[waited.errorCode])
+              ?? 'This file could not be accepted. Please try a different file, or add this account manually above.',
+          );
+          setPhase('unable_to_read');
+          return;
+        }
+        // The scan cleared -- finish the extraction the upload route
+        // deferred, re-submitting the SAME metadata originally supplied.
+        const processQs = buildStatementMetadataQuery();
+        const processBody = Object.fromEntries(processQs.entries());
+        const processRes = await fetch(`/api/financial-data-hub/retirement-statement/${docId}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(processBody),
+        });
+        const processJson = await readJson(processRes);
+        if (!processRes.ok) {
+          setPhase('unable_to_read');
+          setMessage(String(processJson.error ?? 'We could not process this statement.'));
+          return;
+        }
+        await handleStatementOutcome(processJson);
         return;
       }
-      if (body.pipeline_status === 'extraction_failed') {
-        setPhase('unable_to_read');
-        setMessage(String(body.failure_message ?? 'We could not read this statement.'));
-        return;
-      }
-      if (body.pipeline_status === 'duplicate_statement') {
-        setPhase('duplicate');
-        setMessage('You have already imported this exact statement, so nothing was added again.');
-        await loadReview(docId);
-        setPhase('duplicate');
-        return;
-      }
-      await loadReview(docId);
+
+      await handleStatementOutcome(body);
     } finally { setBusy(false); }
-  }, [file, jurisdiction, fundName, maskedIdentifier, periodStart, periodEnd, loadReview]);
+  }, [file, buildStatementMetadataQuery, handleStatementOutcome]);
 
   const handleMatch = useCallback(async (action: 'auto' | 'resolve' | 'confirm_new') => {
     if (!documentId) return;
@@ -429,7 +523,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         to apply them.
       </p>
 
-      {message && phase !== 'comparing' && (
+      {message && phase !== 'comparing' && phase !== 'scanning' && phase !== 'scan_timeout' && (
         <p className="mt-3 rounded bg-gray-50 px-3 py-2 text-sm">{message}</p>
       )}
 
@@ -507,6 +601,17 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       )}
 
       {phase === 'uploading' && <p className="mt-4 text-sm">Reading your statement…</p>}
+
+      {phase === 'scanning' && <p className="mt-4 text-sm" role="status">{message ?? SCANNING_MESSAGE}</p>}
+
+      {phase === 'scan_timeout' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message ?? SCAN_TIMEOUT_MESSAGE}</p>
+          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            Try another file
+          </button>
+        </div>
+      )}
 
       {phase === 'routed_to_smsf' && (
         <div className="mt-4 space-y-3">

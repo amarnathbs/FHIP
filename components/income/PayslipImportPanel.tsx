@@ -24,14 +24,21 @@
  * are already there — see that test's own comment for the precedent.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import {
+  waitForDocumentToLeaveValidating,
+  SCANNING_MESSAGE,
+  SCAN_TIMEOUT_MESSAGE,
+} from '@/components/financial-data-hub/scanStatusPolling';
 
 type Phase =
   | 'form'
   | 'uploading'
+  | 'scanning'
   | 'processing'
   | 'unable_to_read'
+  | 'scan_timeout'
   | 'duplicate'
   | 'review'
   | 'comparing'
@@ -39,6 +46,21 @@ type Phase =
   | 'kept_existing'
   | 'stale'
   | 'error';
+
+// 2026-09-21 (real-malware-gate async fix): a document can legitimately come
+// back from the real S3+GuardDuty scan REJECTED (processing_status
+// 'failed'/'rejected', not merely stuck) once the scan resolves after this
+// panel already moved past `handleUpload()`'s own inline poll. Named the
+// same honest, non-technical way `structural_scan_rejected` already is
+// (FdhDocumentUploadClient.tsx's own precedent) — never "malware" or
+// "virus", and never a raw enum name.
+const SCAN_REJECTION_MESSAGES: Record<string, string> = {
+  malware_detected: 'This file could not be accepted because it failed a security check. Please try a different file, or add this income manually below.',
+  malware_scan_suspicious: 'This file could not be accepted because it failed a security check. Please try a different file, or add this income manually below.',
+  malware_scan_failed: 'We could not finish checking this file for safety. Please try again, or add this income manually below.',
+  malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again, or add this income manually below.',
+  malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this income manually below.',
+};
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
 
@@ -114,6 +136,13 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   const [decision, setDecision] = useState<Decision>('update_existing');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
+  // poll if the panel unmounts (e.g. the user navigates away) mid-scan, so
+  // no setState-after-unmount warning and no wasted polling.
+  const scanPollCancelRef = useRef({ cancelled: false });
+  useEffect(() => () => {
+    scanPollCancelRef.current.cancelled = true;
+  }, []);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
   // (see that file's identical comment) — this panel used to always render
   // as a fully working upload form and only discover the FDH-3 production
@@ -187,6 +216,33 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       if (!completeOk) throw new Error(completeJson.error ?? 'Upload failed');
       const docId = completeJson.data.document_id as string;
       setDocumentId(docId);
+
+      // Real-malware-gate async fix (2026-09-21): completeUpload() may have
+      // left this document genuinely, legally waiting in `validating` — the
+      // real S3+GuardDuty scan has not resolved yet (see
+      // malwareScanGate.ts's own header). Calling /process immediately in
+      // that case used to surface a raw `invalid_state` error even though
+      // nothing had gone wrong. Wait for the document to leave `validating`
+      // first, showing an honest "scanning" state instead.
+      if (completeJson.data.processing_status === 'validating') {
+        setPhase('scanning');
+        setMessage(SCANNING_MESSAGE);
+        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+        if (waited.outcome === 'timeout') {
+          setMessage(SCAN_TIMEOUT_MESSAGE);
+          setPhase('scan_timeout');
+          return;
+        }
+        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+          setMessage(
+            (waited.errorCode && SCAN_REJECTION_MESSAGES[waited.errorCode])
+              ?? 'This file could not be accepted. Please try a different file, or add this income manually below.',
+          );
+          setPhase('unable_to_read');
+          return;
+        }
+        setMessage(null);
+      }
 
       setPhase('processing');
       const processRes = await fetch(`/api/financial-data-hub/payslip/${docId}/process`, { method: 'POST' });
@@ -379,9 +435,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         </div>
       )}
 
-      {(phase === 'uploading' || phase === 'processing') && (
+      {(phase === 'uploading' || phase === 'processing' || phase === 'scanning') && (
         <p className="mt-4 text-sm text-muted" role="status">
-          {phase === 'uploading' ? 'Uploading your payslip…' : 'Processing your payslip — extracting payroll information…'}
+          {phase === 'uploading' && 'Uploading your payslip…'}
+          {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
+          {phase === 'processing' && 'Processing your payslip — extracting payroll information…'}
         </p>
       )}
 
@@ -389,6 +447,15 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         <div className="mt-4 space-y-3">
           <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>
           <p className="text-sm text-muted">You can try a different file, or add this income manually below.</p>
+          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {phase === 'scan_timeout' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message ?? SCAN_TIMEOUT_MESSAGE}</p>
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
             Try again
           </button>

@@ -30,6 +30,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
+import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
@@ -82,7 +83,10 @@ export const LIABILITY_STATEMENT_FAILURE_MESSAGES: Record<string, string> = {
 export interface UploadLiabilityStatementResult {
   document: FdhStatementUpload;
   statementId: string | null;
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement';
+  // 'pending_scan' (2026-09-21, real-malware-gate async fix): see the
+  // identical addition + rationale on `UploadAuInvestmentStatementResult`
+  // in investmentStatementProcessingService.ts.
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan';
   failureKind?: string;
 }
 
@@ -131,6 +135,11 @@ async function loadBankCandidatesForPayment(
  * Upload AND process a credit-card/loan CSV statement in one call (see this
  * file's header for why). Returns the persisted document plus, on success,
  * the new `fdh_liability_statements.id`.
+ *
+ * 2026-09-21 (real-malware-gate async fix): only creates the upload now,
+ * then hands off to `resolveLiabilityStatementDocument()` — see that
+ * function's header. Byte-for-byte unchanged when the real-scan flag is off
+ * or a scan resolves inline.
  */
 export async function uploadAndProcessLiabilityStatement(
   userId: string,
@@ -156,6 +165,39 @@ export async function uploadAndProcessLiabilityStatement(
     throw e;
   }
 
+  return resolveLiabilityStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Resumes processing for a document left in `pending_scan` because the real
+ * malware gate had not yet resolved it when
+ * `uploadAndProcessLiabilityStatement()` (or a prior call to this function)
+ * ran. Called from `POST /liability-statement/{documentId}/process` once
+ * `LiabilityImportPanel.tsx` has polled the document out of `validating`.
+ * Metadata must be re-supplied by the caller, exactly as in the
+ * investment-statement sibling of this function.
+ */
+export async function continueLiabilityStatementProcessing(
+  userId: string,
+  documentId: string,
+  metadata: UploadLiabilityStatementMetadata,
+): Promise<UploadLiabilityStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) throw new LiabilityStatementProcessingError('not_found', 'document not found');
+  return resolveLiabilityStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Everything that happens to an already-uploaded document — see the
+ * identical-purpose `resolveAuInvestmentStatementDocument()` in
+ * investmentStatementProcessingService.ts for the full rationale. Shared by
+ * both entry points above so neither can drift from the other.
+ */
+async function resolveLiabilityStatementDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadLiabilityStatementMetadata,
+): Promise<UploadLiabilityStatementResult> {
   if (document.processing_status === 'failed' || document.processing_status === 'rejected') {
     return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: document.error_code ?? 'unknown_error' };
   }
@@ -173,7 +215,14 @@ export async function uploadAndProcessLiabilityStatement(
     }
   }
 
-  if (!['queued', 'validating', 'uploaded'].includes(document.processing_status)) {
+  // Real-malware-gate wiring (2026-09-21): see the identical comment in
+  // investmentStatementProcessingService.ts's `resolveAuInvestmentStatement
+  // Document()` — this is a genuine, legal wait state, not an error.
+  if (document.processing_status === 'validating') {
+    return { document, statementId: null, pipelineStatus: 'pending_scan' };
+  }
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
     throw new LiabilityStatementProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
   }
 

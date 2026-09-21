@@ -19,16 +19,23 @@
  * — the same relationship any other HTTP client has to a public route.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import {
+  waitForDocumentToLeaveValidating,
+  SCANNING_MESSAGE,
+  SCAN_TIMEOUT_MESSAGE,
+} from '@/components/financial-data-hub/scanStatusPolling';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
   | 'type_select'
   | 'form'
   | 'uploading'
+  | 'scanning'
   | 'processing'
   | 'unable_to_read'
+  | 'scan_timeout'
   | 'duplicate'
   | 'review'
   | 'comparing'
@@ -36,6 +43,17 @@ type Phase =
   | 'kept_existing'
   | 'stale'
   | 'error';
+
+// 2026-09-21 (real-malware-gate async fix) — same honest, non-technical
+// discipline as every other FDH-3 panel's failure copy: never "malware" or
+// "virus".
+const SCAN_REJECTION_MESSAGES: Record<string, string> = {
+  malware_detected: 'This file could not be accepted because it failed a security check. Please try a different file, or add this liability manually below.',
+  malware_scan_suspicious: 'This file could not be accepted because it failed a security check. Please try a different file, or add this liability manually below.',
+  malware_scan_failed: 'We could not finish checking this file for safety. Please try again, or add this liability manually below.',
+  malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again, or add this liability manually below.',
+  malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this liability manually below.',
+};
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
 
@@ -174,6 +192,12 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
+  // poll if the panel unmounts mid-scan.
+  const scanPollCancelRef = useRef({ cancelled: false });
+  useEffect(() => () => {
+    scanPollCancelRef.current.cancelled = true;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,6 +239,46 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     setPhase('review');
   }
 
+  // Handles the JSON body from EITHER the initial upload call or the
+  // real-malware-gate async fix's `.../process` resumption call — both
+  // return the identical `{ document_id, pipeline_status, statement_id,
+  // error_message, duplicate }` shape, so one function covers "what do we
+  // do with this outcome" for both.
+  async function handleStatementOutcome(json: Record<string, unknown>) {
+    const data = json.data as Record<string, unknown>;
+    if (!data.statement_id) {
+      setMessage((data.error_message as string | undefined) ?? 'We could not read this statement.');
+      setPhase('unable_to_read');
+      return;
+    }
+    setDocumentId(data.document_id as string);
+    if (data.duplicate) {
+      setMessage('This statement has already been uploaded. Showing the evidence already on file.');
+      await loadReview(data.document_id as string);
+      setPhase((p) => (p === 'error' ? p : 'duplicate'));
+      return;
+    }
+    await loadReview(data.document_id as string);
+  }
+
+  /** The same metadata JSON both `.../upload`'s query params and the
+   * `.../process` resumption route's body carry — kept as one function so
+   * the resend can never silently drift from what was originally chosen. */
+  function buildStatementMetadataBody(): Record<string, unknown> {
+    return {
+      statement_type: statementType,
+      country_code: country,
+      currency_code: currency,
+      institution_name: institutionName || undefined,
+      masked_identifier: maskedIdentifier || undefined,
+      opening_balance: openingBalance || undefined,
+      closing_balance: closingBalance || undefined,
+      credit_limit: statementType === 'credit_card' ? (creditLimit || undefined) : undefined,
+      minimum_payment: statementType === 'credit_card' ? (minimumPayment || undefined) : undefined,
+      interest_rate: statementType === 'loan' ? (interestRate || undefined) : undefined,
+    };
+  }
+
   async function handleUpload() {
     if (!file) return;
     setBusy(true);
@@ -249,19 +313,52 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         setPhase('unable_to_read');
         return;
       }
-      if (!json.data.statement_id) {
-        setMessage(json.data.error_message ?? 'We could not read this statement.');
-        setPhase('unable_to_read');
+
+      // Real-malware-gate async fix (2026-09-21): the upload route now
+      // returns `pipeline_status: 'pending_scan'` (statement_id: null, NOT
+      // a failure) instead of extracting immediately when the real
+      // S3+GuardDuty scan has not yet resolved — see
+      // liabilityStatementProcessingService.ts's
+      // `resolveLiabilityStatementDocument()`. Checked BEFORE the "no
+      // statement_id means unable to read" branch, which would otherwise
+      // misread this wait state as a real failure.
+      if (json.data.pipeline_status === 'pending_scan') {
+        const docId = json.data.document_id as string;
+        setDocumentId(docId);
+        setPhase('scanning');
+        setMessage(SCANNING_MESSAGE);
+        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+        if (waited.outcome === 'timeout') {
+          setMessage(SCAN_TIMEOUT_MESSAGE);
+          setPhase('scan_timeout');
+          return;
+        }
+        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+          setMessage(
+            (waited.errorCode && SCAN_REJECTION_MESSAGES[waited.errorCode])
+              ?? 'This file could not be accepted. Please try a different file, or add this liability manually below.',
+          );
+          setPhase('unable_to_read');
+          return;
+        }
+        // The scan cleared -- finish the extraction the upload route
+        // deferred, re-submitting the SAME metadata originally supplied.
+        const processRes = await fetch(`/api/financial-data-hub/liability-statement/${docId}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildStatementMetadataBody()),
+        });
+        const { ok: processOk, json: processJson } = await readJson(processRes);
+        if (!processOk) {
+          setMessage(processJson.error ?? 'We could not process this statement.');
+          setPhase('unable_to_read');
+          return;
+        }
+        await handleStatementOutcome(processJson);
         return;
       }
-      setDocumentId(json.data.document_id as string);
-      if (json.data.duplicate) {
-        setMessage('This statement has already been uploaded. Showing the evidence already on file.');
-        await loadReview(json.data.document_id as string);
-        setPhase((p) => (p === 'error' ? p : 'duplicate'));
-        return;
-      }
-      await loadReview(json.data.document_id as string);
+
+      await handleStatementOutcome(json);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -495,9 +592,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         </div>
       )}
 
-      {(phase === 'uploading' || phase === 'processing') && (
+      {(phase === 'uploading' || phase === 'processing' || phase === 'scanning') && (
         <p className="mt-4 text-sm text-muted" role="status">
-          {phase === 'uploading' ? 'Uploading your statement…' : 'Processing your statement — extracting activity…'}
+          {phase === 'uploading' && 'Uploading your statement…'}
+          {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
+          {phase === 'processing' && 'Processing your statement — extracting activity…'}
         </p>
       )}
 
@@ -505,6 +604,15 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         <div className="mt-4 space-y-3">
           <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>
           <p className="text-sm text-muted">You can try a different file, or add this liability manually below.</p>
+          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {phase === 'scan_timeout' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message ?? SCAN_TIMEOUT_MESSAGE}</p>
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
             Try again
           </button>
