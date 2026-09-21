@@ -49,6 +49,51 @@ async function pg(path, init) {
   return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// NAV 1.03 safe pause. This brute-force full-universe script is exactly the
+// job that grew production's ii_prices_nav to 6.26GB+ before being manually
+// interrupted 2026-09-21 -- see docs/investment-intelligence/NAV1_PROGRESS_LEDGER.md.
+// The redesigned NAV 1 architecture replaces it with a selective hydration
+// job scoped to actual dependencies (accepted statements / benchmarks /
+// pinned reports), not "every instrument this deployment has ever resolved"
+// -- which, per the PC6 scheme-master expansion, is now the full ~14,358
+// AMFI universe, not merely held schemes. This script must therefore refuse
+// to run at all unless an operator explicitly re-arms it via
+// ii_reference_job_control, exactly like every scheduled PC6 job already
+// does (0155's kill-switch pattern) -- a one-off script is not exempt from
+// the same control just because it is hand-run rather than cron-run.
+// Migration 0166 ships this job_control row DISABLED. Enabling it is a
+// deferred, human-present, one-invocation decision -- this check reads it
+// fresh on every run rather than caching, so a mid-run disable (an
+// operator hitting the kill switch while this is running) is not required
+// here since the row is only read once at startup; a genuinely live
+// stop-mid-run mechanism is out of scope for a one-shot backfill script and
+// is the reason Ctrl+C / process termination remains the actual stop
+// mechanism for an already-running invocation.
+const KILL_SWITCH_JOB_KEY = 'pc6_full_universe_historical_backfill';
+{
+  let control;
+  try {
+    const rows = await pg(`ii_reference_job_control?job_key=eq.${KILL_SWITCH_JOB_KEY}&select=enabled,disabled_reason`);
+    control = rows[0];
+  } catch (e) {
+    console.error(`Could not read ii_reference_job_control (${e.message}). Refusing to run: this script must not proceed without a confirmed, explicit enable.`);
+    process.exit(1);
+  }
+  if (!control || control.enabled !== true) {
+    console.error(
+      `Refusing to run: ii_reference_job_control.${KILL_SWITCH_JOB_KEY} is ${control ? 'disabled' : 'MISSING'} ` +
+      `(${control?.disabled_reason ?? 'no row -- apply migration 0166 first'}). ` +
+      `This script now requires an operator to explicitly set enabled=true on that row before every ` +
+      `invocation (NAV 1.03 safe pause). This is the brute-force full-universe path the NAV 1 redesign ` +
+      `replaces with selective hydration -- re-enabling it should be a deliberate, reasoned exception, not ` +
+      `a default.`
+    );
+    process.exit(1);
+  }
+  console.warn(`Kill switch check passed: ${KILL_SWITCH_JOB_KEY} is explicitly enabled. Proceeding.`);
+}
+
 // PostgREST's own default response cap (1000) truncates a plain select
 // silently -- must be paged explicitly everywhere, not just for the
 // existing-rows check this was originally written for. Found the hard way:

@@ -141,6 +141,60 @@ export const PC6_REFERENCE_SOURCES: Record<string, ReferenceSourceDefinition> = 
   },
 
   // ---------------------------------------------------------------------------
+  // NAV 1 selective-historical candidate sources (governance registration
+  // only — see lib/services/investment-intelligence/pc6/adapters/ for the
+  // actual fetch implementations, which use their own JSON contract rather
+  // than this registry's AMFI-text urlTemplate/buildUrl() machinery).
+  // `enabled: false` here means "not yet qualified for the FHIP production
+  // runtime network path" (NAV 1.18), NOT "no technical path exists" — do
+  // not conflate this with the licence_required BLOCKED sources below.
+  // ---------------------------------------------------------------------------
+  tigzig_nav_history: {
+    sourceKey: 'tigzig',
+    label: 'TIGZIG — AMFI-derived mutual fund NAV history API',
+    kind: 'nav_history',
+    format: 'json',
+    countryCode: 'IN',
+    currencyCode: 'INR',
+    urlTemplate: null, // see tigzigHistoricalAdapter.ts; not built through buildUrl()
+    termsUrl: 'https://www.tigzig.com/terms',
+    licence: 'public_open',
+    cadence: 'daily_business',
+    staleAfterDays: 4,
+    notes:
+      'Pilot selective-historical source (NAV 1.15). Re-qualified live 2026-09-21 from this session\'s ' +
+      'own sandbox (NOT the FHIP production runtime network path): GET https://api.tigzig.com/mf/v1/nav ' +
+      '?scheme=119551&since=2026-09-14&to=2026-09-18 returned HTTP 200 with 4 real observations, ' +
+      'consistent with the workbook\'s own prior-recorded result. TIGZIG\'s own documentation explicitly ' +
+      'disclaims authority ("not affiliated with, endorsed by, or sponsored by AMFI"), so its output is ' +
+      'never promoted to canonical without AMFI cross-validation. enabled=false until NAV 1.18 repeats ' +
+      'this request from the deployed FHIP runtime itself.',
+    enabled: false,
+  },
+
+  mfnav_fallback_history: {
+    sourceKey: 'mfnav',
+    label: 'mfnav.in — possible fallback mutual fund NAV history API',
+    kind: 'nav_history',
+    format: 'json',
+    countryCode: 'IN',
+    currencyCode: 'INR',
+    urlTemplate: null,
+    termsUrl: 'https://mfnav.in/terms',
+    licence: 'public_open',
+    cadence: 'daily_business',
+    staleAfterDays: 4,
+    notes:
+      'Unqualified fallback (NAV 1.16). The workbook\'s own prior review recorded HTTP 403 from a ' +
+      'research environment; this session did not independently re-test it (no adapter built — building ' +
+      'one against an already-known-403 endpoint without a fresh access result would misrepresent ' +
+      'qualification status). Do not call this operational until a genuine 200 response is observed from ' +
+      'the actual FHIP network path per the workbook\'s own instruction ("test the real FHIP network path ' +
+      'without bypassing access controls").',
+    enabled: false,
+  },
+
+  // ---------------------------------------------------------------------------
   // BLOCKED SOURCES — registered so the gap is visible and governed, NOT so a
   // substitute can be quietly slotted in. See N.7-N.10 in the certification.
   // ---------------------------------------------------------------------------
