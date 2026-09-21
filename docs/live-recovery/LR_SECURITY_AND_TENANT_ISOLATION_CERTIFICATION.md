@@ -1,5 +1,21 @@
 # LR Security and Tenant Isolation Certification
 
+## 2026-09-21 ADDENDUM — fresh live re-confirmation, not merely carried forward
+
+Everything below this line is the 2026-09-14 baseline, preserved as-is. This pass independently **re-ran the same class of test fresh, today, against the real DEV database**, using two newly-created disposable authenticated users each time (not the same rows, not the same users, not a re-read of the old report) — `scripts/audit-lr/z01_dev_rls_cross_tenant_live.mjs` and `z02_dev_rls_cross_tenant_more_tables.mjs`, written this pass using native `fetch` only (this worktree's `node_modules` could not be reliably installed for most of this session, so the TypeScript oracle scripts that depend on `@supabase/supabase-js` and the application's own engines could not be run — see the Section 7 note in the master addendum. RLS itself is enforced entirely at the Postgres/PostgREST layer, so it does not require the application's JS to be running, which is why this specific class of test remained possible).
+
+| Table | READ as user B | UPDATE as user B | DELETE as user B | Positive control (A reads own row) | Result |
+|---|---|---|---|---|---|
+| `liabilities` | 0 rows (200) | 0 rows affected (200) | 0 rows affected (200) | 1 row (200) | **PASS — isolated, live-reconfirmed 2026-09-21** |
+| `business_entities` | 0 rows (200) | — | 0 rows affected (200) | 1 row (200) | **PASS — isolated, live-reconfirmed 2026-09-21** |
+| `ii_source_documents` | 0 rows (200) | — | 0 rows affected (200) | 1 row (200) | **PASS — isolated, live-reconfirmed 2026-09-21.** This is the table behind the P1-3 finding (no upload gate, no malware scan) — confirming RLS still holds here matters specifically because it means that finding is a *content-safety* gap (unscanned bytes reach the parser), not also a *cross-tenant data* gap. Both would have compounded badly together; they do not. |
+
+All test users were created via the Auth Admin API and deleted at the end of each run regardless of outcome (`cleanup: deleted N synthetic DEV users`, confirmed in script output both times). No production credentials were used or available in this pass (`.env.local` in this worktree is DEV-only by construction — verified before use by confirming the production project ref is absent from the file).
+
+Not re-run this pass (carried forward from 09-14 as Tier 4 evidence only): every other table in the matrix below, and the unauthenticated production probes (`a01`, `a03`, `a04`, `a08`, `a11`, `a14`, `a15` were not re-executed — several are explicitly production-only probes and this pass was deliberately issued DEV-only credentials).
+
+---
+
 **Date:** 2026-09-14 · **Baseline:** `origin/main` @ `ff35f54`
 **Method:** two real authenticated users with real JWTs (anon-denied is explicitly *not* accepted as equivalent), plus live unauthenticated probes against the production application, plus service-role introspection of both databases. Script: `scripts/audit-lr/oracle6_security_deletion_residue.ts`, `a01`, `a03`, `a04`, `a08`, `a11`, `a14`, `a15`.
 
