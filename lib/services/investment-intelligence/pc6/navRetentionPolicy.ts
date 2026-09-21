@@ -191,3 +191,62 @@ export function evaluateCandidate(row: NavRow, ctx: PolicyContext): boolean {
 export function withNoReportPinDependency(ctx: Omit<PolicyContext, 'reportPinLookup'>): PolicyContext {
   return { ...ctx, reportPinLookup: () => false };
 }
+
+// ---------------------------------------------------------------------------
+// NAV 1.26 — initial historical hydration: the INVERSE question from
+// KEEP/CANDIDATE. Given an instrument (not yet knowing which dates exist),
+// how far back does its history need to be FETCHED? Deliberately excludes
+// post_changeover (that is the daily job's job, not hydration's) and
+// report_pin (fails closed for retention purposes, but a fail-closed
+// "protect everything" is not an actionable fetch instruction — hydration
+// only fetches for a NAMED reason, never "because we couldn't prove we
+// didn't need it") and active_hold (a hold protects existing rows; it does
+// not, by itself, demand fetching new ones).
+// ---------------------------------------------------------------------------
+
+export interface HydrationRequirement {
+  required: boolean;
+  /** ISO date, or null meaning "from inception / earliest the provider has" when required=true. */
+  fromDate: string | null;
+  reasons: Extract<KeepReason, 'accepted_statement_history' | 'benchmark_dependency'>[];
+}
+
+export function determineHydrationRequirement(
+  instrumentId: string,
+  ctx: Pick<PolicyContext, 'acceptedDependencies' | 'benchmarkDependencies'>
+): HydrationRequirement {
+  const reasons: HydrationRequirement['reasons'] = [];
+  let fromDate: string | null = null;
+  let sawInceptionRequirement = false;
+
+  const dep = ctx.acceptedDependencies.get(instrumentId);
+  if (dep?.isAccepted) {
+    reasons.push('accepted_statement_history');
+    switch (dep.historyCompleteness) {
+      case 'complete_from_inception':
+      case null:
+        sawInceptionRequirement = true;
+        break;
+      case 'complete_from_known_opening_balance':
+        if (dep.earliestTransactionDate && (fromDate === null || dep.earliestTransactionDate < fromDate)) fromDate = dep.earliestTransactionDate;
+        else if (!dep.earliestTransactionDate) sawInceptionRequirement = true;
+        break;
+      case 'partial_history':
+      case 'holdings_only':
+        if (dep.certifiedAsOfDate && (fromDate === null || dep.certifiedAsOfDate < fromDate)) fromDate = dep.certifiedAsOfDate;
+        else if (!dep.certifiedAsOfDate) sawInceptionRequirement = true;
+        break;
+    }
+  }
+
+  if (ctx.benchmarkDependencies.get(instrumentId)?.everBenchmarked) {
+    reasons.push('benchmark_dependency');
+    // A benchmark comparison needs the same window as whatever accepted
+    // history it is comparing against; without a narrower reason already
+    // established above, be conservative and ask for full history.
+    if (reasons.length === 1) sawInceptionRequirement = true;
+  }
+
+  if (reasons.length === 0) return { required: false, fromDate: null, reasons: [] };
+  return { required: true, fromDate: sawInceptionRequirement ? null : fromDate, reasons };
+}

@@ -7,6 +7,7 @@ import {
   evaluateKeep,
   evaluateCandidate,
   withNoReportPinDependency,
+  determineHydrationRequirement,
   type PolicyContext,
   type NavRow,
 } from '@/lib/services/investment-intelligence/pc6/navRetentionPolicy';
@@ -117,5 +118,50 @@ describe('navRetentionPolicy — KEEP/CANDIDATE contract', () => {
       ]),
     });
     expect(evaluateCandidate({ instrumentId: 'scheme-z', navDate: '2010-01-01' }, ctx)).toBe(false);
+  });
+});
+
+describe('determineHydrationRequirement — NAV 1.26 fetch-window planning', () => {
+  it('an instrument with no dependency at all needs no hydration', () => {
+    const req = determineHydrationRequirement('none', { acceptedDependencies: new Map(), benchmarkDependencies: new Map() });
+    expect(req.required).toBe(false);
+    expect(req.fromDate).toBeNull();
+  });
+
+  it('complete_from_inception requires fetching from inception (fromDate null)', () => {
+    const req = determineHydrationRequirement('a', {
+      acceptedDependencies: new Map([['a', { instrumentId: 'a', isAccepted: true, historyCompleteness: 'complete_from_inception', earliestTransactionDate: null, certifiedAsOfDate: null }]]),
+      benchmarkDependencies: new Map(),
+    });
+    expect(req.required).toBe(true);
+    expect(req.fromDate).toBeNull();
+    expect(req.reasons).toEqual(['accepted_statement_history']);
+  });
+
+  it('complete_from_known_opening_balance requires fetching only from the earliest transaction date', () => {
+    const req = determineHydrationRequirement('b', {
+      acceptedDependencies: new Map([['b', { instrumentId: 'b', isAccepted: true, historyCompleteness: 'complete_from_known_opening_balance', earliestTransactionDate: '2020-03-01', certifiedAsOfDate: null }]]),
+      benchmarkDependencies: new Map(),
+    });
+    expect(req.required).toBe(true);
+    expect(req.fromDate).toBe('2020-03-01');
+  });
+
+  it('a benchmark-only dependency with no narrower accepted reason requires full history', () => {
+    const req = determineHydrationRequirement('c', {
+      acceptedDependencies: new Map(),
+      benchmarkDependencies: new Map([['c', { instrumentId: 'c', everBenchmarked: true }]]),
+    });
+    expect(req.required).toBe(true);
+    expect(req.fromDate).toBeNull();
+    expect(req.reasons).toEqual(['benchmark_dependency']);
+  });
+
+  it('an unaccepted instrument (isAccepted: false) is not a hydration reason', () => {
+    const req = determineHydrationRequirement('d', {
+      acceptedDependencies: new Map([['d', { instrumentId: 'd', isAccepted: false, historyCompleteness: null, earliestTransactionDate: null, certifiedAsOfDate: null }]]),
+      benchmarkDependencies: new Map(),
+    });
+    expect(req.required).toBe(false);
   });
 });
