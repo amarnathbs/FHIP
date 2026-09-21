@@ -11,6 +11,7 @@ import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
+import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges, loadExistingAccountsForInstitutionCurrency } from '@/lib/financial-data-hub/bank-csv/repository';
@@ -145,6 +146,16 @@ export async function POST(req: Request) {
     return bad('could not store document', 500);
   }
   await updateIntakeStatus({ intakeId, toStatus: 'quarantined', storageKey, detectedMimeType: admission.detectedMimeType });
+
+  // Real-malware-gate wiring (2026-09-21): shipped disabled — see
+  // lib/aie/malware/aieGateAdapter.ts's header.
+  const malwareGate = await runAieRealMalwareScanGate({ intakeId, userId: user.id, bytes, contentHash: admission.fileHash });
+  if (!malwareGate.proceed) {
+    if (malwareGate.outcome === 'pending_scan') {
+      return ok({ intake_id: intakeId, status: 'quarantined', malware_scan_status: 'pending', duplicate_classification: duplicateClassification });
+    }
+    return ok({ intake_id: intakeId, status: 'rejected', failure_code: malwareGate.failureCode, duplicate_classification: duplicateClassification });
+  }
 
   // FDH-5's own byte-level structural classification, REUSED UNCHANGED
   // (encrypted/corrupt/image-only/text-native/mixed-content). No secure

@@ -46,6 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const result = await processSourceDocument({
     userId: user.id,
+    userEmail: user.email ?? null,
     sourceDocumentId: id,
     password: parsed.data.password,
     forceReparse: parsed.data.forceReparse,

@@ -40,8 +40,9 @@ export default function ExpensesPage() {
           </button>
         </div>
         <p className="mt-2 text-sm text-muted">
-          Upload a bank or credit card statement (PDF or CSV) and FHIP will extract your transactions for you to review
-          and approve before they count toward your Monthly Surplus.
+          Upload a bank statement (PDF or CSV) and FHIP will extract your transactions for you to review and approve
+          before they count toward your Monthly Surplus. For credit card or loan statements, use Import from the
+          Liabilities tab.
         </p>
       </div>
 

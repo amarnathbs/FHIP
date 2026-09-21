@@ -34,10 +34,31 @@
  * `allowMissingSignatureScanner`. Wiring exit criteria (AIE-1.1 exit gate)
  * cannot claim malware-scanning FULL PASS on this alone — recorded as an
  * open item in AIE_1_1_IMPLEMENTATION.md.
+ *
+ * 2026-09-21 UPDATE — SHARED EXTRACTION. The structural scan
+ * (`scanPdfStructure`) described above is no longer implemented in this file.
+ * An independent audit found FDH-3's own upload routes had NO structural PDF
+ * check at all, so the FlateDecode-aware scan was extracted verbatim to
+ * `lib/shared/pdfStructuralScan.ts` and both AIE and FDH-3 now import that
+ * single implementation, rather than FDH-3 growing a second, drifting copy.
+ * This file still owns and re-exports `scanPdfStructure`'s public name for
+ * backward compatibility (see the import/re-export block below) — nothing
+ * about AIE's own behaviour, allowlist, or limits changed.
  */
 
 import { createHash } from 'node:crypto';
-import { inflateSync } from 'node:zlib';
+import { scanPdfStructure, type PdfStructuralScanResult } from '@/lib/shared/pdfStructuralScan';
+
+// Re-exported for backward compatibility — every existing caller/test in this
+// codebase imports `scanPdfStructure`/`PdfStructuralScanResult` FROM THIS
+// FILE (`@/lib/aie/validation/fileValidation`), including
+// `tests/unit/aieFileValidation.test.ts` and
+// `tests/unit/aie16CertificationAdversarialPdf.test.ts`. The 2026-09-21 FDH-3
+// malware-scan-gap remediation pass extracted the actual implementation to
+// `lib/shared/pdfStructuralScan.ts` so FDH-3 can call the SAME code instead
+// of a drifting copy — this re-export means neither AIE's own imports nor
+// its test suite need to change.
+export { scanPdfStructure, type PdfStructuralScanResult };
 
 export interface AieUploadLimits {
   allowedMimeTypes: readonly string[];
@@ -55,7 +76,6 @@ export const DEFAULT_AIE_UPLOAD_LIMITS: AieUploadLimits = {
 };
 
 const PDF_MAGIC = Buffer.from('%PDF-', 'ascii');
-const PDF_EOF = Buffer.from('%%EOF', 'ascii');
 
 export function looksLikePdf(bytes: Uint8Array): boolean {
   if (bytes.length < PDF_MAGIC.length) return false;
@@ -77,159 +97,13 @@ export function isPdfLikelyPasswordProtected(bytes: Uint8Array, scanCapBytes: nu
   return Buffer.from(scanned).includes(ENCRYPT_TOKEN);
 }
 
-/**
- * QUA-03: "reject PDF JavaScript/launch actions/embedded executables/
- * disallowed attachments." A real PDF object-model parser is not built here
- * (out of scope for this pass — see module header); instead this scans for
- * the literal PDF dictionary-key tokens that declare those features,
- * re-scanning any `/FlateDecode`-compressed stream's decompressed content
- * too (see `scanFlateDecodeStreamsForDisallowedTokens` below — added after
- * an AIE-1.6 certification pass demonstrated a FlateDecode-wrapped token
- * evaded the original literal-only scan). This is still a heuristic, not a
- * guarantee: a stream compressed with a DIFFERENT or CHAINED filter (LZW,
- * ASCII85, RunLength, or several filters applied together) can still hide
- * the literal token from both scans — disclosed as such, matching FDH-3's
- * own "sufficient to answer X, nothing more" framing.
- */
-const DISALLOWED_PDF_TOKENS: { token: Buffer; label: string }[] = [
-  { token: Buffer.from('/JavaScript', 'ascii'), label: 'embedded_javascript' },
-  { token: Buffer.from('/JS', 'ascii'), label: 'embedded_javascript' },
-  { token: Buffer.from('/Launch', 'ascii'), label: 'launch_action' },
-  { token: Buffer.from('/EmbeddedFile', 'ascii'), label: 'embedded_file' },
-  { token: Buffer.from('/OpenAction', 'ascii'), label: 'auto_open_action' },
-];
-
-/**
- * AIE-1.6 certification finding (see AIE_1_6_CERTIFICATION_REPORT.md
- * section 5, "aie16CertificationAdversarialPdf.test.ts"): the literal-token
- * scan above cannot see a token that has been deflate-compressed inside a
- * standard PDF stream object — a completely unremarkable PDF feature, not
- * an exotic attack. Certification CONSTRUCTED a `/JavaScript` action inside
- * a `/Filter /FlateDecode` stream and confirmed it evaded detection
- * entirely. This closes that specific, demonstrated gap: every stream
- * object whose dictionary declares `/FlateDecode` is decompressed (best
- * effort) and the same disallowed-token scan is re-run against its
- * decompressed content.
- *
- * This remains a HEURISTIC, not a full PDF object-model parser (still
- * disclosed as such) — it does not handle streams compressed with a
- * DIFFERENT filter (LZW, ASCII85, RunLength, or a `/Filter` ARRAY chaining
- * more than one, e.g. `[/ASCII85Decode /FlateDecode]`), and it locates
- * stream/dictionary boundaries with a bounded literal-byte scan rather than
- * a real tokenizer. A sufficiently adversarial combination of those
- * remaining gaps could still evade it — this is one closed hole, not a
- * claim of "solved." A real PDF-parsing library or a genuine anti-malware
- * signature engine remains the only way to close this class of gap fully,
- * and is still explicitly out of scope for this pass (see module header).
- *
- * Decompression-bomb guard: both the NUMBER of streams inspected and the
- * TOTAL decompressed bytes scanned across the whole file are capped,
- * independent of and in addition to the outer structuralScanCapBytes (which
- * only bounds the RAW/compressed bytes read). A stream that would exceed
- * the remaining decompressed-byte budget is flagged as suspicious in its
- * own right (`oversized_compressed_stream`) rather than silently skipped —
- * a compressed object that expands far past what genuine PDF content needs
- * is itself an anomaly worth surfacing, not just an inconvenience to scan
- * around.
- */
-const STREAM_KEYWORD = Buffer.from('stream', 'ascii');
-const ENDSTREAM_KEYWORD = Buffer.from('endstream', 'ascii');
-const FLATE_DECODE_TOKEN = Buffer.from('/FlateDecode', 'ascii');
-const STREAM_DICT_LOOKBACK_BYTES = 2000; // bounded window to find this stream's own dictionary
-const MAX_FLATE_STREAMS_SCANNED = 200; // bounds parse time on a pathological object count
-const MAX_DECOMPRESSED_SCAN_BYTES = 20 * 1024 * 1024; // bounds total decompression work/memory
-
-function scanFlateDecodeStreamsForDisallowedTokens(buf: Buffer): string[] {
-  const reasons = new Set<string>();
-  let searchFrom = 0;
-  let streamsScanned = 0;
-  let decompressedBytesUsed = 0;
-
-  while (streamsScanned < MAX_FLATE_STREAMS_SCANNED) {
-    const streamKeywordIndex = buf.indexOf(STREAM_KEYWORD, searchFrom);
-    if (streamKeywordIndex === -1) break;
-
-    const endIndex = buf.indexOf(ENDSTREAM_KEYWORD, streamKeywordIndex + STREAM_KEYWORD.length);
-    if (endIndex === -1) break; // malformed/truncated tail — nothing more to scan
-
-    const dictLookbackStart = Math.max(0, streamKeywordIndex - STREAM_DICT_LOOKBACK_BYTES);
-    const isFlateDecode = buf.subarray(dictLookbackStart, streamKeywordIndex).includes(FLATE_DECODE_TOKEN);
-
-    if (isFlateDecode) {
-      // The PDF spec requires an EOL (CR, LF, or CRLF) immediately after the
-      // `stream` keyword before the raw stream data begins.
-      let rawStart = streamKeywordIndex + STREAM_KEYWORD.length;
-      if (buf[rawStart] === 0x0d) rawStart++;
-      if (buf[rawStart] === 0x0a) rawStart++;
-      const rawBytes = buf.subarray(rawStart, endIndex);
-
-      const remainingBudget = MAX_DECOMPRESSED_SCAN_BYTES - decompressedBytesUsed;
-      if (remainingBudget <= 0) {
-        reasons.add('oversized_compressed_stream');
-      } else {
-        try {
-          const decompressed = inflateSync(rawBytes, { maxOutputLength: remainingBudget });
-          decompressedBytesUsed += decompressed.length;
-          for (const { token, label } of DISALLOWED_PDF_TOKENS) {
-            if (decompressed.includes(token)) reasons.add(label);
-          }
-        } catch (err) {
-          // ERR_BUFFER_TOO_LARGE means this one stream alone would exceed
-          // the remaining decompression budget — flag it explicitly rather
-          // than silently skipping, per this function's own header.
-          // Any OTHER zlib error (corrupt data, a different/layered filter
-          // this heuristic doesn't attempt to unwrap, a truncated stream)
-          // is not itself evidence of anything — this is a best-effort
-          // heuristic scan, not a full parser, matching this module's own
-          // disclosed "heuristic, not a guarantee" framing throughout.
-          if ((err as NodeJS.ErrnoException)?.code === 'ERR_BUFFER_TOO_LARGE') {
-            reasons.add('oversized_compressed_stream');
-          }
-        }
-      }
-    }
-
-    streamsScanned++;
-    searchFrom = endIndex + ENDSTREAM_KEYWORD.length;
-  }
-
-  return Array.from(reasons);
-}
-
-export interface PdfStructuralScanResult {
-  suspicious: boolean;
-  reasons: string[];
-  /** QUA-05: "detect polyglot files/suspicious trailing content." */
-  hasTrailingContentAfterEof: boolean;
-}
-
-export function scanPdfStructure(bytes: Uint8Array, scanCapBytes: number): PdfStructuralScanResult {
-  const scanned = bytes.length > scanCapBytes ? bytes.subarray(0, scanCapBytes) : bytes;
-  const buf = Buffer.from(scanned);
-  const reasons: string[] = [];
-  for (const { token, label } of DISALLOWED_PDF_TOKENS) {
-    if (buf.includes(token) && !reasons.includes(label)) reasons.push(label);
-  }
-  for (const label of scanFlateDecodeStreamsForDisallowedTokens(buf)) {
-    if (!reasons.includes(label)) reasons.push(label);
-  }
-
-  // Trailing-content-after-%%EOF check runs over the FULL file (bounded to a
-  // fixed tail window), independent of the head-only structural scan cap,
-  // since a polyglot payload is deliberately appended at the end.
-  const lastEofIndex = Buffer.from(bytes).lastIndexOf(PDF_EOF);
-  let hasTrailingContentAfterEof = false;
-  if (lastEofIndex >= 0) {
-    const afterEof = bytes.subarray(lastEofIndex + PDF_EOF.length);
-    // A handful of trailing whitespace/newline bytes is normal; anything
-    // else after the last %%EOF marker is not.
-    const trimmed = Buffer.from(afterEof).toString('latin1').replace(/[\r\n\s]/g, '');
-    hasTrailingContentAfterEof = trimmed.length > 0;
-  }
-  if (hasTrailingContentAfterEof) reasons.push('trailing_content_after_eof');
-
-  return { suspicious: reasons.length > 0, reasons, hasTrailingContentAfterEof };
-}
+// QUA-03 ("reject PDF JavaScript/launch actions/embedded executables/
+// disallowed attachments") and QUA-05 ("detect polyglot files/suspicious
+// trailing content") are both implemented by `scanPdfStructure`, imported
+// above from `lib/shared/pdfStructuralScan.ts` — see that module's header
+// for the full disclosed scope, the AIE-1.6 FlateDecode-decompression fix
+// history, and the decompression-bomb bounds. It is re-exported at the top
+// of this file so no existing import path in this codebase changes.
 
 /**
  * Disclosed stub (see module header). No signature-based scanner is wired

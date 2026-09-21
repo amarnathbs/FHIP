@@ -3,6 +3,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-intelligence';
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
+import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from '@/lib/services/investment-intelligence/uploadAdmission';
 import { createHash } from 'crypto';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
@@ -46,6 +47,31 @@ export async function POST(req: Request) {
   if (!validation.ok) return bad(validation.error!, 422);
 
   const bytes = new Uint8Array(await file.arrayBuffer());
+
+  // Structural admission scan (2026-09-21 fix — see uploadAdmission.ts's own
+  // header for the full "why here, why not the whole AIE admission
+  // pipeline" reasoning): this upload surface had zero magic-byte/
+  // structural check before this fix — only the extension/MIME/size shell
+  // above. Runs BEFORE the file is written to storage or a
+  // ii_source_documents row is created, so a rejected file is never
+  // persisted and can never reach documentProcessing.ts's parsing or
+  // AI-fallback path. Scoped to PDF only — CSV has no comparable structural
+  // threat model in this codebase.
+  if (file.type === 'application/pdf') {
+    const admission = scanUploadedPdfForAdmission(bytes);
+    if (!admission.ok) {
+      await emitAuditEvent({
+        userId: user.id,
+        eventType: 'document_processing_failed',
+        subjectType: 'ii_source_documents',
+        subjectId: null,
+        actorType: 'system',
+        metadata: { reason: 'upload_admission_rejected', failureCode: admission.failureCode, structuralReasons: admission.reasons, originalFilename: file.name },
+      });
+      return bad(uploadAdmissionFailureMessage(admission.failureCode), 422, 'upload_admission_rejected');
+    }
+  }
+
   const checksum = createHash('sha256').update(bytes).digest('hex');
 
   const supabase = await createClient();
