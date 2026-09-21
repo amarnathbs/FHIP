@@ -679,11 +679,27 @@ returns, risk metrics/drawdowns, IDCW/distribution events
   blanket "from inception" default would fetch meaningfully less data per
   dependency — a real, valuable, NOT-YET-DONE follow-up, disclosed here
   rather than silently left as an inefficiency.
-- IDCW/distribution-event handling (NAV 1.34) was not independently
-  investigated this dispatch — `ii_transactions.transaction_type` already
-  includes `'dividend'`/`'reinvestment'` (migration `0033`, pre-existing),
-  but whether NAV1's hydrated history interacts correctly with a fund's
-  distribution-adjusted vs. unadjusted NAV series was not checked.
+- **NAV 1.34 IDCW/distribution events — investigated, PASS by existing
+  architecture**: PC6's scheme-master design (migration `0155`, pre-existing)
+  already sidesteps the classic "dividend-adjusted vs. unadjusted NAV series"
+  problem structurally, not through any NAV1-specific handling. AMFI (and
+  therefore `amfiParser.ts`'s `option_type` classification —
+  `growth`/`idcw`/`dividend_payout`/`dividend_reinvestment`) treats an IDCW
+  plan as its own DISTINCT scheme code with its OWN `ii_instruments` row and
+  its own `ii_prices_nav` series — "economically distinct plan/option
+  variants are NOT collapsed" (0155's own documented design). A dividend-
+  payout plan's NAV genuinely drops after each distribution because it is a
+  real, separately-published NAV for a real, separate instrument — not
+  because PC6 adjusted anything. NAV1's hydration job inherits this for
+  free: it fetches/writes per-instrument, and an IDCW-option instrument is
+  just another instrument to it. Separately, `ii_transactions.transaction_type`
+  already includes `'dividend'`/`'reinvestment'` (migration `0033`,
+  pre-existing) for recording a unit-holder's OWN distribution receipt,
+  which is a different concept from PC6's scheme-level NAV series and
+  requires no NAV1 change either. `benchmarkGovernance.ts` (pre-existing)
+  separately already flags and qualifies a Price-Return-Index-standing-in-
+  for-Total-Return-Index situation for benchmark comparisons (PRI excludes
+  dividends). No gap found; no code change needed.
 
 ## NAV 1.35 — Currency and historical report preservation
 
