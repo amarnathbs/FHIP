@@ -412,6 +412,30 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'app', 'api', 'business-entities', 'route.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'investment-intelligence', 'cron', 'pc6-reference-ingest', 'route.ts'),
       path.join(REPO_ROOT, 'components', 'investment-intelligence', 'InvestmentIntelligenceSubNav.tsx'),
+      // Real-malware-gate wiring (2026-09-21): the identical naive-substring
+      // limitation once more. `lib/aie/malware/aieGateAdapter.ts` names its
+      // FDH-3 sibling module (`lib/financial-data-hub/services/
+      // malwareScanGate.ts`) in a header comment; `awsSigV4.ts` cites
+      // `lib/financial-data-hub/domain/fileValidation.ts`'s own "no new npm
+      // dependency" precedent as the rationale for hand-rolling SigV4
+      // instead of adding `@aws-sdk/client-s3`; `s3RestClient.ts` cites
+      // `lib/financial-data-hub/services/storage.ts`'s
+      // `verifyDocumentObjectExists` as the prior-art pattern its own
+      // independent HeadObject verification mirrors; `scanSweep.ts` cites
+      // both `lib/aie/services/purge.ts` and its FDH sibling
+      // `lib/financial-data-hub/services/purge.ts` as the prior-art shape
+      // its bounded-batch sweep loop mirrors. All four are prose citations
+      // of a DESIGN PATTERN being followed, not imports — confirmed by hand
+      // and by `grep -n "from '@/lib/financial-data-hub"` against each file
+      // returning zero matches. (The one file in this dispatch that DOES
+      // really import FDH-3 code, `lib/financial-data-hub/services/
+      // malwareScanGate.ts` itself, lives inside `FDH_LIB` and needs no
+      // entry here — see this test's own `if (file.startsWith(FDH_LIB))
+      // continue;` line above.)
+      path.join(REPO_ROOT, 'lib', 'aie', 'malware', 'aieGateAdapter.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'malware', 'awsSigV4.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'malware', 's3RestClient.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'malware', 'scanSweep.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

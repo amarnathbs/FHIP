@@ -13,6 +13,7 @@ import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
+import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 import type { AieSourceModuleHint } from '@/lib/aie/types';
 
 const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investment_intelligence', 'fdh_bank', 'other', null];
@@ -107,6 +108,17 @@ export async function POST(req: Request) {
 
   await updateIntakeStatus({ intakeId, toStatus: 'quarantined', storageKey, detectedMimeType: admission.detectedMimeType });
   await recordAieAuditEvent({ intakeId, runId: null, userId: user.id, eventType: 'intake_quarantined', actorType: 'system' });
+
+  // Real-malware-gate wiring (2026-09-21): shipped disabled
+  // (AIE_REAL_MALWARE_SCAN_ENABLED unset/false) — a no-op until an operator
+  // deliberately opts in. See aieGateAdapter.ts's header.
+  const malwareGate = await runAieRealMalwareScanGate({ intakeId, userId: user.id, bytes, contentHash: admission.fileHash });
+  if (!malwareGate.proceed) {
+    if (malwareGate.outcome === 'pending_scan') {
+      return ok({ intake_id: intakeId, status: 'quarantined', malware_scan_status: 'pending', duplicate_classification: duplicateClassification });
+    }
+    return ok({ intake_id: intakeId, status: 'rejected', failure_code: malwareGate.failureCode, duplicate_classification: duplicateClassification });
+  }
 
   if (admission.passwordRequired) {
     // No secure password-collection flow exists in this pass (out of
