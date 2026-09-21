@@ -27,3 +27,52 @@
 export function isAiFallbackEnabled(): boolean {
   return process.env.II_AI_FALLBACK_ENABLED === 'true';
 }
+
+// --- Pilot-cohort gate (2026-09-21 fix) -------------------------------------
+//
+// M13A's production-readiness pass (mission/m13-production-activation-
+// 2026-09-21) found this AI-fallback path had no pilot-cohort gate at all —
+// unlike the main AIE pipeline (lib/aie/featureFlags.ts's
+// isAiePilotCohortEnforced/isUserInAiePilotCohort), which never lets
+// extraction run for a user who isn't on an explicit allowlist once
+// enforcement is turned on.
+//
+// NOT the `AIE_PILOT_COHORT_*` mechanism verbatim. This path predates and
+// sits outside the AIE-1 pipeline (it calls the AIE gateway directly for
+// the model call, but is gated by its own `II_AI_FALLBACK_ENABLED` kill
+// switch, not `AIE_DOCUMENT_INTAKE_ENABLED`), so it gets its own,
+// identically-shaped cohort — reusing AIE's variable NAMES here would wire
+// this path to a cohort an operator configured for a completely different
+// feature. Same env-var convention as every other flag in this codebase
+// (comma-separated allowlists, exact string `'true'` to enable), and the
+// SAME two-independent-toggles discipline as AIE's version:
+// `isIiAiFallbackPilotCohortEnforced()` (the restriction's own on/off
+// switch, defaulted OFF) and `isUserInIiAiFallbackPilotCohort()` (the
+// allowlist content check, consulted only when the first is true).
+//
+// FAILS CLOSED: enforced with a completely empty allowlist denies everyone,
+// never silently degrading into "everyone allowed" — identical rule to
+// AIE's own version, and to the amplify.yml comment's own warning about
+// exactly this failure mode ("an enforced-but-empty allowlist must never
+// silently degrade into 'everyone allowed'").
+export function isIiAiFallbackPilotCohortEnforced(): boolean {
+  return process.env.II_AI_FALLBACK_PILOT_COHORT_ENFORCED === 'true';
+}
+
+function parseCommaList(raw: string | undefined): Set<string> {
+  return new Set(
+    (raw ?? '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0)
+  );
+}
+
+export function isUserInIiAiFallbackPilotCohort(params: { userId: string; email?: string | null }): boolean {
+  if (!isIiAiFallbackPilotCohortEnforced()) return true;
+  const userIds = parseCommaList(process.env.II_AI_FALLBACK_PILOT_COHORT_USER_IDS);
+  const emails = parseCommaList(process.env.II_AI_FALLBACK_PILOT_COHORT_EMAILS);
+  if (userIds.has(params.userId.toLowerCase())) return true;
+  if (params.email && emails.has(params.email.toLowerCase())) return true;
+  return false;
+}

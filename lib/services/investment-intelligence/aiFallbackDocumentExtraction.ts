@@ -42,7 +42,7 @@
 
 import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isAiFallbackEnabled } from './aiFallbackFeatureFlag';
+import { isAiFallbackEnabled, isUserInIiAiFallbackPilotCohort } from './aiFallbackFeatureFlag';
 import { unitDeltaForTransaction } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
 import { fromPlainNumber, scaledToDecimalString } from './decimal';
@@ -235,6 +235,11 @@ async function resolveAieDocumentProvider(): Promise<AieDocumentProvider | null>
 
 export type AiFallbackDocumentOutcome =
   | { outcome: 'disabled' }
+  // 2026-09-21 fix (M13A finding): this path had no pilot-cohort gate.
+  // Returned when II_AI_FALLBACK_PILOT_COHORT_ENFORCED is on and this user
+  // is not on the allowlist — the provider is never called, matching
+  // 'disabled''s own "no AI call happened" property.
+  | { outcome: 'cohort_denied' }
   | { outcome: 'unavailable'; reason: string }
   | { outcome: 'already_pending'; reviewId: string; holdings: AieExtractedHolding[] }
   | { outcome: 'already_decided'; reviewId: string; status: 'accepted' | 'rejected' }
@@ -261,6 +266,11 @@ interface ApplySummary {
 
 export interface AiFallbackDocumentContext {
   userId: string;
+  /** Needed for the pilot-cohort email allowlist (2026-09-21 fix) — optional
+   * so existing test call sites that only ever exercised the enabled/
+   * disabled kill switch keep compiling; omitted/null simply means the
+   * email-based half of the allowlist can never match for this call. */
+  userEmail?: string | null;
   sourceDocumentId: string;
   parseRunId: string | null;
   triggerReason: AiFallbackTriggerReason;
@@ -292,6 +302,14 @@ function hasUsableData(result: AieDocumentExtractionResult): boolean {
  */
 export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
   if (!isAiFallbackEnabled()) return { outcome: 'disabled' };
+
+  // 2026-09-21 fix (M13A finding): checked BEFORE any existing-review lookup
+  // or provider call, same "before a single byte is read/sent" discipline
+  // the AIE intake routes use for their own pilot-cohort check. Fails
+  // closed: see isUserInIiAiFallbackPilotCohort's own header.
+  if (!isUserInIiAiFallbackPilotCohort({ userId: ctx.userId, email: ctx.userEmail ?? null })) {
+    return { outcome: 'cohort_denied' };
+  }
 
   const admin = createAdminClient();
 
