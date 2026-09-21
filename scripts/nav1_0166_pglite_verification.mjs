@@ -138,6 +138,24 @@ await db.exec(`insert into ii_portfolio_truth_status (user_id, account_id, instr
   ('${ORDINARY}','bbbb0000-0000-0000-0000-000000000001','cccc0000-0000-0000-0000-000000000003','certified','complete_from_known_opening_balance');`);
 await db.exec(`insert into ii_transactions (user_id, account_id, instrument_id, currency_code, transaction_type, transaction_date, units, price_per_unit, gross_amount, status) values
   ('${ORDINARY}','bbbb0000-0000-0000-0000-000000000001','cccc0000-0000-0000-0000-000000000003','INR','purchase','2020-01-15', 100, 10, 1000, 'reconciled');`);
+// REGRESSION NOTE (found live, NAV 1 R3 dispatch, 2026-09-21): once migration
+// 0168 exists in the same replayed chain, its trigger fires on the INSERT
+// above (status='certified') and auto-creates a whole-instrument
+// ii_nav_retention_holds row for cccc...0003 -- correct, intentional 0168
+// behaviour (a hold protects the ENTIRE instrument, not a date range, per
+// 0166's own documented "whole-instrument" choice), but it breaks this
+// assertion's ISOLATION: without releasing it, protected_by_active_hold
+// alone would make every date for this instrument protected, masking what
+// this specific check is actually trying to test (the accepted-statement
+// date-window boundary, in isolation from the separate hold mechanism).
+// This script's own PG-13/14 assertions predate 0168 and were never
+// re-validated against the combined chain until this dispatch -- release
+// the incidental hold the same way NAV 1.39's proven-live lifecycle does
+// (UPDATE released_at, not a DELETE) so the two protections stay testable
+// independently, matching what pc6NavRetentionPolicy.test.ts already tests
+// for the TS engine in isolation.
+await db.exec(`update ii_nav_retention_holds set released_at = now()
+  where instrument_id = 'cccc0000-0000-0000-0000-000000000003' and released_at is null;`);
 check('opening-balance scheme: row before the earliest transaction is a CANDIDATE', await candidate('cccc0000-0000-0000-0000-000000000003', '2019-12-31') === true);
 check('opening-balance scheme: row ON the earliest transaction date is protected', await candidate('cccc0000-0000-0000-0000-000000000003', '2020-01-15') === false);
 
