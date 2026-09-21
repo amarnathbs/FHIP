@@ -795,6 +795,12 @@ returns, risk metrics/drawdowns, IDCW/distribution events
   `volatilityMinObservations: 12`). This is exactly NAV 1.12's "calculation-
   driven history planning" requirement, and it already exists — NAV1 did not
   need to invent it.
+- **NAV 1.30 XIRR confirmation**: `lib/engines/investment-intelligence/xirr.ts`
+  (pre-existing) follows the identical honest-status discipline —
+  `xirr()` returns `{ status: 'unavailable', reason: 'INSUFFICIENT_HISTORY' }`
+  for fewer than 2 cash flows, never a fabricated/zero return. Confirmed by
+  reading the function directly, not assumed from the pattern already found
+  in `rollingReturnService.ts`.
 - `lib/engines/investment-intelligence/calculationStatus.ts` (pre-existing)
   already implements a `CalculationOutcome`/`CalculationStatus` system with
   explicit `INSUFFICIENT_HISTORY`, `MISSING_REFERENCE_DATA` and
@@ -1065,13 +1071,138 @@ returns, risk metrics/drawdowns, IDCW/distribution events
   is considered satisfied. None of this was executed — it is a
   hand-over procedure, not a completed proof.
 
-## NAV 1.44, 1.46, 1.47, 1.48 — Physical disk reclamation / integrated
-certification / controlled production rollout / final handover
+## NAV 1.44 — Physical disk reclamation
 
-- **Status**: NOT STARTED — all genuinely depend on NAV 1.42 (production
-  run, not just DEV) / 1.43 (deletion, explicitly not attempted) / 1.45
-  (recovery proof, blocked above) being real and complete first. Attempting
-  any of these now would be building on top of an unproven foundation.
+- **Status**: NOT STARTED — genuinely depends on NAV 1.43 (deletion,
+  explicitly not attempted). Physical reclamation (e.g. Postgres `VACUUM`,
+  a Supabase-managed disk-shrink) is meaningless before any logical deletion
+  has occurred. Nothing to design further until Stage E is authorized and
+  executed.
+
+## NAV 1.46 — Integrated DEV and regression certification
+
+- **Status**: PASS for what this dispatch could genuinely certify; the
+  matrix below is the honest state, not a claim of full certification
+- **Automated test evidence, actually run this dispatch**: 124/124 vitest
+  unit tests across 6 files (`pc6NavRetentionPolicy`,
+  `pc6SelectiveHistoricalHydrationJob`, `pc6HttpFetchWithRetry`,
+  `pc6TigzigHistoricalAdapter`, `pc6ReferenceMarketData`,
+  `pc6SchemeMasterWriter`); a full `0001..0168` PGlite chain replay across
+  three separate verification scripts (`pc6_0155_pglite_verification.mjs`
+  pre-existing + `nav1_0166_pglite_verification.mjs` 17/17 +
+  `nav1_0168_pglite_verification.mjs` 10/10); a broader
+  `npx vitest run tests/unit` pass earlier in this dispatch found 20
+  pre-existing failures across 6 files, none touching NAV1's own code
+  (Resources CMS timeout, country-gate account-deletion route) — not
+  investigated further as out of this dispatch's scope, flagged rather than
+  silently ignored.
+- **Live-DEV regression evidence**: every live-DEV check this dispatch ran
+  (NAV 1.05/1.08/1.09/1.20/1.26/1.27/1.28/1.29/1.38/1.39/1.42, listed above
+  with timestamps) is itself a regression check against the REAL current
+  database state, not a synthetic fixture — and every one of them was
+  re-confirmed to still hold after the NAV 1.12 window-tightening change
+  (the live dry run was re-run post-change and produced the expected
+  narrower windows, not a crash or a silently wrong number).
+- **What this certification does NOT cover, stated plainly**:
+  - No certification against a REALISTIC production-shaped dependency
+    graph exists (DEV's dependency data is synthetic — see the top-of-file
+    note). A full "real accepted statement -> real hydration -> real
+    calculation" round trip has not been observed end-to-end anywhere.
+  - No production-scale volume test (production's `ii_prices_nav` is
+    materially larger than DEV's 3.06M rows; NAV 1.40's index fix is
+    drafted, not applied, so production performance under this workload
+    remains unverified).
+  - No UI/browser-level regression test was run (this dispatch worked
+    entirely at the database/API/service layer; no `app/` React component
+    was read or tested for this programme).
+  - NAV 1.45 (recovery proof) remains genuinely blocked (no Management-API
+    access from this sandbox).
+- **Certification verdict**: **CONDITIONAL PASS** for the DEV-buildable,
+  DB/service-layer scope of NAV 1 — not a FULL PASS, and not claimed as one.
+  The specific, named conditions above are exactly what remain before a
+  FULL PASS could be honestly claimed.
+
+## NAV 1.47 — Controlled production rollout and rollback (DESIGN ONLY — not executed, not scheduled, no production access exists to execute it from here)
+
+This is a concrete design for a human operator to execute, sequenced to
+match the workbook's own Stage A-F transition and this dispatch's own
+findings. No step below has been performed against production.
+
+1. **Pre-flight (Stage A/B confirmation)**
+   - Confirm the brute-force backfill (`pc6_full_universe_historical_backfill`)
+     is disabled in production (already independently confirmed by the
+     orchestrating session this dispatch — re-confirm immediately before
+     rollout as a final check, since state can drift).
+   - Apply migrations `0166`, `0167`, `0168` to production, in that order.
+     `0167` (the `ii_prices_nav` index) briefly locks the table for writes —
+     schedule it in a low-traffic window; it does NOT depend on `0166`/`0168`
+     functionally but should land alongside them as one coherent release.
+   - Re-run `scripts/pc5_ddl_capability_probe.mjs`-equivalent checks are not
+     needed for a normal migration apply (that script is about THIS
+     session's own sandbox limitation, not a production gate).
+2. **Activate the daily job's coverage gap-fill, if not already complete**
+   - NAV 1.27 found DEV's daily job at only ~51%+ multi-day coverage of the
+     active universe. Before relying on "all-live daily ingestion" in
+     production, run the equivalent of `scripts/nav1_daily_coverage_probe.mjs`
+     against production and confirm the real figure and its trend over a
+     few days — do not assume DEV's percentage transfers directly.
+3. **NAV 1.07 policy activation**
+   - Insert the real `ii_nav_retention_policy` row for production:
+     `policy_version`, `changeover_date = '2026-09-21'`,
+     `environment = 'production'`, `activated_by_admin_id`, a
+     `coverage_proof_reference` pointing at this ledger and the eventual
+     NAV 1.45 recovery proof once it exists.
+4. **Selective hydration: canary, not big-bang**
+   - Per §9b of the operator runbook: register the cron schedule with
+     `dryRun: true` first. Inspect several real `dryRun` responses against
+     production's REAL dependency graph (materially different from DEV's
+     synthetic one) before touching the kill switch.
+   - When ready, enable `pc6_selective_historical_hydration` with a SMALL
+     `maxInstruments` (the route defaults to 50) and monitor
+     `ii_reference_import_batches` (`source_key='tigzig'`) and the admin
+     surface's new `nav1_retention_policy`/`nav1_retention_holds` panels for
+     the first several real runs before raising the bound.
+   - **Rollback trigger for this step**: any `instruments_failed` count
+     that is not attributable to a known, transient TIGZIG outage (compare
+     against `nav1_tigzig_outage_probe.ts`'s own observed 522 pattern), or
+     any write error surfaced in `ii_reference_import_batches`. Rollback
+     action: flip `pc6_selective_historical_hydration.enabled` back to
+     `false` — this is a single-row UPDATE, immediate, and requires no
+     redeploy.
+5. **Stage D — recovery proof and candidate manifest, for real, on
+   production**
+   - Execute the NAV 1.45 recovery procedure (already documented above) for
+     real, with actual Management-API/dashboard access.
+   - Run `scripts/nav1_dev_retention_dryrun.mjs`'s logic (renamed
+     conceptually to a production dry run) against production and obtain
+     the REAL candidate-row count and per-scheme manifest — expected to be
+     dramatically different from DEV's ~100% figure once production's real
+     accepted-statement data is included in the denominator.
+6. **Stage E — explicitly OUT OF SCOPE for this design's own execution
+   authority.** Per the standing stop-gate, actual deletion requires a
+   separate, later, explicit go-ahead with the real production manifest in
+   hand — this design stops at "manifest ready for review," exactly where
+   this dispatch itself has consistently stopped.
+7. **Rollback plan for the whole rollout, not just step 4**: every step
+   above is either (a) additive (migrations, the new admin panels, the new
+   cron route sitting unscheduled) or (b) gated by a single boolean
+   (`ii_reference_job_control.enabled`) that can be flipped back
+   instantly. Nothing in this design requires a code rollback/redeploy to
+   undo — the single exception is `0167`'s index, which is safe to leave in
+   place even if the rest of the rollout is reverted (an unused index costs
+   disk and write overhead, not correctness).
+
+## NAV 1.48 — Final certification and operational handover
+
+See the completion-report format at the end of this session's final message
+to the coordinator, which follows the workbook's own specified structure
+(line ~193 of the extraction): broad-backfill-paused status, selective-
+hydration-working status, all-live-daily-verified status, historical-
+cleanup-executed status, disk-space-reclaimed status, and billing-changed
+status, each stated separately, plus known limitations and the next
+operator action. That report is the NAV 1.48 deliverable; it is not
+duplicated verbatim here to avoid the two drifting out of sync — this
+ledger is the evidence index the report is built from.
 
 ---
 
