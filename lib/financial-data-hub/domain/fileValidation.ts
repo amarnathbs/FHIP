@@ -13,10 +13,38 @@
  * or "pdf-parse" library for that would be an unreviewed, unnecessary
  * dependency. `node:crypto` (already used elsewhere in this repository) is
  * used for SHA-256 hashing.
+ *
+ * 2026-09-21 ADDITION — shared structural PDF scan (malware-scan-gap
+ * remediation). An independent audit found that NONE of FDH-3's upload
+ * routes (or the AI document-extraction pipeline's own production callers)
+ * had any malware/virus-scan integration at all. `scanPdfStructure`, imported
+ * below from `lib/shared/pdfStructuralScan.ts`, is now run over every
+ * detected-PDF upload before it is ever written to storage or handed to a
+ * parser. See that module's header for exactly what it does and does not
+ * catch: it is STRUCTURAL/HEURISTIC validation for a specific, disclosed
+ * bypass class (embedded JavaScript/launch actions hidden in a
+ * `/FlateDecode`-compressed PDF stream, plus polyglot trailing content) — it
+ * is NOT a real signature-based or behavioural malware scanner, and nothing
+ * in this codebase should describe it as one. That implementation was
+ * originally built for, and remains used by, the AIE document-extraction
+ * pipeline (`lib/aie/validation/fileValidation.ts`); this is the same code,
+ * not a second copy. See `docs/financial-data-hub/FDH3_SHARED_MALWARE_GATE_DESIGN.md`
+ * for the actual eventual real-scanner architecture this heuristic is a
+ * stopgap for, and `FDH3_SECURITY_THREAT_MODEL.md` threat #6 for the
+ * original disclosed gap this closes the structural (not the signature)
+ * half of.
  */
 
 import { createHash } from 'node:crypto';
+import { scanPdfStructure } from '@/lib/shared/pdfStructuralScan';
 import { FDH_ALLOWED_UPLOAD_MIME_TYPES, type FdhAllowedUploadMimeType } from '../constants/enums';
+
+/** Bounds how much of a PDF's raw bytes the structural scan inspects for
+ * literal disallowed tokens (independent of the FlateDecode-decompression
+ * budget, which `scanPdfStructure` bounds itself). Set to FDH-3's own
+ * `application/pdf` size ceiling so, in practice, the ENTIRE file is always
+ * scanned — a document this small never needs a partial-scan trade-off. */
+const STRUCTURAL_SCAN_CAP_BYTES = 20 * 1024 * 1024;
 
 /** Practical initial size limits (spec section 19), chosen from the shape of
  * a real financial statement: a multi-year, multi-account PDF export can run
@@ -96,13 +124,29 @@ export function sha256Hex(bytes: Uint8Array): string {
 
 export type FileValidationOutcome =
   | { ok: true; detectedMimeType: FdhAllowedUploadMimeType; fileHash: string; passwordRequired: boolean }
-  | { ok: false; failureCode: 'unsupported_file_type' | 'file_too_large' | 'mime_mismatch' | 'file_corrupt' };
+  | {
+      ok: false;
+      failureCode: 'unsupported_file_type' | 'file_too_large' | 'mime_mismatch' | 'file_corrupt' | 'structural_scan_rejected';
+    };
 
 /**
  * The complete FDH-3 upload-time inspection: allowlist + size limit +
  * declared-vs-actual MIME agreement + magic-byte detection + (for PDF)
- * encryption detection + hashing. Order matters: cheap checks (size,
- * allowlist) run before any byte-content inspection.
+ * a structural threat scan + encryption detection + hashing. Order matters:
+ * cheap checks (size, allowlist) run before any byte-content inspection, and
+ * byte-content inspection before the structural scan — matching the
+ * discipline `lib/aie/validation/fileValidation.ts#validateUploadForAdmission`
+ * already established for the AI document-extraction pipeline.
+ *
+ * `structural_scan_rejected` (new 2026-09-21): `scanPdfStructure` found a
+ * disallowed token (embedded JavaScript/launch action/embedded file/
+ * auto-open action, including inside a `/FlateDecode`-compressed stream) or
+ * polyglot-style trailing content after the PDF's last `%%EOF` marker. This
+ * is a STRUCTURAL/HEURISTIC finding, not a real malware-scanner verdict —
+ * see this module's header and `lib/shared/pdfStructuralScan.ts`'s own
+ * header for the full disclosed scope. Only `application/pdf` uploads are
+ * scanned; CSV has no comparable structural threat surface this scan
+ * addresses.
  *
  * A password-protected PDF is NOT rejected here — it is a valid upload that
  * cannot be parsed without a password later (spec section 22). The caller
@@ -125,6 +169,11 @@ export function validateUploadedFile(input: {
   const detected = detectFileTypeFromBytes(input.bytes);
   if (!detected) return { ok: false, failureCode: 'file_corrupt' };
   if (detected !== declared) return { ok: false, failureCode: 'mime_mismatch' };
+
+  if (detected === 'application/pdf') {
+    const structural = scanPdfStructure(input.bytes, STRUCTURAL_SCAN_CAP_BYTES);
+    if (structural.suspicious) return { ok: false, failureCode: 'structural_scan_rejected' };
+  }
 
   const passwordRequired = detected === 'application/pdf' && isPdfLikelyPasswordProtected(input.bytes);
   return {

@@ -36,6 +36,11 @@ const FAILURE_MESSAGES: Record<string, string> = {
   file_corrupt: 'This file appears to be corrupted or unreadable.',
   password_required: 'This PDF is password-protected. Password-protected statements will be supported by a future processing step.',
   password_invalid: 'The password provided could not open this document.',
+  // 2026-09-21 — deliberately does NOT say "malware" or "virus": this check
+  // (`lib/shared/pdfStructuralScan.ts`) is a structural/heuristic scan for a
+  // specific known bypass technique, not a real malware scanner, and the
+  // user-facing message must not overclaim what actually happened.
+  structural_scan_rejected: 'This PDF could not be accepted because it failed a security check on its internal structure. Please try re-exporting or re-saving the document and upload it again.',
   internal_error: 'Something went wrong while processing this upload.',
 };
 
