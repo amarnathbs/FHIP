@@ -1,7 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import {
-  uploadAndProcessRetirementStatement,
+  continueRetirementStatementProcessing,
   RetirementStatementProcessingError,
   RETIREMENT_STATEMENT_FAILURE_MESSAGES,
 } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
@@ -10,49 +10,31 @@ import {
   currencyMatchesJurisdiction,
 } from '@/lib/financial-data-hub/validation/retirementStatement';
 
-// POST /api/financial-data-hub/retirement-statement/upload
+// POST /api/financial-data-hub/retirement-statement/{documentId}/process
 //
-// Upload AND process a retirement statement CSV (spec sections 91, 119).
-// Reuses FDH-3's document lifecycle unchanged — no new upload framework.
-//
-// CANONICAL RETIREMENT IS UNCHANGED BY THIS CALL (spec section 56). This route
-// creates statement EVIDENCE only.
-//
-// `metadataSchema`/`currencyMatchesJurisdiction` moved to
-// `lib/financial-data-hub/validation/retirementStatement.ts` 2026-09-21
-// (real-malware-gate async fix) — the new `[documentId]/process/route.ts`
-// resumption route needs the identical validation for a re-submitted
-// metadata body.
-
-export async function POST(req: Request) {
+// 2026-09-21 (real-malware-gate async fix) — the resumption half of
+// `POST .../retirement-statement/upload`. See the identical-purpose
+// investment-statement sibling route for the full rationale:
+// `RetirementStatementImportPanel.tsx` polls the document out of
+// `validating`, then re-submits the SAME metadata it used at upload time
+// here to finish the extraction the upload route deferred. Reuses the
+// upload route's own `metadataSchema`/`currencyMatchesJurisdiction` so a
+// re-submitted body is validated identically at both steps.
+export async function POST(req: Request, { params }: { params: Promise<{ documentId: string }> }) {
+  const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
 
-  // LR-4 (2026-09-08): every other FDH-3-descended upload route (Income/
-  // Payslip, Liability, AU Investment) calls this same gate; Retirement
-  // statement upload never did — a real, unintentional production-safety
-  // gap found during LR-4's capability audit, not a design choice (no
-  // comment anywhere in this file claimed otherwise). Fixed by adding the
-  // identical check, in the identical place, that every sibling route uses.
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Statement uploads are not currently enabled in this environment.', 403);
   }
 
-  const url = new URL(req.url);
-  const parsed = metadataSchema.safeParse({
-    jurisdiction: url.searchParams.get('jurisdiction') ?? undefined,
-    currency_code: url.searchParams.get('currency_code') ?? undefined,
-    fund_name: url.searchParams.get('fund_name') ?? undefined,
-    masked_account_identifier: url.searchParams.get('masked_account_identifier') ?? undefined,
-    statement_date: url.searchParams.get('statement_date') ?? undefined,
-    statement_period_start: url.searchParams.get('statement_period_start') ?? undefined,
-    statement_period_end: url.searchParams.get('statement_period_end') ?? undefined,
-  });
+  const body = await req.json().catch(() => ({}));
+  const parsed = metadataSchema.safeParse(body);
   if (!parsed.success) {
     return bad(parsed.error.issues[0]?.message ?? 'Check the statement details and try again.', 400);
   }
   const meta = parsed.data;
-
   if (!currencyMatchesJurisdiction(meta.jurisdiction, meta.currency_code)) {
     return bad(
       meta.jurisdiction === 'AU'
@@ -62,12 +44,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (bytes.byteLength === 0) return bad('The uploaded file was empty.', 400);
-
   try {
-    const result = await uploadAndProcessRetirementStatement(
+    const result = await continueRetirementStatementProcessing(
       user.id,
+      documentId,
       {
         jurisdiction: meta.jurisdiction,
         currencyCode: meta.currency_code,
@@ -76,12 +56,8 @@ export async function POST(req: Request) {
         statementDate: meta.statement_date,
         statementPeriodStart: meta.statement_period_start,
         statementPeriodEnd: meta.statement_period_end,
-        // The fund name doubles as SMSF-detection input. No document body text
-        // is retained anywhere — `statementTextSample` is a transient
-        // parameter, never a column.
         statementTextSample: meta.fund_name,
       },
-      bytes,
     );
 
     return ok({
@@ -89,8 +65,6 @@ export async function POST(req: Request) {
       statement_id: result.statementId,
       pipeline_status: result.pipelineStatus,
       failure_kind: result.failureKind ?? null,
-      // NEVER a bare number that could render as "$0" — the message names the
-      // real state (spec section 94).
       failure_message: result.failureKind
         ? RETIREMENT_STATEMENT_FAILURE_MESSAGES[result.failureKind]
           ?? RETIREMENT_STATEMENT_FAILURE_MESSAGES.unknown_error

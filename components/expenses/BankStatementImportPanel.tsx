@@ -56,13 +56,20 @@
  * files above already are.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  waitForDocumentToLeaveValidating,
+  SCANNING_MESSAGE,
+  SCAN_TIMEOUT_MESSAGE,
+} from '@/components/financial-data-hub/scanStatusPolling';
 
 type Phase =
   | 'form'
   | 'uploading'
+  | 'scanning'
   | 'processing'
   | 'awaiting_password'
+  | 'scan_timeout'
   | 'done'
   | 'error';
 
@@ -85,6 +92,14 @@ const FAILURE_MESSAGES: Record<string, string> = {
   extraction_low_confidence: 'FHIP could not read this statement with enough confidence to certify it.',
   data_validation_failed: 'The extracted data on this statement did not pass basic checks.',
   internal_error: 'Something went wrong while processing this upload.',
+  // 2026-09-21 (real-malware-gate async fix) — deliberately does NOT say
+  // "malware" or "virus", same discipline as structural_scan_rejected above:
+  // a real scan verdict, but the user-facing copy stays calm and generic.
+  malware_detected: 'This file could not be accepted because it failed a security check. Please try a different file.',
+  malware_scan_suspicious: 'This file could not be accepted because it failed a security check. Please try a different file.',
+  malware_scan_failed: 'We could not finish checking this file for safety. Please try again.',
+  malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again.',
+  malware_scan_unknown: 'We could not finish checking this file for safety. Please try again.',
 };
 
 interface ProcessSummary {
@@ -116,6 +131,12 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   // than a known, temporary limitation. `null` = not checked yet (render
   // nothing that could flash and disappear); `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
+  // poll if the panel unmounts mid-scan.
+  const scanPollCancelRef = useRef({ cancelled: false });
+  useEffect(() => () => {
+    scanPollCancelRef.current.cancelled = true;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +286,28 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         return;
       }
 
+      // Real-malware-gate async fix (2026-09-21): the upload step may have
+      // left this document genuinely, legally waiting in `validating` — the
+      // real S3+GuardDuty scan has not resolved yet. Calling detect/process
+      // immediately in that case used to surface a raw `invalid_state`
+      // error even though nothing had gone wrong. Wait for the document to
+      // leave `validating` first, showing an honest "scanning" state.
+      if (data.processing_status === 'validating') {
+        setPhase('scanning');
+        setMessage(SCANNING_MESSAGE);
+        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+        if (waited.outcome === 'timeout') {
+          setMessage(SCAN_TIMEOUT_MESSAGE);
+          setPhase('scan_timeout');
+          return;
+        }
+        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+          failWith(waited.errorCode, 'This file could not be accepted.');
+          return;
+        }
+        setMessage(null);
+      }
+
       await runProcessing(docId, csv);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Upload failed');
@@ -355,10 +398,21 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {(phase === 'uploading' || phase === 'processing') && (
+      {(phase === 'uploading' || phase === 'processing' || phase === 'scanning') && (
         <p className="mt-4 text-sm text-muted" role="status">
-          {phase === 'uploading' ? 'Uploading your statement…' : 'Processing your statement — extracting transactions…'}
+          {phase === 'uploading' && 'Uploading your statement…'}
+          {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
+          {phase === 'processing' && 'Processing your statement — extracting transactions…'}
         </p>
+      )}
+
+      {phase === 'scan_timeout' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message ?? SCAN_TIMEOUT_MESSAGE}</p>
+          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            Try again
+          </button>
+        </div>
       )}
 
       {phase === 'awaiting_password' && (

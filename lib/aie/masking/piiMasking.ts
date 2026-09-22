@@ -406,8 +406,23 @@ const PII_PATTERNS: PiiPattern[] = [
     // kept tripping on after M12B-F2's strip replaced each placeholder with
     // whitespace. A person's name is on the label's own line in every layout
     // this repository parses.
+    // 2026-09-22 (AIE payslip AI-fallback adapter build) — `employee`/
+    // `employee name` ADDED. Found the identical class of gap M12B found and
+    // fixed for insurance's `Policy Owner:`/`Insured Person:` labels (this
+    // rule's own header above), this time live-testing the NEW payslip
+    // adapter's masking of a synthetic payslip against the real provider
+    // (`tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts`): an
+    // AU/India payslip's single most common person-bearing label — `Employee:`
+    // / `Employee Name:` — was not in this alternation, so a real payslip's
+    // employee name would have egressed to the AI provider VERBATIM the
+    // moment `AIE_PAYSLIP_AI_FALLBACK_ENABLED`/`AIE_AI_FALLBACK_ENABLED` were
+    // both turned on. `employer` is deliberately NOT added: an employer NAME
+    // is a business name FDH-9's own extraction is supposed to read (the
+    // `employerName` canonical field), not personal PII to redact — masking
+    // it would defeat the adapter's own purpose, the same "unless" reasoning
+    // this rule's header already applies to `insured` vs `Sum Insured`.
     pattern:
-      /\b((?:investor|account[^\S\r\n]*holder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+      /\b((?:investor|account[^\S\r\n]*holder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
     valueGroup: 2,
     // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
     // `investor:` all occur in real statements), so the value needs its

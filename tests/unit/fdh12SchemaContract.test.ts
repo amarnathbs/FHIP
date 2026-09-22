@@ -12,6 +12,7 @@ import path from 'node:path';
 import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 import {
   RETIREMENT_ACTIVITY_TYPES,
@@ -65,14 +66,22 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
   });
 });
 
+// 0112 was the constraint's latest word until migration 0173 (the AIE
+// payslip AI-fallback addition) widened it further — same "vocabulary as of
+// this phase" pattern fdh9SchemaContract.test.ts/fdh10SchemaContract.test.ts/
+// fdh11SchemaContract.test.ts already established for exactly this reason.
+const VOCABULARY_AS_OF_FDH12 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
+  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t),
+);
+
 describe('FDH-12 audit-event vocabulary parity', () => {
-  it('0112 is the constraint\'s latest word and matches the FULL TypeScript vocabulary', () => {
+  it('0112 matches the TypeScript vocabulary as of FDH-12 (later phases widen further)', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 5000);
     const match = slice.match(/in \(([^)]*)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    expect(values.sort()).toEqual([...VOCABULARY_AS_OF_FDH12].sort());
   });
 
   it('all eleven FDH-12 event types are present in the constraint', () => {
