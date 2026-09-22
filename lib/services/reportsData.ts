@@ -9,6 +9,7 @@ import {
 } from '@/lib/services/reportSnapshotResolver';
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
 import { localeForReportingCurrency } from '@/lib/engines/money';
+import { writeReportNavDependencyManifest } from '@/lib/services/investment-intelligence/pc6/reportNavDependencyWriter';
 
 // II-R10 security hardening (migration 0070_ii_r10_reports_authoritative_write_hardening.sql):
 // the `reports` table family now grants the `authenticated` role SELECT-own
@@ -371,6 +372,26 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_review', source_version: 'ii-r9-review-centre', source_as_of_date: source.asOfDate, snapshot_metadata_json: { openItemCount: source.premium.reviewItems.totalOpenCount } }]
         : []),
     ]);
+
+    // NAV 1 R1 — report-pinning write path. Must run only for a REAL,
+    // already-committed 'ready' report row (this line is only reachable
+    // after the `reports` insert above succeeded — the `not_eligible`
+    // early-return above returns before this point and therefore never
+    // creates a manifest, matching the "draft/preview reports must not
+    // create permanent pins" requirement by construction: this codebase has
+    // no separate preview/draft report-generation path at all, so "not
+    // reaching this point" is the only, and correct, way to express "not
+    // finalized" here). Deliberately allowed to throw (see
+    // writeReportNavDependencyManifest()'s own header) — a failure here
+    // surfaces as this whole generateReport() call throwing, caught by the
+    // catch block below, which marks report_generation_runs.output_status
+    // ='failed'. The already-inserted `report`/`report_sections`/
+    // `report_snapshots` rows are not rolled back (this file has never used
+    // a cross-table DB transaction — see reportError/insert calls above),
+    // but that leaves the SAME honest, disclosed "ships empty until
+    // written" state migration 0172 already documents, never a false claim
+    // of protection.
+    await writeReportNavDependencyManifest(supabase, report.id, source.premium, source.asOfDate);
 
     if (revisesReportId) {
       await supabase.from('reports').update({ status: 'superseded' }).eq('id', revisesReportId);

@@ -81,7 +81,7 @@ describe('II-R10 continuation — Investment Performance chapter (R4)', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
 
-    const section = buildInvestmentPerformance(emptySource, emptyPremium({ investmentPerformance: { results: engineResult, warnings: [] } }));
+    const section = buildInvestmentPerformance(emptySource, emptyPremium({ investmentPerformance: { results: engineResult, warnings: [], earliestCashFlowDateByInstrument: {} } }));
     expect(section.sectionStatus).toBe('included');
     // SOURCE-MODULE ASSERTION (spec section 112): the exact rate the R4
     // engine computed must appear unchanged in the report snapshot — this is
@@ -109,7 +109,7 @@ describe('II-R10 continuation — Investment Performance chapter (R4)', () => {
       ],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
-    const section = buildInvestmentPerformance(emptySource, emptyPremium({ investmentPerformance: { results: engineResult, warnings: [] } }));
+    const section = buildInvestmentPerformance(emptySource, emptyPremium({ investmentPerformance: { results: engineResult, warnings: [], earliestCashFlowDateByInstrument: {} } }));
     // The section itself never renders a number for an unavailable metric —
     // asserting the raw status is what a fabricated-zero regression would
     // flip to 'CALCULATED' with a value of 0.
@@ -142,7 +142,7 @@ describe('II-R10 continuation — SIP chapter (R5)', () => {
       ],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
-    const section = buildSipContribution(emptySource, emptyPremium({ sip: { results: engineResult, warnings: [] } }));
+    const section = buildSipContribution(emptySource, emptyPremium({ sip: { results: engineResult, warnings: [], earliestTransactionDateByInstrument: {} } }));
     expect(section.sectionStatus).toBe('included');
     expect(section.chartData?.observations).toEqual(engineResult.analytics[0].observations);
     expect(section.sourceReferences.engineVersion).toBe('sip-engine-r5-v-test');
@@ -205,7 +205,7 @@ describe('II-R10 continuation — Tax & Cost chapter (R6)', () => {
       taxYearAggregation: { byFinancialYear: [], unresolvedDisposals: [] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
-    const section = buildTaxAndCost(emptySource, emptyPremium({ taxAndCost: { results: engineResult, asOfDate: '2026-08-24', taxProfileSource: 'none' } }));
+    const section = buildTaxAndCost(emptySource, emptyPremium({ taxAndCost: { results: engineResult, asOfDate: '2026-08-24', taxProfileSource: 'none', earliestAcquisitionDateByInstrument: {} } }));
     expect(section.sectionStatus).toBe('included');
     expect((section.sectionData.results as typeof engineResult).disposalResults[0].taxableGain).toBe(12345.67);
     expect(section.narrativeText).toContain('SIMULATION ONLY — NOT TAX ADVICE.');

@@ -34,6 +34,21 @@ import { createClient } from '@/lib/supabase/server';
 export interface ReportPerformanceData {
   results: AnalyticsResultSet;
   warnings: { scope: string; detail: string }[];
+  // NAV 1 R1 (report-pinning write path) — the earliest real cash-flow date
+  // this household has for each instrument that appears in `results.schemes`,
+  // keyed by instrumentId. Derived directly from the SAME dataset.schemes[].
+  // cashFlows list runAnalytics() itself just consumed (never a second,
+  // independently-resolved date) — this is what lets
+  // reportNavDependencyManifest.ts's 'xirr_since_inception' basis bound its
+  // NAV protection window at the household's own real inception date instead
+  // of failing open to "unbounded" for every report. A CashFlow's `date` is a
+  // `Date`; converted to an ISO (YYYY-MM-DD) string here since that is what
+  // the manifest/DB layer uses throughout NAV1. An instrument with no
+  // cashFlows (should not happen for anything in `results.schemes`, since
+  // SchemeAnalytics is only produced from a SchemeDataset that had cash
+  // flows) is simply absent from this map — the manifest derivation already
+  // fails closed (unbounded) for a missing entry, never assumes "today".
+  earliestCashFlowDateByInstrument: Record<string, string>;
 }
 
 export async function loadInvestmentPerformanceForReport(
@@ -44,7 +59,13 @@ export async function loadInvestmentPerformanceForReport(
     const { dataset, warnings, empty } = await loadAnalyticsDataset(supabase, userId, {});
     if (empty || !dataset) return null;
     const results = runAnalytics(dataset);
-    return { results, warnings };
+    const earliestCashFlowDateByInstrument: Record<string, string> = {};
+    for (const scheme of dataset.schemes) {
+      if (scheme.cashFlows.length === 0) continue;
+      const earliest = scheme.cashFlows.reduce((min, cf) => (cf.date < min ? cf.date : min), scheme.cashFlows[0].date);
+      earliestCashFlowDateByInstrument[scheme.instrumentId] = earliest.toISOString().slice(0, 10);
+    }
+    return { results, warnings, earliestCashFlowDateByInstrument };
   } catch {
     // Matches every II GET route's own error handling (spec section 39):
     // a failure surfaces as "not available", never as a fabricated or
@@ -56,6 +77,18 @@ export async function loadInvestmentPerformanceForReport(
 export interface ReportSipData {
   results: SipAnalyticsResult;
   warnings: { scope: string; detail: string }[];
+  // NAV 1 R1 — earliest real transaction date per instrument, from the SAME
+  // dataset.transactions list runSipAnalytics() itself consumed (never a
+  // second resolution path). Feeds reportNavDependencyManifest.ts's
+  // 'sip_xray_transaction_history' basis. X-Ray's own dataset
+  // (loadXrayDataset) is deliberately NOT given the same treatment here — a
+  // real, grounded finding from this integration: X-Ray is built entirely
+  // from ii_holding_snapshots (current composition/look-through), never from
+  // ii_prices_nav, so it has no NAV dependency to pin at all (confirmed by
+  // reading loadXrayDataset() in r5Repository.ts in full — no
+  // `ii_prices_nav` read anywhere in that function). Only SIP actually reads
+  // `ii_prices_nav` (see loadSipDataset()'s own navByInstrument query).
+  earliestTransactionDateByInstrument: Record<string, string>;
 }
 
 export async function loadSipForReport(userId: string, supabase: SupabaseServerClient): Promise<ReportSipData | null> {
@@ -69,7 +102,12 @@ export async function loadSipForReport(userId: string, supabase: SupabaseServerC
     attachAttributableInflows(dataset, preliminary.analytics.map((a) => a.series.seriesKey));
     const results = runSipAnalytics(dataset);
     if (results.seriesCount === 0) return null;
-    return { results, warnings };
+    const earliestTransactionDateByInstrument: Record<string, string> = {};
+    for (const t of dataset.transactions) {
+      const existing = earliestTransactionDateByInstrument[t.instrumentId];
+      if (!existing || t.transactionDate < existing) earliestTransactionDateByInstrument[t.instrumentId] = t.transactionDate;
+    }
+    return { results, warnings, earliestTransactionDateByInstrument };
   } catch {
     return null;
   }
@@ -95,6 +133,21 @@ export interface ReportTaxData {
   results: TaxSimulationOutput;
   asOfDate: string;
   taxProfileSource: 'persisted_profile' | 'none';
+  // NAV 1 R1 — earliest real acquisition (lot) date per instrument that
+  // actually has a disposal in this report (i.e. the instruments
+  // runTaxSimulation() actually produced capital-gains figures for), from
+  // the SAME dataset.acquisitionsByInstrument list already loaded above
+  // (already sorted ascending by acquisitionDate — see loadTaxDataset()).
+  // This also correctly bounds the 31-Jan-2018 grandfathering FMV lookup
+  // (grandfathering.ts): that lookup only ever affects a lot acquired BEFORE
+  // the cutoff, so if any lot needs it, this instrument's earliest
+  // acquisition date is already on/before the cutoff, and any AMFI scheme's
+  // own NAV history is continuously published from well before an
+  // investor's first real purchase of it — so the FMV row's date can never
+  // fall earlier than this earliest-acquisition bound in practice. Recorded
+  // here rather than silently assumed, per this programme's own N.8
+  // discipline of citing reasoning, not just asserting a result.
+  earliestAcquisitionDateByInstrument: Record<string, string>;
 }
 
 // G6 Contract 9 (docs/country-programme/g6-data-contracts.md) — a
@@ -154,7 +207,12 @@ export async function loadTaxForReport(userId: string, supabase: SupabaseServerC
       residencyProfile,
       taxProfile,
     });
-    return { results, asOfDate: dataset.asOfDate, taxProfileSource: persistedProfile ? 'persisted_profile' : 'none' };
+    const earliestAcquisitionDateByInstrument: Record<string, string> = {};
+    for (const instrumentId of dataset.disposalsByInstrument.keys()) {
+      const acquisitions = dataset.acquisitionsByInstrument.get(instrumentId);
+      if (acquisitions && acquisitions.length > 0) earliestAcquisitionDateByInstrument[instrumentId] = acquisitions[0].acquisitionDate;
+    }
+    return { results, asOfDate: dataset.asOfDate, taxProfileSource: persistedProfile ? 'persisted_profile' : 'none', earliestAcquisitionDateByInstrument };
   } catch {
     return null;
   }
