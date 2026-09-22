@@ -587,8 +587,16 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const instrumentUnresolvedKeys = new Set<string>();
 
   const uniqueSchemes = new Map<string, ParsedInstrumentRecord>();
-  for (const t of parsed.transactions) uniqueSchemes.set(schemeKey(t.scheme), t.scheme);
-  for (const h of parsed.holdings) uniqueSchemes.set(schemeKey(h.scheme), h.scheme);
+  for (const t of parsed.transactions) {
+    const key = schemeKey(t.scheme);
+    const existing = uniqueSchemes.get(key);
+    uniqueSchemes.set(key, existing ? mergeSchemeRecords(existing, t.scheme) : t.scheme);
+  }
+  for (const h of parsed.holdings) {
+    const key = schemeKey(h.scheme);
+    const existing = uniqueSchemes.get(key);
+    uniqueSchemes.set(key, existing ? mergeSchemeRecords(existing, h.scheme) : h.scheme);
+  }
 
   // R6-P0 pagination closure — HIGHEST-SEVERITY site found in the module-wide
   // audit. These three reads load the ENTIRE active canonical universe with no
@@ -1268,6 +1276,31 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
 function schemeKey(s: ParsedInstrumentRecord): string {
   return `${s.normalisedSchemeName}|${s.planType}|${s.optionType}|${s.amcName}`;
+}
+
+// REAL DEFECT FOUND AND FIXED (NAV 1 continuation, 2026-09-21, discovered
+// while proving a real accepted-statement journey end-to-end against a
+// real, PC6-known instrument): schemeKey() does not include isin/
+// amfiSchemeCode, so a scheme appearing in BOTH parsed.transactions (which
+// often carries the ISIN, e.g. the "<scheme> ISIN CODE : <isin>" header in
+// the Individual Folio Statement layout) and parsed.holdings (whose
+// SUMMARY OF HOLDINGS table never carries an ISIN in that same real layout)
+// previously OVERWROTE the transaction's isin-bearing record with the
+// holding's isin-less one, since both map to the same key and a plain
+// Map.set() on the SAME key always keeps only the LAST value. This
+// silently discarded a real ISIN before it ever reached resolveScheme(),
+// meaning ISIN-based resolution (priority 1, the highest-trust match) was
+// never actually reachable for this exact, common, real document shape --
+// confirmed live: uploading a real folio statement for HDFC Flexi Cap Fund
+// (real ISIN INF179K01UT0, already present in DEV's real PC6 scheme-master
+// catalogue) minted a brand-new duplicate provisional instrument instead of
+// matching the existing one. Fixed by MERGING same-key records instead of
+// overwriting, keeping whichever side's isin/amfiSchemeCode is non-null
+// (transactions and holdings never legitimately disagree on a scheme's
+// real-world identifiers -- only on which section happened to print them).
+// Exported for direct unit testing (see tests/unit/iiDocumentProcessingSchemeMerge.test.ts).
+export function mergeSchemeRecords(a: ParsedInstrumentRecord, b: ParsedInstrumentRecord): ParsedInstrumentRecord {
+  return { ...a, isin: a.isin ?? b.isin, amfiSchemeCode: a.amfiSchemeCode ?? b.amfiSchemeCode };
 }
 
 async function failRun(admin: ReturnType<typeof createAdminClient>, parseRunId: string, message: string) {

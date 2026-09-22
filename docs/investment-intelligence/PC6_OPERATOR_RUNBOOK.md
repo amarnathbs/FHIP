@@ -232,6 +232,74 @@ it leaves the schedule intact and records *why*.
 
 ---
 
+## 9b. NAV 1 selective-historical-hydration schedule — DEFERRED, HUMAN-PRESENT
+
+**Added 2026-09-21 (NAV 1 programme, `feature/nav1-selective-history-2026-09-21`).**
+Same deferred-activation discipline as section 9, for the NEW job this
+programme adds: `pc6_selective_historical_hydration`
+(`ii_reference_job_control`, migration `0166`), which replaces the retired
+brute-force `scripts/pc6_historical_nav_backfill.mjs` path. **This mission
+did not activate this and was not permitted to.**
+
+Prerequisite, per the job-control row's own `disabled_reason`: the
+dependency-resolution query must be live-proven first. It has been — see
+`docs/investment-intelligence/NAV1_PROGRESS_LEDGER.md`, NAV 1.26 (live-DEV
+dry run against the real database, 2026-09-21). That satisfies the STATED
+prerequisite for enabling; it is still a human-present decision to actually
+flip the switch, per this mission's binding override.
+
+1. Confirm migrations `0166`, `0167`, `0168` are applied to the target
+   environment and the app is deployed.
+2. Create the Vault secret — **reuse the SAME `pc6_reference_ingest_cron_secret`
+   secret from section 9** if it already exists; do not create a second
+   secret for the same `CRON_SECRET` value.
+3. Register the schedule:
+   ```sql
+   create extension if not exists pg_cron;
+   create extension if not exists pg_net;
+
+   select cron.unschedule('pc6-selective-hydration')
+   where exists (select 1 from cron.job where jobname = 'pc6-selective-hydration');
+
+   select cron.schedule(
+     'pc6-selective-hydration',
+     '0 5 * * 2-6',  -- 05:00 UTC Tue-Sat = after the daily NAV job (03:30 UTC) has settled
+     $$
+     select net.http_post(
+       url := '<REPLACE_WITH_REACHABLE_APP_ORIGIN>/api/investment-intelligence/cron/pc6-selective-hydration',
+       headers := jsonb_build_object(
+         'Content-Type', 'application/json',
+         'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'pc6_reference_ingest_cron_secret')
+       ),
+       body := jsonb_build_object('changeoverDate', '2026-09-21', 'dryRun', true, 'maxInstruments', 50)
+     );
+     $$
+   );
+   ```
+4. Leave `dryRun: true` in the body (as shown above) for the first several
+   runs and inspect `per_instrument` in each response — confirm the
+   dependency set and computed windows look sane against real production
+   dependency data before any real fetch happens.
+5. Flip `dryRun` to `false` in the cron body AND flip
+   `ii_reference_job_control.pc6_selective_historical_hydration.enabled` to
+   `true` (both are required — the route runs in dry-run mode regardless of
+   the kill switch, and the kill switch blocks it regardless of the dry-run
+   flag) only once satisfied with the dry-run output.
+6. **Known limitation to resolve before large-scale enable**: this job's
+   fetch-window sizing for a benchmark-only dependency is now bounded (see
+   NAV 1.12, `navRetentionPolicy.ts`'s `BENCHMARK_LOOKBACK_DAYS`), but an
+   ACCEPTED-STATEMENT dependency needing `complete_from_inception` still
+   requests an unbounded single window back to `HISTORICAL_FLOOR_DATE`
+   (2006-04-01). For a scheme with 15-20 years of history this is a large
+   single TIGZIG request untested at that size — chunk it before enabling
+   against a real inception-requiring dependency (NAV 1.26's own disclosed
+   follow-up).
+
+To stop it, prefer the kill switch (`ii_reference_job_control`) over
+`cron.unschedule` — same reasoning as section 9.
+
+---
+
 ## 10. The two blockers
 
 **PO-PC6-1 — benchmark index data is licensed.** NIFTY index values belong to

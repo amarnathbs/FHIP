@@ -611,8 +611,18 @@ describe('PC6 source configuration — blocked sources stay blocked (N.4, N.7, N
     expect(() => buildUrl('india_risk_free')).toThrow(/po_decision_required/);
   });
 
-  it('lists exactly the three blocked sources on the admin surface', () => {
-    expect(blockedSources().map((s) => s.kind).sort()).toEqual(['benchmark_level', 'benchmark_level', 'risk_free_rate']);
+  it('lists exactly the three LICENCE-blocked sources on the admin surface (N.4, N.7, N.10)', () => {
+    // NAV 1 (2026-09-21) added two more disabled-but-public_open entries
+    // (TIGZIG/mfnav, pending production-runtime qualification, not a
+    // licence blocker) — blockedSources() now legitimately returns 5, but
+    // the licence-blocked subset this test actually cares about is unchanged.
+    const licenceBlocked = blockedSources().filter((s) => s.licence !== 'public_open');
+    expect(licenceBlocked.map((s) => s.kind).sort()).toEqual(['benchmark_level', 'benchmark_level', 'risk_free_rate']);
+  });
+
+  it('registers the NAV 1 candidate historical sources as disabled pending production qualification, not licence-blocked', () => {
+    const navCandidates = blockedSources().filter((s) => s.licence === 'public_open');
+    expect(navCandidates.map((s) => s.kind).sort()).toEqual(['nav_history', 'nav_history']);
   });
 
   it('rejects an unknown source id loudly', () => {
