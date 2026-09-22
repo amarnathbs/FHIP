@@ -50,7 +50,10 @@ export type AISubCapability =
   // Module 11.5 — contextual Explain / Why? controls embedded in existing
   // FHIP modules. Additive: an eighth named sub-capability, resolved through
   // the same one function as every other.
-  | 'AI_CONTEXTUAL_EXPLANATIONS';
+  | 'AI_CONTEXTUAL_EXPLANATIONS'
+  // Module 11.6 — rules-first Next Best Action (lib/ai/nba). Additive ninth
+  // named sub-capability, resolved through the same one function.
+  | 'AI_NEXT_BEST_ACTION';
 
 export const AI_SUB_CAPABILITIES: readonly AISubCapability[] = [
   'AI_PERSONALISED_EXPLANATIONS',
@@ -61,6 +64,7 @@ export const AI_SUB_CAPABILITIES: readonly AISubCapability[] = [
   'AI_TWIN_EXPLANATION',
   'AI_INSIGHT_PACK',
   'AI_CONTEXTUAL_EXPLANATIONS',
+  'AI_NEXT_BEST_ACTION',
 ] as const;
 
 /**
@@ -116,6 +120,14 @@ export const AI_CAPABILITY_IMPLEMENTED: Record<AISubCapability, boolean> = {
   // this exact flag. Flipped true here, not because "Premium" changed
   // meaning, but because the feature this flag names is genuinely built now.
   AI_INSIGHT_PACK: true,
+
+  // Module 11.6 — the deterministic Next Best Action engine
+  // (lib/ai/nba/engine.ts, service.ts) is genuinely built and Premium-gated
+  // through this flag. Like AI_STANDARD_QUESTIONS / AI_CONTEXTUAL_EXPLANATIONS
+  // it never goes through ai_admit_request(): NBA is zero-cost by
+  // construction (no provider, no quota), so the flag only gates whether the
+  // endpoint treats the caller as entitled.
+  AI_NEXT_BEST_ACTION: true,
 };
 
 export interface AICapabilitySet {

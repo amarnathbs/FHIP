@@ -264,10 +264,15 @@ describe('R1 — production state before Module 11.6: EMPTY canonical ranking', 
     expect(db.storedAnswers.find((a) => a.metricCode === PRIORITY_REVIEW_AREAS_INTENT)).toBeUndefined();
   });
 
-  it('the default production binding IS the empty source (nothing on this branch ranks until R5 wires Module 11.6)', async () => {
-    const { defaultPriorityRankingSource, EMPTY_PRIORITY_RANKING_SOURCE } = await import('@/lib/ai/insightPack/priorityRankingSource');
-    expect(defaultPriorityRankingSource(ctx)).toEqual([]);
+  it('R5 update: the default production binding is now Module 11.6 — the same deterministic engine that serves /api/ai/next-best-actions', async () => {
+    const { defaultPriorityRankingSource, nbaPriorityRankingSource, EMPTY_PRIORITY_RANKING_SOURCE } = await import('@/lib/ai/insightPack/priorityRankingSource');
+    const { evaluateNextBestActions } = await import('@/lib/ai/nba/engine');
+    expect(defaultPriorityRankingSource).toBe(nbaPriorityRankingSource);
     expect(EMPTY_PRIORITY_RANKING_SOURCE(ctx)).toEqual([]);
+    const fromSource = defaultPriorityRankingSource(ctx);
+    const fromEngine = evaluateNextBestActions(ctx).actions.map((a) => ({ rank: a.rank, action_code: a.action_code, title: a.title, source_ref: a.source_ref }));
+    expect(fromSource).toEqual(fromEngine); // one ranking authority, byte-identical
+    expect(fromSource.length).toBeLessThanOrEqual(3);
   });
 });
 

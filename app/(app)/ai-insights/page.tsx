@@ -6,6 +6,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { StandardQuestionLibrary } from '@/components/aiInsights/StandardQuestionLibrary';
+import { NextBestActions } from '@/components/aiInsights/NextBestActions';
 
 export default async function AiInsightsPage() {
   const supabase = await createClient();
@@ -23,6 +24,8 @@ export default async function AiInsightsPage() {
           made when you select one.
         </p>
       </div>
+      {/* Module 11.6 — deterministic Next Best Action, above the library (it answers "what first?" directly). */}
+      <NextBestActions />
       <StandardQuestionLibrary />
     </div>
   );

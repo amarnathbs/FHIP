@@ -26,6 +26,8 @@ import type { FinancialContextObject } from '@/lib/ai/context/types';
 import { loadStandardQuestionCatalogue } from '@/lib/ai/standardQuestions/catalogueDb';
 import { getQuestionDefinition } from '@/lib/ai/standardQuestions/catalogue';
 import { recordStandardQuestionAudit } from '@/lib/ai/standardQuestions/audit';
+import { evaluateNextBestActions } from '@/lib/ai/nba/engine';
+import { recordNbaEvaluationSafely, NBA_NOTE } from '@/lib/ai/nba/service';
 import type {
   AnswerOrigin,
   CatalogueEntryWithAvailability,
@@ -45,18 +47,6 @@ function originFor(resolutionType: ResolutionResult['resolution']): AnswerOrigin
   if (resolutionType === 'KNOWLEDGE_BASE') return 'KNOWLEDGE_BASE';
   if (resolutionType === 'STORED_PERSONALISED' || resolutionType === 'EXACT_CACHE') return 'STORED_PERSONALISED';
   return null;
-}
-
-function splitIntoUpToN(text: string, n: number): string[] {
-  // Deterministic, non-AI presentation split only (spec section 18/46) — a
-  // plain sentence split, never a model rewrite. Used solely to present the
-  // ALREADY-GENERATED, already-approved priority-review prose as up to N
-  // items; it invents no new content and reorders nothing.
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return sentences.slice(0, n);
 }
 
 function dedupe(items: string[]): string[] {
@@ -366,6 +356,15 @@ export const AIStandardQuestionService = {
       return this.resolveGoalRiskQuestion(userId, householdId, def, ctx, target);
     }
 
+    // Module 11.6 (brief section 46): SQ-AI-003 -> the rank-1 deterministic
+    // Next Best Action; SQ-AI-025 -> the current top <=3. Neither reads a
+    // pack block or any provider-authored text any more. The NBA kill switch
+    // (0178) is honoured through the SAME controls read the caller already
+    // performed for ai_globally_enabled.
+    if (def.standard_question_code === 'SQ-AI-003' || def.standard_question_code === 'SQ-AI-025') {
+      return this.resolveNextBestActionQuestion(userId, householdId, def, ctx);
+    }
+
     if (def.standard_question_code === 'SQ-AI-005' && (ctx.health_score?.prior_valid_score === null || ctx.health_score?.prior_valid_score === undefined)) {
       return response(def, 'NOT_APPLICABLE');
     }
@@ -397,9 +396,6 @@ export const AIStandardQuestionService = {
     }
 
     const composed = composeAnswer(outcomes);
-    if (def.standard_question_code === 'SQ-AI-025') {
-      composed.answer.key_points = splitIntoUpToN(composed.answer.summary || composed.answer.headline, 3);
-    }
 
     return response(def, 'AVAILABLE', {
       answer: composed.answer,
@@ -407,6 +403,37 @@ export const AIStandardQuestionService = {
       source_refs: composed.sourceRefs,
       data_as_of: composed.dataAsOf,
       confidence: composed.confidence,
+    });
+  },
+
+  /**
+   * SQ-AI-003 / SQ-AI-025 (Module 11.6, brief section 46). Pure, zero-cost:
+   * the deterministic engine runs on the certified context the caller
+   * already built; no router call, no stored answer, no provider, no quota.
+   * 0 actions -> NOT_APPLICABLE (never padded); origins DETERMINISTIC.
+   */
+  async resolveNextBestActionQuestion(userId: string, householdId: string | null, def: StandardQuestionDefinition, ctx: FinancialContextObject): Promise<StandardQuestionResponse> {
+    const controls = await getPlatformControls().catch(() => null);
+    if (controls && controls.next_best_action_enabled === false) return response(def, 'FEATURE_DISABLED');
+    if (ctx.meta.certification_status === 'INVALID' || ctx.meta.certification_status === 'UNAVAILABLE') return response(def, 'DOMAIN_UNAVAILABLE');
+
+    const evaluation = evaluateNextBestActions(ctx);
+    await recordNbaEvaluationSafely(userId, householdId, evaluation, 'standard_question');
+    if (evaluation.actions.length === 0) return response(def, 'NOT_APPLICABLE');
+
+    const top = def.standard_question_code === 'SQ-AI-003' ? evaluation.actions.slice(0, 1) : evaluation.actions.slice(0, 3);
+    const first = top[0];
+    return response(def, 'AVAILABLE', {
+      answer: {
+        headline: def.standard_question_code === 'SQ-AI-003' ? `Focus first on: ${first.title}` : `Your top ${top.length} action${top.length === 1 ? '' : 's'} this month`,
+        summary: def.standard_question_code === 'SQ-AI-003' ? first.explanation : top.map((a) => `${a.rank}. ${a.title}`).join(' '),
+        key_points: top.map((a) => `${a.rank}. ${a.title} — ${a.explanation}`),
+        limitations: [NBA_NOTE, `Rules ${evaluation.rules_version}, ranking policy ${evaluation.ranking_policy_version}.`],
+      },
+      answer_origins: ['DETERMINISTIC'],
+      source_refs: top.map((a) => ({ source_type: 'next_best_action', source_id: a.source_ref, data_as_of: ctx.meta.data_as_of })),
+      data_as_of: ctx.meta.data_as_of,
+      confidence: 'HIGH',
     });
   },
 

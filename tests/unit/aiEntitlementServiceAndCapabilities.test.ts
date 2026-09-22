@@ -54,12 +54,14 @@ describe('Module 11.1 section 6 — AI feature entitlement codes', () => {
     expect(Object.values(set.capabilities).every((v) => v === false)).toBe(true);
   });
 
-  it('declares all eight sub-capabilities named by the specification', () => {
-    // Module 11.5 added AI_CONTEXTUAL_EXPLANATIONS as the eighth.
+  it('declares all nine sub-capabilities named by the specification', () => {
+    // Module 11.5 added AI_CONTEXTUAL_EXPLANATIONS as the eighth; Module 11.6
+    // (R5, 2026-09-22) added AI_NEXT_BEST_ACTION as the ninth.
     expect([...AI_SUB_CAPABILITIES].sort()).toEqual([
       'AI_CONTEXTUAL_EXPLANATIONS',
       'AI_CUSTOM_QUESTIONS',
       'AI_INSIGHT_PACK',
+      'AI_NEXT_BEST_ACTION',
       'AI_PERSONALISED_EXPLANATIONS',
       'AI_REPORT_EXPLANATION',
       'AI_SCENARIO_NARRATION',
