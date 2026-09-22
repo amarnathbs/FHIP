@@ -232,6 +232,33 @@ describe('AIE-1.1 PII masking engine (PII-01..12)', () => {
       expect(result.coverageByType.person_name_label ?? 0).toBe(0);
     });
 
+    // 2026-09-22 (AIE payslip AI-fallback adapter) — found live, against the
+    // real provider, that a payslip's employee name egressed unmasked
+    // because 'employee' was not in this rule's label alternation (the same
+    // class of gap M12B found and fixed for insurance's `Policy Owner:`/
+    // `Insured Person:` labels — this file's own `person_name_label` header
+    // comment). See piiMasking.ts's own 2026-09-22 comment for the full
+    // disclosure and tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts
+    // for the live proof that found it.
+    it('masks an employee name on a payslip, which had no rule at all before this fix', () => {
+      const result = maskText('Employee: JANE ANNE CITIZEN', TENANT_A);
+      expect(result.maskedText).not.toContain('JANE ANNE CITIZEN');
+      expect(result.coverageByType.person_name_label).toBe(1);
+      expect(result.maskedText).toContain('Employee:');
+    });
+
+    it('masks an "Employee Name:" label variant too', () => {
+      const result = maskText('Employee Name: JANE ANNE CITIZEN', TENANT_A);
+      expect(result.maskedText).not.toContain('JANE ANNE CITIZEN');
+      expect(result.coverageByType.person_name_label).toBe(1);
+    });
+
+    it('does NOT mask the employer name — a business name the payslip adapter exists to read, not personal PII', () => {
+      const result = maskText('Employer: ACME AUSTRALIA PTY LTD', TENANT_A);
+      expect(result.maskedText).toContain('ACME AUSTRALIA PTY LTD');
+      expect(result.coverageByType.person_name_label ?? 0).toBe(0);
+    });
+
     it('a folio value does not swallow the next field label on a real CAS line', () => {
       const result = maskText('Folio No: 12345678/90   IFSC: HDFC0001234', TENANT_A);
       expect(result.maskedText).toContain('IFSC:');

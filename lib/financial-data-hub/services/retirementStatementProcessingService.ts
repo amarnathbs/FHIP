@@ -39,6 +39,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
@@ -101,7 +102,10 @@ export interface UploadRetirementStatementMetadata {
 export interface UploadRetirementStatementResult {
   document: FdhStatementUpload;
   statementId: string | null;
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'routed_to_smsf';
+  // 'pending_scan' (2026-09-21, real-malware-gate async fix): see the
+  // identical addition + rationale on `UploadAuInvestmentStatementResult`
+  // in investmentStatementProcessingService.ts.
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'routed_to_smsf' | 'pending_scan';
   failureKind?: string;
   activitiesExtracted: number;
   activitiesDeduplicated: number;
@@ -135,6 +139,11 @@ export async function getRetirementStatementIdForDocument(
  * Single-call upload+process is the same deliberate, disclosed simplification
  * FDH-10 and FDH-11 chose for CSV: the bytes are already in memory, extraction
  * is synchronous, and there is no OCR or password retry loop to orchestrate.
+ *
+ * 2026-09-21 (real-malware-gate async fix): only creates the upload now,
+ * then hands off to `resolveRetirementStatementDocument()` — see that
+ * function's header. Byte-for-byte unchanged when the real-scan flag is off
+ * or a scan resolves inline.
  */
 export async function uploadAndProcessRetirementStatement(
   userId: string,
@@ -160,6 +169,39 @@ export async function uploadAndProcessRetirementStatement(
     throw e;
   }
 
+  return resolveRetirementStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Resumes processing for a document left in `pending_scan` because the real
+ * malware gate had not yet resolved it when
+ * `uploadAndProcessRetirementStatement()` (or a prior call to this function)
+ * ran. Called from `POST /retirement-statement/{documentId}/process` once
+ * `RetirementStatementImportPanel.tsx` has polled the document out of
+ * `validating`. Metadata must be re-supplied by the caller, exactly as in
+ * the investment-statement sibling of this function.
+ */
+export async function continueRetirementStatementProcessing(
+  userId: string,
+  documentId: string,
+  metadata: UploadRetirementStatementMetadata,
+): Promise<UploadRetirementStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) throw new RetirementStatementProcessingError('not_found', 'document not found');
+  return resolveRetirementStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Everything that happens to an already-uploaded document — see the
+ * identical-purpose `resolveAuInvestmentStatementDocument()` in
+ * investmentStatementProcessingService.ts for the full rationale. Shared by
+ * both entry points above so neither can drift from the other.
+ */
+async function resolveRetirementStatementDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadRetirementStatementMetadata,
+): Promise<UploadRetirementStatementResult> {
   const empty = { activitiesExtracted: 0, activitiesDeduplicated: 0, positionsExtracted: 0 };
 
   if (document.processing_status === 'failed' || document.processing_status === 'rejected') {
@@ -182,7 +224,14 @@ export async function uploadAndProcessRetirementStatement(
     }
   }
 
-  if (!['queued', 'validating', 'uploaded'].includes(document.processing_status)) {
+  // Real-malware-gate wiring (2026-09-21): see the identical comment in
+  // investmentStatementProcessingService.ts's `resolveAuInvestmentStatement
+  // Document()` — this is a genuine, legal wait state, not an error.
+  if (document.processing_status === 'validating') {
+    return { document, statementId: null, pipelineStatus: 'pending_scan', ...empty };
+  }
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
     throw new RetirementStatementProcessingError(
       'invalid_state', `cannot process while the document is ${document.processing_status}`,
     );

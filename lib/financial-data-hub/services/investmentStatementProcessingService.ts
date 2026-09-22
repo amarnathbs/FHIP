@@ -29,6 +29,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
@@ -68,7 +69,15 @@ export interface UploadAuInvestmentStatementMetadata {
 export interface UploadAuInvestmentStatementResult {
   document: FdhStatementUpload;
   statementId: string | null;
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement';
+  // 'pending_scan' (2026-09-21, real-malware-gate async fix): the real
+  // scanner (lib/aie/malware) has not yet resolved this upload -- the
+  // document is genuinely, legally sitting in `validating`
+  // (`malwareScanGate.ts`'s own documented resting state), not an error.
+  // The caller (AuInvestmentStatementImportPanel.tsx) polls
+  // `GET /financial-data-hub/documents/{id}` until the status leaves
+  // `validating`, then calls `continueAuInvestmentStatementProcessing()`
+  // (via the new `.../investment-statement/{id}/process` route) to finish.
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan';
   failureKind?: string;
   positionsExtracted: number;
   activitiesExtracted: number;
@@ -97,6 +106,13 @@ export async function getAuInvestmentStatementIdForDocument(userId: string, docu
  * Upload AND process an AU investment statement CSV in one call. Returns
  * the persisted document plus, on success, the new
  * `fdh_investment_statements.id`.
+ *
+ * 2026-09-21 (real-malware-gate async fix): this now only creates the
+ * upload and hands off to `resolveAuInvestmentStatementDocument()` for
+ * everything that happens next -- see that function's header for why. When
+ * the real-scan flag is off (today's production default) or a scan
+ * resolves inline, this is byte-for-byte the same single round trip it
+ * always was.
  */
 export async function uploadAndProcessAuInvestmentStatement(
   userId: string,
@@ -120,6 +136,45 @@ export async function uploadAndProcessAuInvestmentStatement(
     throw e;
   }
 
+  return resolveAuInvestmentStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Resumes processing for a document `uploadAndProcessAuInvestmentStatement`
+ * (or a prior call to this same function) already left in `pending_scan`
+ * because the real malware gate had not yet resolved it. Called from
+ * `POST /investment-statement/{documentId}/process` once
+ * `AuInvestmentStatementImportPanel.tsx` has polled the document's status
+ * and observed it leave `validating`. Metadata must be re-supplied by the
+ * caller -- nothing here remembers it across the two calls, exactly like
+ * the original single-call path never needed to remember the original
+ * `bytes` (extraction always re-downloads from storage below).
+ */
+export async function continueAuInvestmentStatementProcessing(
+  userId: string,
+  documentId: string,
+  metadata: UploadAuInvestmentStatementMetadata,
+): Promise<UploadAuInvestmentStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) throw new AuInvestmentStatementProcessingError('not_found', 'document not found');
+  return resolveAuInvestmentStatementDocument(userId, document, metadata);
+}
+
+/**
+ * Everything that happens to an already-uploaded document: the
+ * failed/rejected short-circuit, duplicate detection, the real-malware-scan
+ * `pending_scan` wait state, and (once genuinely clear to proceed) the CSV
+ * detection/extraction/persistence that used to be inlined directly into
+ * `uploadAndProcessAuInvestmentStatement()`. Shared by that function's
+ * immediate path (flag off / a scan that resolved inline) and by
+ * `continueAuInvestmentStatementProcessing()`'s deferred resumption path, so
+ * neither can drift from the other.
+ */
+async function resolveAuInvestmentStatementDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadAuInvestmentStatementMetadata,
+): Promise<UploadAuInvestmentStatementResult> {
   if (document.processing_status === 'failed' || document.processing_status === 'rejected') {
     return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: document.error_code ?? 'unknown_error', positionsExtracted: 0, activitiesExtracted: 0 };
   }
@@ -134,7 +189,21 @@ export async function uploadAndProcessAuInvestmentStatement(
     }
   }
 
-  if (!['queued', 'validating', 'uploaded'].includes(document.processing_status)) {
+  // Real-malware-gate wiring (2026-09-21): `completeUpload()` left this
+  // document genuinely, legally waiting in `validating` -- the scan has not
+  // resolved yet (see `malwareScanGate.ts`'s own header on why FDH-3 has no
+  // worker for this today beyond the cron sweep). This is NOT an error:
+  // `assertDocumentTransition('validating', 'processing')` below would
+  // correctly refuse the jump (documentLifecycle.ts has no such edge), and
+  // reading the file's bytes to extract from it before the scan clears
+  // would defeat the entire point of gating on the scan in the first place.
+  // Report the wait state honestly instead of either throwing or silently
+  // extracting an unscanned file.
+  if (document.processing_status === 'validating') {
+    return { document, statementId: null, pipelineStatus: 'pending_scan', positionsExtracted: 0, activitiesExtracted: 0 };
+  }
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
     throw new AuInvestmentStatementProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
   }
 

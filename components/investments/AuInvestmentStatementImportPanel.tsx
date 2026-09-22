@@ -19,9 +19,25 @@
  * surface purely over `fetch()`.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  waitForDocumentToLeaveValidating,
+  SCANNING_MESSAGE,
+  SCAN_TIMEOUT_MESSAGE,
+} from '@/components/financial-data-hub/scanStatusPolling';
 
-type Phase = 'form' | 'uploading' | 'unable_to_read' | 'duplicate' | 'review' | 'matching' | 'comparing' | 'applied' | 'error';
+type Phase = 'form' | 'uploading' | 'scanning' | 'unable_to_read' | 'scan_timeout' | 'duplicate' | 'review' | 'matching' | 'comparing' | 'applied' | 'error';
+
+// 2026-09-21 (real-malware-gate async fix) — same honest, non-technical
+// discipline as every other FDH-3 panel's failure copy: never "malware" or
+// "virus".
+const SCAN_REJECTION_MESSAGES: Record<string, string> = {
+  malware_detected: 'This file could not be accepted because it failed a security check. Please try a different file, or add this investment manually below.',
+  malware_scan_suspicious: 'This file could not be accepted because it failed a security check. Please try a different file, or add this investment manually below.',
+  malware_scan_failed: 'We could not finish checking this file for safety. Please try again, or add this investment manually below.',
+  malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again, or add this investment manually below.',
+  malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this investment manually below.',
+};
 
 interface Statement {
   id: string;
@@ -84,6 +100,12 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
+  // poll if the panel unmounts mid-scan.
+  const scanPollCancelRef = useRef({ cancelled: false });
+  useEffect(() => () => {
+    scanPollCancelRef.current.cancelled = true;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +146,28 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     setPhase('review');
   }
 
+  // Handles the JSON body from EITHER the initial upload call or the
+  // real-malware-gate async fix's `.../process` resumption call — both
+  // return the identical `{ document_id, pipeline_status, statement_id,
+  // error_message, duplicate }` shape (see the API routes), so one function
+  // covers the "what do we do with this outcome" decision for both.
+  async function handleStatementOutcome(json: Record<string, unknown>) {
+    const data = json.data as Record<string, unknown>;
+    if (!data.statement_id) {
+      setMessage((data.error_message as string | undefined) ?? 'We could not read this statement.');
+      setPhase('unable_to_read');
+      return;
+    }
+    setDocumentId(data.document_id as string);
+    if (data.duplicate) {
+      setMessage('This statement has already been uploaded. Showing the evidence already on file.');
+      await loadReview(data.document_id as string);
+      setPhase('duplicate');
+      return;
+    }
+    await loadReview(data.document_id as string);
+  }
+
   async function handleUpload() {
     if (!file) return;
     setBusy(true);
@@ -145,19 +189,57 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         setPhase('unable_to_read');
         return;
       }
-      if (!json.data.statement_id) {
-        setMessage(json.data.error_message ?? 'We could not read this statement.');
-        setPhase('unable_to_read');
+
+      // Real-malware-gate async fix (2026-09-21): the upload route now
+      // returns `pipeline_status: 'pending_scan'` (statement_id: null,
+      // NOT a failure) instead of extracting immediately when the real
+      // S3+GuardDuty scan has not yet resolved — see
+      // investmentStatementProcessingService.ts's `resolveAuInvestment
+      // StatementDocument()`. Checked BEFORE the "no statement_id means
+      // unable to read" branch below, which would otherwise misread this
+      // wait state as a real failure.
+      if (json.data.pipeline_status === 'pending_scan') {
+        const docId = json.data.document_id as string;
+        setDocumentId(docId);
+        setPhase('scanning');
+        setMessage(SCANNING_MESSAGE);
+        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+        if (waited.outcome === 'timeout') {
+          setMessage(SCAN_TIMEOUT_MESSAGE);
+          setPhase('scan_timeout');
+          return;
+        }
+        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+          setMessage(
+            (waited.errorCode && SCAN_REJECTION_MESSAGES[waited.errorCode])
+              ?? 'This file could not be accepted. Please try a different file, or add this investment manually below.',
+          );
+          setPhase('unable_to_read');
+          return;
+        }
+        // The scan cleared -- finish the extraction the upload route
+        // deferred, re-submitting the SAME metadata originally supplied.
+        const processRes = await fetch(`/api/financial-data-hub/investment-statement/${docId}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            csv_kind: csvKind,
+            currency_code: 'AUD',
+            institution_name: institutionName || undefined,
+            masked_account_identifier: maskedAccountIdentifier || undefined,
+          }),
+        });
+        const { ok: processOk, json: processJson } = await readJson(processRes);
+        if (!processOk) {
+          setMessage(processJson.error ?? 'We could not process this statement.');
+          setPhase('unable_to_read');
+          return;
+        }
+        await handleStatementOutcome(processJson);
         return;
       }
-      setDocumentId(json.data.document_id as string);
-      if (json.data.duplicate) {
-        setMessage('This statement has already been uploaded. Showing the evidence already on file.');
-        await loadReview(json.data.document_id as string);
-        setPhase('duplicate');
-        return;
-      }
-      await loadReview(json.data.document_id as string);
+
+      await handleStatementOutcome(json);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -297,9 +379,11 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         </div>
       )}
 
-      {(phase === 'uploading' || phase === 'matching') && (
+      {(phase === 'uploading' || phase === 'matching' || phase === 'scanning') && (
         <p className="mt-4 text-sm text-muted" role="status">
-          {phase === 'uploading' ? 'Uploading and reading your statement…' : 'Matching accounts, securities and bank evidence…'}
+          {phase === 'uploading' && 'Uploading and reading your statement…'}
+          {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
+          {phase === 'matching' && 'Matching accounts, securities and bank evidence…'}
         </p>
       )}
 
@@ -307,6 +391,13 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         <div className="mt-4 space-y-3">
           <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>
           <p className="text-sm text-muted">You can try a different file, or add this investment manually instead.</p>
+          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">Try again</button>
+        </div>
+      )}
+
+      {phase === 'scan_timeout' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message ?? SCAN_TIMEOUT_MESSAGE}</p>
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">Try again</button>
         </div>
       )}

@@ -436,6 +436,33 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'malware', 'awsSigV4.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'malware', 's3RestClient.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'malware', 'scanSweep.ts'),
+      // AIE payslip AI-fallback adapter (2026-09-22): `mapping.ts` and
+      // `schema.ts` ARE real, intentional imports of FDH-9's own pure
+      // payslip types (`PayrollExtraction`, `PayFrequency`, `PAY_FREQUENCIES`
+      // from `lib/financial-data-hub/payslip/types.ts`) — not naive-substring
+      // false positives. This is the exact analogue of the
+      // `lib/aie/adapters/fdhBankStatement/**` precedent already approved
+      // above: the adapter's whole point (see
+      // docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md
+      // section 2.1) is to map an AI response onto the SAME extraction shape
+      // the native FDH-9 parser already produces, so the rest of the
+      // pipeline (reconciliation, canonical write) runs unchanged — "reuse
+      // it, do not build a second one" is only meaningful if this adapter is
+      // actually allowed to import it. Neither file names any Input Data
+      // register or performs any canonical mutation — confirmed by hand: both
+      // import only `lib/financial-data-hub/payslip/types.ts`'s pure type/
+      // const exports, never a service, repository or table name.
+      // `types.ts`'s own inclusion here is the OTHER kind — a naive-substring
+      // false positive, matching the AIE-1.1/AIE-1.4 precedents above: its
+      // header comment names `lib/financial-data-hub/payslip/types.ts` in
+      // prose (explaining what it mirrors) but contains no
+      // `from '@/lib/financial-data-hub...'` import at all. Confirmed by hand
+      // and by `grep -n "from '@/lib/financial-data-hub" lib/aie/adapters/payslip/types.ts`
+      // returning zero matches. Approved as exactly these three files, not a
+      // directory.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'mapping.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'types.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

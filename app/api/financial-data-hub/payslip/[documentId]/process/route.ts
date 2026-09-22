@@ -42,6 +42,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       payroll_event_id: result.payrollEventId,
       pipeline_status: result.pipelineStatus,
       duplicate: result.pipelineStatus === 'duplicate_payslip',
+      // AI-fallback addition: present only when pipeline_status is
+      // 'ai_fallback_available'. Nothing has been written yet — this is a
+      // DRAFT for the caller to show the user for review/correction, then
+      // submit to POST .../ai-fallback/confirm. See
+      // docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {

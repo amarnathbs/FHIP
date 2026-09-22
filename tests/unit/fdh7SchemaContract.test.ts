@@ -13,6 +13,7 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
   FDH_TRANSACTION_APPROVAL_STATUSES,
 } from '@/lib/financial-data-hub/constants/enums';
 
@@ -119,7 +120,8 @@ describe('FDH-7 new-column check constraints match their TypeScript vocabularies
         !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED as readonly string[]).includes(t) &&
         !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED as readonly string[]).includes(t) &&
         !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t),
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t) &&
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t),
     );
     expect(values.sort()).toEqual([...vocabularyAsOfFdh7].sort());
   });
