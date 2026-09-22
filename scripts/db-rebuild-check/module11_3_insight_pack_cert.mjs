@@ -266,8 +266,11 @@ await asService(async () => {
 
 console.log('\n=== K. Migration 0121 seeds present ===');
 await asService(async () => {
-  const prompt = await db.query(`select * from ai_prompt_templates where prompt_code = 'PR-AI-013'`);
-  check('PR-AI-013 prompt seeded', prompt.rows.length === 1 && prompt.rows[0].status === 'DRAFT');
+  const prompt = await db.query(`select * from ai_prompt_templates where prompt_code = 'PR-AI-013' order by version`);
+  // Module 11 remediation R1 (migration 0175, 2026-09-22) added version 2
+  // (the ranking-provenance prompt). Both versions are seeded DRAFT — nothing
+  // is activated by a migration on any environment.
+  check('PR-AI-013 prompt seeded (v1 by 0121, v2 by 0175, both DRAFT)', prompt.rows.length === 2 && prompt.rows.every((r) => r.status === 'DRAFT') && prompt.rows[1].version === 2);
   const model = await db.query(`select * from ai_model_registry where provider = 'mock'`);
   check('mock model registry row includes monthly_insight_pack in task_types', model.rows[0]?.task_types?.includes('monthly_insight_pack'));
   const costLimit = await db.query(`select * from ai_task_cost_limits where task_type = 'monthly_insight_pack'`);
