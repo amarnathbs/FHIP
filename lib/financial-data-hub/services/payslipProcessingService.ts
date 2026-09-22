@@ -64,6 +64,20 @@ import { normaliseEmployerName } from '../payslip/normalise';
 import type { FdhStatementUpload } from '../domain/types';
 import type { PayrollExtraction, PayslipExtractionFailureKind } from '../payslip/types';
 import type { FdhErrorCode } from '../constants/enums';
+// AI-fallback addition (2026-09-22). Deliberately the SAME shape as
+// Investment Intelligence's own live mechanism
+// (`lib/services/investment-intelligence/aiFallbackDocumentExtraction.ts`):
+// call the shared AIE gateway directly from inside this native processing
+// service's own failure branch, gated by its own kill switch plus the
+// shared global one plus the shared pilot-cohort gate — never the heavier
+// orchestrator/intake/accept pipeline, which this repo's own AIE-programme
+// design audit found has zero live frontend callers for any of the three
+// adapters that use it today. See
+// `lib/aie/adapters/payslip/featureFlags.ts`'s header and
+// `docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md`.
+import { isAiePayslipAiFallbackEnabled, requestPayslipAiExtraction, mapPayslipFactsToExtraction } from '@/lib/aie/adapters/payslip';
+import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
 export class PayslipProcessingError extends Error {
   constructor(
@@ -165,8 +179,34 @@ export const PAYSLIP_FAILURE_MESSAGES: Record<string, string> = {
 export interface ProcessPayslipResult {
   document: FdhStatementUpload;
   payrollEventId: string | null;
-  pipelineStatus: 'ok' | PayslipExtractionFailureKind | 'pdf_extraction_failed' | 'idempotent_existing' | 'duplicate_payslip';
+  pipelineStatus: 'ok' | PayslipExtractionFailureKind | 'pdf_extraction_failed' | 'idempotent_existing' | 'duplicate_payslip' | 'ai_fallback_available';
+  /** Populated only when `pipelineStatus === 'ai_fallback_available'`. A
+   * DRAFT the AI read off the payslip — nothing has been written to
+   * `fdh_payroll_events` yet. The document itself deliberately stays in
+   * `processing` (native success's own pre-write state) rather than
+   * advancing, so `confirmAiPayslipFallback`'s own
+   * `assertDocumentTransition('processing', 'extracted')` — the SAME edge a
+   * native success uses — stays legal. The caller (the API route) shows this
+   * to the user for explicit review/correction before
+   * `confirmAiPayslipFallback` ever writes it (PO requirement: "try AI, then
+   * ask you to review" — never a silent auto-write of an AI guess).
+   */
+  aiFallbackDraft?: PayrollExtraction;
 }
+
+/** Failure kinds this adapter will attempt an AI-fallback extraction for.
+ * Deliberately narrow (mirrors Investment Intelligence's own two trigger
+ * reasons, `documentAiFallbackTriggerReason()` in
+ * `aiFallbackDocumentExtraction.ts`): only kinds where the document is
+ * genuinely readable text and genuinely looks like it is TRYING to be a
+ * payslip, but the deterministic, layout-specific parser could not read it.
+ * Excluded on purpose: `password_required`/`wrong_password`/`corrupt`/
+ * `page_limit_exceeded` (no text was even extracted — AI cannot help),
+ * `scanned_document`/`ocr_required` (same reason), and `not_a_payslip` (the
+ * parser's own judgement that this document is not a payslip at all — AI
+ * fallback exists to read a payslip the native parser cannot, not to
+ * classify an unrelated document as one). */
+const AI_FALLBACK_ELIGIBLE_FAILURE_KINDS: readonly PayslipExtractionFailureKind[] = ['layout_unsupported', 'country_not_identified'];
 
 /** Removes any row a PRIOR failed attempt for this document produced, so a
  * retry is safe (identical discipline to the bank-PDF path's own
@@ -306,6 +346,24 @@ export async function processPayslipDocument(userId: string, documentId: string,
     const parsed = parsePayslipText(text, { declaredCountry });
 
     if ('error' in parsed) {
+      if (AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(parsed.error)) {
+        const fallback = await attemptAiPayslipFallback(userId, documentId, text, declaredCountry ?? 'AU');
+        if (fallback.ok) {
+          // Deliberately NO document status change here (see
+          // `ProcessPayslipResult.aiFallbackDraft`'s own doc comment) — the
+          // document stays `processing` until the user explicitly reviews
+          // and confirms via `confirmAiPayslipFallback`.
+          return { document, payrollEventId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: fallback.extraction };
+        }
+        await recordDocumentAuditEvent({
+          userId,
+          documentId,
+          eventType: 'payslip_ai_fallback_not_usable',
+          actorType: 'system',
+          metadata: { reason: fallback.reason, nativeFailureKind: parsed.error },
+        });
+      }
+
       const errorCode = errorCodeForPayslipParseFailure(parsed.error);
       assertDocumentTransition('processing', 'failed');
       const finalDoc = await adminUpdateStatementUpload(userId, documentId, {
@@ -339,7 +397,94 @@ export async function processPayslipDocument(userId: string, documentId: string,
   }
 }
 
-async function persistPayrollEvidence(
+export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction } | { ok: false; reason: string };
+
+/**
+ * The one call site that reaches the AI provider for a payslip. Gated, in
+ * order: this adapter's own kill switch, the SAME global AIE kill switch
+ * every AI call in this codebase shares, and the SAME shared AIE-1
+ * pilot-cohort allowlist every AIE-gated feature shares (never a cloned
+ * adapter-local allowlist — see `lib/aie/adapters/payslip/featureFlags.ts`'s
+ * header for why). Masks the already-locally-extracted text before it ever
+ * leaves this process, exactly like `lib/aie/orchestrator.ts`'s own masking
+ * step, including the SAME open item that step discloses (`labelsSeenRaw: []`
+ * — see `orchestrator.ts`'s own comment on `isBelowMaskingPolicy`).
+ *
+ * Exported (not just called internally) so it is independently unit-testable
+ * with a fake `requestPayslipAiExtraction` and so a future FDH-3 document
+ * type's own processing service can call the identical shape for its own
+ * fields, per this design's "any new document type" requirement.
+ */
+export async function attemptAiPayslipFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  country: 'AU' | 'IN',
+): Promise<AiPayslipFallbackOutcome> {
+  if (!isAiePayslipAiFallbackEnabled()) return { ok: false, reason: 'adapter_disabled' };
+  if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
+  if (!isUserInAiePilotCohort({ userId })) return { ok: false, reason: 'cohort_denied' };
+
+  let masking: ReturnType<typeof maskText>;
+  try {
+    masking = maskText(extractedText, { tenantKey: userId });
+  } catch {
+    return { ok: false, reason: 'masking_unavailable' };
+  }
+  if (isBelowMaskingPolicy({ maskedText: masking.maskedText, labelsSeenRaw: [] })) {
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_masking_below_policy', actorType: 'system' });
+    return { ok: false, reason: 'masking_below_policy' };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_attempted', actorType: 'system' });
+  const result = await requestPayslipAiExtraction({ maskedText: masking.maskedText, requestId: documentId });
+  if (result.outcome !== 'success') {
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome } });
+    return { ok: false, reason: result.outcome };
+  }
+
+  const currencyCode = country === 'IN' ? 'INR' : 'AUD';
+  const extraction = mapPayslipFactsToExtraction(result.facts, { country, currencyCode });
+  if (!extraction) {
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_insufficient_fields', actorType: 'system' });
+    return { ok: false, reason: 'insufficient_fields' };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_draft_ready', actorType: 'system' });
+  return { ok: true, extraction };
+}
+
+/**
+ * Called only after the user has reviewed the draft `attemptAiPayslipFallback`
+ * produced (and may have corrected it — the same trust model as a manual
+ * Income entry, which this codebase already permits unrestricted for the
+ * user's own data). Performs NO new AI call and re-derives nothing from
+ * document text; it validates the submitted extraction is shaped correctly
+ * and delegates the actual write to `persistPayrollEvidence` — the EXACT
+ * same function, same bank-matching, same fingerprint/dedupe, same
+ * `processing -> extracted` transition, a native successful parse uses. This
+ * is what makes an AI-fallback-produced payroll event indistinguishable from
+ * a natively-parsed one to every downstream review/approve/apply step.
+ *
+ * Refuses (rather than silently reprocessing) unless the document is still
+ * sitting in `processing` — the state `attemptAiPayslipFallback` deliberately
+ * left it in — so a stale/replayed confirm on an already-decided document
+ * (already failed, already extracted, already re-uploaded) is rejected
+ * instead of double-writing.
+ */
+export async function confirmAiPayslipFallback(userId: string, documentId: string, extraction: PayrollExtraction): Promise<ProcessPayslipResult> {
+  const document = await getOwnedDocument(userId, documentId);
+  if (document.document_type !== 'payslip') {
+    throw new PayslipProcessingError('wrong_document_type', 'This document was not uploaded as a payslip.');
+  }
+  if (document.processing_status !== 'processing') {
+    throw new PayslipProcessingError('invalid_state', 'This payslip has no AI-extracted draft awaiting confirmation.');
+  }
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_confirmed', actorType: 'user' });
+  return persistPayrollEvidence(userId, documentId, document, extraction);
+}
+
+export async function persistPayrollEvidence(
   userId: string,
   documentId: string,
   document: FdhStatementUpload,

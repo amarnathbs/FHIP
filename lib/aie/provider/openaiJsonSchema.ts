@@ -43,6 +43,8 @@ import {
   AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
   ALLOWED_AI_COMPLETABLE_FIELDS as II_FIELDS,
 } from '../adapters/investment-intelligence/schema';
+import { AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME, AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION } from '../adapters/payslip/schema';
+import { PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/payslip/openaiSchema';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -79,12 +81,55 @@ interface KnownSchemaSpec {
   maxItems: number;
 }
 
+/**
+ * 2026-09-22 addition (found while live-proving the payslip AI-fallback
+ * adapter against the REAL provider — see
+ * `tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts`).
+ *
+ * NOT EVERY AI-FACING SCHEMA IN THIS CODEBASE IS THE "bounded array of typed
+ * field candidates" ENVELOPE THIS FILE'S OWN HEADER CLAIMS IS THE ONLY SHAPE.
+ * That claim was true when written (2026-09-13, AIE-1 closure mission) but a
+ * later, real, LIVE-RECHABLE addition — Investment Intelligence's own
+ * whole-document facts contract
+ * (`lib/aie/adapters/investment-intelligence/documentFactsSchema.ts`'s
+ * `investmentDocumentFactsSchema`, actually called by
+ * `lib/services/investment-intelligence/aiFallbackDocumentExtraction.ts`,
+ * the ONE II AI-fallback mechanism reachable from live UI today) is a richly
+ * nested object (`positions[].transactions[]...`), not that envelope shape —
+ * and it was NEVER added to `KNOWN_SCHEMAS` below. Confirmed live: calling
+ * the real gateway with `AIE_AI_PROVIDER=openai` and
+ * `schemaName: AIE_II_DOCUMENT_FACTS_SCHEMA_NAME` throws exactly the "no
+ * strict JSON Schema mapping registered" error this function raises, which
+ * `AieDocumentAiGateway.executeOnce()` maps to `outcome: 'provider_error'` —
+ * meaning **Investment Intelligence's live AI-fallback path cannot
+ * successfully complete a real OpenAI call today, in any environment where
+ * `AIE_AI_PROVIDER=openai` is actually set**, a P0-class production-readiness
+ * gap independent of and in addition to this adapter's own two disclosed
+ * blockers (masking key unset; every II parser declares `aiEligibleGaps: []`
+ * — see `moduleRegistry.ts`'s own honesty note). Flagged for a dedicated
+ * follow-up rather than hand-converted here under this dispatch's own
+ * (payslip-scoped) time budget — `investmentDocumentFactsSchema`'s nesting
+ * depth and per-field cross-refinements make a rushed hand-conversion a real
+ * risk of silently narrowing/widening what the provider is allowed to
+ * return, which is exactly the failure mode this whole file exists to
+ * prevent.
+ *
+ * `rawSchema` is added here as an ESCAPE HATCH for exactly this case: a
+ * schema whose shape does not fit the single generic
+ * `buildFieldCompletionJsonSchema()` parameterisation. The payslip adapter
+ * below is the first (and, pending the II fix above, ideally not the last)
+ * consumer.
+ */
+interface RawKnownSchemaSpec {
+  rawSchema: Record<string, unknown>;
+}
+
 /** `schemaName@schemaVersion` -> the field-shape parameters needed to build
  * its strict JSON Schema. Deliberately closed (a `Map`, not a fallback) —
  * an AI-facing schema this builder does not recognise must be added here
  * explicitly, never guessed generically, because a wrong `enum`/`maxItems`
  * would silently widen what the provider is allowed to invent. */
-const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec>([
+const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   [
     `${AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME}@${AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION}`,
     // The generic schema's own Zod definition permits any non-empty
@@ -107,13 +152,21 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec>([
     `${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME}@${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION}`,
     { allowedFieldNames: II_FIELDS, maxItems: 20 },
   ],
+  [`${AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
 ]);
+
+function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {
+  return 'rawSchema' in spec;
+}
 
 export function getKnownOpenAiJsonSchema(schemaName: string, schemaVersion: string): Record<string, unknown> {
   const key = `${schemaName}@${schemaVersion}`;
   const spec = KNOWN_SCHEMAS.get(key);
   if (!spec) {
     throw new Error(`openaiJsonSchema: no strict JSON Schema mapping registered for "${key}" — add one to KNOWN_SCHEMAS rather than guessing a shape`);
+  }
+  if (isRawSpec(spec)) {
+    return spec.rawSchema;
   }
   if (spec.allowedFieldNames.length === 0) {
     // The one open-ended case (the generic schema) — see the comment above.

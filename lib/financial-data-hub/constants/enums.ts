@@ -1070,10 +1070,27 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED = [
   'retirement_proposal_dismissed',
 ] as const;
 
+/** AIE payslip AI-fallback additions (migration 0173), same
+ * TS-side-enum-must-match-the-DB-check-constraint discipline as every prior
+ * phase. Recorded on the payslip processing service's own audit log
+ * (`lib/financial-data-hub/services/auditLog.ts`'s `recordDocumentAuditEvent`)
+ * for the new AI-fallback path — see
+ * `lib/financial-data-hub/services/payslipProcessingService.ts`'s
+ * `attemptAiPayslipFallback`/`confirmAiPayslipFallback`. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED = [
+  'payslip_ai_fallback_attempted',
+  'payslip_ai_fallback_masking_below_policy',
+  'payslip_ai_fallback_provider_outcome',
+  'payslip_ai_fallback_insufficient_fields',
+  'payslip_ai_fallback_draft_ready',
+  'payslip_ai_fallback_not_usable',
+  'payslip_ai_fallback_confirmed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12). Used everywhere OUTSIDE the
- * frozen fdh3SchemaContract.test.ts assertion — i.e. by
- * `FdhDocumentAuditEventType` itself, so every caller can use the later
+ * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback). Used
+ * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
+ * by `FdhDocumentAuditEventType` itself, so every caller can use the later
  * phases' event types without a second parallel type. */
 export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES,
@@ -1085,6 +1102,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

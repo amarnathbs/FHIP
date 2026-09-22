@@ -32,6 +32,7 @@ type Phase =
   | 'uploading'
   | 'processing'
   | 'unable_to_read'
+  | 'ai_fallback_review'
   | 'duplicate'
   | 'review'
   | 'comparing'
@@ -39,6 +40,35 @@ type Phase =
   | 'kept_existing'
   | 'stale'
   | 'error';
+
+// AI-fallback addition (2026-09-22). Mirrors the money/date field subset
+// `lib/aie/adapters/payslip/types.ts`'s `PAYSLIP_AI_COMPLETABLE_FIELDS`
+// declares — this UI never invents a field the backend contract does not
+// also recognise. Nothing here is written until the user presses "Save these
+// details", matching this whole panel's own "every step before the final
+// action is INERT" discipline (this file's header).
+interface AiFallbackDraft {
+  country: 'AU' | 'IN';
+  currencyCode: string;
+  employerName?: string | null;
+  payPeriodStart?: string | null;
+  payPeriodEnd?: string | null;
+  paymentDate?: string | null;
+  payFrequency: string;
+  grossPay?: number | null;
+  netPay?: number | null;
+  taxWithheld?: number | null;
+  employerRetirementContribution?: number | null;
+}
+
+const AI_DRAFT_FIELD_LABELS: Record<string, string> = {
+  employerName: 'Employer',
+  payPeriodStart: 'Pay period start (YYYY-MM-DD)',
+  payPeriodEnd: 'Pay period end (YYYY-MM-DD)',
+  grossPay: 'Gross pay',
+  netPay: 'Net pay',
+  taxWithheld: 'Tax withheld',
+};
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
 
@@ -114,6 +144,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   const [decision, setDecision] = useState<Decision>('update_existing');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // AI-fallback addition: the draft `process` returned when native parsing
+  // failed but AI-fallback produced a usable extraction. Editable — the
+  // whole point of this step is to let the user correct it before anything
+  // is saved.
+  const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
   // (see that file's identical comment) — this panel used to always render
   // as a fully working upload form and only discover the FDH-3 production
@@ -145,6 +180,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     setProposalId(null);
     setFields([]);
     setSelected(new Set());
+    setAiDraft(null);
   }, []);
 
   async function loadReview(docId: string) {
@@ -196,6 +232,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         setPhase('unable_to_read');
         return;
       }
+      if (processJson.data.pipeline_status === 'ai_fallback_available' && processJson.data.ai_fallback_draft) {
+        setAiDraft(processJson.data.ai_fallback_draft as AiFallbackDraft);
+        setPhase('ai_fallback_review');
+        return;
+      }
       if (processJson.data.error_code) {
         setMessage(processJson.data.error_message ?? 'We could not read this payslip.');
         setPhase('unable_to_read');
@@ -208,6 +249,38 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         return;
       }
       await loadReview(docId);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Something went wrong.');
+      setPhase('error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateAiDraftField<K extends keyof AiFallbackDraft>(key: K, value: AiFallbackDraft[K]) {
+    setAiDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  async function handleConfirmAiDraft() {
+    if (!documentId || !aiDraft) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/financial-data-hub/payslip/${documentId}/ai-fallback/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiDraft),
+      });
+      const { ok, json } = await readJson(res);
+      if (!ok) throw new Error(json.error ?? 'We could not save this payslip.');
+      setAiDraft(null);
+      if (json.data.duplicate) {
+        setMessage('This payslip has already been uploaded. Showing the evidence already on file.');
+        await loadReview(documentId);
+        setPhase((p) => (p === 'error' ? p : 'duplicate'));
+        return;
+      }
+      await loadReview(documentId);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -392,6 +465,59 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
             Try again
           </button>
+        </div>
+      )}
+
+      {phase === 'ai_fallback_review' && aiDraft && (
+        <div className="mt-4 space-y-4">
+          <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            We could not read this payslip&apos;s layout automatically, so we used AI to read it instead. Please check
+            these details before saving — nothing has been saved yet.
+          </p>
+          <dl className="grid grid-cols-1 gap-3 text-sm">
+            {(['employerName', 'payPeriodStart', 'payPeriodEnd', 'grossPay', 'netPay', 'taxWithheld'] as const).map((key) => (
+              <div key={key}>
+                <label className="mb-1 block text-muted" htmlFor={`ai-draft-${key}`}>
+                  {AI_DRAFT_FIELD_LABELS[key] ?? key}
+                </label>
+                <input
+                  id={`ai-draft-${key}`}
+                  type={key.includes('Pay') || key === 'grossPay' || key === 'netPay' || key === 'taxWithheld' ? 'number' : 'text'}
+                  className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
+                  value={aiDraft[key] ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const isMoney = key === 'grossPay' || key === 'netPay' || key === 'taxWithheld';
+                    updateAiDraftField(key, (isMoney ? (raw === '' ? null : Number(raw)) : raw === '' ? null : raw) as AiFallbackDraft[typeof key]);
+                  }}
+                />
+              </div>
+            ))}
+          </dl>
+          <p className="text-xs text-muted">
+            AI-read values are shown for your confirmation only — correct anything that looks wrong before saving.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAiDraft(null);
+                setMessage("This doesn't look like a payslip we can read yet. Please check the file, or add this income manually.");
+                setPhase('unable_to_read');
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-sm"
+            >
+              This doesn&apos;t look right
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAiDraft}
+              disabled={busy || (aiDraft.grossPay == null && aiDraft.netPay == null)}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save these details
+            </button>
+          </div>
         </div>
       )}
 
