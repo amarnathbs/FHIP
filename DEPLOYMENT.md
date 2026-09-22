@@ -126,6 +126,12 @@ Repeat the last two commands (new destination + new schedule, same connection) w
 
 Only turning `AIE_REAL_MALWARE_SCAN_ENABLED` back on in production without this scheduler in place will strand any upload whose scan takes longer than a few hundred milliseconds — this was the exact 2026-09-21 production incident this fix addresses. With the flag off (today's default), no document ever sits in `validating` for more than an instant, so these schedules are harmless no-ops until the flag is turned on.
 
+**Alternative: this codebase's own `pg_cron` + `pg_net` mechanism (no AWS account needed).** This app's `purge-sweep` routes have used exactly this mechanism since migration `0135_lr1_document_purge_sweep_scheduler.sql` (FDH-3/LR-1) and `0149_aie1_closure_document_lifecycle_purge.sql` (AIE) — a job registered directly inside Supabase's own Postgres via `cron.schedule()`, firing `net.http_post()` on a fixed cadence, with the real `CRON_SECRET` value looked up from Supabase Vault at call time rather than ever written into a migration file. Migration `0174_aie1_malware_scan_sweep_scheduler.sql` registers the SAME kind of job for both malware-scan-sweep routes (`fdh3-malware-scan-sweep`, `aie1-malware-scan-sweep`, every 1 minute). This is the genuinely DEV-reachable option (no AWS console/IAM access required) — apply the migration, then run, once, directly in the target project's SQL Editor:
+```sql
+select vault.create_secret('<the real CRON_SECRET value>', 'aie1_malware_scan_sweep_cron_secret');
+```
+and replace the migration's `<REPLACE_WITH_REACHABLE_APP_ORIGIN>` placeholder with a real, publicly reachable origin for that environment before applying (Supabase's hosted Postgres cannot reach `localhost` — see the migration's own header for the full disclosure, including the same "no standing publicly-reachable DEV deployment exists yet" limitation this project's `0135` migration already discloses). The two mechanisms (this one and the AWS EventBridge one described above) are not mutually exclusive but should not both be pointed at the same route in the same environment — pick one per environment to avoid double-sweeping (harmless but wasteful, since the sweep is already idempotent).
+
 ## 7. Post-deploy verification
 
 Before telling real users the app is live:

@@ -43,6 +43,8 @@ import {
   AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
   ALLOWED_AI_COMPLETABLE_FIELDS as II_FIELDS,
 } from '../adapters/investment-intelligence/schema';
+import { AIE_II_DOCUMENT_FACTS_SCHEMA_NAME, AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION } from '../adapters/investment-intelligence/documentFactsSchema';
+import { INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/investment-intelligence/openaiSchema';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -79,12 +81,38 @@ interface KnownSchemaSpec {
   maxItems: number;
 }
 
+/**
+ * 2026-09-22 addition — NOT EVERY AI-FACING SCHEMA IN THIS CODEBASE IS THE
+ * "bounded array of typed field candidates" ENVELOPE THIS FILE'S OWN HEADER
+ * ORIGINALLY CLAIMED WAS THE ONLY SHAPE. That claim was true when written
+ * (2026-09-13, AIE-1 closure mission) but Investment Intelligence's own
+ * whole-document facts contract
+ * (`lib/aie/adapters/investment-intelligence/documentFactsSchema.ts`'s
+ * `investmentDocumentFactsSchema`, called by this adapter's `dispatch.ts` ->
+ * `orchestrator.ts` AI-fallback step) is a richly nested object
+ * (`positions[].transactions[]...`), not that envelope shape — and it had
+ * never been added to `KNOWN_SCHEMAS` below. Confirmed by code inspection:
+ * calling the real gateway with `AIE_AI_PROVIDER=openai` and
+ * `schemaName: AIE_II_DOCUMENT_FACTS_SCHEMA_NAME` threw exactly the "no
+ * strict JSON Schema mapping registered" error this function raises, before
+ * any HTTP request was even made — meaning Investment Intelligence's real
+ * AI-fallback path could never complete a real OpenAI call. Fixed here by
+ * registering a hand-written strict-mode mirror
+ * (`../adapters/investment-intelligence/openaiSchema.ts`'s
+ * `INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA`) via the `rawSchema` escape
+ * hatch below, for the one real schema shape the single generic
+ * `buildFieldCompletionJsonSchema()` parameterisation cannot express.
+ */
+interface RawKnownSchemaSpec {
+  rawSchema: Record<string, unknown>;
+}
+
 /** `schemaName@schemaVersion` -> the field-shape parameters needed to build
  * its strict JSON Schema. Deliberately closed (a `Map`, not a fallback) —
  * an AI-facing schema this builder does not recognise must be added here
  * explicitly, never guessed generically, because a wrong `enum`/`maxItems`
  * would silently widen what the provider is allowed to invent. */
-const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec>([
+const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   [
     `${AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME}@${AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION}`,
     // The generic schema's own Zod definition permits any non-empty
@@ -107,13 +135,21 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec>([
     `${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME}@${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION}`,
     { allowedFieldNames: II_FIELDS, maxItems: 20 },
   ],
+  [`${AIE_II_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
 ]);
+
+function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {
+  return 'rawSchema' in spec;
+}
 
 export function getKnownOpenAiJsonSchema(schemaName: string, schemaVersion: string): Record<string, unknown> {
   const key = `${schemaName}@${schemaVersion}`;
   const spec = KNOWN_SCHEMAS.get(key);
   if (!spec) {
     throw new Error(`openaiJsonSchema: no strict JSON Schema mapping registered for "${key}" — add one to KNOWN_SCHEMAS rather than guessing a shape`);
+  }
+  if (isRawSpec(spec)) {
+    return spec.rawSchema;
   }
   if (spec.allowedFieldNames.length === 0) {
     // The one open-ended case (the generic schema) — see the comment above.
