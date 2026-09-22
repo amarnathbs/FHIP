@@ -29,6 +29,7 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import { readApiJson as readJson } from '@/lib/financial-data-hub/clientApiEnvelope';
 
 type Phase =
   | 'form'
@@ -191,10 +192,6 @@ const RECONCILIATION_LABEL: Record<string, string> = {
   insufficient_data: 'This statement does not show enough detail to check the figures.',
 };
 
-async function readJson(res: Response): Promise<Record<string, unknown>> {
-  try { return (await res.json()) as Record<string, unknown>; } catch { return {}; }
-}
-
 function money(value: string | null | undefined, currency: string): string {
   // NEVER renders "$0" for an absent value (spec section 94). "Not shown on
   // statement" is a different fact from zero, and conflating them is the
@@ -309,15 +306,13 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
    * real-malware-gate async fix's `.../process` resumption call.
    *
    * NOTE ON RESPONSE SHAPE: both routes return via this codebase's shared
-   * `ok()` helper (`lib/api.ts`), which wraps the payload as `{ data }`
-   * (confirmed against `lib/api.ts` and every sibling FDH-3 panel, which all
-   * read `json.data.xxx`). `data` below defensively falls back to the raw
-   * body if `.data` is absent so this function reads correctly either way —
-   * see this function's call sites for why that fallback matters here
-   * specifically.
+   * `ok()` helper (`lib/api.ts`), which wraps the payload as `{ data }`.
+   * `readJson` (= `readApiJson`, lib/financial-data-hub/clientApiEnvelope.ts)
+   * already unwraps that envelope on success, so `body` here IS the payload —
+   * read fields directly off it.
    */
   const handleStatementOutcome = useCallback(async (body: Record<string, unknown>) => {
-    const data = ((body.data as Record<string, unknown> | undefined) ?? body);
+    const data = body;
     const docId = String(data.document_id);
     setDocumentId(docId);
 
@@ -354,7 +349,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       const body = await readJson(res);
       if (!res.ok) { setPhase('error'); setMessage(String(body.error ?? 'Could not read this statement.')); return; }
 
-      const data = ((body.data as Record<string, unknown> | undefined) ?? body);
+      // `readJson` already unwrapped the `{ data }` envelope (clientApiEnvelope.ts).
+      const data = body;
 
       // Real-malware-gate async fix (2026-09-21): the upload route now
       // returns `pipeline_status: 'pending_scan'` (statement_id: null, NOT

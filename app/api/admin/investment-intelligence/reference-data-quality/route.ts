@@ -65,6 +65,8 @@ const PANELS = [
   'risk_free',
   'job_control',
   'blocked_sources',
+  'nav1_retention_policy',
+  'nav1_retention_holds',
 ] as const;
 type PanelKey = (typeof PANELS)[number];
 
@@ -232,6 +234,55 @@ export const GET = adminRoute(async (req: Request) => {
         sourceKey: s.sourceKey, label: s.label, kind: s.kind, licence: s.licence, termsUrl: s.termsUrl, reason: s.notes,
       })),
     };
+  }
+
+  // --- NAV 1 retention policy status (added for migration 0166's new tables) -
+  // Admin Standard §12 metric note: this panel is a direct row read, not an
+  // aggregate over user data (no user_id anywhere in ii_nav_retention_policy
+  // -- same tenancy-free reference-data category as every other panel on this
+  // route), so the §7 suppression model has nothing to bite on here either,
+  // for the same reason this file's own header already states for the rest
+  // of the surface. An empty result is the honest `never_activated` state,
+  // never presented as a healthy "policy is active" default.
+  if (wanted.includes('nav1_retention_policy')) {
+    out.nav1_retention_policy = await panel(async () => {
+      const { data, error } = await db
+        .from('ii_nav_retention_policy')
+        .select('policy_version, changeover_date, environment, activated_at, activated_by_admin_id, coverage_proof_reference, notes')
+        .order('activated_at', { ascending: false });
+      if (error) return { data: null, error };
+      return {
+        data: {
+          activated: (data ?? []).length > 0,
+          policies: data ?? [],
+          note: (data ?? []).length === 0
+            ? 'No NAV 1 retention policy has been activated in this environment yet (table ships empty by design -- migration 0166). KEEP/CANDIDATE evaluation still runs (pc6_nav_row_is_candidate defaults its changeover date from the caller), but no policy row exists to audit against.'
+            : undefined,
+        },
+        error: null,
+      };
+    });
+  }
+
+  // --- NAV 1 retention holds (concurrency/race-prevention table) ----------
+  if (wanted.includes('nav1_retention_holds')) {
+    out.nav1_retention_holds = await panel(async () => {
+      const { data, error } = await db
+        .from('ii_nav_retention_holds')
+        .select('id, instrument_id, reason, created_at, created_by_admin_id, expires_at, released_at')
+        .is('released_at', null)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) return { data: null, error };
+      return {
+        data: {
+          activeHoldCount: (data ?? []).length,
+          activeHolds: data ?? [],
+          note: 'Only currently-active (released_at IS NULL) holds are listed. A hold protects an entire instrument (not a date range) from NAV 1 candidate/cleanup evaluation -- see ii_nav_retention_holds (migration 0166).',
+        },
+        error: null,
+      };
+    });
   }
 
   return ok(out);

@@ -1,0 +1,110 @@
+{
+  "ranAt": "2026-09-22T02:45:43.495Z",
+  "migrationsReplayed": 166,
+  "pass": 17,
+  "fail": 0,
+  "results": [
+    {
+      "id": "NAV1-PG-01",
+      "verdict": "PASS",
+      "label": "chain 0001..0166 applied from empty",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-02",
+      "verdict": "PASS",
+      "label": "0166 re-applies cleanly (idempotent)",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-03",
+      "verdict": "PASS",
+      "label": "both new job-control rows exist",
+      "detail": "pc6_full_universe_historical_backfill, pc6_selective_historical_hydration"
+    },
+    {
+      "id": "NAV1-PG-04",
+      "verdict": "PASS",
+      "label": "both new job-control rows ship DISABLED with a reason",
+      "detail": "pc6_full_universe_historical_backfill=false, pc6_selective_historical_hydration=false"
+    },
+    {
+      "id": "NAV1-PG-05",
+      "verdict": "PASS",
+      "label": "ii_nav_retention_policy ships EMPTY (activation is a separate closure step)",
+      "detail": "rows=0"
+    },
+    {
+      "id": "NAV1-PG-06",
+      "verdict": "PASS",
+      "label": "ii_nav_retention_holds ships EMPTY",
+      "detail": "rows=0"
+    },
+    {
+      "id": "NAV1-PG-07",
+      "verdict": "PASS",
+      "label": "a capability-holding admin can read the policy table",
+      "detail": "rows=1"
+    },
+    {
+      "id": "NAV1-PG-08",
+      "verdict": "PASS",
+      "label": "an ordinary user cannot read the policy table",
+      "detail": "rows=0"
+    },
+    {
+      "id": "NAV1-PG-09",
+      "verdict": "PASS",
+      "label": "the RLS harness was not vacuous",
+      "detail": "vacuous assertions = 0"
+    },
+    {
+      "id": "NAV1-PG-10",
+      "verdict": "PASS",
+      "label": "unheld scheme: row before C is a CANDIDATE",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-11",
+      "verdict": "PASS",
+      "label": "unheld scheme: row ON C is protected (KEEP)",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-12",
+      "verdict": "PASS",
+      "label": "redeemed scheme with complete_from_inception: a 2006 row is protected",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-13",
+      "verdict": "PASS",
+      "label": "opening-balance scheme: row before the earliest transaction is a CANDIDATE",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-14",
+      "verdict": "PASS",
+      "label": "opening-balance scheme: row ON the earliest transaction date is protected",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-15",
+      "verdict": "PASS",
+      "label": "benchmark-mapped scheme with no accepted statement is still protected",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-16",
+      "verdict": "PASS",
+      "label": "an active retention hold protects an otherwise-candidate row",
+      "detail": ""
+    },
+    {
+      "id": "NAV1-PG-17",
+      "verdict": "PASS",
+      "label": "a scheme with no accepted/benchmark/hold dependency is a CANDIDATE before C",
+      "detail": ""
+    }
+  ]
+}
