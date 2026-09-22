@@ -18,9 +18,12 @@ import type { AIProvider } from '@/lib/ai/providers/types';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import { MockAIProvider } from '@/lib/ai/providers/mockProvider';
-import { MockInsightPackProvider } from '@/lib/ai/insightPack/mockPackProvider';
+import { MockInsightPackProvider, MockBatchInsightPackProvider } from '@/lib/ai/insightPack/mockPackProvider';
 import { OpenAIProviderAdapter } from '@/lib/ai/providers/openaiProvider';
-import { getModule11AiProvider } from '@/lib/ai/config';
+import { OpenAIBatchProvider } from '@/lib/ai/providers/openaiBatchProvider';
+import { SyncFanoutBatchProvider } from '@/lib/ai/providers/syncFanoutBatchProvider';
+import type { BatchCapableProvider } from '@/lib/ai/insightPack/batchTypes';
+import { getModule11AiProvider, getModule11BatchMode } from '@/lib/ai/config';
 
 export class ProviderResolutionError extends Error {
   constructor(message: string) {
@@ -58,4 +61,15 @@ export function resolvePackProvider(ctx: FinancialContextObject, model: ModelReg
  */
 export function resolveHealthProvider(): AIProvider {
   return getModule11AiProvider() === 'openai' ? new OpenAIProviderAdapter() : new MockAIProvider();
+}
+
+/**
+ * R3 — the batch-capable provider for the scheduler / batch orchestrator.
+ * 'mock' -> the in-process MockBatchInsightPackProvider; 'openai' -> the
+ * real OpenAIBatchProvider (Files + Batches API). Same configuration
+ * switch as the synchronous path, so one env var moves both.
+ */
+export function resolveBatchProvider(): BatchCapableProvider {
+  if (getModule11AiProvider() !== 'openai') return new MockBatchInsightPackProvider();
+  return getModule11BatchMode() === 'provider_batch' ? new OpenAIBatchProvider() : new SyncFanoutBatchProvider(new OpenAIProviderAdapter());
 }

@@ -134,6 +134,8 @@ class FakeBatchDb implements InsightPackBatchDbClient {
     this.batches.set(id, updated);
     return updated;
   }
+  async listPacksForBatch(): Promise<PackRow[]> { return []; }
+  async listOpenBatches(): Promise<BatchRow[]> { return [...this.batches.values()].filter((b) => b.status === 'SUBMITTED'); }
 }
 
 function ctxFor(userId: string, snapshotId: string) {

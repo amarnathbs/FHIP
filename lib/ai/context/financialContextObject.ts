@@ -56,6 +56,18 @@ const SUPPORTED_CURRENCIES = new Set(['AUD', 'INR']);
 export interface BuildContextOptions {
   mode: ContextSizeMode;
   intentCode?: string;
+  /**
+   * R3 (Module 11 remediation, 2026-09-22) — an explicit base client for
+   * callers that have NO request/cookie session: the monthly Insight Pack
+   * scheduler runs from a cron-triggered route with no user signed in, so
+   * the default `createClient()` (cookie-bound, RLS-scoped to the caller)
+   * would read every table as empty and certify nothing. The scheduler
+   * passes the service-role client. Tenant scoping is unaffected: every
+   * read below filters by the explicit `userId` argument, and the
+   * certified-source wrapper still blocks every write verb whichever base
+   * client is supplied. Not for use from a user-facing route.
+   */
+  client?: SupabaseServerClient;
 }
 
 function opaqueRef(userId: string): string {
@@ -167,7 +179,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // it blocks every write verb (so this read path is structurally incapable
   // of mutating canonical financial data — the Module 1-10 loaders below are
   // load-AND-persist functions, not pure readers). See certifiedSourceClient.ts.
-  const { client: supabase, integrity } = createCertifiedSourceClient(await createClient());
+  const { client: supabase, integrity } = createCertifiedSourceClient(options.client ?? (await createClient()));
   const includedDomains = resolveDomainsForMode(options.mode, options.intentCode);
   const include = (d: ContextDomain) => includedDomains.includes(d);
 

@@ -188,6 +188,14 @@ export async function buildPgliteInsightPackHarness(): Promise<PgliteInsightPack
       const { rows } = await db.query(`update ai_insight_pack_batches set ${setClause} where id = $1 returning *`, [id, ...values]);
       return rows[0] as BatchRow;
     },
+    async listPacksForBatch(batchId: string): Promise<PackRow[]> {
+      const { rows } = await db.query(`select * from ai_insight_packs where batch_id=$1 order by created_at`, [batchId]);
+      return rows as PackRow[];
+    },
+    async listOpenBatches(limit: number): Promise<BatchRow[]> {
+      const { rows } = await db.query(`select * from ai_insight_pack_batches where status='SUBMITTED' and provider_batch_id is not null and next_poll_at <= now() order by next_poll_at limit $1`, [limit]);
+      return rows as BatchRow[];
+    },
   };
 
   return { db, gate, dbClient, batchDbClient };
@@ -196,4 +204,62 @@ export async function buildPgliteInsightPackHarness(): Promise<PgliteInsightPack
 export async function insertPremiumUser(db: PGlite, userId: string, email: string): Promise<void> {
   await db.exec(`insert into auth.users(id,email) values ('${userId}','${email}');`);
   await db.exec(`update user_entitlements set plan_tier='premium' where user_id='${userId}';`);
+}
+
+// ---------------------------------------------------------------------------
+// R3 — SchedulerDbClient over the same PGlite instance (real
+// ai_insight_pack_scheduler_claim()/_release() SQL functions from migration
+// 0176; the same query shapes lib/ai/insightPack/scheduler/schedulerDbClient.ts
+// issues over supabase-js).
+// ---------------------------------------------------------------------------
+import type { SchedulerControls, SchedulerDbClient, SchedulerJobRow } from '@/lib/ai/insightPack/scheduler/types';
+
+export function buildPgliteSchedulerDbClient(db: PGlite): SchedulerDbClient {
+  return {
+    async getControls(): Promise<SchedulerControls | null> {
+      const { rows } = await db.query(`select ai_globally_enabled, batch_generation_enabled, scheduler_enabled from ai_platform_controls where id='global'`);
+      return (rows[0] as SchedulerControls) ?? null;
+    },
+    async claimRun(phase, triggeredBy, billingPeriod, leaseSeconds, dryRun) {
+      const { rows } = await db.query(`select ai_insight_pack_scheduler_claim($1,$2,$3,$4,$5) id`, [phase, triggeredBy, billingPeriod, leaseSeconds, dryRun]);
+      return ((rows[0] as { id: string | null }).id) ?? null;
+    },
+    async releaseRun(runId, status, counts, error, batchId) {
+      await db.query(`select ai_insight_pack_scheduler_release($1,$2,$3::jsonb,$4,$5)`, [runId, status, JSON.stringify(counts), error, batchId]);
+    },
+    async listPremiumSubjects(limit) {
+      const { rows } = await db.query(`select user_id from user_entitlements where plan_tier='premium' order by user_id limit $1`, [limit]);
+      return (rows as { user_id: string }[]).map((r) => ({ userId: r.user_id, householdId: null }));
+    },
+    async listJobSubjectsForPeriod(billingPeriod) {
+      const { rows } = await db.query(`select user_id from ai_insight_pack_scheduler_jobs where billing_period=$1`, [billingPeriod]);
+      return new Set((rows as { user_id: string }[]).map((r) => r.user_id));
+    },
+    async insertJob(input) {
+      try {
+        const { rows } = await db.query(
+          `insert into ai_insight_pack_scheduler_jobs (billing_period, user_id, household_id, run_id, status, skip_reason) values ($1,$2,$3,$4,$5,$6) returning *`,
+          [input.billingPeriod, input.userId, input.householdId, input.runId, input.status, input.skipReason ?? null]
+        );
+        return rows[0] as SchedulerJobRow;
+      } catch (e) {
+        if (String((e as Error).message).includes('duplicate key')) return null;
+        throw e;
+      }
+    },
+    async updateJob(id, patch) {
+      const entries = Object.entries(patch);
+      if (entries.length === 0) return;
+      const sets = entries.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+      await db.query(`update ai_insight_pack_scheduler_jobs set ${sets}, updated_at = now() where id = $1`, [id, ...entries.map(([, v]) => v)]);
+    },
+    async listJobsForBatch(batchId) {
+      const { rows } = await db.query(`select * from ai_insight_pack_scheduler_jobs where batch_id=$1`, [batchId]);
+      return rows as SchedulerJobRow[];
+    },
+    async findCurrentPack(userId) {
+      const { rows } = await db.query(`select id, status, snapshot_id, financial_context_hash, pack_schema_version, prompt_version from ai_insight_packs where user_id=$1 and status in ('READY','PARTIAL') order by created_at desc limit 1`, [userId]);
+      return (rows[0] as { id: string; status: string; snapshot_id: string; financial_context_hash: string; pack_schema_version: string; prompt_version: number }) ?? null;
+    },
+  };
 }

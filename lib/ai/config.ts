@@ -59,6 +59,28 @@ export function getModule11AiMaxTransientRetries(): number {
   return Math.min(Math.floor(raw), 3);
 }
 
+export type Module11BatchMode = 'provider_batch' | 'sync_fanout';
+
+/**
+ * R3 — how the monthly scheduler reaches the real provider.
+ *   'provider_batch' -> OpenAI Batch API (50% pricing, 24h window, resumed reconcile).
+ *   'sync_fanout'    -> one synchronous call per household inside the submit
+ *                       invocation (standard pricing). DEFAULT, because the
+ *                       first live probe (2026-09-22) showed this credential's
+ *                       OpenAI project is not entitled to the batch model
+ *                       variant (403 per item). Switch once the project is.
+ * Irrelevant for the mock provider.
+ */
+export function getModule11BatchMode(): Module11BatchMode {
+  return process.env.MODULE11_AI_BATCH_MODE?.trim() === 'provider_batch' ? 'provider_batch' : 'sync_fanout';
+}
+
+/** R3 — households per scheduler submit tick. Defaults: 5 in sync_fanout (one HTTP invocation budget), 50 in provider_batch. Bounded 1..500. */
+export function getModule11SchedulerMaxHouseholdsPerRun(): number {
+  const fallback = getModule11BatchMode() === 'provider_batch' ? 50 : 5;
+  return positiveIntEnv('MODULE11_SCHEDULER_MAX_HOUSEHOLDS_PER_RUN', fallback, 500);
+}
+
 /** Presence check only — the value is never returned, logged or compared here. */
 export function isModule11OpenAiKeyConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0);
@@ -74,6 +96,8 @@ export function describeModule11AiConfig(): {
   timeout_ms: number;
   max_transient_retries: number;
   credential_configured: boolean;
+  batch_mode: Module11BatchMode;
+  scheduler_max_households_per_run: number;
 } {
   const provider = getModule11AiProvider();
   return {
@@ -82,5 +106,7 @@ export function describeModule11AiConfig(): {
     timeout_ms: getModule11AiTimeoutMs(),
     max_transient_retries: getModule11AiMaxTransientRetries(),
     credential_configured: provider === 'openai' ? isModule11OpenAiKeyConfigured() : true,
+    batch_mode: getModule11BatchMode(),
+    scheduler_max_households_per_run: getModule11SchedulerMaxHouseholdsPerRun(),
   };
 }

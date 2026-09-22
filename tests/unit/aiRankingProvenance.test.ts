@@ -120,6 +120,8 @@ class FakeBatchDb implements InsightPackBatchDbClient {
     this.rows.set(id, updated);
     return updated;
   }
+  async listPacksForBatch(): Promise<PackRow[]> { return []; }
+  async listOpenBatches(): Promise<BatchRow[]> { return [...this.rows.values()].filter((b) => b.status === 'SUBMITTED'); }
 }
 
 const ctx = makeContext({ meta: { ...makeContext().meta, snapshot_id: 'snap-r1' } });

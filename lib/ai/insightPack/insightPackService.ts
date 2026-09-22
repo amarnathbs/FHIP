@@ -86,6 +86,8 @@ export interface PackRow {
   generation_mode: string;
   /** Module 11.3 continuation — the ai_insight_pack_batches row this pack was generated as part of, if any (single-call generations leave this null). */
   batch_id: string | null;
+  /** R3 (migration 0176) — the admission reservation held while a provider batch is in flight; optional so pre-R3 doubles keep compiling. */
+  admission_id?: string | null;
   ai_run_id: string | null;
   idempotency_key: string | null;
   input_tokens: number | null;

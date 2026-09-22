@@ -33,6 +33,8 @@ export interface BatchPollResult {
   status: BatchPollStatus;
   /** May be a SUBSET of, in ANY order relative to, the submitted items — the orchestrator must not assume completeness or order. */
   results: BatchPackItemResult[];
+  /** R3 — set by a real async provider when the batch itself ended in a non-success terminal state (failed/expired/cancelled). Items absent from `results` are then batch-level failures. */
+  batchFailure?: { status: string; message: string };
 }
 
 /**
@@ -74,6 +76,15 @@ export interface BatchRow {
   error_summary: string | null;
   created_at: string;
   updated_at: string;
+  // R3 (migration 0176) — real async provider bookkeeping. Optional so the
+  // pre-R3 in-memory doubles keep compiling; the real client returns them.
+  provider_batch_id?: string | null;
+  provider_input_file_id?: string | null;
+  provider_output_file_id?: string | null;
+  provider_status?: string | null;
+  poll_count?: number;
+  next_poll_at?: string | null;
+  cost_pricing_basis?: 'standard' | 'batch' | null;
 }
 
 export interface InsertBatchInput {
@@ -85,4 +96,8 @@ export interface InsertBatchInput {
 export interface InsightPackBatchDbClient {
   insertBatch(input: InsertBatchInput): Promise<BatchRow>;
   updateBatch(id: string, patch: Partial<BatchRow>): Promise<BatchRow>;
+  /** R3 — the packs admitted into a batch (for resumed reconciliation). */
+  listPacksForBatch(batchId: string): Promise<import('@/lib/ai/insightPack/insightPackService').PackRow[]>;
+  /** R3 — SUBMITTED batches whose next_poll_at has passed. */
+  listOpenBatches(limit: number): Promise<BatchRow[]>;
 }

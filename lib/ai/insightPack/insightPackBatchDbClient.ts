@@ -4,6 +4,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { BatchRow, InsertBatchInput, InsightPackBatchDbClient } from '@/lib/ai/insightPack/batchTypes';
+import type { PackRow } from '@/lib/ai/insightPack/insightPackService';
 
 function batchRowFromDb(row: Record<string, unknown>): BatchRow {
   return row as unknown as BatchRow;
@@ -39,5 +40,27 @@ export const realInsightPackBatchDbClient: InsightPackBatchDbClient = {
       .single();
     if (error) throw new Error(`updateBatch failed: ${error.message}`);
     return batchRowFromDb(data);
+  },
+
+  // R3 — resumed reconciliation reads.
+  async listPacksForBatch(batchId: string): Promise<PackRow[]> {
+    const admin = createAdminClient();
+    const { data, error } = await admin.from('ai_insight_packs').select('*').eq('batch_id', batchId).order('created_at', { ascending: true });
+    if (error) throw new Error(`listPacksForBatch failed: ${error.message}`);
+    return (data ?? []) as unknown as PackRow[];
+  },
+
+  async listOpenBatches(limit: number): Promise<BatchRow[]> {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('ai_insight_pack_batches')
+      .select('*')
+      .eq('status', 'SUBMITTED')
+      .not('provider_batch_id', 'is', null)
+      .lte('next_poll_at', new Date().toISOString())
+      .order('next_poll_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listOpenBatches failed: ${error.message}`);
+    return (data ?? []).map((r) => batchRowFromDb(r as Record<string, unknown>));
   },
 };
