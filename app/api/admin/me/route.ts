@@ -10,6 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
+import { readAiOperationsCapabilities } from '@/lib/services/aiOperationsAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -102,6 +103,11 @@ async function canViewLookthroughDataQuality(): Promise<boolean> {
 // exist for their own id, which they could already read directly under RLS.
 export async function GET() {
   const current = await getCurrentResourceRoles();
+  // Module 11 R4 — two more separately named capabilities (admin_users.
+  // can_view_ai_operations / can_manage_ai_operations, migration 0177), read
+  // by their own fail-closed helper; neither derived from isAdmin nor from
+  // each other (Standard §2).
+  const aiOps = await readAiOperationsCapabilities();
   return ok({
     // Unchanged legacy fields, kept for existing consumers. Neither is used
     // to derive any capability below.
@@ -115,6 +121,8 @@ export async function GET() {
       resourceAnalytics: canViewResourceAnalytics(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
+      aiOperations: aiOps.aiOperations,
+      aiOperationsManage: aiOps.aiOperationsManage,
     },
   });
 }

@@ -50,6 +50,10 @@ export interface AiPlatformControls {
    *       Module 11.4 standard question library is unaffected.
    */
   contextual_explanations_enabled: boolean;
+  /** Module 11 R3 (migration 0176) — whether the unattended monthly Insight Pack scheduler may run. Ships false. Optional in the type until 0176 is applied everywhere. */
+  scheduler_enabled?: boolean;
+  /** Module 11 R5 (migration 0178) — Next Best Action kill switch. Optional in the type until 0178 is applied everywhere. */
+  next_best_action_enabled?: boolean;
   // Spec section 18.
   max_concurrent_requests_per_subject: number;
   concurrency_lease_seconds: number;
@@ -139,6 +143,8 @@ export type PlatformControlsPatch = Partial<
     | 'batch_generation_enabled'
     | 'scenario_ai_enabled'
     | 'contextual_explanations_enabled'
+    | 'scheduler_enabled'
+    | 'next_best_action_enabled'
     | 'max_concurrent_requests_per_subject'
     | 'concurrency_lease_seconds'
     | 'max_context_tokens'

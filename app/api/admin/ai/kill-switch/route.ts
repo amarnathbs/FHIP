@@ -27,6 +27,13 @@ const SWITCHES: Record<string, keyof PlatformControlsPatch> = {
   AI_LIVE_PROVIDER_ENABLED: 'live_provider_enabled',
   AI_BATCH_GENERATION_ENABLED: 'batch_generation_enabled',
   AI_SCENARIO_ENABLED: 'scenario_ai_enabled',
+  // Module 11 remediation R4 (brief section 36): the remaining named switches
+  // an operator must be able to flip from the Admin AI Operations screen.
+  // Same closed-list discipline — nothing else on ai_platform_controls is
+  // reachable through this endpoint.
+  AI_CONTEXTUAL_EXPLANATIONS_ENABLED: 'contextual_explanations_enabled', // Module 11.5 (0126)
+  AI_SCHEDULER_ENABLED: 'scheduler_enabled',                             // Module 11 R3 (0176)
+  AI_NEXT_BEST_ACTION_ENABLED: 'next_best_action_enabled',               // Module 11.6 (0178)
 };
 
 export const POST = adminRoute(async (req: Request) => {
@@ -73,6 +80,9 @@ export const POST = adminRoute(async (req: Request) => {
       live_provider_enabled: updated.live_provider_enabled,
       batch_generation_enabled: updated.batch_generation_enabled,
       scenario_ai_enabled: updated.scenario_ai_enabled,
+      contextual_explanations_enabled: updated.contextual_explanations_enabled,
+      scheduler_enabled: updated.scheduler_enabled ?? null,
+      next_best_action_enabled: updated.next_best_action_enabled ?? null,
     },
   });
 });

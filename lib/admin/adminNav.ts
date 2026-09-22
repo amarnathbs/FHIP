@@ -96,6 +96,11 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Underlying Fund Holdings Quality', href: '/admin/investment-intelligence/lookthrough-data-quality' },
 ];
 
+// Module 11 R4: the Admin AI Operations surface. One real destination.
+export const AI_OPERATIONS_ITEMS: { label: string; href: string }[] = [
+  { label: 'AI Operations', href: '/admin/ai-operations' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -125,6 +130,14 @@ export interface AdminCapabilities {
    * named capabilities for two surfaces (Standard §2).
    */
   lookthroughDataQuality: boolean;
+  /**
+   * Module 11 R4 — the Admin AI Operations read surface. Backed by
+   * admin_users.can_view_ai_operations (migration 0177). Not implied by
+   * `isAdmin` and not implied by aiOperationsManage (Standard §2).
+   */
+  aiOperations: boolean;
+  /** Module 11 R4 — guarded AI controls. Backed by admin_users.can_manage_ai_operations (0177). Not implied by aiOperations. */
+  aiOperationsManage: boolean;
 }
 
 /**
@@ -141,6 +154,8 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   resourceAnalytics: false,
   referenceDataQuality: false,
   lookthroughDataQuality: false,
+  aiOperations: false,
+  aiOperationsManage: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -172,6 +187,8 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     resourceAnalytics: readBooleanField(source, 'resourceAnalytics'),
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
+    aiOperations: readBooleanField(source, 'aiOperations'),
+    aiOperationsManage: readBooleanField(source, 'aiOperationsManage'),
   };
 }
 
@@ -219,6 +236,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
+    ...(capabilities.aiOperations ? [{ label: 'AI', items: AI_OPERATIONS_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

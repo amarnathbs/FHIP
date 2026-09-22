@@ -317,6 +317,8 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     // resource_user_roles, so a Resources role snapshot can never grant it —
     // which is exactly the point of Standard §2. Always false here.
     referenceDataQuality: false, lookthroughDataQuality: false,
+    // Module 11 R4: likewise on admin_users (migration 0177). Always false here.
+    aiOperations: false, aiOperationsManage: false,
   };
 }
 
@@ -373,7 +375,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true,
+      referenceDataQuality: true, lookthroughDataQuality: true, aiOperations: true, aiOperationsManage: true,
     };
     expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
   });
@@ -405,7 +407,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true,
+      referenceDataQuality: true, lookthroughDataQuality: true, aiOperations: true, aiOperationsManage: true,
     };
     // PC6/N.11 added a fifth capability-driven group, 'Reference Data'; PC7/O.9
     // added a sixth, 'Fund Look-Through'. The probe covers both, and the
@@ -418,12 +420,18 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceDiscoveryAdmin: 'Discovery',
       referenceDataQuality: 'Reference Data',
       lookthroughDataQuality: 'Fund Look-Through',
+      // Module 11 R4 added a seventh, 'AI' (aiOperations). aiOperationsManage
+      // contributes no group of its own — it only unlocks controls INSIDE the
+      // AI screen, so turning it off must leave every group in place.
+      aiOperations: 'AI',
     };
-    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin', 'referenceDataQuality', 'lookthroughDataQuality'] as (keyof AdminCapabilities)[]) {
+    for (const field of ['resourcesDashboard', 'resourceContentAdmin', 'resourceWorkflowAdmin', 'resourceDiscoveryAdmin', 'referenceDataQuality', 'lookthroughDataQuality', 'aiOperations'] as (keyof AdminCapabilities)[]) {
       const labels = buildAdminNavGroups(false, { ...allTrue, [field]: false }).map((g) => g.label);
       expect(labels).not.toContain(expectedLabel[field]);
-      expect(labels).toHaveLength(5); // 6 real groups minus the one just turned off
+      expect(labels).toHaveLength(6); // 7 real groups minus the one just turned off
     }
+    expect(buildAdminNavGroups(false, { ...allTrue, aiOperationsManage: false }).map((g) => g.label)).toContain('AI');
+    expect(buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, aiOperationsManage: true }).map((g) => g.label)).not.toContain('AI');
     // PC7/O.9 §2 specifically: PC6's grant must NOT confer PC7's group, and
     // PC7's must not confer PC6's. Two capabilities, two surfaces.
     const pc6Only = buildAdminNavGroups(false, { ...allTrue, lookthroughDataQuality: false }).map((g) => g.label);
@@ -742,7 +750,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true,
+      referenceDataQuality: true, lookthroughDataQuality: true, aiOperations: true, aiOperationsManage: true,
     };
     expect(buildAdminNavGroups(false, allResources).map((g) => g.label)).not.toContain('General');
   });
@@ -786,7 +794,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true,
+      referenceDataQuality: true, lookthroughDataQuality: true, aiOperations: true, aiOperationsManage: true,
     };
     const groups = buildAdminNavGroups(true, all);
     // The pre-existing five are unchanged in both order and match mode —
@@ -801,6 +809,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       'Discovery:exact',
       'Reference Data:exact',
       'Fund Look-Through:exact',
+      'AI:exact', // Module 11 R4 — appended, never interleaved
     ]);
   });
 });
