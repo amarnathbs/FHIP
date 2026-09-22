@@ -18,7 +18,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('id', id)
     .eq('user_id', user.id)
     .maybeSingle();
-  if (docErr) return bad(docErr.message);
+  // Negative constraint (NAV1 UI-journey audit, 2026-09-22): this used to
+  // return `docErr.message` (a raw Postgres/PostgREST error string)
+  // straight to the client -- the InvestmentIntelligenceClient's
+  // Statement Detail panel renders `json.error` verbatim in its error
+  // banner, so a genuine DB error on this real, live-exercised read path
+  // was a real "must never show raw database errors" violation, not a
+  // theoretical one. The raw detail is still fully diagnosable server-side.
+  if (docErr) {
+    console.error('[investment-intelligence] summary route document lookup failed', { userId: user.id, documentId: id, errorMessage: docErr.message, errorCode: docErr.code ?? null });
+    return bad('Could not load this statement. Please try again.');
+  }
   if (!doc) return bad('Source document not found.', 404);
 
   const [{ data: accounts }, { data: transactions }, { data: holdings }, { data: cases }, { data: truthStatuses }] = await Promise.all([

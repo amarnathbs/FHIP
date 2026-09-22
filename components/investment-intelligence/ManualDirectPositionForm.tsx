@@ -182,9 +182,19 @@ export function ManualDirectPositionForm() {
         </div>
       </form>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {/* NAV1 UI-journey audit, 2026-09-22: same "screen-reader-readable
+          status/error" fix applied to the rest of this page's components --
+          this manual-entry form (rendered directly below
+          InvestmentIntelligenceClient on the same /investment-intelligence/data
+          page) had neither its error nor its success confirmation announced
+          to assistive technology. */}
+      {error && (
+        <p role="alert" aria-live="assertive" className="mt-3 text-sm text-red-600">
+          {error}
+        </p>
+      )}
       {result && (
-        <p className="mt-3 text-sm text-green-700">
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-green-700">
           Saved. Position now shows {result.unitsAfter ?? '—'} units, valued at {result.valueAfter ?? '—'}.
           {result.taxClassificationSeeded ? ' Tax classification was seeded for this new security.' : ''}
         </p>

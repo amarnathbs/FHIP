@@ -502,7 +502,22 @@ export function InvestmentIntelligenceClient() {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {/* NAV1 UI-journey audit, 2026-09-22 (accessibility/status announcements):
+          this is the single error banner for every failure across the whole
+          upload/process/certify/publish journey (upload failure, wrong
+          password, unsupported format, certification failure, publish
+          failure, etc.) but had no `role="alert"`/`aria-live`, unlike the
+          `notice` banner just below which already correctly has
+          `role="status" aria-live="polite"`. A screen-reader user was never
+          told a failure occurred unless they happened to navigate back to
+          this exact spot on the page — a real "screen-reader-readable error
+          state" gap for a live region that already existed, not a new one
+          being added. */}
+      {error && (
+        <div role="alert" aria-live="assertive" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
       {notice && (
         <div role="status" aria-live="polite" className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
           {notice}
@@ -705,6 +720,31 @@ export function InvestmentIntelligenceClient() {
                           <span>
                             <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
                             <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
+                            {/* NAV1 UI-journey audit, 2026-09-22 (unresolved scheme
+                                identity): the generic "Resolve" button below used to
+                                apply to this case type too, which flips the case to
+                                `resolved` (`resolution: 'accepted_new_value'`,
+                                `resolutionMethod: 'user_accepted_anomaly'` -- the
+                                wrong method for this discrepancy, and there is no
+                                `user_mapped_instrument` UI anywhere in this codebase)
+                                WITHOUT ever mapping the ambiguous scheme to a real
+                                instrument. `documentProcessing.ts`'s own resolver
+                                (schemeResolution.ts) never assigns an instrument id
+                                for an `ambiguous` outcome, so that holding/transaction
+                                was already silently skipped during parsing -- clicking
+                                "Resolve" only hid the case, producing exactly the
+                                "successful state for incomplete coverage" the UI must
+                                never show, with zero real fix. Surfacing the real
+                                scheme name and reason here (previously discarded even
+                                though the API already returns it) so a user isn't
+                                blind to which scheme is in question. */}
+                            {c.discrepancy_type === 'ambiguous_instrument' && (
+                              <span className="mt-1 block text-xs text-gray-600">
+                                Scheme: <span className="font-medium">{String((c.discrepancy_details as { scheme?: string } | null)?.scheme ?? 'Unknown')}</span>
+                                {' — '}
+                                {String((c.discrepancy_details as { reason?: string } | null)?.reason ?? 'Multiple existing schemes could match this one.')}
+                              </span>
+                            )}
                           </span>
                           {open && c.discrepancy_type === 'owner_unmatched' && addMemberForCase !== c.id && (
                             <span className="flex items-center gap-2">
@@ -773,7 +813,21 @@ export function InvestmentIntelligenceClient() {
                           {open && c.discrepancy_type === 'document_password_required' && (
                             <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
                           )}
-                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && (
+                          {/* NAV1 UI-journey audit, 2026-09-22: this discrepancy type
+                              has no real self-service fix in this product today (no
+                              UI or API exists to pick which candidate instrument a
+                              scheme actually is). An honest, non-actionable status is
+                              shown instead of the generic "Resolve" button, which
+                              would silently mark the case resolved without ever
+                              recovering the skipped holding/transaction — see the
+                              scheme/reason note above for the load-bearing detail. */}
+                          {open && c.discrepancy_type === 'ambiguous_instrument' && (
+                            <span className="text-xs text-amber-700">
+                              This holding was not imported because we could not tell which existing scheme it matches. Contact support with this statement — resolving
+                              it needs a data correction on our side, not something clicking &ldquo;Resolve&rdquo; can fix.
+                            </span>
+                          )}
+                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && c.discrepancy_type !== 'ambiguous_instrument' && (
                             <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
                               Resolve
                             </button>
@@ -859,7 +913,7 @@ export function InvestmentIntelligenceClient() {
           ) : (
             <div className="mt-3 space-y-3 text-sm">
               {publishPreview.eligibility.status === 'NOT_ELIGIBLE' ? (
-                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+                <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-red-800">
                   <p className="font-medium">Not eligible to publish</p>
                   <ul className="mt-1 list-disc pl-4">
                     {publishPreview.eligibility.blockingReasons.map((r) => (

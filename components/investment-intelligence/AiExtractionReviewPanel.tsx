@@ -207,7 +207,15 @@ export function AiExtractionReviewPanel({
 
         <div className="mt-4 max-h-[70vh] overflow-y-auto">
           {loading && <p className="text-sm text-muted">Loading…</p>}
-          {error && <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>}
+          {/* NAV1 UI-journey audit, 2026-09-22: matching the same fix applied to
+              InvestmentIntelligenceClient.tsx's error banner -- this had no
+              `role="alert"`, so a screen-reader user reviewing AI-extracted
+              data was never told a load/accept/decline failure occurred. */}
+          {error && (
+            <p role="alert" aria-live="assertive" className="rounded-card border border-risk bg-white p-4 text-sm text-risk">
+              {error}
+            </p>
+          )}
           {review && !loading && (
             <>
               <p className="rounded-card border border-line bg-gray-50 p-3 text-sm text-ink">

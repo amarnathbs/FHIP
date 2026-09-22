@@ -15,7 +15,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('id', id)
     .eq('user_id', user.id)
     .maybeSingle();
-  if (docErr) return bad(docErr.message);
+  // Negative constraint (NAV1 UI-journey audit, 2026-09-22): both this and
+  // the runsErr check below used to return the raw Postgres/PostgREST
+  // error string straight to the caller. This route's own header comment
+  // documents it as a real, intended user-facing status-polling surface
+  // (spec section 51), so a raw DB error here is exactly the class of leak
+  // the "must never show raw database errors" constraint forbids, even
+  // though no shipped component currently renders this route's response.
+  if (docErr) {
+    console.error('[investment-intelligence] status route document lookup failed', { userId: user.id, documentId: id, errorMessage: docErr.message, errorCode: docErr.code ?? null });
+    return bad('Could not load this statement. Please try again.');
+  }
   if (!doc) return bad('Source document not found.', 404);
 
   const { data: runs, error: runsErr } = await supabase
@@ -25,7 +35,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .eq('user_id', user.id)
     .order('started_at', { ascending: false })
     .limit(5);
-  if (runsErr) return bad(runsErr.message);
+  if (runsErr) {
+    console.error('[investment-intelligence] status route parse-runs lookup failed', { userId: user.id, documentId: id, errorMessage: runsErr.message, errorCode: runsErr.code ?? null });
+    return bad('Could not load processing status. Please try again.');
+  }
 
   return ok({ document: doc, recentRuns: runs ?? [] });
 }

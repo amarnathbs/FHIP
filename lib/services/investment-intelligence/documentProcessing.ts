@@ -369,7 +369,16 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     })
     .select('id')
     .single();
-  if (runErr || !run) return { ok: false, status: doc.status as string, parseRunId: null, error: runErr?.message ?? 'Could not start a processing run.' };
+  if (runErr || !run) {
+    // Negative constraint (NAV1 UI-journey audit, 2026-09-22): this used to
+    // return `runErr?.message` (a raw Postgres/PostgREST error string)
+    // directly as the user-facing `error`, which `process/route.ts` passes
+    // straight through and the client renders verbatim in its error banner
+    // -- a real "interface must never show raw database errors" violation.
+    // The raw detail is still fully diagnosable server-side via this log.
+    if (runErr) console.error('[investment-intelligence] ii_document_parse_runs insert failed', { userId, sourceDocumentId, errorMessage: runErr.message, errorCode: runErr.code ?? null });
+    return { ok: false, status: doc.status as string, parseRunId: null, error: 'Could not start a processing run. Please try again.' };
+  }
   const parseRunId = run.id as string;
 
   await emitAuditEvent({ userId, eventType: 'parse_started', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'user', actorId: userId, metadata: { parseRunId } });
@@ -1014,17 +1023,28 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       // no response body instead of the client's own toast/error message,
       // reproducing the exact "Unexpected end of JSON input" symptom this
       // whole fix exists to eliminate, just from a new cause.
-      const message = `Batched transaction insert failed (rows ${i}-${i + txnChunk.length}): ${batchTxnError.message}`;
-      await failRun(admin, parseRunId, message);
+      // Negative constraint (NAV1 UI-journey audit, 2026-09-22): the raw
+      // `batchTxnError.message` (a Postgres/PostgREST error string) used to
+      // be embedded in `message` and returned BOTH into failRun()'s
+      // ii_document_parse_runs.errors column (which the /status route
+      // selects and returns verbatim) AND directly as this function's own
+      // `error` (which /process route passes straight to the client's error
+      // banner) -- a real raw-database-error leak on two paths at once. The
+      // detailed diagnostic still reaches server logs; only the two
+      // user/API-facing copies are now generic.
+      const diagnostic = `Batched transaction insert failed (rows ${i}-${i + txnChunk.length}): ${batchTxnError.message}`;
+      console.error('[investment-intelligence] ' + diagnostic, { userId, sourceDocumentId, parseRunId, errorCode: batchTxnError.code ?? null });
+      await failRun(admin, parseRunId, 'Could not save the parsed transactions.');
       await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
-      return { ok: false, status: 'parse_failed', parseRunId, error: message };
+      return { ok: false, status: 'parse_failed', parseRunId, error: 'Could not save the parsed transactions. Please try again or contact support if this persists.' };
     }
     const { error: batchLinkError } = await admin.from('ii_transaction_source_links').insert(linkChunk);
     if (batchLinkError) {
-      const message = `Batched transaction-source-link insert failed (rows ${i}-${i + linkChunk.length}): ${batchLinkError.message}`;
-      await failRun(admin, parseRunId, message);
+      const diagnostic = `Batched transaction-source-link insert failed (rows ${i}-${i + linkChunk.length}): ${batchLinkError.message}`;
+      console.error('[investment-intelligence] ' + diagnostic, { userId, sourceDocumentId, parseRunId, errorCode: batchLinkError.code ?? null });
+      await failRun(admin, parseRunId, 'Could not save the parsed transactions.');
       await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
-      return { ok: false, status: 'parse_failed', parseRunId, error: message };
+      return { ok: false, status: 'parse_failed', parseRunId, error: 'Could not save the parsed transactions. Please try again or contact support if this persists.' };
     }
   }
 
@@ -1392,7 +1412,14 @@ export async function recertifyPosition(userId: string, accountId: string, instr
   const admin = createAdminClient();
 
   const { data: account, error: accountErr } = await admin.from('ii_accounts').select('id, owner_member_id, source_document_id').eq('id', accountId).eq('user_id', userId).maybeSingle();
-  if (accountErr || !account) return { ok: false, error: accountErr?.message ?? 'Account not found or not owned by this user.' };
+  if (accountErr || !account) {
+    // Negative constraint (NAV1 UI-journey audit, 2026-09-22): see the
+    // identical fix above -- `accountErr?.message` used to reach the
+    // client verbatim via handleCertify()'s error banner on a genuine DB
+    // error (as opposed to the honest, safe "not found/not owned" case).
+    if (accountErr) console.error('[investment-intelligence] recertifyPosition account lookup failed', { userId, accountId, errorMessage: accountErr.message, errorCode: accountErr.code ?? null });
+    return { ok: false, error: accountErr ? 'Could not load this account. Please try again.' : 'Account not found or not owned by this user.' };
+  }
 
   const { data: latestSnapshot } = await admin
     .from('ii_holding_snapshots')

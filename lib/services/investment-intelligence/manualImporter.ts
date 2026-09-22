@@ -466,6 +466,16 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       txErr = error;
     }
     if (txErr) {
+      // Negative constraint (NAV1 UI-journey audit, 2026-09-22): this
+      // `error` reaches the real, live "Add a direct position manually"
+      // form (ManualDirectPositionForm.tsx, on the same page as the
+      // statement-upload journey) via submitManualDirectPosition() ->
+      // positions/manual/route.ts's `bad(result.error, 400)` -- returning
+      // the raw Postgres/PostgREST message here was a real "must never show
+      // raw database errors" violation, matching the identical fix already
+      // applied to documentProcessing.ts. The internal audit trail
+      // (ii_source_documents.parse_error) keeps the full raw detail.
+      console.error('[investment-intelligence] manual import transaction insert failed', { userId, sourceDocumentId: doc.id, errorMessage: txErr.message });
       await admin.from('ii_source_documents').update({ status: 'parse_failed', parse_error: txErr.message }).eq('id', doc.id);
       return {
         ...empty,
@@ -473,7 +483,7 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
         accountId: accountResult.accountId,
         instrumentId: instrumentResult.instrumentId,
         transactionIds,
-        error: txErr.message,
+        error: 'Could not save this transaction. Please try again.',
       };
     }
     let txId = (created?.id as string) ?? null;
@@ -512,6 +522,9 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
     .select('id')
     .maybeSingle();
   if (snapErr) {
+    // Negative constraint (NAV1 UI-journey audit, 2026-09-22): identical fix
+    // to the txErr branch above -- see that comment for the full rationale.
+    console.error('[investment-intelligence] manual import holding snapshot upsert failed', { userId, sourceDocumentId: doc.id, errorMessage: snapErr.message, errorCode: snapErr.code ?? null });
     await admin.from('ii_source_documents').update({ status: 'parse_failed', parse_error: snapErr.message }).eq('id', doc.id);
     return {
       ...empty,
@@ -519,7 +532,7 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       accountId: accountResult.accountId,
       instrumentId: instrumentResult.instrumentId,
       transactionIds,
-      error: snapErr.message,
+      error: 'Could not save this holding. Please try again.',
     };
   }
   // ignoreDuplicates:true returns no row on a pre-existing conflict — look
