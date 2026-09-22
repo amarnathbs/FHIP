@@ -33,8 +33,14 @@ export interface AIGenerateRequest {
   taskType: AITaskType;
   model: string;
   maxOutputTokens: number;
-  /** JSON schema name the response envelope must validate against (see lib/ai/structuredOutput.ts). */
-  responseSchema: 'ai_response_envelope';
+  /**
+   * JSON schema name the response must validate against. 'ai_response_envelope'
+   * = lib/ai/structuredOutput.ts (single explanation); 'insight_pack_envelope'
+   * = lib/ai/insightPack/types.ts (whole pack, R2). A real provider uses this
+   * to select its strict structured-output schema
+   * (lib/ai/providers/openaiJsonSchemas.ts); the mock ignores it.
+   */
+  responseSchema: 'ai_response_envelope' | 'insight_pack_envelope';
   temperature?: number;
   timeoutMs?: number;
 }

@@ -14,22 +14,14 @@ import { bad, ok } from '@/lib/api';
 import { buildFinancialContextObject } from '@/lib/ai/context/financialContextObject';
 import { AIPersonalisedInsightPackService } from '@/lib/ai/insightPack/insightPackService';
 import { realInsightPackDbClient } from '@/lib/ai/insightPack/insightPackDbClient';
-import { MockInsightPackProvider } from '@/lib/ai/insightPack/mockPackProvider';
+import { resolvePackProvider } from '@/lib/ai/providers/providerFactory';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
-import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 
-/**
- * Resolves a real AIProvider for the pack's model. Only 'mock' is wired to a
- * usable provider today (Module 11.0's OpenAIProviderAdapter throws
- * PROVIDER_UNAVAILABLE unconditionally by design — no live external call
- * exists anywhere in this codebase, spec section 104). A model registered
- * against any other provider therefore fails closed here rather than
- * silently falling back.
- */
-function resolveProvider(ctx: FinancialContextObject, model: ModelRegistryRow) {
-  if (model.provider === 'mock') return new MockInsightPackProvider(ctx, 'valid');
-  throw new Error(`No live provider adapter is wired for provider "${model.provider}" in Module 11.3 (spec section 104: no live external call).`);
-}
+// R2 (2026-09-22): the provider is resolved by lib/ai/providers/
+// providerFactory.ts from the registry row AND the server configuration
+// (MODULE11_AI_PROVIDER). The pre-R2 local resolveProvider() that hard-wired
+// 'mock' and threw for everything else (source audit PH-02) is gone; a
+// provider/config mismatch still fails closed inside the factory.
 
 export const POST = adminRoute(async (req: Request) => {
   const { forbidden } = await requireAdmin();
@@ -52,7 +44,7 @@ export const POST = adminRoute(async (req: Request) => {
     return bad(err instanceof Error ? err.message : 'Failed to build financial context.', 502);
   }
 
-  const service = new AIPersonalisedInsightPackService(realInsightPackDbClient, resolveProvider);
+  const service = new AIPersonalisedInsightPackService(realInsightPackDbClient, resolvePackProvider);
   const outcome = await service.generateOrGetPack({ userId, householdId: null, context, bypassRegenerationCooldown: force });
   return ok({ ...outcome, forced: force, reason: force ? reason : null });
 });

@@ -32,7 +32,7 @@ import {
   type RankedPriorityArea,
 } from '@/lib/ai/insightPack/priorityRanking';
 import { summarisePackGrounding } from '@/lib/ai/insightPack/groundingValidation';
-import { validateProviderPackResponse, PACK_SCHEMA_VERSION, type PackBlockCode, type ProviderPackBlock } from '@/lib/ai/insightPack/types';
+import { validateProviderPackResponse, PACK_SCHEMA_VERSION, type PackBlockCode, type ProviderPackBlock, type ProviderPackEnvelope } from '@/lib/ai/insightPack/types';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import type { InsightPackBatchDbClient, BatchRow, InsertBatchInput } from '@/lib/ai/insightPack/batchTypes';
@@ -298,7 +298,7 @@ describe('R1 — grounding summary integration', () => {
     expect(summary.blockResults.get('priority_review_areas')!.status).toBe('UNGROUNDED');
     expect(summary.overallStatus).toBe('PARTIAL');
     // And the answer-store composer refuses to emit the focus-first answer from that state.
-    const envelope = { pack_version: PACK_SCHEMA_VERSION, snapshot_id: 's', data_as_of: null, reporting_currency: 'AUD' as const, overall_confidence: 'HIGH' as const, blocks: {}, top_strengths: [], top_risks: [], limitations: [], priority_review_areas: [] };
+    const envelope: ProviderPackEnvelope = { pack_version: PACK_SCHEMA_VERSION, snapshot_id: 's', data_as_of: null, reporting_currency: 'AUD', overall_confidence: 'HIGH', blocks: {}, top_strengths: [], top_risks: [], limitations: [], priority_review_areas: [] };
     expect(storedAnswersFromValidatedPack(provided, summary, envelope, ABC).some((a) => a.metricCode === PRIORITY_REVIEW_AREAS_INTENT)).toBe(false);
   });
 

@@ -8,7 +8,8 @@
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
 import { BLOCK_INTENT_MAP, type PackBlockCode, type ProviderPackBlock, type ProviderPackEnvelope } from '@/lib/ai/insightPack/types';
-import type { PackGroundingSummary } from '@/lib/ai/insightPack/groundingValidation';
+import { CERTIFIED_METRIC_CODES, type PackGroundingSummary } from '@/lib/ai/insightPack/groundingValidation';
+import { MANDATORY_BLOCK_CODES, PACK_BLOCK_CODES } from '@/lib/ai/insightPack/types';
 import {
   buildRankedPriorityPromptSection,
   composeCanonicalPriorityExplanation,
@@ -28,7 +29,28 @@ export const RANKED_MARKER = '\n\nRANKED_PRIORITY_AREAS';
  * same words, that it may not rank.
  */
 export function buildPackUserPrompt(prompt: PromptTemplateRow, ctx: FinancialContextObject, canonical: readonly RankedPriorityArea[]): string {
-  return `${prompt.developer_prompt}${CONTEXT_MARKER}${JSON.stringify(ctx)}${RANKED_MARKER}${buildRankedPriorityPromptSection(canonical).slice('RANKED_PRIORITY_AREAS'.length)}`;
+  return `${prompt.developer_prompt}${OUTPUT_CONTRACT_MARKER}${buildOutputContractSection()}${CONTEXT_MARKER}${JSON.stringify(ctx)}${RANKED_MARKER}${buildRankedPriorityPromptSection(canonical).slice('RANKED_PRIORITY_AREAS'.length)}`;
+}
+
+export const OUTPUT_CONTRACT_MARKER = '\n\nOUTPUT_CONTRACT:\n';
+
+/**
+ * R2 — the closed output contract, rendered from the SAME constants the
+ * validator enforces (never a hand-written duplicate that can drift):
+ * which blocks exist, which are mandatory (return them even if only as
+ * status UNAVAILABLE with a limitation), and the closed metric_code
+ * vocabulary. Added after the first real-provider DEV run rejected every
+ * block that cited a context field name instead of a certified code.
+ */
+export function buildOutputContractSection(): string {
+  return [
+    `Block keys (return every key; use null for a block you do not populate): ${PACK_BLOCK_CODES.join(', ')}.`,
+    `MANDATORY blocks — always return these four, populated when the certified data supports them, otherwise with status "UNAVAILABLE" and a plain-English limitation, never omitted: ${MANDATORY_BLOCK_CODES.join(', ')}.`,
+    `metric_claims.metric_code must be one of EXACTLY these certified codes (any other value is rejected): ${CERTIFIED_METRIC_CODES.join(', ')}. ` +
+      'monthly_surplus = cash_flow.monthly_surplus_or_deficit; overall_score = health_score.overall_score; insurance_premium_burden = insurance.premium_burden. ' +
+      'Do not cite a metric that is null/absent in the context.',
+    'source_refs entries must copy source_type and source_id verbatim from context.source_references.',
+  ].join('\n');
 }
 
 /**

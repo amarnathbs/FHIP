@@ -6,7 +6,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getActivePrompt as registryGetActivePrompt } from '@/lib/ai/promptRegistry';
-import { resolveModelForTask as registryResolveModel, type ModelRegistryRow } from '@/lib/ai/modelRegistry';
+import { resolveConfiguredModelForTask, type ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import { AIEntitlementService } from '@/lib/ai/entitlement/aiEntitlementService';
 import { getPlatformControls } from '@/lib/ai/entitlement/platformControls';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
@@ -25,9 +25,15 @@ export const realInsightPackDbClient: InsightPackDbClient = {
     return registryGetActivePrompt(promptCode, countryScope, admin);
   },
 
-  async resolveModelForTask(taskType, tier = 'STANDARD'): Promise<ModelRegistryRow | null> {
+  // R2: the tier hint is deliberately ignored by the REAL client. Which
+  // provider/model Module 11 runs on is a server-configuration decision
+  // (MODULE11_AI_PROVIDER / MODULE11_AI_MODEL, lib/ai/config.ts) cross-
+  // checked against the registry's active+approved state — not something a
+  // caller picks per request by tier. The parameter stays on the interface
+  // so in-memory test doubles keep their existing shape.
+  async resolveModelForTask(taskType): Promise<ModelRegistryRow | null> {
     const admin = createAdminClient();
-    return registryResolveModel(taskType, tier, admin);
+    return resolveConfiguredModelForTask(taskType, admin);
   },
 
   async isPersonalisedAiEligible(userId, householdId): Promise<boolean> {

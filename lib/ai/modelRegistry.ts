@@ -8,6 +8,7 @@ import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { AITaskType } from '@/lib/ai/providers/types';
+import { getModule11AiModel, getModule11AiProvider } from '@/lib/ai/config';
 
 export type ModelTier = 'LOW_COST' | 'STANDARD' | 'ADVANCED';
 
@@ -62,6 +63,42 @@ export async function resolveModelForTask(taskType: AITaskType, tier: ModelTier 
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ModelRegistryRow | null) ?? null;
+}
+
+/**
+ * R2 — the model resolution Module 11's governed generations actually use.
+ * Configuration (lib/ai/config.ts) says WHICH provider/model Module 11 wants;
+ * the registry says whether that model is ACTIVE and APPROVED for the task.
+ * Both must agree or this returns null (fail closed, no fallback):
+ *   * provider 'mock'   -> the newest active+approved mock row for the task
+ *                          (tier-agnostic: the mock has one row);
+ *   * provider 'openai' -> the active+approved row for EXACTLY
+ *                          (openai, MODULE11_AI_MODEL) carrying the task.
+ * A registry row for a different openai model, or the configured model
+ * still inactive/unapproved (the state migration 0175 seeds), yields null
+ * and the caller reports no_approved_model — configuration never
+ * authorises a model on its own (ADR-M11-001 #14).
+ *
+ * `config` is injectable so unit tests can exercise both branches without
+ * touching process.env.
+ */
+export async function resolveConfiguredModelForTask(
+  taskType: AITaskType,
+  client?: SupabaseServerClient,
+  config: { provider: 'mock' | 'openai'; model: string } = { provider: getModule11AiProvider(), model: getModule11AiModel() }
+): Promise<ModelRegistryRow | null> {
+  const supabase = client ?? (await createClient());
+  let q = supabase
+    .from('ai_model_registry')
+    .select('*')
+    .eq('active', true)
+    .eq('approved', true)
+    .eq('provider', config.provider)
+    .contains('task_types', [taskType]);
+  if (config.provider === 'openai') q = q.eq('model_identifier', config.model);
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as ModelRegistryRow | null) ?? null;
 }

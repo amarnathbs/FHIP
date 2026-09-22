@@ -134,6 +134,22 @@ function buildValidEnvelope(ctx: FinancialContextObject, ranked: readonly { rank
     twin_summary: ctx.financial_twin
       ? { block_code: 'twin_summary', status: 'POPULATED', headline: 'Peer comparison', short_answer: 'A peer comparison is available.', explanation: 'A peer comparison is available for your household.', why_it_matters: '', metric_claims: [], source_refs: [], limitations: [], confidence: 'MEDIUM', data_as_of: null, related_module: 'twin', action_route: '/twin' }
       : { block_code: 'twin_summary', status: 'UNAVAILABLE' },
+    // R2: strengths/risks are MANDATORY blocks (spec section 51). The
+    // original mock omitted them, which went unnoticed only because the
+    // grounding summary did not check for absent mandatory blocks — it now
+    // does (mandatory_block_missing), so a valid mock must supply them.
+    strengths: {
+      block_code: 'strengths', status: 'POPULATED', headline: 'Strengths',
+      short_answer: ctx.cash_flow && ctx.cash_flow.monthly_surplus_or_deficit > 0 ? 'Your recorded monthly cash flow is positive.' : 'FHIP cannot assess strengths because cash flow data is incomplete.',
+      explanation: ctx.cash_flow && ctx.cash_flow.monthly_surplus_or_deficit > 0 ? 'Your recorded monthly cash flow is positive.' : 'FHIP cannot assess strengths because cash flow data is incomplete.',
+      why_it_matters: '', metric_claims: [], source_refs: [], limitations: [], confidence: 'MEDIUM', data_as_of: ctx.meta.data_as_of, related_module: 'dashboard', action_route: '/dashboard',
+    },
+    risks: {
+      block_code: 'risks', status: 'POPULATED', headline: 'Risks',
+      short_answer: 'Recorded risks are listed in your Resilience view.',
+      explanation: 'Recorded risks are listed in your Resilience view.',
+      why_it_matters: '', metric_claims: [], source_refs: [], limitations: [], confidence: 'MEDIUM', data_as_of: ctx.meta.data_as_of, related_module: 'resilience', action_route: '/resilience',
+    },
     data_quality_summary: {
       block_code: 'data_quality_summary',
       status: 'POPULATED',

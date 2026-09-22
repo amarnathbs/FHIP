@@ -125,7 +125,7 @@ export class AIInsightPackBatchOrchestrator {
     }
 
     const prompt = await this.db.getActivePrompt(BATCH_PROMPT_CODE, null);
-    const model = await this.db.resolveModelForTask(TASK_TYPE, 'STANDARD');
+    const model = await this.db.resolveModelForTask(TASK_TYPE); // R2: configured provider/model, see insightPackService.ts
     if (!prompt || !model) {
       const pending = await this.batchDb.insertBatch({ provider: this.batchProvider.providerName, taskType: TASK_TYPE, requestCount: items.length });
       const aborted = await this.batchDb.updateBatch(pending.id, { status: 'FAILED', error_summary: !prompt ? 'no_active_prompt' : 'no_approved_model' });

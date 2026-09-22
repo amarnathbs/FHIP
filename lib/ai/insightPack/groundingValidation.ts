@@ -35,6 +35,26 @@ export interface BlockGroundingResult {
 
 const NUMERIC_TOLERANCE = 0.5; // half a currency unit — rounding-safe, not "approximately" loose
 
+/**
+ * R2 — the CLOSED vocabulary of metric codes a pack may cite, exported so
+ * the prompt renders it to the provider verbatim (packComposition.ts). The
+ * first real-provider DEV run (2026-09-22) showed why this matters: the
+ * model cited the FinancialContextObject's own field names
+ * (`monthly_surplus_or_deficit`, `score_band`) instead of these codes and
+ * every such block was correctly rejected as unsupported_metric_code. The
+ * validator is unchanged; the provider is now told the contract.
+ * tests/unit/aiInsightPackGrounding.test.ts asserts this list and
+ * extractCertifiedMetricValue()'s switch agree exactly.
+ */
+export const CERTIFIED_METRIC_CODES = [
+  'monthly_gross_income', 'monthly_net_income', 'monthly_expenses', 'monthly_surplus', 'savings_rate',
+  'total_assets', 'total_liabilities', 'net_worth', 'liquid_assets', 'property_concentration', 'investment_concentration',
+  'overall_score', 'prior_valid_score', 'score_movement',
+  'resilience_score', 'emergency_fund_months',
+  'total_investment_value', 'diversification_score',
+  'retirement_balance', 'insurance_premium_burden',
+] as const;
+
 // ---------------------------------------------------------------------------
 // Metric extraction — the canonical mapping from a metric_code the prompt
 // asks the provider to cite, to the certified value it must match exactly
@@ -367,6 +387,26 @@ export function summarisePackGrounding(
       anyUngrounded = true;
       if (mandatoryBlockCodes.includes(code)) mandatoryBlockFailed = code;
     }
+  }
+
+  // R2 — spec section 51 says a mandatory block must be PRESENT (possibly
+  // as an UNAVAILABLE/limitation block) for a pack to reach READY. The
+  // original implementation only inspected blocks the provider returned, so
+  // a provider that simply omitted every mandatory block could reach READY
+  // on the strength of its optional blocks alone — the first real-provider
+  // DEV run did exactly that (4 optional blocks, 0 mandatory). An omitted
+  // mandatory block is now a mandatory-block failure, exactly like an
+  // ungrounded one.
+  for (const code of mandatoryBlockCodes) {
+    if (blocks.has(code)) continue;
+    blockResults.set(code, {
+      status: 'UNGROUNDED',
+      violations: [{ code: 'mandatory_block_missing', detail: `Mandatory block "${code}" was not returned by the provider (spec section 51: never omitted silently).` }],
+      safetyClassification: null,
+      criticalSafetyFailure: false,
+    });
+    anyUngrounded = true;
+    if (!mandatoryBlockFailed) mandatoryBlockFailed = code;
   }
 
   const rankingProvenance: RankingProvenanceResult = ranking

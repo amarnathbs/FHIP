@@ -242,7 +242,10 @@ export class AIPersonalisedInsightPackService {
     // ---- Step 4: model + prompt resolution ----
     const prompt = await this.db.getActivePrompt(PROMPT_CODE, context.meta.country_of_residence);
     if (!prompt) return { status: 'FAILED', pack: null, failureCode: 'no_active_prompt' };
-    const model = await this.db.resolveModelForTask('monthly_insight_pack', 'STANDARD');
+    // R2: no tier hint — the real client resolves the CONFIGURED provider/
+    // model (lib/ai/modelRegistry.ts resolveConfiguredModelForTask) and
+    // returns null unless that exact model is active+approved for this task.
+    const model = await this.db.resolveModelForTask('monthly_insight_pack');
     if (!model) return { status: 'FAILED', pack: null, failureCode: 'no_approved_model' };
 
     // ---- Step 5: pack identity + idempotent admission (spec sections 9-10) ----

@@ -290,3 +290,32 @@ describe('Module 11.3 — UNAVAILABLE block status is NOT_APPLICABLE, never scor
     expect(r.violations).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// R2 additions (2026-09-22): mandatory-block presence and closed vocabulary.
+// ---------------------------------------------------------------------------
+describe('R2 — mandatory blocks must be PRESENT, and the metric vocabulary is closed and self-consistent', () => {
+  it('an omitted mandatory block is a mandatory-block failure (pack FAIL), not silently tolerated', async () => {
+    const { summarisePackGrounding, CERTIFIED_METRIC_CODES, extractCertifiedMetricValue } = await import('@/lib/ai/insightPack/groundingValidation');
+    const { makeContext } = await import('./support/financialContextFixture');
+    const ctx = makeContext();
+    const summary = summarisePackGrounding(new Map(), ctx, new Set(), ['overall_financial_summary', 'data_quality_summary', 'strengths', 'risks']);
+    expect(summary.overallStatus).toBe('FAIL');
+    expect(summary.mandatoryBlockFailed).toBe('overall_financial_summary');
+    expect(summary.blockResults.get('risks')?.violations[0]?.code).toBe('mandatory_block_missing');
+
+    // Vocabulary parity: every exported code resolves through the switch, and no other code does.
+    for (const code of CERTIFIED_METRIC_CODES) expect(extractCertifiedMetricValue(code, ctx)).not.toBeUndefined();
+    expect(extractCertifiedMetricValue('monthly_surplus_or_deficit', ctx)).toBeUndefined();
+    expect(extractCertifiedMetricValue('score_band', ctx)).toBeUndefined();
+  });
+
+  it('the rendered prompt carries the closed vocabulary and the mandatory list verbatim from the validator constants', async () => {
+    const { buildOutputContractSection } = await import('@/lib/ai/insightPack/packComposition');
+    const { CERTIFIED_METRIC_CODES } = await import('@/lib/ai/insightPack/groundingValidation');
+    const { MANDATORY_BLOCK_CODES } = await import('@/lib/ai/insightPack/types');
+    const text = buildOutputContractSection();
+    for (const code of CERTIFIED_METRIC_CODES) expect(text).toContain(code);
+    for (const code of MANDATORY_BLOCK_CODES) expect(text).toContain(code);
+  });
+});
