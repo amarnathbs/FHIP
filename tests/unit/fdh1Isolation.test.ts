@@ -628,6 +628,25 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // The module never writes a canonical register — separately enforced by
       // `tests/unit/fdh12Isolation.test.ts`.
       path.join(FDH_LIB, 'services', 'retirementStatementProcessingService.ts'),
+      // LIVE-PRODUCTION DEFECT FIX (2026-09-22) adds a TENTH:
+      // malwareScanGate.ts. Its two cron-sweep resume entry points
+      // (`resumeFdhUploadAfterCleanScan` / `resumeFdhUploadAfterBlockedScan`)
+      // are reached ONLY from
+      // `app/api/financial-data-hub/documents/cron/malware-scan-sweep/route.ts`,
+      // which authenticates with an `x-cron-secret` header and has NO user
+      // session at all. They previously wrote through the RLS-scoped
+      // repository, so `auth.uid()` was null, every UPDATE matched zero rows,
+      // PostgREST returned success, and the sweep reported resumes that never
+      // happened — documents that passed a real GuardDuty scan were stranded
+      // in `validating` forever, and malware-POSITIVE documents were never
+      // marked `failed`. This is the same "a scheduled, cross-user sweep has
+      // no session to scope an RLS query by" carve-out `services/purge.ts`
+      // already holds, and it follows the same discipline as every approved
+      // file above: the service role is used only for single-row writes whose
+      // ownership was already resolved from the row itself, and every write is
+      // explicitly re-scoped by BOTH `.eq('id', ...)` AND `.eq('user_id', ...)`
+      // (plus the expected `processing_status`) regardless of RLS bypass.
+      path.join(FDH_LIB, 'services', 'malwareScanGate.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {
