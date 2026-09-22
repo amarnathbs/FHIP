@@ -46,9 +46,12 @@ export async function buildPgliteInsightPackHarness(): Promise<PgliteInsightPack
     await db.exec(fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
     if (f.startsWith('0001')) await db.exec(seed);
   }
-  // PR-AI-013 is seeded DRAFT (migration 0121) — activate it in THIS
-  // isolated instance only, so the real getActivePrompt() query can find it.
-  await db.exec(`update ai_prompt_templates set status='ACTIVE' where prompt_code='PR-AI-013' and version=1;`);
+  // PR-AI-013 is seeded DRAFT (v1 by migration 0121, v2 — the R1 ranking-
+  // provenance prompt — by migration 0175). Activate ONLY v2 in THIS
+  // isolated instance, so the real getActivePrompt() query finds exactly the
+  // one certified prompt version (brief section 17: "exactly one compatible
+  // active prompt should resolve").
+  await db.exec(`update ai_prompt_templates set status='ACTIVE' where prompt_code='PR-AI-013' and version=2;`);
   // Give the mock model a non-zero per-token price in THIS isolated
   // instance only, so cost-ceiling-driven tests have a genuine non-zero
   // projected cost to compare against a ceiling (the real seeded mock row

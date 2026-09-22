@@ -11,6 +11,8 @@ import { ProviderError } from '@/lib/ai/providers/types';
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import { PACK_SCHEMA_VERSION } from '@/lib/ai/insightPack/types';
 import type { BatchCapableProvider, BatchPackItemRequest, BatchPollResult } from '@/lib/ai/insightPack/batchTypes';
+import { splitPackUserPrompt } from '@/lib/ai/insightPack/packComposition';
+import type { ProviderPriorityItem } from '@/lib/ai/insightPack/priorityRanking';
 
 export type MockPackBehavior =
   | 'valid'
@@ -35,6 +37,13 @@ export type MockPackBehavior =
   | 'legal_advice'
   | 'missing_treated_as_zero_insurance'
   | 'safe_limitation_wording'
+  // R1 — ranking-provenance negative controls (brief section 8). The mock
+  // reads the immutable ranked list out of the rendered prompt exactly as a
+  // real model would, then deliberately misbehaves.
+  | 'reordered_priority'   // returns the canonical set rotated (A,B,C -> C,A,B)
+  | 'invented_priority'    // returns an action_code FHIP never supplied
+  | 'dropped_priority'     // omits the last canonical item
+  | 'relabelled_rank'      // right order, wrong rank numbers
   | 'timeout'
   | 'provider_unavailable';
 
@@ -51,7 +60,12 @@ function estimateTokens(text: string): number {
  * "valid" baseline (spec section 80: negative controls need a working
  * positive control to be non-vacuous against).
  */
-function buildValidEnvelope(ctx: FinancialContextObject): Record<string, unknown> {
+/** R1 — what a well-behaved provider does with the immutable ranked list: echo rank/action_code verbatim, add an explanation only. */
+function echoRankedItems(ranked: readonly { rank: number; action_code: string; title: string }[]): ProviderPriorityItem[] {
+  return ranked.map((r) => ({ rank: r.rank, action_code: r.action_code, explanation: `Mock explanation for ${r.title}.` }));
+}
+
+function buildValidEnvelope(ctx: FinancialContextObject, ranked: readonly { rank: number; action_code: string; title: string }[] = []): Record<string, unknown> {
   const scoreClaims = ctx.health_score
     ? [{ metric_code: 'overall_score', source_value: ctx.health_score.overall_score, display_value: String(ctx.health_score.overall_score) }]
     : [];
@@ -146,7 +160,7 @@ function buildValidEnvelope(ctx: FinancialContextObject): Record<string, unknown
     blocks,
     top_strengths: ctx.cash_flow && ctx.cash_flow.monthly_surplus_or_deficit > 0 ? ['Your recorded monthly cash flow is positive.'] : [],
     top_risks: [],
-    priority_review_areas: [],
+    priority_review_areas: echoRankedItems(ranked),
     limitations: [],
   };
 }
@@ -164,15 +178,44 @@ function buildValidEnvelope(ctx: FinancialContextObject): Record<string, unknown
  * reports a per-item failure instead (a provider failing on ONE household's
  * item must never abort the whole batch).
  */
-export function buildMockPackRawText(ctx: FinancialContextObject, behavior: MockPackBehavior): string {
+export function buildMockPackRawText(
+  ctx: FinancialContextObject,
+  behavior: MockPackBehavior,
+  ranked: readonly { rank: number; action_code: string; title: string }[] = []
+): string {
   if (behavior === 'timeout') throw new ProviderError('TIMEOUT', 'Mock pack provider simulated a timeout.');
   if (behavior === 'provider_unavailable') throw new ProviderError('PROVIDER_UNAVAILABLE', 'Mock pack provider simulated an outage.');
 
   let rawText: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const valid = buildValidEnvelope(ctx) as any; // mock-only, mutated per-scenario below; not a production shape guarantee
+  const valid = buildValidEnvelope(ctx, ranked) as any; // mock-only, mutated per-scenario below; not a production shape guarantee
 
   switch (behavior) {
+      case 'reordered_priority': {
+        // A rank-1/2/3 list becomes 3/1/2 — the exact brief section 8 case.
+        const echoed = echoRankedItems(ranked);
+        valid.priority_review_areas = echoed.length > 1 ? [echoed[echoed.length - 1], ...echoed.slice(0, -1)] : echoed;
+        rawText = JSON.stringify(valid);
+        break;
+      }
+      case 'invented_priority':
+        // Replaces the LAST canonical item (or supplies one when FHIP ranked
+        // nothing) with a code FHIP never produced — the set differs, so
+        // this is always detectable regardless of canonical length.
+        valid.priority_review_areas = [
+          ...echoRankedItems(ranked).slice(0, -1),
+          { rank: Math.max(ranked.length, 1), action_code: 'INVENTED_BY_PROVIDER', explanation: 'The model decided this matters most.' },
+        ];
+        rawText = JSON.stringify(valid);
+        break;
+      case 'dropped_priority':
+        valid.priority_review_areas = echoRankedItems(ranked).slice(0, -1);
+        rawText = JSON.stringify(valid);
+        break;
+      case 'relabelled_rank':
+        valid.priority_review_areas = echoRankedItems(ranked).map((p, i, all) => ({ ...p, rank: all.length - i }));
+        rawText = JSON.stringify(valid);
+        break;
       case 'malformed_json':
         rawText = '{ this is not valid pack json ';
         break;
@@ -281,7 +324,15 @@ export class MockInsightPackProvider implements AIProvider {
   async generateStructured(req: AIGenerateRequest): Promise<AIGenerateResult> {
     const start = Date.now();
     const inputTokens = estimateTokens(req.systemPrompt + req.userPrompt);
-    const rawText = buildMockPackRawText(this.ctx, this.behavior); // throws ProviderError for timeout/provider_unavailable, same as before
+    // R1: like a real model, the mock only knows the ranked list from the
+    // rendered prompt text — never from a side channel.
+    let ranked: { rank: number; action_code: string; title: string }[] = [];
+    try {
+      ranked = splitPackUserPrompt(req.userPrompt).rankedItems;
+    } catch {
+      ranked = []; // a caller that rendered no ranked section (legacy tests) gets an empty list
+    }
+    const rawText = buildMockPackRawText(this.ctx, this.behavior, ranked); // throws ProviderError for timeout/provider_unavailable, same as before
 
     return {
       rawText,
@@ -327,13 +378,14 @@ export class MockInsightPackProvider implements AIProvider {
 // (fabrication, timeout, schema-invalid, ...) — a hook only the MOCK
 // exposes; a real provider has no such method and the orchestrator never
 // calls it.
-const CONTEXT_MARKER = '\n\nCONTEXT:\n';
-
-function extractContextFromUserPrompt(userPrompt: string): FinancialContextObject {
-  const idx = userPrompt.indexOf(CONTEXT_MARKER);
-  if (idx === -1) throw new ProviderError('INVALID_REQUEST', 'Mock batch provider could not find the CONTEXT: marker in the rendered prompt.');
-  const jsonText = userPrompt.slice(idx + CONTEXT_MARKER.length);
-  return JSON.parse(jsonText) as FinancialContextObject;
+function extractFromUserPrompt(userPrompt: string): { ctx: FinancialContextObject; ranked: { rank: number; action_code: string; title: string }[] } {
+  let split: ReturnType<typeof splitPackUserPrompt>;
+  try {
+    split = splitPackUserPrompt(userPrompt);
+  } catch (e) {
+    throw new ProviderError('INVALID_REQUEST', e instanceof Error ? e.message : 'Mock batch provider could not parse the rendered prompt.');
+  }
+  return { ctx: JSON.parse(split.contextJson) as FinancialContextObject, ranked: split.rankedItems };
 }
 
 export class MockBatchInsightPackProvider implements BatchCapableProvider {
@@ -370,8 +422,8 @@ export class MockBatchInsightPackProvider implements BatchCapableProvider {
 
 function buildOneResult(item: BatchPackItemRequest, behavior: MockPackBehavior): ReturnType<typeof successResult> | ReturnType<typeof failureResult> {
   try {
-    const ctx = extractContextFromUserPrompt(item.userPrompt);
-    const rawText = buildMockPackRawText(ctx, behavior);
+    const { ctx, ranked } = extractFromUserPrompt(item.userPrompt);
+    const rawText = buildMockPackRawText(ctx, behavior, ranked);
     return successResult(item.requestId, rawText);
   } catch (err) {
     const code = err instanceof ProviderError ? err.code : 'UNKNOWN';

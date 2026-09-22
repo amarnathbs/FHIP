@@ -36,7 +36,7 @@ import type { FinancialContextObject } from '@/lib/ai/context/types';
 import type { ModelRegistryRow } from '@/lib/ai/modelRegistry';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
 import {
-  PACK_BLOCK_CODES, BLOCK_INTENT_MAP, validateProviderPackResponse,
+  PACK_BLOCK_CODES, validateProviderPackResponse,
   type PackBlockCode, type ProviderPackBlock,
 } from '@/lib/ai/insightPack/types';
 import { computePackIdentityHash, packIdempotencyKey } from '@/lib/ai/insightPack/packIdentity';
@@ -46,6 +46,9 @@ import {
   type InsightPackDbClient, type PackRow, type PersistedBlockInput,
 } from '@/lib/ai/insightPack/insightPackService';
 import type { BatchCapableProvider, BatchPackItemRequest, InsightPackBatchDbClient, BatchRow } from '@/lib/ai/insightPack/batchTypes';
+import { assertCanonicalRanking, type PriorityRankingSource, type RankedPriorityArea } from '@/lib/ai/insightPack/priorityRanking';
+import { defaultPriorityRankingSource } from '@/lib/ai/insightPack/priorityRankingSource';
+import { buildPackUserPrompt, storedAnswersFromValidatedPack } from '@/lib/ai/insightPack/packComposition';
 
 const TASK_TYPE = 'monthly_insight_pack' as const;
 export const BATCH_PROMPT_CODE = 'PR-AI-013';
@@ -86,6 +89,8 @@ interface AdmittedItem {
   isRetry: boolean;
   existingRetryCount: number;
   provider: AIProvider; // per-household delegate, used ONLY for cost estimation (mirrors the single-call path's providerFactory use)
+  /** R1 — this household's own deterministic ranking, computed at admission and reused as the provenance oracle at reconciliation. */
+  canonicalRanking: RankedPriorityArea[];
 }
 
 export class AIInsightPackBatchOrchestrator {
@@ -97,7 +102,9 @@ export class AIInsightPackBatchOrchestrator {
     private readonly batchProvider: BatchCapableProvider,
     private readonly entitlementGate: EntitlementGate = dbEntitlementGate,
     /** Spec's "bounded retries... then terminally fails with a reportable failure_code" — a batch-specific budget, independent of (and not a weakening of) the single-call path's own hardcoded 1-retry budget. */
-    private readonly maxRetries: number = 3
+    private readonly maxRetries: number = 3,
+    /** R1 — same deterministic ranking producer the single-call service uses; injected so the two transports share one ranking authority. */
+    private readonly rankingSource: PriorityRankingSource = defaultPriorityRankingSource
   ) {}
 
   async generateBatch(items: BatchHouseholdInput[]): Promise<BatchGenerationResult> {
@@ -154,7 +161,7 @@ export class AIInsightPackBatchOrchestrator {
     const itemRequests: BatchPackItemRequest[] = admitted.map((a) => ({
       requestId: a.requestId,
       systemPrompt: prompt.system_prompt,
-      userPrompt: `${prompt.developer_prompt}\n\nCONTEXT:\n${JSON.stringify(a.context)}`,
+      userPrompt: buildPackUserPrompt(prompt, a.context, a.canonicalRanking),
       model: model.model_identifier,
       maxOutputTokens: 3000,
     }));
@@ -270,7 +277,18 @@ export class AIInsightPackBatchOrchestrator {
     }
 
     const requestId = packIdempotencyKey(identity);
-    const projectedInputTokens = Math.ceil((prompt.system_prompt.length + prompt.developer_prompt.length + JSON.stringify(item.context).length) / 4);
+
+    // R1 — FHIP ranks at admission, before any provider submission. A
+    // structurally invalid canonical list is a producer defect: this
+    // household fails closed (no provider item, no spend), the rest of the
+    // batch is unaffected.
+    const canonicalRanking = this.rankingSource(item.context);
+    if (assertCanonicalRanking(canonicalRanking).length > 0) {
+      const failed = await this.db.updatePack(pendingPackId, { status: 'FAILED', failure_code: 'canonical_ranking_invalid' });
+      return { kind: 'outcome', outcome: { userId: item.userId, status: 'FAILED', pack: failed, failureCode: 'canonical_ranking_invalid', retryable: false } };
+    }
+
+    const projectedInputTokens = Math.ceil((prompt.system_prompt.length + buildPackUserPrompt(prompt, item.context, canonicalRanking).length) / 4);
     const provider = this.providerFactory(item.context, model);
     const projectedCost = estimateCallCost(provider, model, projectedInputTokens, 3000);
 
@@ -309,7 +327,7 @@ export class AIInsightPackBatchOrchestrator {
 
     return {
       kind: 'admitted',
-      item: { userId: item.userId, householdId: item.householdId, context: item.context, identity, identityHash, requestId, packId: pendingPackId, admissionId: admission.admissionId, isRetry, existingRetryCount, provider },
+      item: { userId: item.userId, householdId: item.householdId, context: item.context, identity, identityHash, requestId, packId: pendingPackId, admissionId: admission.admissionId, isRetry, existingRetryCount, provider, canonicalRanking },
     };
   }
 
@@ -351,7 +369,10 @@ export class AIInsightPackBatchOrchestrator {
     }
     const knownSourceIds = new Set(target.context.source_references.map((s) => s.source_id));
     const mandatory = mandatoryBlocksApplicableFor(target.context);
-    const grounding = summarisePackGrounding(provided, target.context, knownSourceIds, mandatory);
+    const grounding = summarisePackGrounding(provided, target.context, knownSourceIds, mandatory, {
+      canonical: target.canonicalRanking,
+      provided: validation.envelope.priority_review_areas,
+    });
 
     const cost = estimateCallCost(target.provider, model, result.inputTokens, result.outputTokens);
     const nowIso = new Date().toISOString();
@@ -398,15 +419,8 @@ export class AIInsightPackBatchOrchestrator {
     });
     await this.db.supersedeOlderPacks(target.userId, readyPack.id);
 
-    for (const [blockCode, intentCode] of BLOCK_INTENT_MAP) {
-      const g = grounding.blockResults.get(blockCode);
-      const block = provided.get(blockCode);
-      if (!g || g.status !== 'GROUNDED' || !block) continue;
-      await this.db.upsertStoredAnswer({
-        userId: target.userId, householdId: target.householdId, metricCode: intentCode,
-        currentValue: block.metric_claims[0]?.source_value ?? null,
-        explanation: block.explanation || block.short_answer, confidence: block.confidence,
-      });
+    for (const candidate of storedAnswersFromValidatedPack(provided, grounding, validation.envelope, target.canonicalRanking)) {
+      await this.db.upsertStoredAnswer({ userId: target.userId, householdId: target.householdId, ...candidate });
     }
 
     return { userId: target.userId, status: status === 'READY' ? 'READY' : 'PARTIAL', pack: readyPack };

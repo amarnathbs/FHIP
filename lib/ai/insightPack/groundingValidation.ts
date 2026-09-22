@@ -15,6 +15,11 @@
 import type { FinancialContextObject } from '@/lib/ai/context/types';
 import { classifyRequest } from '@/lib/ai/safety/classification';
 import type { GroundingStatus, MetricClaim, ProviderPackBlock, PackBlockCode } from '@/lib/ai/insightPack/types';
+import {
+  validatePriorityRankingProvenance,
+  type ProviderPriorityItem,
+  type RankedPriorityArea,
+} from '@/lib/ai/insightPack/priorityRanking';
 
 export interface BlockViolation {
   code: string;
@@ -294,23 +299,60 @@ export function validateBlockGrounding(
   return { status: 'UNGROUNDED', violations, safetyClassification: safety.classification, criticalSafetyFailure: false };
 }
 
+/**
+ * R1 — the ranking-provenance verdict for the envelope-level
+ * `priority_review_areas` list. GROUNDED means the provider echoed FHIP's
+ * deterministic ranking exactly (or, when FHIP ranked nothing, returned
+ * nothing); UNGROUNDED means the provider attempted to rank. NOT_APPLICABLE
+ * is only used when the caller supplied no ranking inputs at all (legacy
+ * callers / tests that predate R1) — never for "provider returned an empty
+ * list", which is a real, checkable outcome.
+ */
+export interface RankingProvenanceResult {
+  status: 'GROUNDED' | 'UNGROUNDED' | 'NOT_APPLICABLE';
+  violations: BlockViolation[];
+}
+
 export interface PackGroundingSummary {
   blockResults: Map<PackBlockCode, BlockGroundingResult>;
   overallStatus: 'PASS' | 'PARTIAL' | 'FAIL';
   criticalSafetyFailure: boolean;
   mandatoryBlockFailed: PackBlockCode | null;
+  rankingProvenance: RankingProvenanceResult;
+}
+
+export interface RankingInputs {
+  /** FHIP's own deterministic, immutable ranking (may be empty). */
+  canonical: readonly RankedPriorityArea[];
+  /** What the provider returned in the envelope's `priority_review_areas`. */
+  provided: readonly ProviderPriorityItem[];
+}
+
+export function validateRankingProvenance(inputs: RankingInputs): RankingProvenanceResult {
+  const violations = validatePriorityRankingProvenance(inputs.provided, inputs.canonical).map((v) => ({ code: v.code, detail: v.detail }));
+  return { status: violations.length === 0 ? 'GROUNDED' : 'UNGROUNDED', violations };
 }
 
 /**
  * Spec sections 50-51: an optional block failing grounding is isolated
  * (pack may still be READY/PARTIAL); a MANDATORY block failing, or ANY
  * critical safety failure anywhere in the pack, fails the whole pack closed.
+ *
+ * R1 addition: when `ranking` is supplied, the envelope-level priority
+ * ranking is validated for provenance. A failure marks the
+ * `priority_review_areas` BLOCK (if the provider returned one) UNGROUNDED
+ * — the block is the persisted, answer-store-feeding artefact, and a
+ * provider that is re-ranking must not have its "focus first" prose
+ * persisted either — and downgrades the pack to at most PARTIAL. It does
+ * not by itself FAIL the pack: priority_review_areas is not a mandatory
+ * block, and the other, independently grounded blocks remain valid.
  */
 export function summarisePackGrounding(
   blocks: Map<PackBlockCode, ProviderPackBlock>,
   ctx: FinancialContextObject,
   knownSourceIds: ReadonlySet<string>,
-  mandatoryBlockCodes: readonly PackBlockCode[]
+  mandatoryBlockCodes: readonly PackBlockCode[],
+  ranking?: RankingInputs
 ): PackGroundingSummary {
   const blockResults = new Map<PackBlockCode, BlockGroundingResult>();
   let anyUngrounded = false;
@@ -327,11 +369,27 @@ export function summarisePackGrounding(
     }
   }
 
+  const rankingProvenance: RankingProvenanceResult = ranking
+    ? validateRankingProvenance(ranking)
+    : { status: 'NOT_APPLICABLE', violations: [] };
+
+  if (rankingProvenance.status === 'UNGROUNDED') {
+    anyUngrounded = true;
+    const existing = blockResults.get('priority_review_areas');
+    if (existing) {
+      blockResults.set('priority_review_areas', {
+        ...existing,
+        status: 'UNGROUNDED',
+        violations: [...existing.violations, ...rankingProvenance.violations],
+      });
+    }
+  }
+
   const overallStatus: 'PASS' | 'PARTIAL' | 'FAIL' = criticalSafetyFailure || mandatoryBlockFailed
     ? 'FAIL'
     : anyUngrounded
       ? 'PARTIAL'
       : 'PASS';
 
-  return { blockResults, overallStatus, criticalSafetyFailure, mandatoryBlockFailed };
+  return { blockResults, overallStatus, criticalSafetyFailure, mandatoryBlockFailed, rankingProvenance };
 }

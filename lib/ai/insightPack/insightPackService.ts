@@ -30,7 +30,6 @@ import {
   PACK_SCHEMA_VERSION,
   PACK_BLOCK_CODES,
   MANDATORY_BLOCK_CODES,
-  BLOCK_INTENT_MAP,
   type PackBlockCode,
   type PackIdentity,
   type ProviderPackBlock,
@@ -38,6 +37,9 @@ import {
 } from '@/lib/ai/insightPack/types';
 import { computePackIdentityHash, packIdempotencyKey } from '@/lib/ai/insightPack/packIdentity';
 import { summarisePackGrounding } from '@/lib/ai/insightPack/groundingValidation';
+import { assertCanonicalRanking, type PriorityRankingSource } from '@/lib/ai/insightPack/priorityRanking';
+import { defaultPriorityRankingSource } from '@/lib/ai/insightPack/priorityRankingSource';
+import { buildPackUserPrompt, storedAnswersFromValidatedPack } from '@/lib/ai/insightPack/packComposition';
 
 export const PROMPT_CODE = 'PR-AI-013';
 
@@ -189,7 +191,15 @@ export class AIPersonalisedInsightPackService {
   constructor(
     private readonly db: InsightPackDbClient,
     private readonly providerFactory: (ctx: FinancialContextObject, model: ModelRegistryRow) => AIProvider,
-    private readonly entitlementGate: EntitlementGate = dbEntitlementGate
+    private readonly entitlementGate: EntitlementGate = dbEntitlementGate,
+    /**
+     * R1 — the deterministic producer of the immutable ranked
+     * `priority_review_areas` list the provider must echo. Defaults to the
+     * production binding (lib/ai/insightPack/priorityRankingSource.ts);
+     * tests inject a fixture so the provenance validator is exercised
+     * against a known canonical order.
+     */
+    private readonly rankingSource: PriorityRankingSource = defaultPriorityRankingSource
   ) {}
 
   /**
@@ -286,11 +296,23 @@ export class AIPersonalisedInsightPackService {
       ? await this.db.updatePack(retryOf.id, { status: 'GENERATING', retry_count: retryOf.retry_count + 1 })
       : await this.db.insertPendingPack({ userId, householdId, identity, identityHash, provider: model.provider, model: model.model_identifier, idempotencyKey });
 
+    // ---- R1: FHIP ranks BEFORE the provider is ever called. The canonical
+    // list is computed once here, sent to the provider as immutable data,
+    // and used again below as the provenance oracle. A structurally invalid
+    // canonical list is a producer defect and fails the generation closed
+    // with no provider call (and therefore no spend). ----
+    const canonicalRanking = this.rankingSource(context);
+    const canonicalDefects = assertCanonicalRanking(canonicalRanking);
+    if (canonicalDefects.length > 0) {
+      const failed = await this.db.updatePack(pending.id, { status: 'FAILED', failure_code: 'canonical_ranking_invalid', updated_at: new Date().toISOString() });
+      return { status: 'FAILED', pack: failed, failureCode: 'canonical_ranking_invalid' };
+    }
+
     const provider = this.providerFactory(context, model);
     const gateway = new AIModelGateway(provider, this.entitlementGate);
 
     const systemPrompt = prompt.system_prompt;
-    const userPrompt = `${prompt.developer_prompt}\n\nCONTEXT:\n${JSON.stringify(context)}`;
+    const userPrompt = buildPackUserPrompt(prompt, context, canonicalRanking);
 
     const result = await gateway.generatePack({
       taskType: 'monthly_insight_pack',
@@ -336,7 +358,10 @@ export class AIPersonalisedInsightPackService {
     }
     const knownSourceIds = new Set(context.source_references.map((s) => s.source_id));
     const mandatory = mandatoryBlocksApplicableFor(context);
-    const grounding = summarisePackGrounding(provided, context, knownSourceIds, mandatory);
+    const grounding = summarisePackGrounding(provided, context, knownSourceIds, mandatory, {
+      canonical: canonicalRanking,
+      provided: result.envelope.priority_review_areas,
+    });
 
     const nowIso = new Date().toISOString();
     const blockInputs: PersistedBlockInput[] = [];
@@ -404,20 +429,10 @@ export class AIPersonalisedInsightPackService {
     await this.db.supersedeOlderPacks(userId, readyPack.id);
 
     // Spec sections 29, 59: feed the Module 11.2 STORED_PERSONALISED answer
-    // store — ONLY from GROUNDED blocks, and only for the (deliberately
-    // small) block->intent mapping this phase wires.
-    for (const [blockCode, intentCode] of BLOCK_INTENT_MAP) {
-      const g = grounding.blockResults.get(blockCode);
-      const block = provided.get(blockCode);
-      if (!g || g.status !== 'GROUNDED' || !block) continue;
-      await this.db.upsertStoredAnswer({
-        userId,
-        householdId,
-        metricCode: intentCode,
-        currentValue: block.metric_claims[0]?.source_value ?? null,
-        explanation: block.explanation || block.short_answer,
-        confidence: block.confidence,
-      });
+    // store — ONLY from GROUNDED blocks (and, R1, the "focus first" answer
+    // ONLY from FHIP's own canonical ranking — see packComposition.ts).
+    for (const candidate of storedAnswersFromValidatedPack(provided, grounding, result.envelope, canonicalRanking)) {
+      await this.db.upsertStoredAnswer({ userId, householdId, ...candidate });
     }
 
     return { status: status === 'READY' ? 'READY' : 'PARTIAL', pack: readyPack };

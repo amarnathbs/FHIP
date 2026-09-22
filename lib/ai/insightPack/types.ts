@@ -7,7 +7,14 @@
 
 import { z } from 'zod';
 
-export const PACK_SCHEMA_VERSION = 'insight-pack-1.0.0';
+// R1 (2026-09-22): bumped 1.0.0 -> 1.1.0. The envelope's `priority_review_areas`
+// changed shape from a provider-authored `string[]` to a list of
+// `{ rank, action_code, explanation }` items that must echo FHIP's own
+// deterministic ranking verbatim (lib/ai/insightPack/priorityRanking.ts).
+// A schema-version bump is required because pack_schema_version is part of
+// the pack identity (spec section 9): a 1.0.0 pack and a 1.1.0 pack for the
+// same snapshot are genuinely different products.
+export const PACK_SCHEMA_VERSION = 'insight-pack-1.1.0';
 export const CONTEXT_SCHEMA_VERSION_FOR_PACK = 'ai-context-1.0.0';
 
 // ---------------------------------------------------------------------------
@@ -188,6 +195,21 @@ export const packBlockSchema = z
   .strict();
 export type ProviderPackBlock = z.infer<typeof packBlockSchema>;
 
+/**
+ * R1 — one provider-returned priority item. The provider may ONLY fill in
+ * `explanation`; `rank` and `action_code` must echo the deterministic list
+ * it was given (validated by validatePriorityRankingProvenance()). A `title`
+ * is deliberately NOT accepted here: the canonical title is FHIP's, and
+ * accepting a provider-supplied one would let it re-label an action.
+ */
+export const providerPriorityItemSchema = z
+  .object({
+    rank: z.number().int().min(1).max(3),
+    action_code: z.string().min(1).max(80),
+    explanation: z.string().max(400).optional().default(''),
+  })
+  .strict();
+
 export const packEnvelopeSchema = z
   .object({
     pack_version: z.literal(PACK_SCHEMA_VERSION),
@@ -198,7 +220,7 @@ export const packEnvelopeSchema = z
     blocks: z.record(z.enum(PACK_BLOCK_CODES), packBlockSchema),
     top_strengths: z.array(z.string().max(300)).max(3),
     top_risks: z.array(z.string().max(300)).max(3),
-    priority_review_areas: z.array(z.string().max(300)).max(3),
+    priority_review_areas: z.array(providerPriorityItemSchema).max(3),
     limitations: z.array(z.string().max(300)).max(20),
   })
   .strict();
@@ -208,6 +230,28 @@ export type PackValidationOutcome =
   | { ok: true; envelope: ProviderPackEnvelope }
   | { ok: false; reason: string };
 
+/**
+ * R2 — OpenAI strict structured output cannot express "a record with an
+ * enum key subset" (strict mode requires every declared property to be
+ * present and forbids additionalProperties), so the real provider is asked
+ * for every block key with `null` meaning "not populated". Normalise that
+ * wire shape to the internal one (absent key) BEFORE zod runs, so the mock
+ * provider (which omits keys) and the real provider (which sends nulls)
+ * validate through the identical schema. Only `null` is stripped — any
+ * other non-object value still fails schema validation exactly as before.
+ */
+function stripNullBlocks(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  const env = parsed as Record<string, unknown>;
+  const blocks = env.blocks;
+  if (!blocks || typeof blocks !== 'object' || Array.isArray(blocks)) return parsed;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(blocks as Record<string, unknown>)) {
+    if (v !== null) cleaned[k] = v;
+  }
+  return { ...env, blocks: cleaned };
+}
+
 /** Spec sections 37/79 — reject invalid JSON / wrong schema before any grounding check runs. */
 export function validateProviderPackResponse(rawText: string): PackValidationOutcome {
   let parsed: unknown;
@@ -216,7 +260,7 @@ export function validateProviderPackResponse(rawText: string): PackValidationOut
   } catch {
     return { ok: false, reason: 'Provider pack response was not valid JSON.' };
   }
-  const result = packEnvelopeSchema.safeParse(parsed);
+  const result = packEnvelopeSchema.safeParse(stripNullBlocks(parsed));
   if (!result.success) {
     return { ok: false, reason: `Pack schema validation failed: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}` };
   }

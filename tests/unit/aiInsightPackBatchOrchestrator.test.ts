@@ -16,6 +16,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { makeContext } from './support/financialContextFixture';
 import { AIInsightPackBatchOrchestrator, type BatchHouseholdInput } from '@/lib/ai/insightPack/batchOrchestrator';
 import { MockBatchInsightPackProvider, MockInsightPackProvider } from '@/lib/ai/insightPack/mockPackProvider';
+import { splitPackUserPrompt } from '@/lib/ai/insightPack/packComposition';
+import { PACK_SCHEMA_VERSION } from '@/lib/ai/insightPack/types';
 import { PROMPT_CODE, type InsightPackDbClient, type PackRow, type PersistedBlockInput, type StoredAnswerUpsertInput } from '@/lib/ai/insightPack/insightPackService';
 import type { InsightPackBatchDbClient, BatchRow, InsertBatchInput, BatchCapableProvider, BatchPackItemRequest, BatchPollResult } from '@/lib/ai/insightPack/batchTypes';
 import type { PromptTemplateRow } from '@/lib/ai/promptRegistry';
@@ -266,8 +268,11 @@ describe('Module 11.3 continuation — AIInsightPackBatchOrchestrator', () => {
       private stash = new Map<string, BatchPollResult>();
     }
     function extractAndBuildValid(userPrompt: string): string {
-      const ctx = JSON.parse(userPrompt.slice(userPrompt.indexOf('CONTEXT:\n') + 'CONTEXT:\n'.length));
-      return JSON.stringify({ pack_version: 'insight-pack-1.0.0', snapshot_id: ctx.meta.snapshot_id, data_as_of: null, reporting_currency: 'AUD', overall_confidence: 'HIGH', blocks: {}, top_strengths: [], top_risks: [], priority_review_areas: [], limitations: [] });
+      // R1: the rendered prompt now carries a RANKED_PRIORITY_AREAS section
+      // after the context JSON — parse it with the production splitter
+      // rather than assuming the context runs to end-of-prompt.
+      const ctx = JSON.parse(splitPackUserPrompt(userPrompt).contextJson);
+      return JSON.stringify({ pack_version: PACK_SCHEMA_VERSION, snapshot_id: ctx.meta.snapshot_id, data_as_of: null, reporting_currency: 'AUD', overall_confidence: 'HIGH', blocks: {}, top_strengths: [], top_risks: [], priority_review_areas: [], limitations: [] });
     }
 
     const orchestrator = new AIInsightPackBatchOrchestrator(db, batchDb, (ctx) => new MockInsightPackProvider(ctx, 'valid'), new AdversarialBatchProvider(), allowAllGate(false));
