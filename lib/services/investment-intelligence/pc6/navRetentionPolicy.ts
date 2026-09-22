@@ -262,6 +262,18 @@ function subtractDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Hoisted out of `determineHydrationRequirement`'s switch statement (2026-09-22
+ * production build fix): reassigning `fromDate` from multiple `case` branches
+ * defeats TypeScript's control-flow narrowing across the switch, surfacing as
+ * "Operator '<' cannot be applied to types 'string' and 'never'" the moment
+ * this file becomes reachable from a real build (it wasn't before). Comparing
+ * inside a plain function call, where `current`'s null-check and the `<`
+ * comparison are both local to this function's own narrowing scope, sidesteps
+ * the limitation without changing behaviour. */
+function isEarlierOrUnset(candidate: string, current: string | null): boolean {
+  return current === null || candidate < current;
+}
+
 export function determineHydrationRequirement(
   instrumentId: string,
   ctx: Pick<PolicyContext, 'acceptedDependencies' | 'benchmarkDependencies'>,
@@ -281,12 +293,12 @@ export function determineHydrationRequirement(
         sawInceptionRequirement = true;
         break;
       case 'complete_from_known_opening_balance':
-        if (dep.earliestTransactionDate && (fromDate === null || dep.earliestTransactionDate < fromDate)) fromDate = dep.earliestTransactionDate;
+        if (dep.earliestTransactionDate && isEarlierOrUnset(dep.earliestTransactionDate, fromDate)) fromDate = dep.earliestTransactionDate;
         else if (!dep.earliestTransactionDate) sawInceptionRequirement = true;
         break;
       case 'partial_history':
       case 'holdings_only':
-        if (dep.certifiedAsOfDate && (fromDate === null || dep.certifiedAsOfDate < fromDate)) fromDate = dep.certifiedAsOfDate;
+        if (dep.certifiedAsOfDate && isEarlierOrUnset(dep.certifiedAsOfDate, fromDate)) fromDate = dep.certifiedAsOfDate;
         else if (!dep.certifiedAsOfDate) sawInceptionRequirement = true;
         break;
     }
