@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { readApiJson as readJson } from '@/lib/financial-data-hub/clientApiEnvelope';
 
 type Phase =
   | 'form'
@@ -172,10 +173,6 @@ const RECONCILIATION_LABEL: Record<string, string> = {
   variance: 'The figures on this statement do not add up. Check them before applying.',
   insufficient_data: 'This statement does not show enough detail to check the figures.',
 };
-
-async function readJson(res: Response): Promise<Record<string, unknown>> {
-  try { return (await res.json()) as Record<string, unknown>; } catch { return {}; }
-}
 
 function money(value: string | null | undefined, currency: string): string {
   // NEVER renders "$0" for an absent value (spec section 94). "Not shown on
