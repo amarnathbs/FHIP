@@ -45,6 +45,8 @@ import {
 } from '../adapters/investment-intelligence/schema';
 import { AIE_II_DOCUMENT_FACTS_SCHEMA_NAME, AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION } from '../adapters/investment-intelligence/documentFactsSchema';
 import { INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/investment-intelligence/openaiSchema';
+import { AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME, AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION } from '../adapters/payslip/schema';
+import { PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/payslip/openaiSchema';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -82,26 +84,46 @@ interface KnownSchemaSpec {
 }
 
 /**
- * 2026-09-22 addition — NOT EVERY AI-FACING SCHEMA IN THIS CODEBASE IS THE
- * "bounded array of typed field candidates" ENVELOPE THIS FILE'S OWN HEADER
- * ORIGINALLY CLAIMED WAS THE ONLY SHAPE. That claim was true when written
- * (2026-09-13, AIE-1 closure mission) but Investment Intelligence's own
+ * 2026-09-22 addition (found while live-proving the payslip AI-fallback
+ * adapter against the REAL provider — see
+ * `tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts`).
+ *
+ * NOT EVERY AI-FACING SCHEMA IN THIS CODEBASE IS THE "bounded array of typed
+ * field candidates" ENVELOPE THIS FILE'S OWN HEADER CLAIMS IS THE ONLY SHAPE.
+ * That claim was true when written (2026-09-13, AIE-1 closure mission) but a
+ * later, real, LIVE-RECHABLE addition — Investment Intelligence's own
  * whole-document facts contract
  * (`lib/aie/adapters/investment-intelligence/documentFactsSchema.ts`'s
- * `investmentDocumentFactsSchema`, called by this adapter's `dispatch.ts` ->
- * `orchestrator.ts` AI-fallback step) is a richly nested object
- * (`positions[].transactions[]...`), not that envelope shape — and it had
- * never been added to `KNOWN_SCHEMAS` below. Confirmed by code inspection:
- * calling the real gateway with `AIE_AI_PROVIDER=openai` and
- * `schemaName: AIE_II_DOCUMENT_FACTS_SCHEMA_NAME` threw exactly the "no
- * strict JSON Schema mapping registered" error this function raises, before
- * any HTTP request was even made — meaning Investment Intelligence's real
- * AI-fallback path could never complete a real OpenAI call. Fixed here by
- * registering a hand-written strict-mode mirror
- * (`../adapters/investment-intelligence/openaiSchema.ts`'s
- * `INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA`) via the `rawSchema` escape
- * hatch below, for the one real schema shape the single generic
- * `buildFieldCompletionJsonSchema()` parameterisation cannot express.
+ * `investmentDocumentFactsSchema`, actually called by
+ * `lib/services/investment-intelligence/aiFallbackDocumentExtraction.ts`,
+ * the ONE II AI-fallback mechanism reachable from live UI today) is a richly
+ * nested object (`positions[].transactions[]...`), not that envelope shape —
+ * and, at the time this comment was first written, it had NEVER been added
+ * to `KNOWN_SCHEMAS` below. Confirmed live: calling the real gateway with
+ * `AIE_AI_PROVIDER=openai` and `schemaName: AIE_II_DOCUMENT_FACTS_SCHEMA_NAME`
+ * threw exactly the "no strict JSON Schema mapping registered" error this
+ * function raises, which `AieDocumentAiGateway.executeOnce()` maps to
+ * `outcome: 'provider_error'` — meaning Investment Intelligence's live
+ * AI-fallback path could not successfully complete a real OpenAI call, in
+ * any environment where `AIE_AI_PROVIDER=openai` was actually set, a
+ * P0-class production-readiness gap independent of and in addition to this
+ * adapter's own two disclosed blockers (masking key unset; every II parser
+ * declares `aiEligibleGaps: []` — see `moduleRegistry.ts`'s own honesty
+ * note).
+ *
+ * FIXED 2026-09-22, same day: `investmentDocumentFactsSchema` hand-converted
+ * to `INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA`
+ * (`investment-intelligence/openaiSchema.ts` — see that file's own header
+ * for what is and is not encoded) and registered below. The entry now
+ * resolves; see `tests/unit/aieIiOpenAiSchemaShape.test.ts` (drift
+ * detector) and `tests/live-dev/aieIiAdapterLiveProviderProof.live.test.ts`
+ * (opt-in real-provider proof).
+ *
+ * `rawSchema` is added here as an ESCAPE HATCH for exactly this case: a
+ * schema whose shape does not fit the single generic
+ * `buildFieldCompletionJsonSchema()` parameterisation. The payslip adapter
+ * was the first consumer; Investment Intelligence's whole-document schema
+ * (below) is the second.
  */
 interface RawKnownSchemaSpec {
   rawSchema: Record<string, unknown>;
@@ -135,6 +157,11 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
     `${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME}@${AIE_II_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION}`,
     { allowedFieldNames: II_FIELDS, maxItems: 20 },
   ],
+  [`${AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
+  // 2026-09-22 fix — see this file's own 2026-09-22 addition comment above
+  // and `investment-intelligence/openaiSchema.ts`'s header: this entry was
+  // missing, which made every real OpenAI call from II's live AI-fallback
+  // mechanism fail with `provider_error` before ever returning usable data.
   [`${AIE_II_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
 ]);
 
