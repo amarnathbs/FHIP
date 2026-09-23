@@ -709,13 +709,35 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           {statement.approval_status === 'approved' ? (
             <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This statement evidence has been approved.</p>
           ) : (
-            <div className="flex gap-3">
-              <button type="button" onClick={() => loadReview(documentId!)} className="rounded border border-gray-300 px-3 py-1 text-sm">
-                Review / Correct
-              </button>
-              <button type="button" onClick={handleApprove} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
-                Approve
-              </button>
+            <div className="space-y-3">
+              {/*
+                2026-09-24. A correction button used to sit here whose
+                only handler was `loadReview(documentId!)` — a re-fetch that
+                set the phase this block is ALREADY rendered in, so it
+                re-rendered identical content and changed nothing the user
+                could see. The identical dead control existed on the payslip
+                panel, where it has been replaced with a real correction
+                surface (`.../payslip/{id}/correct`). No equivalent
+                correction path exists for a liability statement yet — that
+                needs its own narrowly-scoped RPC, because migration 0096's
+                statement columns are system-authoritative in exactly the way
+                `fdh_payroll_events`' are — so rather than keep offering a
+                button that does nothing, this says plainly what the options
+                actually are. Tracked as follow-up, not silently dropped.
+              */}
+              <p className="text-sm text-muted">
+                Check these figures against your statement before approving. We can&apos;t edit them here yet — if
+                something is wrong, choose Try again with a clearer copy of the statement, or add this liability
+                yourself using the form below.
+              </p>
+              <div className="flex gap-3">
+                <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+                  Try again with a different file
+                </button>
+                <button type="button" onClick={handleApprove} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+                  Approve
+                </button>
+              </div>
             </div>
           )}
           {statement.approval_status === 'approved' && !proposalId && (

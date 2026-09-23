@@ -1122,8 +1122,19 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED = [
   'payslip_ai_fallback_confirmed',
 ] as const;
 
+/** Payslip review/correction addition (migration 0185). Recorded when a user
+ * replaces an extracted figure through the Income tab's payslip
+ * review/correct step — see
+ * `lib/financial-data-hub/services/payslipProcessingService.ts`'s
+ * `correctPayrollEvent`. Its metadata carries the corrected field NAMES only,
+ * never the figures (auditLog.ts's own rule about `metadata`). */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED = [
+  'payroll_event_corrected',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback). Used
+ * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback +
+ * payslip correction). Used
  * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
  * by `FdhDocumentAuditEventType` itself, so every caller can use the later
  * phases' event types without a second parallel type. */
@@ -1138,6 +1149,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

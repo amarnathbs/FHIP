@@ -25,6 +25,28 @@
 const CURRENCY_SYMBOLS = /[$₹]|(?:\b(?:AUD|INR|Rs\.?|INR\.)\b)/gi;
 
 /**
+ * The one money-token pattern, built fresh per call (it is a `/g` regex, so a
+ * shared instance would carry `lastIndex` between callers).
+ *
+ * THE TRAILING-MINUS LOOKAHEAD, added 2026-09-24. Some payroll systems print
+ * a negative as `120.00-`, so a trailing `-` is part of the token. The
+ * original pattern allowed WHITESPACE before that trailing minus, which made
+ * it swallow the MINUS SIGN OF THE NEXT COLUMN on a two-column row: the line
+ *
+ *     Ordinary Hours Adjustment     -500.00           -500.00
+ *
+ * tokenised as `-500.00           -` (leading minus AND trailing minus, which
+ * cancel to +500) followed by `500.00`. A retro reversal therefore arrived as
+ * a POSITIVE earning and overstated the period's pay. The lookahead keeps
+ * `120.00-` working while refusing to claim a minus that begins another
+ * number. Found by the synthetic layout corpus
+ * (`tests/fixtures/fdh9/payslipColumnLayouts.ts`, PL-07).
+ */
+export function moneyTokenPattern(): RegExp {
+  return /\(?\s*(?:[$₹]|Rs\.?\s*)?-?\s*\d[\d, ]*(?:\.\d+)?(?:\s*-(?!\s*[\d(]))?\)?/g;
+}
+
+/**
  * Parse a money token from payslip text.
  *
  * Returns `undefined` — never `0` — when the token is not a number. A payslip
@@ -86,7 +108,7 @@ export function parsePayslipMoney(token: string | undefined | null): number | un
  * finds candidates, and never assumes the last one is the total.
  */
 export function extractMoneyTokens(line: string): number[] {
-  const matches = line.match(/\(?\s*(?:[$₹]|Rs\.?\s*)?-?\s*\d[\d, ]*(?:\.\d+)?\s*-?\)?/g) ?? [];
+  const matches = line.match(moneyTokenPattern()) ?? [];
   const out: number[] = [];
   for (const raw of matches) {
     const value = parsePayslipMoney(raw);
@@ -120,7 +142,7 @@ const DATE_LIKE = /\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{1,
 
 export function extractAmountTokens(line: string): number[] {
   const withoutDates = line.replace(DATE_LIKE, ' ');
-  const matches = withoutDates.match(/\(?\s*(?:[$₹]|Rs\.?\s*)?-?\s*\d[\d, ]*(?:\.\d+)?\s*-?\)?/g) ?? [];
+  const matches = withoutDates.match(moneyTokenPattern()) ?? [];
   const out: number[] = [];
   for (const raw of matches) {
     const token = raw.trim();

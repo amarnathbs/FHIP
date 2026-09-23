@@ -199,7 +199,17 @@ function matchesTerm(label: string, term: string): boolean {
  * "Total Earnings" line to the individual earnings would double the gross).
  */
 export const TOTAL_LABELS = {
-  gross: ['total earnings', 'gross earnings', 'gross pay', 'total gross', 'gross salary', 'total income', 'gross'],
+  // 2026-09-24: `total payments` / `total pay` / `total payment` added. They
+  // are the standard AU gross-line wording (it is what the ATO's own payment
+  // summary and the mainstream AU payroll templates print), and their absence
+  // was the second half of the production YTD defect: a payslip whose gross
+  // line read "Total Payments" fell through to an `unknown` component, so
+  // `gross_pay` was stored null with nothing recorded about why. `gross pay`
+  // already covered "Gross Payments" via its own prefix rule.
+  gross: [
+    'total earnings', 'gross earnings', 'gross pay', 'total gross', 'gross salary',
+    'total income', 'total payments', 'total payment', 'total pay', 'gross',
+  ],
   totalDeductions: ['total deductions', 'total deduction', 'less deductions'],
   net: ['net pay', 'net salary', 'net amount', 'take home', 'amount payable', 'net payable', 'net'],
 } as const;
