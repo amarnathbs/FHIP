@@ -28,7 +28,6 @@ import {
 import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -235,15 +234,24 @@ describe('migration 0185 is additive against what it replaces', () => {
     }
   });
 
-  it('the TypeScript audit-event enum matches the widened constraint exactly', () => {
-    // 0186 (the liability correction counterpart) has since widened this SAME
-    // constraint one value further, so 0185 is no longer the constraint's
-    // latest word — the same "as of this migration" filter every earlier
-    // phase's schema-contract test already uses.
-    const vocabularyAsOf0185 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-      (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
-    );
-    expect([...auditEventTypesIn(MIGRATION_0185)].sort()).toEqual([...vocabularyAsOf0185].sort());
+  it('every value 0185 grants is reachable from the TypeScript enum', () => {
+    // DELIBERATELY NOT AN EXACT MATCH ANY MORE. 0186 (the liability correction
+    // counterpart) has since widened this SAME constraint one value further,
+    // so 0185 is no longer the constraint's latest word. The obvious repair —
+    // subtracting `LIABILITY_CORRECTION_ADDED` here — is the shape that made
+    // the six `*SchemaContract.test.ts` files a maintenance tax: each new
+    // correction surface adds another subtrahend until the assertion is
+    // bookkeeping about which migrations exist rather than a real check.
+    //
+    // The "nothing in the enum is unreachable in SQL" guarantee is instead
+    // asserted ONCE, against whichever migration the ledger says is latest, by
+    // `tests/unit/fdh10LiabilityCorrection.test.ts`. What is left here is the
+    // half that stays true forever no matter how many later widenings land.
+    const granted = auditEventTypesIn(MIGRATION_0185);
+    expect(granted.length).toBeGreaterThan(0);
+    for (const value of granted) {
+      expect(FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES as readonly string[]).toContain(value);
+    }
   });
 
   it('its authoritative-write trigger protects a STRICT SUPERSET of migration 0091’s columns', () => {

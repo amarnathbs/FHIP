@@ -61,17 +61,26 @@ const MIGRATION_0096 = read('supabase/migrations/0096_fdh10_credit_cards_loans_i
  * such collision fail loudly here instead of shipping.
  */
 function predecessorAuditEventMigration(selfNumber: number): { name: string; sql: string } {
+  const chain = auditEventMigrationChain().filter((m) => Number(m.name.slice(0, 4)) < selfNumber);
+  const previous = chain[chain.length - 1];
+  if (!previous) throw new Error('no prior migration defines fdh_document_audit_events_event_type_check');
+  return previous;
+}
+
+/** Every migration that defines the event_type constraint, oldest first. */
+function auditEventMigrationChain(): { name: string; sql: string }[] {
   const dir = path.join(ROOT, 'supabase/migrations');
-  const candidates = readdirSync(dir)
+  return readdirSync(dir)
     .filter((name) => /^\d{4}_.*\.sql$/.test(name))
-    .filter((name) => Number(name.slice(0, 4)) < selfNumber)
     .sort()
-    .reverse();
-  for (const name of candidates) {
-    const sql = readFileSync(path.join(dir, name), 'utf8');
-    if (auditEventTypesIn(sql).length > 0) return { name, sql };
-  }
-  throw new Error('no prior migration defines fdh_document_audit_events_event_type_check');
+    .map((name) => ({ name, sql: readFileSync(path.join(dir, name), 'utf8') }))
+    .filter((m) => {
+      try {
+        return auditEventTypesIn(m.sql).length > 0;
+      } catch {
+        return false;
+      }
+    });
 }
 
 /** Every value inside a `check (event_type in ( ... ))` block. */
@@ -371,6 +380,58 @@ describe('migration 0186 is additive against what it replaces', () => {
   it('the TypeScript audit-event enum matches the widened constraint exactly', () => {
     expect([...auditEventTypesIn(MIGRATION_0186)].sort())
       .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The repo-wide invariant, asserted ONCE and pointed at the ledger
+// ---------------------------------------------------------------------------
+//
+// WHY THIS BLOCK IS NOT SIX MORE SUBTRACTION CLAUSES. Six
+// `*SchemaContract.test.ts` files each prove their own migration matches "the
+// enum minus everything later phases added", so every new widening costs one
+// edit per file — and both correction migrations have now paid that tax. Worse,
+// the same shape was about to spread into the correction tests themselves: an
+// "exact match, minus LIABILITY_CORRECTION_ADDED" assertion in
+// `fdh9PayslipCorrection.test.ts` would need another subtrahend for expenses,
+// another for insurance, until it asserts nothing but which migrations exist.
+//
+// The two claims below are the durable form. They are derived entirely from the
+// migration ledger, so a new widening needs NO edit here: add the migration and
+// the enum value, and these keep meaning exactly what they mean today.
+describe('the fdh_document_audit_events event_type chain, as a whole', () => {
+  it('the LATEST constraint-defining migration matches the TypeScript enum exactly', () => {
+    // The "nothing in the enum is unreachable in SQL, and nothing in SQL is
+    // missing from the enum" guarantee, which the per-phase subtraction form
+    // slowly loses. Whichever migration is newest owns this claim; no file
+    // needs renaming when that changes.
+    const chain = auditEventMigrationChain();
+    const latest = chain[chain.length - 1];
+    expect(latest.name).toBe('0186_fdh10_liability_statement_user_correction.sql');
+    expect([...auditEventTypesIn(latest.sql)].sort())
+      .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+  });
+
+  it('every link in the chain is a strict superset of the one before it', () => {
+    // This is the assertion that would have caught 0185-drafted-against-0173
+    // at any point in the two days it sat unmerged, and it will catch the next
+    // one without being edited.
+    const chain = auditEventMigrationChain();
+    expect(chain.length).toBeGreaterThan(8);
+    for (let i = 1; i < chain.length; i += 1) {
+      const before = auditEventTypesIn(chain[i - 1].sql);
+      const after = auditEventTypesIn(chain[i].sql);
+      for (const value of before) {
+        expect(after, `${chain[i].name} revokes ${value}, which ${chain[i - 1].name} grants`)
+          .toContain(value);
+      }
+      expect(after.length, `${chain[i].name} widens nothing`).toBeGreaterThan(before.length);
+    }
+  });
+
+  it('no two migrations in the chain claim the same version number', () => {
+    const numbers = auditEventMigrationChain().map((m) => m.name.slice(0, 4));
+    expect(new Set(numbers).size).toBe(numbers.length);
   });
 
   it('its authoritative-write trigger protects a STRICT SUPERSET of migration 0096’s columns', () => {
