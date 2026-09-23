@@ -279,7 +279,16 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     const seeded: Record<string, string> = {};
     for (const field of CORRECTABLE_FIELDS) {
       const value = current[field as keyof PayrollEvent];
-      seeded[field] = value === null || value === undefined ? '' : String(value);
+      if (value === null || value === undefined) {
+        // Blank, not "0" — an absent figure stays absent until the user
+        // decides otherwise.
+        seeded[field] = '';
+        continue;
+      }
+      // Money arrives from a numeric(20,4) column, so "2870.0000" is a
+      // faithful but unreadable way to show $2,870. Trailing zeros are
+      // dropped for display only; the value is identical.
+      seeded[field] = MONEY_CORRECTION_FIELDS.includes(field) ? String(Number(value)) : String(value);
     }
     setCorrections(seeded);
     setCorrectionError(null);
