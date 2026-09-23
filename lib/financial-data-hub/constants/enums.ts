@@ -1122,8 +1122,70 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED = [
   'payslip_ai_fallback_confirmed',
 ] as const;
 
+/**
+ * AIE UNIFIED DOCUMENT FALLBACK additions (migration 0180) — the remaining
+ * four FDH-3 document types, extending the payslip pattern above to every
+ * type that has both a native processing service and a real import panel.
+ * See `docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md`
+ * §3 and §5, and each type's own `attemptAi*Fallback`/`confirmAi*Fallback`.
+ *
+ * DELIBERATELY FOUR SEPARATE CONSTANTS, NOT ONE GENERATED LIST. A helper that
+ * built these from a prefix would be shorter, but the DB CHECK constraint in
+ * migration 0180 has to spell every value out anyway, and the whole point of
+ * this TS-side constant is to be diffable against that SQL by eye. A
+ * generated list makes the one comparison this constant exists to support
+ * impossible to do by reading.
+ *
+ * The seven-event vocabulary per type mirrors
+ * `FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED` exactly: attempted,
+ * masking_below_policy, provider_outcome, insufficient_fields, draft_ready,
+ * not_usable, confirmed. Keeping the same seven for every type is what makes
+ * one operator query answer "what is the AI fallback doing across all
+ * document types" rather than five per-type queries.
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_BANK_STATEMENT_ADDED = [
+  'bank_statement_ai_fallback_attempted',
+  'bank_statement_ai_fallback_masking_below_policy',
+  'bank_statement_ai_fallback_provider_outcome',
+  'bank_statement_ai_fallback_insufficient_fields',
+  'bank_statement_ai_fallback_draft_ready',
+  'bank_statement_ai_fallback_not_usable',
+  'bank_statement_ai_fallback_confirmed',
+] as const;
+
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_RETIREMENT_ADDED = [
+  'retirement_statement_ai_fallback_attempted',
+  'retirement_statement_ai_fallback_masking_below_policy',
+  'retirement_statement_ai_fallback_provider_outcome',
+  'retirement_statement_ai_fallback_insufficient_fields',
+  'retirement_statement_ai_fallback_draft_ready',
+  'retirement_statement_ai_fallback_not_usable',
+  'retirement_statement_ai_fallback_confirmed',
+] as const;
+
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_LIABILITY_ADDED = [
+  'liability_statement_ai_fallback_attempted',
+  'liability_statement_ai_fallback_masking_below_policy',
+  'liability_statement_ai_fallback_provider_outcome',
+  'liability_statement_ai_fallback_insufficient_fields',
+  'liability_statement_ai_fallback_draft_ready',
+  'liability_statement_ai_fallback_not_usable',
+  'liability_statement_ai_fallback_confirmed',
+] as const;
+
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED = [
+  'investment_statement_ai_fallback_attempted',
+  'investment_statement_ai_fallback_masking_below_policy',
+  'investment_statement_ai_fallback_provider_outcome',
+  'investment_statement_ai_fallback_insufficient_fields',
+  'investment_statement_ai_fallback_draft_ready',
+  'investment_statement_ai_fallback_not_usable',
+  'investment_statement_ai_fallback_confirmed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
- * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback). Used
+ * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback +
+ * AIE unified document fallback). Used
  * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
  * by `FdhDocumentAuditEventType` itself, so every caller can use the later
  * phases' event types without a second parallel type. */
@@ -1138,6 +1200,10 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_BANK_STATEMENT_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_RETIREMENT_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_LIABILITY_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 
