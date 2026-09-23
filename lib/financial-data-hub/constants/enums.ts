@@ -307,6 +307,40 @@ export const FDH_ERROR_CODES_FDH5_ADDED = [
  */
 export const FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED = ['structural_scan_rejected'] as const;
 
+/**
+ * FDH-3 REAL MALWARE-SCAN WIDENING (2026-09-23): the four non-`malicious`
+ * blocking verdicts the real S3 + GuardDuty gate has been able to emit since
+ * migration `0169`, but which no migration ever added to the
+ * `fdh_statement_uploads.error_code` check constraint.
+ *
+ * LIVE-DEV-DISCOVERED (malware-scan canary, 2026-09-23). `failureCodeForStatus`
+ * (`services/malwareScanGate.ts`) and `failureCodeFor`
+ * (`lib/aie/malware/scanSweep.ts`) both map a blocking scan outcome onto one
+ * of FIVE codes. Only `malware_detected` was storable; the other four were
+ * refused by the database with `23514`, leaving the document stranded in
+ * `validating` with a null `error_code` and no onward path — its
+ * `malware_scan_status` was already terminal, so the sweep's `pending`-only
+ * work queue never looked at it again. Fails closed (never admitted), but the
+ * user saw a document that silently never finished.
+ *
+ * These four strings were ALREADY the product's user-facing vocabulary before
+ * this widening: every FDH import panel ships an honest, non-technical message
+ * keyed by each of them (see `components/income/PayslipImportPanel.tsx`'s
+ * `SCAN_REJECTION_MESSAGES` and its four siblings). Widening the constraint
+ * makes that shipped UI reachable; remapping onto an existing code would have
+ * discarded a distinction the UI already draws (a timed-out scan asks the user
+ * to retry; a threat verdict does not).
+ *
+ * Migration `0179_fdh3_real_malware_scan_error_codes.sql` widens the check
+ * constraint to match.
+ */
+export const FDH_ERROR_CODES_FDH3_REAL_MALWARE_SCAN_ADDED = [
+  'malware_scan_suspicious',
+  'malware_scan_failed',
+  'malware_scan_timeout',
+  'malware_scan_unknown',
+] as const;
+
 /** The complete current error-code set (FDH-1 + FDH-5 + FDH-3-structural-scan
  * widening). Used everywhere OUTSIDE the frozen fdh1SchemaContract.test.ts
  * assertion. */
@@ -314,6 +348,7 @@ export const FDH_ALL_ERROR_CODES = [
   ...FDH_ERROR_CODES,
   ...FDH_ERROR_CODES_FDH5_ADDED,
   ...FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED,
+  ...FDH_ERROR_CODES_FDH3_REAL_MALWARE_SCAN_ADDED,
 ] as const;
 export type FdhErrorCode = (typeof FDH_ALL_ERROR_CODES)[number];
 
