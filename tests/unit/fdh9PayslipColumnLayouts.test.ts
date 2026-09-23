@@ -126,7 +126,25 @@ describe('FDH-9 payslip table shape vs independent oracle', () => {
     expect(extraction.components.map((c) => c.amount)).not.toContain(37.7632);
   });
 
-  it('PL-04 regression: the production shape — a YTD summary block never becomes period pay', () => {
+  it('PL-12 regression: the production signature — the YTD figure is gone from base pay, the variance is not', () => {
+    const f = PAYSLIP_LAYOUT_FIXTURES.find((x) => x.id === 'PL-12')!;
+    const extraction = parse(f.text, f.parseOptions);
+    // What the production row held, and must never hold again.
+    expect(extraction.basePay).not.toBe(75217.63);
+    expect(extraction.basePay).toBeUndefined();
+    expect(extraction.grossPay).toBe(2870);
+    // 75,217.63 appears ONLY as year-to-date evidence.
+    const ytd = extraction.components.filter((c) => c.isYearToDate).map((c) => c.amount);
+    const period = extraction.components.filter((c) => !c.isYearToDate).map((c) => c.amount);
+    expect(ytd).toContain(75217.63);
+    expect(period).not.toContain(75217.63);
+    // And the safety net that caught the defect still fires on this document.
+    const result = reconcileGrossToNet(extraction);
+    expect(result.status).toBe('variance');
+    expect(result.variance).toBe(0.38);
+  });
+
+  it('PL-04 regression: a YTD summary block never becomes period pay', () => {
     const f = PAYSLIP_LAYOUT_FIXTURES.find((x) => x.id === 'PL-04')!;
     const extraction = parse(f.text, f.parseOptions);
     expect(extraction.basePay).toBe(2870);

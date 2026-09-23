@@ -548,4 +548,75 @@ Gross Payments YTD       75,217.63`,
       proves: 'the cumulative-YTD invariant corrects a headerless, reversed layout — and discloses that it did',
     },
   },
+
+  // =========================================================================
+  // PL-12 — THE PRODUCTION SIGNATURE, REPRODUCED FIELD FOR FIELD.
+  //
+  // Run through the PRE-FIX parser this synthetic payslip returns, exactly:
+  //     gross_pay              null
+  //     base_pay               75,217.63   <- the YEAR-TO-DATE figure
+  //     tax_withheld              566.00
+  //     net_pay                 2,303.62
+  //     pay_frequency          fortnightly (derived_from_period)
+  //     extraction_confidence        0.55
+  //     reconciliation_status    variance
+  // which is every observable value recorded for the real production row,
+  // with employer unidentified and an unrecognised earning label — the two
+  // warnings that produce 0.55 rather than a higher score. Built entirely
+  // from invented figures arranged in a standard AU layout; no real payslip
+  // was read to construct it.
+  //
+  // The fix has to leave the YEAR-TO-DATE figure in a year-to-date component
+  // and NOT put it in `base_pay`. It must NOT turn the variance into a pass:
+  // the document's own net genuinely does not match its own gross minus its
+  // own tax, and that is still reported.
+  // =========================================================================
+  {
+    id: 'PL-12',
+    description: 'Reproduces the production row’s full observable signature, then fixes only what was wrong',
+    // ORACLE ARITHMETIC (by hand):
+    //   The only earning line, "Ordinary Time", is NOT a label FDH-9
+    //   recognises, so it stays an `unknown` informational component and
+    //   base_pay is correctly ABSENT — the payslip's own gross line is what
+    //   discloses the period earnings.
+    //   Header-total identity: 2,870.00 - 566.00        = 2,304.00
+    //   stated net                                       = 2,303.62
+    //   variance = 2,304.00 - 2,303.62                  =     0.38 -> VARIANCE
+    //   The YTD block's 75,217.63 is year-to-date evidence and must not
+    //   appear in any period field.
+    text: `Payslip
+Northwind Services Pty Ltd
+Employee: A Person
+Pay Period: 22/12/2025 - 04/01/2026
+Payment Date: 06/01/2026
+
+Payments                    Amount
+Ordinary Time             2,870.00
+Total Payments            2,870.00
+
+Deductions
+PAYG Withholding            566.00
+
+Net Pay                   2,303.62
+
+Year To Date
+Salary                   75,217.63
+Tax                      18,455.00`,
+    parseOptions: { declaredCountry: 'AU', declaredCurrency: 'AUD' },
+    expected: {
+      ...AU_META,
+      payPeriodStart: '2025-12-22', payPeriodEnd: '2026-01-04', paymentDate: '2026-01-06',
+      payFrequency: 'fortnightly', payFrequencySource: 'derived_from_period',
+      grossPay: 2870,
+      taxWithheld: 566,
+      netPay: 2303.62,
+      reconciliationStatus: 'variance', reconciliationVariance: 0.38,
+    },
+    layout: {
+      columnPlanSource: 'ytd_present_no_header',
+      grossPaySource: 'stated_on_document',
+      requiredWarnings: ['employer_not_identified', 'unknown_payroll_field', 'column_header_not_identified'],
+      proves: 'the exact production defect is gone, and the variance that caught it is not',
+    },
+  },
 ];

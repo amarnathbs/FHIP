@@ -40,9 +40,11 @@
  *      inverted: every row beneath it is year-to-date, and the parser read
  *      each row's single amount as a CURRENT-period amount. A
  *      `Salary  75,217.63` row in that block became a current-period `base`
- *      component. This is the layout that reproduces the production row's
- *      full observable signature (gross null, base = the YTD figure,
- *      confidence 0.55, reconciliation `variance`) exactly.
+ *      component. Fixture PL-12 is this layout, and run through the PRE-FIX
+ *      parser it returns the production row's full observable signature
+ *      field for field: `gross_pay` null, `base_pay` 75,217.63, `net_pay`
+ *      2,303.62, `tax_withheld` 566, fortnightly/`derived_from_period`,
+ *      `extraction_confidence` 0.55, `reconciliation_status` `variance`.
  *
  *   2. COLUMN ORDER WAS DETECTED BUT NEVER USED. The original function tested
  *      `currentIdx < ytdIdx` and returned `current_first`; when that test
