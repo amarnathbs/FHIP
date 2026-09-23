@@ -47,6 +47,18 @@ import { AIE_II_DOCUMENT_FACTS_SCHEMA_NAME, AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION
 import { INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/investment-intelligence/openaiSchema';
 import { AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME, AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION } from '../adapters/payslip/schema';
 import { PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/payslip/openaiSchema';
+// AIE unified document fallback (2026-09-23) — the four remaining FDH-3
+// document types. Registering each schema HERE is the step §6.1 of the design
+// document records as "easy to forget and already forgotten once for a live
+// mechanism": a schema absent from `KNOWN_SCHEMAS` throws, the gateway maps
+// that throw to `outcome: 'provider_error'`, and every real provider call for
+// that adapter fails before returning anything usable — with no signal that
+// the cause is a missing registration rather than a provider fault.
+// `tests/unit/aieUnifiedFallbackSchemaShape.test.ts` asserts every one of
+// these four resolves through `getKnownOpenAiJsonSchema()`, so a future
+// adapter added without this line fails a test rather than failing live.
+import { AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME, AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION } from '../adapters/bankStatement/schema';
+import { BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/bankStatement/openaiSchema';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -163,6 +175,8 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   // missing, which made every real OpenAI call from II's live AI-fallback
   // mechanism fail with `provider_error` before ever returning usable data.
   [`${AIE_II_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
+  // AIE unified document fallback (2026-09-23) — see the import block above.
+  [`${AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME}@${AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA }],
 ]);
 
 function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {

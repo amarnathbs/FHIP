@@ -23,7 +23,7 @@ import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
-import { getAieAiModel, getAieAiMaxOutputTokensPerDocument } from '@/lib/aie/config';
+import { getAieAiModel, getAieAiMaxOutputTokensPerDocument, getAieAiMaxOutputTokensPerLineItemDocument } from '@/lib/aie/config';
 
 const sharedGateway = new AieDocumentAiGateway(createAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
@@ -112,6 +112,14 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
   maskedText: string;
   idempotencyPrefix: string;
   requestId?: string;
+  /** `true` for a document whose useful content is an ARRAY (bank
+   * transactions, retirement activities, broker holdings). Selects the
+   * separate, larger line-item output budget — see
+   * `getAieAiMaxOutputTokensPerLineItemDocument()`'s header for why a second
+   * budget exists rather than the shared one simply being raised. Defaults to
+   * the ordinary scalar budget, so an adapter that forgets this gets the
+   * conservative number, not the expensive one. */
+  lineItemDocument?: boolean;
 }): Promise<AieAdapterExtractionOutcome<z.infer<TSchema>>> {
   const idempotencyKey = `${params.idempotencyPrefix}:${params.requestId ?? randomUUID()}`;
   const result = await sharedGateway.requestFieldCompletion({
@@ -120,7 +128,7 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
     schemaName: params.schemaName,
     schemaVersion: params.schemaVersion,
     model: getAieAiModel(),
-    maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
+    maxOutputTokens: params.lineItemDocument ? getAieAiMaxOutputTokensPerLineItemDocument() : getAieAiMaxOutputTokensPerDocument(),
     requestedFields: [],
     idempotencyKey,
   });
