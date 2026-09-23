@@ -1215,9 +1215,20 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
 ] as const;
 
+/** Liability statement review/correction addition (migration 0186). Recorded
+ * when a user replaces an extracted figure through the Liabilities tab's
+ * statement review/correct step — see
+ * `lib/financial-data-hub/services/liabilityStatementProcessingService.ts`'s
+ * `correctLiabilityStatement`. Same metadata discipline as its payslip
+ * counterpart above: corrected field NAMES only, never the figures. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED = [
+  'liability_statement_corrected',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
  * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback +
- * AIE unified document fallback + payslip correction). Used
+ * AIE unified document fallback + payslip correction + liability statement
+ * correction). Used
  * everywhere OUTSIDE the frozen fdh3SchemaContract.test.ts assertion — i.e.
  * by `FdhDocumentAuditEventType` itself, so every caller can use the later
  * phases' event types without a second parallel type. */
@@ -1237,6 +1248,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_LIABILITY_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 

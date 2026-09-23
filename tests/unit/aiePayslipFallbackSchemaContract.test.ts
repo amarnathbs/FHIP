@@ -13,6 +13,7 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '..', '..', 'supabase', 'migrations');
@@ -60,7 +61,8 @@ describe('AIE payslip AI-fallback audit-event vocabulary parity', () => {
     const vocabularyAsOfPayslip = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
       (t) =>
         !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t) &&
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
     );
     expect(values.sort()).toEqual([...vocabularyAsOfPayslip].sort());
   });

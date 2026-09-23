@@ -52,6 +52,7 @@ import { matchBankPayment, type BankTransactionCandidate } from '../liability/ba
 import type {
   LiabilityExtractionFailureKind,
   LiabilityFacilityType,
+  LiabilityReconciliationStatus,
   LiabilityStatementActivity,
   LiabilityStatementCountry,
   LiabilityStatementType,
@@ -783,6 +784,262 @@ export async function confirmAiLiabilityFallback(
 
   const { data: finalDocument } = await statementUploadsRepository.getForUser(userId, documentId);
   return { document: (finalDocument ?? document) as FdhStatementUpload, statementId, pipelineStatus: 'ok' };
+}
+
+// ---------------------------------------------------------------------------
+// User correction of extracted statement figures (2026-09-24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The fields a user may correct on an extracted liability statement.
+ *
+ * Deliberately the EXACT key set `fdh10_correct_liability_statement`
+ * (migration 0186) accepts — one closed vocabulary, declared once, so a field
+ * can never be accepted by the route and then silently rejected by the
+ * database, or vice versa. `tests/unit/fdh10LiabilityCorrection.test.ts`
+ * asserts all three layers agree.
+ */
+export const LIABILITY_CORRECTABLE_TEXT_FIELDS = ['institution_name'] as const;
+export const LIABILITY_CORRECTABLE_DATE_FIELDS = [
+  'statement_period_start', 'statement_period_end', 'statement_date', 'due_date',
+] as const;
+/** Credit-card-only figures. A loan statement has none of these; correcting
+ * one there would store a figure no formula and no proposal ever reads. */
+export const LIABILITY_CORRECTABLE_CREDIT_CARD_FIELDS = [
+  'opening_balance', 'closing_balance', 'credit_limit', 'minimum_payment',
+  'purchases_total', 'cash_advances_total', 'refunds_total',
+] as const;
+/** Loan-only figures, in the same sense. */
+export const LIABILITY_CORRECTABLE_LOAN_FIELDS = [
+  'opening_principal', 'closing_principal', 'drawdowns_total',
+  'capitalised_total', 'principal_repayments_total',
+] as const;
+/** Money figures both kinds of statement disclose. */
+export const LIABILITY_CORRECTABLE_SHARED_MONEY_FIELDS = [
+  'interest_total', 'fees_total', 'payments_total', 'adjustments_total',
+] as const;
+/** A percentage, not money — its own group because it is neither formatted
+ * nor bounded like the figures above. */
+export const LIABILITY_CORRECTABLE_RATE_FIELDS = ['interest_rate'] as const;
+
+/**
+ * Exactly the fields `statementReconciliation.ts`' two formulas READ.
+ *
+ * This is what decides whether a correction makes the stored reconciliation
+ * outcome stale. It is deliberately NARROWER than "every money field": a
+ * corrected `credit_limit`, `minimum_payment` or `interest_rate` is not an
+ * input to either identity, so re-stamping on one of those would replace a
+ * real prior result with the answer to a question the user did not ask. This
+ * is the one place this implementation is more precise than its payslip
+ * precedent rather than merely parallel to it.
+ */
+export const LIABILITY_RECONCILIATION_INPUT_FIELDS = [
+  'opening_balance', 'closing_balance', 'purchases_total', 'cash_advances_total', 'refunds_total',
+  'opening_principal', 'closing_principal', 'drawdowns_total', 'capitalised_total',
+  'principal_repayments_total', 'interest_total', 'fees_total', 'payments_total', 'adjustments_total',
+] as const;
+
+export type LiabilityCorrectableField =
+  | (typeof LIABILITY_CORRECTABLE_TEXT_FIELDS)[number]
+  | (typeof LIABILITY_CORRECTABLE_DATE_FIELDS)[number]
+  | (typeof LIABILITY_CORRECTABLE_CREDIT_CARD_FIELDS)[number]
+  | (typeof LIABILITY_CORRECTABLE_LOAN_FIELDS)[number]
+  | (typeof LIABILITY_CORRECTABLE_SHARED_MONEY_FIELDS)[number]
+  | (typeof LIABILITY_CORRECTABLE_RATE_FIELDS)[number];
+
+export type LiabilityCorrections = Partial<Record<LiabilityCorrectableField, string | number | null>>;
+
+export interface CorrectLiabilityStatementResult {
+  statementId: string;
+  correctedFields: string[];
+  reconciliationStatus: LiabilityReconciliationStatus;
+  reconciliationVariance: number | null;
+  reconciliationRestamped: boolean;
+}
+
+/** Which correctable fields apply to a statement of this type. Used by the
+ * route to refuse a cross-type field with an honest message, and asserted
+ * against the RPC's own identical guard by this feature's unit test. */
+export function liabilityCorrectableFieldsFor(statementType: LiabilityStatementType): readonly string[] {
+  return [
+    ...LIABILITY_CORRECTABLE_TEXT_FIELDS,
+    ...LIABILITY_CORRECTABLE_DATE_FIELDS,
+    ...(statementType === 'credit_card' ? LIABILITY_CORRECTABLE_CREDIT_CARD_FIELDS : LIABILITY_CORRECTABLE_LOAN_FIELDS),
+    ...LIABILITY_CORRECTABLE_SHARED_MONEY_FIELDS,
+    ...LIABILITY_CORRECTABLE_RATE_FIELDS,
+  ];
+}
+
+/**
+ * Apply a user's corrections to an already-extracted liability statement.
+ *
+ * WHY THIS IS NOT A DIRECT UPDATE. Migration 0096's Part F.1 trigger makes
+ * every balance anchor, activity total and reconciliation column on
+ * `fdh_liability_statements` authoritative: an ordinary authenticated UPDATE
+ * of any of them fails closed, and only a SECURITY DEFINER RPC running under
+ * the internal-write GUC may move them. `fdh10_correct_liability_statement`
+ * (migration 0186) is that RPC, added rather than widening the trigger's
+ * allowance — the same choice migration 0185 made for `fdh_payroll_events`.
+ * This function does the two things that must NOT live in PL/pgSQL —
+ * validation against the closed, type-scoped field vocabulary, and
+ * recomputing the statement identity with the SAME certified
+ * `reconcileCreditCardStatement`/`reconcileLoanStatement` an extraction uses
+ * — and then delegates the write.
+ *
+ * WHY RECONCILIATION IS RECOMPUTED FROM THE STORED TOTALS, NOT THE ACTIVITY
+ * ROWS. `persistLiabilityStatementEvidence` derives the activity totals by
+ * summing `fdh_liability_statement_activities`, which are THE LINES THE
+ * STATEMENT PRINTED. A correction changes the summary figures, not the
+ * document, so re-summing the activity rows would discard the user's
+ * correction and return the pre-correction result. The corrected figures are
+ * instead fed straight to the same certified formula, which — exactly as
+ * before — returns `insufficient_data` rather than a guess when a balance
+ * anchor is missing, and `variance` when the corrected figures still do not
+ * add up. The safety net is re-stamped, never dropped.
+ */
+export async function correctLiabilityStatement(
+  userId: string,
+  documentId: string,
+  corrections: LiabilityCorrections,
+): Promise<CorrectLiabilityStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) {
+    throw new LiabilityStatementProcessingError('not_found', 'document not found');
+  }
+  // `document_type` is nullable on `fdh_statement_uploads`, and a document
+  // that never declared one is not a liability statement either — the same
+  // refusal, not a cast that pretends the column cannot be null.
+  if (!document.document_type || !['credit_card_statement', 'loan_statement'].includes(document.document_type)) {
+    throw new LiabilityStatementProcessingError(
+      'wrong_document_type',
+      'This document was not uploaded as a credit card or loan statement.',
+    );
+  }
+
+  const statementId = await getLiabilityStatementIdForDocument(userId, documentId);
+  if (!statementId) {
+    throw new LiabilityStatementProcessingError(
+      'not_found',
+      'No statement evidence has been extracted from this document yet.',
+    );
+  }
+
+  const review = await getLiabilityStatementForReview(userId, statementId);
+  if (!review) throw new LiabilityStatementProcessingError('not_found', 'Statement not found.');
+  const current = review.statement as Record<string, unknown>;
+
+  if (current.approval_status === 'approved') {
+    throw new LiabilityStatementProcessingError(
+      'invalid_state',
+      'This statement evidence has already been approved and can no longer be corrected.',
+    );
+  }
+
+  const keys = Object.keys(corrections) as LiabilityCorrectableField[];
+  if (keys.length === 0) {
+    throw new LiabilityStatementProcessingError('invalid_state', 'No corrections were supplied.');
+  }
+
+  // A figure that belongs to the other kind of facility is refused here with
+  // an honest message; the RPC refuses it again as a backstop.
+  const statementType = (current.statement_type as LiabilityStatementType) ?? 'credit_card';
+  const allowed = liabilityCorrectableFieldsFor(statementType);
+  for (const key of keys) {
+    if (!allowed.includes(key)) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        statementType === 'credit_card'
+          ? `${key} is not a figure on a credit card statement.`
+          : `${key} is not a figure on a loan statement.`,
+      );
+    }
+  }
+
+  // The post-correction value of every field the identity needs, taking the
+  // correction where one was supplied and the stored value where one was not.
+  // `null` is the formulas' own "not disclosed", and is passed through as one.
+  const after = (field: string): number | null => {
+    const source = field in corrections
+      ? (corrections as Record<string, string | number | null | undefined>)[field]
+      : current[field];
+    if (source === null || source === undefined || source === '') return null;
+    const value = Number(source);
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const currencyCode = (current.currency_code as string) ?? 'AUD';
+  const recomputed = statementType === 'credit_card'
+    ? reconcileCreditCardStatement({
+        openingBalance: after('opening_balance'),
+        purchasesTotal: after('purchases_total'),
+        cashAdvancesTotal: after('cash_advances_total'),
+        interestTotal: after('interest_total'),
+        feesTotal: after('fees_total'),
+        paymentsTotal: after('payments_total'),
+        refundsTotal: after('refunds_total'),
+        adjustmentsTotal: after('adjustments_total'),
+        closingBalance: after('closing_balance'),
+        currencyCode,
+      })
+    : reconcileLoanStatement({
+        openingPrincipal: after('opening_principal'),
+        drawdownsTotal: after('drawdowns_total'),
+        capitalisedTotal: after('capitalised_total'),
+        principalRepaymentsTotal: after('principal_repayments_total'),
+        adjustmentsTotal: after('adjustments_total'),
+        closingPrincipal: after('closing_principal'),
+        currencyCode,
+      });
+
+  const reconciliationRestamped = keys.some(
+    (k) => (LIABILITY_RECONCILIATION_INPUT_FIELDS as readonly string[]).includes(k),
+  );
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('fdh10_correct_liability_statement', {
+    p_statement_id: statementId,
+    p_corrections: corrections,
+    p_reconciliation_status: recomputed.status,
+    p_reconciliation_variance: recomputed.variance,
+  });
+  if (error) throw new Error(error.message);
+
+  const result = data as {
+    ok: boolean; code?: string; error?: string;
+    corrected_fields?: string[]; reconciliation_restamped?: boolean;
+  } | null;
+  if (!result?.ok) {
+    const code = result?.code;
+    throw new LiabilityStatementProcessingError(
+      code === 'STATEMENT_NOT_FOUND' ? 'not_found' : 'invalid_state',
+      result?.error ?? 'These corrections could not be saved.',
+    );
+  }
+
+  // Attribution, on the SAME document audit trail every other liability
+  // statement lifecycle event uses. Field NAMES only — never the figures,
+  // which `auditLog.ts`'s own rule keeps out of `metadata`.
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'liability_statement_corrected',
+    actorType: 'user',
+    actorId: userId,
+    metadata: {
+      statement_id: statementId,
+      corrected_fields: result.corrected_fields ?? keys,
+      reconciliation_status: recomputed.status,
+      reconciliation_restamped: Boolean(result.reconciliation_restamped),
+    },
+  });
+
+  return {
+    statementId,
+    correctedFields: result.corrected_fields ?? (keys as string[]),
+    reconciliationStatus: recomputed.status,
+    reconciliationVariance: recomputed.variance,
+    reconciliationRestamped: Boolean(result.reconciliation_restamped) || reconciliationRestamped,
+  };
 }
 
 export async function getLiabilityStatementIdForDocument(userId: string, documentId: string): Promise<string | null> {
