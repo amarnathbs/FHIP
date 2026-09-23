@@ -23,6 +23,10 @@ import { classifyPdf } from './classification';
 import { detectPdfBankAdapter, type PdfDetectionResult } from './detection';
 import { flattenPdfLines, reconstructRows } from './rowReconstruction';
 import { normalizePdfRow } from './normalize';
+// Imported for `runBankPdfPipelineFromReadRows` below — the SAME description
+// cleaning and type-hint inference the CSV and PDF native paths already use,
+// so an AI-read row is derived exactly like a natively-parsed one.
+import { normalizeDescription, inferTypeHint } from '../bank-csv/normalize';
 import { extractPdfStatementMetadata, type PdfStatementMetadata } from './metadata';
 import { computeEconomicFingerprint, computeSourceRowHash, ECONOMIC_FINGERPRINT_VERSION } from '../bank-csv/fingerprint';
 import { decideDedup, addToDedupIndex, type DedupIndex } from '../bank-csv/dedup';
@@ -85,9 +89,33 @@ export interface PdfPipelineResult {
   statementExtractionConfidence: number | null;
   parserVersion: string;
   economicFingerprintVersion: string;
+  /**
+   * The native-extracted page text, IN MEMORY ONLY, populated ONLY for the
+   * failure statuses an AI fallback is eligible for
+   * (`unsupported_layout`, `ambiguous_layout`, `extraction_low_confidence`)
+   * and `null` in every other case, including success.
+   *
+   * ADDED 2026-09-23 for the AI-fallback path, and the narrowness is the
+   * whole point. The caller needs the text to MASK it and offer it to the AI
+   * gateway, and it previously died as a local inside this function
+   * (`classifyPdf`'s `pages` are consumed at the top and never returned) —
+   * `classification.ts` states the invariant plainly: extracted text is
+   * "ephemeral, in-memory only, never persisted (spec 21, 75)". That
+   * invariant is NOT relaxed here. This field is never written to a database
+   * column, never logged, and never included in an API response; it exists so
+   * the service can hand it to `maskText` without re-parsing the PDF — which
+   * was the only alternative, and would have meant re-admitting the decrypted
+   * `password` below the line the service's own header promises it is never
+   * used again.
+   *
+   * It is deliberately NOT populated on success (nothing needs it) or on
+   * `encrypted`/`corrupt`/`image_only`/`page_limit_exceeded` (there is no
+   * usable text, which is precisely why those statuses are not AI-eligible).
+   */
+  extractedText: string | null;
 }
 
-function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | null = null): PdfPipelineResult {
+function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | null = null, extractedText: string | null = null): PdfPipelineResult {
   return {
     status,
     adapter: null,
@@ -104,6 +132,7 @@ function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | 
     statementExtractionConfidence: null,
     parserVersion: FDH5_PARSER_VERSION,
     economicFingerprintVersion: ECONOMIC_FINGERPRINT_VERSION,
+    extractedText,
   };
 }
 
@@ -153,11 +182,13 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
     adapter = getPdfAdapterById(input.adapterIdOverride);
   } else {
     detection = detectPdfBankAdapter(fullText);
-    if (detection.status === 'ambiguous') return emptyResult('ambiguous_layout', detection);
-    if (detection.status === 'unsupported_layout' || !detection.adapter) return emptyResult('unsupported_layout', detection);
+    // `fullText` is carried out on these two statuses ONLY so the AI-fallback
+    // path can mask it — see `PdfPipelineResult.extractedText`'s header.
+    if (detection.status === 'ambiguous') return emptyResult('ambiguous_layout', detection, fullText);
+    if (detection.status === 'unsupported_layout' || !detection.adapter) return emptyResult('unsupported_layout', detection, fullText);
     adapter = detection.adapter;
   }
-  if (!adapter) return emptyResult('unsupported_layout', detection);
+  if (!adapter) return emptyResult('unsupported_layout', detection, fullText);
 
   const statementMetadata = extractPdfStatementMetadata(fullText, adapter);
 
@@ -249,7 +280,7 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
 
   if (statementExtractionConfidence < PDF_MIN_EXTRACTION_CONFIDENCE && rows.length > 0) {
     return {
-      ...emptyResult('extraction_low_confidence', detection),
+      ...emptyResult('extraction_low_confidence', detection, fullText),
       adapter,
       pageCount: classified.pageCount,
       statementMetadata,
@@ -274,6 +305,173 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
     statementExtractionConfidence,
     parserVersion: FDH5_PARSER_VERSION,
     economicFingerprintVersion: ECONOMIC_FINGERPRINT_VERSION,
+    // Never carried on success — nothing downstream needs it, and the
+    // narrowest possible lifetime for extracted document text is the point.
+    extractedText: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AI-FALLBACK RE-ENTRY (2026-09-23) — the SAME deterministic downstream, run
+// over rows an AI read off a layout the deterministic parser could not
+// segment.
+//
+// WHY THIS LIVES HERE, NEXT TO `runBankPdfPipeline`, AND NOT IN THE ADAPTER.
+// Everything below the "read the rows off the page" step — fingerprinting,
+// duplicate decisions, balance rollforward, date coverage, statement
+// confidence — must be byte-identical between a natively-parsed statement and
+// an AI-read one, or an AI-sourced import could reach the database having
+// passed different checks. Putting this function in the AI adapter would have
+// meant either importing all seven deterministic helpers into
+// `lib/aie/` (duplicating this file's own careful REUSE-NOT-REIMPLEMENTATION
+// property one directory over) or, far worse, reimplementing them. It lives
+// here so that it CANNOT drift: it calls the same functions, in the same
+// order, from the same module as the native path immediately above it.
+//
+// WHAT IT DELIBERATELY DOES NOT DO. It performs no I/O, makes no AI call,
+// knows nothing about masking or feature flags, and writes nothing. It is as
+// pure as its native sibling. It also does not set `status: 'ok'` blindly —
+// see the confidence note below.
+// ---------------------------------------------------------------------------
+
+/** One transaction line as READ off the page, before any derivation. The AI
+ * adapter maps its schema onto this; nothing else in this module knows the AI
+ * exists. */
+export interface ReadBankStatementRow {
+  sourceRowNumber: number;
+  transactionDate: string;
+  descriptionRaw: string;
+  /** Positive magnitude. Direction is `creditDebit`, never a sign. */
+  amountOriginal: number;
+  creditDebit: FdhCreditDebit;
+  balanceAfter: number | null;
+}
+
+export interface RunPdfPipelineFromReadRowsInput {
+  statementUploadId: string;
+  financialAccountId: string;
+  currencyCode: string;
+  dedupIndex: DedupIndex;
+  rows: readonly ReadBankStatementRow[];
+  statementMetadata: PdfStatementMetadata;
+  pageCount: number | null;
+  declaredPeriodStart?: string | null;
+  declaredPeriodEnd?: string | null;
+  /** Stamped onto the result so a reviewer (and every downstream consumer)
+   * can tell an AI-read statement from a natively-parsed one. */
+  parserVersion: string;
+}
+
+/**
+ * Runs the deterministic downstream over already-read rows.
+ *
+ * `extractionConfidence` on each row is recorded as 0, and the
+ * statement-level `statementExtractionConfidence` likewise. That is NOT a
+ * claim that the reading is worthless — it is this codebase's established
+ * P4/REC-04 position that no confidence channel is ever trusted to gate
+ * anything, applied consistently: the payslip adapter records the same 0. The
+ * signal that actually decides whether this import is trustworthy is the
+ * balance rollforward computed below, which is arithmetic over the rows
+ * themselves rather than an opinion about them.
+ */
+export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRowsInput): PdfPipelineResult {
+  const accepted: AcceptedPdfTransactionPlan[] = [];
+
+  for (const row of input.rows) {
+    const descriptionClean = normalizeDescription(row.descriptionRaw);
+    const transactionTypeHint = inferTypeHint(descriptionClean, row.creditDebit);
+    const transaction = {
+      sourceRowNumber: row.sourceRowNumber,
+      transactionDate: row.transactionDate,
+      postedDate: null,
+      valueDate: null,
+      descriptionRaw: row.descriptionRaw,
+      descriptionClean,
+      referenceRaw: null,
+      amountOriginal: row.amountOriginal,
+      creditDebit: row.creditDebit,
+      balanceAfter: row.balanceAfter,
+      transactionTypeHint,
+    };
+
+    const sourceRowHash = computeSourceRowHash(input.statementUploadId, row.sourceRowNumber, [
+      row.transactionDate,
+      row.descriptionRaw,
+      String(row.amountOriginal),
+      row.balanceAfter === null ? '' : String(row.balanceAfter),
+    ]);
+    const economicFingerprint = computeEconomicFingerprint({
+      financialAccountId: input.financialAccountId,
+      currencyCode: input.currencyCode,
+      transaction,
+    });
+    const hasStrongEvidence = row.balanceAfter !== null;
+    const decision = decideDedup({ economicFingerprint, hasStrongEvidence }, input.dedupIndex);
+
+    accepted.push({
+      sourceRowNumber: row.sourceRowNumber,
+      // An AI reading is not page-anchored: the model is given the whole
+      // document's flattened text and is not asked which page a line came
+      // from (a fact it could only guess). Recorded as page 1 rather than
+      // inventing a page number per row.
+      sourcePage: 1,
+      transactionDate: row.transactionDate,
+      descriptionRaw: row.descriptionRaw,
+      descriptionClean,
+      amountOriginal: row.amountOriginal,
+      creditDebit: row.creditDebit,
+      balanceAfter: row.balanceAfter,
+      transactionTypeHint,
+      sourceRowHash,
+      economicFingerprint,
+      dedupStatus: decision.status,
+      matchedTransactionId: decision.matchedTransactionId,
+      matchMethod: decision.matchMethod,
+      dedupConfidence: decision.confidence,
+      extractionConfidence: 0,
+    });
+
+    addToDedupIndex(input.dedupIndex, economicFingerprint, {
+      transactionId: `pending-row-${row.sourceRowNumber}`,
+      hasStrongEvidence,
+    });
+  }
+
+  const nonDuplicateAccepted = accepted.filter((a) => a.dedupStatus !== 'duplicate_confirmed');
+  const duplicateConfirmed = accepted.filter((a) => a.dedupStatus === 'duplicate_confirmed');
+
+  const reconciliation = reconcileBalances(
+    nonDuplicateAccepted.map((a) => ({
+      sourceRowNumber: a.sourceRowNumber,
+      amountOriginal: a.amountOriginal,
+      creditDebit: a.creditDebit,
+      balanceAfter: a.balanceAfter,
+    })),
+    input.currencyCode,
+  );
+  const dateCoverage = computeDateCoverage(
+    nonDuplicateAccepted.map((a) => a.transactionDate),
+    input.declaredPeriodStart ?? input.statementMetadata.statementPeriodStart ?? null,
+    input.declaredPeriodEnd ?? input.statementMetadata.statementPeriodEnd ?? null,
+  );
+
+  return {
+    status: 'ok',
+    adapter: null,
+    detection: null,
+    pageCount: input.pageCount,
+    statementMetadata: input.statementMetadata,
+    accepted,
+    rejected: [],
+    unparseableBlockCount: 0,
+    reconciliation,
+    dateCoverage,
+    newTransactionRowCount: nonDuplicateAccepted.length,
+    duplicateConfirmedRowCount: duplicateConfirmed.length,
+    statementExtractionConfidence: 0,
+    parserVersion: input.parserVersion,
+    economicFingerprintVersion: ECONOMIC_FINGERPRINT_VERSION,
+    extractedText: null,
   };
 }
 

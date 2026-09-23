@@ -37,9 +37,27 @@ import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { detectAuInvestmentCsvFormat } from '../investment/detection';
 import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv } from '../investment/csvExtraction';
 import { matchBankBrokerEvent, type BankTransactionCandidate } from '../investment/bankMatching';
-import type { AuStatementTransactionEvidence, AuStatementPositionEvidence, AuInvestmentStatementType } from '../investment/types';
+import type {
+  AuStatementTransactionEvidence,
+  AuStatementPositionEvidence,
+  AuInvestmentStatementType,
+  AuInvestmentStatementExtraction,
+  AuInvestmentExtractionFailureKind,
+  AuStatementTransactionType,
+} from '../investment/types';
 import type { FdhStatementUpload } from '../domain/types';
 import { fetchAllRows } from '../bank-csv/pagination';
+import { decodeCsvBytes } from '../bank-csv/csv';
+import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import {
+  isAieInvestmentStatementAiFallbackEnabled,
+  requestAuInvestmentAiExtraction,
+  mapAuInvestmentFactsToExtraction,
+  AIE_AU_INVESTMENT_PARSER_NAME,
+  AIE_AU_INVESTMENT_PARSER_VERSION,
+  AIE_AU_INVESTMENT_EXTRACTION_CONFIDENCE,
+  type AuInvestmentMappingContext,
+} from '@/lib/aie/adapters/auInvestment';
 
 export class AuInvestmentStatementProcessingError extends Error {
   constructor(readonly code: 'not_found' | 'invalid_state' | 'internal_error', message: string) {
@@ -77,10 +95,74 @@ export interface UploadAuInvestmentStatementResult {
   // `GET /financial-data-hub/documents/{id}` until the status leaves
   // `validating`, then calls `continueAuInvestmentStatementProcessing()`
   // (via the new `.../investment-statement/{id}/process` route) to finish.
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan';
+  // 'ai_fallback_available' (2026-09-23, AIE unified document fallback): the
+  // native CSV extractor could not read this layout, an AI read a DRAFT off
+  // the same bytes, and NOTHING has been written -- no
+  // `fdh_investment_statements` row, no positions, no activities, and
+  // deliberately no `processing_status: 'failed'` either (see
+  // `attemptAiAuInvestmentFallback`'s header for why that last one matters).
+  // The caller shows the draft to the user and only an explicit confirm
+  // (`confirmAiAuInvestmentFallback`) ever writes anything.
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan' | 'ai_fallback_available';
   failureKind?: string;
   positionsExtracted: number;
   activitiesExtracted: number;
+  /** Populated ONLY when `pipelineStatus === 'ai_fallback_available'`. */
+  aiFallbackDraft?: AuInvestmentStatementAiFallbackDraft;
+}
+
+/**
+ * What the review UI is shown, and what the confirm route accepts back.
+ *
+ * Deliberately the RAW READING — the security names, codes, units, prices,
+ * dates and amounts as the model claims the page printed them — rather than a
+ * persisted row or any derived verdict. Every derived value (the security
+ * match, the holdings reconciliation, the bank match, the approval state) is
+ * recomputed server-side from the reviewed rows AFTER the confirm, by the same
+ * FDH-11 code a natively-parsed statement goes through. Nothing computed on
+ * the client is ever trusted; the client can only supply what a human could
+ * have typed off the page.
+ *
+ * Every numeric is an exact decimal STRING, matching
+ * `AuStatementPositionEvidence`/`AuStatementTransactionEvidence` exactly — a
+ * JS number would reintroduce float loss into a share registry's 6-decimal
+ * unit holdings at the one boundary designed to prevent it.
+ */
+export interface AuInvestmentAiFallbackDraftHolding {
+  securityNameRaw: string;
+  tickerRaw: string | null;
+  isin: string | null;
+  quantity: string;
+  unitPrice: string | null;
+  marketValue: string | null;
+  valuationDate: string;
+}
+
+export interface AuInvestmentAiFallbackDraftActivity {
+  transactionType: AuStatementTransactionType;
+  tradeDate: string | null;
+  settlementDate: string | null;
+  securityNameRaw: string | null;
+  tickerRaw: string | null;
+  quantity: string | null;
+  unitPrice: string | null;
+  /** Positive magnitude; meaning is carried by `transactionType`. */
+  amount: string;
+  brokerageRaw: string | null;
+}
+
+export interface AuInvestmentStatementAiFallbackDraft {
+  holdings: AuInvestmentAiFallbackDraftHolding[];
+  activities: AuInvestmentAiFallbackDraftActivity[];
+  institutionName: string | null;
+  statementDate: string | null;
+  statementPeriodStart: string | null;
+  statementPeriodEnd: string | null;
+  /** The model's own claim that it listed every printed row. Shown to the user
+   * in words. Never the only completeness check — FDH-11's own holdings
+   * reconciliation, run after the confirm, is. */
+  allRowsListed: boolean;
+  warnings: string[];
 }
 
 const STATEMENT_TYPE_BY_KIND: Record<'transaction' | 'portfolio', AuInvestmentStatementType> = {
@@ -95,6 +177,45 @@ const DEFAULT_TRANSACTION_COLUMN_MAP = {
 const DEFAULT_PORTFOLIO_COLUMN_MAP = {
   securityName: 'Security Name', ticker: 'Code', isin: 'ISIN', quantity: 'Quantity', unitPrice: 'Price', marketValue: 'Market Value', valuationDate: 'Valuation Date',
 };
+
+/**
+ * Native extraction failures this pipeline will attempt an AI fallback for.
+ *
+ * DELIBERATELY NARROW, mirroring the payslip and bank-statement paths' own
+ * eligibility lists and their reasoning. The test is not "did extraction fail"
+ * but "is there readable text that genuinely looks like an investment
+ * statement the column-mapping extractor could not segment":
+ *
+ *   - `layout_unsupported` — the file decoded and has text, but no delimiter,
+ *     no header row, no recognised columns or no determinable date format was
+ *     found. This is the ONLY failure kind the FDH-11 CSV extractor actually
+ *     emits for a readable file (`csvExtraction.ts` emits it at six distinct
+ *     points), and it is exactly the case a reader can help with.
+ *
+ * EXCLUDED ON PURPOSE:
+ *   - `unknown_error` — an exception of unknown provenance. It carries no
+ *     evidence that the bytes are a statement at all, and an AI call on an
+ *     arbitrary internal failure is pure spend.
+ *   - `scanned_document`, `ocr_required`, `password_required`,
+ *     `wrong_password`, `corrupt` — declared on the failure-kind union but
+ *     never produced by this CSV-only pipeline. Each would mean NO READABLE
+ *     TEXT WAS EVER OBTAINED, so there would be nothing to send.
+ *   - `zero_holdings_suspected` — a successfully-read statement whose content
+ *     is in question; re-reading it with a model answers a different question
+ *     than the one being asked.
+ *
+ * `manual_mapping_required` and `ambiguous_format` ARE NOT LISTED HERE
+ * DELIBERATELY, AND THE REASON IS WORTH RECORDING: both are declared on
+ * `AuInvestmentExtractionFailureKind` and both read like the ideal AI-fallback
+ * trigger, but NEITHER IS REACHABLE IN THIS SERVICE. `detectAuInvestmentCsvFormat`'s
+ * verdict is used only to choose between the transaction and portfolio column
+ * maps — a failed detection falls through to the user's own declared
+ * `csvKind` — and `csvExtraction.ts` never emits either kind. Keying a trigger
+ * on them would produce a fallback path that looks wired and never fires once.
+ * If a future adapter-registry change starts emitting them, add them here and
+ * to the eligibility comment above at the same time.
+ */
+const AU_INVESTMENT_AI_FALLBACK_ELIGIBLE_KINDS: readonly AuInvestmentExtractionFailureKind[] = ['layout_unsupported'];
 
 export async function getAuInvestmentStatementIdForDocument(userId: string, documentId: string): Promise<string | null> {
   const supabase = await createClient();
@@ -229,19 +350,128 @@ async function resolveAuInvestmentStatementDocument(
       : extractAuPositionsFromCsv({ bytes: download.bytes, columnMap: DEFAULT_PORTFOLIO_COLUMN_MAP, currencyCode: metadata.currencyCode, institutionName: metadata.institutionName, maskedAccountIdentifier: metadata.maskedAccountIdentifier, statementDate: metadata.statementDate, defaultValuationDate: metadata.statementDate ?? new Date().toISOString().slice(0, 10) });
 
   if (!extraction.ok) {
+    // AI FALLBACK (2026-09-23), attempted BEFORE the `failed` write below and
+    // only for the failure kinds where the file genuinely decoded to readable
+    // text that the COLUMN-MAPPING extractor could not segment.
+    //
+    // THE ORDERING IS NOT A PREFERENCE. `resolveAuInvestmentStatementDocument`
+    // short-circuits at its very first line for any document already in
+    // `failed`, so a draft offered after that write could never be confirmed —
+    // the confirm path would find a document it is not allowed to touch. The
+    // document is therefore left exactly as it is (still `queued`/`uploaded`)
+    // until the user either confirms or walks away.
+    //
+    // DISCLOSED LIMITATION: because no status is written, a user who reloads
+    // and re-submits the same document re-runs the native extraction and, if
+    // still eligible, asks the provider again. The gateway's in-flight
+    // idempotency (keyed on the document id) collapses concurrent retries but
+    // not sequential ones, so a determined retry loop can bill more than once.
+    // That is the same trade-off the no-parking-state divergence forces (see
+    // `confirmAiAuInvestmentFallback`'s header) and is bounded by the cost
+    // admission ledger rather than by this branch.
+    if (AU_INVESTMENT_AI_FALLBACK_ELIGIBLE_KINDS.includes(extraction.kind)) {
+      const fallback = await attemptAiAuInvestmentFallback(userId, document.id, decodeCsvBytes(download.bytes).text, {
+        statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+        // CALLER CONTEXT ONLY — never the AI's impression of the page. The
+        // currency comes from the upload session the user created, the
+        // institution and masked account identifier from what they typed on
+        // the form, the dates from the metadata they supplied.
+        currencyCode: metadata.currencyCode,
+        institutionName: metadata.institutionName,
+        maskedAccountIdentifier: metadata.maskedAccountIdentifier,
+        statementDate: metadata.statementDate,
+        statementPeriodStart: metadata.statementPeriodStart,
+        statementPeriodEnd: metadata.statementPeriodEnd,
+        fallbackValuationDate: metadata.statementDate ?? new Date().toISOString().slice(0, 10),
+      });
+      if (fallback.ok) {
+        return {
+          document,
+          statementId: null,
+          pipelineStatus: 'ai_fallback_available',
+          positionsExtracted: 0,
+          activitiesExtracted: 0,
+          aiFallbackDraft: fallback.draft,
+        };
+      }
+      await recordDocumentAuditEvent({
+        userId,
+        documentId: document.id,
+        eventType: 'investment_statement_ai_fallback_not_usable',
+        actorType: 'system',
+        metadata: { reason: fallback.reason, nativeFailureKind: extraction.kind },
+      });
+    }
+
     await admin.from('fdh_statement_uploads').update({ processing_status: 'failed', error_code: 'layout_unsupported', review_status: 'pending' }).eq('id', document.id).eq('user_id', userId);
     await recordDocumentAuditEvent({ userId, documentId: document.id, eventType: 'investment_statement_extraction_failed', actorType: 'system', metadata: { reason: extraction.kind } });
     return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind, positionsExtracted: 0, activitiesExtracted: 0 };
   }
 
-  const { extraction: ex } = extraction;
+  // The canonical write. Extracted verbatim into `persistAuInvestmentEvidence`
+  // below so that the AI-fallback confirm path can reuse the EXACT same write
+  // — see that function's header.
+  const persisted = await persistAuInvestmentEvidence({
+    userId,
+    documentId: document.id,
+    statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+    extraction: extraction.extraction,
+  });
+
+  return {
+    document,
+    statementId: persisted.statementId,
+    pipelineStatus: 'ok',
+    positionsExtracted: persisted.positionsExtracted,
+    activitiesExtracted: persisted.activitiesExtracted,
+  };
+}
+
+export interface PersistAuInvestmentEvidenceResult {
+  statementId: string;
+  positionsExtracted: number;
+  activitiesExtracted: number;
+}
+
+/**
+ * THE CANONICAL WRITE for an AU investment statement's evidence.
+ *
+ * Lifted VERBATIM out of `resolveAuInvestmentStatementDocument`, where it used
+ * to be inlined, for exactly one reason: the AI-fallback confirm path
+ * (`confirmAiAuInvestmentFallback`) must call the IDENTICAL write rather than
+ * a second, parallel one. A second writer is how an AI-sourced row eventually
+ * acquires a different column set, a different null-handling rule or a missing
+ * audit event from a natively-parsed one — and the whole point of this design
+ * is that an AI-fallback-produced statement is INDISTINGUISHABLE downstream
+ * from a natively-parsed one.
+ *
+ * Behaviour is unchanged from the inlined version, deliberately including its
+ * two existing quirks, which are NOT tidied up here because tidying them would
+ * be a behavioural change smuggled into a refactor:
+ *   - `statementType` is passed in by the caller (from the user's own declared
+ *     CSV kind) rather than read from `extraction.statementType`, matching
+ *     what the inlined code did;
+ *   - a failed positions/activities insert does NOT throw. It leaves the
+ *     corresponding count at 0 while the statement row survives, so the user
+ *     sees "0 holdings" rather than an error. Pre-existing behaviour, carried
+ *     across as-is and flagged here rather than silently changed.
+ */
+export async function persistAuInvestmentEvidence(params: {
+  userId: string;
+  documentId: string;
+  statementType: AuInvestmentStatementType;
+  extraction: AuInvestmentStatementExtraction;
+}): Promise<PersistAuInvestmentEvidenceResult> {
+  const { userId, documentId, statementType } = params;
+  const ex = params.extraction;
+  const admin = createAdminClient();
 
   const { data: statement, error: stmtErr } = await admin
     .from('fdh_investment_statements')
     .insert({
       user_id: userId,
-      statement_upload_id: document.id,
-      statement_type: STATEMENT_TYPE_BY_KIND[effectiveKind],
+      statement_upload_id: documentId,
+      statement_type: statementType,
       institution_name: ex.institutionName ?? null,
       masked_account_identifier: ex.maskedAccountIdentifier ?? null,
       base_currency: ex.currencyCode,
@@ -287,9 +517,279 @@ async function resolveAuInvestmentStatementDocument(
     if (!actErr) activitiesExtracted = rows.length;
   }
 
-  await recordDocumentAuditEvent({ userId, documentId: document.id, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted } });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted } });
 
-  return { document, statementId, pipelineStatus: 'ok', positionsExtracted, activitiesExtracted };
+  return { statementId, positionsExtracted, activitiesExtracted };
+}
+
+export type AiAuInvestmentFallbackOutcome = { ok: true; draft: AuInvestmentStatementAiFallbackDraft } | { ok: false; reason: string };
+
+/**
+ * The one call site that reaches the AI provider for an AU investment
+ * statement.
+ *
+ * Every gate — this adapter's own kill switch
+ * (`AIE_INVESTMENT_STATEMENT_AI_FALLBACK_ENABLED`, default OFF), the shared
+ * global AIE kill switch, the shared AIE-1 pilot cohort, and masking (which
+ * FAILS CLOSED when the masking key is unset) — is evaluated by the shared
+ * `evaluateAiFallbackGate`, in that order. The gate returns ONLY masked text
+ * on success, so this function has no way to send the raw statement to the
+ * provider even by mistake.
+ *
+ * WHAT IS SENT is the CSV text decoded from the same bytes the native
+ * extractor just failed on (`decodeCsvBytes`) — this pipeline is CSV-only and
+ * has no PDF/text-extraction stage of its own, so there is no other text to
+ * send and no second decode to disagree with the first.
+ *
+ * WRITES NOTHING. It returns a draft for a human to look at. That is the
+ * entire contract.
+ *
+ * Exported so it is independently unit-testable with a faked provider, and so
+ * a live-DEV proof can exercise it directly.
+ */
+export async function attemptAiAuInvestmentFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  context: AuInvestmentMappingContext,
+): Promise<AiAuInvestmentFallbackOutcome> {
+  const gate = evaluateAiFallbackGate({
+    userId,
+    adapterEnabled: isAieInvestmentStatementAiFallbackEnabled(),
+    extractedText,
+  });
+  if (!gate.ok) {
+    if (gate.reason === 'masking_below_policy') {
+      await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_masking_below_policy', actorType: 'system' });
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_attempted', actorType: 'system' });
+  const result = await requestAuInvestmentAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  if (result.outcome !== 'success') {
+    await recordDocumentAuditEvent({
+      userId,
+      documentId,
+      eventType: 'investment_statement_ai_fallback_provider_outcome',
+      actorType: 'system',
+      metadata: { outcome: result.outcome },
+    });
+    return { ok: false, reason: result.outcome };
+  }
+
+  const mapped = mapAuInvestmentFactsToExtraction(result.facts, context);
+  if (!mapped) {
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_insufficient_fields', actorType: 'system' });
+    return { ok: false, reason: 'insufficient_fields' };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_draft_ready', actorType: 'system' });
+  return {
+    ok: true,
+    draft: {
+      // The draft carries only the RAW READING. Caller context (currency,
+      // country, statement type, masked account identifier) is deliberately
+      // NOT echoed to the client and not accepted back from it — the confirm
+      // path re-establishes all of it server-side from the document itself.
+      holdings: mapped.positions.map((p) => ({
+        securityNameRaw: p.securityNameRaw,
+        tickerRaw: p.tickerRaw ?? null,
+        isin: p.isin ?? null,
+        quantity: p.quantity,
+        unitPrice: p.unitPrice ?? null,
+        marketValue: p.marketValue ?? null,
+        valuationDate: p.valuationDate,
+      })),
+      activities: mapped.transactions.map((t) => ({
+        transactionType: t.transactionType,
+        tradeDate: t.tradeDate ?? null,
+        settlementDate: t.settlementDate ?? null,
+        securityNameRaw: t.securityNameRaw ?? null,
+        tickerRaw: t.tickerRaw ?? null,
+        quantity: t.quantity ?? null,
+        unitPrice: t.unitPrice ?? null,
+        amount: t.amount,
+        brokerageRaw: t.brokerageRaw ?? null,
+      })),
+      institutionName: mapped.institutionName ?? null,
+      statementDate: mapped.statementDate ?? null,
+      statementPeriodStart: mapped.statementPeriodStart ?? null,
+      statementPeriodEnd: mapped.statementPeriodEnd ?? null,
+      allRowsListed: !mapped.warnings.includes('ai_reported_rows_incomplete'),
+      warnings: mapped.warnings,
+    },
+  };
+}
+
+/** What the confirm route hands back after the user has reviewed (and
+ * possibly pruned) the draft. Every numeric is an exact decimal string, and
+ * every field is something a human could have typed off the page — there is
+ * no field in which a client could smuggle a currency, a country, an account
+ * identity, a reconciliation verdict or an approval. */
+export interface ReviewedAuInvestmentEvidence {
+  /** The user's own "statement contains" choice, carried back from the upload
+   * form. Caller context, never AI-derived. Optional: when absent, the kind is
+   * inferred from which table actually has rows. */
+  csvKind?: 'transaction' | 'portfolio';
+  holdings: readonly AuInvestmentAiFallbackDraftHolding[];
+  activities: readonly AuInvestmentAiFallbackDraftActivity[];
+  institutionName: string | null;
+  maskedAccountIdentifier: string | null;
+  statementDate: string | null;
+  statementPeriodStart: string | null;
+  statementPeriodEnd: string | null;
+}
+
+/**
+ * Called only after the user has reviewed the draft
+ * `attemptAiAuInvestmentFallback` produced (and may have pruned).
+ *
+ * MAKES NO AI CALL and re-reads nothing from the document. It takes the
+ * reviewed raw rows, rebuilds the SAME `AuInvestmentStatementExtraction` shape
+ * the native CSV extractor produces, and hands it to
+ * `persistAuInvestmentEvidence` — the EXACT function a native successful parse
+ * uses. Everything that happens afterwards (security matching, holdings
+ * reconciliation, bank matching, the explicit approve and the explicit apply)
+ * is untouched and unaware that a model was ever involved, which is precisely
+ * the property that stops an AI-sourced statement being approved on weaker
+ * evidence than a native one.
+ *
+ * THE RE-ENTRY GATE DIVERGES FROM THE PAYSLIP/BANK-STATEMENT REFERENCE, AND
+ * THE DIVERGENCE IS REAL RATHER THAN COSMETIC — SO IT IS STATED, NOT PAPERED
+ * OVER. Those two services park a document in `processing_status:
+ * 'processing'` while a draft awaits confirmation, and their confirm routes
+ * gate on exactly that state. THIS service never writes `'processing'` at all:
+ * `resolveAuInvestmentStatementDocument` calls `assertDocumentTransition`
+ * purely as a guard and writes no status on the success path either, so there
+ * is no parking state to gate on and inventing one would change the native
+ * path's own behaviour (and would collide with the `validating`/`pending_scan`
+ * malware-gate states this pipeline already threads through that column).
+ *
+ * The gate used instead is a conjunction of two conditions that together mean
+ * the same thing — "this document has not been decided yet":
+ *   1. the document is still in `queued`/`uploaded` — it has not been failed,
+ *      rejected, or moved on by anything else, and in particular it has not
+ *      been failed by a later native attempt; and
+ *   2. `getAuInvestmentStatementIdForDocument` returns null — no
+ *      `fdh_investment_statements` row exists for it yet, which is the actual
+ *      thing a double-confirm would duplicate.
+ *
+ * Condition 2 is the one that carries the weight: it is a check on the exact
+ * artefact being created, not a proxy for it, so a replayed or concurrent
+ * confirm finds the evidence already there and is refused. It is a
+ * check-then-act rather than a DB constraint, so two confirms racing inside
+ * the same few milliseconds could in principle both pass — the residual is
+ * disclosed here rather than hidden, and the blast radius is a duplicate
+ * evidence row for one document, which the user can see and which nothing
+ * downstream auto-applies.
+ */
+export async function confirmAiAuInvestmentFallback(
+  userId: string,
+  documentId: string,
+  reviewed: ReviewedAuInvestmentEvidence,
+): Promise<UploadAuInvestmentStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) throw new AuInvestmentStatementProcessingError('not_found', 'document not found');
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
+    throw new AuInvestmentStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+  const existingStatementId = await getAuInvestmentStatementIdForDocument(userId, documentId);
+  if (existingStatementId) {
+    throw new AuInvestmentStatementProcessingError('invalid_state', 'This statement has already been saved.');
+  }
+  if (reviewed.holdings.length === 0 && reviewed.activities.length === 0) {
+    throw new AuInvestmentStatementProcessingError('invalid_state', 'At least one holding or transaction is required.');
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_confirmed', actorType: 'user' });
+
+  // Statement kind: the user's own declared choice when supplied, otherwise
+  // inferred from which table actually carries rows. Never the model's.
+  const effectiveKind: 'transaction' | 'portfolio' =
+    reviewed.csvKind ?? (reviewed.activities.length > 0 ? 'transaction' : 'portfolio');
+  // CURRENCY IS TAKEN FROM THE DOCUMENT, NOT FROM THE REQUEST. The upload
+  // session recorded it when the user created it, behind an authoritative
+  // AU-home-country check at the upload route. A client cannot re-declare it
+  // here, and the AUD default only ever applies to a legacy row that somehow
+  // has none — this pipeline is AU-only by construction.
+  const currencyCode = document.currency_code ?? 'AUD';
+  const fallbackValuationDate = reviewed.statementDate ?? new Date().toISOString().slice(0, 10);
+
+  const extraction: AuInvestmentStatementExtraction = {
+    statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+    country: 'AU',
+    currencyCode,
+    institutionName: reviewed.institutionName ?? undefined,
+    maskedAccountIdentifier: reviewed.maskedAccountIdentifier ?? undefined,
+    statementDate: reviewed.statementDate ?? undefined,
+    statementPeriodStart: reviewed.statementPeriodStart ?? undefined,
+    statementPeriodEnd: reviewed.statementPeriodEnd ?? undefined,
+    // Portfolio totals stay absent on this path, exactly as the mapping layer
+    // leaves them: a total derived from the very rows being written is not
+    // independent evidence, and leaving it null lets FDH-11's own
+    // reconciliation report "insufficient data" honestly instead of checking
+    // the rows against themselves.
+    openingPortfolioValue: undefined,
+    closingPortfolioValue: undefined,
+    cashBalance: undefined,
+    positions: reviewed.holdings.map((h, index) => ({
+      securityNameRaw: h.securityNameRaw,
+      tickerRaw: h.tickerRaw ?? undefined,
+      exchange: undefined,
+      isin: h.isin ?? undefined,
+      quantity: h.quantity,
+      unitPrice: h.unitPrice ?? undefined,
+      marketValue: h.marketValue ?? undefined,
+      currencyCode,
+      valuationDate: h.valuationDate || fallbackValuationDate,
+      // Row numbers are re-assigned from the reviewed order so a user who
+      // removed a bogus line cannot leave a gap in the evidence's own
+      // source-row numbering.
+      sourceRowNumber: index + 1,
+    })),
+    transactions: reviewed.activities.map((a, index) => ({
+      transactionType: a.transactionType,
+      tradeDate: a.tradeDate ?? undefined,
+      settlementDate: a.settlementDate ?? undefined,
+      securityNameRaw: a.securityNameRaw ?? undefined,
+      tickerRaw: a.tickerRaw ?? undefined,
+      isin: undefined,
+      quantity: a.quantity ?? undefined,
+      unitPrice: a.unitPrice ?? undefined,
+      amount: a.amount,
+      currencyCode,
+      descriptionRaw: undefined,
+      brokerageRaw: a.brokerageRaw ?? undefined,
+      frankingCreditRaw: undefined,
+      withholdingTaxRaw: undefined,
+      sourceRowNumber: index + 1,
+    })),
+    parserName: AIE_AU_INVESTMENT_PARSER_NAME,
+    parserVersion: AIE_AU_INVESTMENT_PARSER_VERSION,
+    // The same deliberately-lower-than-native confidence the draft carried:
+    // the provenance of these rows does not improve because a human pressed
+    // a button, and a reviewer looking at the evidence later should be able
+    // to tell an AI-read statement from a column-mapped one.
+    extractionConfidence: AIE_AU_INVESTMENT_EXTRACTION_CONFIDENCE,
+    warnings: ['read_by_ai_fallback_not_native_parser', 'user_confirmed_ai_fallback_draft'],
+  };
+
+  const persisted = await persistAuInvestmentEvidence({
+    userId,
+    documentId,
+    statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+    extraction,
+  });
+
+  return {
+    document,
+    statementId: persisted.statementId,
+    pipelineStatus: 'ok',
+    positionsExtracted: persisted.positionsExtracted,
+    activitiesExtracted: persisted.activitiesExtracted,
+  };
 }
 
 /**

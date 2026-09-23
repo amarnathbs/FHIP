@@ -99,6 +99,14 @@ export async function POST(req: Request) {
       activities_extracted: result.activitiesExtracted,
       duplicate: result.pipelineStatus === 'duplicate_statement',
       error_message: result.failureKind ? (AU_INVESTMENT_STATEMENT_FAILURE_MESSAGES[result.failureKind] ?? null) : null,
+      // AIE AU investment-statement AI fallback (2026-09-23). Present ONLY
+      // when `pipeline_status === 'ai_fallback_available'`, i.e. the native
+      // extractor could not read this layout and an AI read a DRAFT off the
+      // same bytes. NOTHING has been written at this point — no statement, no
+      // positions, no activities, and no `failed` status either. The panel
+      // shows this for review and only its explicit confirm
+      // (POST .../ai-fallback/confirm) ever writes anything.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof AuInvestmentStatementProcessingError) {

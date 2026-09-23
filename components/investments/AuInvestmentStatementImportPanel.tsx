@@ -26,7 +26,51 @@ import {
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
 
-type Phase = 'form' | 'uploading' | 'scanning' | 'unable_to_read' | 'scan_timeout' | 'duplicate' | 'review' | 'matching' | 'comparing' | 'applied' | 'error';
+// 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
+// CSV extractor could not read this layout and an AI read a DRAFT off the same
+// file. Nothing is saved until the user confirms from this phase — it sits
+// BEFORE the ordinary 'review' phase, which shows evidence that already exists
+// in the database.
+type Phase = 'form' | 'uploading' | 'scanning' | 'unable_to_read' | 'scan_timeout' | 'duplicate' | 'ai_fallback_review' | 'review' | 'matching' | 'comparing' | 'applied' | 'error';
+
+/** One AI-read holdings line, exactly as the confirm route accepts it. Every
+ * numeric is an exact decimal STRING — FDH-11 stores units and money as
+ * strings to keep float loss out of a share registry's 6-decimal unit
+ * holdings, and parsing them to numbers here just to display them would
+ * reintroduce it on the way back. */
+interface AiDraftHolding {
+  securityNameRaw: string;
+  tickerRaw: string | null;
+  isin: string | null;
+  quantity: string;
+  unitPrice: string | null;
+  marketValue: string | null;
+  valuationDate: string;
+}
+
+/** One AI-read activity line, exactly as the confirm route accepts it. */
+interface AiDraftActivity {
+  transactionType: string;
+  tradeDate: string | null;
+  settlementDate: string | null;
+  securityNameRaw: string | null;
+  tickerRaw: string | null;
+  quantity: string | null;
+  unitPrice: string | null;
+  amount: string;
+  brokerageRaw: string | null;
+}
+
+interface AiFallbackDraft {
+  holdings: AiDraftHolding[];
+  activities: AiDraftActivity[];
+  institutionName: string | null;
+  statementDate: string | null;
+  statementPeriodStart: string | null;
+  statementPeriodEnd: string | null;
+  allRowsListed: boolean;
+  warnings: string[];
+}
 
 // 2026-09-21 (real-malware-gate async fix) — same honest, non-technical
 // discipline as every other FDH-3 panel's failure copy: never "malware" or
@@ -38,6 +82,13 @@ const SCAN_REJECTION_MESSAGES: Record<string, string> = {
   malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again, or add this investment manually below.',
   malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this investment manually below.',
 };
+
+/** Shown when the user rejects an AI-read draft. Deliberately the same
+ * "we couldn't read it, add it yourself" dead end an unreadable statement
+ * already produces — declining a draft must not read as an error the user
+ * caused. */
+const AI_FALLBACK_DECLINED_MESSAGE =
+  "We haven't saved anything. You can try a different file, or add this investment manually instead.";
 
 interface Statement {
   id: string;
@@ -100,6 +151,10 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // AIE AU investment-statement AI-fallback (2026-09-23). Held only for the
+  // lifetime of the `ai_fallback_review` phase; cleared by `reset()` and on
+  // confirm. Nothing in this draft exists in the database yet.
+  const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -130,6 +185,62 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     setStatement(null);
     setPositions([]);
     setActivities([]);
+    setAiDraft(null);
+  }
+
+  /** Removes one AI-read line the user judges wrong. Deletion is the only
+   * per-row edit offered here, deliberately: the statement's own review,
+   * matching and approval steps (which this draft feeds into once saved) are
+   * where values get examined in detail, and duplicating them as an editable
+   * grid before anything exists would be a second review surface. Removing a
+   * line the model hallucinated or double-counted is the one correction that
+   * must happen BEFORE the write, because it is the one that would otherwise
+   * become evidence. */
+  function removeAiDraftHolding(index: number) {
+    setAiDraft((d) => (d ? { ...d, holdings: d.holdings.filter((_, i) => i !== index) } : d));
+  }
+
+  function removeAiDraftActivity(index: number) {
+    setAiDraft((d) => (d ? { ...d, activities: d.activities.filter((_, i) => i !== index) } : d));
+  }
+
+  async function handleConfirmAiDraft() {
+    if (!aiDraft || !documentId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/financial-data-hub/investment-statement/${documentId}/ai-fallback/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // The user's own form choice travels back with the confirmation —
+          // the statement's kind is caller context, never the model's reading.
+          csv_kind: csvKind,
+          holdings: aiDraft.holdings,
+          activities: aiDraft.activities,
+          institutionName: institutionName || aiDraft.institutionName,
+          maskedAccountIdentifier: maskedAccountIdentifier || null,
+          statementDate: aiDraft.statementDate,
+          statementPeriodStart: aiDraft.statementPeriodStart,
+          statementPeriodEnd: aiDraft.statementPeriodEnd,
+        }),
+      });
+      const { ok: confirmOk, json } = await readJson(res);
+      if (!confirmOk) {
+        setMessage(json.error ?? 'We could not save this statement.');
+        setPhase('error');
+        return;
+      }
+      setAiDraft(null);
+      // The confirm route returns the SAME envelope as upload/process, so the
+      // journey rejoins the ordinary path here: review -> match -> approve ->
+      // apply, with nothing downstream aware that a model was involved.
+      await handleStatementOutcome(json);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Something went wrong.');
+      setPhase('error');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadReview(docId: string) {
@@ -153,6 +264,17 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
   // covers the "what do we do with this outcome" decision for both.
   async function handleStatementOutcome(json: Record<string, unknown>) {
     const data = json.data as Record<string, unknown>;
+    // AIE AU investment-statement AI-fallback (2026-09-23). Checked BEFORE the
+    // "no statement_id means we could not read it" branch below, which would
+    // otherwise misread a perfectly good draft as a hard failure — an
+    // AI-fallback response deliberately carries NO statement_id, because
+    // nothing has been written yet.
+    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      setDocumentId(data.document_id as string);
+      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
+      return;
+    }
     if (!data.statement_id) {
       setMessage((data.error_message as string | undefined) ?? 'We could not read this statement.');
       setPhase('unable_to_read');
@@ -406,6 +528,148 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         <div className="mt-4 space-y-3">
           <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">{message}</p>
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">Try again</button>
+        </div>
+      )}
+
+      {phase === 'ai_fallback_review' && aiDraft && (
+        <div className="mt-4 space-y-4">
+          <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
+            check these lines before saving — <strong>nothing has been saved yet</strong>.
+          </p>
+
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-muted">Broker / institution</dt>
+              <dd>{institutionName || aiDraft.institutionName || 'Not shown'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Statement date</dt>
+              <dd>{aiDraft.statementDate ?? 'Not shown'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Period</dt>
+              <dd>
+                {aiDraft.statementPeriodStart ?? '?'} to {aiDraft.statementPeriodEnd ?? '?'}
+              </dd>
+            </div>
+          </dl>
+
+          {!aiDraft.allRowsListed && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              The AI reported that it could <strong>not</strong> list every line on this statement. If you save this,
+              the evidence will be incomplete — we recommend adding the missing lines by hand afterwards, or trying a
+              different file.
+            </p>
+          )}
+
+          {aiDraft.holdings.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm text-muted">
+                {aiDraft.holdings.length} holding{aiDraft.holdings.length === 1 ? '' : 's'} read. Remove any line that
+                is wrong or is not really a holding.
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">Holdings read from this statement by AI, awaiting your confirmation</caption>
+                  <thead className="sticky top-0 bg-gray-50 text-left">
+                    <tr>
+                      <th scope="col" className="px-3 py-2">Security</th>
+                      <th scope="col" className="px-3 py-2">Code</th>
+                      <th scope="col" className="px-3 py-2 text-right">Units</th>
+                      <th scope="col" className="px-3 py-2 text-right">Value</th>
+                      <th scope="col" className="px-3 py-2">As at</th>
+                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiDraft.holdings.map((h, i) => (
+                      <tr key={`${h.securityNameRaw}-${i}`} className="border-t border-gray-100">
+                        <td className="px-3 py-2">{h.securityNameRaw}</td>
+                        <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{h.valuationDate}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                            Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {aiDraft.activities.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm text-muted">
+                {aiDraft.activities.length} transaction{aiDraft.activities.length === 1 ? '' : 's'} read. Remove any
+                line that is wrong or is not really a transaction.
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
+                  <thead className="sticky top-0 bg-gray-50 text-left">
+                    <tr>
+                      <th scope="col" className="px-3 py-2">Date</th>
+                      <th scope="col" className="px-3 py-2">Type</th>
+                      <th scope="col" className="px-3 py-2">Security</th>
+                      <th scope="col" className="px-3 py-2 text-right">Units</th>
+                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiDraft.activities.map((a, i) => (
+                      <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
+                        <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
+                        <td className="px-3 py-2">{a.transactionType}</td>
+                        <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{a.amount}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" onClick={() => removeAiDraftActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                            Remove<span className="sr-only"> the {a.transactionType} line on {a.tradeDate ?? 'an unknown date'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-muted">
+            AI-read values are shown for your confirmation only. Saving them creates statement evidence — exactly as a
+            statement we read automatically would — which you then match, reconcile and explicitly approve before
+            anything reaches your Investments.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAiDraft(null);
+                setMessage(AI_FALLBACK_DECLINED_MESSAGE);
+                setPhase('unable_to_read');
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-sm"
+            >
+              This doesn&apos;t look right
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAiDraft}
+              disabled={busy || aiDraft.holdings.length + aiDraft.activities.length === 0}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save this statement
+            </button>
+          </div>
         </div>
       )}
 

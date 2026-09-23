@@ -69,9 +69,34 @@ type Phase =
   | 'scanning'
   | 'processing'
   | 'awaiting_password'
+  // AIE bank-statement AI-fallback (2026-09-23). The native parse failed on a
+  // readable-but-unrecognised layout and an AI read a DRAFT off it; nothing
+  // is saved until the user confirms from this phase.
+  | 'ai_fallback_review'
   | 'scan_timeout'
   | 'done'
   | 'error';
+
+/** One AI-read transaction line, exactly as the confirm route accepts it. */
+interface AiDraftRow {
+  transactionDate: string;
+  descriptionRaw: string;
+  amountOriginal: number;
+  creditDebit: 'credit' | 'debit';
+  balanceAfter: number | null;
+}
+
+interface AiFallbackDraft {
+  rows: AiDraftRow[];
+  institutionName: string | null;
+  maskedAccountIdentifier: string | null;
+  statementPeriodStart: string | null;
+  statementPeriodEnd: string | null;
+  declaredOpeningBalance: number | null;
+  declaredClosingBalance: number | null;
+  allTransactionsListed: boolean;
+  warnings: string[];
+}
 
 const FAILURE_MESSAGES: Record<string, string> = {
   unsupported_file_type: 'Unsupported file type. Only PDF and CSV files are accepted.',
@@ -131,6 +156,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   // than a known, temporary limitation. `null` = not checked yet (render
   // nothing that could flash and disappear); `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // AIE bank-statement AI-fallback (2026-09-23). Held only for the lifetime of
+  // the `ai_fallback_review` phase; cleared by `reset()` and on confirm.
+  const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -160,11 +188,67 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     setDocumentId(null);
     setMessage(null);
     setSummary(null);
+    setAiDraft(null);
   }
 
   function failWith(errorCode: string | null | undefined, fallback: string) {
     setMessage((errorCode && FAILURE_MESSAGES[errorCode]) ?? fallback);
     setPhase('error');
+  }
+
+  /** Removes one AI-read line the user judges wrong. Deletion is the only
+   * per-row edit offered here, deliberately: a statement can carry dozens of
+   * lines, and an inline editable grid for all of them would duplicate the
+   * review workspace at /financial-data-hub/review that already exists for
+   * exactly that job — and which the user reaches straight after saving.
+   * Removing a line the model hallucinated or double-counted is the one
+   * correction that must happen BEFORE the write, because it is the one the
+   * balance check will otherwise trip on. */
+  function removeAiDraftRow(index: number) {
+    setAiDraft((d) => (d ? { ...d, rows: d.rows.filter((_, i) => i !== index) } : d));
+  }
+
+  async function handleConfirmAiDraft() {
+    if (!aiDraft || !documentId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/financial-data-hub/bank-pdf/${documentId}/ai-fallback/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: aiDraft.rows,
+          statementPeriodStart: aiDraft.statementPeriodStart,
+          statementPeriodEnd: aiDraft.statementPeriodEnd,
+          declaredOpeningBalance: aiDraft.declaredOpeningBalance,
+          declaredClosingBalance: aiDraft.declaredClosingBalance,
+          maskedAccountIdentifier: aiDraft.maskedAccountIdentifier,
+        }),
+      });
+      const { ok: confirmOk, json } = await readJson(res);
+      if (!confirmOk) {
+        setMessage(json.error ?? 'We could not save this statement.');
+        setPhase('error');
+        return;
+      }
+      const data = json.data ?? {};
+      // Best-effort auto-classification, exactly as the native success path
+      // does it — an AI-fallback import must land in the same state a native
+      // one does, including this.
+      try {
+        await fetch('/api/financial-data-hub/bank-transactions/categorise', { method: 'POST' });
+      } catch {
+        // Best-effort only; transactions are still correctable by hand.
+      }
+      setAiDraft(null);
+      setSummary({
+        transactionsCreated: data.transactions_created ?? 0,
+        duplicatesSkipped: data.duplicates_skipped ?? 0,
+        reconciliationStatus: data.reconciliation_status ?? null,
+      });
+      setPhase('done');
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Runs the real parse for an already-uploaded document: `detect` (CSV
@@ -208,6 +292,19 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       setPhase('awaiting_password');
       return;
     }
+    // AIE bank-statement AI-fallback (2026-09-23). Checked BEFORE the generic
+    // `error_code` branch below: when the native parse fails on a
+    // readable-but-unrecognised layout, the service returns a DRAFT instead
+    // of failing, and the document is deliberately left in `processing` with
+    // no error code. Ordering matters — placed after this branch, a perfectly
+    // good draft would still be read as a hard failure on any response that
+    // also carried an error code.
+    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
+      return;
+    }
+
     if (data.error_code) {
       failWith(data.error_code, 'This file could not be processed.');
       return;
@@ -404,6 +501,114 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
           {phase === 'processing' && 'Processing your statement — extracting transactions…'}
         </p>
+      )}
+
+      {phase === 'ai_fallback_review' && aiDraft && (
+        <div className="mt-4 space-y-4">
+          <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
+            check these transactions before saving — <strong>nothing has been saved yet</strong>.
+          </p>
+
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-muted">Institution</dt>
+              <dd>{aiDraft.institutionName ?? 'Not shown'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Period</dt>
+              <dd>
+                {aiDraft.statementPeriodStart ?? '?'} to {aiDraft.statementPeriodEnd ?? '?'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted">Opening balance</dt>
+              <dd>{aiDraft.declaredOpeningBalance ?? 'Not shown'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Closing balance</dt>
+              <dd>{aiDraft.declaredClosingBalance ?? 'Not shown'}</dd>
+            </div>
+          </dl>
+
+          {!aiDraft.allTransactionsListed && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              The AI reported that it could <strong>not</strong> list every transaction on this statement. If you save
+              this, the import will be incomplete — we recommend adding the missing transactions by hand afterwards, or
+              trying a different file.
+            </p>
+          )}
+
+          <div>
+            <p className="mb-2 text-sm text-muted">
+              {aiDraft.rows.length} transaction{aiDraft.rows.length === 1 ? '' : 's'} read. Remove any line that is
+              wrong or is not really a transaction.
+            </p>
+            <div className="max-h-80 overflow-y-auto rounded border border-gray-200">
+              <table className="w-full text-sm">
+                <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Description</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2">In/Out</th>
+                    <th scope="col" className="px-3 py-2">
+                      <span className="sr-only">Remove</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.rows.map((row, i) => (
+                    <tr key={`${row.transactionDate}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{row.transactionDate}</td>
+                      <td className="px-3 py-2">{row.descriptionRaw}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{row.amountOriginal.toFixed(2)}</td>
+                      <td className="px-3 py-2">{row.creditDebit === 'credit' ? 'In' : 'Out'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => removeAiDraftRow(i)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                        >
+                          Remove<span className="sr-only"> the {row.descriptionRaw} transaction on {row.transactionDate}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted">
+            AI-read values are shown for your confirmation only. When you save, we check these transactions against the
+            statement&apos;s own opening and closing balances — exactly as we do for a statement we read automatically —
+            and flag the import for review if they do not add up.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAiDraft(null);
+                setMessage(FAILURE_MESSAGES.layout_unsupported);
+                setPhase('error');
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-sm"
+            >
+              This doesn&apos;t look right
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAiDraft}
+              disabled={busy || aiDraft.rows.length === 0}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save these transactions
+            </button>
+          </div>
+        </div>
       )}
 
       {phase === 'scan_timeout' && (

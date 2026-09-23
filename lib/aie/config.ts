@@ -95,6 +95,45 @@ export function getAieAiMaxOutputTokensPerDocument(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 512;
 }
 
+/**
+ * The SEPARATE output budget for LINE-ITEM documents (2026-09-23, AIE unified
+ * document fallback).
+ *
+ * WHY A SECOND BUDGET RATHER THAN RAISING THE FIRST. Every AI-fallback
+ * adapter before this one extracted a fixed, small set of SCALAR facts — a
+ * payslip's ~22 header totals, an insurance schedule's 5 fields — for which
+ * 512 output tokens is ample. The four document types added by this dispatch
+ * are different in kind: a bank statement, a retirement statement and a
+ * broker statement are LINE-ITEM documents whose useful content is an array
+ * of transactions or holdings. At 512 output tokens a model cannot emit even
+ * twenty transaction rows, so the call does not fail loudly — it returns a
+ * TRUNCATED array, which is far worse than an error because a truncated
+ * statement still looks plausible.
+ *
+ * Raising `AIE_AI_MAX_OUTPUT_TOKENS` itself would have silently widened the
+ * per-call cost ceiling for payslip, insurance and Investment Intelligence
+ * too — three mechanisms this dispatch has no authority over and did not
+ * test. A separate, separately-overridable value keeps the blast radius to
+ * the adapters that actually need it.
+ *
+ * 4096 is chosen against this codebase's own numbers rather than picked: at
+ * gpt-4o-mini's $0.60 / 1M output tokens (see this file's pricing disclosure)
+ * a fully-used 4096-token response costs about a quarter of a cent, and it
+ * admits roughly 80 transaction rows in this schema's shape — which is the
+ * `maxItems` the bank-statement schema sets.
+ *
+ * TRUNCATION IS STILL POSSIBLE AND IS NOT LEFT TO TRUST. A statement with
+ * more rows than the cap is caught deterministically downstream: the AI's
+ * rows are re-run through the SAME `reconcileBalances` rollforward the native
+ * parser uses, and a missing row makes the closing balance disagree, which
+ * marks the import `review_required` rather than certified. The schema also
+ * asks the model to state explicitly whether it listed every row.
+ */
+export function getAieAiMaxOutputTokensPerLineItemDocument(): number {
+  const raw = Number(process.env.AIE_AI_MAX_OUTPUT_TOKENS_LINE_ITEMS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 4096;
+}
+
 /** Conservative worst-case input-token estimate used for the PRE-call cost
  * RESERVATION (mission section 8: "reserve a conservative maximum before
  * the provider call"). Actual masked-text length varies per document; this
