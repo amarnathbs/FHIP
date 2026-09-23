@@ -87,11 +87,13 @@ function migrationFilenames(): string[] {
  * the first link, but it can never be found by searching for the name, because
  * it never writes it.
  *
- * The proof that the implicit name really does match is not that 0064's
- * `drop constraint if exists` succeeds — `if exists` would pass silently
- * either way. It is that R7's ten event types work in production: had the drop
- * missed, 0058's 9-value constraint would still be in force and would reject
- * every one of them.
+ * The proof that the implicit name really does match is NOT that 0064's
+ * `drop constraint if exists` succeeds — `if exists` passes silently whether or
+ * not it matched anything, so DDL exit status cannot establish constraint
+ * identity. The proof is runtime: two CHECKs on the same column are ANDed, so
+ * had that drop missed, the effective vocabulary would be the INTERSECTION of
+ * 0058's 9 values and 0064's 19 — i.e. still 9 — and every one of R7's ten new
+ * event types would be rejected in production. They are not.
  *
  * Starting the chain at 0064 instead (an earlier version of this file did)
  * makes 0064 look like a 19-value base that needs TWO named constants to
