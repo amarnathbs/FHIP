@@ -497,4 +497,55 @@ Net Pay                   1,640.00          4,720.00`,
       proves: 'a derivable gross is derived from the document’s own arithmetic and labelled as derived',
     },
   },
+
+  // =========================================================================
+  // PL-11 — NO READABLE HEADER, AND THE COLUMNS ARE THE WRONG WAY ROUND.
+  //
+  // The last line of defence. There is no header row to read the order from,
+  // so the first reading takes the left column as the period — and the
+  // document's own figures then break the one invariant a year-to-date
+  // column cannot break (a cumulative total is never SMALLER than the period
+  // it contains). The orientation is flipped only because the document
+  // proved the first reading impossible, and the correction is disclosed.
+  // =========================================================================
+  {
+    id: 'PL-11',
+    description: 'No header row and the year-to-date column on the left — the cumulative-YTD invariant settles it',
+    // ORACLE ARITHMETIC (by hand):
+    //   Each row prints YTD then this pay. YTD >= period on every row, so
+    //   only one reading of the columns is possible:
+    //     earnings   2,870.00 ; deductions 566.00
+    //     expected net = 2,304.00 = stated -> RECONCILED, variance 0
+    //   No gross total is printed for the period, but 2,870.00 - 566.00
+    //   equals the stated net exactly, so gross = 2,870.00 (DERIVED).
+    //   The document's own YTD gross line reads 75,217.63.
+    text: `Payslip
+Employer: Northwind Services Pty Ltd
+Employee: A Person
+Pay Period: 22/12/2025 - 04/01/2026
+Payment Date: 06/01/2026
+
+Ordinary Hours           75,217.63       2,870.00
+PAYG Withholding         18,455.00         566.00
+Net Pay                  56,762.63       2,304.00
+Gross Payments YTD       75,217.63`,
+    parseOptions: { declaredCountry: 'AU', declaredCurrency: 'AUD' },
+    expected: {
+      ...AU_META,
+      employerName: 'Northwind Services Pty Ltd',
+      payPeriodStart: '2025-12-22', payPeriodEnd: '2026-01-04', paymentDate: '2026-01-06',
+      payFrequency: 'fortnightly', payFrequencySource: 'derived_from_period',
+      grossPay: 2870, basePay: 2870,
+      taxWithheld: 566,
+      netPay: 2304,
+      ytdGross: 75217.63, ytdTax: 18455, ytdNet: 56762.63,
+      reconciliationStatus: 'reconciled', reconciliationVariance: 0,
+    },
+    layout: {
+      columnPlanSource: 'ytd_present_no_header',
+      grossPaySource: 'derived_from_components',
+      requiredWarnings: ['column_orientation_corrected', 'column_header_not_identified'],
+      proves: 'the cumulative-YTD invariant corrects a headerless, reversed layout — and discloses that it did',
+    },
+  },
 ];

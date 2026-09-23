@@ -150,6 +150,23 @@ describe('FDH-9 payslip correction — the write path', () => {
   });
 });
 
+describe('the variance safety net is strengthened, never quieted', () => {
+  it('layout uncertainty forces review in addition to the two original triggers', () => {
+    const block = /review_status:[\s\S]*?'not_required',/.exec(SERVICE)![0];
+    // The two original triggers must survive verbatim.
+    expect(block).toContain("bankMatchStatus === 'multiple_candidates'");
+    expect(block).toContain("reconciliation.status === 'variance'");
+    // ...plus the new ones.
+    expect(block).toContain('column_mapping_ambiguous');
+    expect(block).toContain('column_orientation_corrected');
+    expect(block).toContain('column_orientation_unresolved');
+  });
+
+  it('records where a gross figure came from on every insert', () => {
+    expect(SERVICE).toContain('gross_pay_source: extraction.grossPaySource ?? null');
+  });
+});
+
 describe('FDH-9 payslip correction — one closed field vocabulary across all three layers', () => {
   const all = [
     ...PAYROLL_CORRECTABLE_TEXT_FIELDS,

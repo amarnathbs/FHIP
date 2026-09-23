@@ -147,6 +147,17 @@ describe('FDH-9 payslip table shape vs independent oracle', () => {
     expect(result.method).toBe('components');
   });
 
+  it('PL-11 regression: a headerless, reversed layout is corrected by the document’s own figures, and says so', () => {
+    const f = PAYSLIP_LAYOUT_FIXTURES.find((x) => x.id === 'PL-11')!;
+    const extraction = parse(f.text, f.parseOptions);
+    expect(extraction.basePay).toBe(2870);
+    expect(extraction.basePay).not.toBe(75217.63);
+    expect(extraction.ytdGross).toBe(75217.63);
+    // The correction is disclosed, never silent — and it is what forces this
+    // event to `review_status = 'pending'` in `persistPayrollEvidence`.
+    expect(extraction.warnings).toContain('column_orientation_corrected');
+  });
+
   it('PL-09 regression: an unprovable gross stays absent — not zero, not guessed', () => {
     const f = PAYSLIP_LAYOUT_FIXTURES.find((x) => x.id === 'PL-09')!;
     const extraction = parse(f.text, f.parseOptions);
