@@ -362,7 +362,7 @@ begin
 
     -- Union, not replace: a field corrected in an earlier round stays flagged.
     user_corrected_fields = (
-      select coalesce(array_agg(distinct f order by f), '{}')
+      select coalesce(array_agg(distinct f order by f), '{}'::text[])
       from unnest(user_corrected_fields || v_changed) as f
     ),
     last_corrected_at = now(),
