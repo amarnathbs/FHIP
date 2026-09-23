@@ -1,7 +1,7 @@
 | Case | Scenario | Field P | Field R | Econ P | Econ R | Unexplained omissions | False accept | False canonical write |
 |---|---|---|---|---|---|---|---|---|
-| INS-B01 | normal policy schedule | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
-| INS-B02 | multi-page policy schedule | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
+| INS-B02 | multi-page policy schedule | 33.33% | 37.50% | 0.00% | 0.00% | 2 | no | no |
+| INS-B01 | normal policy schedule | 88.89% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | INS-B03 | terminology variants | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | INS-B04 | renewal notice with structured benefit fields | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | INS-B05 | missing policy name requiring AI clarification | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
@@ -14,8 +14,8 @@
 | INS-B12 | ADDITIVE — money printed under an unrecognised label | 100.00% | 100.00% | 100.00% | 66.67% | 0 | no | no |
 | INS-B13 | ADDITIVE — India / INR jurisdiction variant carrying PII, product name absent | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | INS-B14 | ADDITIVE — renewal date printed in a non-ISO format | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
-| **ALL 14** | — | **100.00%** | **100.00%** | **100.00%** | **82.76%** | **0** | **0.00%** | **0.00%** |
+| **ALL 14** | — | **91.91%** | **94.08%** | **91.67%** | **75.86%** | **2** | **0.00%** | **0.00%** |
 
-- unexplained economic omissions: **0**
+- unexplained economic omissions: **2**
 - false accept rate: **0.00%** (0 of 9 must-not-be-acceptable cases)
 - false canonical write rate: **0.00%** (0 of 14 cases)

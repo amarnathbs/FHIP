@@ -3,25 +3,143 @@
   "generatedBy": "tests/unit/m12bInsuranceAccuracyCorpus.test.ts",
   "summary": {
     "caseCount": 14,
-    "fieldPrecision": 1,
-    "fieldRecall": 1,
-    "economicPrecision": 1,
-    "economicRecall": 0.8275862068965517,
+    "fieldPrecision": 0.9190751445086706,
+    "fieldRecall": 0.9408284023668639,
+    "economicPrecision": 0.9166666666666666,
+    "economicRecall": 0.7586206896551724,
     "falseAcceptRate": 0,
     "falseAcceptCount": 0,
     "falseAcceptDenominator": 9,
     "falseCanonicalWriteRate": 0,
     "falseCanonicalWriteCount": 0,
-    "totalUnexplainedOmissions": 0
+    "totalUnexplainedOmissions": 2
   },
   "cases": [
+    {
+      "caseId": "INS-B02",
+      "scenario": "multi-page policy schedule",
+      "fieldTruePositives": 6,
+      "fieldFalsePositives": 12,
+      "fieldFalseNegatives": 10,
+      "fieldPrecision": 0.3333333333333333,
+      "fieldRecall": 0.375,
+      "economicMatched": 0,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        "cover:1",
+        "premium:1"
+      ],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [
+        {
+          "fieldName": "policyName",
+          "expected": "Family Shield Home Cover",
+          "observed": "Protection Plus Life Cover"
+        },
+        {
+          "fieldName": "coverType",
+          "expected": "home",
+          "observed": "life"
+        },
+        {
+          "fieldName": "coverAmount",
+          "expected": "850000",
+          "observed": "500000"
+        },
+        {
+          "fieldName": "premium",
+          "expected": "310.5",
+          "observed": "120"
+        },
+        {
+          "fieldName": "premiumFrequency",
+          "expected": "quarterly",
+          "observed": "monthly"
+        },
+        {
+          "fieldName": "renewalDate",
+          "expected": "2027-03-15",
+          "observed": "2027-08-31"
+        },
+        {
+          "fieldName": "provider",
+          "expected": "Northern Reach Insurance Group",
+          "observed": "Southern Cross Mutual Assurance"
+        },
+        {
+          "fieldName": "policyNumberMasked",
+          "expected": "******4512",
+          "observed": "******0983"
+        },
+        {
+          "fieldName": "policyOwnerName",
+          "expected": "Sam Quinn Harper",
+          "observed": "Jordan Avery Lee"
+        },
+        {
+          "fieldName": "printedAnnualPremiumTotal",
+          "expected": "1242",
+          "observed": "1440"
+        },
+        {
+          "fieldName": "insuredPersonName",
+          "expected": null,
+          "observed": "Jordan Avery Lee"
+        },
+        {
+          "fieldName": "beneficiaryName",
+          "expected": null,
+          "observed": "Morgan Riley Lee"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": "cover:1",
+          "expected": {
+            "key": "cover:1",
+            "date": null,
+            "amount": 850000,
+            "direction": "cover",
+            "balance": null
+          },
+          "observed": {
+            "key": "cover:1",
+            "date": null,
+            "amount": 500000,
+            "direction": "cover",
+            "balance": null
+          }
+        },
+        {
+          "key": "premium:1",
+          "expected": {
+            "key": "premium:1",
+            "date": null,
+            "amount": 310.5,
+            "direction": "premium",
+            "balance": null
+          },
+          "observed": {
+            "key": "premium:1",
+            "date": null,
+            "amount": 120,
+            "direction": "premium",
+            "balance": null
+          }
+        }
+      ]
+    },
     {
       "caseId": "INS-B01",
       "scenario": "normal policy schedule",
       "fieldTruePositives": 16,
-      "fieldFalsePositives": 0,
+      "fieldFalsePositives": 2,
       "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
+      "fieldPrecision": 0.8888888888888888,
       "fieldRecall": 1,
       "economicMatched": 2,
       "economicObserved": 2,
@@ -31,26 +149,18 @@
       "unexplainedOmissions": [],
       "falseAccept": false,
       "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
-    },
-    {
-      "caseId": "INS-B02",
-      "scenario": "multi-page policy schedule",
-      "fieldTruePositives": 16,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 2,
-      "economicObserved": 2,
-      "economicExpected": 2,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
-      "falseAccept": false,
-      "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
+      "fieldDisagreements": [
+        {
+          "fieldName": "excessAmount",
+          "expected": null,
+          "observed": "750"
+        },
+        {
+          "fieldName": "exclusionsText",
+          "expected": null,
+          "observed": "Flood damage excluded in declared catchment zones."
+        }
+      ],
       "economicDisagreements": []
     },
     {
@@ -341,6 +451,125 @@
     }
   ],
   "evidence": {
+    "INS-B02": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "passwordRequired": false,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "stale_conflict"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "aiOutcomes": [],
+      "maskingSummaries": [],
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 14.4
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
+        },
+        {
+          "ruleId": "insurance_document_class_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_required_fields_present",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_currency_supported",
+          "ruleVersion": "1",
+          "outcome": "pass"
+        },
+        {
+          "ruleId": "insurance_multi_component_not_supported",
+          "ruleVersion": "1",
+          "outcome": "not_applicable"
+        },
+        {
+          "ruleId": "insurance_premium_totals_reconciled",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 12.42
+        },
+        {
+          "ruleId": "insurance_printed_fact_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "materiality": "all_printed_facts_read"
+        }
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ],
+      "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin",
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
+      ],
+      "canonicalRowsWritten": [
+        {
+          "policy_name": "Protection Plus Life Cover",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 120,
+          "premium_frequency": "monthly",
+          "currency_code": "AUD",
+          "renewal_date": "2027-08-31",
+          "waiting_period_days": null,
+          "benefit_period": null,
+          "provider": "Southern Cross Mutual Assurance",
+          "owner": "self",
+          "master_item_key": null,
+          "notes": null
+        }
+      ]
+    },
     "INS-B01": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
@@ -388,52 +617,7 @@
           "ruleVersion": "1",
           "outcome": "pass",
           "materiality": "all_printed_facts_read"
-        }
-      ],
-      "intakeStatusUpdates": [
-        {
-          "toStatus": "quarantined"
         },
-        {
-          "toStatus": "ready"
-        }
-      ],
-      "binariesFinalized": [
-        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
-      ],
-      "canonicalRowsWritten": [
-        {
-          "policy_name": "Protection Plus Life Cover",
-          "cover_type": "life",
-          "cover_amount": 500000,
-          "premium": 120,
-          "premium_frequency": "monthly",
-          "currency_code": "AUD",
-          "renewal_date": "2027-08-31",
-          "waiting_period_days": null,
-          "benefit_period": null,
-          "provider": "Southern Cross Mutual Assurance",
-          "owner": "self",
-          "master_item_key": null,
-          "notes": null
-        }
-      ]
-    },
-    "INS-B02": {
-      "observedTerminalStatus": "awaiting_acceptance",
-      "observedRejectionReason": null,
-      "passwordRequired": false,
-      "intakeThrew": null,
-      "acceptOutcome": {
-        "ok": true
-      },
-      "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
-      "aiCompletionAttempts": 0,
-      "aiOutcomes": [],
-      "maskingSummaries": [],
-      "unresolvedItems": [],
-      "reconciliationResults": [
         {
           "ruleId": "insurance_document_class_supported",
           "ruleVersion": "1",
@@ -473,24 +657,31 @@
           "toStatus": "quarantined"
         },
         {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        },
+        {
           "toStatus": "ready"
         }
       ],
       "binariesFinalized": [
+        "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin",
         "user-m12b/intake-insurance-corpus/intake-insurance-corpus.bin"
       ],
       "canonicalRowsWritten": [
         {
-          "policy_name": "Family Shield Home Cover",
-          "cover_type": "home",
-          "cover_amount": 850000,
-          "premium": 310.5,
-          "premium_frequency": "quarterly",
+          "policy_name": "Protection Plus Life Cover",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 120,
+          "premium_frequency": "monthly",
           "currency_code": "AUD",
-          "renewal_date": "2027-03-15",
+          "renewal_date": "2027-08-31",
           "waiting_period_days": null,
           "benefit_period": null,
-          "provider": "Northern Reach Insurance Group",
+          "provider": "Southern Cross Mutual Assurance",
           "owner": "self",
           "master_item_key": null,
           "notes": null

@@ -389,10 +389,10 @@ grant execute on function fdh9_correct_payroll_event(uuid, jsonb, text, text, nu
 -- 4. AUDIT-EVENT VOCABULARY WIDENING
 -- ===========================================================================
 --
--- ONE new value: `payroll_event_corrected`. The list below is migration
--- 0173's list verbatim plus that value — a STRICT SUPERSET, verified value by
--- value against 0173 rather than assumed, following the widening discipline
--- 0064/0068/0071/0076/0091/0096/0106/0112/0173 established.
+-- ONE new value: `payroll_event_corrected`. The list below is the CURRENT
+-- constraint (migrations 0173 + 0180) verbatim plus that value — a STRICT
+-- SUPERSET, verified value by value rather than assumed, following the widening
+-- discipline 0064/0068/0071/0076/0091/0096/0106/0112/0173/0180 established.
 alter table fdh_document_audit_events
   drop constraint if exists fdh_document_audit_events_event_type_check;
 alter table fdh_document_audit_events
@@ -460,6 +460,39 @@ alter table fdh_document_audit_events
       'payslip_ai_fallback_draft_ready',
       'payslip_ai_fallback_not_usable',
       'payslip_ai_fallback_confirmed',
+      -- AIE unified AI-fallback additions for the other four document types
+      -- (migration 0180). Added here because 0180 landed on `main` after this
+      -- migration was first drafted: this constraint is DROPped and recreated,
+      -- so omitting them would silently REVOKE 0180's vocabulary. Verified
+      -- value-by-value against 0180 as a strict superset, not assumed.
+      'bank_statement_ai_fallback_attempted',
+      'bank_statement_ai_fallback_masking_below_policy',
+      'bank_statement_ai_fallback_provider_outcome',
+      'bank_statement_ai_fallback_insufficient_fields',
+      'bank_statement_ai_fallback_draft_ready',
+      'bank_statement_ai_fallback_not_usable',
+      'bank_statement_ai_fallback_confirmed',
+      'investment_statement_ai_fallback_attempted',
+      'investment_statement_ai_fallback_masking_below_policy',
+      'investment_statement_ai_fallback_provider_outcome',
+      'investment_statement_ai_fallback_insufficient_fields',
+      'investment_statement_ai_fallback_draft_ready',
+      'investment_statement_ai_fallback_not_usable',
+      'investment_statement_ai_fallback_confirmed',
+      'liability_statement_ai_fallback_attempted',
+      'liability_statement_ai_fallback_masking_below_policy',
+      'liability_statement_ai_fallback_provider_outcome',
+      'liability_statement_ai_fallback_insufficient_fields',
+      'liability_statement_ai_fallback_draft_ready',
+      'liability_statement_ai_fallback_not_usable',
+      'liability_statement_ai_fallback_confirmed',
+      'retirement_statement_ai_fallback_attempted',
+      'retirement_statement_ai_fallback_masking_below_policy',
+      'retirement_statement_ai_fallback_provider_outcome',
+      'retirement_statement_ai_fallback_insufficient_fields',
+      'retirement_statement_ai_fallback_draft_ready',
+      'retirement_statement_ai_fallback_not_usable',
+      'retirement_statement_ai_fallback_confirmed',
       -- Payslip review/correction addition (this migration).
       -- Metadata carries the corrected field NAMES only — never the figures,
       -- which already live in their own columns (auditLog.ts's own rule:

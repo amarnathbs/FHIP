@@ -3,37 +3,18 @@
   "generatedBy": "tests/unit/m12aFdhBankAccuracyCorpus.test.ts",
   "summary": {
     "caseCount": 12,
-    "fieldPrecision": 1,
-    "fieldRecall": 1,
-    "economicPrecision": 1,
-    "economicRecall": 0.925,
+    "fieldPrecision": 0.825,
+    "fieldRecall": 0.9209302325581395,
+    "economicPrecision": 0.7857142857142857,
+    "economicRecall": 0.825,
     "falseAcceptRate": 0,
     "falseAcceptCount": 0,
     "falseAcceptDenominator": 5,
     "falseCanonicalWriteRate": 0,
     "falseCanonicalWriteCount": 0,
-    "totalUnexplainedOmissions": 0
+    "totalUnexplainedOmissions": 4
   },
   "cases": [
-    {
-      "caseId": "FDH-A01",
-      "scenario": "normal bank PDF",
-      "fieldTruePositives": 23,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 4,
-      "economicObserved": 4,
-      "economicExpected": 4,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
-      "falseAccept": false,
-      "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
-    },
     {
       "caseId": "FDH-A02",
       "scenario": "multi-page transaction history",
@@ -52,6 +33,365 @@
       "falseCanonicalWrite": false,
       "fieldDisagreements": [],
       "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A01",
+      "scenario": "normal bank PDF",
+      "fieldTruePositives": 6,
+      "fieldFalsePositives": 42,
+      "fieldFalseNegatives": 17,
+      "fieldPrecision": 0.125,
+      "fieldRecall": 0.2608695652173913,
+      "economicMatched": 0,
+      "economicObserved": 9,
+      "economicExpected": 4,
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [
+        {
+          "fieldName": "txn:1:amount",
+          "expected": "45.2",
+          "observed": "12.5"
+        },
+        {
+          "fieldName": "txn:1:balance",
+          "expected": "954.8",
+          "observed": "4987.5"
+        },
+        {
+          "fieldName": "txn:1:description",
+          "expected": "CARD PURCHASE WOOLWORTHS 1234",
+          "observed": "POS COLES 4471"
+        },
+        {
+          "fieldName": "txn:2:date",
+          "expected": "2026-08-03",
+          "observed": "2026-08-02"
+        },
+        {
+          "fieldName": "txn:2:amount",
+          "expected": "500",
+          "observed": "7.25"
+        },
+        {
+          "fieldName": "txn:2:direction",
+          "expected": "credit",
+          "observed": "debit"
+        },
+        {
+          "fieldName": "txn:2:balance",
+          "expected": "1454.8",
+          "observed": "4980.25"
+        },
+        {
+          "fieldName": "txn:2:description",
+          "expected": "SALARY XYZ PTY LTD",
+          "observed": "POS BAKERY LANE"
+        },
+        {
+          "fieldName": "txn:3:date",
+          "expected": "2026-08-05",
+          "observed": "2026-08-03"
+        },
+        {
+          "fieldName": "txn:3:amount",
+          "expected": "220.24",
+          "observed": "1500"
+        },
+        {
+          "fieldName": "txn:3:direction",
+          "expected": "debit",
+          "observed": "credit"
+        },
+        {
+          "fieldName": "txn:3:balance",
+          "expected": "1234.56",
+          "observed": "6480.25"
+        },
+        {
+          "fieldName": "txn:3:description",
+          "expected": "DIRECT DEBIT INSURANCE",
+          "observed": "SALARY ACME PTY LTD"
+        },
+        {
+          "fieldName": "txn:4:date",
+          "expected": "2026-08-08",
+          "observed": "2026-08-04"
+        },
+        {
+          "fieldName": "txn:4:amount",
+          "expected": "100",
+          "observed": "900"
+        },
+        {
+          "fieldName": "txn:4:balance",
+          "expected": "1134.56",
+          "observed": "5580.25"
+        },
+        {
+          "fieldName": "txn:4:description",
+          "expected": "ATM CASH WITHDRAWAL",
+          "observed": "RENT PAYMENT"
+        },
+        {
+          "fieldName": "txn:5:date",
+          "expected": null,
+          "observed": "2026-08-05"
+        },
+        {
+          "fieldName": "txn:5:amount",
+          "expected": null,
+          "observed": "120.75"
+        },
+        {
+          "fieldName": "txn:5:direction",
+          "expected": null,
+          "observed": "debit"
+        },
+        {
+          "fieldName": "txn:5:balance",
+          "expected": null,
+          "observed": "5459.5"
+        },
+        {
+          "fieldName": "txn:5:description",
+          "expected": null,
+          "observed": "UTILITIES BILL"
+        },
+        {
+          "fieldName": "txn:6:date",
+          "expected": null,
+          "observed": "2026-08-06"
+        },
+        {
+          "fieldName": "txn:6:amount",
+          "expected": null,
+          "observed": "3.1"
+        },
+        {
+          "fieldName": "txn:6:direction",
+          "expected": null,
+          "observed": "credit"
+        },
+        {
+          "fieldName": "txn:6:balance",
+          "expected": null,
+          "observed": "5462.6"
+        },
+        {
+          "fieldName": "txn:6:description",
+          "expected": null,
+          "observed": "INTEREST CREDIT"
+        },
+        {
+          "fieldName": "txn:7:date",
+          "expected": null,
+          "observed": "2026-08-07"
+        },
+        {
+          "fieldName": "txn:7:amount",
+          "expected": null,
+          "observed": "65.4"
+        },
+        {
+          "fieldName": "txn:7:direction",
+          "expected": null,
+          "observed": "debit"
+        },
+        {
+          "fieldName": "txn:7:balance",
+          "expected": null,
+          "observed": "5397.2"
+        },
+        {
+          "fieldName": "txn:7:description",
+          "expected": null,
+          "observed": "CARD PURCHASE FUEL STOP"
+        },
+        {
+          "fieldName": "txn:8:date",
+          "expected": null,
+          "observed": "2026-08-08"
+        },
+        {
+          "fieldName": "txn:8:amount",
+          "expected": null,
+          "observed": "400"
+        },
+        {
+          "fieldName": "txn:8:direction",
+          "expected": null,
+          "observed": "debit"
+        },
+        {
+          "fieldName": "txn:8:balance",
+          "expected": null,
+          "observed": "4997.2"
+        },
+        {
+          "fieldName": "txn:8:description",
+          "expected": null,
+          "observed": "TRANSFER TO SAVINGS"
+        },
+        {
+          "fieldName": "txn:9:date",
+          "expected": null,
+          "observed": "2026-08-09"
+        },
+        {
+          "fieldName": "txn:9:amount",
+          "expected": null,
+          "observed": "22.8"
+        },
+        {
+          "fieldName": "txn:9:direction",
+          "expected": null,
+          "observed": "credit"
+        },
+        {
+          "fieldName": "txn:9:balance",
+          "expected": null,
+          "observed": "5020"
+        },
+        {
+          "fieldName": "txn:9:description",
+          "expected": null,
+          "observed": "REFUND MERCHANT"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 45.2,
+            "direction": "debit",
+            "balance": 954.8
+          },
+          "observed": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 12.5,
+            "direction": "debit",
+            "balance": 4987.5
+          }
+        },
+        {
+          "key": 2,
+          "expected": {
+            "key": 2,
+            "date": "2026-08-03",
+            "amount": 500,
+            "direction": "credit",
+            "balance": 1454.8
+          },
+          "observed": {
+            "key": 2,
+            "date": "2026-08-02",
+            "amount": 7.25,
+            "direction": "debit",
+            "balance": 4980.25
+          }
+        },
+        {
+          "key": 3,
+          "expected": {
+            "key": 3,
+            "date": "2026-08-05",
+            "amount": 220.24,
+            "direction": "debit",
+            "balance": 1234.56
+          },
+          "observed": {
+            "key": 3,
+            "date": "2026-08-03",
+            "amount": 1500,
+            "direction": "credit",
+            "balance": 6480.25
+          }
+        },
+        {
+          "key": 4,
+          "expected": {
+            "key": 4,
+            "date": "2026-08-08",
+            "amount": 100,
+            "direction": "debit",
+            "balance": 1134.56
+          },
+          "observed": {
+            "key": 4,
+            "date": "2026-08-04",
+            "amount": 900,
+            "direction": "debit",
+            "balance": 5580.25
+          }
+        },
+        {
+          "key": 5,
+          "expected": null,
+          "observed": {
+            "key": 5,
+            "date": "2026-08-05",
+            "amount": 120.75,
+            "direction": "debit",
+            "balance": 5459.5
+          }
+        },
+        {
+          "key": 6,
+          "expected": null,
+          "observed": {
+            "key": 6,
+            "date": "2026-08-06",
+            "amount": 3.1,
+            "direction": "credit",
+            "balance": 5462.6
+          }
+        },
+        {
+          "key": 7,
+          "expected": null,
+          "observed": {
+            "key": 7,
+            "date": "2026-08-07",
+            "amount": 65.4,
+            "direction": "debit",
+            "balance": 5397.2
+          }
+        },
+        {
+          "key": 8,
+          "expected": null,
+          "observed": {
+            "key": 8,
+            "date": "2026-08-08",
+            "amount": 400,
+            "direction": "debit",
+            "balance": 4997.2
+          }
+        },
+        {
+          "key": 9,
+          "expected": null,
+          "observed": {
+            "key": 9,
+            "date": "2026-08-09",
+            "amount": 22.8,
+            "direction": "credit",
+            "balance": 5020
+          }
+        }
+      ]
     },
     {
       "caseId": "FDH-A03",
@@ -281,6 +621,71 @@
     }
   ],
   "evidence": {
+    "FDH-A02": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "stale_conflict"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        },
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1",
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
     "FDH-A01": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
@@ -308,32 +713,7 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "all_printed_rows_read"
-        }
-      ],
-      "accountIdentityReuseObserved": [
-        "oracle-account-1"
-      ],
-      "intakeStatusUpdates": [
-        {
-          "toStatus": "quarantined"
         },
-        {
-          "toStatus": "ready"
-        }
-      ]
-    },
-    "FDH-A02": {
-      "observedTerminalStatus": "awaiting_acceptance",
-      "observedRejectionReason": null,
-      "intakeThrew": null,
-      "acceptOutcome": {
-        "ok": true
-      },
-      "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
-      "aiCompletionAttempts": 0,
-      "unresolvedItems": [],
-      "reconciliationResults": [
         {
           "ruleId": "fdh_bank_statement_balance_reconciliation",
           "ruleVersion": "1",
@@ -352,11 +732,18 @@
         }
       ],
       "accountIdentityReuseObserved": [
+        "oracle-account-1",
         "oracle-account-1"
       ],
       "intakeStatusUpdates": [
         {
           "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
         },
         {
           "toStatus": "ready"

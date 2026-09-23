@@ -46,6 +46,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       page_count: result.document.page_count,
       declared_row_count: result.document.declared_row_count,
       parsed_row_count: result.document.parsed_row_count,
+      // AIE bank-statement AI-fallback (2026-09-23). Present (non-null) ONLY
+      // when `pipeline_status === 'ai_fallback_available'`, i.e. the native
+      // parse failed on a readable-but-unrecognised layout and an AI read a
+      // DRAFT off it. Nothing has been written at this point; the panel shows
+      // this for explicit review and then posts it to
+      // `.../ai-fallback/confirm`.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof BankPdfProcessingError) {

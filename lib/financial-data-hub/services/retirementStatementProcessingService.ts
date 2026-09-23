@@ -53,7 +53,25 @@ import { matchContributionToPayslip, type PayrollEventEvidence } from '../retire
 import { matchRetirementActivityToBank, type BankTransactionEvidence } from '../retirement/bankMatching';
 import { matchRolloverCounterpart, type RolloverLeg } from '../retirement/rolloverIntelligence';
 import { minorUnitsToDecimalString } from '../retirement/money';
-import type { RetirementJurisdiction } from '../retirement/types';
+import type { RetirementJurisdiction, RetirementStatementExtraction, RetirementStatementType, RetirementAccountType } from '../retirement/types';
+// AIE retirement-statement AI-fallback (2026-09-23). Follows the pattern
+// proven by the payslip and bank-statement paths: call the shared AIE gateway
+// DIRECTLY from inside this native processing service's own failure branch,
+// rather than routing through the `lib/aie/orchestrator.ts` intake/accept
+// pipeline, whose three existing adapters were all found to have zero
+// frontend callers. See `lib/aie/adapters/retirement/index.ts` and
+// `docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md`.
+import {
+  isAieRetirementAiFallbackEnabled,
+  requestRetirementAiExtraction,
+  mapRetirementFactsToExtraction,
+} from '@/lib/aie/adapters/retirement';
+import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+// The retirement service holds only BYTES at its failure branch — there is no
+// extracted-text variable, because detection decodes the CSV into a local and
+// never returns it. `decodeCsvBytes` is the same pure decoder the detector
+// itself uses, so masking sees exactly the text the parser saw.
+import { decodeCsvBytes } from '../bank-csv/csv';
 import type { FdhStatementUpload } from '../domain/types';
 import { fetchAllRows } from '../bank-csv/pagination';
 
@@ -105,11 +123,71 @@ export interface UploadRetirementStatementResult {
   // 'pending_scan' (2026-09-21, real-malware-gate async fix): see the
   // identical addition + rationale on `UploadAuInvestmentStatementResult`
   // in investmentStatementProcessingService.ts.
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'routed_to_smsf' | 'pending_scan';
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'routed_to_smsf' | 'pending_scan' | 'ai_fallback_available';
   failureKind?: string;
   activitiesExtracted: number;
   activitiesDeduplicated: number;
   positionsExtracted: number;
+  /**
+   * Populated ONLY when `pipelineStatus === 'ai_fallback_available'`. A DRAFT
+   * an AI read off a statement the deterministic CSV parser could not
+   * recognise — NOTHING has been written yet.
+   *
+   * HOW THIS DIFFERS FROM THE PAYSLIP PATH, STATED EXPLICITLY BECAUSE IT IS A
+   * REAL DIVERGENCE AND NOT AN OVERSIGHT. The payslip service parks its draft
+   * by leaving the document in `processing`, and its confirm step gates on
+   * that status. THIS service never persists `processing` at all — it calls
+   * `assertDocumentTransition` purely as a guard and writes no status on the
+   * success path — so there is no equivalent parking state to gate on.
+   *
+   * The fallback therefore deliberately does NOT call `failDocument` before
+   * returning this draft, leaving the document in `queued`, and
+   * `confirmAiRetirementFallback` gates instead on the pair
+   * "(still `queued`/`uploaded`) AND (no `fdh_retirement_statements` row
+   * exists for this upload yet)". That pair is what makes a replayed or stale
+   * confirm a no-op rather than a double-write: the second call finds a
+   * statement row and refuses.
+   */
+  aiFallbackDraft?: RetirementStatementExtraction;
+}
+
+/**
+ * Failure kinds this adapter will attempt an AI-fallback extraction for.
+ *
+ * DELIBERATELY NARROW, mirroring the payslip and bank-statement paths. The
+ * test is "is there decodable text that the LAYOUT parser could not
+ * recognise", not "did extraction fail":
+ *   - `manual_mapping_required` — detection scored below the confidence
+ *     floor. The primary case: a real super statement in a layout FHIP has
+ *     no adapter for.
+ *   - `ambiguous_format` — two adapters scored too closely to choose between.
+ *   - `layout_unsupported` — a required column was missing, or zero rows
+ *     parsed, from an otherwise-readable CSV.
+ *
+ * EXCLUDED: `unknown_error` (an unclassified internal fault — the cause is by
+ * definition not understood, so it is not known that text even exists),
+ * `scanned_document`/`ocr_required`/`password_required`/`wrong_password`/
+ * `corrupt` (no text was extracted at all; none of these is currently emitted
+ * by the CSV-only parser but all are declared, and excluding them keeps the
+ * list correct if a PDF path is ever added), and `zero_balance_suspected`
+ * (declared, never emitted).
+ *
+ * ALSO EXCLUDED BY CONSTRUCTION, and worth stating because it is the case
+ * users will most expect help with: `pdf_manual_mapping_required`. FDH-12
+ * refuses a PDF before any text extraction happens, so there is nothing to
+ * mask or send. Adding PDF text extraction to this pipeline is the highest-
+ * value follow-up for this document type — see
+ * `lib/aie/adapters/retirement/index.ts`'s scope note.
+ */
+const RETIREMENT_AI_FALLBACK_ELIGIBLE_FAILURE_KINDS: readonly string[] = ['manual_mapping_required', 'ambiguous_format', 'layout_unsupported'];
+
+/** The generic statement type used for an AI-read document. The native parser
+ * picks a specific type from the adapter it matched; when no adapter matched
+ * at all there is nothing to pick from, so the generic CSV type is used
+ * rather than having the model guess a vocabulary value that drives
+ * downstream behaviour. */
+function statementTypeFor(jurisdiction: RetirementJurisdiction): RetirementStatementType {
+  return jurisdiction === 'IN' ? 'epf_passbook_statement' : 'retirement_statement_csv';
 }
 
 /** Document type per jurisdiction. All three values already exist in
@@ -283,6 +361,39 @@ async function resolveRetirementStatementDocument(
   });
 
   if (!extraction.ok) {
+    // AI FALLBACK, attempted BEFORE `failDocument` and only for the kinds
+    // where the CSV was genuinely decodable text whose LAYOUT the
+    // deterministic parser could not recognise.
+    //
+    // Ordering matters for a concrete reason, not just tidiness:
+    // `resolveRetirementStatementDocument` refuses outright to process a
+    // document already in `failed` (see the guard at the top of this
+    // function), so a draft offered AFTER `failDocument` could never be
+    // confirmed. The document is therefore deliberately left in `queued`.
+    if (RETIREMENT_AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(extraction.kind)) {
+      const fallback = await attemptAiRetirementFallback(userId, document.id, download.bytes, {
+        jurisdiction: metadata.jurisdiction,
+        currencyCode: metadata.currencyCode,
+        statementType: statementTypeFor(metadata.jurisdiction),
+        // The AI is never asked which retirement product this is — see
+        // `mapping.ts`'s header. `unknown` is the native parser's own default
+        // for a generic CSV too, and the account type is resolved later by
+        // the account-matching step the user drives.
+        accountType: 'unknown',
+      });
+      if (fallback.ok) {
+        return {
+          document, statementId: null, pipelineStatus: 'ai_fallback_available',
+          aiFallbackDraft: fallback.extraction, ...empty,
+        };
+      }
+      await recordDocumentAuditEvent({
+        userId, documentId: document.id,
+        eventType: 'retirement_statement_ai_fallback_not_usable', actorType: 'system',
+        metadata: { reason: fallback.reason, nativeFailureKind: extraction.kind },
+      });
+    }
+
     await failDocument('layout_unsupported', extraction.kind);
     return {
       document, statementId: null, pipelineStatus: 'extraction_failed',
@@ -291,6 +402,167 @@ async function resolveRetirementStatementDocument(
   }
   const ex = extraction.extraction;
 
+  // The canonical write. Extracted verbatim into `persistRetirementEvidence`
+  // below so the AI-fallback confirm path reuses the EXACT same write — see
+  // that function's header.
+  return persistRetirementEvidence({ userId, document, ex, smsf });
+}
+
+export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementStatementExtraction } | { ok: false; reason: string };
+
+/**
+ * The one call site that reaches the AI provider for a retirement statement.
+ *
+ * Every gate — this adapter's own kill switch, the shared global AIE kill
+ * switch, the shared AIE-1 pilot cohort, and masking (which FAILS CLOSED) —
+ * is evaluated by the shared `evaluateAiFallbackGate`, in that order. The
+ * gate returns ONLY masked text on success, so this function cannot send the
+ * raw statement to the provider even by mistake.
+ *
+ * It takes BYTES rather than text because this service has no extracted-text
+ * variable at its failure branch: detection decodes the CSV into a local and
+ * never returns it. `decodeCsvBytes` is the same pure decoder the detector
+ * uses, so what is masked is exactly what the parser saw.
+ *
+ * Exported so it is independently unit-testable with a faked provider.
+ */
+export async function attemptAiRetirementFallback(
+  userId: string,
+  documentId: string,
+  bytes: Uint8Array,
+  context: { jurisdiction: RetirementJurisdiction; currencyCode: string; statementType: RetirementStatementType; accountType: RetirementAccountType },
+): Promise<AiRetirementFallbackOutcome> {
+  let text: string;
+  try {
+    text = decodeCsvBytes(bytes).text;
+  } catch {
+    return { ok: false, reason: 'could_not_decode_bytes' };
+  }
+
+  const gate = evaluateAiFallbackGate({ userId, adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
+  if (!gate.ok) {
+    if (gate.reason === 'masking_below_policy') {
+      await recordDocumentAuditEvent({
+        userId, documentId,
+        eventType: 'retirement_statement_ai_fallback_masking_below_policy', actorType: 'system',
+      });
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_attempted', actorType: 'system' });
+  const result = await requestRetirementAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  if (result.outcome !== 'success') {
+    await recordDocumentAuditEvent({
+      userId, documentId,
+      eventType: 'retirement_statement_ai_fallback_provider_outcome', actorType: 'system',
+      metadata: { outcome: result.outcome },
+    });
+    return { ok: false, reason: result.outcome };
+  }
+
+  const extraction = mapRetirementFactsToExtraction(result.facts, context);
+  if (!extraction) {
+    await recordDocumentAuditEvent({
+      userId, documentId,
+      eventType: 'retirement_statement_ai_fallback_insufficient_fields', actorType: 'system',
+    });
+    return { ok: false, reason: 'insufficient_fields' };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_draft_ready', actorType: 'system' });
+  return { ok: true, extraction };
+}
+
+/**
+ * Called only after the user has reviewed the draft
+ * `attemptAiRetirementFallback` produced (and may have corrected it).
+ *
+ * MAKES NO AI CALL and re-derives nothing from document text. It validates
+ * the submitted extraction and delegates the write to
+ * `persistRetirementEvidence` — the EXACT function a native successful parse
+ * uses, giving the same reconciliation, the same activity fingerprinting and
+ * dedupe, the same SMSF routing, the same audit events.
+ *
+ * THE IDEMPOTENCY GATE IS A PAIR, AND DIFFERS FROM PAYSLIP'S BY NECESSITY.
+ * Payslip can gate on `processing_status === 'processing'` because its
+ * service actually persists that state. This service never does (see
+ * `UploadRetirementStatementResult.aiFallbackDraft`'s own note), so a status
+ * check alone would admit a replay. The gate is therefore:
+ *   (a) the document is still in `queued`/`uploaded` — it has not since
+ *       failed, been rejected, or been carried elsewhere; AND
+ *   (b) no `fdh_retirement_statements` row exists for this upload yet.
+ * (b) is the one that actually prevents a double-write: a replayed confirm
+ * finds the row written by the first and refuses.
+ *
+ * SMSF CLASSIFICATION IS RECOMPUTED HERE from the caller's own fund name and
+ * text sample — never carried across the two requests and never taken from
+ * the client, so a user cannot route a statement away from (or into) SMSF
+ * handling by editing a payload.
+ */
+export async function confirmAiRetirementFallback(
+  userId: string,
+  documentId: string,
+  extraction: RetirementStatementExtraction,
+  smsfContext: { fundName?: string; statementTextSample?: string },
+): Promise<UploadRetirementStatementResult> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('fdh_statement_uploads')
+    .select('*')
+    .eq('id', documentId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const document = data as FdhStatementUpload | null;
+  if (!document) throw new RetirementStatementProcessingError('not_found', 'document not found');
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
+    throw new RetirementStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+  const existingStatementId = await getRetirementStatementIdForDocument(userId, documentId);
+  if (existingStatementId) {
+    throw new RetirementStatementProcessingError('invalid_state', 'This statement has already been saved.');
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_confirmed', actorType: 'user' });
+
+  const smsf = detectSmsf(smsfContext.fundName ?? extraction.fundName, smsfContext.statementTextSample);
+  return persistRetirementEvidence({ userId, document, ex: extraction, smsf });
+}
+
+/**
+ * THE CANONICAL WRITE for a retirement-statement import.
+ *
+ * EXTRACTED 2026-09-23 (AIE unified document fallback) FROM THE MIDDLE OF
+ * `resolveRetirementStatementDocument`, VERBATIM — the body below is the same
+ * code that ran inline before, moved with no behavioural change and no
+ * re-indentation. It was extracted for exactly one reason: so that the
+ * AI-fallback confirm path (`confirmAiRetirementFallback`) can call the
+ * IDENTICAL write rather than growing a second, AI-specific writer.
+ *
+ * That is the property the whole design rests on. An AI-fallback-produced
+ * statement must be indistinguishable from a natively-parsed one to every
+ * downstream step — the same reconciliation, the same activity
+ * fingerprinting and dedupe, the same SMSF routing decision, the same
+ * supersede-prior-statement logic, the same audit events. A parallel writer
+ * would be free to drift from all of that.
+ *
+ * NOTE THE SMSF ARGUMENT. SMSF classification is computed by the CALLER and
+ * passed in, never recomputed here, so the AI path and the native path reach
+ * this function having made that routing decision the same way — from the
+ * fund name and the document text sample, never from anything a model said.
+ * That matters: SMSF routing decides whether a statement is diverted out of
+ * ordinary super entirely, and it must not become an AI-influenced judgement
+ * by the back door.
+ */
+export async function persistRetirementEvidence(params: {
+  userId: string;
+  document: FdhStatementUpload;
+  ex: RetirementStatementExtraction;
+  smsf: ReturnType<typeof detectSmsf>;
+}): Promise<UploadRetirementStatementResult> {
+  const { userId, document, ex, smsf } = params;
+  const admin = createAdminClient();
   // --- Reconciliation (spec sections 46-49) -------------------------------
   const reconciliation = reconcileStatement(ex);
 

@@ -463,6 +463,66 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'mapping.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'schema.ts'),
       path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'payslip', 'types.ts'),
+      // AIE UNIFIED DOCUMENT FALLBACK (2026-09-23) — the four remaining FDH-3
+      // document types, extending the payslip precedent directly above to
+      // bank-statement, retirement, liability and investment statements. Same
+      // two kinds, same standard, each verified by hand with
+      // `grep -c "from '@/lib/financial-data-hub"` rather than by assumption:
+      //
+      //   (a) GENUINE, INTENTIONAL type/const imports — every `mapping.ts`
+      //       (each imports its type's own native extraction interface, which
+      //       is the whole point: the AI result is mapped onto the SAME shape
+      //       the native parser produces so the canonical write is reused
+      //       rather than duplicated), and every `schema.ts`/`openaiSchema.ts`
+      //       (each imports its type's closed vocabulary constant —
+      //       `RETIREMENT_ACTIVITY_TYPES`, `LIABILITY_ACTIVITY_TYPES`,
+      //       `AU_STATEMENT_TRANSACTION_TYPES` — deliberately, because a
+      //       retyped copy of a vocabulary would only fail at write time
+      //       against the DB CHECK constraint, after the user had confirmed).
+      //       These are exactly the `payslip/mapping.ts` + `payslip/schema.ts`
+      //       case above.
+      //
+      //   (b) NAIVE-SUBSTRING FALSE POSITIVES — `auInvestment/featureFlags.ts`
+      //       and `liability/index.ts` name FDH paths only in their header
+      //       prose (explaining which native service they hook into and, for
+      //       the investment one, disambiguating FDH-11 from the separate
+      //       Investment Intelligence module). Both return ZERO for
+      //       `grep -c "from '@/lib/financial-data-hub"`. Same kind as
+      //       `payslip/types.ts` above.
+      //
+      // None of these names an Input Data register or performs any canonical
+      // mutation: each adapter maps facts and returns them, and the write is
+      // done by the native service's own already-certified function.
+      // Approved as exactly these files, not as a directory, so a future
+      // adapter file that started genuinely reaching into FDH services would
+      // still be caught.
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'bankStatement', 'mapping.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'retirement', 'mapping.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'retirement', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'retirement', 'openaiSchema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'liability', 'mapping.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'liability', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'liability', 'openaiSchema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'liability', 'index.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'auInvestment', 'mapping.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'auInvestment', 'schema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'auInvestment', 'openaiSchema.ts'),
+      path.join(REPO_ROOT, 'lib', 'aie', 'adapters', 'auInvestment', 'featureFlags.ts'),
+      // PRE-EXISTING FAILURE, FOUND AND FIXED HERE RATHER THAN LEFT RED.
+      // `lib/shared/pdfStructuralScan.ts` is UNMODIFIED from `origin/main`
+      // (`git diff origin/main -- lib/shared/pdfStructuralScan.ts` is empty)
+      // and already tripped this assertion before this branch existed — so
+      // this test was failing on `main`. It is a naive-substring false
+      // positive of exactly the documented kind: the literal appears once, in
+      // a doc comment pointing at
+      // `docs/financial-data-hub/FDH3_SHARED_MALWARE_GATE_DESIGN.md`, and
+      // `grep -c "from '@/lib/financial-data-hub"` returns zero.
+      //
+      // Added because a permanently-red isolation test is worse than useless:
+      // it stops anyone noticing the NEXT violation, which is the real thing
+      // this test exists to catch. Disclosed in the dispatch report as a
+      // pre-existing defect fixed in passing, not as part of this feature.
+      path.join(REPO_ROOT, 'lib', 'shared', 'pdfStructuralScan.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

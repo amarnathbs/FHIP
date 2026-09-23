@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED } from '@/lib/financial-data-hub/constants/enums';
 
 // FDH-11 (migration 0106) has since widened this SAME constraint further —
 // 0096 is no longer "the constraint's latest word" (see
@@ -32,6 +32,10 @@ const VOCABULARY_AS_OF_FDH10 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
   (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t)
     && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t)
     && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t)
+    // AIE unified document fallback (migration 0180) — the four remaining
+    // FDH-3 document types, subtracted for the same reason as every later
+    // phase above.
+    && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t)
     && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
 );
 

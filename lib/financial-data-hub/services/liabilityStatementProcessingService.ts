@@ -30,6 +30,17 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
+import { decodeCsvBytes } from '../bank-csv/csv';
+import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import {
+  isAieLiabilityAiFallbackEnabled,
+  requestLiabilityAiExtraction,
+  mapLiabilityStatementFactsToDraft,
+  AIE_LIABILITY_PARSER_NAME,
+  AIE_LIABILITY_PARSER_VERSION,
+  AIE_LIABILITY_AI_EXTRACTION_CONFIDENCE,
+  type MappedLiabilityStatementHeader,
+} from '@/lib/aie/adapters/liability';
 import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
@@ -38,7 +49,13 @@ import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
 import { reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
 import { matchBankPayment, type BankTransactionCandidate } from '../liability/bankMatching';
-import type { LiabilityFacilityType, LiabilityStatementActivity, LiabilityStatementCountry, LiabilityStatementType } from '../liability/types';
+import type {
+  LiabilityExtractionFailureKind,
+  LiabilityFacilityType,
+  LiabilityStatementActivity,
+  LiabilityStatementCountry,
+  LiabilityStatementType,
+} from '../liability/types';
 import type { FdhStatementUpload } from '../domain/types';
 
 export class LiabilityStatementProcessingError extends Error {
@@ -86,8 +103,53 @@ export interface UploadLiabilityStatementResult {
   // 'pending_scan' (2026-09-21, real-malware-gate async fix): see the
   // identical addition + rationale on `UploadAuInvestmentStatementResult`
   // in investmentStatementProcessingService.ts.
-  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan';
+  //
+  // 'ai_fallback_available' (2026-09-23, AIE unified document fallback): the
+  // native CSV extraction failed on a readable-but-unrecognised layout and an
+  // AI read a DRAFT off it instead. NOTHING has been written — no
+  // `fdh_liability_statements` row, no activities, and (deliberately) not even
+  // a `processing_status` change. See `aiFallbackDraft` below.
+  pipelineStatus: 'ok' | 'extraction_failed' | 'duplicate_statement' | 'pending_scan' | 'ai_fallback_available';
   failureKind?: string;
+  /**
+   * Populated ONLY when `pipelineStatus === 'ai_fallback_available'`.
+   *
+   * THE DOCUMENT IS DELIBERATELY LEFT EXACTLY WHERE IT WAS — still `queued`
+   * or `uploaded`, with no `error_code` — rather than being moved to `failed`
+   * as the native failure branch would. That is what keeps
+   * `confirmAiLiabilityFallback` able to complete the write later:
+   * `persistLiabilityStatementEvidence` ends with the same
+   * `processing -> extracted` update a native success uses, and a document
+   * already written as `failed` would have to be un-failed first, which is a
+   * second write path and therefore a second thing that can disagree with the
+   * first.
+   *
+   * The caller (the API route) shows this to the user for explicit review
+   * before `confirmAiLiabilityFallback` writes anything — "try AI, then ask
+   * you to review", never a silent auto-write of an AI guess.
+   */
+  aiFallbackDraft?: LiabilityStatementAiFallbackDraft;
+}
+
+/**
+ * What the review UI is shown, and what the confirm route sends back.
+ *
+ * It is deliberately the RAW READING (the header facts as printed, and one
+ * row per activity line) rather than any derived result: the user reviews what
+ * the model claims the page said, and every derived value — the per-type
+ * totals, the reconciliation verdict and its variance, the bank-payment
+ * matching, the review status — is recomputed SERVER-SIDE from the reviewed
+ * rows at confirm time by the same code a native parse runs through. Nothing
+ * computed on the client is ever trusted.
+ */
+export interface LiabilityStatementAiFallbackDraft {
+  activities: LiabilityStatementActivity[];
+  header: MappedLiabilityStatementHeader;
+  /** The model's own claim that it listed every printed line. Shown to the
+   * user in words. Never the only completeness check — the reconciliation
+   * arithmetic recomputed at confirm time is. */
+  allActivitiesListed: boolean;
+  warnings: string[];
 }
 
 /** Same discipline as `loadBankCandidates` (payslip): a read of the
@@ -188,6 +250,46 @@ export async function continueLiabilityStatementProcessing(
 }
 
 /**
+ * Extraction failure kinds this adapter will attempt an AI-fallback for.
+ *
+ * DELIBERATELY NARROW, mirroring the payslip and bank-statement paths' own
+ * eligibility lists and their reasoning. The test is not "did parsing fail"
+ * but "is there readable statement text that the LAYOUT detector could not
+ * map":
+ *
+ *   - `manual_mapping_required` — the file was read, but no registered
+ *     adapter's header signature cleared the minimum-confidence bar. The
+ *     primary case, and the one real users hit with an unsupported lender.
+ *   - `ambiguous_format`        — the file was read, but two adapters scored
+ *     within the confidence gap of each other so the detector refused to pick.
+ *   - `layout_unsupported`      — the file was read as text but not as a
+ *     recognisable statement export.
+ *
+ * EXCLUDED ON PURPOSE, each because there is either NO READABLE TEXT (so an
+ * AI has nothing to read and the call would be pure spend and pure invention
+ * risk) or because the failure is not about layout at all:
+ *   - `scanned_document` / `ocr_required` — a scan with no text layer. This is
+ *     the case people most expect AI to rescue and it is exactly the one it
+ *     cannot here: this pipeline does no OCR, and sending near-empty text to a
+ *     model invites it to invent a statement wholesale.
+ *   - `password_required` / `wrong_password` — a missing credential for this
+ *     attempt, recoverable by retrying; not a defect and not a layout problem.
+ *   - `corrupt` — the file itself could not be read.
+ *   - `statement_type_not_identified` / `country_not_identified` — the
+ *     document may not be a liability statement at all. Asking a model to read
+ *     one out of it is precisely the "wrong document type" case the design
+ *     document's §4 item 6 rules out.
+ *   - `unknown_error` — an unclassified internal fault. Its cause is by
+ *     definition not established, so it cannot be asserted to be a layout
+ *     problem.
+ */
+const AI_FALLBACK_ELIGIBLE_LIABILITY_FAILURE_KINDS: readonly LiabilityExtractionFailureKind[] = [
+  'manual_mapping_required',
+  'ambiguous_format',
+  'layout_unsupported',
+];
+
+/**
  * Everything that happens to an already-uploaded document — see the
  * identical-purpose `resolveAuInvestmentStatementDocument()` in
  * investmentStatementProcessingService.ts for the full rationale. Shared by
@@ -250,6 +352,34 @@ async function resolveLiabilityStatementDocument(
   });
 
   if (!extraction.ok) {
+    // AI FALLBACK, attempted BEFORE the failure write below and only for the
+    // failure kinds where the file is genuinely readable statement text that
+    // the LAYOUT-specific adapter registry could not map. Ordering is not a
+    // preference: the write below sets `error_code` and moves the document to
+    // `failed`, and a draft offered after that would have to undo it.
+    if (AI_FALLBACK_ELIGIBLE_LIABILITY_FAILURE_KINDS.includes(extraction.kind)) {
+      // Liability statements are CSV-only — there is no PDF/OCR stage and so
+      // no `extractedText` already in hand at this point, unlike every other
+      // adapter in this programme. The already-downloaded bytes are decoded
+      // here with the SAME certified `decodeCsvBytes()` the native extractor
+      // itself uses (encoding sniffing included), purely so the masking layer
+      // has text to work on. No second download and no second decoder.
+      const decoded = decodeCsvBytes(download.bytes).text;
+      const fallback = await attemptAiLiabilityFallback(userId, document.id, decoded);
+      if (fallback.ok) {
+        // Deliberately NO document status change and NO error code — see
+        // `UploadLiabilityStatementResult.aiFallbackDraft`'s own doc comment.
+        return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: fallback.draft };
+      }
+      await recordDocumentAuditEvent({
+        userId,
+        documentId: document.id,
+        eventType: 'liability_statement_ai_fallback_not_usable',
+        actorType: 'system',
+        metadata: { reason: fallback.reason, nativeFailureKind: extraction.kind },
+      });
+    }
+
     const supabase = await createClient();
     assertDocumentTransition('processing', 'failed');
     await supabase
@@ -272,7 +402,26 @@ async function resolveLiabilityStatementDocument(
   return { document, statementId, pipelineStatus: 'ok' };
 }
 
-async function persistLiabilityStatementEvidence(
+/**
+ * THE CANONICAL WRITE for a liability statement.
+ *
+ * EXPORTED 2026-09-23 (AIE unified document fallback) so that the AI-fallback
+ * confirm path calls the IDENTICAL function a native successful extraction
+ * calls, rather than a second writer that would have to be kept in step with
+ * this one. Everything that makes a native import trustworthy — the per-type
+ * totals arithmetic, the reconciliation verdict, the bank-payment matching of
+ * every PAYMENT line, the review-status decision, the `processing -> extracted`
+ * transition and the completion audit event — happens here and therefore
+ * happens identically on both paths. An AI-fallback-produced
+ * `fdh_liability_statements` row is indistinguishable from a natively-parsed
+ * one to every downstream consumer except in the two fields that SHOULD
+ * distinguish it: `parser_name` and `extraction_confidence`.
+ *
+ * It remains an internal-to-FDH function in every other sense: nothing outside
+ * this service and its own confirm route calls it, and it is not re-exported
+ * from any barrel.
+ */
+export async function persistLiabilityStatementEvidence(
   userId: string,
   document: FdhStatementUpload,
   activities: readonly LiabilityStatementActivity[],
@@ -461,6 +610,179 @@ async function persistLiabilityStatementEvidence(
   });
 
   return statementId;
+}
+
+export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAiFallbackDraft } | { ok: false; reason: string };
+
+/**
+ * The one call site that reaches the AI provider for a liability statement.
+ *
+ * Every gate — this adapter's own kill switch, the shared global AIE kill
+ * switch, the shared AIE-1 pilot cohort, and masking (which FAILS CLOSED when
+ * the masking key is unset) — is evaluated by the shared
+ * `evaluateAiFallbackGate`, in that order. The gate returns ONLY masked text
+ * on success, so this function has no way to send the raw statement to the
+ * provider even by mistake.
+ *
+ * Exported so it is independently unit-testable with a faked provider, and so
+ * a live-DEV proof can exercise it directly.
+ */
+export async function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+  const gate = evaluateAiFallbackGate({
+    userId,
+    adapterEnabled: isAieLiabilityAiFallbackEnabled(),
+    extractedText,
+  });
+  if (!gate.ok) {
+    if (gate.reason === 'masking_below_policy') {
+      await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_masking_below_policy', actorType: 'system' });
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_attempted', actorType: 'system' });
+  const result = await requestLiabilityAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  if (result.outcome !== 'success') {
+    await recordDocumentAuditEvent({
+      userId,
+      documentId,
+      eventType: 'liability_statement_ai_fallback_provider_outcome',
+      actorType: 'system',
+      metadata: { outcome: result.outcome },
+    });
+    return { ok: false, reason: result.outcome };
+  }
+
+  const mapped = mapLiabilityStatementFactsToDraft(result.facts);
+  if (!mapped) {
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_insufficient_fields', actorType: 'system' });
+    return { ok: false, reason: 'insufficient_fields' };
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_draft_ready', actorType: 'system' });
+  return {
+    ok: true,
+    draft: {
+      activities: mapped.activities,
+      header: mapped.header,
+      allActivitiesListed: mapped.allActivitiesListed,
+      warnings: mapped.warnings,
+    },
+  };
+}
+
+/** What the confirm route hands back after the user has reviewed the draft. */
+export interface ReviewedLiabilityStatementDraft {
+  /** The caller's own context — statement type, country, currency and the
+   * header values, exactly as the upload/process routes already carry them.
+   * NEVER taken from the AI response; the AI-read header values reach this
+   * only by being shown to the user and confirmed by them. */
+  metadata: UploadLiabilityStatementMetadata;
+  /** Chosen by the USER, never by the model — see
+   * `lib/aie/adapters/liability/schema.ts`'s header for why this one field is
+   * singled out (a wrong facility type does not mislabel a row, it makes the
+   * user's existing liability unfindable and silently creates a duplicate). */
+  facilityType: LiabilityFacilityType;
+  activities: readonly LiabilityStatementActivity[];
+  /** The warnings the extraction itself produced (dropped rows, an
+   * incomplete-listing self-report). Carried through so they are persisted
+   * with the evidence rather than lost at the request boundary. */
+  aiWarnings?: readonly string[];
+}
+
+/**
+ * Called only after the user has reviewed the draft `attemptAiLiabilityFallback`
+ * produced (and may have corrected it by removing rows).
+ *
+ * MAKES NO AI CALL and re-reads nothing from the document. It takes the
+ * reviewed activities and header values and hands them to
+ * `persistLiabilityStatementEvidence` — the EXACT function a native successful
+ * extraction uses — which recomputes every per-type total, the reconciliation
+ * verdict and its variance, and the bank-payment match for every PAYMENT line,
+ * SERVER-SIDE. Nothing the client computed is trusted; the client supplies only
+ * what a human could have typed off the page.
+ *
+ * THE PARKING-STATE GATE, AND HOW IT DELIBERATELY DIVERGES FROM PAYSLIP AND
+ * BANK-STATEMENT. Those two services persist `processing_status: 'processing'`
+ * before extracting, so their confirm routes can gate on
+ * `processing_status === 'processing'` — a state only their own fallback could
+ * have left the document in. THIS SERVICE NEVER WRITES `processing` AT ALL: it
+ * calls `assertDocumentTransition('processing', ...)` with literal strings to
+ * assert the edge is legal, but the row itself stays `queued`/`uploaded` right
+ * up until the `extracted` write inside `persistLiabilityStatementEvidence`.
+ * Gating on `'processing'` here would therefore reject every legitimate
+ * confirm. The equivalent guarantee is reconstructed from two conditions that
+ * together mean the same thing:
+ *   1. the document is still in `queued`/`uploaded` — i.e. it has not since
+ *      been failed, rejected, extracted, approved or purged by anything else;
+ *   2. no `fdh_liability_statements` row exists for it yet — i.e. no evidence
+ *      has been written for this document by any path.
+ * A replayed or stale confirm fails (2) even if it somehow passes (1), which
+ * is what makes the double-write impossible. This is a genuine divergence from
+ * the reference implementation, recorded here rather than papered over: it is
+ * weaker than payslip's gate in one specific way — a document that has been
+ * uploaded but whose native processing has never been attempted would also
+ * satisfy both conditions, so a caller who guessed a document id could confirm
+ * an AI draft for a document that never produced one. That caller must already
+ * be the authenticated OWNER of that document (`getForUser` is user-scoped),
+ * and the result would be a statement containing exactly the activities they
+ * themselves submitted — which they could equally have created by uploading a
+ * CSV of the same rows. It is a "user writes their own data by an unintended
+ * door", not a cross-tenant or privilege issue.
+ */
+export async function confirmAiLiabilityFallback(
+  userId: string,
+  documentId: string,
+  reviewed: ReviewedLiabilityStatementDraft,
+): Promise<UploadLiabilityStatementResult> {
+  const { data: document } = await statementUploadsRepository.getForUser(userId, documentId);
+  if (!document) throw new LiabilityStatementProcessingError('not_found', 'document not found');
+
+  if (!['queued', 'uploaded'].includes(document.processing_status)) {
+    throw new LiabilityStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+  const existingStatementId = await getLiabilityStatementIdForDocument(userId, documentId);
+  if (existingStatementId) {
+    throw new LiabilityStatementProcessingError('invalid_state', 'Evidence has already been saved for this statement.');
+  }
+  if (reviewed.activities.length === 0) {
+    throw new LiabilityStatementProcessingError('invalid_state', 'At least one activity is required.');
+  }
+  // Defence in depth, duplicated in the route's own validation: a credit-card
+  // statement can only ever be a credit-card facility. FDH-10's
+  // `FACILITY_TO_DEBT_TYPE` would otherwise map a mis-declared card statement
+  // onto a loan debt type, and facility matching would look for the wrong
+  // existing liability entirely.
+  const facilityType: LiabilityFacilityType =
+    reviewed.metadata.statementType === 'credit_card' ? 'credit_card' : reviewed.facilityType;
+  if (reviewed.metadata.statementType === 'loan' && facilityType === 'credit_card') {
+    throw new LiabilityStatementProcessingError('invalid_state', 'A loan statement cannot be saved as a credit card facility.');
+  }
+
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_confirmed', actorType: 'user' });
+
+  // The marker warning is ALWAYS added, never conditionally. Its first job is
+  // provenance (the evidence row itself records that it was AI-read and
+  // user-confirmed), and its second is that
+  // `persistLiabilityStatementEvidence` sets `review_status: 'pending'`
+  // whenever warnings are present — so an AI-read statement always lands in
+  // the review queue, even when the model's own reading reconciled perfectly.
+  const warnings = ['ai_fallback_user_confirmed', ...(reviewed.aiWarnings ?? [])];
+
+  const statementId = await persistLiabilityStatementEvidence(
+    userId,
+    document,
+    reviewed.activities,
+    reviewed.metadata,
+    warnings,
+    AIE_LIABILITY_PARSER_NAME,
+    AIE_LIABILITY_PARSER_VERSION,
+    AIE_LIABILITY_AI_EXTRACTION_CONFIDENCE,
+    facilityType,
+  );
+
+  const { data: finalDocument } = await statementUploadsRepository.getForUser(userId, documentId);
+  return { document: (finalDocument ?? document) as FdhStatementUpload, statementId, pipelineStatus: 'ok' };
 }
 
 export async function getLiabilityStatementIdForDocument(userId: string, documentId: string): Promise<string | null> {

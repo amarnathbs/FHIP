@@ -102,6 +102,13 @@ export async function POST(req: Request) {
       statement_id: result.statementId,
       duplicate: result.pipelineStatus === 'duplicate_statement',
       error_message: result.failureKind ? (LIABILITY_STATEMENT_FAILURE_MESSAGES[result.failureKind] ?? null) : null,
+      // AIE liability AI-fallback (2026-09-23). Non-null ONLY when
+      // `pipeline_status === 'ai_fallback_available'`, and then it is a DRAFT:
+      // nothing has been written, `statement_id` is null, and the document is
+      // deliberately still in `queued`/`uploaded`. The client must show this
+      // for explicit review and call
+      // `POST .../{documentId}/ai-fallback/confirm` before anything is saved.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof LiabilityStatementProcessingError) {

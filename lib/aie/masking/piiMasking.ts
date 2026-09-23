@@ -65,6 +65,14 @@ export type AiePiiType =
   | 'ifsc' // M2 (H.9)
   | 'folio_number' // M2 (H.9)
   | 'policy_number' // M12B (M12B-F1)
+  // AIE unified document fallback (2026-09-23). Three identifier classes with
+  // NO rule of any kind before this phase, each found by building a capturing
+  // test provider for the bank-statement / retirement / liability /
+  // investment AI-fallback adapters and reading what actually egressed. See
+  // each rule's own header in `PII_PATTERNS` for the evidence.
+  | 'holder_identification_number' // AU HIN/SRN (share registry / broker)
+  | 'account_reference' // member no, customer/client no, loan account, CRN
+  | 'date_of_birth'
   | 'card_number'
   | 'email'
   | 'phone'
@@ -201,6 +209,16 @@ const ADDRESS_STOP_TERMS: readonly string[] = [
   'statement', 'period', 'renewal', 'product', 'plan', 'type', 'frequency',
   'gstin', 'gst', 'tax', 'transaction', 'deposit', 'withdrawal', 'interest',
   'maturity', 'contact', 'customer', 'reference', 'page', 'signature',
+  // AIE unified document fallback (2026-09-23). The labels the three new
+  // identifier rules above anchor on must also be able to TERMINATE an address
+  // continuation, or a 3-line postal address printed immediately above
+  // `HIN: X0001234567` would swallow the HIN line into the address token.
+  // That is over-capture, not a leak (the HIN is still masked) — but it
+  // destroys a label the adapter reads and makes `coverage_by_type` report an
+  // address where the document actually had an address AND a holder id, which
+  // is the same inaccurate-privacy-evidence failure this list already exists
+  // to prevent.
+  'hin', 'srn', 'member', 'membership', 'loan', 'crn', 'client',
 ];
 
 const ADDRESS_STOP_TERM_ALTERNATION = ADDRESS_STOP_TERMS
@@ -349,6 +367,121 @@ const PII_PATTERNS: PiiPattern[] = [
     valueGroup: 2,
   },
 
+  // ---- AIE unified document fallback (2026-09-23). THREE NEW RULES.
+  //
+  // All three were found the same way M2 and M12B found theirs: not by
+  // inspection, but by running the new adapters' masking over synthetic
+  // documents through a CAPTURING test provider and reading the payload that
+  // would actually have left the process
+  // (`tests/unit/aieUnifiedFallbackMaskingEgress.test.ts`). All three are
+  // LABEL-ANCHORED for the reason the folio and policy-number rules above
+  // already establish — these identifier formats are genuinely not uniform,
+  // so a bare shape rule is either uselessly narrow or swallows the money
+  // figures the adapters exist to read — and all three keep the LABEL via
+  // `valueGroup: 2` so a downstream adapter still sees that the field was
+  // present. Every gap is `[^\S\r\n]*`, never `\s*`, carrying forward the
+  // M12B-F3 fix: `\s*` crosses a line ending, so an EMPTY labelled field
+  // reaches down and tokenises whatever is printed on the next line.
+  //
+  // THEY SIT HERE, ABOVE `person_name_label` AND ABOVE THE GENERIC DIGIT
+  // RULES, DELIBERATELY. `maskText` applies patterns in array order over
+  // progressively-masked text, so the first rule to match owns the span. Put
+  // below `long_digit_run`/`tax_id`, an 11-digit member number would be
+  // masked but tagged `long_digit_run`, which is the
+  // "coverage_by_type says something untrue about the document" failure the
+  // array's own opening comment describes.
+
+  // AU HOLDER IDENTIFICATION NUMBER (HIN) / SECURITYHOLDER REFERENCE NUMBER
+  // (SRN). The identifier that uniquely names a holding on the ASX CHESS
+  // register or an issuer-sponsored share registry, printed on essentially
+  // every real broker and registry statement (`HIN: X0001234567`,
+  // `SRN: I0001234567`).
+  //
+  // BEFORE THIS RULE IT MATCHED NOTHING AND EGRESSED VERBATIM — the identical
+  // structural gap M12B-F1 records for insurance policy numbers. A HIN is a
+  // letter followed by 10 digits: `long_digit_run` needs 11+, `card_number`
+  // needs 13-19, `bank_account` needs a BSB-shaped prefix, and the AU-TFN rule
+  // needs a word boundary after 8-9 digits which a 10-digit run does not
+  // provide (and the `X` prefix removes the leading boundary too). Confirmed
+  // by capture, not by reading the regexes.
+  {
+    type: 'holder_identification_number',
+    pattern:
+      /\b((?:hin|srn|holder[^\S\r\n]*identification(?:[^\S\r\n]*(?:no|number))?|securityholder[^\S\r\n]*reference(?:[^\S\r\n]*(?:no|number))?|shareholder[^\S\r\n]*reference(?:[^\S\r\n]*(?:no|number))?)\.?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Z0-9][A-Z0-9/\-]{3,24})/gi,
+    valueGroup: 2,
+  },
+
+  // MEMBER / CUSTOMER / CLIENT / LOAN-ACCOUNT / CRN REFERENCE. The
+  // account-class identifier on a retirement statement (`Member No: 4821993`),
+  // a liability statement (`Loan Account: HL-00482913`, `CRN: 194872`) and a
+  // broker statement (`Client Number: 88213`).
+  //
+  // The `policy_number` rule above already covers `Member Number: …` because
+  // `member` is in its alternation — but ONLY when the label carries an
+  // explicit `no`/`number`/`ref` word. Real statements print `Member: 4821993`
+  // and `Membership No: …` just as often, and neither matched. A bare 7-10
+  // digit account number matched nothing at all (below `long_digit_run`'s
+  // 11-digit floor).
+  //
+  // `valuePredicate` REQUIRING A DIGIT IS LOAD-BEARING, NOT DEFENSIVE. Without
+  // it, `Member: JANE CITIZEN` would match here — this rule runs BEFORE
+  // `person_name_label` — and tokenise only the first word, leaving `CITIZEN`
+  // in the clear AND mislabelling a person's name as an account reference.
+  // Requiring a digit in the value means a name-valued label falls through to
+  // the name rule below, which is where it belongs. `account`/`a/c` are
+  // included for the same reason the M12B header gives for `certificate no`:
+  // the same identifier is printed under several names across issuers.
+  {
+    type: 'account_reference',
+    pattern:
+      /\b((?:member|membership|customer|client|loan|crn|a\/c|account)[^\S\r\n]*(?:account|no|number|id|#|ref|reference)?\.?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Z0-9][A-Z0-9/\-]{3,24})/gi,
+    valueGroup: 2,
+    // See the header: a value with no digit in it is a NAME, not a reference,
+    // and must be left for `person_name_label` to own.
+    valuePredicate: (value) => /\d/.test(value),
+  },
+
+  // DATE OF BIRTH. Printed on retirement/super member statements and on many
+  // insurance and loan documents. `date of birth`/`dob` have been in
+  // `FORBIDDEN_LABEL_TERMS` since AIE-1.1 — but that list is ONLY read by
+  // `isBelowMaskingPolicy`, whose sole callers pass `labelsSeenRaw: []`, so it
+  // has never once fired. No regex masked the VALUE, so a member's date of
+  // birth egressed verbatim.
+  //
+  // LABEL-ANCHORED and nothing else, deliberately: a bare date rule would
+  // tokenise every statement period, payment date and valuation date in the
+  // document — which is to say, exactly the fields every one of these adapters
+  // exists to read. Only a date the document itself introduces as a birth date
+  // is masked. Both the numeric (`14/03/1978`, `1978-03-14`) and the
+  // spelled-month (`14 March 1978`) forms are covered, because AU and India
+  // statements print both.
+  {
+    type: 'date_of_birth',
+    pattern:
+      /\b((?:date[^\S\r\n]*of[^\S\r\n]*birth|birth[^\S\r\n]*date|d\.?o\.?b\.?)[^\S\r\n]*[:.\-][^\S\r\n]*)(\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}|\d{1,2}[^\S\r\n]+[A-Za-z]{3,9}[^\S\r\n]+\d{2,4})/gi,
+    valueGroup: 2,
+  },
+
+  // STANDALONE AU BSB. The generic `bank_account` rule below
+  // (`\b\d{3}-?\d{3}\s?\d{6,10}\b`) requires the BSB and the account digits to
+  // be ADJACENT. A real payslip or liability statement prints them as two
+  // separately-labelled fields — `BSB: 062-000` on one line, `Account: 1234
+  // 5678` on the next — and the six-digit BSB alone matched nothing. Reported
+  // as a disclosed residual exposure by the payslip dispatch
+  // (`AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md` §6.3) rather than
+  // fixed there because it is a shared-pattern limit, not a payslip bug;
+  // closed here, where four more document types depend on it.
+  //
+  // Tagged `bank_account`, not a new type: it IS a bank account identifier,
+  // and splitting it would make `coverage_by_type` report two categories for
+  // what a reader would call one. Label-anchored so it cannot swallow an
+  // ordinary six-digit figure.
+  {
+    type: 'bank_account',
+    pattern: /\b(bsb(?:[^\S\r\n]*(?:no|number|code))?\.?[^\S\r\n]*[:.\-][^\S\r\n]*)(\d{3}[- ]?\d{3})\b/gi,
+    valueGroup: 2,
+  },
+
   // Person / holder / nominee NAME. Global invariant D.6 requires holder
   // names to be excluded or tokenised where not required, and nominee
   // details never to egress. Before M2 there was NO name rule of any kind —
@@ -421,8 +554,31 @@ const PII_PATTERNS: PiiPattern[] = [
     // `employerName` canonical field), not personal PII to redact — masking
     // it would defeat the adapter's own purpose, the same "unless" reasoning
     // this rule's header already applies to `insured` vs `Sum Insured`.
+    // 2026-09-23 (AIE unified document fallback) — `member`, `membership`,
+    // `borrower`, `customer`, `client` and `accountholder` ADDED. Found by
+    // capture, not inspection: the egress-boundary proof
+    // (`tests/unit/aieUnifiedFallbackMaskingEgress.test.ts`) planted
+    // `Member: ALEX SAMPLE TESTPERSON` in a synthetic AU super member
+    // statement and read the payload that would actually have left the
+    // process — the member's NAME was in it, verbatim.
+    //
+    // This is the THIRD instance of the identical class of gap: M12B found it
+    // for insurance's `Policy Owner:`/`Insured Person:`, the payslip dispatch
+    // found it for `Employee:`, and this is `Member:` — in each case the
+    // single most common person-bearing label on that document type simply
+    // was not in this alternation. Every one of the three was invisible to
+    // code review and obvious the moment the outbound payload was captured.
+    //
+    // NOTE ON `member` SPECIFICALLY, because it is doing double duty: a
+    // retirement statement prints BOTH `Member: <a person's name>` and
+    // `Member Number: <digits>`. Those are handled by different rules and the
+    // ORDER above is what separates them — `policy_number` (whose alternation
+    // already contains `member`) and `account_reference` both run BEFORE this
+    // rule and both claim the numeric form first, and `account_reference`'s
+    // digit-requiring `valuePredicate` means it declines the name form and
+    // leaves it for this rule. Reordering any of the three would break that.
     pattern:
-      /\b((?:investor|account[^\S\r\n]*holder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+      /\b((?:investor|account[^\S\r\n]*holder|accountholder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee|member|membership|borrower|customer|client)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
     valueGroup: 2,
     // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
     // `investor:` all occur in real statements), so the value needs its

@@ -34,6 +34,10 @@ type Phase =
   | 'uploading'
   | 'scanning'
   | 'processing'
+  // AIE liability AI-fallback (2026-09-23). The native CSV extraction could
+  // not map this export's layout and an AI read a DRAFT off it instead;
+  // nothing is saved until the user confirms from this phase.
+  | 'ai_fallback_review'
   | 'unable_to_read'
   | 'scan_timeout'
   | 'duplicate'
@@ -56,6 +60,73 @@ const SCAN_REJECTION_MESSAGES: Record<string, string> = {
 };
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
+
+/** One AI-read activity line, exactly as the confirm route accepts it. */
+interface AiDraftActivity {
+  activityType: string;
+  activityDate: string;
+  amount: number;
+  descriptionRaw?: string;
+  merchantRaw?: string;
+  principalComponent?: number;
+  interestComponent?: number;
+  feeComponent?: number;
+}
+
+/** The header facts the AI read, in the same units the upload form uses. Each
+ * is only used where the user left the corresponding form field blank — a
+ * value the user typed themselves always wins over one a model read. */
+interface AiDraftHeader {
+  institutionName?: string;
+  maskedIdentifier?: string;
+  statementPeriodStart?: string;
+  statementPeriodEnd?: string;
+  statementDate?: string;
+  dueDate?: string;
+  openingBalance?: number;
+  closingBalance?: number;
+  creditLimit?: number;
+  minimumPayment?: number;
+  interestRate?: number;
+}
+
+interface AiFallbackDraft {
+  activities: AiDraftActivity[];
+  header: AiDraftHeader;
+  allActivitiesListed: boolean;
+  warnings: string[];
+}
+
+/** The loan facility types a user may choose at the AI review step.
+ * `credit_card` is deliberately absent: a credit-card statement never reaches
+ * this selector (its facility type is forced server-side), and a loan
+ * statement must never be saved as one. There is no default — an unchosen
+ * facility type blocks the save, because a wrong one does not merely mislabel
+ * the row, it makes the user's existing liability unfindable and silently
+ * creates a duplicate (see FDH-10's own live-certification finding, quoted in
+ * `persistLiabilityStatementEvidence`). */
+const LOAN_FACILITY_CHOICES: Array<{ value: string; label: string }> = [
+  { value: 'home_loan', label: 'Home loan / mortgage' },
+  { value: 'investment_property_loan', label: 'Investment property loan' },
+  { value: 'personal_loan', label: 'Personal loan' },
+  { value: 'vehicle_loan', label: 'Car / vehicle loan' },
+  { value: 'line_of_credit', label: 'Line of credit' },
+  { value: 'overdraft', label: 'Overdraft' },
+  { value: 'other_term_loan', label: 'Another kind of term loan' },
+];
+
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  PURCHASE: 'Purchase',
+  REFUND: 'Refund',
+  PAYMENT: 'Payment',
+  CASH_ADVANCE: 'Cash advance',
+  INTEREST: 'Interest',
+  FEE: 'Fee',
+  PRINCIPAL: 'Principal',
+  LOAN_ADVANCE: 'Drawdown',
+  ADJUSTMENT: 'Adjustment',
+  OTHER: 'Other',
+};
 
 interface LiabilityStatement {
   id: string;
@@ -138,6 +209,27 @@ function money(value: number | null | undefined, currency: string) {
   return formatMoneyExact(value, currency);
 }
 
+/** Shows what will actually be SAVED for one header figure: the value the
+ * user typed on the upload form if they typed one, otherwise the value the AI
+ * read, otherwise nothing. Written as an explicit null/empty check rather than
+ * `||` because `0` is a real opening balance and a falsy-coalescing chain
+ * would display (and, worse, imply we were discarding) a genuine zero. */
+/** The same precedence as `headerFigure`, but producing the value actually
+ * SENT (the route's Zod schema coerces either a numeric string or a number).
+ * `undefined` means "we have no figure", which the server treats as the
+ * statement not stating one — never as zero. */
+function pickFigure(formValue: string, aiValue: number | undefined): string | number | undefined {
+  if (formValue.trim() !== '') return formValue;
+  if (aiValue === undefined || aiValue === null) return undefined;
+  return aiValue;
+}
+
+function headerFigure(formValue: string, aiValue: number | undefined): string {
+  if (formValue.trim() !== '') return formValue;
+  if (aiValue === undefined || aiValue === null) return 'Not shown';
+  return String(aiValue);
+}
+
 function displayValue(v: string | null, kind: string) {
   if (v === null) return '—';
   if (kind === 'bool') return v === 'true' ? 'Yes' : 'No';
@@ -192,6 +284,12 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // AIE liability AI-fallback (2026-09-23). Held only for the lifetime of the
+  // `ai_fallback_review` phase; cleared by `reset()` and on confirm.
+  const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
+  /** The user's own facility-type choice for an AI-read LOAN statement.
+   * Empty until they pick — never pre-filled, and never read from the AI. */
+  const [aiFacilityType, setAiFacilityType] = useState('');
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -224,6 +322,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     setProposalId(null);
     setFields([]);
     setSelected(new Set());
+    setAiDraft(null);
+    setAiFacilityType('');
   }, []);
 
   async function loadReview(docId: string) {
@@ -246,6 +346,18 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // do with this outcome" for both.
   async function handleStatementOutcome(json: Record<string, unknown>) {
     const data = json.data as Record<string, unknown>;
+    // AIE liability AI-fallback (2026-09-23). Checked BEFORE the "no
+    // statement_id means unable to read" branch below, which would otherwise
+    // swallow a perfectly good draft as a hard failure: an AI draft ALSO has a
+    // null `statement_id` (deliberately — nothing has been written yet), so
+    // ordering here is load-bearing, not stylistic.
+    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      setDocumentId(data.document_id as string);
+      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
+      setAiFacilityType('');
+      setPhase('ai_fallback_review');
+      return;
+    }
     if (!data.statement_id) {
       setMessage((data.error_message as string | undefined) ?? 'We could not read this statement.');
       setPhase('unable_to_read');
@@ -277,6 +389,69 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       minimum_payment: statementType === 'credit_card' ? (minimumPayment || undefined) : undefined,
       interest_rate: statementType === 'loan' ? (interestRate || undefined) : undefined,
     };
+  }
+
+  /** Removes one AI-read line the user judges wrong. Deletion is the only
+   * per-row edit offered here, deliberately: a statement can carry dozens of
+   * lines, and an inline editable grid for all of them would duplicate the
+   * statement review screen this panel already moves on to straight after
+   * saving. Removing a line the model hallucinated or double-counted is the
+   * one correction that must happen BEFORE the write, because it is the one
+   * the reconciliation arithmetic will otherwise trip on. */
+  function removeAiDraftActivity(index: number) {
+    setAiDraft((d) => (d ? { ...d, activities: d.activities.filter((_, i) => i !== index) } : d));
+  }
+
+  /** Confirms the AI-read draft. The metadata sent is the SAME shape the
+   * upload and resume calls use, with each AI-read header value applied only
+   * where the user left that form field blank — a figure the user typed
+   * themselves always wins over one a model read. */
+  async function handleConfirmAiDraft() {
+    if (!aiDraft || !documentId) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const h = aiDraft.header;
+      const res = await fetch(`/api/financial-data-hub/liability-statement/${documentId}/ai-fallback/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metadata: {
+            statement_type: statementType,
+            country_code: country,
+            currency_code: currency,
+            institution_name: institutionName || h.institutionName || undefined,
+            masked_identifier: maskedIdentifier || h.maskedIdentifier || undefined,
+            statement_period_start: h.statementPeriodStart || undefined,
+            statement_period_end: h.statementPeriodEnd || undefined,
+            statement_date: h.statementDate || undefined,
+            due_date: h.dueDate || undefined,
+            opening_balance: pickFigure(openingBalance, h.openingBalance),
+            closing_balance: pickFigure(closingBalance, h.closingBalance),
+            credit_limit: statementType === 'credit_card' ? pickFigure(creditLimit, h.creditLimit) : undefined,
+            minimum_payment: statementType === 'credit_card' ? pickFigure(minimumPayment, h.minimumPayment) : undefined,
+            interest_rate: statementType === 'loan' ? pickFigure(interestRate, h.interestRate) : undefined,
+          },
+          // Forced for a card; the user's own explicit choice for a loan.
+          facilityType: statementType === 'credit_card' ? 'credit_card' : aiFacilityType,
+          activities: aiDraft.activities,
+          aiWarnings: aiDraft.warnings,
+        }),
+      });
+      const { ok, json } = await readJson(res);
+      if (!ok) {
+        setMessage(json.error ?? 'We could not save this statement.');
+        setPhase('error');
+        return;
+      }
+      setAiDraft(null);
+      await loadReview(json.data.document_id as string);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Something went wrong.');
+      setPhase('error');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleUpload() {
@@ -598,6 +773,136 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
           {phase === 'processing' && 'Processing your statement — extracting activity…'}
         </p>
+      )}
+
+      {phase === 'ai_fallback_review' && aiDraft && (
+        <div className="mt-4 space-y-4">
+          <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
+            check these figures before saving — <strong>nothing has been saved yet</strong>.
+          </p>
+
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-muted">Institution</dt>
+              <dd>{institutionName || aiDraft.header.institutionName || 'Not shown'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Statement period</dt>
+              <dd>
+                {aiDraft.header.statementPeriodStart ?? '?'} to {aiDraft.header.statementPeriodEnd ?? '?'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted">{isCreditCard ? 'Opening balance' : 'Opening principal'}</dt>
+              <dd>{headerFigure(openingBalance, aiDraft.header.openingBalance)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">{isCreditCard ? 'Closing balance' : 'Closing principal'}</dt>
+              <dd>{headerFigure(closingBalance, aiDraft.header.closingBalance)}</dd>
+            </div>
+          </dl>
+
+          {!aiDraft.allActivitiesListed && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              The AI reported that it could <strong>not</strong> list every line on this statement. If you save this,
+              the evidence will be incomplete and the statement is unlikely to add up — we recommend trying a different
+              export, or adding this liability by hand.
+            </p>
+          )}
+
+          {!isCreditCard && (
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">What kind of loan is this statement for?</span>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                value={aiFacilityType}
+                onChange={(e) => setAiFacilityType(e.target.value)}
+              >
+                <option value="">Please choose…</option>
+                {LOAN_FACILITY_CHOICES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-muted">
+                We ask rather than guess: this is what lets us match the statement to the loan you already have, instead
+                of adding a second copy of it.
+              </span>
+            </label>
+          )}
+
+          <div>
+            <p className="mb-2 text-sm text-muted">
+              {aiDraft.activities.length} line{aiDraft.activities.length === 1 ? '' : 's'} read. Remove any line that is
+              wrong or is not really an activity.
+            </p>
+            <div className="max-h-80 overflow-y-auto rounded border border-gray-200">
+              <table className="w-full text-sm">
+                <caption className="sr-only">Statement activity read by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Type</th>
+                    <th scope="col" className="px-3 py-2">Description</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2">
+                      <span className="sr-only">Remove</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.activities.map((a, i) => (
+                    <tr key={`${a.activityDate}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate}</td>
+                      <td className="px-3 py-2">{ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType}</td>
+                      <td className="px-3 py-2">{a.descriptionRaw ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{a.amount.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => removeAiDraftActivity(i)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                        >
+                          Remove
+                          <span className="sr-only"> the {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType} line on {a.activityDate}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted">
+            AI-read values are shown for your confirmation only. When you save, we check these figures against the
+            statement&apos;s own opening and closing balances — exactly as we do for a statement we read automatically —
+            and flag the result for review if they do not add up. Nothing is applied to your Liabilities until you
+            approve the evidence and then apply the comparison, as usual.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAiDraft(null);
+                setMessage("We couldn't recognise the layout of this statement. Please check the file, or add this liability manually.");
+                setPhase('unable_to_read');
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-sm"
+            >
+              This doesn&apos;t look right
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAiDraft}
+              disabled={busy || aiDraft.activities.length === 0 || (!isCreditCard && !aiFacilityType)}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save this statement
+            </button>
+          </div>
+        </div>
       )}
 
       {phase === 'unable_to_read' && (

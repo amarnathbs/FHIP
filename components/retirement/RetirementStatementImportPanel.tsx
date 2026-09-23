@@ -36,6 +36,10 @@ type Phase =
   | 'uploading'
   | 'scanning'
   | 'unable_to_read'
+  // AIE retirement-statement AI-fallback (2026-09-23). The native CSV parse
+  // failed on a readable-but-unrecognised layout and an AI read a DRAFT off
+  // it; nothing is saved until the user confirms from this phase.
+  | 'ai_fallback_review'
   | 'scan_timeout'
   | 'duplicate'
   | 'routed_to_smsf'
@@ -111,6 +115,64 @@ interface Position {
   asset_class_raw: string | null;
   market_value: string | null;
   currency_code: string;
+}
+
+/**
+ * AIE retirement-statement AI-fallback (2026-09-23) — the draft the service
+ * returns and the confirm route accepts back.
+ *
+ * MONEY IS A STRING, EVERYWHERE, DELIBERATELY. This mirrors
+ * `RetirementStatementExtraction` exactly: that type's own header calls a
+ * `number` on a money field "a defect", and the confirm route refuses a JSON
+ * number. Parsing these into numbers for display and re-serialising them
+ * would silently round values the user is being asked to verify.
+ */
+interface AiDraftActivity {
+  activityType: string;
+  amount: string;
+  activityDate?: string;
+  descriptionRaw?: string;
+  employerNameRaw?: string;
+  isSummaryTotal: boolean;
+  isYearToDate: boolean;
+}
+
+interface AiDraftPosition {
+  optionNameRaw: string;
+  assetClassRaw?: string;
+  units?: string;
+  unitPrice?: string;
+  marketValue?: string;
+  valuationDate?: string;
+}
+
+interface AiFallbackDraft {
+  statementType: string;
+  jurisdiction: 'AU' | 'IN';
+  accountType: string;
+  currencyCode: string;
+  fundName?: string;
+  maskedAccountIdentifier?: string;
+  statementDate?: string;
+  statementStartDate?: string;
+  statementEndDate?: string;
+  openingBalance?: string;
+  closingBalance?: string;
+  employerContributions?: string;
+  personalContributions?: string;
+  salarySacrifice?: string;
+  governmentContributions?: string;
+  rolloversIn?: string;
+  rolloversOut?: string;
+  withdrawals?: string;
+  pensionPayments?: string;
+  investmentEarnings?: string;
+  fees?: string;
+  insurancePremiums?: string;
+  tax?: string;
+  activities: AiDraftActivity[];
+  positions: AiDraftPosition[];
+  warnings: string[];
 }
 
 interface Member { id: string; member_type: 'self' | 'spouse'; target_retirement_age: number | null }
@@ -223,6 +285,12 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   const [file, setFile] = useState<File | null>(null);
 
   const [documentId, setDocumentId] = useState<string | null>(null);
+  // AIE retirement-statement AI-fallback (2026-09-23). Held only for the
+  // lifetime of the `ai_fallback_review` phase; cleared by `reset()` and on
+  // confirm. Money stays a STRING end to end — the canonical extraction type
+  // stores it that way and a round-trip through a JS number would reintroduce
+  // the float loss that representation exists to prevent.
+  const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
   const [statement, setStatement] = useState<Statement | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -319,6 +387,16 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     if (data.pipeline_status === 'routed_to_smsf') {
       setPhase('routed_to_smsf');
       setMessage(String(data.failure_message ?? ''));
+      return;
+    }
+    // Checked BEFORE `extraction_failed`: for an AI-eligible failure kind the
+    // service returns a DRAFT instead of failing, and the document is
+    // deliberately left in `queued` rather than marked failed. Both the
+    // single-call upload response and the post-scan `/process` response funnel
+    // through this one function, so this single branch covers both paths.
+    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
       return;
     }
     if (data.pipeline_status === 'extraction_failed') {
@@ -498,11 +576,56 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     } finally { setBusy(false); }
   }, [documentId, proposalId, decision, selected, onApplied, handleGenerateProposal]);
 
+  /** Removes one AI-read line the user judges wrong. Deletion is the only
+   * per-row edit offered, deliberately: the statement's own summary figures
+   * (which the user CAN correct above) are what the reconciliation check
+   * uses, and an inline editable grid for every activity would duplicate the
+   * review screen the user reaches immediately after saving. Removing a line
+   * the model invented or double-counted — most often a summary total it
+   * failed to mark as one — is the correction that has to happen before the
+   * write. */
+  const removeAiActivity = useCallback((index: number) => {
+    setAiDraft((d) => (d ? { ...d, activities: d.activities.filter((_, i) => i !== index) } : d));
+  }, []);
+
+  const removeAiPosition = useCallback((index: number) => {
+    setAiDraft((d) => (d ? { ...d, positions: d.positions.filter((_, i) => i !== index) } : d));
+  }, []);
+
+  const updateAiMoney = useCallback((key: 'openingBalance' | 'closingBalance', raw: string) => {
+    // Kept as a STRING. An empty box means "the statement did not show this",
+    // which is a different fact from zero — see `money()` above.
+    setAiDraft((d) => (d ? { ...d, [key]: raw === '' ? undefined : raw } : d));
+  }, []);
+
+  const handleConfirmAiDraft = useCallback(async () => {
+    if (!aiDraft || !documentId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/financial-data-hub/retirement-statement/${documentId}/ai-fallback/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiDraft),
+      });
+      const body = await readJson(res);
+      if (!res.ok) {
+        setMessage(String(body.error ?? 'We could not save this statement.'));
+        setPhase('error');
+        return;
+      }
+      setAiDraft(null);
+      await loadReview(documentId);
+    } finally {
+      setBusy(false);
+    }
+  }, [aiDraft, documentId, loadReview]);
+
   const reset = useCallback(() => {
     setPhase('form'); setBusy(false); setMessage(null); setFile(null);
     setDocumentId(null); setStatement(null); setActivities([]); setPositions([]);
     setCurrentVsStatement(null); setProposalId(null); setFields([]); setSelected(new Set());
     setChosenAccountId(''); setChosenMemberId('');
+    setAiDraft(null);
   }, []);
 
   return (
@@ -622,6 +745,138 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
             Start again
           </button>
+        </div>
+      )}
+
+      {phase === 'ai_fallback_review' && aiDraft && (
+        <div className="mt-4 space-y-4">
+          <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
+            check these details before saving — <strong>nothing has been saved yet</strong>.
+          </p>
+
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            <div><dt className="text-muted">Fund</dt><dd>{aiDraft.fundName ?? 'Not identified'}</dd></div>
+            <div><dt className="text-muted">Member number</dt><dd>{aiDraft.maskedAccountIdentifier ?? 'Not shown'}</dd></div>
+            <div>
+              <dt className="text-muted">Period</dt>
+              <dd>{aiDraft.statementStartDate ?? '—'} to {aiDraft.statementEndDate ?? '—'}</dd>
+            </div>
+            <div><dt className="text-muted">Currency</dt><dd>{aiDraft.currencyCode}</dd></div>
+          </dl>
+
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-muted" htmlFor="ai-opening-balance">Opening balance</label>
+              <input
+                id="ai-opening-balance"
+                type="text"
+                inputMode="decimal"
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                placeholder="Not shown on statement"
+                value={aiDraft.openingBalance ?? ''}
+                onChange={(e) => updateAiMoney('openingBalance', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-muted" htmlFor="ai-closing-balance">Closing balance</label>
+              <input
+                id="ai-closing-balance"
+                type="text"
+                inputMode="decimal"
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                placeholder="Not shown on statement"
+                value={aiDraft.closingBalance ?? ''}
+                onChange={(e) => updateAiMoney('closingBalance', e.target.value)}
+              />
+            </div>
+          </div>
+
+          {aiDraft.activities.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm text-muted">
+                {aiDraft.activities.length} activit{aiDraft.activities.length === 1 ? 'y' : 'ies'} read. Remove any line
+                that is wrong, or that is a total of other lines rather than a movement of its own.
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">Activities read from this statement by AI, awaiting your confirmation</caption>
+                  <thead className="sticky top-0 bg-gray-50 text-left">
+                    <tr>
+                      <th scope="col" className="px-3 py-2">Date</th>
+                      <th scope="col" className="px-3 py-2">Type</th>
+                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                      <th scope="col" className="px-3 py-2">Total?</th>
+                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiDraft.activities.map((a, i) => (
+                      <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
+                        <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
+                        <td className="px-3 py-2">{a.activityType}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
+                        <td className="px-3 py-2">
+                          {a.isSummaryTotal ? 'Summary total' : a.isYearToDate ? 'Year to date' : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" onClick={() => removeAiActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                            Remove<span className="sr-only"> the {a.activityType} activity</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {aiDraft.positions.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm text-muted">{aiDraft.positions.length} investment option(s) read.</p>
+              <ul className="space-y-1 text-sm">
+                {aiDraft.positions.map((pos, i) => (
+                  <li key={`${pos.optionNameRaw}-${i}`} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                    <span>
+                      {pos.optionNameRaw} — {money(pos.marketValue, aiDraft.currencyCode)}
+                    </span>
+                    <button type="button" onClick={() => removeAiPosition(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                      Remove<span className="sr-only"> the {pos.optionNameRaw} holding</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-xs text-muted">
+            AI-read values are shown for your confirmation only. When you save, we check these figures against the
+            statement&apos;s own opening and closing balances — exactly as we do for a statement we read automatically —
+            and flag anything that does not add up.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAiDraft(null);
+                setMessage('We could not read this statement. Please check the file, or add these details manually.');
+                setPhase('unable_to_read');
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-sm"
+            >
+              This doesn&apos;t look right
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmAiDraft}
+              disabled={busy || (aiDraft.activities.length === 0 && !aiDraft.closingBalance && !aiDraft.openingBalance)}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save these details
+            </button>
+          </div>
         </div>
       )}
 

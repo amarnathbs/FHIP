@@ -13,6 +13,7 @@ import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 import {
@@ -72,8 +73,14 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
 // this phase" pattern fdh9SchemaContract.test.ts/fdh10SchemaContract.test.ts/
 // fdh11SchemaContract.test.ts already established for exactly this reason.
 const VOCABULARY_AS_OF_FDH12 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t)
-    && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
+  (t) =>
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t) &&
+    // AIE unified document fallback (migration 0180) — the four remaining
+    // FDH-3 document types, subtracted for the same reason as the payslip
+    // phase above.
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
+    // Payslip review/correction (migration 0185) — a later phase again.
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
 );
 
 describe('FDH-12 audit-event vocabulary parity', () => {

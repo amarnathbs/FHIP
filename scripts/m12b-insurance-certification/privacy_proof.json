@@ -213,7 +213,7 @@
   ],
   "evidence": {
     "masking-key-not-persisted": {
-      "envLocalPresentInWorktree": true,
+      "envLocalPresentInWorktree": false,
       "envLocalDeclaresMaskingKey": false,
       "note": "This phase provisioned no key. The key used by the proofs below is generated per-test with crypto.randomBytes and dies with the process."
     },
