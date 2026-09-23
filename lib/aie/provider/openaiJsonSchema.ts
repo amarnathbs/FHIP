@@ -59,6 +59,12 @@ import { PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/payslip/o
 // adapter added without this line fails a test rather than failing live.
 import { AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME, AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION } from '../adapters/bankStatement/schema';
 import { BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/bankStatement/openaiSchema';
+import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '../adapters/auInvestment/schema';
+import { AU_INVESTMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/auInvestment/openaiSchema';
+import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '../adapters/liability/schema';
+import { LIABILITY_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/liability/openaiSchema';
+import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '../adapters/retirement/schema';
+import { RETIREMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/retirement/openaiSchema';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -177,6 +183,13 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   [`${AIE_II_DOCUMENT_FACTS_SCHEMA_NAME}@${AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: INVESTMENT_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA }],
   // AIE unified document fallback (2026-09-23) — see the import block above.
   [`${AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME}@${AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA }],
+  [`${AIE_RETIREMENT_FACTS_SCHEMA_NAME}@${AIE_RETIREMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: RETIREMENT_FACTS_OPENAI_JSON_SCHEMA }],
+  [`${AIE_LIABILITY_FACTS_SCHEMA_NAME}@${AIE_LIABILITY_FACTS_SCHEMA_VERSION}`, { rawSchema: LIABILITY_FACTS_OPENAI_JSON_SCHEMA }],
+  // FDH-11 AU investment statement. Distinct from the Investment Intelligence
+  // entry above in BOTH domain and destination — that one reads CAS/folio
+  // documents into `ii_*`, this one reads AU broker/fund statement exports
+  // into FDH-11's own evidence tables.
+  [`${AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME}@${AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: AU_INVESTMENT_FACTS_OPENAI_JSON_SCHEMA }],
 ]);
 
 function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {

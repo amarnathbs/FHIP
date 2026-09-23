@@ -72,6 +72,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       activities_extracted: result.activitiesExtracted,
       activities_deduplicated: result.activitiesDeduplicated,
       positions_extracted: result.positionsExtracted,
+      // AIE retirement-statement AI-fallback (2026-09-23). Present (non-null)
+      // ONLY when `pipeline_status === 'ai_fallback_available'`: the native
+      // CSV parse failed on a readable-but-unrecognised layout and an AI read
+      // a DRAFT off it. Nothing has been written at this point; the panel
+      // shows this for explicit review and then posts it to
+      // `.../ai-fallback/confirm`. Returned from BOTH this route and its
+      // sibling because a `pending_scan` upload finishes through the other
+      // one, and a draft must not be reachable from only one of the two.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof RetirementStatementProcessingError) {
