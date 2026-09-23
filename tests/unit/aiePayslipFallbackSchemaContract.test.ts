@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '..', '..', 'supabase', 'migrations');
 const FILE = '0173_aie_payslip_ai_fallback_audit_events.sql';
@@ -32,13 +32,22 @@ describe('AIE payslip AI-fallback migration numbering governance', () => {
 });
 
 describe('AIE payslip AI-fallback audit-event vocabulary parity', () => {
-  it('0173 matches the FULL TypeScript vocabulary (it is the constraint\'s latest word)', () => {
+  // Migration 0185 (payslip review/correction) has since widened this SAME
+  // constraint again, so 0173 is no longer "the constraint's latest word" —
+  // `fdh9PayslipCorrection.test.ts` now owns that claim for 0185, and proves
+  // 0185's list is a STRICT SUPERSET of this one. This test keeps its own
+  // claim, filtering out only what a LATER migration added, exactly as
+  // fdh7/fdh9/fdh10/fdh11/fdh12SchemaContract.test.ts each already do.
+  it('0173 matches everything known up to and including the AIE payslip AI-fallback widening', () => {
     const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
     expect(idx).toBeGreaterThan(-1);
     const slice = SQL.slice(idx, idx + 6000);
     const match = slice.match(/in \(([\s\S]*?)\)\)/);
     const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+    const vocabularyAsOf0173 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
+      (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
+    );
+    expect(values.sort()).toEqual([...vocabularyAsOf0173].sort());
   });
 
   it('all seven new event types are present in the constraint and the TS union', () => {

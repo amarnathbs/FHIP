@@ -13,6 +13,7 @@ import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 import {
   RETIREMENT_ACTIVITY_TYPES,
@@ -71,7 +72,8 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
 // this phase" pattern fdh9SchemaContract.test.ts/fdh10SchemaContract.test.ts/
 // fdh11SchemaContract.test.ts already established for exactly this reason.
 const VOCABULARY_AS_OF_FDH12 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t),
+  (t) => !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t)
+    && !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
 );
 
 describe('FDH-12 audit-event vocabulary parity', () => {
