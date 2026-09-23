@@ -67,12 +67,20 @@ function predecessorAuditEventMigration(selfNumber: number): { name: string; sql
   return previous;
 }
 
-/** Every migration that defines the event_type constraint, oldest first. */
+/** Every migration filename in the ledger, oldest first. */
+function migrationFilenames(): string[] {
+  return readdirSync(path.join(ROOT, 'supabase/migrations'))
+    .filter((name) => /^\d{4}_.*\.sql$/.test(name))
+    .sort();
+}
+
+/**
+ * Every migration that defines the event_type constraint, oldest first,
+ * identified by PARSING each one's value list.
+ */
 function auditEventMigrationChain(): { name: string; sql: string }[] {
   const dir = path.join(ROOT, 'supabase/migrations');
-  return readdirSync(dir)
-    .filter((name) => /^\d{4}_.*\.sql$/.test(name))
-    .sort()
+  return migrationFilenames()
     .map((name) => ({ name, sql: readFileSync(path.join(dir, name), 'utf8') }))
     .filter((m) => {
       try {
@@ -81,6 +89,23 @@ function auditEventMigrationChain(): { name: string; sql: string }[] {
         return false;
       }
     });
+}
+
+/**
+ * The same set, found a DIFFERENT way: a plain substring search for the
+ * `add constraint` statement, with no parsing at all.
+ *
+ * Deliberately independent of `auditEventMigrationChain`. The chain claims
+ * below compare a parsed list against the TypeScript enum; if the traversal
+ * itself were wrong — a truncated list, or the wrong last element — a
+ * `toEqual` against one end of it could still pass. Two derivations that share
+ * no code cannot both be wrong in the same direction by accident.
+ */
+function auditEventMigrationNamesBySubstring(): string[] {
+  const dir = path.join(ROOT, 'supabase/migrations');
+  return migrationFilenames().filter((name) =>
+    readFileSync(path.join(dir, name), 'utf8')
+      .includes('add constraint fdh_document_audit_events_event_type_check'));
 }
 
 /** Every value inside a `check (event_type in ( ... ))` block. */
@@ -377,9 +402,20 @@ describe('migration 0186 is additive against what it replaces', () => {
     }
   });
 
-  it('the TypeScript audit-event enum matches the widened constraint exactly', () => {
-    expect([...auditEventTypesIn(MIGRATION_0186)].sort())
-      .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+  it('every value 0186 grants is reachable from the TypeScript enum', () => {
+    // DELIBERATELY NOT AN EXACT MATCH, for the same reason the equivalent
+    // assertion in `fdh9PayslipCorrection.test.ts` is not one. 0186 happens to
+    // be the newest constraint-defining migration TODAY, so an exact match
+    // would pass — and would then fail the moment 0187 lands, sending the next
+    // reader to edit this file. The exact-match claim belongs to whichever
+    // migration the ledger says is newest, and is asserted once, below.
+    // (An earlier draft of this file had both, which a simulated-0187 control
+    // caught.) What is left here is the half that stays true forever.
+    const granted = auditEventTypesIn(MIGRATION_0186);
+    expect(granted.length).toBeGreaterThan(0);
+    for (const value of granted) {
+      expect(FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES as readonly string[]).toContain(value);
+    }
   });
 });
 
@@ -396,18 +432,41 @@ describe('migration 0186 is additive against what it replaces', () => {
 // `fdh9PayslipCorrection.test.ts` would need another subtrahend for expenses,
 // another for insurance, until it asserts nothing but which migrations exist.
 //
-// The two claims below are the durable form. They are derived entirely from the
+// The claims below are the durable form. They are derived entirely from the
 // migration ledger, so a new widening needs NO edit here: add the migration and
-// the enum value, and these keep meaning exactly what they mean today.
+// the enum value, and these keep meaning exactly what they mean today. That
+// claim is load-bearing, so it is kept literally true — an earlier draft of
+// this block pinned `latest.name` to '0186_...sql', which would have failed on
+// 0187 and sent the next reader to edit a hardcoded filename: the exact thing
+// this block exists to remove. The anti-vacuity weight that pin was carrying is
+// now carried by a second, independent derivation instead. The only numbers
+// here are floors, which never need raising.
 describe('the fdh_document_audit_events event_type chain, as a whole', () => {
+  it('the traversal finds every constraint-defining migration, and only those', () => {
+    // The anti-vacuity guard for everything below. Two independent
+    // derivations — parsing each value list, and a plain substring search for
+    // the `add constraint` statement — must agree exactly. A traversal that
+    // silently truncated, or picked up a migration that only MENTIONS the
+    // constraint in a comment, fails here rather than quietly weakening the
+    // claims that consume it.
+    const parsed = auditEventMigrationChain().map((m) => m.name);
+    expect(parsed).toEqual(auditEventMigrationNamesBySubstring());
+    // A floor, not a pin: this only ever grows.
+    expect(parsed.length).toBeGreaterThanOrEqual(12);
+  });
+
   it('the LATEST constraint-defining migration matches the TypeScript enum exactly', () => {
     // The "nothing in the enum is unreachable in SQL, and nothing in SQL is
     // missing from the enum" guarantee, which the per-phase subtraction form
-    // slowly loses. Whichever migration is newest owns this claim; no file
-    // needs renaming when that changes.
+    // slowly loses. Whichever migration is newest owns this claim, derived
+    // from the ledger — NO filename is pinned here, so the next widening needs
+    // no edit to this file.
     const chain = auditEventMigrationChain();
     const latest = chain[chain.length - 1];
-    expect(latest.name).toBe('0186_fdh10_liability_statement_user_correction.sql');
+    // ...and "latest" really is the highest-numbered one, established without
+    // relying on the traversal that produced it.
+    const highest = auditEventMigrationNamesBySubstring().slice(-1)[0];
+    expect(latest.name).toBe(highest);
     expect([...auditEventTypesIn(latest.sql)].sort())
       .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
   });
