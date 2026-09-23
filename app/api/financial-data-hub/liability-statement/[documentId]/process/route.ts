@@ -60,6 +60,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       statement_id: result.statementId,
       duplicate: result.pipelineStatus === 'duplicate_statement',
       error_message: result.failureKind ? (LIABILITY_STATEMENT_FAILURE_MESSAGES[result.failureKind] ?? null) : null,
+      // AIE liability AI-fallback (2026-09-23) — the same addition as the
+      // upload route's own response, because both routes funnel through
+      // `resolveLiabilityStatementDocument()` and must return the identical
+      // envelope. A draft returned here (after a malware scan cleared) is no
+      // different from one returned at upload time.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof LiabilityStatementProcessingError) {

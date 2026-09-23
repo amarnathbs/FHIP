@@ -554,8 +554,31 @@ const PII_PATTERNS: PiiPattern[] = [
     // `employerName` canonical field), not personal PII to redact — masking
     // it would defeat the adapter's own purpose, the same "unless" reasoning
     // this rule's header already applies to `insured` vs `Sum Insured`.
+    // 2026-09-23 (AIE unified document fallback) — `member`, `membership`,
+    // `borrower`, `customer`, `client` and `accountholder` ADDED. Found by
+    // capture, not inspection: the egress-boundary proof
+    // (`tests/unit/aieUnifiedFallbackMaskingEgress.test.ts`) planted
+    // `Member: ALEX SAMPLE TESTPERSON` in a synthetic AU super member
+    // statement and read the payload that would actually have left the
+    // process — the member's NAME was in it, verbatim.
+    //
+    // This is the THIRD instance of the identical class of gap: M12B found it
+    // for insurance's `Policy Owner:`/`Insured Person:`, the payslip dispatch
+    // found it for `Employee:`, and this is `Member:` — in each case the
+    // single most common person-bearing label on that document type simply
+    // was not in this alternation. Every one of the three was invisible to
+    // code review and obvious the moment the outbound payload was captured.
+    //
+    // NOTE ON `member` SPECIFICALLY, because it is doing double duty: a
+    // retirement statement prints BOTH `Member: <a person's name>` and
+    // `Member Number: <digits>`. Those are handled by different rules and the
+    // ORDER above is what separates them — `policy_number` (whose alternation
+    // already contains `member`) and `account_reference` both run BEFORE this
+    // rule and both claim the numeric form first, and `account_reference`'s
+    // digit-requiring `valuePredicate` means it declines the name form and
+    // leaves it for this rule. Reordering any of the three would break that.
     pattern:
-      /\b((?:investor|account[^\S\r\n]*holder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+      /\b((?:investor|account[^\S\r\n]*holder|accountholder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee|member|membership|borrower|customer|client)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
     valueGroup: 2,
     // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
     // `investor:` all occur in real statements), so the value needs its

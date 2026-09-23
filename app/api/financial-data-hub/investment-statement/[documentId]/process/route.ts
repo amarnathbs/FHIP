@@ -62,6 +62,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       activities_extracted: result.activitiesExtracted,
       duplicate: result.pipelineStatus === 'duplicate_statement',
       error_message: result.failureKind ? (AU_INVESTMENT_STATEMENT_FAILURE_MESSAGES[result.failureKind] ?? null) : null,
+      // AIE AU investment-statement AI fallback (2026-09-23) — identical to
+      // the upload route's own field, and present on BOTH because a document
+      // that waited for the malware scan reaches the failure branch through
+      // this route instead. Populated only alongside
+      // `pipeline_status: 'ai_fallback_available'`, and nothing is written
+      // until the user confirms the draft.
+      ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
     if (e instanceof AuInvestmentStatementProcessingError) {

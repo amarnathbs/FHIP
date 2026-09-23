@@ -1183,6 +1183,28 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED = [
   'investment_statement_ai_fallback_confirmed',
 ] as const;
 
+/**
+ * All 28 values this dispatch adds, as ONE constant.
+ *
+ * WHY THIS EXISTS ON TOP OF THE FOUR ABOVE. Every historical
+ * `*SchemaContract.test.ts` proves that ITS migration's CHECK constraint
+ * matches "the TypeScript vocabulary as of that phase", which it computes by
+ * subtracting everything LATER phases added. Six such tests exist
+ * (FDH-7/9/10/11/12 and the AIE payslip one), and each would otherwise need
+ * four new subtraction clauses — twenty-four edits to keep in step, any one of
+ * which could be forgotten.
+ *
+ * The four separate constants above are kept because the migration's CHECK
+ * constraint is grouped per document type and the per-type constants are what
+ * make that SQL diffable by eye. This is the flattened view those tests want.
+ */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED = [
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_BANK_STATEMENT_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_RETIREMENT_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_LIABILITY_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
  * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback +
  * AIE unified document fallback). Used
