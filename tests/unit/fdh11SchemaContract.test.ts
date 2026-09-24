@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED } from '@/lib/financial-data-hub/constants/enums';
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED } from '@/lib/financial-data-hub/constants/enums';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0106_fdh11_au_investment_statement_intelligence.sql';
@@ -49,7 +49,8 @@ describe('FDH-11 fdh_document_audit_events.event_type widened constraint matches
         // AIE unified document fallback (migration 0180) — the four remaining
         // FDH-3 document types, subtracted for the same reason as every later
         // phase above.
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t),
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
     );
     expect(values.sort()).toEqual([...vocabularyAsOfFdh11].sort());
   });

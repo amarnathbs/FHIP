@@ -15,6 +15,7 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
   FDH_TRANSACTION_APPROVAL_STATUSES,
 } from '@/lib/financial-data-hub/constants/enums';
 
@@ -126,7 +127,8 @@ describe('FDH-7 new-column check constraints match their TypeScript vocabularies
         // AIE unified document fallback (migration 0180) — the four remaining
         // FDH-3 document types, subtracted for the same reason as every later
         // phase above.
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t),
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
+        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
     );
     expect(values.sort()).toEqual([...vocabularyAsOfFdh7].sort());
   });

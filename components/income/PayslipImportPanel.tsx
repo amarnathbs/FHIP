@@ -42,6 +42,11 @@ type Phase =
   | 'ai_fallback_review'
   | 'duplicate'
   | 'review'
+  // 2026-09-24. "Review / Correct" used to call `loadReview()`, which
+  // re-fetched the payroll event and set the phase this panel was ALREADY in
+  // — it re-rendered identical content and changed nothing a user could see,
+  // with no correction surface behind it at all. This phase is that surface.
+  | 'correcting'
   | 'comparing'
   | 'applied'
   | 'kept_existing'
@@ -112,7 +117,53 @@ interface PayrollEvent {
   approval_status: 'pending' | 'approved';
   country_code: string;
   currency_code: string;
+  // Migration 0185. Present once that migration is applied; treated as
+  // optional here so this panel renders correctly against an environment
+  // where it is not, rather than showing `undefined`.
+  gross_pay_source?: 'stated_on_document' | 'derived_from_components' | 'user_corrected' | null;
+  user_corrected_fields?: string[] | null;
+  last_corrected_at?: string | null;
 }
+
+/** The fields this panel lets a user correct, in the order it shows them. */
+const CORRECTABLE_FIELDS = [
+  'employer_name',
+  'pay_period_start',
+  'pay_period_end',
+  'gross_pay',
+  'base_pay',
+  'overtime_pay',
+  'bonus_pay',
+  'tax_withheld',
+  'employer_retirement_contribution',
+  'net_pay',
+] as const;
+type CorrectableField = (typeof CORRECTABLE_FIELDS)[number];
+
+const CORRECTION_LABELS: Record<CorrectableField, string> = {
+  employer_name: 'Employer',
+  pay_period_start: 'Pay period start (YYYY-MM-DD)',
+  pay_period_end: 'Pay period end (YYYY-MM-DD)',
+  gross_pay: 'Gross pay for this pay period',
+  base_pay: 'Ordinary earnings for this pay period',
+  overtime_pay: 'Overtime for this pay period',
+  bonus_pay: 'Bonus for this pay period',
+  tax_withheld: 'Tax withheld for this pay period',
+  employer_retirement_contribution: 'Employer super / retirement contribution',
+  net_pay: 'Net pay for this pay period',
+};
+
+const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
+  'gross_pay', 'base_pay', 'overtime_pay', 'bonus_pay', 'tax_withheld',
+  'employer_retirement_contribution', 'net_pay',
+];
+
+/** Honest, non-technical wording for where a gross figure came from. */
+const GROSS_SOURCE_NOTE: Record<string, string> = {
+  stated_on_document: '',
+  derived_from_components: 'Worked out from the pay lines on this payslip — this payslip does not print a gross total.',
+  user_corrected: 'You corrected this figure.',
+};
 
 interface ProposedField {
   fieldName: string;
@@ -178,6 +229,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // whole point of this step is to let the user correct it before anything
   // is saved.
   const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
+  // 2026-09-24 correction surface. `corrections` holds the RAW string in each
+  // input, seeded from the extracted event; only the entries that actually
+  // differ from the stored value are ever submitted, so
+  // `user_corrected_fields` records what the user really touched rather than
+  // every field they looked at.
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
   // (see that file's identical comment) — this panel used to always render
   // as a fully working upload form and only discover the FDH-3 production
@@ -210,7 +269,100 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     setFields([]);
     setSelected(new Set());
     setAiDraft(null);
+    setCorrections({});
+    setCorrectionError(null);
+    setCorrectionNotice(null);
   }, []);
+
+  /** Seed every correction input from what was actually extracted. */
+  function startCorrecting(current: PayrollEvent) {
+    const seeded: Record<string, string> = {};
+    for (const field of CORRECTABLE_FIELDS) {
+      const value = current[field as keyof PayrollEvent];
+      if (value === null || value === undefined) {
+        // Blank, not "0" — an absent figure stays absent until the user
+        // decides otherwise.
+        seeded[field] = '';
+        continue;
+      }
+      // Money arrives from a numeric(20,4) column, so "2870.0000" is a
+      // faithful but unreadable way to show $2,870. Trailing zeros are
+      // dropped for display only; the value is identical.
+      seeded[field] = MONEY_CORRECTION_FIELDS.includes(field) ? String(Number(value)) : String(value);
+    }
+    setCorrections(seeded);
+    setCorrectionError(null);
+    setCorrectionNotice(null);
+    setPhase('correcting');
+  }
+
+  /** Only the fields whose value the user actually changed. */
+  function changedCorrections(current: PayrollEvent): Record<string, string | number | null> {
+    const body: Record<string, string | number | null> = {};
+    for (const field of CORRECTABLE_FIELDS) {
+      const raw = (corrections[field] ?? '').trim();
+      const stored = current[field as keyof PayrollEvent];
+      const storedText = stored === null || stored === undefined ? '' : String(stored);
+      if (MONEY_CORRECTION_FIELDS.includes(field)) {
+        // Compare numerically, so "2870" and "2870.0000" are not a change.
+        const before = storedText === '' ? null : Number(storedText);
+        const after = raw === '' ? null : Number(raw);
+        if (after !== null && !Number.isFinite(after)) {
+          throw new Error(`${CORRECTION_LABELS[field]} must be a number, or left blank.`);
+        }
+        if (before === after) continue;
+        body[field] = after;
+        continue;
+      }
+      if (raw === storedText) continue;
+      body[field] = raw === '' ? null : raw;
+    }
+    return body;
+  }
+
+  async function handleSaveCorrections() {
+    if (!documentId || !event) return;
+    setCorrectionError(null);
+    setCorrectionNotice(null);
+    let body: Record<string, string | number | null>;
+    try {
+      body = changedCorrections(event);
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : 'Check each figure and try again.');
+      return;
+    }
+    if (Object.keys(body).length === 0) {
+      setCorrectionError('Nothing has been changed yet. Edit a value, or choose Cancel.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/financial-data-hub/payslip/${documentId}/correct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const { ok, json } = await readJson(res);
+      if (!ok) {
+        setCorrectionError(json.error ?? 'These corrections could not be saved.');
+        return;
+      }
+      const saved = json.data.payroll_event as PayrollEvent | null;
+      if (saved) setEvent(saved);
+      const count = (json.data.corrected_fields as string[] | undefined)?.length ?? Object.keys(body).length;
+      setCorrectionNotice(
+        `Saved ${count} ${count === 1 ? 'correction' : 'corrections'}. `
+        + (json.data.reconciliation_restamped
+          ? 'The gross-to-net check has been run again on your figures.'
+          : 'The gross-to-net check is unchanged.'),
+      );
+      setPhase('review');
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function loadReview(docId: string) {
     const res = await fetch(`/api/financial-data-hub/payslip/${docId}`);
@@ -603,6 +755,19 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           {phase === 'duplicate' && message && (
             <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>
           )}
+          {/* Announced, not just displayed: a correction that has just been
+              saved is a status change the user may not be looking at. */}
+          {correctionNotice && (
+            <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800" role="status" aria-live="polite">
+              {correctionNotice}
+            </p>
+          )}
+          {(event.user_corrected_fields?.length ?? 0) > 0 && (
+            <p className="text-xs text-muted">
+              {event.user_corrected_fields!.length === 1 ? 'One figure below was' : `${event.user_corrected_fields!.length} figures below were`}{' '}
+              corrected by you, not read from the payslip.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <dt className="text-muted">Employer</dt>
             <dd>{event.employer_name ?? 'Not identified'}</dd>
@@ -611,7 +776,18 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               {event.pay_period_start && event.pay_period_end ? `${event.pay_period_start} – ${event.pay_period_end}` : 'Not identified'}
             </dd>
             <dt className="text-muted">Gross pay</dt>
-            <dd>{money(event.gross_pay, event.currency_code)}</dd>
+            <dd>
+              {money(event.gross_pay, event.currency_code)}
+              {event.gross_pay_source && GROSS_SOURCE_NOTE[event.gross_pay_source] && (
+                <span className="mt-0.5 block text-xs text-muted">{GROSS_SOURCE_NOTE[event.gross_pay_source]}</span>
+              )}
+              {event.gross_pay === null && (
+                <span className="mt-0.5 block text-xs text-muted">
+                  This payslip doesn&apos;t state a gross figure we could read, and we haven&apos;t assumed one. You can
+                  enter it below.
+                </span>
+              )}
+            </dd>
             <dt className="text-muted">Ordinary earnings</dt>
             <dd>{money(event.base_pay, event.currency_code)}</dd>
             {(event.overtime_pay ?? 0) > 0 && (
@@ -651,8 +827,13 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This payroll evidence has been approved.</p>
           ) : (
             <div className="flex gap-3">
-              <button type="button" onClick={() => loadReview(documentId!)} className="rounded border border-gray-300 px-3 py-1 text-sm">
-                Review / Correct
+              <button
+                type="button"
+                onClick={() => startCorrecting(event)}
+                disabled={busy}
+                className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
+              >
+                Correct these figures
               </button>
               <button
                 type="button"
@@ -674,6 +855,86 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               Continue to income comparison
             </button>
           )}
+        </div>
+      )}
+
+      {phase === 'correcting' && event && (
+        <div className="mt-4 space-y-4">
+          <h3 className="font-semibold">Correct the figures from this payslip</h3>
+          <p className="text-sm text-muted">
+            These are the figures we read from your payslip. Change anything that doesn&apos;t match what the payslip
+            actually says for <strong>this pay period</strong> — year-to-date totals belong in the year-to-date
+            columns, not here. Leave a box empty if your payslip doesn&apos;t show that figure; empty means &ldquo;not
+            stated&rdquo;, not zero. Nothing is added to your Income until you approve and apply.
+          </p>
+
+          {correctionError && (
+            <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+              {correctionError}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            {CORRECTABLE_FIELDS.map((field) => {
+              const isMoney = MONEY_CORRECTION_FIELDS.includes(field);
+              const wasCorrected = event.user_corrected_fields?.includes(field) ?? false;
+              return (
+                <div key={field}>
+                  <label className="mb-1 block text-muted" htmlFor={`payslip-correct-${field}`}>
+                    {CORRECTION_LABELS[field]}
+                    {isMoney && <span className="text-xs"> ({event.currency_code})</span>}
+                  </label>
+                  <input
+                    id={`payslip-correct-${field}`}
+                    type={isMoney ? 'number' : 'text'}
+                    inputMode={isMoney ? 'decimal' : undefined}
+                    step={isMoney ? '0.01' : undefined}
+                    min={isMoney ? '0' : undefined}
+                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    value={corrections[field] ?? ''}
+                    aria-describedby={wasCorrected ? `payslip-correct-${field}-note` : undefined}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCorrections((prev) => ({ ...prev, [field]: next }));
+                    }}
+                  />
+                  {wasCorrected && (
+                    <span id={`payslip-correct-${field}-note`} className="mt-0.5 block text-xs text-muted">
+                      You corrected this earlier.
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-muted">
+            We&apos;ll re-run the gross-to-net check on whatever you save, and tell you the result — a correction is
+            never assumed to be right just because you typed it.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setCorrections({});
+                setCorrectionError(null);
+                setPhase('review');
+              }}
+              disabled={busy}
+              className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveCorrections}
+              disabled={busy}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {busy ? 'Saving…' : 'Save corrections'}
+            </button>
+          </div>
         </div>
       )}
 

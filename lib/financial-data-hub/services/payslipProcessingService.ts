@@ -62,7 +62,12 @@ import { reconcileGrossToNet } from '../payslip/reconciliation';
 import { matchSalaryDeposit, type BankCandidate } from '../payslip/bankMatch';
 import { normaliseEmployerName } from '../payslip/normalise';
 import type { FdhStatementUpload } from '../domain/types';
-import type { PayrollExtraction, PayslipExtractionFailureKind } from '../payslip/types';
+import type {
+  PayrollCountry,
+  PayrollExtraction,
+  PayrollReconciliationStatus,
+  PayslipExtractionFailureKind,
+} from '../payslip/types';
 import type { FdhErrorCode } from '../constants/enums';
 // AI-fallback addition (2026-09-22). Deliberately the SAME shape as
 // Investment Intelligence's own live mechanism
@@ -533,6 +538,10 @@ export async function persistPayrollEvidence(
     pay_frequency: extraction.payFrequency,
     pay_frequency_source: extraction.payFrequencySource,
     gross_pay: extraction.grossPay ?? null,
+    // Migration 0185. A gross this parser worked out from the payslip's own
+    // component lines must never be indistinguishable from one the employer
+    // printed — see the parser's own `deriveGrossFromComponents`.
+    gross_pay_source: extraction.grossPaySource ?? null,
     base_pay: extraction.basePay ?? null,
     overtime_pay: extraction.overtimePay ?? null,
     bonus_pay: extraction.bonusPay ?? null,
@@ -562,7 +571,19 @@ export async function persistPayrollEvidence(
     bank_match_status: bankMatchStatus,
     bank_match_transaction_id: bankMatchTransactionId,
     bank_match_confidence: bankMatchConfidence,
-    review_status: bankMatchStatus === 'multiple_candidates' || reconciliation.status === 'variance' ? 'pending' : 'not_required',
+    // 2026-09-24: layout uncertainty now forces review too. The three
+    // warnings below mean "this parser could not be sure which column it was
+    // reading", which is exactly the condition that let a year-to-date total
+    // reach `base_pay` in production. Strengthening, never loosening — the
+    // two original triggers are unchanged.
+    review_status:
+      bankMatchStatus === 'multiple_candidates'
+      || reconciliation.status === 'variance'
+      || extraction.warnings.includes('column_mapping_ambiguous')
+      || extraction.warnings.includes('column_orientation_corrected')
+      || extraction.warnings.includes('column_orientation_unresolved')
+        ? 'pending'
+        : 'not_required',
     payslip_fingerprint: fingerprint,
   };
 
@@ -637,6 +658,183 @@ export async function persistPayrollEvidence(
   });
 
   return { document: (finalDoc ?? document) as FdhStatementUpload, payrollEventId, pipelineStatus: 'ok' };
+}
+
+// ---------------------------------------------------------------------------
+// User correction of extracted payroll figures (2026-09-24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The money/date fields a user may correct on an extracted payroll event.
+ *
+ * Deliberately the EXACT key set `fdh9_correct_payroll_event` (migration
+ * 0185) accepts — one closed vocabulary, declared once, so a field can never
+ * be accepted by the route and then silently rejected by the database, or
+ * vice versa.
+ */
+export const PAYROLL_CORRECTABLE_TEXT_FIELDS = ['employer_name'] as const;
+export const PAYROLL_CORRECTABLE_DATE_FIELDS = ['pay_period_start', 'pay_period_end', 'payment_date'] as const;
+export const PAYROLL_CORRECTABLE_MONEY_FIELDS = [
+  'gross_pay', 'base_pay', 'overtime_pay', 'bonus_pay', 'commission_pay',
+  'allowances_total', 'reimbursements_total', 'other_earnings',
+  'tax_withheld', 'employee_deductions_total', 'salary_sacrifice', 'professional_tax',
+  'employer_retirement_contribution', 'employee_retirement_contribution',
+  'employer_nps_contribution', 'employee_nps_contribution', 'net_pay',
+] as const;
+
+export type PayrollCorrectableField =
+  | (typeof PAYROLL_CORRECTABLE_TEXT_FIELDS)[number]
+  | (typeof PAYROLL_CORRECTABLE_DATE_FIELDS)[number]
+  | (typeof PAYROLL_CORRECTABLE_MONEY_FIELDS)[number]
+  | 'pay_frequency';
+
+export type PayrollCorrections = Partial<Record<PayrollCorrectableField, string | number | null>>;
+
+export interface CorrectPayrollEventResult {
+  payrollEventId: string;
+  correctedFields: string[];
+  reconciliationStatus: PayrollReconciliationStatus;
+  reconciliationVariance: number | null;
+  reconciliationRestamped: boolean;
+}
+
+/**
+ * Apply a user's corrections to an already-extracted payroll event.
+ *
+ * WHY THIS IS NOT A DIRECT UPDATE. Migration 0091's D.4 trigger makes every
+ * money/period/reconciliation column on `fdh_payroll_events` authoritative:
+ * the authenticated role may write `employer_name` and nothing else. Its own
+ * comment says any correction UI must add a narrowly-scoped RPC rather than
+ * widen that allowance, and `fdh9_correct_payroll_event` (migration 0185) is
+ * that RPC. This function does the two things that must NOT live in PL/pgSQL
+ * — validation against the closed field vocabulary, and recomputing the
+ * gross-to-net identity with the SAME certified `reconcileGrossToNet` an
+ * extraction uses — and then delegates the write.
+ *
+ * WHY RECONCILIATION IS RECOMPUTED FROM HEADER TOTALS. The stored components
+ * are the LINES THE DOCUMENT PRINTED; a correction changes the summary
+ * figures, not the document. Re-running the component identity would
+ * therefore answer a question the user did not ask and return the
+ * pre-correction result. The corrected figures are instead checked with the
+ * function's own header-total identity (its step 2), which — exactly as
+ * before — returns INSUFFICIENT_DATA rather than a guess when the deduction
+ * side is ambiguous. The variance safety net is re-stamped, never dropped:
+ * a correction that still does not add up stays a `variance`.
+ */
+export async function correctPayrollEvent(
+  userId: string,
+  documentId: string,
+  corrections: PayrollCorrections,
+): Promise<CorrectPayrollEventResult> {
+  const document = await getOwnedDocument(userId, documentId);
+  if (document.document_type !== 'payslip') {
+    throw new PayslipProcessingError('wrong_document_type', 'This document was not uploaded as a payslip.');
+  }
+
+  const payrollEventId = await getPayrollEventIdForDocument(userId, documentId);
+  if (!payrollEventId) {
+    throw new PayslipProcessingError('not_found', 'No payroll evidence has been extracted from this document yet.');
+  }
+
+  const review = await getPayrollEventForReview(userId, payrollEventId);
+  if (!review) throw new PayslipProcessingError('not_found', 'Payroll event not found.');
+  const current = review.event as Record<string, unknown>;
+
+  if (current.approval_status === 'approved') {
+    throw new PayslipProcessingError(
+      'invalid_state',
+      'This payroll evidence has already been approved and can no longer be corrected.',
+    );
+  }
+
+  const keys = Object.keys(corrections) as PayrollCorrectableField[];
+  if (keys.length === 0) {
+    throw new PayslipProcessingError('invalid_state', 'No corrections were supplied.');
+  }
+
+  // The post-correction value of every field the identity needs, taking the
+  // correction where one was supplied and the stored value where one was not.
+  const after = (field: string): number | undefined => {
+    const supplied = (corrections as Record<string, string | number | null | undefined>)[field];
+    if (field in corrections) return supplied === null || supplied === undefined ? undefined : Number(supplied);
+    const stored = current[field];
+    return stored === null || stored === undefined ? undefined : Number(stored);
+  };
+
+  const moneyChanged = keys.some((k) => (PAYROLL_CORRECTABLE_MONEY_FIELDS as readonly string[]).includes(k));
+
+  // `components: []` is deliberate, not an oversight — see this function's
+  // own doc comment. It forces `reconcileGrossToNet` down its header-total
+  // identity, which is the one the corrected figures actually belong to.
+  const recomputed = reconcileGrossToNet({
+    country: (current.country_code as PayrollCountry) ?? 'AU',
+    currencyCode: (current.currency_code as string) ?? 'AUD',
+    payFrequency: 'unknown',
+    payFrequencySource: 'unknown',
+    grossPay: after('gross_pay'),
+    netPay: after('net_pay'),
+    taxWithheld: after('tax_withheld'),
+    employeeDeductionsTotal: after('employee_deductions_total'),
+    salarySacrifice: after('salary_sacrifice'),
+    professionalTax: after('professional_tax'),
+    employeeRetirementContribution: after('employee_retirement_contribution'),
+    employeeNpsContribution: after('employee_nps_contribution'),
+    reimbursementsTotal: after('reimbursements_total'),
+    components: [],
+    parserName: (current.parser_name as string) ?? PAYSLIP_PARSER_NAME,
+    parserVersion: (current.parser_version as string) ?? PAYSLIP_PARSER_VERSION,
+    extractionConfidence: 0,
+    warnings: [],
+  });
+
+  const employerNormalised =
+    'employer_name' in corrections
+      ? normaliseEmployerName(corrections.employer_name == null ? undefined : String(corrections.employer_name)) ?? null
+      : null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('fdh9_correct_payroll_event', {
+    p_payroll_event_id: payrollEventId,
+    p_corrections: corrections,
+    p_employer_normalised: employerNormalised,
+    p_reconciliation_status: recomputed.status,
+    p_reconciliation_variance: recomputed.variance,
+  });
+  if (error) throw new Error(error.message);
+
+  const result = data as { ok: boolean; code?: string; error?: string; corrected_fields?: string[]; reconciliation_restamped?: boolean } | null;
+  if (!result?.ok) {
+    const code = result?.code;
+    throw new PayslipProcessingError(
+      code === 'PAYROLL_EVENT_NOT_FOUND' ? 'not_found' : code === 'ALREADY_APPROVED' ? 'invalid_state' : 'invalid_state',
+      result?.error ?? 'These corrections could not be saved.',
+    );
+  }
+
+  // Attribution, on the SAME document audit trail every other payslip
+  // lifecycle event uses. Field NAMES only — never the figures, which
+  // `auditLog.ts`'s own rule keeps out of `metadata`.
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'payroll_event_corrected',
+    actorType: 'user',
+    actorId: userId,
+    metadata: {
+      payroll_event_id: payrollEventId,
+      corrected_fields: result.corrected_fields ?? keys,
+      reconciliation_status: recomputed.status,
+      reconciliation_restamped: Boolean(result.reconciliation_restamped),
+    },
+  });
+
+  return {
+    payrollEventId,
+    correctedFields: result.corrected_fields ?? (keys as string[]),
+    reconciliationStatus: recomputed.status,
+    reconciliationVariance: recomputed.variance,
+    reconciliationRestamped: Boolean(result.reconciliation_restamped) || moneyChanged,
+  };
 }
 
 /** Resolve the payroll event for a given uploaded document (1:1 in FDH-9

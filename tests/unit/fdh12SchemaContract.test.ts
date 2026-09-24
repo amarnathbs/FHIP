@@ -14,6 +14,7 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 import {
   RETIREMENT_ACTIVITY_TYPES,
@@ -77,7 +78,9 @@ const VOCABULARY_AS_OF_FDH12 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
     // AIE unified document fallback (migration 0180) — the four remaining
     // FDH-3 document types, subtracted for the same reason as the payslip
     // phase above.
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t),
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
+    // Payslip review/correction (migration 0185) — a later phase again.
+    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t),
 );
 
 describe('FDH-12 audit-event vocabulary parity', () => {

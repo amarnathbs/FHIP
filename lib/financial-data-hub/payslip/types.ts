@@ -101,6 +101,22 @@ export interface PayrollExtraction {
 
   // Current period — earnings
   grossPay?: number;
+  /**
+   * WHERE `grossPay` came from — never left to inference downstream.
+   *
+   * `stated_on_document`      the payslip printed a gross total we recognised.
+   * `derived_from_components` the payslip did NOT state one, but its own
+   *                           current-period earning and deduction lines
+   *                           reproduce its own stated net EXACTLY, so the
+   *                           gross is the document's own arithmetic. Never
+   *                           produced when that identity does not hold.
+   * `user_corrected`          a human replaced the figure through the payslip
+   *                           review/correct flow.
+   *
+   * `undefined` alongside an undefined `grossPay` means the document simply
+   * does not disclose it — which is NOT zero, and is never filled in.
+   */
+  grossPaySource?: 'stated_on_document' | 'derived_from_components' | 'user_corrected';
   basePay?: number;
   overtimePay?: number;
   bonusPay?: number;
