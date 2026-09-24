@@ -257,24 +257,21 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
 
   const perInstrument: PerInstrumentOutcome[] = [];
   let hydrated = 0, partiallyHydrated = 0, failed = 0, alreadyCovered = 0, totalInserted = 0, needing = 0;
+  // `processed` counts only instruments that need a provider fetch -- the
+  // work maxInstruments exists to bound. Checking coverage costs two indexed
+  // reads, so every held instrument is checked on every run. Counting those
+  // checks against the limit (as this loop did until 2026-09-24) meant the
+  // first maxInstruments instruments, all already covered, used up the
+  // budget on every run and every instrument after them was never examined:
+  // the first scheduled production run examined 10 of 17 held funds.
   let processed = 0;
+  let deferred = 0;
   let progressReported = 0;
 
   for (const instrumentId of candidateIds) {
-    // Report every outcome finished so far before starting the next
-    // instrument: if this one is where the platform kills the run, the open
-    // batch still shows everything before it.
-    if (batchId !== null && perInstrument.length > progressReported) {
-      // A snapshot, not the live array: this array keeps growing, and an
-      // implementation that read it later would record the wrong progress.
-      await deps.updateBatchProgress(batchId, [...perInstrument]);
-      progressReported = perInstrument.length;
-    }
     const req = determineHydrationRequirement(instrumentId, { acceptedDependencies: accepted, benchmarkDependencies: benchmarked }, changeoverDate);
     if (!req.required) continue;
     needing++;
-    if (processed >= maxInstruments) continue; // still counted in `needing`, honestly reported as not processed this run
-    processed++;
 
     // Never request before a confirmed history floor (0190): without it, a
     // fund launched after 2006 had its empty pre-launch window re-requested
@@ -305,9 +302,27 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       continue;
     }
 
+    // Only now is this instrument work: bound it.
+    if (processed >= maxInstruments) {
+      deferred++; // still counted in `needing`; a later run reaches it
+      continue;
+    }
+    processed++;
+
     if (dryRun) {
       perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'planned_dry_run', detail: `would fetch [${requiredFrom}, ${toDate}]`, rowsInserted: 0 });
       continue;
+    }
+
+    // Report every outcome finished so far before starting a fetch: if this
+    // one is where the platform kills the run, the open batch still shows
+    // everything before it. (Coverage checks are too quick to be worth a
+    // write each.)
+    if (batchId !== null && perInstrument.length > progressReported) {
+      // A snapshot, not the live array: this array keeps growing, and an
+      // implementation that read it later would record the wrong progress.
+      await deps.updateBatchProgress(batchId, [...perInstrument]);
+      progressReported = perInstrument.length;
     }
 
     const identifier = await deps.fetchAdapterIdentifier(instrumentId);
@@ -447,8 +462,8 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     instrumentsFailed: failed,
     totalRowsInserted: totalInserted,
     detail: dryRun
-      ? `Dry run: ${needing} instrument(s) need hydration, ${processed} planned this invocation (max ${maxInstruments}).`
-      : `${hydrated} hydrated, ${partiallyHydrated} partially hydrated (resumable), ${alreadyCovered} already covered, ${failed} failed, out of ${needing} needing hydration (${processed} processed this invocation, max ${maxInstruments}).`,
+      ? `Dry run: ${needing} instrument(s) need hydration, ${processed} planned this invocation (max ${maxInstruments}), ${deferred} deferred to a later run.`
+      : `${hydrated} hydrated, ${partiallyHydrated} partially hydrated (resumable), ${alreadyCovered} already covered, ${failed} failed, out of ${needing} needing hydration (${processed} fetched this invocation, max ${maxInstruments}; ${deferred} deferred to a later run).`,
     perInstrument,
     startedAt,
     finishedAt: new Date().toISOString(),

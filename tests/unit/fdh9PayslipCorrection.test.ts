@@ -17,7 +17,7 @@
  * shared helper") and by `tests/unit/fdh1Isolation.test.ts`.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -29,6 +29,7 @@ import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
+import { auditEventDeltaFor, auditEventTypesIn } from './helpers/auditEventChain';
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf8');
@@ -37,37 +38,17 @@ const PANEL = read('components/income/PayslipImportPanel.tsx');
 const ROUTE = read('app/api/financial-data-hub/payslip/[documentId]/correct/route.ts');
 const SERVICE = read('lib/financial-data-hub/services/payslipProcessingService.ts');
 const MIGRATION_0185 = read('supabase/migrations/0185_fdh9_payroll_event_user_correction.sql');
-/**
- * The migration whose event_type constraint 0185 actually replaces.
- *
- * Derived, never hardcoded: 0185 was first drafted against 0173, but 0180
- * (the unified AI-fallback widening) landed on `main` in between and added 28
- * values. Because this constraint is DROPped and recreated, a stale
- * hardcoded predecessor would have let 0185 silently REVOKE those 28 values
- * while this suite still passed. Resolving the predecessor from the ledger
- * makes the next such collision fail loudly here instead.
- */
-function predecessorAuditEventMigration(selfNumber: number): { name: string; sql: string } {
-  const dir = path.join(ROOT, 'supabase/migrations');
-  const candidates = readdirSync(dir)
-    .filter((name) => /^\d{4}_.*\.sql$/.test(name))
-    .filter((name) => Number(name.slice(0, 4)) < selfNumber)
-    .sort()
-    .reverse();
-  for (const name of candidates) {
-    const sql = readFileSync(path.join(dir, name), 'utf8');
-    if (auditEventTypesIn(sql).length > 0) return { name, sql };
-  }
-  throw new Error('no prior migration defines fdh_document_audit_events_event_type_check');
-}
 const MIGRATION_0091 = read('supabase/migrations/0091_fdh9_payslip_income_intelligence.sql');
 
-/** Every value inside a `check (event_type in ( ... ))` block. */
-function auditEventTypesIn(sql: string): string[] {
-  const block = /fdh_document_audit_events_event_type_check\s*\n?\s*check \(event_type in \(([\s\S]*?)\)\);/.exec(sql);
-  if (!block) throw new Error('no event_type check constraint found');
-  return [...block[1].matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
-}
+// `predecessorAuditEventMigration` and `auditEventTypesIn` used to be defined
+// privately here and, nearly identically, in
+// `tests/unit/fdh10LiabilityCorrection.test.ts`. They are shared now, in
+// `tests/unit/helpers/auditEventChain.ts`, along with the reasoning for
+// resolving the predecessor from the ledger rather than hardcoding it: 0185
+// was first drafted against 0173, but 0180 (the unified AI-fallback widening)
+// landed on `main` in between and added 28 values. Because this constraint is
+// DROPped and recreated, a stale hardcoded predecessor would have let 0185
+// silently REVOKE those 28 while this suite still passed.
 
 /** Every `new.<col> is distinct from old.<col>` guard in an authoritative-write trigger. */
 function protectedColumnsIn(sql: string): string[] {
@@ -219,19 +200,15 @@ describe('FDH-9 payslip correction — one closed field vocabulary across all th
 });
 
 describe('migration 0185 is additive against what it replaces', () => {
-  it('its audit-event list is a STRICT SUPERSET of the constraint it replaces', () => {
-    const predecessor = predecessorAuditEventMigration(185);
-    const before = auditEventTypesIn(predecessor.sql);
-    const after = auditEventTypesIn(MIGRATION_0185);
-    expect(before.length).toBeGreaterThan(0);
-    for (const value of before) {
-      expect(after, `0185 drops ${value}, which ${predecessor.name} grants`).toContain(value);
-    }
-    expect(after.length).toBe(before.length + FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED.length);
-    for (const added of FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED) {
-      expect(before).not.toContain(added);
-      expect(after).toContain(added);
-    }
+  it('adds exactly PAYSLIP_CORRECTION_ADDED to its predecessor, revoking nothing', () => {
+    // The delta claim, in the shared form every phase contract test now
+    // takes. It says the same thing the longhand superset check said — 0185
+    // grants everything its predecessor granted, plus exactly its own value —
+    // without this file having to resolve the predecessor itself.
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0185');
+    expect(revoked, `0185 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort())
+      .toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED].sort());
   });
 
   it('every value 0185 grants is reachable from the TypeScript enum', () => {
