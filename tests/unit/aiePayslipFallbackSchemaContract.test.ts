@@ -11,10 +11,8 @@ import path from 'node:path';
 import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
+import { auditEventDeltaFor } from './helpers/auditEventChain';
 
 const MIGRATION_DIR = path.resolve(__dirname, '..', '..', 'supabase', 'migrations');
 const FILE = '0173_aie_payslip_ai_fallback_audit_events.sql';
@@ -38,33 +36,17 @@ describe('AIE payslip AI-fallback migration numbering governance', () => {
 });
 
 describe('AIE payslip AI-fallback audit-event vocabulary parity', () => {
-  // 2026-09-23: 0173 is NO LONGER the constraint's latest word — migration
-  // 0180 (the AIE unified document fallback) widened it again for the four
-  // remaining FDH-3 document types. This test therefore joins the same
-  // "vocabulary AS OF THIS PHASE" chain every earlier phase's contract test
-  // already uses, rather than continuing to claim 0173 matches everything.
-  // The title was changed with it: leaving "it is the constraint's latest
-  // word" in place while subtracting a later phase would be a test whose name
-  // contradicts its own assertion.
-  // Migration 0185 (payslip review/correction) has since widened this SAME
-  // constraint again, so 0173 is no longer "the constraint's latest word" —
-  // `fdh9PayslipCorrection.test.ts` now owns that claim for 0185, and proves
-  // 0185's list is a STRICT SUPERSET of this one. This test keeps its own
-  // claim, filtering out only what LATER migrations added (0180 and 0185),
-  // exactly as fdh7/fdh9/fdh10/fdh11/fdh12SchemaContract.test.ts each do.
-  it('0173 matches the TypeScript vocabulary as of the payslip phase (0180 and 0185 widen it further)', () => {
-    const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
-    expect(idx).toBeGreaterThan(-1);
-    const slice = SQL.slice(idx, idx + 6000);
-    const match = slice.match(/in \(([\s\S]*?)\)\)/);
-    const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    const vocabularyAsOfPayslip = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-      (t) =>
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
-    );
-    expect(values.sort()).toEqual([...vocabularyAsOfPayslip].sort());
+  // 0173 has not been the constraint's latest word since migration 0180 (the
+  // AIE unified document fallback, which widened it for the four remaining
+  // FDH-3 document types), and 0185 and 0186 have widened it again since.
+  // Under the old "vocabulary AS OF THIS PHASE" form each of those three cost
+  // an edit to this file — this test's subtrahend list grew from one entry to
+  // three in two days. The delta form states the claim about 0173 alone, so
+  // no later phase touches this file again.
+  it('0173 adds exactly AIE_PAYSLIP_ADDED to its predecessor, and revokes nothing', () => {
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0173');
+    expect(revoked, `0173 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED].sort());
   });
 
   it('all seven new event types are present in the constraint and the TS union', () => {

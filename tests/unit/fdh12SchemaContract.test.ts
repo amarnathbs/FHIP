@@ -12,11 +12,8 @@ import path from 'node:path';
 import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
+import { auditEventDeltaFor } from './helpers/auditEventChain';
 import {
   RETIREMENT_ACTIVITY_TYPES,
   RETIREMENT_STATEMENT_TYPES,
@@ -69,30 +66,16 @@ describe('FDH-12 migration numbering governance (spec section 164)', () => {
   });
 });
 
-// 0112 was the constraint's latest word until migration 0173 (the AIE
-// payslip AI-fallback addition) widened it further — same "vocabulary as of
-// this phase" pattern fdh9SchemaContract.test.ts/fdh10SchemaContract.test.ts/
-// fdh11SchemaContract.test.ts already established for exactly this reason.
-const VOCABULARY_AS_OF_FDH12 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-  (t) =>
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t) &&
-    // AIE unified document fallback (migration 0180) — the four remaining
-    // FDH-3 document types, subtracted for the same reason as the payslip
-    // phase above.
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
-    // Payslip review/correction (migration 0185) — a later phase again.
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
-);
-
 describe('FDH-12 audit-event vocabulary parity', () => {
-  it('0112 matches the TypeScript vocabulary as of FDH-12 (later phases widen further)', () => {
-    const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
-    expect(idx).toBeGreaterThan(-1);
-    const slice = SQL.slice(idx, idx + 5000);
-    const match = slice.match(/in \(([^)]*)\)/);
-    const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...VOCABULARY_AS_OF_FDH12].sort());
+  it('0112 adds exactly FDH12_ADDED to its predecessor, and revokes nothing', () => {
+    // 0112 was the constraint's latest word until migration 0173 widened it
+    // again, and three further phases have widened it since. Under the old
+    // "enum minus every later phase" form, each of those cost an edit to this
+    // file; under the delta form none of them do, because this claim is about
+    // 0112 alone.
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0112');
+    expect(revoked, `0112 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED].sort());
   });
 
   it('all eleven FDH-12 event types are present in the constraint', () => {
