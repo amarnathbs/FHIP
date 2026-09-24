@@ -8,6 +8,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
 import type { HydrationDeps, HydrationJobResult, HydrationWriteRow } from './selectiveHistoricalHydrationJob';
+import { buildHydrationBatchRow } from './selectiveHistoricalHydrationJob';
 import type { BenchmarkDependency } from './navRetentionPolicy';
 import { userHeldInstrumentsToDependencies } from './navRetentionPolicy';
 import type { ExistingObservation } from './referenceDataQuality';
@@ -126,24 +127,11 @@ export function createLiveHydrationDeps(): HydrationDeps {
     },
 
     async recordBatch(summary: HydrationJobResult) {
-      await db.from('ii_reference_import_batches').insert({
-        // AMFI has been the primary source since NAV 1 Stage D (D.3); this
-        // used to say 'tigzig' unconditionally. A batch can mix sources when
-        // the fallback serves some instruments -- the provider behind each
-        // ROW is in that row's data_version, which is the authoritative record.
-        source_key: 'amfi',
-        source_config_id: 'amfi_nav_history',
-        batch_kind: 'nav_history',
-        as_of_date: new Date().toISOString().slice(0, 10),
-        status: summary.instrumentsFailed > 0 && summary.instrumentsHydrated === 0 ? 'failed' : 'succeeded',
-        rows_read: summary.instrumentsConsidered,
-        rows_accepted: summary.instrumentsNeedingHydration,
-        rows_inserted: summary.totalRowsInserted,
-        notes: {
-          sources: { primary: 'amfi_nav_history', fallback: 'tigzig_nav_history', perRowProvider: 'data_version' },
-          perInstrument: summary.perInstrument.slice(0, 200),
-        },
-      });
+      // The row is built by the pure, tested buildHydrationBatchRow(). This
+      // used to insert an inline payload and ignore the result -- which
+      // violated two check constraints and so recorded nothing, silently.
+      const { error } = await db.from('ii_reference_import_batches').insert(buildHydrationBatchRow(summary));
+      return { error: error ? `${error.message}${error.code ? ` (${error.code})` : ''}` : null };
     },
 
     async fetchHistoryFloor(instrumentId: string) {

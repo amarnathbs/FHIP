@@ -72,7 +72,8 @@ export interface HydrationDeps {
   /** Existing (instrument, date) rows in the fetch window, for decideUpsert. */
   fetchExistingObservations(instrumentId: string, fromDate: string, toDate: string): Promise<Map<string, ExistingObservation>>;
   writeRows(rows: HydrationWriteRow[]): Promise<{ inserted: number; error: string | null }>;
-  recordBatch(summary: HydrationJobResult): Promise<void>;
+  /** Returns the insert error rather than throwing: a lost batch record must be visible, but must not undo the run's work. */
+  recordBatch(summary: HydrationJobResult): Promise<{ error: string | null }>;
   /** NAV 1 Stage D (0190): the confirmed earliest date with NAV data for this instrument, or null if none is recorded. */
   fetchHistoryFloor(instrumentId: string): Promise<string | null>;
   /**
@@ -127,10 +128,61 @@ export interface HydrationJobResult {
   totalRowsInserted: number;
   detail: string;
   perInstrument: PerInstrumentOutcome[];
+  startedAt: string;
+  finishedAt: string;
+  /** Present when the batch record could not be saved -- the run's work still stands. */
+  batchRecordError?: string;
+}
+
+/** error_code for a batch in which no instrument succeeded at all. */
+export const HYDRATION_NOTHING_SUCCEEDED_ERROR_CODE = 'HYDRATION_NOTHING_SUCCEEDED';
+
+/**
+ * The ii_reference_import_batches row for a hydration run.
+ *
+ * Built here, as a pure function, because the version inlined in the live
+ * deps VIOLATED BOTH of the table's check constraints and nobody could tell:
+ *   - ii_reference_import_batches_terminal_has_finish -- a non-'running'
+ *     status needs finished_at, which was never set;
+ *   - ii_reference_import_batches_failed_has_error -- a 'failed' status needs
+ *     error_code, which was never set;
+ * and the insert's error was discarded. So no real hydration run was ever
+ * recorded. Found 2026-09-24 by the first real production run (plan D.9),
+ * which recorded three history floors and no batch at all.
+ *
+ * 'failed' now means NOTHING succeeded. The old rule ("any failure and no
+ * instrument newly hydrated") logged a run that recorded floors for some
+ * instruments and hit one error as a total failure.
+ *
+ * AMFI is the primary source since D.3; the provider behind each ROW is in
+ * that row's data_version, which is the authoritative record.
+ */
+export function buildHydrationBatchRow(summary: HydrationJobResult) {
+  const succeededAny = summary.instrumentsHydrated + summary.instrumentsPartiallyHydrated + summary.instrumentsAlreadyCovered > 0;
+  const failed = summary.instrumentsFailed > 0 && !succeededAny;
+  return {
+    source_key: 'amfi',
+    source_config_id: 'amfi_nav_history',
+    batch_kind: 'nav_history' as const,
+    as_of_date: summary.finishedAt.slice(0, 10),
+    status: failed ? ('failed' as const) : ('succeeded' as const),
+    started_at: summary.startedAt,
+    finished_at: summary.finishedAt,
+    error_code: failed ? HYDRATION_NOTHING_SUCCEEDED_ERROR_CODE : null,
+    error_detail: failed ? summary.detail.slice(0, 2000) : null,
+    rows_read: summary.instrumentsConsidered,
+    rows_accepted: summary.instrumentsNeedingHydration,
+    rows_inserted: summary.totalRowsInserted,
+    notes: {
+      sources: { primary: 'amfi_nav_history', fallback: 'tigzig_nav_history', perRowProvider: 'data_version' },
+      perInstrument: summary.perInstrument.slice(0, 200),
+    },
+  };
 }
 
 export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): Promise<HydrationJobResult> {
   const { dryRun = false, maxInstruments = 50, changeoverDate, adapter, deps } = args;
+  const startedAt = new Date().toISOString();
 
   const control = await deps.isEnabled();
   if (!control.enabled) {
@@ -140,6 +192,8 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       instrumentsHydrated: 0, instrumentsPartiallyHydrated: 0, instrumentsFailed: 0, totalRowsInserted: 0,
       detail: `pc6_selective_historical_hydration is disabled: ${control.reason ?? '(no reason recorded)'}`,
       perInstrument: [],
+      startedAt,
+      finishedAt: new Date().toISOString(),
     };
   }
 
@@ -332,8 +386,16 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       ? `Dry run: ${needing} instrument(s) need hydration, ${processed} planned this invocation (max ${maxInstruments}).`
       : `${hydrated} hydrated, ${partiallyHydrated} partially hydrated (resumable), ${alreadyCovered} already covered, ${failed} failed, out of ${needing} needing hydration (${processed} processed this invocation, max ${maxInstruments}).`,
     perInstrument,
+    startedAt,
+    finishedAt: new Date().toISOString(),
   };
-  if (!dryRun) await deps.recordBatch(result);
+  if (!dryRun) {
+    const saved = await deps.recordBatch(result);
+    if (saved.error) {
+      result.batchRecordError = saved.error;
+      result.detail += ` BATCH RECORD NOT SAVED: ${saved.error}`;
+    }
+  }
   return result;
 }
 

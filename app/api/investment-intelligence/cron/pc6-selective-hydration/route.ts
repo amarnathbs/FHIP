@@ -78,6 +78,9 @@ export async function POST(req: Request) {
       instruments_hydrated: result.instrumentsHydrated,
       instruments_failed: result.instrumentsFailed,
       total_rows_inserted: result.totalRowsInserted,
+      // Null when the batch ledger row was saved. Surfaced so a lost record
+      // can never again be invisible (see buildHydrationBatchRow()).
+      batch_record_error: result.batchRecordError ?? null,
       per_instrument: result.perInstrument.map((p) => ({
         instrument_id: p.instrumentId,
         reasons: p.reasons,
