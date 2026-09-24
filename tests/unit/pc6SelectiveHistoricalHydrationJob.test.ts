@@ -24,7 +24,7 @@ function makeDeps(overrides: Partial<HydrationDeps> = {}): HydrationDeps {
     fetchAdapterIdentifier: vi.fn().mockResolvedValue('119551'),
     fetchExistingObservations: vi.fn().mockResolvedValue(new Map()),
     writeRows: vi.fn().mockResolvedValue({ inserted: 0, error: null }),
-    recordBatch: vi.fn().mockResolvedValue(undefined),
+    recordBatch: vi.fn().mockResolvedValue({ error: null }),
     fetchHistoryFloor: vi.fn().mockResolvedValue(null),
     recordHistoryFloor: vi.fn().mockResolvedValue({ error: null }),
     ...overrides,

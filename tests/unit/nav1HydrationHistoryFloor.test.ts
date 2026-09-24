@@ -71,7 +71,7 @@ function deps(over: Partial<HydrationDeps> = {}) {
     fetchAdapterIdentifier: async () => '149366',
     fetchExistingObservations: async () => new Map(),
     writeRows: async (rows) => { written.push(...rows); return { inserted: rows.length, error: null }; },
-    recordBatch: async () => {},
+    recordBatch: async () => ({ error: null }),
     fetchHistoryFloor: async () => null,
     recordHistoryFloor,
     ...over,
