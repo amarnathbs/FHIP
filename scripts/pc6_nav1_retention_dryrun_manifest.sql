@@ -1,3 +1,18 @@
+-- ==========================================================================
+-- SUPERSEDED BY MIGRATION 0189 -- DO NOT USE FOR A PRODUCTION MANIFEST.
+--
+-- This file encodes the pre-0189 retention rule: an instrument is protected
+-- only if it has a CERTIFIED portfolio-truth statement. In production no
+-- statement had ever certified (2026-09-24: all 51 at reconciliation_required),
+-- so this rule marks the history of every instrument real users hold as a
+-- deletion candidate -- proven on production: 17 of 17 held instruments.
+--
+-- A manifest produced by this file would delete users' history. The Stage D
+-- production manifest (plan step D.10) must be generated from
+-- pc6_nav_row_is_candidate() / pc6_instrument_is_user_held() as defined in 0189,
+-- and this file rebuilt or retired at that point.
+-- ==========================================================================
+
 -- NAV 1.42 — retention dry run and candidate manifest.
 --
 -- READ-ONLY. Every statement below is a SELECT. There is no UPDATE, DELETE,

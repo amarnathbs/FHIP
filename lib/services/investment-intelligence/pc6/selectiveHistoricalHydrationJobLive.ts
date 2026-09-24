@@ -8,7 +8,8 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
 import type { HydrationDeps, HydrationJobResult, HydrationWriteRow } from './selectiveHistoricalHydrationJob';
-import type { AcceptedDependency, BenchmarkDependency } from './navRetentionPolicy';
+import type { BenchmarkDependency } from './navRetentionPolicy';
+import { userHeldInstrumentsToDependencies } from './navRetentionPolicy';
 import type { ExistingObservation } from './referenceDataQuality';
 
 const KILL_SWITCH_JOB_KEY = 'pc6_selective_historical_hydration';
@@ -28,70 +29,36 @@ export function createLiveHydrationDeps(): HydrationDeps {
     },
 
     async fetchAcceptedDependencies() {
-      const rows = await fetchAllRows<{
-        instrument_id: string; status: string; history_completeness: string | null;
-        account_id: string; latest_holding_snapshot_id: string | null;
-      }>(() =>
-        db.from('ii_portfolio_truth_status')
-          .select('instrument_id, status, history_completeness, account_id, latest_holding_snapshot_id')
-          .in('status', ['certified', 'certified_with_warnings'])
-          .order('instrument_id')
-      );
-
-      // Earliest non-reversed transaction date and certified snapshot as-of
-      // date are resolved per (account, instrument) pair actually present,
-      // rather than for every instrument in the deployment, to keep this
-      // live query bounded to what NAV 1.09's binding actually needs.
-      const pairs = rows.map((r) => ({ instrumentId: r.instrument_id, accountId: r.account_id }));
-      const txByPair = new Map<string, string>();
-      const snapshotByRow = new Map<string, string>();
-      if (pairs.length > 0) {
-        const instrumentIds = [...new Set(pairs.map((p) => p.instrumentId))];
-        const txRows = await fetchAllRows<{ instrument_id: string; account_id: string; transaction_date: string }>(() =>
-          db.from('ii_transactions')
-            .select('instrument_id, account_id, transaction_date')
-            .in('instrument_id', instrumentIds)
-            .neq('status', 'reversed')
-            .order('transaction_date')
-        );
-        for (const t of txRows) {
-          const key = `${t.instrument_id}|${t.account_id}`;
-          const existing = txByPair.get(key);
-          if (!existing || t.transaction_date < existing) txByPair.set(key, t.transaction_date);
-        }
-        const snapshotIds = [...new Set(rows.map((r) => r.latest_holding_snapshot_id).filter(Boolean))] as string[];
-        if (snapshotIds.length > 0) {
-          const snapRows = await fetchAllRows<{ id: string; as_of_date: string }>(() =>
-            db.from('ii_holding_snapshots').select('id, as_of_date').in('id', snapshotIds)
-          );
-          for (const s of snapRows) snapshotByRow.set(s.id, s.as_of_date);
-        }
-      }
-
-      const map = new Map<string, AcceptedDependency>();
-      for (const r of rows) {
-        // Multiple accepted rows can exist for the same instrument across
-        // different accounts; keep the union's most conservative (earliest)
-        // requirement rather than overwriting with whichever row was read last.
-        const candidate: AcceptedDependency = {
-          instrumentId: r.instrument_id,
-          isAccepted: true,
-          historyCompleteness: r.history_completeness as AcceptedDependency['historyCompleteness'],
-          earliestTransactionDate: txByPair.get(`${r.instrument_id}|${r.account_id}`) ?? null,
-          certifiedAsOfDate: r.latest_holding_snapshot_id ? (snapshotByRow.get(r.latest_holding_snapshot_id) ?? null) : null,
-        };
-        const existing = map.get(r.instrument_id);
-        if (!existing) { map.set(r.instrument_id, candidate); continue; }
-        // Prefer complete_from_inception > complete_from_known_opening_balance > partial/holdings_only,
-        // and within known_opening_balance prefer the EARLIER date (more conservative / more history).
-        const rank = (h: AcceptedDependency['historyCompleteness']) =>
-          h === 'complete_from_inception' || h === null ? 3 : h === 'complete_from_known_opening_balance' ? 2 : 1;
-        if (rank(candidate.historyCompleteness) > rank(existing.historyCompleteness)) { map.set(r.instrument_id, candidate); continue; }
-        if (rank(candidate.historyCompleteness) === rank(existing.historyCompleteness) && candidate.historyCompleteness === 'complete_from_known_opening_balance') {
-          if ((candidate.earliestTransactionDate ?? '9999-12-31') < (existing.earliestTransactionDate ?? '9999-12-31')) map.set(r.instrument_id, candidate);
-        }
-      }
-      return map;
+      // NAV 1 Stage D (migration 0189): "held" comes from the ONE shared SQL
+      // definition that retention also uses -- any instrument in any
+      // user-scoped ii_* table, in any statement status.
+      //
+      // Until 0189 this read only ii_portfolio_truth_status rows with status
+      // IN ('certified', 'certified_with_warnings'). In production that
+      // matched nothing (every statement sat at 'reconciliation_required'),
+      // so once history had been deleted, a user bringing a deleted scheme
+      // would never have had it fetched back.
+      //
+      // Paged, and ordered by the function's unique output column: a
+      // set-returning RPC is capped at db-max-rows like any other PostgREST
+      // read, and an unpaged read would silently drop held instruments past
+      // the first 1000.
+      //
+      // supabase-js cannot infer that this RPC returns a TABLE rather than a
+      // single row, so its result type is a union of the two. The function is
+      // declared `returns table (instrument_id uuid)` in 0189, so PostgREST
+      // always answers with an array -- the one narrowing below says exactly
+      // that and nothing more.
+      type HeldRow = { instrument_id: string };
+      const rows = await fetchAllRows<HeldRow>(() => ({
+        range: (from, to) =>
+          db.rpc('pc6_user_held_instrument_ids')
+            .select('instrument_id')
+            .order('instrument_id')
+            .range(from, to)
+            .then(({ data, error }) => ({ data: data as HeldRow[] | null, error })),
+      }));
+      return userHeldInstrumentsToDependencies(rows.map((r) => r.instrument_id));
     },
 
     async fetchBenchmarkDependencies() {

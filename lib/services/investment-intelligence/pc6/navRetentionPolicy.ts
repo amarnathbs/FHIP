@@ -14,7 +14,17 @@
 //
 // Schema bindings discovered 2026-09-21 (NAV 1.02/1.09 discovery):
 //
-// - needed_by_accepted_statement_history(row): an instrument is "accepted"
+// - needed_by_accepted_statement_history(row): SUPERSEDED BY MIGRATION 0189
+//   (NAV 1 Stage D, 2026-09-24). An instrument is now protected when ANY user
+//   holds or has held it, in any user-scoped ii_* table and any statement
+//   status, and its ENTIRE history is kept -- see
+//   userHeldInstrumentsToDependencies() and the SQL pc6_instrument_is_user_held().
+//   The certified-only binding below protected nothing in production, where no
+//   statement had ever certified. It is retained as the record of what 0166-
+//   0172 did, and because the windowing logic still applies to any dependency
+//   that carries a history_completeness.
+//
+//   ORIGINAL (0166-0172): an instrument was "accepted"
 //   when it has an `ii_portfolio_truth_status` row (0041) with
 //   status IN ('certified', 'certified_with_warnings') for ANY account.
 //   `history_completeness` on that row decides how far back the requirement
@@ -69,7 +79,14 @@ export type HistoryCompleteness =
 
 export interface AcceptedDependency {
   instrumentId: string;
-  /** True for status IN ('certified', 'certified_with_warnings'). */
+  /**
+   * True when a user holds or has ever held the instrument.
+   *
+   * Until migration 0189 this meant status IN ('certified',
+   * 'certified_with_warnings') only. In production no statement had ever
+   * certified (all sat at 'reconciliation_required'), so it was never true
+   * for anyone -- see userHeldInstrumentsToDependencies().
+   */
   isAccepted: boolean;
   historyCompleteness: HistoryCompleteness;
   /** ISO date. Earliest non-reversed transaction for this instrument/account, if known. */
@@ -325,4 +342,39 @@ export function determineHydrationRequirement(
 
   if (reasons.length === 0) return { required: false, fromDate: null, reasons: [] };
   return { required: true, fromDate: sawInceptionRequirement ? null : fromDate, reasons };
+}
+
+/**
+ * NAV 1 Stage D (migration 0189) — the hydration side of the ONE shared
+ * definition of "held by a user".
+ *
+ * The input is exactly what the SQL function `pc6_user_held_instrument_ids()`
+ * returns: every instrument present in any user-scoped ii_* table, in any
+ * statement status. Retention consults the same definition through
+ * `pc6_instrument_is_user_held()`, so the two can never disagree about which
+ * instruments are protected and which must be re-fetched on demand.
+ *
+ * Every held instrument is hydrated FROM INCEPTION (`historyCompleteness:
+ * null`), because retention keeps a held instrument's ENTIRE history. A
+ * narrower hydration window would leave a gap that retention was promising
+ * to keep -- and the old windowing inputs (history_completeness, the
+ * certified snapshot date) only ever existed for certified statements,
+ * which production has never had.
+ *
+ * Deliberately tolerant: duplicate and empty ids are ignored rather than
+ * thrown, since the input is a union the database already de-duplicates.
+ */
+export function userHeldInstrumentsToDependencies(instrumentIds: readonly string[]): Map<string, AcceptedDependency> {
+  const map = new Map<string, AcceptedDependency>();
+  for (const instrumentId of instrumentIds) {
+    if (!instrumentId || map.has(instrumentId)) continue;
+    map.set(instrumentId, {
+      instrumentId,
+      isAccepted: true,
+      historyCompleteness: null,
+      earliestTransactionDate: null,
+      certifiedAsOfDate: null,
+    });
+  }
+  return map;
 }
