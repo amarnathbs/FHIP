@@ -67,3 +67,10 @@ scripts/.fdh1-*.json
 # — must never be committed (spec section 7.4).
 mcc_restricted_manifest*.json
 .mcc-restricted/
+
+# Bulk reference-data dumps used for one-off verification (NAV 1, 2026-09-24).
+# The AMFI NAV master is ~3.8GB extracted; GitHub would reject the push, and a
+# local commit would bake it into history permanently. Stream it with
+# `unzip -p ... | grep` instead of extracting, and never track it.
+amfi_nav_master.csv
+*.csv.zip
