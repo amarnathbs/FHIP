@@ -25,8 +25,24 @@
 -- "succeeded" in cron.job_run_details. Copying in SQL cannot truncate.
 --
 -- If `aie1_malware_scan_sweep_cron_secret` does not exist in this project's
--- Vault, step 1 raises instead of creating an empty secret -- fail closed,
--- never a job that authenticates with ''.
+-- Vault, step 1 creates NOTHING -- never an empty secret, never a job that
+-- authenticates with ''. The schedule in step 2 is still registered; its
+-- lazy secret lookup then yields NULL and every tick 401s, which is visible
+-- in net._http_response. That is the same failure mode 0135/0149/0174
+-- accept for a missing secret.
+--
+-- REPLAY SAFETY (amended 2026-09-24, same day as first application). The
+-- first version RAISED when the source secret was missing, and read
+-- vault.decrypted_secrets unconditionally. Both broke every fresh replay of
+-- the migration chain -- PGlite verification scripts failed with `relation
+-- "vault.decrypted_secrets" does not exist`, and a freshly bootstrapped
+-- environment with no secret yet would have been unable to get past 0187 at
+-- all. A migration chain must stay replayable; an operational secret is not
+-- a schema prerequisite. The amendment matches 0174's established guard.
+--
+-- Production is unaffected: it already held the source secret when 0187 was
+-- applied, so the amended block takes exactly the path the original took
+-- there and produces the identical result.
 
 -- ---------------------------------------------------------------------------
 -- 1. Vault secret, copied from the proven one. Never re-typed.
@@ -35,15 +51,24 @@ do $$
 declare
   v_source text;
 begin
+  if to_regclass('vault.decrypted_secrets') is null then
+    raise notice
+      '0187: vault.decrypted_secrets is unavailable in this environment (expected under '
+      'PGlite fresh-chain replays) -- secret copy skipped; unaffected on real Supabase.';
+    return;
+  end if;
+
   select decrypted_secret into v_source
   from vault.decrypted_secrets
   where name = 'aie1_malware_scan_sweep_cron_secret';
 
   if v_source is null or length(v_source) = 0 then
-    raise exception
-      'aie1_malware_scan_sweep_cron_secret is missing or empty in this project''s Vault. '
-      'Refusing to create an empty pc6_reference_ingest_cron_secret -- that would produce a '
-      'job that authenticates with the empty string and 401s forever while pg_cron reports success.';
+    raise warning
+      '0187: aie1_malware_scan_sweep_cron_secret is missing or empty in this project''s Vault. '
+      'NOT creating pc6_reference_ingest_cron_secret (never an empty secret). The schedule is '
+      'still registered and will 401 visibly in net._http_response until the secret exists; '
+      're-run this migration once it does.';
+    return;
   end if;
 
   if exists (select 1 from vault.decrypted_secrets where name = 'pc6_reference_ingest_cron_secret') then
