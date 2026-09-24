@@ -5,6 +5,7 @@ import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-in
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from '@/lib/services/investment-intelligence/uploadAdmission';
 import { createHash } from 'crypto';
+import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -125,5 +126,22 @@ export async function POST(req: Request) {
     metadata: { sourceDocumentId: doc.id, originalFilename: file.name, fileSize: file.size },
   });
 
-  return ok(doc);
+  // AIE-1 final completion (2026-09-25): the real S3 + GuardDuty scan of the
+  // exact stored bytes (see realScanAdmission.ts). A no-op while
+  // AIE_REAL_MALWARE_SCAN_ENABLED is off. A pending verdict is resolved by the
+  // /process call, which refuses to parse until the verdict is clean.
+  const scan = await startIiRealScan({
+    userId: user.id,
+    sourceDocumentId: doc.id as string,
+    storagePath: objectKey,
+    bytes,
+    contentType: file.type,
+    contentHash: checksum,
+    hasScanColumns: 'malware_scan_status' in (doc as object),
+  });
+  if (!scan.admitted && scan.reason === 'blocked') {
+    return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
+  }
+
+  return ok({ ...doc, scan_pending: !scan.admitted });
 }

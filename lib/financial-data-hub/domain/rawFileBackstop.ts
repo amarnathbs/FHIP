@@ -19,6 +19,18 @@ export interface RawFileBackstopInput {
    * `uploaded_at` stamp was ever set. */
   receivedAtIso: string;
   purgeDueAtIso: string | null;
+  /**
+   * AIE-1 final completion (2026-09-25): the document's structured result is
+   * already durable (payroll/statement evidence exists, or a validated AI
+   * draft is persisted and awaiting the user). The raw file is then purged
+   * WITHOUT forcing `rejected`: nothing downstream needs the bytes, and
+   * rejecting would strand evidence the user has not reviewed yet (observed in
+   * production: three successfully extracted payslips of 23 Sep were forced to
+   * `rejected` 50 minutes after upload purely because nobody approved them
+   * inside the window). Optional and false by default, so every existing
+   * caller keeps its exact behaviour.
+   */
+  hasDurableStructuredResult?: boolean;
 }
 
 export interface RawFileBackstopDecision {
@@ -53,7 +65,9 @@ export function decideRawFileBackstopAction(
   }
 
   let forceProcessingStatus: RawFileBackstopDecision['forceProcessingStatus'] = null;
-  if (input.processingStatus === 'approved') {
+  if (input.hasDurableStructuredResult && input.processingStatus !== 'approved') {
+    // Purge only; the processing status is the user's to move on from.
+  } else if (input.processingStatus === 'approved') {
     if (isAllowedDocumentTransition('approved', 'purge_pending')) forceProcessingStatus = 'purge_pending';
   } else if (!['rejected', 'purge_pending', 'purged'].includes(input.processingStatus)) {
     if (isAllowedDocumentTransition(input.processingStatus, 'rejected')) forceProcessingStatus = 'rejected';

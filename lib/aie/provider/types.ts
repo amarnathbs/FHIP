@@ -81,6 +81,10 @@ export interface AieAiGenerateResult {
    * backward-compatibility reason; absent means "not reported", which for a
    * single-attempt provider is equivalent to 1. */
   attemptCount?: number;
+  /** AIE-1 final completion (2026-09-25): the provider's own request id for
+   * every HTTP attempt made (OpenAI `x-request-id`), retries included.
+   * Optional so the mock and pre-existing stubs keep compiling. */
+  providerRequestIds?: string[];
 }
 
 /**
@@ -116,6 +120,12 @@ export interface AieCumulativeAttemptUsage {
   cumulativeOutputTokens: number;
   /** How many provider attempts were made before this error was thrown. */
   attemptCount: number;
+  /** Provider request ids observed before the throw (may be empty). */
+  providerRequestIds?: string[];
+  /** Whether at least one request was handed to the network. A failure after
+   * that point (timeout, connection reset) may have been billed without any
+   * usage being reported, so settlement must treat it as billing-uncertain. */
+  requestSent?: boolean;
 }
 
 /** The single well-known own-property key used to carry
@@ -150,6 +160,8 @@ export function readAieCumulativeUsage(error: unknown): AieCumulativeAttemptUsag
     cumulativeInputTokens: u.cumulativeInputTokens,
     cumulativeOutputTokens: u.cumulativeOutputTokens,
     attemptCount: typeof u.attemptCount === 'number' ? u.attemptCount : 0,
+    providerRequestIds: Array.isArray(u.providerRequestIds) ? u.providerRequestIds.filter((x): x is string => typeof x === 'string') : [],
+    requestSent: u.requestSent === true,
   };
 }
 

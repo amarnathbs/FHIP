@@ -27,6 +27,7 @@ import type { AieAiProvider } from './types';
 import { readAieCumulativeUsage } from './types';
 import { ProviderError } from '@/lib/ai/providers/types';
 import { containsUnmaskedPii } from '../masking/piiMasking';
+import { isPermittedAieModel } from '../config';
 import { validateAiOutput } from '../schema/schemaRegistry';
 import type { AieAiOutcome } from '../types';
 
@@ -52,6 +53,9 @@ export interface AieFieldCompletionResult {
   inputTokens?: number;
   outputTokens?: number;
   latencyMs?: number;
+  /** AIE-1 final completion: provider request ids of every HTTP attempt made
+   * for this call (OpenAI `x-request-id`). Empty when nothing was sent. */
+  providerRequestIds?: string[];
 }
 
 export interface AieGatewayOptions {
@@ -88,8 +92,21 @@ export interface AieGatewayOptions {
    * "the provider said no" apart from "we never asked."
    */
   costAdmission?: {
-    reserve: (model: string, idempotencyKey: string) => Promise<{ admitted: boolean; reservedUsd: number }>;
-    settle: (params: { reservedUsd: number; actualInputTokens: number; actualOutputTokens: number; model: string; idempotencyKey: string; treatAsFullReservedCost?: boolean }) => Promise<void>;
+    reserve: (
+      model: string,
+      idempotencyKey: string,
+      sizing?: { promptChars?: number; maxOutputTokens?: number },
+    ) => Promise<{ admitted: boolean; reservedUsd: number }>;
+    settle: (params: {
+      reservedUsd: number;
+      actualInputTokens: number;
+      actualOutputTokens: number;
+      model: string;
+      idempotencyKey: string;
+      treatAsFullReservedCost?: boolean;
+      providerRequestIds?: string[];
+      callOutcome?: string;
+    }) => Promise<unknown>;
   };
 }
 
@@ -108,6 +125,15 @@ export class AieDocumentAiGateway {
   async requestFieldCompletion(req: AieFieldCompletionRequest): Promise<AieFieldCompletionResult> {
     const killSwitchEnabled = this.options.isKillSwitchEnabled ?? defaultKillSwitch;
     if (!killSwitchEnabled()) {
+      return { outcome: 'kill_switch_blocked' };
+    }
+
+    // AIE-1 final completion (2026-09-25): the contract is GPT-4o mini ONLY,
+    // with no substitution or escalation. A model outside the permitted set
+    // (e.g. a mistyped or widened AIE_AI_MODEL) is blocked before any
+    // reservation or provider call, exactly like the kill switch.
+    if (!isPermittedAieModel(req.model)) {
+      console.error(`aie gateway refused a non-permitted model for key ${req.idempotencyKey}`);
       return { outcome: 'kill_switch_blocked' };
     }
 
@@ -140,7 +166,10 @@ export class AieDocumentAiGateway {
       // gateway's own in-memory in-flight layer AND (migration 0152) the
       // DB-level reserve/settle idempotency layer -- one key, one identity,
       // across both defenses, rather than a second key concept.
-      const reservation = await this.options.costAdmission.reserve(req.model, req.idempotencyKey);
+      const reservation = await this.options.costAdmission.reserve(req.model, req.idempotencyKey, {
+        promptChars: req.systemPrompt.length + req.maskedUserPrompt.length,
+        maxOutputTokens: req.maxOutputTokens,
+      });
       if (!reservation.admitted) {
         // No provider call, no recordAttempt (nothing was attempted) --
         // matches kill_switch_blocked/unmasked_pii_detected precedent.
@@ -157,8 +186,23 @@ export class AieDocumentAiGateway {
     // `aie_ai_cost_attempt.idempotency_key` + the `v_already_settled` guard
     // (migration 0152), and `req.idempotencyKey` is threaded through
     // unchanged so a replay collapses there.
-    const settle = (actualInputTokens: number, actualOutputTokens: number, treatAsFullReservedCost = false) =>
-      this.options.costAdmission?.settle({ reservedUsd, actualInputTokens, actualOutputTokens, model: req.model, idempotencyKey: req.idempotencyKey, treatAsFullReservedCost }) ?? Promise.resolve();
+    const settle = (
+      actualInputTokens: number,
+      actualOutputTokens: number,
+      treatAsFullReservedCost: boolean,
+      providerRequestIds: string[] | undefined,
+      callOutcome: string,
+    ) =>
+      this.options.costAdmission?.settle({
+        reservedUsd,
+        actualInputTokens,
+        actualOutputTokens,
+        model: req.model,
+        idempotencyKey: req.idempotencyKey,
+        treatAsFullReservedCost,
+        providerRequestIds: providerRequestIds ?? [],
+        callOutcome,
+      }) ?? Promise.resolve();
 
     let raw;
     try {
@@ -187,7 +231,13 @@ export class AieDocumentAiGateway {
       // carrying nothing (any non-AIE provider, or a failure before the first
       // attempt) reads back as null and still settles zero -- never a guess.
       const incurred = readAieCumulativeUsage(e);
-      await settle(incurred?.cumulativeInputTokens ?? 0, incurred?.cumulativeOutputTokens ?? 0, outcome === 'timeout');
+      // AIE-1 final completion: a network failure AFTER the request left this
+      // process (ProviderError UNKNOWN with requestSent) is as uncertain as a
+      // timeout -- the provider may have processed and billed it -- so it is
+      // settled at the full reservation too, never assumed free.
+      const billingUncertain =
+        outcome === 'timeout' || (incurred?.requestSent === true && e instanceof ProviderError && e.code === 'UNKNOWN');
+      await settle(incurred?.cumulativeInputTokens ?? 0, incurred?.cumulativeOutputTokens ?? 0, billingUncertain, incurred?.providerRequestIds, outcome);
       await this.options.recordAttempt?.({
         idempotencyKey: req.idempotencyKey,
         outcome,
@@ -197,7 +247,11 @@ export class AieDocumentAiGateway {
         ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}),
       });
       // GW-10: never return the raw provider error to the caller.
-      return { outcome, ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}) };
+      return {
+        outcome,
+        providerRequestIds: incurred?.providerRequestIds ?? [],
+        ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}),
+      };
     }
 
     // M12C M2-OPEN-5: `raw.inputTokens`/`raw.outputTokens` are CUMULATIVE
@@ -206,7 +260,7 @@ export class AieDocumentAiGateway {
     // summing retries -- no call-site arithmetic here, which is what keeps
     // "sum across attempts" and "settle exactly once" from fighting.
     if (raw.finishReason === 'content_filter' || raw.finishReason === 'error') {
-      await settle(raw.inputTokens, raw.outputTokens);
+      await settle(raw.inputTokens, raw.outputTokens, false, raw.providerRequestIds, 'refused');
       await this.options.recordAttempt?.({
         idempotencyKey: req.idempotencyKey,
         outcome: 'refused',
@@ -214,12 +268,12 @@ export class AieDocumentAiGateway {
         outputTokens: raw.outputTokens,
         latencyMs: raw.latencyMs,
       });
-      return { outcome: 'refused' };
+      return { outcome: 'refused', providerRequestIds: raw.providerRequestIds ?? [] };
     }
 
     const validation = validateAiOutput({ schemaName: req.schemaName, schemaVersion: req.schemaVersion, rawText: raw.rawText });
     if (!validation.valid) {
-      await settle(raw.inputTokens, raw.outputTokens);
+      await settle(raw.inputTokens, raw.outputTokens, false, raw.providerRequestIds, 'schema_rejected');
       await this.options.recordAttempt?.({
         idempotencyKey: req.idempotencyKey,
         outcome: 'schema_rejected',
@@ -229,10 +283,10 @@ export class AieDocumentAiGateway {
         schemaValid: false,
         errorCodes: validation.errorCodes,
       });
-      return { outcome: 'schema_rejected', errorCodes: validation.errorCodes };
+      return { outcome: 'schema_rejected', errorCodes: validation.errorCodes, providerRequestIds: raw.providerRequestIds ?? [] };
     }
 
-    await settle(raw.inputTokens, raw.outputTokens);
+    await settle(raw.inputTokens, raw.outputTokens, false, raw.providerRequestIds, 'success');
     await this.options.recordAttempt?.({
       idempotencyKey: req.idempotencyKey,
       outcome: 'success',
@@ -248,6 +302,7 @@ export class AieDocumentAiGateway {
       inputTokens: raw.inputTokens,
       outputTokens: raw.outputTokens,
       latencyMs: raw.latencyMs,
+      providerRequestIds: raw.providerRequestIds ?? [],
     };
   }
 }

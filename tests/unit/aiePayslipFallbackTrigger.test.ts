@@ -35,6 +35,19 @@ vi.mock('@/lib/aie/featureFlags', () => ({
   isAieAiFallbackEnabled: () => flagState.globalEnabled,
   isUserInAiePilotCohort: () => flagState.cohortAllows,
 }));
+// AIE-1 final completion: the email resolver (service-role Auth lookup) is
+// outside this unit's scope; the cohort decision itself is mocked above.
+vi.mock('@/lib/aie/pilotCohortEmail', () => ({
+  resolveEmailForAiePilotCohort: async () => null,
+}));
+// ...and so is the durable draft store (migration 0197): reported as not
+// present, i.e. the pre-0197 behaviour this suite was written against.
+vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
+  saveAiFallbackDraft: async () => ({ persisted: false, reason: 'table_missing' }),
+  claimPendingAiFallbackDraft: async () => ({ claimed: false, reason: 'table_missing' }),
+  releaseClaimedAiFallbackDraft: async () => undefined,
+  documentsWithPendingAiFallbackDrafts: async () => new Set(),
+}));
 
 const maskingState = { throwOnMask: false, belowPolicy: false };
 vi.mock('@/lib/aie/masking/piiMasking', () => ({
@@ -47,6 +60,8 @@ vi.mock('@/lib/aie/masking/piiMasking', () => ({
 
 const providerState = { outcome: 'success' as 'success' | 'schema_rejected' | 'kill_switch_blocked', facts: null as unknown };
 vi.mock('@/lib/aie/adapters/payslip', () => ({
+  AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME: 'aie_payslip_document_facts',
+  AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION: '1',
   isAiePayslipAiFallbackEnabled: () => flagState.adapterEnabled,
   requestPayslipAiExtraction: vi.fn(() =>
     Promise.resolve(providerState.outcome === 'success' ? { outcome: 'success', facts: providerState.facts } : { outcome: providerState.outcome }),

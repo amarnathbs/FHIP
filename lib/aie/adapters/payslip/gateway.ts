@@ -63,7 +63,12 @@ export const PAYSLIP_AI_EXTRACTION_SYSTEM_PROMPT =
  */
 export async function requestPayslipAiExtraction(params: { maskedText: string; requestId?: string }): Promise<PayslipAiExtractionOutcome> {
   registerPayslipDocumentFactsSchema();
-  const idempotencyKey = `payslip-ai-fallback:${params.requestId ?? randomUUID()}`;
+  // AIE-1 final completion (2026-09-25): `requestId` is a CORRELATION id (the
+  // document id), not the attempt identity. The key used to be exactly the
+  // document id, so re-processing a failed document replayed a settled key,
+  // which migration 0152 re-admitted without metering (defect D1). Every
+  // attempt now gets its own key; since 0195 a replayed key is refused.
+  const idempotencyKey = `payslip-ai-fallback:${params.requestId ?? 'adhoc'}:${randomUUID()}`;
   const result = await gateway.requestFieldCompletion({
     systemPrompt: PAYSLIP_AI_EXTRACTION_SYSTEM_PROMPT,
     maskedUserPrompt: params.maskedText,

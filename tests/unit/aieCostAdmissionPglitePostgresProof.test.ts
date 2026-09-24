@@ -129,7 +129,10 @@ describe('migration 0152 — aie_reserve_ai_cost / aie_settle_ai_cost idempotenc
 
     // Same key, called again -- simulates a genuine cross-process retry.
     const second = await reserve('pglite-attempt-3-stable', 3.0);
-    expect(second[0].reserved).toBe(true); // same stored outcome replayed
+    // Migration 0195 (2026-09-25): a replayed key is REFUSED, never re-admitted.
+    // 0152 answered `true` here, which let a settled key buy an unmetered
+    // provider call (defect D1, reproduced in scripts/aie1_0195_pglite_verification.mjs).
+    expect(second[0].reserved).toBe(false);
     const afterSecond = await ledger();
     expect(Number(afterSecond.reserved_usd)).toBe(3.0); // UNCHANGED -- not reserved twice
     expect(afterSecond.total_attempts).toBe(1); // UNCHANGED -- not counted twice

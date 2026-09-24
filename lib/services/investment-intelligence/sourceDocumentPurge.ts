@@ -23,6 +23,54 @@
 import type { createAdminClient } from '@/lib/supabase/admin';
 import { deleteSourceDocumentObject, verifySourceDocumentObjectAbsent } from './storage';
 
+/**
+ * AIE-1 final production completion (2026-09-25) -- the Investment
+ * Intelligence raw-retention BACKSTOP.
+ *
+ * `purgeSourceDocumentStorage` below runs only after a SUCCESSFUL
+ * deterministic parse. Everything else -- a document never processed, one the
+ * parser found `unsupported`, `parse_failed`, `password_required`, handed to AI
+ * review, or a purge that itself failed -- kept its original PDF
+ * indefinitely. Confirmed read-only in production on 2026-09-25: four real
+ * CAS statement PDFs uploaded between 6 and 16 September were still in the
+ * `investment-source-documents` bucket.
+ *
+ * Rule: any row with a storage path, not yet purged, uploaded more than
+ * `maxAgeHours` ago, and not mid-parse, has its object deleted and verified
+ * absent (the same delete -> verify -> mark discipline). Structured data
+ * already written (holdings, transactions, AI review rows) is untouched; only
+ * the original file goes. Called from the AIE purge sweep.
+ */
+export async function enforceIiSourceDocumentRetentionBackstop(
+  admin: ReturnType<typeof createAdminClient>,
+  maxAgeHours = 24,
+  limit = 100,
+): Promise<{ scanned: number; purged: number; failed: number }> {
+  const cutoff = new Date(Date.now() - maxAgeHours * 3600_000).toISOString();
+  const { data, error } = await admin
+    .from('ii_source_documents')
+    .select('id, storage_path, status')
+    .not('storage_path', 'is', null)
+    .is('storage_purged_at', null)
+    .neq('status', 'parsing')
+    .lt('uploaded_at', cutoff)
+    .order('uploaded_at', { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.error(`ii retention backstop query failed: ${error.message}`);
+    return { scanned: 0, purged: 0, failed: 0 };
+  }
+  let purged = 0;
+  let failed = 0;
+  for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
+    await purgeSourceDocumentStorage(admin, row.id, row.storage_path);
+    const { data: after } = await admin.from('ii_source_documents').select('storage_purged_at').eq('id', row.id).maybeSingle();
+    if ((after as { storage_purged_at: string | null } | null)?.storage_purged_at) purged += 1;
+    else failed += 1;
+  }
+  return { scanned: (data ?? []).length, purged, failed };
+}
+
 export async function purgeSourceDocumentStorage(
   admin: ReturnType<typeof createAdminClient>,
   sourceDocumentId: string,

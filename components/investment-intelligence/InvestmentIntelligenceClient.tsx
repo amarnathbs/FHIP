@@ -336,7 +336,9 @@ export function InvestmentIntelligenceClient() {
       );
       const res = await fetch('/api/investment-intelligence/source-documents', { method: 'POST', body: form });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Upload failed');
+      // `bad(msg, status, code)` answers `{ error: code, message }` -- show the
+      // human message (e.g. a blocked malware scan), never the bare code.
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Upload failed');
       setFile(null);
       await loadDocuments();
       // M12C §11 (`CG-10`): say so, rather than silently selecting a different
@@ -356,12 +358,34 @@ export function InvestmentIntelligenceClient() {
     setProcessing(id);
     setError(null);
     try {
-      const res = await fetch(`/api/investment-intelligence/source-documents/${id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: passwordInputs[id] || undefined, forceReparse }),
-      });
-      const json = await res.json();
+      // AIE-1 final completion (2026-09-25): the server refuses to parse a
+      // document until its malware scan has cleared it, answering 409
+      // `malware_scan_pending` meanwhile. Poll calmly (bounded, the same 3s /
+      // 2-minute budget the FDH upload panels use) instead of showing that
+      // refusal as an error. A 422 `malware_scan_blocked` is final.
+      const requestProcess = () =>
+        fetch(`/api/investment-intelligence/source-documents/${id}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: passwordInputs[id] || undefined, forceReparse }),
+        });
+      let res = await requestProcess();
+      let json = await res.json();
+      const scanDeadline = Date.now() + 120_000;
+      while (res.status === 409 && json?.error === 'malware_scan_pending' && Date.now() < scanDeadline) {
+        setNotice(json.message ?? 'Your document is being scanned for safety.');
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        res = await requestProcess();
+        json = await res.json();
+      }
+      setNotice(null);
+      if (res.status === 409 && json?.error === 'malware_scan_pending') {
+        throw new Error('The safety scan is taking longer than usual. Please try processing this document again in a few minutes.');
+      }
+      if (!res.ok && typeof json?.message === 'string' && (json?.error === 'malware_scan_blocked')) {
+        await loadDocuments();
+        throw new Error(json.message);
+      }
       // This route always answers HTTP 200 (see lib/api.ts's `ok()` helper)
       // even when processing itself failed -- the semantic outcome lives in
       // `json.data.ok`, not the HTTP status. Checking only `res.ok` (as this

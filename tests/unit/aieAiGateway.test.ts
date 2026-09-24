@@ -10,7 +10,7 @@ function baseRequest(overrides: Partial<Parameters<AieDocumentAiGateway['request
     maskedUserPrompt: 'account: [MASKED:tax_id:abcxxxxx:1] balance: 100.00',
     schemaName: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME,
     schemaVersion: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION,
-    model: 'test-model',
+    model: 'gpt-4o-mini',
     maxOutputTokens: 256,
     requestedFields: ['account_number'],
     idempotencyKey: 'test-key-1',
@@ -166,7 +166,7 @@ describe('AIE-1 closure mission (section 8) — atomic cost admission wired thro
     });
     const result = await gateway.requestFieldCompletion(baseRequest());
     expect(result.outcome).toBe('timeout');
-    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', idempotencyKey: 'test-key-1', treatAsFullReservedCost: true });
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'gpt-4o-mini', idempotencyKey: 'test-key-1', treatAsFullReservedCost: true, callOutcome: 'timeout' }));
   });
 
   it('settles a genuine (non-timeout) provider error at zero actual cost, not the full reservation', async () => {
@@ -180,7 +180,7 @@ describe('AIE-1 closure mission (section 8) — atomic cost admission wired thro
       costAdmission: { reserve: async () => ({ admitted: true, reservedUsd: 0.05 }), settle },
     });
     await gateway.requestFieldCompletion(baseRequest());
-    expect(settle).toHaveBeenCalledWith({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'test-model', idempotencyKey: 'test-key-1', treatAsFullReservedCost: false });
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({ reservedUsd: 0.05, actualInputTokens: 0, actualOutputTokens: 0, model: 'gpt-4o-mini', idempotencyKey: 'test-key-1', treatAsFullReservedCost: false }));
   });
 
   it('with no costAdmission configured at all, behaves exactly as before (backward compatible)', async () => {

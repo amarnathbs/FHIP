@@ -114,9 +114,22 @@ export async function deleteDocumentObject(
   return { ok: true };
 }
 
+/**
+ * AIE-1 final completion (2026-09-25): absence must be PROVEN, not inferred.
+ * `verifyDocumentObjectExists` answers `exists: false` when the listing call
+ * itself errors, which is the right answer for "may I use this object?" and
+ * the wrong one here: a failed listing used to let a purge mark the row
+ * `purged` while the object was still stored. A listing error now counts as
+ * "still present", matching the AIE and Investment Intelligence purge checks.
+ */
 export async function verifyDocumentObjectAbsent(storageKey: string): Promise<boolean> {
-  const { exists } = await verifyDocumentObjectExists(storageKey);
-  return !exists;
+  const admin = createAdminClient();
+  const lastSlash = storageKey.lastIndexOf('/');
+  const dir = storageKey.slice(0, lastSlash);
+  const name = storageKey.slice(lastSlash + 1);
+  const { data, error } = await admin.storage.from(FDH_SOURCE_DOCUMENTS_BUCKET).list(dir, { search: name, limit: 100 });
+  if (error || !data) return false;
+  return !data.some((f) => f.name === name);
 }
 
 /**

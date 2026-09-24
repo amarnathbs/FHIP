@@ -27,6 +27,8 @@
  * table (mechanically enforced by `tests/unit/fdh11Isolation.test.ts`).
  */
 
+import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { statementUploadsRepository } from '../repositories';
@@ -328,6 +330,11 @@ async function resolveAuInvestmentStatementDocument(
     throw new AuInvestmentStatementProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
   }
 
+  // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new AuInvestmentStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
   if (!download.ok) throw new AuInvestmentStatementProcessingError('internal_error', download.message);
 
@@ -555,6 +562,7 @@ export async function attemptAiAuInvestmentFallback(
 ): Promise<AiAuInvestmentFallbackOutcome> {
   const gate = evaluateAiFallbackGate({
     userId,
+    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieInvestmentStatementAiFallbackEnabled(),
     extractedText,
   });
