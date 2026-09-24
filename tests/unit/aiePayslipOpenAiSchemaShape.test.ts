@@ -72,10 +72,22 @@ describe('payslip OpenAI json schema <-> Zod schema parity', () => {
     const schema = PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA as { properties: Record<string, unknown> };
     for (const [key, value] of Object.entries(schema.properties)) {
       if (key === 'schemaVersion' || key === 'documentMissingReasonCode') continue;
-      const nested = value as { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean };
-      expect(nested.additionalProperties, `${key} must set additionalProperties:false (strict mode)`).toBe(false);
-      expect(nested.required.sort(), `${key} required must match its own properties`).toEqual(Object.keys(nested.properties).sort());
+      type Obj = { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean };
+      // Money fields (2026-09-25) are an anyOf of two exact object shapes;
+      // strict mode's rules apply to EACH branch.
+      const branches = Array.isArray((value as { anyOf?: unknown[] }).anyOf) ? ((value as { anyOf: Obj[] }).anyOf) : [value as Obj];
+      for (const nested of branches) {
+        expect(nested.additionalProperties, `${key} must set additionalProperties:false (strict mode)`).toBe(false);
+        expect([...nested.required].sort(), `${key} required must match its own properties`).toEqual(Object.keys(nested.properties).sort());
+      }
     }
+  });
+
+  it('money fields structurally forbid BOTH (value, reason) and (null, null) -- the live schema_rejected cause', () => {
+    const money = (PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA as { properties: Record<string, { anyOf?: Array<{ properties: Record<string, { type: string }> }> }> }).properties.grossPay;
+    expect(money.anyOf).toHaveLength(2);
+    const shapes = money.anyOf!.map((b) => `${b.properties.value.type}/${b.properties.missingReasonCode.type}`).sort();
+    expect(shapes).toEqual(['null/string', 'string/null']);
   });
 
   it('getKnownOpenAiJsonSchema resolves this schema without throwing (the exact call the real gateway makes)', () => {

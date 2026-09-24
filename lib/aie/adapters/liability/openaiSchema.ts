@@ -30,6 +30,7 @@
 
 import {
   aieScalarFieldJsonSchema,
+  aieMoneyFieldJsonSchema,
   aieLineItemArrayJsonSchema,
   aieDocumentFactsJsonSchema,
   aieNullableString,
@@ -48,10 +49,10 @@ export const LIABILITY_FACTS_OPENAI_JSON_SCHEMA: Record<string, unknown> = aieDo
     statementPeriodEnd: aieScalarFieldJsonSchema(),
     statementDate: aieScalarFieldJsonSchema(),
     dueDate: aieScalarFieldJsonSchema(),
-    openingBalance: aieScalarFieldJsonSchema(),
-    closingBalance: aieScalarFieldJsonSchema(),
-    creditLimit: aieScalarFieldJsonSchema(),
-    minimumPayment: aieScalarFieldJsonSchema(),
+    openingBalance: aieMoneyFieldJsonSchema(),
+    closingBalance: aieMoneyFieldJsonSchema(),
+    creditLimit: aieMoneyFieldJsonSchema(),
+    minimumPayment: aieMoneyFieldJsonSchema(),
     interestRate: aieScalarFieldJsonSchema(),
     allActivitiesListed: { type: 'boolean' },
     activities: aieLineItemArrayJsonSchema({

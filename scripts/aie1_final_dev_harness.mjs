@@ -9,7 +9,9 @@ import path from 'node:path';
 
 export const DEV_HOST = 'vqycarelcoijzwlpkpcz.supabase.co';
 
+/** @returns {Record<string, string>} */
 export function loadEnv(file = 'D:/FHIP/.env.local') {
+  /** @type {Record<string, string>} */
   const env = {};
   for (const line of fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
     const i = line.indexOf('=');
@@ -23,12 +25,18 @@ export const BASE = env.NEXT_PUBLIC_SUPABASE_URL;
 export const ANON = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 
+/** @param {string} url */
 export function assertDev(url) {
   const host = new URL(url).host;
   if (host !== DEV_HOST) throw new Error(`DEV HOST ASSERTION FAILED: refusing to touch ${host}`);
 }
 assertDev(BASE);
 
+/**
+ * @param {string} p
+ * @param {{ method?: string, body?: unknown, token?: string, prefer?: string, headers?: Record<string, string> }} [opts]
+ * @returns {Promise<{ ok: boolean, status: number, json: any, text: string }>}
+ */
 export async function devFetch(p, { method = 'GET', body, token, prefer, headers: extra } = {}) {
   assertDev(BASE);
   const headers = {
@@ -48,11 +56,13 @@ export async function devFetch(p, { method = 'GET', body, token, prefer, headers
 export const MANIFEST = process.env.AIE1_MANIFEST
   ?? 'C:/Users/user/AppData/Local/Temp/claude/D--FHIP--claude-worktrees-audit-lr-2026-09-21/e1468c38-4b9f-45c2-b862-ab8725ccd725/scratchpad/aie1_dev_manifest.jsonl';
 
+/** @param {Record<string, unknown>} entry */
 export function recordArtefact(entry) {
   fs.mkdirSync(path.dirname(MANIFEST), { recursive: true });
   fs.appendFileSync(MANIFEST, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n');
 }
 
+/** @param {string} tag @param {{ country?: string }} [opts] */
 export async function makeSyntheticUser(tag, { country = 'AU' } = {}) {
   const stamp = Date.now();
   const email = `aie1-final-${tag}-${stamp}@fhip-test.invalid`;
@@ -73,6 +83,7 @@ export async function makeSyntheticUser(tag, { country = 'AU' } = {}) {
   return { id, email, password, token };
 }
 
+/** @param {string} email @param {string} password */
 export async function signIn(email, password) {
   assertDev(BASE);
   const res = await fetch(`${BASE}/auth/v1/token?grant_type=password`, {
@@ -85,9 +96,11 @@ export async function signIn(email, password) {
   return j.access_token;
 }
 
+/** @param {string} prefix */
 export function makeChecker(prefix) {
   let pass = 0, fail = 0, seq = 0;
   const failures = [];
+  /** @param {string} label @param {unknown} cond @param {string} [detail] */
   const check = (label, cond, detail = '') => {
     seq++;
     const id = `${prefix}-${String(seq).padStart(2, '0')}`;

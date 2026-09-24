@@ -52,6 +52,43 @@ export function aieScalarFieldJsonSchema(): Record<string, unknown> {
   };
 }
 
+/**
+ * AIE-1 final production completion (2026-09-25) -- the envelope for MONEY
+ * fields, whose Zod side (`aieMoneyField()`) refuses both `(value, reason)`
+ * and `(null, null)`.
+ *
+ * FOUND LIVE against real gpt-4o-mini in DEV (OpenAI request
+ * req_9df4a731402e427e9bba12823983d672, and reproduced as
+ * req_f01b48ca2b514652a8692887bc93afa7): with the plain envelope above, the
+ * model answers every field that is absent from the document -- e.g. the NPS
+ * fields on any Australian payslip -- as `{ value: null, missingReasonCode:
+ * null }`, which the Zod side rightly rejects, so EVERY realistic document
+ * came back `schema_rejected` and was billed for nothing. Strict mode enforces
+ * structure but not cross-field rules, so the rule is moved INTO the
+ * structure: `anyOf` two exact shapes, "a value and no reason" or "no value
+ * and a reason". The model can no longer emit the invalid combination; the Zod
+ * invariant is unchanged and still checked locally.
+ */
+export function aieMoneyFieldJsonSchema(): Record<string, unknown> {
+  const codes = MISSING_REASON_ENUM.filter((c): c is string => c !== null);
+  return {
+    anyOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['value', 'missingReasonCode'],
+        properties: { value: { type: 'string' }, missingReasonCode: { type: 'null' } },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['value', 'missingReasonCode'],
+        properties: { value: { type: 'null' }, missingReasonCode: { type: 'string', enum: codes } },
+      },
+    ],
+  };
+}
+
 /** The same envelope, but with the `value` constrained to a closed set. */
 export function aieEnumFieldJsonSchema(values: readonly string[]): Record<string, unknown> {
   return {

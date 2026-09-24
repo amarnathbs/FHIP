@@ -364,7 +364,20 @@ export async function processPayslipDocument(userId: string, documentId: string,
 
     const text = extraction.pages.join('\n');
     const declaredCountry = document.country_code === 'AU' || document.country_code === 'IN' ? document.country_code : undefined;
-    const parsed = parsePayslipText(text, { declaredCountry });
+    const rawParsed = parsePayslipText(text, { declaredCountry });
+    // AIE-1 final completion (2026-09-25). DEFECT: `parsePayslipText` can only
+    // fail with `not_a_payslip` or `country_not_identified`, and the second is
+    // impossible here because the upload always declares AU/IN. So a payslip
+    // the parser could not read AT ALL came back as a "successful" extraction
+    // with neither gross nor net pay, was persisted as empty payroll evidence,
+    // and the AI fallback (eligible only for `layout_unsupported` /
+    // `country_not_identified`) could never run -- confirmed by probe. An
+    // extraction with no gross AND no net is now what it is: an unsupported
+    // layout. A partial read (gross or net present) is unchanged.
+    const parsed: typeof rawParsed | { error: 'layout_unsupported' } =
+      !('error' in rawParsed) && rawParsed.grossPay === undefined && rawParsed.netPay === undefined
+        ? { error: 'layout_unsupported' }
+        : rawParsed;
 
     if ('error' in parsed) {
       if (AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(parsed.error)) {
@@ -418,6 +431,18 @@ export async function processPayslipDocument(userId: string, documentId: string,
   }
 }
 
+/** Identifiers and counts only (auditLog.ts's own metadata rule). */
+function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestIds: string[]; inputTokens?: number; outputTokens?: number; model: string } | undefined): Record<string, unknown> {
+  if (!evidence) return {};
+  return {
+    ai_model: evidence.model,
+    ai_cost_key: evidence.idempotencyKey,
+    ai_provider_request_ids: evidence.providerRequestIds.slice(0, 5),
+    ai_input_tokens: evidence.inputTokens ?? null,
+    ai_output_tokens: evidence.outputTokens ?? null,
+  };
+}
+
 export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction } | { ok: false; reason: string };
 
 /**
@@ -462,7 +487,7 @@ export async function attemptAiPayslipFallback(
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_attempted', actorType: 'system' });
   const result = await requestPayslipAiExtraction({ maskedText: masking.maskedText, requestId: documentId });
   if (result.outcome !== 'success') {
-    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome } });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome, ...aiEvidenceMetadata(result.evidence) } });
     return { ok: false, reason: result.outcome };
   }
 
@@ -485,13 +510,20 @@ export async function attemptAiPayslipFallback(
     schemaName: AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME,
     schemaVersion: AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
     payload: extraction,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
   });
   if (!saved.persisted && saved.reason === 'write_failed') {
     console.error(`payslip AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
     return { ok: false, reason: 'draft_not_persisted' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_draft_ready', actorType: 'system' });
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'payslip_ai_fallback_draft_ready',
+    actorType: 'system',
+    metadata: { ...aiEvidenceMetadata(result.evidence), draft_persisted: saved.persisted },
+  });
   return { ok: true, extraction };
 }
 
