@@ -43,6 +43,7 @@
 // is fully covered"). Coverage completeness is validated downstream against
 // AMFI, never asserted here.
 
+import { getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { fetchWithRetry } from '../httpFetchWithRetry';
 import type {
   HistoricalNavAdapter,
@@ -89,6 +90,21 @@ export class TigzigHistoricalAdapter implements HistoricalNavAdapter {
 
   async fetchHistory(request: HistoricalNavRequest): Promise<HistoricalNavAdapterResult> {
     const retrievedAt = new Date().toISOString();
+
+    // The registry's enabled flag is the governance control for this source.
+    // Until NAV 1 Stage D this adapter hardcoded its URL and never consulted
+    // it, so a source marked "not qualified for production" could still be
+    // fetched. Refuse before any network call when it is off.
+    if (!getReferenceSource('tigzig_nav_history').enabled) {
+      return {
+        ok: false,
+        schemeIdentifier: request.schemeIdentifier,
+        kind: 'disabled',
+        detail: "registry source 'tigzig_nav_history' is disabled",
+        provider: { key: this.providerKey, adapterVersion: this.adapterVersion, requestUrl: null, httpStatus: null, retrievedAt },
+      };
+    }
+
     const url = `${TIGZIG_BASE_URL}?scheme=${encodeURIComponent(request.schemeIdentifier)}&since=${request.fromDate}&to=${request.toDate}`;
 
     const result = await fetchWithRetry(url, { headers: { 'User-Agent': 'FHIP-PC6/1.0 (NAV1 selective historical adapter)' } });

@@ -53,7 +53,7 @@ import {
   planImport,
   MIN_PLAUSIBLE_FULL_UNIVERSE_BYTES,
 } from '@/lib/services/investment-intelligence/pc6/referenceImportRunner';
-import { buildUrl, toAmfiDate, blockedSources, PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import { buildUrl, toAmfiDate, blockedSources, getReferenceSource, PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -620,9 +620,20 @@ describe('PC6 source configuration — blocked sources stay blocked (N.4, N.7, N
     expect(licenceBlocked.map((s) => s.kind).sort()).toEqual(['benchmark_level', 'benchmark_level', 'risk_free_rate']);
   });
 
-  it('registers the NAV 1 candidate historical sources as disabled pending production qualification, not licence-blocked', () => {
+  it('keeps the unqualified NAV 1 candidate historical source disabled, not licence-blocked', () => {
+    // Was two sources (TIGZIG + mfnav) until 2026-09-24, when the PO approved
+    // TIGZIG as the FALLBACK behind AMFI for on-demand hydration (NAV 1 Stage
+    // D, D.3). mfnav was never qualified -- it returned HTTP 403 in research --
+    // and must stay off.
     const navCandidates = blockedSources().filter((s) => s.licence === 'public_open');
-    expect(navCandidates.map((s) => s.kind).sort()).toEqual(['nav_history', 'nav_history']);
+    expect(navCandidates.map((s) => s.kind)).toEqual(['nav_history']);
+    expect(getReferenceSource('mfnav_fallback_history').enabled).toBe(false);
+  });
+
+  it('enables TIGZIG only as the PO-approved fallback, never silently', () => {
+    const tigzig = getReferenceSource('tigzig_nav_history');
+    expect(tigzig.enabled).toBe(true);
+    expect(tigzig.notes).toContain('APPROVED AS FALLBACK ONLY by the PO on 2026-09-24');
   });
 
   it('rejects an unknown source id loudly', () => {

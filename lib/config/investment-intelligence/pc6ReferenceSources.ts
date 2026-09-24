@@ -168,8 +168,13 @@ export const PC6_REFERENCE_SOURCES: Record<string, ReferenceSourceDefinition> = 
       'consistent with the workbook\'s own prior-recorded result. TIGZIG\'s own documentation explicitly ' +
       'disclaims authority ("not affiliated with, endorsed by, or sponsored by AMFI"), so its output is ' +
       'never promoted to canonical without AMFI cross-validation. enabled=false until NAV 1.18 repeats ' +
-      'this request from the deployed FHIP runtime itself.',
-    enabled: false,
+      'this request from the deployed FHIP runtime itself. ' +
+      'APPROVED AS FALLBACK ONLY by the PO on 2026-09-24 (NAV 1 Stage D, D.3): AMFI is the primary ' +
+      'historical source; TIGZIG is consulted only when AMFI fails -- chiefly for a scheme AMFI no ' +
+      'longer publishes. Rows it supplies are stamped with provider key "tigzig" in data_version so ' +
+      'they stay identifiable. Setting enabled back to false makes the adapter refuse (kind "disabled") ' +
+      'before any network call.',
+    enabled: true,
   },
 
   mfnav_fallback_history: {
