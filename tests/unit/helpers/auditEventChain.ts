@@ -116,14 +116,41 @@ export function auditEventPhaseConstantsFor(migrationNumber: string): string[] {
   return constants.flatMap((c) => [...c]);
 }
 
+// ---------------------------------------------------------------------------
+// Memoisation
+// ---------------------------------------------------------------------------
+//
+// WHY THIS IS NOT PREMATURE. The ledger is ~180 files and several of them are
+// large. Without caching, every `auditEventDeltaFor` call re-walks and re-reads
+// the whole directory, so the 13-link sweep in `fdhAuditEventChain.test.ts`
+// performed ~2,400 full file reads and blew vitest's 5s default timeout — it
+// passed on a warm cache and failed consistently on a cold one, which is worse
+// than failing outright. The ledger cannot change during a test process, so
+// reading each file once is both faster and more honest about what is being
+// asserted. Raising the timeout instead would have left the quadratic read in
+// place for every consumer of this module.
+let filenameCache: string[] | undefined;
+const migrationCache = new Map<string, string>();
+let chainCache: { name: string; values: string[] }[] | undefined;
+
 /** Every migration filename in the ledger, oldest first. */
 export function migrationFilenames(): string[] {
-  return readdirSync(MIGRATION_DIR)
-    .filter((name) => /^\d{4}_.*\.sql$/.test(name))
-    .sort();
+  if (!filenameCache) {
+    filenameCache = readdirSync(MIGRATION_DIR)
+      .filter((name) => /^\d{4}_.*\.sql$/.test(name))
+      .sort();
+  }
+  return filenameCache;
 }
 
-const readMigration = (name: string) => readFileSync(path.join(MIGRATION_DIR, name), 'utf8');
+function readMigration(name: string): string {
+  let sql = migrationCache.get(name);
+  if (sql === undefined) {
+    sql = readFileSync(path.join(MIGRATION_DIR, name), 'utf8');
+    migrationCache.set(name, sql);
+  }
+  return sql;
+}
 
 /**
  * Every value inside a NAMED `... event_type_check check (event_type in (...))`
@@ -210,11 +237,17 @@ export function auditEventMigrationNamesBySubstring(): string[] {
 
 /** The WHOLE chain, base first: what the constraint has held over time. */
 export function auditEventChainValues(): { name: string; values: string[] }[] {
-  const base = auditEventBaseMigration();
-  return [
-    base,
-    ...namedAuditEventMigrations().map((m) => ({ name: m.name, values: auditEventTypesIn(m.sql) })),
-  ];
+  if (!chainCache) {
+    const base = auditEventBaseMigration();
+    chainCache = [
+      base,
+      ...namedAuditEventMigrations().map((m) => ({ name: m.name, values: auditEventTypesIn(m.sql) })),
+    ];
+  }
+  // A fresh copy per call: the chain is shared, but callers sort and filter the
+  // value arrays, and a cached structure that callers can mutate in place would
+  // make one test's `.sort()` visible to the next.
+  return chainCache.map((link) => ({ name: link.name, values: [...link.values] }));
 }
 
 /**
