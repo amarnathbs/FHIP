@@ -2,6 +2,8 @@ import { ok, bad } from '@/lib/api';
 import { runSelectiveHistoricalHydration } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJob';
 import { createLiveHydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJobLive';
 import { TigzigHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/tigzigHistoricalAdapter';
+import { AmfiHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/amfiHistoricalAdapter';
+import { FallbackHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/fallbackHistoricalAdapter';
 
 /**
  * NAV 1.23/1.26 — the scheduled selective-historical-hydration endpoint.
@@ -59,7 +61,8 @@ export async function POST(req: Request) {
   try {
     const result = await runSelectiveHistoricalHydration({
       changeoverDate,
-      adapter: new TigzigHistoricalAdapter(),
+      // NAV 1 Stage D (D.3, PO 2026-09-24): AMFI primary, TIGZIG fallback.
+      adapter: new FallbackHistoricalAdapter(new AmfiHistoricalAdapter(), new TigzigHistoricalAdapter()),
       deps: createLiveHydrationDeps(),
       dryRun: body.dryRun === true,
       maxInstruments: typeof body.maxInstruments === 'number' ? body.maxInstruments : undefined,

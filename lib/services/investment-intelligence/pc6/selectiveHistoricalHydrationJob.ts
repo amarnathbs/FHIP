@@ -203,7 +203,11 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
 
       const existingObs = await deps.fetchExistingObservations(instrumentId, chunk.fromDate, chunk.toDate);
       const importBatchId = crypto.randomUUID();
-      const dataVersion = `${adapter.providerKey}:${adapter.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
+      // Stamp the provider that ACTUALLY supplied these rows, not the adapter
+      // object: with a fallback in the chain, adapter.providerKey names the
+      // composite ('amfi+tigzig'), and a TIGZIG-sourced row labelled that way
+      // could not be told apart from an AMFI one.
+      const dataVersion = `${fetchResult.provider.key}:${fetchResult.provider.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
       const rowsToWrite: HydrationWriteRow[] = [];
       for (const obs of fetchResult.observations) {
         const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
