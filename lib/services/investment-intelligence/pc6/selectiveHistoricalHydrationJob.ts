@@ -73,6 +73,14 @@ export interface HydrationDeps {
   fetchExistingObservations(instrumentId: string, fromDate: string, toDate: string): Promise<Map<string, ExistingObservation>>;
   writeRows(rows: HydrationWriteRow[]): Promise<{ inserted: number; error: string | null }>;
   recordBatch(summary: HydrationJobResult): Promise<void>;
+  /** NAV 1 Stage D (0190): the confirmed earliest date with NAV data for this instrument, or null if none is recorded. */
+  fetchHistoryFloor(instrumentId: string): Promise<string | null>;
+  /**
+   * NAV 1 Stage D (0190): record that no NAV exists before floorDate. Reports
+   * failure as a value rather than throwing -- a floor that fails to save only
+   * means the next run re-discovers it; it must never fail the instrument.
+   */
+  recordHistoryFloor(instrumentId: string, floorDate: string, detail: string): Promise<{ error: string | null }>;
 }
 
 export interface HydrationWriteRow {
@@ -100,6 +108,8 @@ export interface PerInstrumentOutcome {
   reasons: string[];
   requiredFromDate: string | null;
   outcome: 'already_covered' | 'hydrated' | 'partially_hydrated' | 'unresolvable_identifier' | 'fetch_failed' | 'planned_dry_run' | 'no_gap_to_fetch';
+  /** Present when this run confirmed and recorded where the instrument's history starts (0190). */
+  historyFloorRecorded?: string;
   /** Present when outcome is 'partially_hydrated': the earliest date successfully written before a later (older) chunk failed — the exact resume point for the next invocation. */
   resumeFromDate?: string;
   detail: string;
@@ -148,19 +158,30 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     if (processed >= maxInstruments) continue; // still counted in `needing`, honestly reported as not processed this run
     processed++;
 
-    const requiredFrom = req.fromDate ?? HISTORICAL_FLOOR_DATE;
+    // Never request before a confirmed history floor (0190): without it, a
+    // fund launched after 2006 had its empty pre-launch window re-requested
+    // on every run -- a fund-house download each time once AMFI became the
+    // primary source.
+    const baseRequiredFrom = req.fromDate ?? HISTORICAL_FLOOR_DATE;
+    const historyFloor = await deps.fetchHistoryFloor(instrumentId);
+    const requiredFrom = historyFloor !== null && historyFloor > baseRequiredFrom ? historyFloor : baseRequiredFrom;
     const existingEarliest = await deps.fetchEarliestExistingDate(instrumentId);
 
     if (existingEarliest !== null && existingEarliest <= requiredFrom) {
       alreadyCovered++;
-      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'already_covered', detail: `existing coverage from ${existingEarliest} already satisfies required ${requiredFrom}`, rowsInserted: 0 });
+      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'already_covered', detail: `existing coverage from ${existingEarliest} already satisfies required ${requiredFrom}${historyFloor !== null && requiredFrom === historyFloor ? ' (the recorded history floor)' : ''}`, rowsInserted: 0 });
       continue;
     }
 
     // The gap to fetch: [requiredFrom, existingEarliest - 1 day] if some
     // coverage already exists, else [requiredFrom, changeoverDate - 1 day]
     // (never fetch on/after C — that is the daily job's authority).
-    const toDate = existingEarliest !== null ? addDays(existingEarliest, -1) : addDays(changeoverDate, -1);
+    // Clamped: for an instrument whose earliest row is itself after C (a fund
+    // launched after the changeover), existingEarliest - 1 would otherwise
+    // land on or after C and break the rule stated above.
+    const lastPreChangeover = addDays(changeoverDate, -1);
+    const dayBeforeExisting = existingEarliest !== null ? addDays(existingEarliest, -1) : null;
+    const toDate = dayBeforeExisting !== null && dayBeforeExisting < lastPreChangeover ? dayBeforeExisting : lastPreChangeover;
     if (toDate < requiredFrom) {
       perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'no_gap_to_fetch', detail: `computed window [${requiredFrom}, ${toDate}] is empty`, rowsInserted: 0 });
       continue;
@@ -192,10 +213,26 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     let chunksCompleted = 0;
     let stoppedAt: string | null = null; // the requiredFrom of the chunk that failed, if any
     let stopDetail: string | null = null;
+    // Earliest date any provider returned in this run, and -- if the walk
+    // went past the start of the instrument's history -- where it starts.
+    let earliestSeen: string | null = null;
+    let floorReachedAt: string | null = null;
+    let floorEvidence = '';
 
     for (const chunk of windowChunks) {
       const fetchResult = await adapter.fetchHistory({ schemeIdentifier: identifier, fromDate: chunk.fromDate, toDate: chunk.toDate });
       if (!fetchResult.ok) {
+        // Only "no data here" (both providers, via the fallback adapter) AND
+        // data already known NEWER than this window means the walk has gone
+        // past the start of the instrument's history. A not_found with nothing
+        // known at all is an unknown scheme, and any other failure is a real
+        // error -- neither may be recorded as a floor.
+        const earliestKnown = [existingEarliest, earliestSeen].filter((d): d is string => d !== null).sort()[0] ?? null;
+        if (fetchResult.kind === 'not_found' && earliestKnown !== null) {
+          floorReachedAt = earliestKnown;
+          floorEvidence = `no data in [${chunk.fromDate}, ${chunk.toDate}]: ${fetchResult.detail}`;
+          break;
+        }
         stoppedAt = chunk.fromDate;
         stopDetail = `${fetchResult.kind}: ${fetchResult.detail} (chunk [${chunk.fromDate}, ${chunk.toDate}])`;
         break;
@@ -210,6 +247,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       const dataVersion = `${fetchResult.provider.key}:${fetchResult.provider.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
       const rowsToWrite: HydrationWriteRow[] = [];
       for (const obs of fetchResult.observations) {
+        if (earliestSeen === null || obs.date < earliestSeen) earliestSeen = obs.date;
         const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
         const decision = decideUpsert(existingObs.get(`${instrumentId}|${obs.date}`) ?? null, { value: obs.nav, recordChecksum });
         if (decision.action === 'insert') {
@@ -253,8 +291,20 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       continue;
     }
 
+    let floorNote = '';
+    let historyFloorRecorded: string | undefined;
+    if (floorReachedAt !== null) {
+      const saved = await deps.recordHistoryFloor(instrumentId, floorReachedAt, floorEvidence);
+      if (saved.error) {
+        floorNote = ` -- history starts ${floorReachedAt}, but the floor could not be saved (${saved.error}); the next run will re-discover it`;
+      } else {
+        floorNote = ` -- history starts ${floorReachedAt}; recorded as the floor, earlier dates will not be requested again`;
+        historyFloorRecorded = floorReachedAt;
+      }
+    }
+
     if (instrumentRowsInserted === 0) {
-      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'already_covered', detail: 'provider returned only already-on-file dates', rowsInserted: 0 });
+      perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'already_covered', detail: `provider returned only already-on-file dates${floorNote}`, rowsInserted: 0, historyFloorRecorded });
       alreadyCovered++;
       continue;
     }
@@ -263,8 +313,9 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     totalInserted += instrumentRowsInserted;
     perInstrument.push({
       instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'hydrated',
-      detail: `inserted ${instrumentRowsInserted} row(s) for [${requiredFrom}, ${toDate}] across ${windowChunks.length} chunk(s) of up to ${MAX_FETCH_WINDOW_DAYS} days each`,
+      detail: `inserted ${instrumentRowsInserted} row(s) for [${requiredFrom}, ${toDate}] across ${windowChunks.length} chunk(s) of up to ${MAX_FETCH_WINDOW_DAYS} days each${floorNote}`,
       rowsInserted: instrumentRowsInserted,
+      historyFloorRecorded,
     });
   }
 

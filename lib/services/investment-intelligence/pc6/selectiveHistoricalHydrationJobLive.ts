@@ -127,16 +127,60 @@ export function createLiveHydrationDeps(): HydrationDeps {
 
     async recordBatch(summary: HydrationJobResult) {
       await db.from('ii_reference_import_batches').insert({
-        source_key: 'tigzig',
-        source_config_id: 'tigzig_nav_history',
+        // AMFI has been the primary source since NAV 1 Stage D (D.3); this
+        // used to say 'tigzig' unconditionally. A batch can mix sources when
+        // the fallback serves some instruments -- the provider behind each
+        // ROW is in that row's data_version, which is the authoritative record.
+        source_key: 'amfi',
+        source_config_id: 'amfi_nav_history',
         batch_kind: 'nav_history',
         as_of_date: new Date().toISOString().slice(0, 10),
         status: summary.instrumentsFailed > 0 && summary.instrumentsHydrated === 0 ? 'failed' : 'succeeded',
         rows_read: summary.instrumentsConsidered,
         rows_accepted: summary.instrumentsNeedingHydration,
         rows_inserted: summary.totalRowsInserted,
-        notes: { perInstrument: summary.perInstrument.slice(0, 200) },
+        notes: {
+          sources: { primary: 'amfi_nav_history', fallback: 'tigzig_nav_history', perRowProvider: 'data_version' },
+          perInstrument: summary.perInstrument.slice(0, 200),
+        },
       });
+    },
+
+    async fetchHistoryFloor(instrumentId: string) {
+      const { data, error } = await db
+        .from('ii_nav_history_floors')
+        .select('floor_date')
+        .eq('instrument_id', instrumentId)
+        .maybeSingle();
+      // A failed read must not become "no floor" silently in a way that hides
+      // a broken table -- but it also must not fail hydration. Without a floor
+      // the job simply walks back as it did before 0190, so treat it as none.
+      if (error) return null;
+      return (data?.floor_date as string | undefined) ?? null;
+    },
+
+    async recordHistoryFloor(instrumentId: string, floorDate: string, detail: string) {
+      // Keep the EARLIEST confirmed floor: a later run can only ever find
+      // more history, never less, so a floor is never moved later.
+      const { data: existing, error: readError } = await db
+        .from('ii_nav_history_floors')
+        .select('floor_date')
+        .eq('instrument_id', instrumentId)
+        .maybeSingle();
+      if (readError) return { error: readError.message };
+      const current = (existing?.floor_date as string | undefined) ?? null;
+      const floor = current !== null && current < floorDate ? current : floorDate;
+      const { error } = await db.from('ii_nav_history_floors').upsert(
+        {
+          instrument_id: instrumentId,
+          floor_date: floor,
+          confirmed_by: 'pc6_selective_hydration',
+          detail: detail.slice(0, 2000),
+          confirmed_at: new Date().toISOString(),
+        },
+        { onConflict: 'instrument_id' },
+      );
+      return { error: error ? error.message : null };
     },
   };
 }

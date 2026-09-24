@@ -244,6 +244,8 @@ describe('hydration stamps each row with the provider that actually supplied it'
       fetchExistingObservations: async () => new Map(),
       writeRows: async (rows) => { written.push(...rows); return { inserted: rows.length, error: null }; },
       recordBatch: async () => {},
+      fetchHistoryFloor: async () => null,
+      recordHistoryFloor: async () => ({ error: null }),
     };
     const adapter = new FallbackHistoricalAdapter(stub('amfi', failure('amfi', 'not_found')), stub('tigzig', success('tigzig')));
     const result = await runSelectiveHistoricalHydration({ changeoverDate: '2026-09-21', adapter, deps });
