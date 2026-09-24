@@ -60,7 +60,10 @@ describe('buildHydrationBatchRow', () => {
 
   it('is logged under AMFI, the primary source since D.3', () => {
     const row = buildHydrationBatchRow(summary());
-    expect([row.source_key, row.source_config_id, row.batch_kind]).toEqual(['amfi', 'amfi_nav_history', 'nav_history']);
+    // batch_kind is hydration's own (0192): 'nav_history' would share the PC6
+    // ingest job's AMFI-backfill scope, and the two would block or reconcile
+    // each other's running rows.
+    expect([row.source_key, row.source_config_id, row.batch_kind]).toEqual(['amfi', 'amfi_nav_history', 'nav_hydration']);
     expect(row.notes.sources.perRowProvider).toBe('data_version');
   });
 });
@@ -83,6 +86,8 @@ describe('the job never loses a failed batch save silently', () => {
     writeRows: async (rows) => ({ inserted: rows.length, error: null }),
     recordBatch,
     fetchHistoryFloor: async () => null,
+    claimBatch: async () => ({ batchId: null, blocked: null, error: null }),
+    updateBatchProgress: async () => {},
     recordHistoryFloor: async () => ({ error: null }),
   });
 

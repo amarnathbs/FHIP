@@ -69,7 +69,7 @@ describe('fetchWithRetry now gives up on a request that hangs', () => {
 
 describe('classifyAmfiHistoryBody', () => {
   it('recognises a NAV history file', () => expect(classifyAmfiHistoryBody(DATA)).toBe('data'));
-  it('recognises one that starts with a byte-order mark', () => expect(classifyAmfiHistoryBody('﻿' + DATA)).toBe('data'));
+  it('recognises one that starts with a byte-order mark', () => expect(classifyAmfiHistoryBody('\uFEFF' + DATA)).toBe('data'));
   it("recognises AMFI's own 'no data' page", () => expect(classifyAmfiHistoryBody(AMFI_NO_DATA_PAGE)).toBe('no_data'));
   it('does NOT take a block page for "no data"', () => expect(classifyAmfiHistoryBody(BLOCK_PAGE)).toBe('unrecognised'));
   it('does NOT take an empty body for "no data"', () => expect(classifyAmfiHistoryBody('')).toBe('unrecognised'));
@@ -136,6 +136,8 @@ describe('a block page can never become a history floor', () => {
       writeRows: async (rows) => ({ inserted: rows.length, error: null }),
       recordBatch: async () => ({ error: null }),
       fetchHistoryFloor: async () => null,
+      claimBatch: async () => ({ batchId: null, blocked: null, error: null }),
+      updateBatchProgress: async () => {},
       recordHistoryFloor,
     };
     const adapter = new FallbackHistoricalAdapter(new AmfiHistoricalAdapter({ resolveFundHouse: hdfc, today: () => '2026-09-24' }), tigzigEmpty);

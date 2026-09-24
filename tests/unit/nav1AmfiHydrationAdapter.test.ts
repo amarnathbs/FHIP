@@ -224,6 +224,8 @@ describe('hydration stamps each row with the provider that actually supplied it'
       writeRows: async (rows) => { written.push(...rows); return { inserted: rows.length, error: null }; },
       recordBatch: async () => ({ error: null }),
       fetchHistoryFloor: async () => null,
+      claimBatch: async () => ({ batchId: null, blocked: null, error: null }),
+      updateBatchProgress: async () => {},
       recordHistoryFloor: async () => ({ error: null }),
     };
     const adapter = new FallbackHistoricalAdapter(stub('amfi', failure('amfi', 'not_found')), stub('tigzig', success('tigzig')));

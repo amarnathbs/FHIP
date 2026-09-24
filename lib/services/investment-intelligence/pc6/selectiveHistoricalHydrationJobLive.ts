@@ -7,8 +7,9 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
-import type { HydrationDeps, HydrationJobResult, HydrationWriteRow } from './selectiveHistoricalHydrationJob';
-import { buildHydrationBatchRow } from './selectiveHistoricalHydrationJob';
+import type { HydrationDeps, HydrationJobResult, HydrationWriteRow, PerInstrumentOutcome } from './selectiveHistoricalHydrationJob';
+import { buildHydrationBatchRow, HYDRATION_BATCH_KIND, HYDRATION_STALE_RUNNING_MINUTES } from './selectiveHistoricalHydrationJob';
+import { reconcileStaleRunningBatches } from './referenceImportRunner';
 import type { FundHouseResolver } from './adapters/amfiHistoricalAdapter';
 import type { BenchmarkDependency } from './navRetentionPolicy';
 import { userHeldInstrumentsToDependencies } from './navRetentionPolicy';
@@ -164,12 +165,85 @@ export function createLiveHydrationDeps(): HydrationDeps {
       return { inserted: error ? 0 : rows.length, error: error?.message ?? null };
     },
 
-    async recordBatch(summary: HydrationJobResult) {
+    async claimBatch(startedAt: string) {
+      // Scoped to hydration's OWN batch kind (0192), so this never blocks on,
+      // or reconciles, a PC6 ingest backfill -- and the ingest job never
+      // touches hydration's rows.
+      const { data: running, error: readError } = await db
+        .from('ii_reference_import_batches')
+        .select('id, started_at')
+        .eq('batch_kind', HYDRATION_BATCH_KIND)
+        .eq('status', 'running');
+      if (readError) {
+        // Fail closed: if we cannot tell whether a run is in flight, do not start one.
+        return { batchId: null, blocked: `could not confirm that no hydration run is in flight: ${readError.message}`, error: null };
+      }
+      const rec = reconcileStaleRunningBatches(
+        (running ?? []).map((r) => ({ id: r.id as string, started_at: r.started_at as string })),
+        startedAt,
+        HYDRATION_STALE_RUNNING_MINUTES,
+      );
+      if (rec.reconciledIds.length > 0) {
+        await db
+          .from('ii_reference_import_batches')
+          .update({
+            status: 'failed',
+            finished_at: startedAt,
+            error_code: 'STALE_RUNNING_RECONCILED',
+            error_detail: `Reconciled by a later hydration run after ${HYDRATION_STALE_RUNNING_MINUTES}+ minute(s) with no terminal status -- most likely the platform ended the process. Its progress so far is in notes.perInstrument.`,
+          })
+          .in('id', rec.reconciledIds);
+      }
+      if (rec.stillRunning) return { batchId: null, blocked: rec.detail, error: null };
+
+      const { data, error } = await db
+        .from('ii_reference_import_batches')
+        .insert({
+          source_key: 'amfi',
+          source_config_id: 'amfi_nav_history',
+          batch_kind: HYDRATION_BATCH_KIND,
+          as_of_date: startedAt.slice(0, 10),
+          status: 'running',
+          started_at: startedAt,
+          notes: { sources: { primary: 'amfi_nav_history', fallback: 'tigzig_nav_history', perRowProvider: 'data_version' }, perInstrument: [] },
+        })
+        .select('id')
+        .single();
+      return { batchId: (data?.id as string | undefined) ?? null, blocked: null, error: error ? error.message : null };
+    },
+
+    async updateBatchProgress(batchId: string, perInstrument: PerInstrumentOutcome[]) {
+      // Best effort by design: a lost progress note must never fail the run.
+      await db
+        .from('ii_reference_import_batches')
+        .update({
+          notes: {
+            sources: { primary: 'amfi_nav_history', fallback: 'tigzig_nav_history', perRowProvider: 'data_version' },
+            inProgress: true,
+            perInstrument: perInstrument.slice(0, 200),
+          },
+        })
+        .eq('id', batchId)
+        .eq('status', 'running');
+    },
+
+    async recordBatch(summary: HydrationJobResult, batchId: string | null) {
       // The row is built by the pure, tested buildHydrationBatchRow(). This
-      // used to insert an inline payload and ignore the result -- which
+      // once inserted an inline payload and ignored the result -- which
       // violated two check constraints and so recorded nothing, silently.
-      const { error } = await db.from('ii_reference_import_batches').insert(buildHydrationBatchRow(summary));
-      return { error: error ? `${error.message}${error.code ? ` (${error.code})` : ''}` : null };
+      const row = buildHydrationBatchRow(summary);
+      const fmt = (e: { message: string; code?: string }) => `${e.message}${e.code ? ` (${e.code})` : ''}`;
+      if (batchId !== null) {
+        // Close the run's own row -- even if a later run already reconciled it
+        // as stale: the real outcome replaces the guess. `.select()` so a
+        // zero-row update is detected, never mistaken for success.
+        const { data, error } = await db.from('ii_reference_import_batches').update(row).eq('id', batchId).select('id');
+        if (error) return { error: fmt(error) };
+        if ((data ?? []).length === 1) return { error: null };
+        // The open row is gone; fall through and insert, so the outcome is still recorded.
+      }
+      const { error } = await db.from('ii_reference_import_batches').insert(row);
+      return { error: error ? fmt(error) : null };
     },
 
     async fetchHistoryFloor(instrumentId: string) {

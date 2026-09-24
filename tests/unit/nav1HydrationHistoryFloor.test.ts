@@ -73,6 +73,8 @@ function deps(over: Partial<HydrationDeps> = {}) {
     writeRows: async (rows) => { written.push(...rows); return { inserted: rows.length, error: null }; },
     recordBatch: async () => ({ error: null }),
     fetchHistoryFloor: async () => null,
+    claimBatch: async () => ({ batchId: null, blocked: null, error: null }),
+    updateBatchProgress: async () => {},
     recordHistoryFloor,
     ...over,
   };
