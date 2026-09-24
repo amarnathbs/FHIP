@@ -63,7 +63,16 @@ Object.assign(env, {
 delete env.AIE_PILOT_COHORT_USER_IDS;
 delete env.AIE_AI_COST_ALLOWANCE_USD;
 
+if (process.argv[2] === 'build') {
+  // Release gate: a production build of this branch with DEV connection values
+  // (prerender needs a Supabase URL). Nothing is deployed. The type-check
+  // phase needs the larger heap this repo always uses for tsc.
+  env.NODE_OPTIONS = '--max-old-space-size=8192';
+  const b = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['next', 'build', '--webpack'], { env, stdio: 'inherit', shell: process.platform === 'win32' });
+  b.on('exit', (c) => process.exit(c ?? 0));
+} else {
 const port = process.argv[2] ?? '3961';
 console.log(`next dev on :${port} against DEV; flags set: ${Object.keys(env).filter((k) => /^(AIE_|II_AI)/.test(k) && !/KEY|SECRET/.test(k)).sort().join(', ')}`);
 const child = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['next', 'dev', '--webpack', '-p', port], { env, stdio: 'inherit', shell: process.platform === 'win32' });
 child.on('exit', (c) => process.exit(c ?? 0));
+}
