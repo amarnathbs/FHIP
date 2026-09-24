@@ -36,7 +36,7 @@ The remaining `AIE_*` variables are not secrets — feature flags, pilot-cohort 
 `amplify.yml`'s `build` phase only forwards a **fixed, explicitly hand-maintained list** of server-only environment variable names into `.env.production` (the only way a non-`NEXT_PUBLIC_*` variable reaches this app's runtime on Amplify — see that file's own header comment for why):
 
 ```
-env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e II_AI_FALLBACK_ >> .env.production
+env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
 ```
 
 **Corrected by M12C §13:** the block above is now quoted verbatim from `amplify.yml`'s current `build` phase. The version previously printed here omitted the four G-flags, `-e ROLLOUT_` and `-e AIE_`, all of which the real script has since gained — so this document was itself the source of a misleading "known gap". `-e AIE_` is a prefix match, so every `AIE_*` variable, including both secrets, is forwarded. **A reader who relied on the old quotation would have concluded that AIE configuration could not reach the runtime at all.** The paragraph that follows is retained because its underlying warning — that this list is hand-maintained and silently forgetting a new name has no failure mode — is still true; its specific four-flag claim is not.
