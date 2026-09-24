@@ -85,6 +85,9 @@ export async function POST(req: Request) {
       // Null when the batch ledger row was saved. Surfaced so a lost record
       // can never again be invisible (see buildHydrationBatchRow()).
       batch_record_error: result.batchRecordError ?? null,
+      // Examined / already covered / attempted / succeeded / deferred / failed /
+      // remaining, plus how the fetch budget was ordered (NAV 1 completion, P1).
+      telemetry: result.telemetry ?? null,
       per_instrument: result.perInstrument.map((p) => ({
         instrument_id: p.instrumentId,
         reasons: p.reasons,
