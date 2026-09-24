@@ -234,9 +234,24 @@ describe('migration 0185 is additive against what it replaces', () => {
     }
   });
 
-  it('the TypeScript audit-event enum matches the widened constraint exactly', () => {
-    expect([...auditEventTypesIn(MIGRATION_0185)].sort())
-      .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
+  it('every value 0185 grants is reachable from the TypeScript enum', () => {
+    // DELIBERATELY NOT AN EXACT MATCH ANY MORE. 0186 (the liability correction
+    // counterpart) has since widened this SAME constraint one value further,
+    // so 0185 is no longer the constraint's latest word. The obvious repair —
+    // subtracting `LIABILITY_CORRECTION_ADDED` here — is the shape that made
+    // the six `*SchemaContract.test.ts` files a maintenance tax: each new
+    // correction surface adds another subtrahend until the assertion is
+    // bookkeeping about which migrations exist rather than a real check.
+    //
+    // The "nothing in the enum is unreachable in SQL" guarantee is instead
+    // asserted ONCE, against whichever migration the ledger says is latest, by
+    // `tests/unit/fdh10LiabilityCorrection.test.ts`. What is left here is the
+    // half that stays true forever no matter how many later widenings land.
+    const granted = auditEventTypesIn(MIGRATION_0185);
+    expect(granted.length).toBeGreaterThan(0);
+    for (const value of granted) {
+      expect(FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES as readonly string[]).toContain(value);
+    }
   });
 
   it('its authoritative-write trigger protects a STRICT SUPERSET of migration 0091’s columns', () => {
@@ -279,14 +294,22 @@ describe('the same dead-control pattern in the sibling import panels', () => {
     }
   });
 
-  it('the liability panel says plainly that it cannot edit the figures, instead of pretending it can', () => {
-    // It shared the payslip panel's exact dead control. A liability
-    // correction path would need its own narrowly-scoped RPC against
-    // migration 0096's equally-authoritative statement columns, which is out
-    // of this change's scope — so the button is gone and the copy is honest,
-    // rather than a second button that also does nothing.
+  it('the liability panel now has a real correction path, not the dead control and not an apology for it', () => {
+    // HISTORY, so the next reader does not mistake this for a weakened
+    // assertion. This panel shared the payslip panel's exact dead control.
+    // When that control was made real (migration 0185), the liability button
+    // was REMOVED and replaced with honest copy ("We can't edit them here
+    // yet"), because the liability write path needed its own narrowly-scoped
+    // RPC against migration 0096's equally-authoritative statement columns
+    // and that was out of scope. That RPC now exists (migration 0186), so the
+    // interim copy is gone too: what this asserts is that neither the dead
+    // control NOR the apology for it came back, and that the real path is
+    // what is there instead. `tests/unit/fdh10LiabilityCorrection.test.ts`
+    // holds the full cross-layer proof.
     const source = PANELS['components/liabilities/LiabilityImportPanel.tsx'];
-    expect(source).toContain("We can&apos;t edit them here yet");
     expect(source).not.toContain('Review / Correct');
+    expect(source).not.toContain("We can&apos;t edit them here yet");
+    expect(source).toContain("setPhase('correcting')");
+    expect(source).toContain('/correct`');
   });
 });

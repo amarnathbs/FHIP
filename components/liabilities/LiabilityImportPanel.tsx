@@ -42,6 +42,15 @@ type Phase =
   | 'scan_timeout'
   | 'duplicate'
   | 'review'
+  // 2026-09-24. The old review-and-correct button used to call
+  // `loadReview()`, which re-fetched the statement and set the phase this
+  // panel was ALREADY in —
+  // it re-rendered identical content and changed nothing a user could see,
+  // with no correction surface behind it at all. It was then replaced with
+  // honest copy saying the figures could not be edited here. This phase is
+  // the surface that makes the offer real, mirroring the payslip panel's own
+  // `correcting` phase.
+  | 'correcting'
   | 'comparing'
   | 'applied'
   | 'kept_existing'
@@ -135,6 +144,7 @@ interface LiabilityStatement {
   masked_identifier: string | null;
   statement_period_start: string | null;
   statement_period_end: string | null;
+  statement_date: string | null;
   due_date: string | null;
   opening_balance: number | null;
   closing_balance: number | null;
@@ -152,11 +162,112 @@ interface LiabilityStatement {
   refunds_total: number | null;
   drawdowns_total: number | null;
   principal_repayments_total: number | null;
+  // Formula inputs the extraction path never populates today (it always
+  // stores null for both), which is precisely why they are worth offering as
+  // corrections: a statement that capitalises interest, or carries a
+  // statement-level adjustment, cannot reconcile until someone can say so.
+  capitalised_total: number | null;
+  adjustments_total: number | null;
   reconciliation_status: 'reconciled' | 'variance' | 'insufficient_data';
   reconciliation_variance: number | null;
   approval_status: 'pending' | 'approved';
   currency_code: string;
+  // Migration 0186. Present once that migration is applied; treated as
+  // optional here so this panel renders correctly against an environment
+  // where it is not, rather than showing `undefined`.
+  user_corrected_fields?: string[] | null;
+  last_corrected_at?: string | null;
 }
+
+/** The fields this panel lets a user correct on a CREDIT CARD statement, in
+ * the order it shows them. Exactly the credit-card half of
+ * `liabilityCorrectableFieldsFor()` in
+ * `lib/financial-data-hub/services/liabilityStatementProcessingService.ts`. */
+const CREDIT_CARD_CORRECTABLE_FIELDS = [
+  'institution_name',
+  'statement_period_start',
+  'statement_period_end',
+  'statement_date',
+  'due_date',
+  'opening_balance',
+  'closing_balance',
+  'purchases_total',
+  'cash_advances_total',
+  'refunds_total',
+  'interest_total',
+  'fees_total',
+  'payments_total',
+  'adjustments_total',
+  'credit_limit',
+  'minimum_payment',
+  'interest_rate',
+] as const;
+
+/** ...and the LOAN half. */
+const LOAN_CORRECTABLE_FIELDS = [
+  'institution_name',
+  'statement_period_start',
+  'statement_period_end',
+  'statement_date',
+  'due_date',
+  'opening_principal',
+  'closing_principal',
+  'drawdowns_total',
+  'principal_repayments_total',
+  'capitalised_total',
+  'interest_total',
+  'fees_total',
+  'payments_total',
+  'adjustments_total',
+  'interest_rate',
+] as const;
+
+type CorrectableField =
+  | (typeof CREDIT_CARD_CORRECTABLE_FIELDS)[number]
+  | (typeof LOAN_CORRECTABLE_FIELDS)[number];
+
+const CORRECTION_LABELS: Record<CorrectableField, string> = {
+  institution_name: 'Institution',
+  statement_period_start: 'Statement period start (YYYY-MM-DD)',
+  statement_period_end: 'Statement period end (YYYY-MM-DD)',
+  statement_date: 'Statement date (YYYY-MM-DD)',
+  due_date: 'Payment due date (YYYY-MM-DD)',
+  opening_balance: 'Opening balance',
+  closing_balance: 'Closing balance',
+  purchases_total: 'Purchases this statement period',
+  cash_advances_total: 'Cash advances this statement period',
+  refunds_total: 'Refunds and credits this statement period',
+  opening_principal: 'Opening principal',
+  closing_principal: 'Closing principal',
+  drawdowns_total: 'Amounts drawn down this statement period',
+  principal_repayments_total: 'Principal repaid this statement period',
+  capitalised_total: 'Interest or fees added to the principal',
+  interest_total: 'Interest charged this statement period',
+  fees_total: 'Fees charged this statement period',
+  payments_total: 'Payments made this statement period',
+  adjustments_total: 'Other adjustments (may be negative)',
+  credit_limit: 'Credit limit',
+  minimum_payment: 'Minimum payment',
+  interest_rate: 'Interest rate (% per year)',
+};
+
+/** Rendered as money, in the statement's own currency. `interest_rate` is a
+ * percentage and the dates are text, so neither belongs here. */
+const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
+  'opening_balance', 'closing_balance', 'purchases_total', 'cash_advances_total', 'refunds_total',
+  'opening_principal', 'closing_principal', 'drawdowns_total', 'principal_repayments_total',
+  'capitalised_total', 'interest_total', 'fees_total', 'payments_total', 'adjustments_total',
+  'credit_limit', 'minimum_payment',
+];
+
+/** Fields that may legitimately be negative — an account in credit, a payout
+ * mid-period, or an adjustment in either direction. Everything else money is
+ * a magnitude whose sign the reconciliation formula applies itself. */
+const SIGNED_CORRECTION_FIELDS: readonly CorrectableField[] = [
+  'opening_balance', 'closing_balance', 'opening_principal', 'closing_principal', 'adjustments_total',
+];
+
+const NUMERIC_CORRECTION_FIELDS: readonly CorrectableField[] = [...MONEY_CORRECTION_FIELDS, 'interest_rate'];
 
 interface StatementActivity {
   id: string;
@@ -278,6 +389,14 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   const [decision, setDecision] = useState<Decision>('update_existing');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // 2026-09-24 correction surface. `corrections` holds the RAW string in each
+  // input, seeded from the extracted statement; only the entries that
+  // actually differ from the stored value are ever submitted, so
+  // `user_corrected_fields` records what the user really touched rather than
+  // every field they looked at.
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
   // (see that file's identical comment) — this panel used to always render
   // as a fully working upload form and only discover the FDH-3 production
@@ -324,7 +443,109 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     setSelected(new Set());
     setAiDraft(null);
     setAiFacilityType('');
+    setCorrections({});
+    setCorrectionError(null);
+    setCorrectionNotice(null);
   }, []);
+
+  /** The correctable fields for the statement actually on screen. */
+  function correctableFieldsFor(current: LiabilityStatement): readonly CorrectableField[] {
+    return current.statement_type === 'credit_card' ? CREDIT_CARD_CORRECTABLE_FIELDS : LOAN_CORRECTABLE_FIELDS;
+  }
+
+  /** Seed every correction input from what was actually extracted. */
+  function startCorrecting(current: LiabilityStatement) {
+    const seeded: Record<string, string> = {};
+    for (const field of correctableFieldsFor(current)) {
+      const value = current[field as keyof LiabilityStatement];
+      if (value === null || value === undefined) {
+        // Blank, not "0" — an absent figure stays absent until the user
+        // decides otherwise.
+        seeded[field] = '';
+        continue;
+      }
+      // Money and rates arrive from numeric(20,4)/numeric(8,4) columns, so
+      // "1450.0000" is a faithful but unreadable way to show $1,450. Trailing
+      // zeros are dropped for display only; the value is identical.
+      seeded[field] = NUMERIC_CORRECTION_FIELDS.includes(field) ? String(Number(value)) : String(value);
+    }
+    setCorrections(seeded);
+    setCorrectionError(null);
+    setCorrectionNotice(null);
+    setPhase('correcting');
+  }
+
+  /** Only the fields whose value the user actually changed. */
+  function changedCorrections(current: LiabilityStatement): Record<string, string | number | null> {
+    const body: Record<string, string | number | null> = {};
+    for (const field of correctableFieldsFor(current)) {
+      const raw = (corrections[field] ?? '').trim();
+      const stored = current[field as keyof LiabilityStatement];
+      const storedText = stored === null || stored === undefined ? '' : String(stored);
+      if (NUMERIC_CORRECTION_FIELDS.includes(field)) {
+        // Compare numerically, so "1450" and "1450.0000" are not a change.
+        const before = storedText === '' ? null : Number(storedText);
+        const after = raw === '' ? null : Number(raw);
+        if (after !== null && !Number.isFinite(after)) {
+          throw new Error(`${CORRECTION_LABELS[field]} must be a number, or left blank.`);
+        }
+        if (after !== null && after < 0 && !SIGNED_CORRECTION_FIELDS.includes(field)) {
+          throw new Error(`${CORRECTION_LABELS[field]} cannot be negative — enter the amount, not its sign.`);
+        }
+        if (before === after) continue;
+        body[field] = after;
+        continue;
+      }
+      if (raw === storedText) continue;
+      body[field] = raw === '' ? null : raw;
+    }
+    return body;
+  }
+
+  async function handleSaveCorrections() {
+    if (!documentId || !statement) return;
+    setCorrectionError(null);
+    setCorrectionNotice(null);
+    let body: Record<string, string | number | null>;
+    try {
+      body = changedCorrections(statement);
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : 'Check each figure and try again.');
+      return;
+    }
+    if (Object.keys(body).length === 0) {
+      setCorrectionError('Nothing has been changed yet. Edit a value, or choose Cancel.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/financial-data-hub/liability-statement/${documentId}/correct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const { ok, json } = await readJson(res);
+      if (!ok) {
+        setCorrectionError(json.error ?? 'These corrections could not be saved.');
+        return;
+      }
+      const saved = json.data.statement as LiabilityStatement | null;
+      if (saved) setStatement(saved);
+      setActivities((json.data.activities as StatementActivity[]) ?? activities);
+      const count = (json.data.corrected_fields as string[] | undefined)?.length ?? Object.keys(body).length;
+      setCorrectionNotice(
+        `Saved ${count} ${count === 1 ? 'correction' : 'corrections'}. `
+        + (json.data.reconciliation_restamped
+          ? 'The statement check has been run again on your figures.'
+          : 'The statement check is unchanged.'),
+      );
+      setPhase('review');
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function loadReview(docId: string) {
     const res = await fetch(`/api/financial-data-hub/liability-statement/${docId}`);
@@ -937,6 +1158,19 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         <div className="mt-4 space-y-4">
           <h3 className="font-semibold">Statement review</h3>
           {phase === 'duplicate' && message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
+          {/* Announced, not just displayed: a correction that has just been
+              saved is a status change the user may not be looking at. */}
+          {correctionNotice && (
+            <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800" role="status" aria-live="polite">
+              {correctionNotice}
+            </p>
+          )}
+          {(statement.user_corrected_fields?.length ?? 0) > 0 && (
+            <p className="text-xs text-muted">
+              {statement.user_corrected_fields!.length === 1 ? 'One figure below was' : `${statement.user_corrected_fields!.length} figures below were`}{' '}
+              corrected by you, not read from the statement.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <dt className="text-muted">Institution</dt>
             <dd>{statement.institution_name ?? 'Not identified'}</dd>
@@ -1016,28 +1250,29 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           ) : (
             <div className="space-y-3">
               {/*
-                2026-09-24. A correction button used to sit here whose
-                only handler was `loadReview(documentId!)` — a re-fetch that
-                set the phase this block is ALREADY rendered in, so it
-                re-rendered identical content and changed nothing the user
-                could see. The identical dead control existed on the payslip
-                panel, where it has been replaced with a real correction
-                surface (`.../payslip/{id}/correct`). No equivalent
-                correction path exists for a liability statement yet — that
-                needs its own narrowly-scoped RPC, because migration 0096's
-                statement columns are system-authoritative in exactly the way
-                `fdh_payroll_events`' are — so rather than keep offering a
-                button that does nothing, this says plainly what the options
-                actually are. Tracked as follow-up, not silently dropped.
+                2026-09-24. A correction button used to sit here whose only
+                handler was `loadReview(documentId!)` — a re-fetch that set
+                the phase this block is ALREADY rendered in, so it re-rendered
+                identical content and changed nothing the user could see. It
+                was first replaced with honest copy saying the figures could
+                not be edited here, because building the write path was out of
+                that dispatch's scope. The write path now exists (migration
+                0186's `fdh10_correct_liability_statement`, reached through
+                `.../liability-statement/{id}/correct`), so the offer is real
+                and the copy no longer has to apologise for it.
               */}
               <p className="text-sm text-muted">
-                Check these figures against your statement before approving. We can&apos;t edit them here yet — if
-                something is wrong, choose Try again with a clearer copy of the statement, or add this liability
-                yourself using the form below.
+                Check these figures against your statement before approving. If something doesn&apos;t match, correct
+                it here — nothing is added to your Liabilities until you approve and apply.
               </p>
               <div className="flex gap-3">
-                <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
-                  Try again with a different file
+                <button
+                  type="button"
+                  onClick={() => startCorrecting(statement)}
+                  disabled={busy}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
+                >
+                  Correct these figures
                 </button>
                 <button type="button" onClick={handleApprove} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
                   Approve
@@ -1050,6 +1285,90 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
               Continue to liability comparison
             </button>
           )}
+        </div>
+      )}
+
+      {phase === 'correcting' && statement && (
+        <div className="mt-4 space-y-4">
+          <h3 className="font-semibold">
+            Correct the figures from this {statement.statement_type === 'credit_card' ? 'card statement' : 'loan statement'}
+          </h3>
+          <p className="text-sm text-muted">
+            These are the figures we read from your statement. Change anything that doesn&apos;t match what the
+            statement actually says for <strong>this statement period</strong> — a year-to-date or since-inception
+            total belongs in neither box here. Leave a box empty if your statement doesn&apos;t show that figure; empty
+            means &ldquo;not stated&rdquo;, not zero. Nothing is added to your Liabilities until you approve and apply.
+          </p>
+
+          {correctionError && (
+            <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+              {correctionError}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            {correctableFieldsFor(statement).map((field) => {
+              const isNumeric = NUMERIC_CORRECTION_FIELDS.includes(field);
+              const isMoney = MONEY_CORRECTION_FIELDS.includes(field);
+              const isSigned = SIGNED_CORRECTION_FIELDS.includes(field);
+              const wasCorrected = statement.user_corrected_fields?.includes(field) ?? false;
+              return (
+                <div key={field}>
+                  <label className="mb-1 block text-muted" htmlFor={`liability-correct-${field}`}>
+                    {CORRECTION_LABELS[field]}
+                    {isMoney && <span className="text-xs"> ({statement.currency_code})</span>}
+                  </label>
+                  <input
+                    id={`liability-correct-${field}`}
+                    type={isNumeric ? 'number' : 'text'}
+                    inputMode={isNumeric ? 'decimal' : undefined}
+                    step={isNumeric ? '0.01' : undefined}
+                    min={isNumeric && !isSigned ? '0' : undefined}
+                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    value={corrections[field] ?? ''}
+                    aria-describedby={wasCorrected ? `liability-correct-${field}-note` : undefined}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCorrections((prev) => ({ ...prev, [field]: next }));
+                    }}
+                  />
+                  {wasCorrected && (
+                    <span id={`liability-correct-${field}-note`} className="mt-0.5 block text-xs text-muted">
+                      You corrected this earlier.
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-muted">
+            We&apos;ll re-run the statement check on whatever you save, and tell you the result — a correction is never
+            assumed to be right just because you typed it.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setCorrections({});
+                setCorrectionError(null);
+                setPhase('review');
+              }}
+              disabled={busy}
+              className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveCorrections}
+              disabled={busy}
+              className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {busy ? 'Saving…' : 'Save corrections'}
+            </button>
+          </div>
         </div>
       )}
 
