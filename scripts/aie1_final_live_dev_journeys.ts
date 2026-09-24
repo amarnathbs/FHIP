@@ -348,8 +348,9 @@ async function main() {
     const accounts = await rows('ii_accounts', `user_id=eq.${inUser.id}`, 'id');
     const holdings = await rows('ii_holding_snapshots', `user_id=eq.${inUser.id}`, 'id');
     const txs = await rows('ii_transactions', `user_id=eq.${inUser.id}`, 'id');
-    (evidence.j5 as any).counts = { accounts: accounts.length, holdings: holdings.length, transactions: txs.length, expected: expected.counts ?? expected.summary ?? null };
-    check('J5 canonical ii_* rows written', accounts.length > 0 && holdings.length > 0 && txs.length > 0, JSON.stringify((evidence.j5 as any).counts));
+    const exp = { accounts: expected.accounts.length, transactions: expected.transactionCount, holdings: expected.holdingCount };
+    (evidence.j5 as any).counts = { accounts: accounts.length, holdings: holdings.length, transactions: txs.length, expected: exp };
+    check('J5 canonical ii_* rows equal the fixture oracle (accounts / transactions / holdings)', accounts.length === exp.accounts && txs.length === exp.transactions && holdings.length === exp.holdings, JSON.stringify((evidence.j5 as any).counts));
     check('J5 original PDF purged after parse (verified by the II purge)', !!sd.storage_purged_at, String(sd.storage_purged_at));
     evidence.iiUser = inUser.id;
   }
