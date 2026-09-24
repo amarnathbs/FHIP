@@ -98,9 +98,11 @@ async function rows(table: string, filter: string, select = '*') {
 
 /** Mirrors the (fixed) PayslipImportPanel: for `add_new`, send the review's
  * default selection -- recommended, not requiring confirmation. */
-async function recommendedFields(proposalId: string): Promise<string[]> {
+async function recommendedFields(proposalId: string, userTicksPleaseConfirm = false): Promise<string[]> {
   const f = await rows('fhip_import_proposal_fields', `proposal_id=eq.${proposalId}`, 'field_name,is_recommended,requires_confirmation');
-  return f.filter((x) => x.is_recommended && !x.requires_confirmation).map((x) => x.field_name);
+  // `userTicksPleaseConfirm`: the user explicitly ticks the fields the review
+  // marks "please confirm" (the panel's checkbox), as a real user must.
+  return f.filter((x) => x.is_recommended && (userTicksPleaseConfirm || !x.requires_confirmation)).map((x) => x.field_name);
 }
 
 async function ledger() {
@@ -265,7 +267,7 @@ async function main() {
     const pid = prop.json?.data?.proposal_id;
     if (pid) recordArtefact({ kind: 'fhip_import_proposals', id: pid, userId: pilotA.id, run: RUN });
     const incomeBefore = (await rows('income_sources', `user_id=eq.${pilotA.id}`, 'id')).length;
-    const apply = await app(pilotA, `/api/financial-data-hub/income-proposals/${pid}/apply`, { method: 'POST', json: { decision: 'add_new', selectedFields: await recommendedFields(pid) } });
+    const apply = await app(pilotA, `/api/financial-data-hub/income-proposals/${pid}/apply`, { method: 'POST', json: { decision: 'add_new', selectedFields: await recommendedFields(pid, true) } });
     const inc = (await rows('income_sources', `id=eq.${apply.json?.data?.target_entity_id}`, 'id,amount,frequency'))[0];
     if (inc) recordArtefact({ kind: 'income_sources', id: inc.id, userId: pilotA.id, run: RUN });
     // EXPECTED (by hand): base 2,900.00 + tools allowance 300.00 = 3,200.00 recurring (no overtime/bonus).

@@ -268,7 +268,7 @@ export class AieDocumentAiGateway {
         outputTokens: raw.outputTokens,
         latencyMs: raw.latencyMs,
       });
-      return { outcome: 'refused', providerRequestIds: raw.providerRequestIds ?? [] };
+      return { outcome: 'refused', providerRequestIds: raw.providerRequestIds ?? [], inputTokens: raw.inputTokens, outputTokens: raw.outputTokens };
     }
 
     const validation = validateAiOutput({ schemaName: req.schemaName, schemaVersion: req.schemaVersion, rawText: raw.rawText });
@@ -283,7 +283,7 @@ export class AieDocumentAiGateway {
         schemaValid: false,
         errorCodes: validation.errorCodes,
       });
-      return { outcome: 'schema_rejected', errorCodes: validation.errorCodes, providerRequestIds: raw.providerRequestIds ?? [] };
+      return { outcome: 'schema_rejected', errorCodes: validation.errorCodes, providerRequestIds: raw.providerRequestIds ?? [], inputTokens: raw.inputTokens, outputTokens: raw.outputTokens };
     }
 
     await settle(raw.inputTokens, raw.outputTokens, false, raw.providerRequestIds, 'success');

@@ -431,6 +431,30 @@ export async function processPayslipDocument(userId: string, documentId: string,
   }
 }
 
+/**
+ * AIE-1 final completion (2026-09-25): the reviewable projection of an
+ * AI-fallback draft -- exactly the keys the confirm route accepts
+ * (`ai-fallback/confirm/route.ts`'s strict body schema). Internal extraction
+ * fields (components, parser identity, warnings, confidence) never leave the
+ * server, and a draft posted back verbatim by the review UI is always valid.
+ */
+export const PAYSLIP_AI_DRAFT_REVIEW_KEYS = [
+  'country', 'currencyCode', 'employerName', 'payPeriodStart', 'payPeriodEnd', 'paymentDate', 'payFrequency',
+  'grossPay', 'basePay', 'overtimePay', 'bonusPay', 'commissionPay', 'allowancesTotal', 'reimbursementsTotal',
+  'otherEarnings', 'taxWithheld', 'employeeDeductionsTotal', 'salarySacrifice', 'professionalTax',
+  'employerRetirementContribution', 'employeeRetirementContribution', 'employerNpsContribution',
+  'employeeNpsContribution', 'netPay',
+] as const;
+
+export function toPayslipAiDraftForReview(extraction: PayrollExtraction): Record<string, unknown> {
+  const source = extraction as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of PAYSLIP_AI_DRAFT_REVIEW_KEYS) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
 /** Identifiers and counts only (auditLog.ts's own metadata rule). */
 function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestIds: string[]; inputTokens?: number; outputTokens?: number; model: string } | undefined): Record<string, unknown> {
   if (!evidence) return {};
