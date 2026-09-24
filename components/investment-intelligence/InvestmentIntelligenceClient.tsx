@@ -538,8 +538,10 @@ export function InvestmentIntelligenceClient() {
         <h2 className="text-sm font-semibold text-gray-900">Step 1 — Upload a statement</h2>
         <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600">Statement source</label>
-            <select value={sourceKey} onChange={(e) => setSourceKey(e.target.value as 'cams' | 'kfintech')} className="mt-1 rounded border border-gray-300 px-2 py-1.5 text-sm">
+            {/* AIE-1 final completion (2026-09-25): axe `select-name` (critical)
+                -- the label was not associated with the control. */}
+            <label htmlFor="ii-statement-source" className="block text-xs font-medium text-gray-600">Statement source</label>
+            <select id="ii-statement-source" value={sourceKey} onChange={(e) => setSourceKey(e.target.value as 'cams' | 'kfintech')} className="mt-1 rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="cams">CAMS</option>
               <option value="kfintech">KFintech</option>
             </select>
