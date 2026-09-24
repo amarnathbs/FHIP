@@ -9,11 +9,49 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
 import type { HydrationDeps, HydrationJobResult, HydrationWriteRow } from './selectiveHistoricalHydrationJob';
 import { buildHydrationBatchRow } from './selectiveHistoricalHydrationJob';
+import type { FundHouseResolver } from './adapters/amfiHistoricalAdapter';
 import type { BenchmarkDependency } from './navRetentionPolicy';
 import { userHeldInstrumentsToDependencies } from './navRetentionPolicy';
 import type { ExistingObservation } from './referenceDataQuality';
 
 const KILL_SWITCH_JOB_KEY = 'pc6_selective_historical_hydration';
+
+/** How fund-house names are compared: case- and spacing-insensitive, matching 0191's unique index on lower(amc_name). */
+export function normaliseFundHouseName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * The server's fund-house resolver: the codes STORED in ii_amfi_fund_houses
+ * (migration 0191), reached through ii_scheme_master.amc_name. Sends AMFI no
+ * requests -- replacing the per-process probe of all 150 codes that stalled
+ * the second production hydration run.
+ *
+ * Returns null (so the adapter reports not_found and TIGZIG is tried) when the
+ * scheme has no fund-house name or the name has no stored code. A database
+ * error is thrown instead, so it surfaces as a real failure -- never as "no
+ * data", which could otherwise end in a wrong history floor.
+ */
+export function createLiveFundHouseResolver(): FundHouseResolver {
+  const db = createAdminClient();
+  let byName: Map<string, number> | null = null;
+  return async (schemeCode: string) => {
+    if (byName === null) {
+      const { data, error } = await db.from('ii_amfi_fund_houses').select('fund_house_code, amc_name');
+      if (error) throw new Error(`could not load ii_amfi_fund_houses: ${error.message}`);
+      byName = new Map((data ?? []).map((r) => [normaliseFundHouseName(r.amc_name as string), r.fund_house_code as number]));
+    }
+    const { data, error } = await db
+      .from('ii_scheme_master')
+      .select('amc_name')
+      .eq('amfi_scheme_code', schemeCode)
+      .not('amc_name', 'is', null)
+      .limit(1);
+    if (error) throw new Error(`could not read the fund house for scheme ${schemeCode}: ${error.message}`);
+    const name = data?.[0]?.amc_name as string | undefined;
+    return name ? byName.get(normaliseFundHouseName(name)) ?? null : null;
+  };
+}
 
 export function createLiveHydrationDeps(): HydrationDeps {
   const db = createAdminClient();

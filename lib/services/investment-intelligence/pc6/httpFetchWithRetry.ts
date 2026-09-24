@@ -21,6 +21,17 @@ export interface RetryOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Injectable for tests/logging; defaults to a no-op. */
   onRetry?: (info: { attempt: number; maxAttempts: number; delayMs: number; reason: string }) => void;
+  /**
+   * fetchWithRetry only: the time limit for ONE attempt, in ms. A request that
+   * has neither answered nor failed by then is aborted and counted as a failed
+   * attempt. Defaults to DEFAULT_FETCH_TIMEOUT_MS.
+   *
+   * Without it, a connection that hangs stalls the caller until the platform
+   * kills the whole process -- no error, no result, nothing recorded. That is
+   * exactly how the second real production hydration run (NAV 1 D.9,
+   * 2026-09-24) vanished: no history floor and no batch record in 20 minutes.
+   */
+  timeoutMs?: number;
 }
 
 export interface RetryResult<T> {
@@ -31,6 +42,9 @@ export interface RetryResult<T> {
   failures: string[];
   attemptsMade: number;
 }
+
+/** Default per-attempt limit for fetchWithRetry. A 180-day, one-fund-house AMFI response is ~5 MB and took 3-6 s from a workstation. */
+export const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -95,14 +109,26 @@ export async function fetchWithRetry(
   init: RequestInit,
   options: RetryOptions = {}
 ): Promise<RetryResult<{ status: number; bodyText: string }>> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   return withRetry(async () => {
-    const res = await fetch(url, init);
-    const bodyText = await res.text();
-    if (res.ok) return { retryable: false, value: { status: res.status, bodyText } };
-    const blockPage = looksLikeBlockPage(bodyText);
-    return {
-      retryable: true,
-      reason: `HTTP ${res.status}${blockPage ? ' (HTML block page, not a provider error)' : ''}: ${bodyText.slice(0, 200)}`,
-    };
+    // One controller per attempt, covering BOTH the response headers and the
+    // body: a server can answer promptly and then stall mid-body.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      const bodyText = await res.text();
+      if (res.ok) return { retryable: false, value: { status: res.status, bodyText } };
+      const blockPage = looksLikeBlockPage(bodyText);
+      return {
+        retryable: true,
+        reason: `HTTP ${res.status}${blockPage ? ' (HTML block page, not a provider error)' : ''}: ${bodyText.slice(0, 200)}`,
+      };
+    } catch (e) {
+      if (controller.signal.aborted) throw new Error(`timed out after ${timeoutMs} ms`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
   }, options);
 }

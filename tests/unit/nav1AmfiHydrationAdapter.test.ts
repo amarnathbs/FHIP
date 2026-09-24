@@ -14,9 +14,7 @@ import path from 'node:path';
 import { PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import {
   AMFI_MAX_REQUEST_DAYS,
-  AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY,
   AmfiHistoricalAdapter,
-  buildAmfiFundHouseMap,
   splitAmfiWindow,
 } from '@/lib/services/investment-intelligence/pc6/adapters/amfiHistoricalAdapter';
 import { FallbackHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/fallbackHistoricalAdapter';
@@ -149,25 +147,6 @@ describe('splitAmfiWindow', () => {
   });
 });
 
-describe('buildAmfiFundHouseMap', () => {
-  it('skips a thin day (weekend / holiday) and maps every scheme on the next full day to its fund house', async () => {
-    const full = Array.from({ length: AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY }, (_, i) => `${200000 + i};Fund ${i};Regular Plan;Growth Option;;;10.0;22-Sep-2026`);
-    global.fetch = vi.fn().mockImplementation(async (url: string) => {
-      const mf = Number(/&mf=(\d+)/.exec(url)![1]);
-      const thinDay = url.includes('frmdt=23-Sep-2026');
-      if (thinDay) return ok(mf === 1 ? '100001;Liquid;Regular Plan;Growth Option;;;1000;23-Sep-2026' : '');
-      if (mf === 1) return ok(full.slice(0, 2600).join('\n'));
-      if (mf === 89) return ok(full.slice(2600).join('\n'));
-      return ok('');
-    }) as unknown as typeof fetch;
-    const { referenceDate, map } = await buildAmfiFundHouseMap('2026-09-24');
-    expect(referenceDate).toBe('2026-09-22'); // 23 Sep had one liquid fund -- rejected as a reference day
-    expect(map.size).toBe(AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY);
-    expect(map.get('200000')).toBe(1);
-    expect(map.get(String(200000 + AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY - 1))).toBe(89);
-  });
-});
-
 describe('TigzigHistoricalAdapter honours the registry', () => {
   it('refuses before any network call when tigzig_nav_history is disabled', async () => {
     PC6_REFERENCE_SOURCES.tigzig_nav_history.enabled = false;
@@ -258,6 +237,8 @@ describe('hydration stamps each row with the provider that actually supplied it'
 describe('the hydration route is wired to AMFI primary, TIGZIG fallback', () => {
   it('constructs the fallback composite in that order', () => {
     const route = readFileSync(path.resolve(__dirname, '../../app/api/investment-intelligence/cron/pc6-selective-hydration/route.ts'), 'utf8');
-    expect(route).toContain('new FallbackHistoricalAdapter(new AmfiHistoricalAdapter(), new TigzigHistoricalAdapter())');
+    // Normalise whitespace so the check is about the wiring, not the formatting.
+    const flat = route.replace(/\s+/g, ' ');
+    expect(flat).toContain('new FallbackHistoricalAdapter( new AmfiHistoricalAdapter({ resolveFundHouse: createLiveFundHouseResolver() }), new TigzigHistoricalAdapter(), )');
   });
 });
