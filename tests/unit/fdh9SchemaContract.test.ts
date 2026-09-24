@@ -15,38 +15,15 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED, FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED } from '@/lib/financial-data-hub/constants/enums';
-
-// FDH-10 (migration 0096) has since widened this SAME constraint further —
-// 0091 is no longer "the constraint's latest word" (see
-// `fdh10SchemaContract.test.ts`, which now owns that claim for 0096).
-// Mirrors `fdh7SchemaContract.test.ts`'s own `vocabularyAsOfFdh7` precedent
-// exactly: this test still proves 0091 matches everything known UP TO AND
-// INCLUDING FDH-9, filtering out only what a LATER migration added.
-const VOCABULARY_AS_OF_FDH9 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-  (t) =>
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t) &&
-    // AIE unified document fallback (migration 0180) — the four remaining
-    // FDH-3 document types. Subtracted for the same reason every later phase
-    // above is: this test proves 0091 matched the vocabulary AS OF FDH-9, not
-    // today's.
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t) &&
-    !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
-);
+import { FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES, FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED } from '@/lib/financial-data-hub/constants/enums';
+import { auditEventDeltaFor } from './helpers/auditEventChain';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0091_fdh9_payslip_income_intelligence.sql';
-const RAW = fs.readFileSync(path.join(MIGRATION_DIR, FILE), 'utf8');
-const SQL = RAW.split('\n')
-  .map((line) => {
-    const i = line.indexOf('--');
-    return i === -1 ? line : line.slice(0, i);
-  })
-  .join('\n');
+// This file no longer reads the migration text itself. Its one SQL-derived
+// claim is the delta below, which `tests/unit/helpers/auditEventChain.ts`
+// parses from the ledger — so the local copy of the read-and-strip-comments
+// boilerplate every sibling contract test carries would be dead code here.
 
 describe('FDH-9 migration 0091 exists', () => {
   it('the file exists', () => {
@@ -54,14 +31,25 @@ describe('FDH-9 migration 0091 exists', () => {
   });
 });
 
-describe('FDH-9 fdh_document_audit_events.event_type widened constraint matches the TypeScript vocabulary as of FDH-9', () => {
-  it('0091 matches everything known up to and including FDH-9 (FDH-10 added its own further widening in 0096 — see fdh10SchemaContract.test.ts)', () => {
-    const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
-    expect(idx).toBeGreaterThan(-1);
-    const slice = SQL.slice(idx, idx + 2400);
-    const match = slice.match(/in \(([^)]*)\)/);
-    const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(values.sort()).toEqual([...VOCABULARY_AS_OF_FDH9].sort());
+describe('FDH-9 fdh_document_audit_events.event_type widened constraint adds exactly the FDH-9 event types', () => {
+  it('0091 adds exactly FDH9_ADDED to its predecessor, and revokes nothing', () => {
+    // THE CLAIM THIS FILE WAS CREATED FOR, PRESERVED. 0091's own widening had
+    // reached the DB without the TypeScript enum being widened to match — a
+    // real pre-existing gap this test was written to catch (see the header).
+    // The claim then was "0091 == the enum MINUS everything later phases
+    // added", which meant naming every later phase here and editing this file
+    // on every future widening.
+    //
+    // This form is the same claim, stated only about 0091: what 0091 ADDS to
+    // its predecessor is exactly FDH-9's own six event types. It still catches
+    // the original defect — six values in the SQL with no constant to match
+    // fails here — and it catches the case the whole-chain claims in
+    // `fdhAuditEventChain.test.ts` cannot: 0091 OMITTING one of its own six is
+    // still a superset of 0076, still strictly larger, and still leaves the
+    // latest link matching the enum.
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0091');
+    expect(revoked, `0091 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED].sort());
   });
 
   it('the six FDH-9 event types are all present', () => {

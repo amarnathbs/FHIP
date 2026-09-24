@@ -8,17 +8,10 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED,
   FDH_TRANSACTION_APPROVAL_STATUSES,
 } from '@/lib/financial-data-hub/constants/enums';
+import { auditEventDeltaFor } from './helpers/auditEventChain';
 
 const MIGRATION_DIR = path.resolve(__dirname, '../../supabase/migrations');
 const FILE = '0076_fdh7_review_approval_workflow.sql';
@@ -99,40 +92,28 @@ describe('FDH-7 new-column check constraints match their TypeScript vocabularies
     expect(values.sort()).toEqual([...FDH_TRANSACTION_APPROVAL_STATUSES].sort());
   });
 
-  it('fdh_document_audit_events.event_type widened constraint, AS OF MIGRATION 0076, matches the (FDH-3 + R7 + R8 + FDH-5 + FDH-7) subset of the TypeScript vocabulary', () => {
-    // NOTE (FDH-9, 2026-08-26): this constraint has been redefined by a
-    // "drop constraint + add constraint (full cumulative list)" pattern by
-    // every phase that widens it (0058 -> 0064 -> 0068 -> 0071 -> 0076 ->
-    // 0091), so 0076's OWN literal text is necessarily a snapshot of the
-    // vocabulary as it stood at FDH-7, not "the FULL" vocabulary once a later
-    // phase (FDH-9) widens it again — the live DB constraint text has moved
-    // on to 0091's version, which is what
-    // `tests/unit/fdh9SchemaContract.test.ts` (added in the same pass that
-    // found this) checks against `FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES`
-    // instead. This assertion is retargeted at the FDH-3+R7+R8+FDH-5+FDH-7
-    // subset specifically, so it keeps proving 0076 itself was written
-    // correctly, without falsely asserting it is still the constraint's
-    // final word.
-    const idx = SQL.indexOf('add constraint fdh_document_audit_events_event_type_check');
-    expect(idx).toBeGreaterThan(-1);
-    const slice = SQL.slice(idx, idx + 2200);
-    const match = slice.match(/in \(([^)]*)\)/);
-    const values = [...match![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    const vocabularyAsOfFdh7 = FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES.filter(
-      (t) =>
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH9_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH10_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH11_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH12_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_PAYSLIP_ADDED as readonly string[]).includes(t) &&
-        // AIE unified document fallback (migration 0180) — the four remaining
-        // FDH-3 document types, subtracted for the same reason as every later
-        // phase above.
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_UNIFIED_FALLBACK_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED as readonly string[]).includes(t) &&
-        !(FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED as readonly string[]).includes(t),
-    );
-    expect(values.sort()).toEqual([...vocabularyAsOfFdh7].sort());
+  it('fdh_document_audit_events.event_type widened constraint adds exactly FDH-7’s own event types, and revokes nothing', () => {
+    // WHAT THIS REPLACED, AND WHY. This constraint is redefined by a "drop
+    // constraint + add constraint (full cumulative list)" pattern by every
+    // phase that widens it (0058 -> 0064 -> 0068 -> 0071 -> 0076 -> 0091 ->
+    // ...), so 0076's own literal text is a snapshot of the vocabulary as it
+    // stood at FDH-7, not the full vocabulary. This test used to say so by
+    // computing "the enum MINUS everything every later phase added", naming
+    // each later phase by constant. That subtrahend grew with every new
+    // phase — +2 in this file between 2026-09-22 and 2026-09-24 alone — which
+    // is why these six contract tests were the repeated merge-conflict
+    // epicentre.
+    //
+    // The delta form says the same thing about 0076 without naming any other
+    // phase: what it ADDS to its predecessor is exactly FDH-7's own constant.
+    // That keeps the guarantee the whole-chain claims in
+    // `fdhAuditEventChain.test.ts` genuinely do NOT carry — a value MISSING
+    // from 0076 that FDH-7 should have granted is still a superset of 0071,
+    // still strictly larger, and still leaves the latest link matching the
+    // enum, so only this comparison catches it.
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0076');
+    expect(revoked, `0076 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_FDH7_ADDED].sort());
   });
 });
 

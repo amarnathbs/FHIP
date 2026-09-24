@@ -21,7 +21,7 @@
  * `tests/unit/fdh1Isolation.test.ts`.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -36,10 +36,13 @@ import {
 } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 import {
   FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES,
-  FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
+import {
+  auditEventDeltaFor,
+  auditEventTypesIn,
+  predecessorAuditEventMigration,
+} from './helpers/auditEventChain';
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf8');
@@ -50,120 +53,12 @@ const SERVICE = read('lib/financial-data-hub/services/liabilityStatementProcessi
 const MIGRATION_0186 = read('supabase/migrations/0186_fdh10_liability_statement_user_correction.sql');
 const MIGRATION_0096 = read('supabase/migrations/0096_fdh10_credit_cards_loans_intelligence.sql');
 
-/**
- * The migration whose event_type constraint 0186 actually replaces.
- *
- * Derived, never hardcoded — the same helper, for the same reason, as
- * `tests/unit/fdh9PayslipCorrection.test.ts`. 0186 was first drafted against a
- * copy of 0185 that predated 0180 (the unified AI-fallback widening, which
- * landed on `main` in between and added 28 values). Because this constraint is
- * DROPped and recreated, a stale hardcoded predecessor would have let 0186
- * silently REVOKE all 28 while this suite still passed. That draft really was
- * written; resolving the predecessor from the ledger is what makes the next
- * such collision fail loudly here instead of shipping.
- */
-function predecessorAuditEventMigration(selfNumber: number): { name: string; sql: string } {
-  const chain = auditEventMigrationChain().filter((m) => Number(m.name.slice(0, 4)) < selfNumber);
-  const previous = chain[chain.length - 1];
-  if (!previous) throw new Error('no prior migration defines fdh_document_audit_events_event_type_check');
-  return previous;
-}
-
-/** Every migration filename in the ledger, oldest first. */
-function migrationFilenames(): string[] {
-  return readdirSync(path.join(ROOT, 'supabase/migrations'))
-    .filter((name) => /^\d{4}_.*\.sql$/.test(name))
-    .sort();
-}
-
-/**
- * Link 0 of the chain: the migration that FIRST constrains `event_type`.
- *
- * WHY THIS NEEDS ITS OWN LOOKUP. 0058 creates the table with an UNNAMED,
- * column-level `event_type text not null check (event_type in (...))`. Postgres
- * auto-names a column check `<table>_<column>_check`, which is literally
- * `fdh_document_audit_events_event_type_check` — the same constraint object
- * every later migration DROPs and recreates by that name. So 0058 is genuinely
- * the first link, but it can never be found by searching for the name, because
- * it never writes it.
- *
- * The proof that the implicit name really does match is NOT that 0064's
- * `drop constraint if exists` succeeds — `if exists` passes silently whether or
- * not it matched anything, so DDL exit status cannot establish constraint
- * identity. The proof is runtime: two CHECKs on the same column are ANDed, so
- * had that drop missed, the effective vocabulary would be the INTERSECTION of
- * 0058's 9 values and 0064's 19 — i.e. still 9 — and every one of R7's ten new
- * event types would be rejected in production. They are not.
- *
- * Starting the chain at 0064 instead (an earlier version of this file did)
- * makes 0064 look like a 19-value base that needs TWO named constants to
- * explain, when it is really a +10 delta that is exactly `R7_ADDED`.
- */
-function auditEventBaseMigration(): { name: string; values: string[] } {
-  const name = migrationFilenames().find((n) => n.startsWith('0058_'));
-  if (!name) throw new Error('the base migration 0058 is missing from the ledger');
-  const sql = readFileSync(path.join(ROOT, 'supabase/migrations', name), 'utf8');
-  const table = sql.slice(sql.indexOf('create table fdh_document_audit_events ('));
-  const inline = /event_type text not null check \(event_type in \(([\s\S]*?)\)\),/.exec(table);
-  if (!inline) throw new Error(`${name} no longer constrains event_type inline`);
-  return { name, values: [...inline[1].matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]) };
-}
-
-/**
- * Every migration that RE-DEFINES the event_type constraint by name, oldest
- * first, identified by PARSING each one's value list. Excludes the base, which
- * has no name to match — see `auditEventBaseMigration`.
- */
-function namedAuditEventMigrations(): { name: string; sql: string }[] {
-  const dir = path.join(ROOT, 'supabase/migrations');
-  return migrationFilenames()
-    .map((name) => ({ name, sql: readFileSync(path.join(dir, name), 'utf8') }))
-    .filter((m) => {
-      try {
-        return auditEventTypesIn(m.sql).length > 0;
-      } catch {
-        return false;
-      }
-    });
-}
-
-/** The WHOLE chain, base first: what the constraint has held over time. */
-function auditEventChainValues(): { name: string; values: string[] }[] {
-  const base = auditEventBaseMigration();
-  return [
-    base,
-    ...namedAuditEventMigrations().map((m) => ({ name: m.name, values: auditEventTypesIn(m.sql) })),
-  ];
-}
-
-/** Kept for the callers that only care about the NAMED links. */
-function auditEventMigrationChain(): { name: string; sql: string }[] {
-  return namedAuditEventMigrations();
-}
-
-/**
- * The same set, found a DIFFERENT way: a plain substring search for the
- * `add constraint` statement, with no parsing at all.
- *
- * Deliberately independent of `auditEventMigrationChain`. The chain claims
- * below compare a parsed list against the TypeScript enum; if the traversal
- * itself were wrong — a truncated list, or the wrong last element — a
- * `toEqual` against one end of it could still pass. Two derivations that share
- * no code cannot both be wrong in the same direction by accident.
- */
-function auditEventMigrationNamesBySubstring(): string[] {
-  const dir = path.join(ROOT, 'supabase/migrations');
-  return migrationFilenames().filter((name) =>
-    readFileSync(path.join(dir, name), 'utf8')
-      .includes('add constraint fdh_document_audit_events_event_type_check'));
-}
-
-/** Every value inside a `check (event_type in ( ... ))` block. */
-function auditEventTypesIn(sql: string): string[] {
-  const block = /fdh_document_audit_events_event_type_check\s*\n?\s*check \(event_type in \(([\s\S]*?)\)\);/.exec(sql);
-  if (!block) throw new Error('no event_type check constraint found');
-  return [...block[1].matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
-}
+// The chain helpers this file used to define privately now live in
+// `tests/unit/helpers/auditEventChain.ts`, shared with every phase's schema
+// contract test and with `fdh9PayslipCorrection.test.ts`. The reasoning that
+// was in their doc comments — why the chain starts at 0058 and not 0064, why
+// the constraint NAME is the only safe anchor, and why two independent
+// derivations of the named set are kept — moved with them.
 
 /** Every `new.<col> is distinct from old.<col>` guard in the liability
  * statements authoritative-write trigger. */
@@ -470,107 +365,27 @@ describe('migration 0186 is additive against what it replaces', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The repo-wide invariant, asserted ONCE and pointed at the ledger
+// What migration 0186 itself does to the ledger
 // ---------------------------------------------------------------------------
 //
-// WHY THIS BLOCK IS NOT SIX MORE SUBTRACTION CLAUSES. Six
-// `*SchemaContract.test.ts` files each prove their own migration matches "the
-// enum minus everything later phases added", so every new widening costs one
-// edit per file — and both correction migrations have now paid that tax. Worse,
-// the same shape was about to spread into the correction tests themselves: an
-// "exact match, minus LIABILITY_CORRECTION_ADDED" assertion in
-// `fdh9PayslipCorrection.test.ts` would need another subtrahend for expenses,
-// another for insurance, until it asserts nothing but which migrations exist.
-//
-// The claims below are the durable form. They are derived entirely from the
-// migration ledger, so a new widening needs NO edit here: add the migration and
-// the enum value, and these keep meaning exactly what they mean today. That
-// claim is load-bearing, so it is kept literally true — an earlier draft of
-// this block pinned `latest.name` to '0186_...sql', which would have failed on
-// 0187 and sent the next reader to edit a hardcoded filename: the exact thing
-// this block exists to remove. The anti-vacuity weight that pin was carrying is
-// now carried by a second, independent derivation instead. The only numbers
-// here are floors, which never need raising.
-describe('the fdh_document_audit_events event_type chain, as a whole', () => {
-  it('the traversal finds every constraint-defining migration, and only those', () => {
-    // The anti-vacuity guard for everything below. Two independent
-    // derivations — parsing each value list, and a plain substring search for
-    // the `add constraint` statement — must agree exactly. A traversal that
-    // silently truncated, or picked up a migration that only MENTIONS the
-    // constraint in a comment, fails here rather than quietly weakening the
-    // claims that consume it.
-    const parsed = namedAuditEventMigrations().map((m) => m.name);
-    expect(parsed).toEqual(auditEventMigrationNamesBySubstring());
-    // A floor, not a pin: this only ever grows.
-    expect(parsed.length).toBeGreaterThanOrEqual(12);
-    // ...and the ASYMMETRY is asserted rather than left implicit: the base is
-    // deliberately absent from both NAMED derivations, because it never writes
-    // the constraint name. A future reader who finds 0058 missing here should
-    // find this line before concluding the traversal is broken.
-    expect(parsed).not.toContain(auditEventBaseMigration().name);
-  });
+// The CHAIN-WIDE claims that used to sit here — the two independent
+// traversals agreeing, the base being 0058, the latest link equalling the
+// enum, every link a strict superset, no revocation anywhere in history, and
+// every link's delta equalling its own phase constants — were never specific
+// to the liability phase. They now live in `tests/unit/fdhAuditEventChain
+// .test.ts`, so the next correction migration inherits them instead of
+// restating them. What stays here is 0186.
 
-  it('the LATEST constraint-defining migration matches the TypeScript enum exactly', () => {
-    // The "nothing in the enum is unreachable in SQL, and nothing in SQL is
-    // missing from the enum" guarantee, which the per-phase subtraction form
-    // slowly loses. Whichever migration is newest owns this claim, derived
-    // from the ledger — NO filename is pinned here, so the next widening needs
-    // no edit to this file.
-    const chain = auditEventMigrationChain();
-    const latest = chain[chain.length - 1];
-    // ...and "latest" really is the highest-numbered one, established without
-    // relying on the traversal that produced it.
-    const highest = auditEventMigrationNamesBySubstring().slice(-1)[0];
-    expect(latest.name).toBe(highest);
-    expect([...auditEventTypesIn(latest.sql)].sort())
-      .toEqual([...FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES].sort());
-  });
-
-  it('the base is 0058, and its values are exactly the BASE TypeScript constant', () => {
-    // 0058 never writes the constraint NAME (it is an unnamed inline column
-    // check that Postgres names implicitly), so it is located separately and
-    // is easy to leave out of the chain by accident — which makes 0064 look
-    // like a 19-value base needing two named constants to explain.
-    const base = auditEventBaseMigration();
-    expect(base.name).toMatch(/^0058_/);
-    expect([...base.values].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES].sort());
-  });
-
-  it('the first NAMED migration adds exactly R7_ADDED to the base, revoking nothing', () => {
-    // The base's payoff, and a worked example of the delta property the whole
-    // chain has: every link's addition is exactly one phase's own named
-    // constant(s). Asserted here for the one link where getting the base wrong
-    // silently changes the answer from "+10, one constant" to "19, two".
-    const chain = auditEventChainValues();
-    const [base, first] = chain;
-    expect(first.name).toMatch(/^0064_/);
-    const added = first.values.filter((v) => !base.values.includes(v));
-    const revoked = base.values.filter((v) => !first.values.includes(v));
-    expect(revoked).toEqual([]);
-    expect([...added].sort()).toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_R7_ADDED].sort());
-  });
-
-  it('every link in the chain is a strict superset of the one before it', () => {
-    // This is the assertion that would have caught 0185-drafted-against-0173
-    // at any point in the two days it sat unmerged, and it will catch the next
-    // one without being edited. Runs over the WHOLE chain, base included, so
-    // the 0058 -> 0064 link is covered like every other.
-    const chain = auditEventChainValues();
-    expect(chain.length).toBeGreaterThanOrEqual(13);
-    for (let i = 1; i < chain.length; i += 1) {
-      const { values: before } = chain[i - 1];
-      const { values: after } = chain[i];
-      for (const value of before) {
-        expect(after, `${chain[i].name} revokes ${value}, which ${chain[i - 1].name} grants`)
-          .toContain(value);
-      }
-      expect(after.length, `${chain[i].name} widens nothing`).toBeGreaterThan(before.length);
-    }
-  });
-
-  it('no two migrations in the chain claim the same version number', () => {
-    const numbers = auditEventMigrationChain().map((m) => m.name.slice(0, 4));
-    expect(new Set(numbers).size).toBe(numbers.length);
+describe('migration 0186 — its own contribution to the event_type ledger', () => {
+  it('adds exactly LIABILITY_CORRECTION_ADDED to its predecessor, revoking nothing', () => {
+    // The delta claim in the form every phase contract test now takes. It
+    // replaces an "exact match against the enum, minus
+    // LIABILITY_CORRECTION_ADDED" assertion that was about to grow a
+    // subtrahend for every future document type.
+    const { added, revoked, predecessorName } = auditEventDeltaFor('0186');
+    expect(revoked, `0186 revokes values granted by ${predecessorName}`).toEqual([]);
+    expect([...added].sort())
+      .toEqual([...FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED].sort());
   });
 
   it('its authoritative-write trigger protects a STRICT SUPERSET of migration 0096’s columns', () => {
