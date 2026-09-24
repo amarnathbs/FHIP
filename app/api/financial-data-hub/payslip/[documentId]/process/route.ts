@@ -5,6 +5,7 @@ import {
   processPayslipDocument,
   PayslipProcessingError,
   PAYSLIP_FAILURE_MESSAGES,
+  toPayslipAiDraftForReview,
 } from '@/lib/financial-data-hub/services/payslipProcessingService';
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
@@ -47,7 +48,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       // DRAFT for the caller to show the user for review/correction, then
       // submit to POST .../ai-fallback/confirm. See
       // docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md.
-      ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // AIE-1 final completion (2026-09-25), found by the live DEV journey:
+      // this used to return the whole internal `PayrollExtraction` (with
+      // `components`, `parserName`, `warnings`, `extractionConfidence`...),
+      // the panel posts the draft back verbatim, and the confirm route's
+      // `.strict()` schema rightly rejects those keys -- so EVERY AI-fallback
+      // confirmation failed with 422. Only the reviewable fields go out now,
+      // exactly the confirm route's own vocabulary.
+      ai_fallback_draft: result.aiFallbackDraft ? toPayslipAiDraftForReview(result.aiFallbackDraft) : null,
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {

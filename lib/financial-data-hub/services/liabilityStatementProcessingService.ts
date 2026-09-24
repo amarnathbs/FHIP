@@ -28,6 +28,8 @@
  * effect from a file that never became valid evidence).
  */
 
+import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
@@ -327,6 +329,11 @@ async function resolveLiabilityStatementDocument(
 
   if (!['queued', 'uploaded'].includes(document.processing_status)) {
     throw new LiabilityStatementProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
+  }
+
+  // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new LiabilityStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
   }
 
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
@@ -631,6 +638,7 @@ export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAi
 export async function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
   const gate = evaluateAiFallbackGate({
     userId,
+    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieLiabilityAiFallbackEnabled(),
     extractedText,
   });

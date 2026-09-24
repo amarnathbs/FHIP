@@ -62,10 +62,18 @@ const MIN_EXTRACTED_TEXT_CHARS = 40;
  * caller cannot accidentally send the raw text to the provider, because a
  * successful result does not contain it.
  */
-export function evaluateAiFallbackGate(params: { userId: string; adapterEnabled: boolean; extractedText: string }): AieFallbackGateResult {
+export function evaluateAiFallbackGate(params: {
+  userId: string;
+  /** AIE-1 final completion (2026-09-25): the caller's email, so an
+   * email-only pilot allowlist can admit (see `lib/aie/pilotCohortEmail.ts`).
+   * Omitted or null can only deny, never admit. */
+  cohortEmail?: string | null;
+  adapterEnabled: boolean;
+  extractedText: string;
+}): AieFallbackGateResult {
   if (!params.adapterEnabled) return { ok: false, reason: 'adapter_disabled' };
   if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
-  if (!isUserInAiePilotCohort({ userId: params.userId })) return { ok: false, reason: 'cohort_denied' };
+  if (!isUserInAiePilotCohort({ userId: params.userId, email: params.cohortEmail })) return { ok: false, reason: 'cohort_denied' };
 
   if (params.extractedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
     return { ok: false, reason: 'no_extracted_text' };

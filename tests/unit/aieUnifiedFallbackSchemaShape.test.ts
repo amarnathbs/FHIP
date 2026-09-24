@@ -133,6 +133,13 @@ const RETIREMENT_PAYLOAD = {
  */
 function validateAgainstJsonSchema(schema: Record<string, unknown>, value: unknown, path = '$'): string[] {
   const errors: string[] = [];
+  // AIE-1 final completion (2026-09-25): money fields are an `anyOf` of two
+  // exact shapes (see `aieMoneyFieldJsonSchema`). A value is valid when it
+  // satisfies at least one branch -- the same rule OpenAI strict mode applies.
+  if (Array.isArray(schema.anyOf)) {
+    const branchErrors = (schema.anyOf as Record<string, unknown>[]).map((b) => validateAgainstJsonSchema(b, value, path));
+    return branchErrors.some((e) => e.length === 0) ? [] : [`${path}: matches no anyOf branch (${branchErrors.map((e) => e[0]).join(' | ')})`];
+  }
   const type = schema.type;
 
   const typeAdmits = (t: string) => (Array.isArray(type) ? (type as string[]).includes(t) : type === t);

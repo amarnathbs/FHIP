@@ -40,6 +40,8 @@
  * onto the one row already inserted from the payslip itself.
  */
 
+import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { statementUploadsRepository, documentAuditEventsRepository } from '../repositories';
@@ -80,7 +82,14 @@ import type { FdhErrorCode } from '../constants/enums';
 // adapters that use it today. See
 // `lib/aie/adapters/payslip/featureFlags.ts`'s header and
 // `docs/aie-programme/AIE_UNIFIED_DOCUMENT_FALLBACK_DESIGN_2026_09_22.md`.
-import { isAiePayslipAiFallbackEnabled, requestPayslipAiExtraction, mapPayslipFactsToExtraction } from '@/lib/aie/adapters/payslip';
+import {
+  isAiePayslipAiFallbackEnabled,
+  requestPayslipAiExtraction,
+  mapPayslipFactsToExtraction,
+  AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME,
+  AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
+} from '@/lib/aie/adapters/payslip';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
 import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
@@ -277,6 +286,13 @@ export async function processPayslipDocument(userId: string, documentId: string,
     throw new PayslipProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
   }
 
+  // AIE-1 final completion (2026-09-25): `failed` is retryable, but never for a
+  // file the malware gate blocked or never scanned. See
+  // `checkFdhDocumentMalwareAdmission`'s header for the defect this closes.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new PayslipProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
   // --- M12C §10 (`M2-OPEN-8`) — password brute-force limiter ----------------
   //
   // This endpoint accepted `password` (route schema `z.string().max(200)
@@ -348,7 +364,20 @@ export async function processPayslipDocument(userId: string, documentId: string,
 
     const text = extraction.pages.join('\n');
     const declaredCountry = document.country_code === 'AU' || document.country_code === 'IN' ? document.country_code : undefined;
-    const parsed = parsePayslipText(text, { declaredCountry });
+    const rawParsed = parsePayslipText(text, { declaredCountry });
+    // AIE-1 final completion (2026-09-25). DEFECT: `parsePayslipText` can only
+    // fail with `not_a_payslip` or `country_not_identified`, and the second is
+    // impossible here because the upload always declares AU/IN. So a payslip
+    // the parser could not read AT ALL came back as a "successful" extraction
+    // with neither gross nor net pay, was persisted as empty payroll evidence,
+    // and the AI fallback (eligible only for `layout_unsupported` /
+    // `country_not_identified`) could never run -- confirmed by probe. An
+    // extraction with no gross AND no net is now what it is: an unsupported
+    // layout. A partial read (gross or net present) is unchanged.
+    const parsed: typeof rawParsed | { error: 'layout_unsupported' } =
+      !('error' in rawParsed) && rawParsed.grossPay === undefined && rawParsed.netPay === undefined
+        ? { error: 'layout_unsupported' }
+        : rawParsed;
 
     if ('error' in parsed) {
       if (AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(parsed.error)) {
@@ -402,6 +431,42 @@ export async function processPayslipDocument(userId: string, documentId: string,
   }
 }
 
+/**
+ * AIE-1 final completion (2026-09-25): the reviewable projection of an
+ * AI-fallback draft -- exactly the keys the confirm route accepts
+ * (`ai-fallback/confirm/route.ts`'s strict body schema). Internal extraction
+ * fields (components, parser identity, warnings, confidence) never leave the
+ * server, and a draft posted back verbatim by the review UI is always valid.
+ */
+export const PAYSLIP_AI_DRAFT_REVIEW_KEYS = [
+  'country', 'currencyCode', 'employerName', 'payPeriodStart', 'payPeriodEnd', 'paymentDate', 'payFrequency',
+  'grossPay', 'basePay', 'overtimePay', 'bonusPay', 'commissionPay', 'allowancesTotal', 'reimbursementsTotal',
+  'otherEarnings', 'taxWithheld', 'employeeDeductionsTotal', 'salarySacrifice', 'professionalTax',
+  'employerRetirementContribution', 'employeeRetirementContribution', 'employerNpsContribution',
+  'employeeNpsContribution', 'netPay',
+] as const;
+
+export function toPayslipAiDraftForReview(extraction: PayrollExtraction): Record<string, unknown> {
+  const source = extraction as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of PAYSLIP_AI_DRAFT_REVIEW_KEYS) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
+/** Identifiers and counts only (auditLog.ts's own metadata rule). */
+function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestIds: string[]; inputTokens?: number; outputTokens?: number; model: string } | undefined): Record<string, unknown> {
+  if (!evidence) return {};
+  return {
+    ai_model: evidence.model,
+    ai_cost_key: evidence.idempotencyKey,
+    ai_provider_request_ids: evidence.providerRequestIds.slice(0, 5),
+    ai_input_tokens: evidence.inputTokens ?? null,
+    ai_output_tokens: evidence.outputTokens ?? null,
+  };
+}
+
 export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction } | { ok: false; reason: string };
 
 /**
@@ -428,7 +493,9 @@ export async function attemptAiPayslipFallback(
 ): Promise<AiPayslipFallbackOutcome> {
   if (!isAiePayslipAiFallbackEnabled()) return { ok: false, reason: 'adapter_disabled' };
   if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
-  if (!isUserInAiePilotCohort({ userId })) return { ok: false, reason: 'cohort_denied' };
+  // AIE-1 final completion (2026-09-25): email resolved so an email-only
+  // allowlist (production's configuration) can admit; see pilotCohortEmail.ts.
+  if (!isUserInAiePilotCohort({ userId, email: await resolveEmailForAiePilotCohort(userId) })) return { ok: false, reason: 'cohort_denied' };
 
   let masking: ReturnType<typeof maskText>;
   try {
@@ -444,7 +511,7 @@ export async function attemptAiPayslipFallback(
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_attempted', actorType: 'system' });
   const result = await requestPayslipAiExtraction({ maskedText: masking.maskedText, requestId: documentId });
   if (result.outcome !== 'success') {
-    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome } });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome, ...aiEvidenceMetadata(result.evidence) } });
     return { ok: false, reason: result.outcome };
   }
 
@@ -455,7 +522,32 @@ export async function attemptAiPayslipFallback(
     return { ok: false, reason: 'insufficient_fields' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_draft_ready', actorType: 'system' });
+  // AIE-1 final completion (2026-09-25): the validated draft is persisted
+  // BEFORE the user sees it (migration 0197), so review/confirmation never
+  // depends on the PDF still existing and a confirmation is only accepted
+  // against a draft the server actually issued. Without 0197 applied the
+  // pre-existing behaviour (draft in the response only) is kept.
+  const saved = await saveAiFallbackDraft({
+    userId,
+    documentId,
+    documentType: 'payslip',
+    schemaName: AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME,
+    schemaVersion: AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
+    payload: extraction,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
+  });
+  if (!saved.persisted && saved.reason === 'write_failed') {
+    console.error(`payslip AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
+    return { ok: false, reason: 'draft_not_persisted' };
+  }
+
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'payslip_ai_fallback_draft_ready',
+    actorType: 'system',
+    metadata: { ...aiEvidenceMetadata(result.evidence), draft_persisted: saved.persisted },
+  });
   return { ok: true, extraction };
 }
 
@@ -485,8 +577,23 @@ export async function confirmAiPayslipFallback(userId: string, documentId: strin
   if (document.processing_status !== 'processing') {
     throw new PayslipProcessingError('invalid_state', 'This payslip has no AI-extracted draft awaiting confirmation.');
   }
+
+  // AIE-1 final completion (2026-09-25): claim the durable draft the server
+  // issued (migration 0197). One conditional update: a replayed or concurrent
+  // confirmation finds nothing pending and writes nothing. If 0197 is not
+  // applied, the pre-existing `processing`-status gate above is the guard.
+  const claim = await claimPendingAiFallbackDraft({ userId, documentId, confirmedPayload: extraction });
+  if (!claim.claimed && claim.reason !== 'table_missing') {
+    throw new PayslipProcessingError('invalid_state', 'This payslip has no AI-extracted draft awaiting confirmation.');
+  }
+
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_confirmed', actorType: 'user' });
-  return persistPayrollEvidence(userId, documentId, document, extraction);
+  try {
+    return await persistPayrollEvidence(userId, documentId, document, extraction);
+  } catch (e) {
+    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    throw e;
+  }
 }
 
 export async function persistPayrollEvidence(

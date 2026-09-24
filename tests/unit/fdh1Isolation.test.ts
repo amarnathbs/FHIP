@@ -707,6 +707,16 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // explicitly re-scoped by BOTH `.eq('id', ...)` AND `.eq('user_id', ...)`
       // (plus the expected `processing_status`) regardless of RLS bypass.
       path.join(FDH_LIB, 'services', 'malwareScanGate.ts'),
+      // AIE-1 final production completion (2026-09-25) adds an ELEVENTH:
+      // aiFallbackDrafts.ts (migration 0197, `fdh_ai_fallback_drafts`). The
+      // table deliberately has NO write policy for the authenticated role --
+      // a user must never be able to mint or edit the validated AI draft the
+      // confirm step is checked against -- so the server is the only writer.
+      // Same discipline as every file above: every write is scoped by BOTH
+      // the document id AND `.eq('user_id', userId)` and verified by the rows
+      // it returns; the only cross-user read (pending-draft ids for the purge
+      // backstop) returns ids only.
+      path.join(FDH_LIB, 'services', 'aiFallbackDrafts.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

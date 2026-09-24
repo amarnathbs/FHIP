@@ -97,7 +97,7 @@ function request(maskedUserPrompt: string, idempotencyKey: string) {
     maskedUserPrompt,
     schemaName: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_NAME,
     schemaVersion: AIE_GENERIC_FIELD_COMPLETION_SCHEMA_VERSION,
-    model: 'test-model',
+    model: 'gpt-4o-mini',
     maxOutputTokens: 256,
     requestedFields: ['scheme_name'],
     idempotencyKey,

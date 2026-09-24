@@ -1,6 +1,11 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
+import {
+  ensureIiRealScanAdmissible,
+  II_SCAN_PENDING_MESSAGE,
+  II_SCAN_BLOCKED_MESSAGE,
+} from '@/lib/services/investment-intelligence/realScanAdmission';
 
 // A real-world CAMS consolidated statement with many schemes/transactions
 // (found live 2026-09-07: a 17-scheme, ~1000-row statement) can take longer
@@ -43,6 +48,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const bodyRaw = await req.json().catch(() => ({}));
   const parsed = processBodySchema.safeParse(bodyRaw);
   if (!parsed.success) return badValidation(parsed.error, 422);
+
+  // AIE-1 final completion (2026-09-25): nothing parses these bytes until the
+  // real malware scan has cleared them (a no-op while the scan is switched
+  // off). 409 is retryable -- the client polls; 422 is final.
+  const scan = await ensureIiRealScanAdmissible(user.id, id);
+  if (!scan.admitted) {
+    if (scan.reason === 'not_found') return bad('Source document not found.', 404);
+    if (scan.reason === 'pending') return bad(II_SCAN_PENDING_MESSAGE, 409, 'malware_scan_pending');
+    return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
+  }
 
   const result = await processSourceDocument({
     userId: user.id,

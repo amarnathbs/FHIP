@@ -28,6 +28,7 @@ import '@/lib/serverOnly';
 import type { AieAiProvider } from './types';
 import { MockAieProvider, type MockAieProviderScript } from './mockAieProvider';
 import { OpenAiAieProvider } from './openaiAieProvider';
+import { ProviderError } from '@/lib/ai/providers/types';
 import { getAieAiProviderKind } from '../config';
 
 /** The mock provider's default DEV/test script — deterministic, no
@@ -42,10 +43,40 @@ const DEFAULT_MOCK_SCRIPT: MockAieProviderScript = {
   respond: () => JSON.stringify({ fields: [] }),
 };
 
+/**
+ * AIE-1 final production completion (2026-09-25): the provider used when
+ * `AIE_AI_PROVIDER` is not set outside the test runner. It never calls
+ * anything and never fabricates output: every call fails as
+ * PROVIDER_UNAVAILABLE, which the gateway maps to a typed provider_error
+ * outcome (the reservation is settled at zero, nothing was sent). This
+ * replaces the old silent mock default that production was running on.
+ * Constructed lazily-failing rather than throwing at module load, so a route
+ * module that imports a gateway still loads and its deterministic
+ * (non-AI) path keeps working.
+ */
+class UnconfiguredAieProvider implements AieAiProvider {
+  readonly providerName = 'unconfigured';
+  async generateStructured(): Promise<never> {
+    throw new ProviderError(
+      'PROVIDER_UNAVAILABLE',
+      'AIE_AI_PROVIDER is not configured in this environment; no AI provider call was made.',
+    );
+  }
+  async validateProviderHealth() {
+    return { healthy: false, checkedAt: new Date().toISOString(), detail: 'AIE_AI_PROVIDER not configured' };
+  }
+  estimateCost(inputTokens: number, outputTokens: number) {
+    return { inputTokens, outputTokens, estimatedCostUsd: 0 };
+  }
+}
+
 export function createAieAiProvider(mockScript: MockAieProviderScript = DEFAULT_MOCK_SCRIPT): AieAiProvider {
   const kind = getAieAiProviderKind();
   if (kind === 'mock') {
     return new MockAieProvider(mockScript);
+  }
+  if (kind === 'unconfigured') {
+    return new UnconfiguredAieProvider();
   }
   // kind === 'openai' — checked HERE, synchronously, at construction time
   // (route module load), not deferred to the first real user upload. This

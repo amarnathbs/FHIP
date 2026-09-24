@@ -16,6 +16,7 @@
 
 import {
   aieScalarFieldJsonSchema,
+  aieMoneyFieldJsonSchema,
   aieLineItemArrayJsonSchema,
   aieDocumentFactsJsonSchema,
   aieNullableString,
@@ -50,7 +51,7 @@ export const RETIREMENT_FACTS_OPENAI_JSON_SCHEMA: Record<string, unknown> = aieD
     statementDate: aieScalarFieldJsonSchema(),
     statementStartDate: aieScalarFieldJsonSchema(),
     statementEndDate: aieScalarFieldJsonSchema(),
-    ...Object.fromEntries(SCALAR_MONEY_KEYS.map((k) => [k, aieScalarFieldJsonSchema()])),
+    ...Object.fromEntries(SCALAR_MONEY_KEYS.map((k) => [k, aieMoneyFieldJsonSchema()])),
     activities: aieLineItemArrayJsonSchema({
       maxItems: AIE_RETIREMENT_MAX_ACTIVITIES,
       required: ['activityType', 'amount', 'activityDate', 'descriptionRaw', 'employerNameRaw', 'isSummaryTotal', 'isYearToDate'],

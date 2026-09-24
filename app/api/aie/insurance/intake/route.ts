@@ -1,7 +1,8 @@
+import { isUserIdInAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { bad, ok } from '@/lib/api';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
@@ -93,7 +94,9 @@ export async function POST(req: Request) {
   // AIE_PILOT_COHORT_EMAILS should list this route's callers by user id
   // instead, or this route's own capability layer can be extended to
   // surface email if that becomes a real operational need.
-  if (!isUserInAiePilotCohort({ userId: user.id })) {
+  // AIE-1 final completion (2026-09-25): the email is now resolved server-side
+  // (lib/aie/pilotCohortEmail.ts), so an email-only allowlist admits correctly.
+  if (!(await isUserIdInAiePilotCohort(user.id))) {
     return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
   }
 
