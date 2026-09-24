@@ -1,6 +1,6 @@
 import { ok, bad } from '@/lib/api';
 import { runSelectiveHistoricalHydration } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJob';
-import { createLiveHydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJobLive';
+import { createLiveFundHouseResolver, createLiveHydrationDeps } from '@/lib/services/investment-intelligence/pc6/selectiveHistoricalHydrationJobLive';
 import { TigzigHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/tigzigHistoricalAdapter';
 import { AmfiHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/amfiHistoricalAdapter';
 import { FallbackHistoricalAdapter } from '@/lib/services/investment-intelligence/pc6/adapters/fallbackHistoricalAdapter';
@@ -62,7 +62,11 @@ export async function POST(req: Request) {
     const result = await runSelectiveHistoricalHydration({
       changeoverDate,
       // NAV 1 Stage D (D.3, PO 2026-09-24): AMFI primary, TIGZIG fallback.
-      adapter: new FallbackHistoricalAdapter(new AmfiHistoricalAdapter(), new TigzigHistoricalAdapter()),
+      // Fund-house codes come from the stored table (0191); AMFI is never probed for them.
+      adapter: new FallbackHistoricalAdapter(
+        new AmfiHistoricalAdapter({ resolveFundHouse: createLiveFundHouseResolver() }),
+        new TigzigHistoricalAdapter(),
+      ),
       deps: createLiveHydrationDeps(),
       dryRun: body.dryRun === true,
       maxInstruments: typeof body.maxInstruments === 'number' ? body.maxInstruments : undefined,

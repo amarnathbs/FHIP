@@ -72,8 +72,25 @@ export interface HydrationDeps {
   /** Existing (instrument, date) rows in the fetch window, for decideUpsert. */
   fetchExistingObservations(instrumentId: string, fromDate: string, toDate: string): Promise<Map<string, ExistingObservation>>;
   writeRows(rows: HydrationWriteRow[]): Promise<{ inserted: number; error: string | null }>;
-  /** Returns the insert error rather than throwing: a lost batch record must be visible, but must not undo the run's work. */
-  recordBatch(summary: HydrationJobResult): Promise<{ error: string | null }>;
+  /**
+   * NAV 1 Stage D (0192): claim the run before doing any work. Reconciles this
+   * job's own abandoned 'running' batches, refuses while one is still genuinely
+   * in flight (returns `blocked` with the reason), and otherwise opens a
+   * 'running' batch and returns its id. A failure to open is returned as
+   * `error`; the run then proceeds and is logged when it finishes.
+   */
+  claimBatch(startedAt: string): Promise<{ batchId: string | null; blocked: string | null; error: string | null }>;
+  /**
+   * Record progress on the open batch after each instrument, so a run the
+   * platform kills still shows how far it got. Best effort: never fails a run.
+   */
+  updateBatchProgress(batchId: string, perInstrument: PerInstrumentOutcome[]): Promise<void>;
+  /**
+   * Close the run's batch (or, with no open batch, insert it). Returns the
+   * error rather than throwing: a lost batch record must be visible, but must
+   * not undo the run's work.
+   */
+  recordBatch(summary: HydrationJobResult, batchId: string | null): Promise<{ error: string | null }>;
   /** NAV 1 Stage D (0190): the confirmed earliest date with NAV data for this instrument, or null if none is recorded. */
   fetchHistoryFloor(instrumentId: string): Promise<string | null>;
   /**
@@ -118,7 +135,7 @@ export interface PerInstrumentOutcome {
 }
 
 export interface HydrationJobResult {
-  status: 'succeeded' | 'skipped_kill_switch' | 'partial';
+  status: 'succeeded' | 'skipped_kill_switch' | 'skipped_already_running' | 'partial';
   instrumentsConsidered: number;
   instrumentsNeedingHydration: number;
   instrumentsAlreadyCovered: number;
@@ -156,14 +173,29 @@ export const HYDRATION_NOTHING_SUCCEEDED_ERROR_CODE = 'HYDRATION_NOTHING_SUCCEED
  *
  * AMFI is the primary source since D.3; the provider behind each ROW is in
  * that row's data_version, which is the authoritative record.
+ *
+ * batch_kind 'nav_hydration' (0192), not 'nav_history': the PC6 ingest job
+ * scopes its own "still running?" checks by source_key + batch_kind, and
+ * 'amfi' + 'nav_history' is exactly its AMFI history backfill scope. Sharing
+ * it would let each job block, or stale-reconcile, the other's live run.
  */
+export const HYDRATION_BATCH_KIND = 'nav_hydration' as const;
+
+/**
+ * A 'running' hydration batch older than this is treated as abandoned (the
+ * platform killed the process) and reconciled as failed; a younger one blocks
+ * a new run. Generous on purpose: with per-request timeouts a real run is
+ * bounded, and reconciling a live run would let two overlap.
+ */
+export const HYDRATION_STALE_RUNNING_MINUTES = 30;
+
 export function buildHydrationBatchRow(summary: HydrationJobResult) {
   const succeededAny = summary.instrumentsHydrated + summary.instrumentsPartiallyHydrated + summary.instrumentsAlreadyCovered > 0;
   const failed = summary.instrumentsFailed > 0 && !succeededAny;
   return {
     source_key: 'amfi',
     source_config_id: 'amfi_nav_history',
-    batch_kind: 'nav_history' as const,
+    batch_kind: HYDRATION_BATCH_KIND,
     as_of_date: summary.finishedAt.slice(0, 10),
     status: failed ? ('failed' as const) : ('succeeded' as const),
     started_at: summary.startedAt,
@@ -197,6 +229,28 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     };
   }
 
+  // Claim the run (0192) -- never for a dry run, which writes nothing. Refuse
+  // to overlap a run that is still genuinely in flight; open a 'running' batch
+  // so a run the platform kills still leaves a record of how far it got.
+  let batchId: string | null = null;
+  let claimError: string | null = null;
+  if (!dryRun) {
+    const claim = await deps.claimBatch(startedAt);
+    if (claim.blocked) {
+      return {
+        status: 'skipped_already_running',
+        instrumentsConsidered: 0, instrumentsNeedingHydration: 0, instrumentsAlreadyCovered: 0,
+        instrumentsHydrated: 0, instrumentsPartiallyHydrated: 0, instrumentsFailed: 0, totalRowsInserted: 0,
+        detail: claim.blocked,
+        perInstrument: [],
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    }
+    batchId = claim.batchId;
+    claimError = claim.error;
+  }
+
   const accepted = await deps.fetchAcceptedDependencies();
   const benchmarked = await deps.fetchBenchmarkDependencies();
   const candidateIds = new Set<string>([...accepted.keys(), ...benchmarked.keys()]);
@@ -204,8 +258,18 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
   const perInstrument: PerInstrumentOutcome[] = [];
   let hydrated = 0, partiallyHydrated = 0, failed = 0, alreadyCovered = 0, totalInserted = 0, needing = 0;
   let processed = 0;
+  let progressReported = 0;
 
   for (const instrumentId of candidateIds) {
+    // Report every outcome finished so far before starting the next
+    // instrument: if this one is where the platform kills the run, the open
+    // batch still shows everything before it.
+    if (batchId !== null && perInstrument.length > progressReported) {
+      // A snapshot, not the live array: this array keeps growing, and an
+      // implementation that read it later would record the wrong progress.
+      await deps.updateBatchProgress(batchId, [...perInstrument]);
+      progressReported = perInstrument.length;
+    }
     const req = determineHydrationRequirement(instrumentId, { acceptedDependencies: accepted, benchmarkDependencies: benchmarked }, changeoverDate);
     if (!req.required) continue;
     needing++;
@@ -390,7 +454,8 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     finishedAt: new Date().toISOString(),
   };
   if (!dryRun) {
-    const saved = await deps.recordBatch(result);
+    if (claimError) result.detail += ` (no 'running' batch could be opened at the start: ${claimError})`;
+    const saved = await deps.recordBatch(result, batchId);
     if (saved.error) {
       result.batchRecordError = saved.error;
       result.detail += ` BATCH RECORD NOT SAVED: ${saved.error}`;

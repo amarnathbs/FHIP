@@ -22,16 +22,20 @@
 // single response approaches the compute execution limit that cut a larger
 // request short the same day.
 //
-// RESOLVING A SCHEME'S FUND HOUSE, FROM AMFI ITSELF. Probing each fund-house
-// code for one full business day tells us which schemes belong to it. Measured
-// 2026-09-24: 53 codes carry data (highest 89) and together cover exactly the
-// 8,730 schemes the whole market published that day -- a complete map in ~7 s
-// with 8 requests in flight. It is cached per process for a day. No manually
-// maintained mapping table.
+// RESOLVING A SCHEME'S FUND HOUSE. The caller supplies the resolver, and on
+// the server it reads the codes STORED in ii_amfi_fund_houses (migration
+// 0191) through ii_scheme_master.amc_name -- so a hydration run sends AMFI no
+// lookup requests at all.
 //
-// A scheme that published nothing on the reference day (matured, merged,
-// suspended, or brand new) cannot be resolved. That is reported as not_found,
-// which is exactly the case the TIGZIG fallback exists for.
+// This adapter used to build that map itself by probing all 150 codes on
+// every cold process, 8 at a time. AMFI appears to throttle that burst from
+// the production server's address: the first real production run slowed to
+// ~90 s per request after it, and the second (2026-09-24) stalled with
+// nothing recorded. The probe is gone, and the resolver is now REQUIRED, so
+// no caller can quietly fall back into it.
+//
+// A scheme the resolver cannot place is reported as not_found -- the case the
+// TIGZIG fallback exists for.
 
 import { buildUrl, getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { parseNavHistory } from '../amfiParser';
@@ -47,12 +51,33 @@ export const AMFI_HISTORICAL_ADAPTER_VERSION = 'amfi-history-adapter-v1';
 export const AMFI_HISTORY_SOURCE_ID = 'amfi_nav_history';
 /** Largest single AMFI request, in days. 365 days for one fund house measured 10.6 MB; 180 keeps each near 5 MB. */
 export const AMFI_MAX_REQUEST_DAYS = 180;
-/** Fund-house codes are probed 1..this. 53 codes carried data on 2026-09-24, highest 89; headroom for new houses. */
-export const AMFI_MAX_FUND_HOUSE_CODE = 150;
-/** A reference day must carry at least this many schemes, so a weekend or holiday (a few hundred liquid funds) is never used. */
-export const AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY = 5000;
-const FUND_HOUSE_MAP_TTL_MS = 24 * 60 * 60 * 1000;
-const PROBE_CONCURRENCY = 8;
+/**
+ * Per-request limits for AMFI: 45 s per attempt, 3 attempts -- so one bad
+ * request costs at most ~2.3 minutes rather than hanging a run (the
+ * failure that stalled the second production hydration run, 2026-09-24).
+ */
+export const AMFI_REQUEST_OPTIONS = { timeoutMs: 45_000, maxAttempts: 3 } as const;
+
+/**
+ * What an AMFI NAV-history response actually is. Observed live 2026-09-24:
+ *   - a window with data  -> text/plain starting "Scheme Code;..."
+ *   - a window with NONE  -> HTTP 200, text/html, ~8 KB, titled
+ *     "View/Download NAV History" and saying "No data found on the basis of
+ *     selected parameters for this report" (also returned for a fund-house
+ *     code that does not exist)
+ * Anything else -- a block page, an error or maintenance page -- is NOT an
+ * answer. Before this, every HTML body parsed to zero rows and was reported
+ * as "no data", so a block page could have been recorded as the start of a
+ * fund's history (a wrong, permanent history floor).
+ */
+export type AmfiHistoryBodyKind = 'data' | 'no_data' | 'unrecognised';
+export function classifyAmfiHistoryBody(body: string): AmfiHistoryBodyKind {
+  const text = body.replace(/^\uFEFF/, '').trimStart();
+  if (text.startsWith('Scheme Code;')) return 'data';
+  if (/<title>\s*View\/Download NAV History\s*<\/title>/i.test(text)
+    && /No data found on the basis of selected parameters/i.test(text)) return 'no_data';
+  return 'unrecognised';
+}
 const USER_AGENT = 'FHIP-PC6/1.0 (NAV1 selective historical adapter; AMFI primary)';
 
 /** Resolves an AMFI scheme code to its fund-house (`mf`) code, or null if AMFI does not currently publish it. */
@@ -60,7 +85,8 @@ export type FundHouseResolver = (schemeCode: string) => Promise<number | null>;
 
 export interface AmfiHistoricalAdapterOptions {
   /** Injected in tests. Defaults to the probe-and-cache resolver below. */
-  resolveFundHouse?: FundHouseResolver;
+  /** Required. On the server: the stored-codes resolver from selectiveHistoricalHydrationJobLive.ts. */
+  resolveFundHouse: FundHouseResolver;
   /** Injected in tests. Defaults to the real clock. ISO yyyy-mm-dd. */
   today?: () => string;
 }
@@ -94,64 +120,15 @@ function fundHouseUrl(fromDate: string, toDate: string, mf: number): string {
   return `${buildUrl(AMFI_HISTORY_SOURCE_ID, { fromDate, toDate })}&mf=${mf}`;
 }
 
-function schemeCodesIn(bodyText: string): string[] {
-  const codes: string[] = [];
-  for (const line of bodyText.split(/\r?\n/)) {
-    const m = /^(\d+);/.exec(line);
-    if (m) codes.push(m[1]);
-  }
-  return codes;
-}
-
-let cachedMap: { builtAt: number; referenceDate: string; map: Map<string, number> } | null = null;
-
-/** Test hook: forget the cached fund-house map. */
-export function resetAmfiFundHouseCache(): void {
-  cachedMap = null;
-}
-
-/**
- * Builds the scheme-code -> fund-house-code map by probing every code for one
- * full business day. Walks back from yesterday until it finds a day on which
- * the market published at least AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY schemes.
- */
-export async function buildAmfiFundHouseMap(today: string): Promise<{ referenceDate: string; map: Map<string, number> }> {
-  for (let back = 1; back <= 10; back++) {
-    const day = addDays(today, -back);
-    const map = new Map<string, number>();
-    const codes = Array.from({ length: AMFI_MAX_FUND_HOUSE_CODE }, (_, i) => i + 1);
-    const worker = async () => {
-      for (let mf = codes.shift(); mf !== undefined; mf = codes.shift()) {
-        const res = await fetchWithRetry(fundHouseUrl(day, day, mf), { headers: { 'User-Agent': USER_AGENT } });
-        if (!res.ok) throw new Error(`AMFI fund-house probe mf=${mf} failed: ${res.failures.at(-1) ?? 'unknown'}`);
-        for (const code of schemeCodesIn(res.value!.bodyText)) map.set(code, mf);
-      }
-    };
-    await Promise.all(Array.from({ length: PROBE_CONCURRENCY }, worker));
-    if (map.size >= AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY) return { referenceDate: day, map };
-  }
-  throw new Error(`no business day in the last 10 carried ${AMFI_MIN_SCHEMES_FOR_REFERENCE_DAY}+ AMFI schemes -- cannot build the fund-house map`);
-}
-
-function defaultResolver(today: () => string): FundHouseResolver {
-  return async (schemeCode) => {
-    if (!cachedMap || Date.now() - cachedMap.builtAt > FUND_HOUSE_MAP_TTL_MS) {
-      const built = await buildAmfiFundHouseMap(today());
-      cachedMap = { builtAt: Date.now(), ...built };
-    }
-    return cachedMap.map.get(schemeCode) ?? null;
-  };
-}
-
 export class AmfiHistoricalAdapter implements HistoricalNavAdapter {
   readonly providerKey = 'amfi';
   readonly adapterVersion = AMFI_HISTORICAL_ADAPTER_VERSION;
   private readonly resolveFundHouse: FundHouseResolver;
   private readonly today: () => string;
 
-  constructor(options: AmfiHistoricalAdapterOptions = {}) {
+  constructor(options: AmfiHistoricalAdapterOptions) {
     this.today = options.today ?? (() => new Date().toISOString().slice(0, 10));
-    this.resolveFundHouse = options.resolveFundHouse ?? defaultResolver(this.today);
+    this.resolveFundHouse = options.resolveFundHouse;
   }
 
   async fetchHistory(request: HistoricalNavRequest): Promise<HistoricalNavAdapterResult> {
@@ -191,7 +168,7 @@ export class AmfiHistoricalAdapter implements HistoricalNavAdapter {
 
     for (const window of splitAmfiWindow(request.fromDate, request.toDate)) {
       const url = fundHouseUrl(window.fromDate, window.toDate, mf);
-      const res = await fetchWithRetry(url, { headers: { 'User-Agent': USER_AGENT } });
+      const res = await fetchWithRetry(url, { headers: { 'User-Agent': USER_AGENT } }, AMFI_REQUEST_OPTIONS);
       if (!res.ok) {
         const rateLimited = res.failures.some((f) => f.includes('HTTP 429'));
         return fail(rateLimited ? 'rate_limited' : 'http_error',
@@ -199,6 +176,18 @@ export class AmfiHistoricalAdapter implements HistoricalNavAdapter {
       }
       lastUrl = url;
       lastStatus = res.value!.status;
+
+      const bodyKind = classifyAmfiHistoryBody(res.value!.bodyText);
+      if (bodyKind === 'unrecognised') {
+        const start = res.value!.bodyText.replace(/\s+/g, ' ').trim().slice(0, 120);
+        return fail('schema_unexpected',
+          `AMFI returned something that is neither a NAV history file nor its "no data" page -- not treated as "no data" (starts: "${start}")`,
+          url, lastStatus);
+      }
+      if (bodyKind === 'no_data') {
+        bodyChecksums.push(await sha256Hex(res.value!.bodyText));
+        continue; // AMFI's own answer: nothing for this fund house in this window
+      }
 
       let parsed;
       try {
