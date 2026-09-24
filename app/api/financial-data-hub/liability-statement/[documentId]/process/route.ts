@@ -72,6 +72,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       const status = e.code === 'not_found' ? 404 : e.code === 'wrong_document_type' ? 422 : e.code === 'invalid_state' ? 409 : 500;
       return bad(e.message, status);
     }
+    // AIE-1 final completion (2026-09-25): an unexpected failure here was
+    // swallowed with no server-side trace at all. Log the message (never the
+    // document content) so an operator can diagnose it.
+    console.error(`liability-statement process failed for ${documentId}: ${e instanceof Error ? e.message.slice(0, 300) : 'unknown'}`);
     return bad('We could not read this statement upload. Please try again.', 500);
   }
 }

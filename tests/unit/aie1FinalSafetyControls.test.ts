@@ -62,6 +62,38 @@ describe('S3 quarantine object deletion', () => {
   });
 });
 
+describe('S3 quarantine upload resilience (found live: one transient fetch failure rejected a clean upload)', () => {
+  const config = { bucket: location.bucket, region: location.region, accountId: '879807128139', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'x', admissionWindowMinutes: 20 };
+  function scripted(steps: Array<'put200' | 'head200' | 'netfail' | 'head403'>) {
+    const calls: string[] = [];
+    let i = 0;
+    const impl = (async (_url: string, init?: { method?: string }) => {
+      const step = steps[i++];
+      calls.push(`${init?.method}:${step}`);
+      if (step === 'netfail') throw new TypeError('fetch failed');
+      if (step === 'head403') return new Response(null, { status: 403 });
+      return new Response(null, { status: 200, headers: { etag: '"abc"' } });
+    }) as unknown as typeof fetch;
+    return { impl, calls };
+  }
+
+  it('a transient network failure on the verification HEAD is retried and the upload succeeds', async () => {
+    const { uploadForRealMalwareScan } = await import('@/lib/aie/malware/quarantineS3');
+    const f = scripted(['put200', 'netfail', 'head200']);
+    const r = await uploadForRealMalwareScan({ pipeline: 'fdh3', userId: 'u', documentId: 'd', bytes: new Uint8Array([1]), contentType: 'text/csv', contentHash: 'h', config, fetchImpl: f.impl });
+    expect(r.ok).toBe(true);
+    expect(f.calls).toEqual(['PUT:put200', 'HEAD:netfail', 'HEAD:head200']);
+  });
+
+  it('a definite 4xx is NOT retried (fail closed, no hammering)', async () => {
+    const { uploadForRealMalwareScan } = await import('@/lib/aie/malware/quarantineS3');
+    const f = scripted(['put200', 'head403', 'head200']);
+    const r = await uploadForRealMalwareScan({ pipeline: 'fdh3', userId: 'u', documentId: 'd', bytes: new Uint8Array([1]), contentType: 'text/csv', contentHash: 'h', config, fetchImpl: f.impl });
+    expect(r.ok).toBe(false);
+    expect(f.calls).toEqual(['PUT:put200', 'HEAD:head403']);
+  });
+});
+
 describe('raw-file backstop with a durable structured result', () => {
   const old = new Date(Date.now() - 3 * 3600_000).toISOString();
   const base = { purgeStatus: 'not_required' as const, receivedAtIso: old, purgeDueAtIso: null };
