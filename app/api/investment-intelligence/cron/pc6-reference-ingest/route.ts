@@ -1,6 +1,13 @@
 import { ok, bad } from '@/lib/api';
 import { runReferenceIngest } from '@/lib/services/investment-intelligence/pc6/referenceIngestJob';
 import { PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import { PC6_INGEST_MAX_HTTP_BUDGET_MS } from '@/lib/services/investment-intelligence/pc6/ingestBudget';
+
+/** A caller-supplied budget, clamped to what the platform's 28 s limit allows; undefined = the job's default. */
+function httpBudgetMs(v: unknown): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return undefined;
+  return Math.min(v, PC6_INGEST_MAX_HTTP_BUDGET_MS);
+}
 
 /**
  * PC6 (M6) — the scheduled reference-market-data ingest endpoint (N.15).
@@ -34,10 +41,20 @@ import { PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6R
  * licence-blocked feed cannot be fetched even by a correctly-authenticated
  * caller.
  *
+ * TIME BUDGET (2026-09-25). The hosting platform kills a request at 28 s, so
+ * the job writes only until its budget is used (default 18 s, measured from
+ * the moment this handler starts) and reports status 'partial' with the
+ * remaining counts; the schedule (migration 0205) calls again every 2
+ * minutes through a morning window until a call reports 'succeeded' or
+ * 'skipped_unchanged_source'. `budgetMs` in the body is clamped to
+ * PC6_INGEST_MAX_HTTP_BUDGET_MS so no caller can ask for a run the platform
+ * would kill.
+ *
  * Body (all optional): { sourceConfigId, jobKey, asOfDate, fromDate, toDate,
- * dryRun, chunkSize }.
+ * dryRun, chunkSize, budgetMs }.
  */
 export async function POST(req: Request) {
+  const startedAtMs = Date.now();
   const secret = req.headers.get('x-cron-secret');
   if (!secret || secret !== process.env.CRON_SECRET) {
     return bad('Unauthorized', 401);
@@ -71,6 +88,8 @@ export async function POST(req: Request) {
       toDate: typeof body.toDate === 'string' ? body.toDate : undefined,
       chunkSize: typeof body.chunkSize === 'number' ? body.chunkSize : undefined,
       dryRun: body.dryRun === true,
+      startedAtMs,
+      budgetMs: httpBudgetMs(body.budgetMs),
     });
     // Counts and alert codes only. No source URL, no credential, no row
     // content — the same sanitised-output discipline the existing sweeps use.
@@ -82,6 +101,7 @@ export async function POST(req: Request) {
       runner_version: result.runnerVersion,
       source_sha256: result.sourceSha256,
       counts: result.counts,
+      timings_ms: result.timings,
       alerts: result.alerts.map((a) => ({ severity: a.severity, code: a.code })),
     });
   } catch (err) {

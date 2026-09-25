@@ -156,6 +156,10 @@ order by started_at desc limit 20;
 | `SOURCE_EMPTY_BODY` / `SOURCE_IMPLAUSIBLY_SMALL` | A truncated body or an error page | **Not** parsed as a small day. Wait, then retry |
 | `PARSE_FAILED` | The file could not be parsed at all | Almost certainly a format change. Engage a developer |
 | `PARTIAL_BATCH` | Some chunks committed, some did not | Re-run. Committed rows are content-idempotent no-ops; the tail completes |
+| `PARTIAL_BATCH_CONTINUING` (status `failed`) | **Normal since 2026-09-25.** The call reached its 18 s time budget with work left; `notes.remaining` says how much. No backoff, `last_success_at` not advanced | Nothing — the next 2-minute call in the window continues (section 9c). Only the call that leaves nothing remaining is `succeeded` |
+| `BUDGET_EXHAUSTED_NO_PROGRESS` | The reads alone used the whole budget; nothing was written | Real problem (slow database or source). Backoff applies. Check `notes.timings_ms.steps` for the slow phase |
+| `EXACT_PAIR_LOOKUP_UNAVAILABLE` | Migration 0204's function is missing | Apply 0204 |
+| `STALE_RUNNING_RECONCILED` | An earlier call was killed mid-run (e.g. the 28 s platform limit) and left its batch `running` | Harmless once reconciled; if it recurs, the budget is too large for the platform |
 | `HIGH_REJECTION_RATE` alert | >5% of records rejected | **Format change, not bad data.** Inspect `ii_reference_import_rejections` |
 
 The individual refused records are in `ii_reference_import_rejections` with the
@@ -229,6 +233,39 @@ may not activate a production job. When a human decides to:
 
 To stop it again, prefer the kill switch (section 5) over `cron.unschedule` —
 it leaves the schedule intact and records *why*.
+
+---
+
+## 9c. The budgeted morning window (migrations 0204 + 0205, 2026-09-25)
+
+Production kills every request at 28 s, and one day's NAV file needs more
+writes than fit in one request. Since 0204/0205:
+
+* each call reads everything it needs (the "which rows exist" read is an
+  exact-pair lookup, 0204), then writes until an **18 s** budget is used and
+  closes its batch: `succeeded` when nothing is left, otherwise
+  `failed` + `PARTIAL_BATCH_CONTINUING`;
+* 0205 calls the daily job **every 2 minutes, 03:30–04:30 UTC, Tue–Sat**
+  (jobs `pc6-reference-ingest` and `pc6-reference-ingest-0400`), and the
+  scheme master every 2 minutes 03:00–03:28 UTC on Tuesday;
+* once a call succeeds, later calls on the same file return
+  `skipped_unchanged_source` without opening a batch.
+
+A normal morning therefore shows a few `PARTIAL_BATCH_CONTINUING` rows followed
+by one `succeeded` row. `ii_reference_job_control.last_success_at` moves only
+on that last one. To check a morning:
+
+```sql
+select started_at, status, error_code, rows_inserted, notes->'remaining' as remaining,
+       notes->'timings_ms'->>'totalMs' as ms
+from ii_reference_import_batches
+where batch_kind = 'daily_nav' and started_at > now() - interval '1 day'
+order by started_at;
+```
+
+Never apply 0202 (unmerged NAV1 branch) after 0205: it would put back the
+single 03:30 call. A hand run (`scripts/pc6_run_ingest.mjs`) is not budgeted
+unless given `--budget-ms=18000`.
 
 ---
 

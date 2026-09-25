@@ -10,9 +10,36 @@
 // `skipped_kill_switch` until a human turns it on. Activating the production
 // schedule is a deferred human-present step, written up in
 // docs/investment-intelligence/PC6_OPERATOR_RUNBOOK.md.
+//
+// TIME-BUDGETED AND RESUMABLE (2026-09-25). Production runs on AWS Amplify
+// compute, which kills every request at 28 s. The first scheduled daily tick
+// (25 Sep 03:30 UTC) and a manual server run (04:01) both died there, leaving
+// the batch 'running' with 0 rows; the same job run from a workstation took
+// 1,212 s. Two changes, together:
+//   1. The "which rows already exist?" read now asks for EXACT (instrument,
+//      date) pairs through migration 0204's function (exactPairLookup.ts)
+//      instead of every instrument x every one of the file's 831 NAV dates.
+//   2. Each invocation fetches, parses, resolves and looks up, then writes
+//      until its wall-clock budget (default 18 s from invocation start,
+//      ingestBudget.ts) is used, and closes ITS batch honestly:
+//        * nothing left                 -> 'succeeded' (advances last_success_at)
+//        * work left, progress made     -> result 'partial'; the batch row is
+//          'failed' with error_code PARTIAL_BATCH_CONTINUING and the remaining
+//          counts in notes. The failure streak and backoff are NOT touched
+//          (the next tick must be allowed to continue) and last_success_at is
+//          NOT advanced.
+//        * work left, no progress at all -> 'failed', error_code
+//          BUDGET_EXHAUSTED_NO_PROGRESS, normal failure bookkeeping.
+//      Migration 0205 re-invokes the job every 2 minutes through a morning
+//      window; every write is idempotent, so each call re-plans against the
+//      database and continues where the last one stopped.
+//   A call that finds the source byte-identical to the last complete run
+//   (and no instrument added since) returns 'skipped_unchanged_source'
+//   without opening a batch or touching job control -- so the rest of the
+//   window's ticks cost a fetch and a handful of small reads.
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { parseNavAll, parseNavHistory, type AmfiParseResult } from './amfiParser';
+import { parseNavAll, parseNavHistory, fingerprintBytes, type AmfiParseResult } from './amfiParser';
 import {
   classifyFetch,
   decideStart,
@@ -25,16 +52,24 @@ import {
   PC6_RUNNER_VERSION,
   type Alert,
   type ChunkOutcome,
+  type FetchOutcome,
   type InstrumentResolutionIndex,
   type JobControlRow,
 } from './referenceImportRunner';
-
-/** How long a 'running' batch may sit with no terminal status before a later invocation treats it as abandoned rather than still in flight. */
-export const STALE_RUNNING_BATCH_MINUTES = 15;
-import type { ExistingObservation, NavQualityStatus } from './referenceDataQuality';
+import type { ExistingObservation } from './referenceDataQuality';
 import { buildUrl, getReferenceSource } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { writeSchemeMasterRows } from './schemeMasterWriter';
 import { fetchAllRows } from '../pagination';
+import { createWriteBudget, resolveBudgetMs, type WriteBudget } from './ingestBudget';
+import { ExistingStateLookupError, loadExistingObservations, type NavPair } from './exactPairLookup';
+
+/** How long a 'running' batch may sit with no terminal status before a later invocation treats it as abandoned rather than still in flight. */
+export const STALE_RUNNING_BATCH_MINUTES = 15;
+
+/** error_code of a batch that stopped at its time budget with work left; the next invocation continues it. */
+export const PARTIAL_CONTINUING_ERROR_CODE = 'PARTIAL_BATCH_CONTINUING';
+/** error_code of a batch whose budget ran out before a single write unit could start. */
+export const BUDGET_NO_PROGRESS_ERROR_CODE = 'BUDGET_EXHAUSTED_NO_PROGRESS';
 
 export interface IngestJobArgs {
   jobKey: string;
@@ -49,11 +84,35 @@ export interface IngestJobArgs {
   chunkSize?: number;
   /** When true, plan and report but write nothing. */
   dryRun?: boolean;
+  /**
+   * Wall-clock budget in ms from `startedAtMs` (default 18 s, or the
+   * PC6_INGEST_BUDGET_MS environment variable). `Infinity` = unbounded, for
+   * hand-run scripts only; never from the HTTP route.
+   */
+  budgetMs?: number;
+  /** When the invocation began (epoch ms). The route passes the moment the request arrived. */
+  startedAtMs?: number;
+  /** Clock seam for tests. Defaults to Date.now. */
+  now?: () => number;
+  /**
+   * Seam for tests and DEV harnesses ONLY: replaces the exact-pair lookup
+   * (exactPairLookup.ts) with a caller-supplied one. Production never sets it.
+   */
+  existingLookup?: (pairs: NavPair[]) => Promise<Map<string, ExistingObservation>>;
 }
 
 export interface IngestJobResult {
   jobKey: string;
-  status: 'succeeded' | 'failed' | 'rolled_back' | 'skipped_kill_switch' | 'skipped_backoff' | 'skipped_source_outage' | 'skipped_already_running';
+  status:
+    | 'succeeded'
+    | 'partial'
+    | 'failed'
+    | 'rolled_back'
+    | 'skipped_kill_switch'
+    | 'skipped_backoff'
+    | 'skipped_source_outage'
+    | 'skipped_already_running'
+    | 'skipped_unchanged_source';
   batchId: string | null;
   detail: string;
   runnerVersion: string;
@@ -66,17 +125,72 @@ export interface IngestJobResult {
     inserted: number;
     unchanged: number;
     superseded: number;
+    /** Planned inserts not attempted in this invocation (budget). */
+    remainingInserts: number;
+    /** Planned corrections not attempted in this invocation (budget). */
+    remainingCorrections: number;
   };
   sourceSha256: string | null;
   alerts: Alert[];
+  /** Where the time went, in ms from invocation start; `steps` records when each phase ENDED. */
+  timings: { readPhaseMs: number | null; totalMs: number; budgetMs: number; steps: Record<string, number> };
 }
 
-const EMPTY_COUNTS = {
+const EMPTY_COUNTS: IngestJobResult['counts'] = {
   sourceBytes: 0, parsedAccepted: 0, parsedRejected: 0, resolved: 0,
   unresolved: 0, inserted: 0, unchanged: 0, superseded: 0,
+  remainingInserts: 0, remainingCorrections: 0,
 };
 
+/**
+ * Pure decision: may this invocation skip because the source is byte-for-byte
+ * what the last COMPLETE run already applied?
+ *
+ * Only a 'succeeded', non-dry-run batch for the same source config and window
+ * counts (a 'partial' batch is 'failed' in the ledger, so a continuing run can
+ * never skip itself). The prior run must have been at least as late an
+ * as-of date (a later as-of admits more records past the future-date guard),
+ * and no instrument or AMFI-code identifier may have been created or updated
+ * since it started -- a newly resolvable scheme is new work even on an
+ * unchanged file.
+ */
+export function decideUnchangedSourceSkip(input: {
+  sha256: string;
+  asOfDate: string;
+  lastSucceeded: { id: string; source_sha256: string | null; as_of_date: string; started_at: string } | null;
+  newestUniverseChangeAt: string | null;
+}): { skip: boolean; detail: string } {
+  const last = input.lastSucceeded;
+  if (!last) return { skip: false, detail: 'No previous complete run for this source.' };
+  if (last.source_sha256 !== input.sha256) return { skip: false, detail: 'The source differs from the last complete run.' };
+  if (last.as_of_date < input.asOfDate) return { skip: false, detail: `The last complete run was as of ${last.as_of_date}, before ${input.asOfDate}.` };
+  if (input.newestUniverseChangeAt && Date.parse(input.newestUniverseChangeAt) >= Date.parse(last.started_at)) {
+    return { skip: false, detail: 'An instrument or identifier changed after the last complete run started.' };
+  }
+  return {
+    skip: true,
+    detail: `Source unchanged since complete batch ${last.id} (sha256 ${input.sha256.slice(0, 12)}, as of ${last.as_of_date}); nothing to do. No batch opened, job control untouched.`,
+  };
+}
+
+function laterOf(...isos: (string | null | undefined)[]): string | null {
+  let best: string | null = null;
+  for (const v of isos) if (v && (best === null || Date.parse(v) > Date.parse(best))) best = v;
+  return best;
+}
+
 export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJobResult> {
+  const clock = args.now ?? Date.now;
+  const startedAtMs = args.startedAtMs ?? clock();
+  const budgetMs = resolveBudgetMs(args.budgetMs);
+  const budget: WriteBudget = createWriteBudget({ startedAtMs, budgetMs, clock });
+  let readPhaseMs: number | null = null;
+  const steps: Record<string, number> = {};
+  const mark = (step: string) => {
+    steps[step] = clock() - startedAtMs;
+  };
+  const timings = () => ({ readPhaseMs, totalMs: clock() - startedAtMs, budgetMs, steps: { ...steps } });
+
   const db = createAdminClient();
   const nowIso = new Date().toISOString();
   const source = getReferenceSource(args.sourceConfigId);
@@ -101,10 +215,11 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
         lastSuccessAt: controlRow.last_success_at,
       }
     : null;
+  mark('control');
 
   const start = decideStart(control, args.jobKey, nowIso);
   if (!start.start) {
-    return { ...base, status: start.status, detail: start.detail };
+    return { ...base, status: start.status, detail: start.detail, timings: timings() };
   }
 
   // --- 1b. Stuck-batch reconciliation (found live in DEV, 2026-09-21: two
@@ -134,12 +249,108 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       })
       .in('id', reconciliation.reconciledIds);
   }
+  mark('reconcile');
   if (reconciliation.stillRunning) {
-    return { ...base, status: 'skipped_already_running' as IngestJobResult['status'], detail: reconciliation.detail };
+    return { ...base, status: 'skipped_already_running', detail: reconciliation.detail, timings: timings() };
   }
 
-  // --- 2. Open the batch ledger row ----------------------------------------
+  // --- Instrument-resolution reads (used at step 5). Started as soon as the
+  // run is known NOT to be a no-op (step 2b), so they overlap opening the
+  // batch, parsing and persisting rejections instead of following them; a
+  // no-op tick never issues them. Settled into a value, so a failure is
+  // handled at step 5 and never becomes an unhandled rejection.
+  //
+  // fetchAllRows(): a plain, unbounded select silently caps at PostgREST's
+  // db-max-rows (1000) -- the exact same defect class R4/R5 already found
+  // and built this helper for. Found here the same way: the full AMFI
+  // universe now has 14,358 resolvable instruments, and an unpaged select
+  // only ever resolved the first ~1,000-2,000 of them, silently leaving
+  // most of a genuinely-complete instrument universe unresolved.
+  const startResolutionReads = (): Promise<
+    | { ok: true; idRows: { identifier_value: string; instrument_id: string }[]; instRows: { id: string; isin: string | null }[] }
+    | { ok: false; detail: string }
+  > => Promise.all([
+    fetchAllRows<{ identifier_value: string; instrument_id: string }>(() =>
+      db
+        .from('ii_instrument_identifiers')
+        .select('identifier_value, instrument_id')
+        .eq('identifier_scheme', 'amfi_scheme_code')
+        .eq('country_code', source.countryCode)
+        .eq('is_active', true)
+        .order('id')
+    ),
+    fetchAllRows<{ id: string; isin: string | null }>(() =>
+      db.from('ii_instruments').select('id, isin').eq('instrument_class', 'mutual_fund').not('isin', 'is', null).order('id')
+    ),
+  ]).then(
+    ([idRows, instRows]) => ({ ok: true as const, idRows, instRows }),
+    (e) => ({ ok: false as const, detail: e instanceof Error ? e.message : String(e) })
+  );
+
+  // --- 2. Fetch, with outage classification --------------------------------
+  // (Before the batch row is opened, so a no-op tick can return without
+  // writing anything; an outage still opens and closes a batch, as before.)
   const url = buildUrl(args.sourceConfigId, { fromDate: args.fromDate, toDate: args.toDate });
+  const retrievedAt = new Date().toISOString();
+  let bytes: Uint8Array | null = null;
+  let httpStatus: number | null = null;
+  let networkError: string | undefined;
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'FHIP-PC6/1.0' } });
+    httpStatus = r.status;
+    bytes = new Uint8Array(await r.arrayBuffer());
+  } catch (e) {
+    networkError = e instanceof Error ? e.message : String(e);
+  }
+  const fetched: FetchOutcome = classifyFetch(httpStatus, bytes, MIN_PLAUSIBLE_FULL_UNIVERSE_BYTES, retrievedAt, networkError);
+  mark('fetch');
+
+  // --- 2b. Nothing new? -----------------------------------------------------
+  if (fetched.ok && !args.dryRun) {
+    const sha = fingerprintBytes(fetched.bytes).sha256;
+    let lastQuery = db
+      .from('ii_reference_import_batches')
+      .select('id, source_sha256, as_of_date, started_at')
+      .eq('source_config_id', args.sourceConfigId)
+      .eq('batch_kind', source.kind)
+      .eq('status', 'succeeded')
+      .is('notes->>dry_run', null);
+    lastQuery = args.fromDate ? lastQuery.eq('window_from', args.fromDate) : lastQuery.is('window_from', null);
+    lastQuery = args.toDate ? lastQuery.eq('window_to', args.toDate) : lastQuery.is('window_to', null);
+    const [lastRes, idRes, instCreatedRes, instUpdatedRes] = await Promise.all([
+      lastQuery.order('started_at', { ascending: false }).limit(1).maybeSingle(),
+      db.from('ii_instrument_identifiers').select('created_at').eq('identifier_scheme', 'amfi_scheme_code').eq('country_code', source.countryCode)
+        .not('created_at', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      db.from('ii_instruments').select('created_at').eq('instrument_class', 'mutual_fund')
+        .not('created_at', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      db.from('ii_instruments').select('updated_at').eq('instrument_class', 'mutual_fund')
+        .not('updated_at', 'is', null).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    mark('unchangedCheck');
+    // Any read error means "not provably unchanged": fall through and do the work.
+    if (!lastRes.error && !idRes.error && !instCreatedRes.error && !instUpdatedRes.error) {
+      const decision = decideUnchangedSourceSkip({
+        sha256: sha,
+        asOfDate: args.asOfDate,
+        lastSucceeded: lastRes.data ?? null,
+        newestUniverseChangeAt: laterOf(idRes.data?.created_at, instCreatedRes.data?.created_at, instUpdatedRes.data?.updated_at),
+      });
+      if (decision.skip) {
+        return {
+          ...base,
+          status: 'skipped_unchanged_source',
+          detail: decision.detail,
+          counts: { ...EMPTY_COUNTS, sourceBytes: fetched.bytes.byteLength },
+          sourceSha256: sha,
+          timings: timings(),
+        };
+      }
+    }
+  }
+
+  const resolutionReads = startResolutionReads();
+
+  // --- 3. Open the batch ledger row ----------------------------------------
   const { data: batch, error: batchErr } = await db
     .from('ii_reference_import_batches')
     .insert({
@@ -156,9 +367,10 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     .select('id')
     .single();
   if (batchErr || !batch) {
-    return { ...base, status: 'failed', detail: `Could not open a batch ledger row: ${batchErr?.message ?? 'unknown'}` };
+    return { ...base, status: 'failed', detail: `Could not open a batch ledger row: ${batchErr?.message ?? 'unknown'}`, timings: timings() };
   }
   const batchId = batch.id as string;
+  mark('batchOpen');
 
   const finish = async (
     status: IngestJobResult['status'],
@@ -168,8 +380,13 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     alerts: Alert[],
     extra: Record<string, unknown> = {}
   ): Promise<IngestJobResult> => {
+    const t = timings();
+    const extraNotes = (extra.notes as Record<string, unknown> | undefined) ?? {};
     await db.from('ii_reference_import_batches').update({
-      status: status === 'skipped_backoff' ? 'failed' : status,
+      // 'partial' is not a ledger status: it is recorded as 'failed' with
+      // error_code PARTIAL_BATCH_CONTINUING (the table's existing CHECK
+      // domain, unchanged), which keeps it off every "last success" surface.
+      status: status === 'skipped_backoff' || status === 'partial' ? 'failed' : status,
       finished_at: new Date().toISOString(),
       rows_read: counts.parsedAccepted + counts.parsedRejected,
       rows_accepted: counts.parsedAccepted,
@@ -180,10 +397,13 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       source_sha256: sha,
       source_byte_length: counts.sourceBytes || null,
       ...extra,
+      notes: { ...extraNotes, timings_ms: t, remaining: { inserts: counts.remainingInserts, corrections: counts.remainingCorrections } },
     }).eq('id', batchId);
 
     // Job-control bookkeeping: success clears the failure streak, failure
-    // extends the bounded backoff.
+    // extends the bounded backoff. A PARTIAL run is neither: it must not
+    // advance last_success_at (the day is not complete) and must not start a
+    // backoff (the next tick has to be allowed to continue the work).
     if (status === 'succeeded') {
       await db.from('ii_reference_job_control').update({
         last_success_at: new Date().toISOString(),
@@ -192,7 +412,7 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
         next_attempt_not_before: null,
         updated_at: new Date().toISOString(),
       }).eq('job_key', args.jobKey);
-    } else {
+    } else if (status !== 'partial') {
       const failures = (control?.consecutiveFailures ?? 0) + 1;
       await db.from('ii_reference_job_control').update({
         last_failure_at: new Date().toISOString(),
@@ -202,23 +422,9 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       }).eq('job_key', args.jobKey);
     }
 
-    return { ...base, batchId, status, detail, counts, sourceSha256: sha, alerts };
+    return { ...base, batchId, status, detail, counts, sourceSha256: sha, alerts, timings: timings() };
   };
 
-  // --- 3. Fetch, with outage classification --------------------------------
-  const retrievedAt = new Date().toISOString();
-  let bytes: Uint8Array | null = null;
-  let httpStatus: number | null = null;
-  let networkError: string | undefined;
-  try {
-    const r = await fetch(url, { headers: { 'User-Agent': 'FHIP-PC6/1.0' } });
-    httpStatus = r.status;
-    bytes = new Uint8Array(await r.arrayBuffer());
-  } catch (e) {
-    networkError = e instanceof Error ? e.message : String(e);
-  }
-
-  const fetched = classifyFetch(httpStatus, bytes, MIN_PLAUSIBLE_FULL_UNIVERSE_BYTES, retrievedAt, networkError);
   if (!fetched.ok) {
     const alerts = buildAlerts({ jobKey: args.jobKey, settlement: null, fetchOutcome: fetched, consecutiveFailures: control?.consecutiveFailures ?? 0, parsedAccepted: 0, parsedRejected: 0, unresolvedCount: 0 });
     return finish('skipped_source_outage', fetched.detail, { ...EMPTY_COUNTS }, null, alerts, {
@@ -258,25 +464,19 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     }
   }
 
+  const readCounts: IngestJobResult['counts'] = { ...EMPTY_COUNTS, sourceBytes: parsed.fingerprint.byteLength, parsedAccepted: parsed.counts.accepted, parsedRejected: parsed.counts.rejected };
+  mark('parseAndRejections');
+
   // --- 5. Resolve and plan --------------------------------------------------
-  // fetchAllRows(): a plain, unbounded select silently caps at PostgREST's
-  // db-max-rows (1000) -- the exact same defect class R4/R5 already found
-  // and built this helper for. Found here the same way: the full AMFI
-  // universe now has 14,358 resolvable instruments, and an unpaged select
-  // only ever resolved the first ~1,000-2,000 of them, silently leaving
-  // most of a genuinely-complete instrument universe unresolved.
-  const idRows = await fetchAllRows<{ identifier_value: string; instrument_id: string }>(() =>
-    db
-      .from('ii_instrument_identifiers')
-      .select('identifier_value, instrument_id')
-      .eq('identifier_scheme', 'amfi_scheme_code')
-      .eq('country_code', source.countryCode)
-      .eq('is_active', true)
-      .order('id')
-  );
-  const instRows = await fetchAllRows<{ id: string; isin: string | null }>(() =>
-    db.from('ii_instruments').select('id, isin').eq('instrument_class', 'mutual_fund').not('isin', 'is', null).order('id')
-  );
+  // (The two resolution reads were started right after step 2b.)
+  const resolved = await resolutionReads;
+  mark('resolution');
+  if (!resolved.ok) {
+    return finish('failed', `Instrument resolution read failed: ${resolved.detail}`, readCounts, parsed.fingerprint.sha256, [], {
+      error_code: 'RESOLUTION_READ_FAILED', error_detail: resolved.detail,
+    });
+  }
+  const { idRows, instRows } = resolved;
 
   const index: InstrumentResolutionIndex = {
     byAmfiCode: new Map(idRows.map((r) => [r.identifier_value, r.instrument_id])),
@@ -289,15 +489,18 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   // source kind was never actually compatible with (see schemeMasterWriter.ts
   // header for the real incident this fixes).
   if (source.kind === 'scheme_master') {
+    readPhaseMs = clock() - startedAtMs;
     const schemeWrite = args.dryRun
-      ? { counts: { resolved: 0, unresolved: 0, inserted: 0, unchanged: 0, superseded: 0 }, errors: [] }
+      ? { counts: { resolved: 0, unresolved: 0, inserted: 0, unchanged: 0, superseded: 0 }, errors: [] as string[], remaining: 0 }
       : await writeSchemeMasterRows(
           db,
           parsed.records,
           index,
           { countryCode: source.countryCode, currencyCode: source.currencyCode, sourceId: null, importBatchId: batchId, asOfDate: args.asOfDate },
-          chunkSize
+          chunkSize,
+          budget
         );
+    mark('schemeMasterLookupAndWrites');
     // A dry run still needs an honest resolved/unresolved count without
     // actually writing -- computed the same way writeSchemeMasterRows()
     // would resolve, just without the DB round trip for current rows.
@@ -308,20 +511,22 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
         }).length
       : schemeWrite.counts.resolved;
     const schemeCounts: IngestJobResult['counts'] = {
-      sourceBytes: parsed.fingerprint.byteLength,
-      parsedAccepted: parsed.counts.accepted,
-      parsedRejected: parsed.counts.rejected,
+      ...readCounts,
       resolved: dryResolved,
       unresolved: new Set(parsed.records.map((r) => r.amfiSchemeCode)).size - dryResolved,
       inserted: schemeWrite.counts.inserted,
       unchanged: schemeWrite.counts.unchanged,
       superseded: schemeWrite.counts.superseded,
+      remainingInserts: schemeWrite.remaining,
     };
     if (args.dryRun) {
-      return finish('succeeded', `Dry run: ${dryResolved} scheme(s) resolved to an existing instrument. Nothing written.`, schemeCounts, parsed.fingerprint.sha256, []);
+      return finish('succeeded', `Dry run: ${dryResolved} scheme(s) resolved to an existing instrument. Nothing written.`, schemeCounts, parsed.fingerprint.sha256, [], { notes: { dry_run: true } });
     }
     if (schemeWrite.errors.length > 0) {
       return finish('failed', `Scheme-master write failed: ${schemeWrite.errors[0]}`, schemeCounts, parsed.fingerprint.sha256, [], { error_code: 'SCHEME_MASTER_WRITE_FAILED', error_detail: schemeWrite.errors.join('; ') });
+    }
+    if (schemeWrite.remaining > 0) {
+      return settleIncomplete(schemeCounts, budget.unitsDone(), `${schemeWrite.remaining} scheme-master change(s)`);
     }
     return finish(
       'succeeded',
@@ -332,46 +537,30 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     );
   }
 
-  // Existing state for exactly the instruments AND DATES this run could
+  // Existing state for EXACTLY the (instrument, date) pairs this run could
   // touch, so idempotency is decided against the database rather than
-  // assumed. Scoped to price_date (not just instrument_id): with the full
-  // AMFI universe resolved and years of backfilled history per instrument,
-  // an unscoped-by-date query here would need to fetch every historical row
-  // for 200 instruments just to check "does today's row already exist" --
-  // both needlessly expensive and, per fetchAllRows's own header, exactly
-  // the silent-truncation risk it exists to remove. fetchAllRows() is kept
-  // as defense in depth regardless (a NAV-history backfill window can still
-  // span enough dates to exceed one page even after this narrowing).
-  const candidateIds = [...new Set(parsed.records.map((r) => index.byAmfiCode.get(r.amfiSchemeCode) ?? (r.isinGrowthOrPayout ? index.byIsin.get(r.isinGrowthOrPayout) : undefined)).filter(Boolean) as string[])];
-  const candidateDates = [...new Set(parsed.records.map((r) => r.navDate))];
-  const existing = new Map<string, ExistingObservation>();
-  const RESOLUTION_BATCH = 100; // 200 UUIDs in one .in() filter produced a request the network layer itself rejected ("fetch failed", not an HTTP error) against the full AMFI universe -- halved for headroom
-  for (let i = 0; i < candidateIds.length; i += RESOLUTION_BATCH) {
-    const idSlice = candidateIds.slice(i, i + RESOLUTION_BATCH);
-    const rows = await fetchAllRows<{ instrument_id: string; price_date: string; price: number; record_checksum: string | null; quality_status: NavQualityStatus }>(() =>
-      db
-        .from('ii_prices_nav')
-        .select('instrument_id, price_date, price, record_checksum, quality_status')
-        .in('instrument_id', idSlice)
-        .in('price_date', candidateDates)
-        .order('instrument_id')
-        .order('price_date')
-    );
-    for (const r of rows) {
-      existing.set(`${r.instrument_id}|${r.price_date}`, {
-        value: String(r.price),
-        recordChecksum: r.record_checksum ?? '',
-        quality_status: r.quality_status,
-      });
-    }
+  // assumed. See exactPairLookup.ts for why this is no longer
+  // "instrument IN (...) AND date IN (every date in the file)".
+  const pairs: NavPair[] = [];
+  for (const r of parsed.records) {
+    const instrumentId = index.byAmfiCode.get(r.amfiSchemeCode) ?? (r.isinGrowthOrPayout ? index.byIsin.get(r.isinGrowthOrPayout) : undefined);
+    if (instrumentId) pairs.push({ instrumentId, priceDate: r.navDate });
   }
+  let existing: Map<string, ExistingObservation>;
+  try {
+    existing = args.existingLookup ? await args.existingLookup(pairs) : await loadExistingObservations(db, pairs);
+  } catch (e) {
+    const code = e instanceof ExistingStateLookupError ? e.code : 'EXISTING_STATE_LOOKUP_FAILED';
+    const detail = e instanceof Error ? e.message : String(e);
+    return finish('failed', detail, readCounts, parsed.fingerprint.sha256, [], { error_code: code, error_detail: detail });
+  }
+  readPhaseMs = clock() - startedAtMs;
+  mark('existingLookup');
 
   const plan = planImport({ parsed, index, existing, currencyCode: source.currencyCode });
 
   const counts: IngestJobResult['counts'] = {
-    sourceBytes: parsed.fingerprint.byteLength,
-    parsedAccepted: parsed.counts.accepted,
-    parsedRejected: parsed.counts.rejected,
+    ...readCounts,
     resolved: plan.counts.resolved,
     unresolved: plan.counts.unresolved,
     inserted: 0,
@@ -383,13 +572,17 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     return finish('succeeded', `Dry run: ${plan.counts.toInsert} insert(s), ${plan.counts.unchanged} unchanged, ${plan.counts.toSupersede} correction(s) planned. Nothing written.`, counts, parsed.fingerprint.sha256, [], { notes: { dry_run: true, planned: plan.counts } });
   }
 
-  // --- 6. Write, in bounded chunks -----------------------------------------
+  // --- 6. Write, in bounded chunks, inside the budget ----------------------
   const inserts = plan.writes.filter((w) => w.action === 'insert');
   const supersedes = plan.writes.filter((w) => w.action === 'supersede');
   const chunks: ChunkOutcome[] = [];
+  const dataVersion = `${parsed.parserVersion}:${parsed.fingerprint.sha256.slice(0, 12)}`;
 
+  let insertsAttempted = 0;
   for (let i = 0; i < inserts.length; i += chunkSize) {
+    if (!budget.canStart('insert_chunk')) break;
     const slice = inserts.slice(i, i + chunkSize);
+    insertsAttempted = i + slice.length;
     // ignoreDuplicates: defense in depth alongside the existing-state check
     // above -- with the full AMFI universe resolved, a row this plan
     // believes is new but that in fact already exists (however that
@@ -398,24 +591,28 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     // masks a genuine correction: a row with DIFFERENT data for the same
     // (instrument, price_date) is planImport's 'supersede' action, a
     // completely separate code path below that this ignoreDuplicates never
-    // touches.
-    const { error } = await db.from('ii_prices_nav').upsert(
-      slice.map((w) => ({
-        instrument_id: w.instrumentId,
-        currency_code: w.currencyCode,
-        price_date: w.priceDate,
-        price: w.price,
-        source_timestamp: retrievedAt,
-        data_version: `${parsed.parserVersion}:${parsed.fingerprint.sha256.slice(0, 12)}`,
-        record_checksum: w.recordChecksum,
-        import_batch_id: batchId,
-        quality_status: 'ok',
-      })),
-      { onConflict: 'instrument_id,price_date', ignoreDuplicates: true }
+    // touches. It is also what makes a rerun after a partial run safe.
+    const { error } = await budget.time('insert_chunk', async () =>
+      db.from('ii_prices_nav').upsert(
+        slice.map((w) => ({
+          instrument_id: w.instrumentId,
+          currency_code: w.currencyCode,
+          price_date: w.priceDate,
+          price: w.price,
+          source_timestamp: retrievedAt,
+          data_version: dataVersion,
+          record_checksum: w.recordChecksum,
+          import_batch_id: batchId,
+          quality_status: 'ok',
+        })),
+        { onConflict: 'instrument_id,price_date', ignoreDuplicates: true }
+      )
     );
     chunks.push({ chunkIndex: chunks.length, attempted: slice.length, succeeded: error ? 0 : slice.length, error: error?.message ?? null });
     if (!error) counts.inserted += slice.length;
   }
+  counts.remainingInserts = inserts.length - insertsAttempted;
+  mark('inserts');
 
   // Corrections (FIXED 2026-09-21 -- see NAV1_PROGRESS_LEDGER.md).
   //
@@ -449,41 +646,60 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   // instead of this one; this fix was selected because it requires no
   // migration, does not touch the proven-live fresh-insert path at all, and
   // fully preserves the audit trail's information content.
-  for (const w of supersedes) {
-    const { data: prior } = await db
-      .from('ii_prices_nav')
-      .select('id, price')
-      .eq('instrument_id', w.instrumentId)
-      .eq('price_date', w.priceDate)
-      .maybeSingle();
-    if (!prior) continue;
-    const { error } = await db.from('ii_prices_nav').update({
-      price: w.price,
-      source_timestamp: retrievedAt,
-      data_version: `${parsed.parserVersion}:${parsed.fingerprint.sha256.slice(0, 12)}`,
-      record_checksum: w.recordChecksum,
-      import_batch_id: batchId,
-      quality_status: 'ok',
-    }).eq('id', prior.id);
-    if (error) {
-      chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 0, error: error?.message ?? 'correction update failed' });
-      continue;
+  //
+  // Corrections count against the budget too (2026-09-25), and only start
+  // once every insert chunk has been attempted. A correction written by an
+  // earlier invocation re-plans as 'skip' (its checksum now matches).
+  let correctionsAttempted = 0;
+  if (counts.remainingInserts === 0) {
+    for (const w of supersedes) {
+      if (!budget.canStart('correction')) break;
+      correctionsAttempted++;
+      await budget.time('correction', async () => {
+        const { data: prior } = await db
+          .from('ii_prices_nav')
+          .select('id, price')
+          .eq('instrument_id', w.instrumentId)
+          .eq('price_date', w.priceDate)
+          .maybeSingle();
+        if (!prior) return;
+        const { error } = await db.from('ii_prices_nav').update({
+          price: w.price,
+          source_timestamp: retrievedAt,
+          data_version: dataVersion,
+          record_checksum: w.recordChecksum,
+          import_batch_id: batchId,
+          quality_status: 'ok',
+        }).eq('id', prior.id);
+        if (error) {
+          chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 0, error: error?.message ?? 'correction update failed' });
+          return;
+        }
+        await db.from('ii_reference_corrections').insert({
+          target_table: 'ii_prices_nav',
+          target_row_id: prior.id,
+          correction_kind: 'source_correction',
+          previous_value: { price: prior.price },
+          new_value: { price: w.price },
+          actor_kind: 'system_import',
+          reason: `Source ${source.sourceKey} republished a different NAV for ${w.priceDate}; the prior value is preserved in this audit record (previous_value) since ii_prices_nav's unique (instrument_id, price_date) constraint does not permit a second physical row for the same key -- see the code comment above this loop.`,
+          batch_id: batchId,
+        });
+        counts.superseded += 1;
+        chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 1, error: null });
+      });
     }
-    await db.from('ii_reference_corrections').insert({
-      target_table: 'ii_prices_nav',
-      target_row_id: prior.id,
-      correction_kind: 'source_correction',
-      previous_value: { price: prior.price },
-      new_value: { price: w.price },
-      actor_kind: 'system_import',
-      reason: `Source ${source.sourceKey} republished a different NAV for ${w.priceDate}; the prior value is preserved in this audit record (previous_value) since ii_prices_nav's unique (instrument_id, price_date) constraint does not permit a second physical row for the same key -- see the code comment above this loop.`,
-      batch_id: batchId,
-    });
-    counts.superseded += 1;
-    chunks.push({ chunkIndex: chunks.length, attempted: 1, succeeded: 1, error: null });
   }
+  counts.remainingCorrections = supersedes.length - correctionsAttempted;
+
+  mark('corrections');
 
   // --- 7. Settle -----------------------------------------------------------
+  const hadErrors = chunks.some((c) => c.error !== null);
+  if (!hadErrors && counts.remainingInserts + counts.remainingCorrections > 0) {
+    return settleIncomplete(counts, budget.unitsDone(), `${counts.remainingInserts} insert(s) and ${counts.remainingCorrections} correction(s)`);
+  }
+
   const settlement = settleBatch(chunks.length ? chunks : [{ chunkIndex: 0, attempted: 0, succeeded: 0, error: null }], 'commit_chunks');
   const alerts = buildAlerts({
     jobKey: args.jobKey,
@@ -503,4 +719,19 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     alerts,
     settlement.status === 'succeeded' ? {} : { error_code: settlement.partial ? 'PARTIAL_BATCH' : 'BATCH_FAILED', error_detail: settlement.detail }
   );
+
+  /** The budget ran out with work left and no write error. */
+  function settleIncomplete(c: IngestJobResult['counts'], unitsDone: number, what: string): Promise<IngestJobResult> {
+    const elapsed = clock() - startedAtMs;
+    if (unitsDone === 0) {
+      const detail = `The ${budgetMs} ms budget was used before any write could start (read phase ${readPhaseMs ?? '?'} ms, ${elapsed} ms elapsed); ${what} remain. Recorded as a failure: a run that cannot make progress is a problem, not a continuation.`;
+      return finish('failed', detail, c, parsed.fingerprint.sha256, [{ severity: 'critical', code: BUDGET_NO_PROGRESS_ERROR_CODE, detail: `${args.jobKey}: ${detail}` }], {
+        error_code: BUDGET_NO_PROGRESS_ERROR_CODE, error_detail: detail,
+      });
+    }
+    const detail = `Stopped at the ${budgetMs} ms time budget after ${elapsed} ms with ${what} remaining; the next invocation continues from here (every write is idempotent). Not a completed run: last_success_at is not advanced.`;
+    return finish('partial', detail, c, parsed.fingerprint.sha256, [{ severity: 'info', code: 'CONTINUING_NEXT_INVOCATION', detail: `${args.jobKey}: ${detail}` }], {
+      error_code: PARTIAL_CONTINUING_ERROR_CODE, error_detail: detail, notes: { continuing: true },
+    });
+  }
 }
