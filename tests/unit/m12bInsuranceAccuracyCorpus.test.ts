@@ -224,20 +224,20 @@ vi.mock('@/lib/aie/audit', () => ({ recordAieAuditEvent: async () => {} }));
 
 vi.mock('@/lib/aie/provider/providerFactory', async () => {
   const { MockAieProvider } = await import('@/lib/aie/provider/mockAieProvider');
-  return {
-    createAieAiProvider: () =>
-      new MockAieProvider({
-        respond: (req: { userPrompt: string }) => {
-          rec().aiPrompts.push(req.userPrompt);
-          // The adapter's own closed-enum schema is what decides whether this
-          // is acceptable — the mock deliberately returns an EMPTY fields
-          // array rather than inventing a policy name, because a corpus that
-          // scripted the AI into supplying the missing value would be
-          // measuring the script, not the system.
-          return JSON.stringify({ fields: [] });
-        },
-      }),
-  };
+  const make = () =>
+    new MockAieProvider({
+      respond: (req: { userPrompt: string }) => {
+        rec().aiPrompts.push(req.userPrompt);
+        // The adapter's own closed-enum schema is what decides whether this
+        // is acceptable — the mock deliberately returns an EMPTY fields
+        // array rather than inventing a policy name, because a corpus that
+        // scripted the AI into supplying the missing value would be
+        // measuring the script, not the system.
+        return JSON.stringify({ fields: [] });
+      },
+    });
+  // Gateways now use the per-call factory (createLazyAieAiProvider).
+  return { createAieAiProvider: make, createLazyAieAiProvider: make };
 });
 
 // The insurance_policies save is substituted so every canonical write attempt

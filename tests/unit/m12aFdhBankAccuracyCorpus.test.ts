@@ -277,15 +277,15 @@ vi.mock('@/lib/aie/audit', () => ({ recordAieAuditEvent: async () => {} }));
 
 vi.mock('@/lib/aie/provider/providerFactory', async () => {
   const { MockAieProvider } = await import('@/lib/aie/provider/mockAieProvider');
-  return {
-    createAieAiProvider: () =>
-      new MockAieProvider({
-        respond: (req: { userPrompt: string }) => {
-          rec().aiPrompts.push(req.userPrompt);
-          return JSON.stringify({ fields: state().aiScriptedFields });
-        },
-      }),
-  };
+  const make = () =>
+    new MockAieProvider({
+      respond: (req: { userPrompt: string }) => {
+        rec().aiPrompts.push(req.userPrompt);
+        return JSON.stringify({ fields: state().aiScriptedFields });
+      },
+    });
+  // Gateways now use the per-call factory (createLazyAieAiProvider).
+  return { createAieAiProvider: make, createLazyAieAiProvider: make };
 });
 
 vi.mock('@/lib/aie/db/repository', async (importOriginal) => {

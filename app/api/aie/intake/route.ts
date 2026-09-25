@@ -10,7 +10,7 @@ import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { noDomainAdapterReconciliationRule } from '@/lib/aie/reconciliation/types';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
@@ -23,7 +23,7 @@ const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investme
 // `lib/aie/provider/providerFactory.ts`'s header. Still gated by
 // gateway.ts's own kill switch (defaults OFF) regardless of which provider
 // is selected.
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
 

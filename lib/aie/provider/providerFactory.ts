@@ -91,3 +91,40 @@ export function createAieAiProvider(mockScript: MockAieProviderScript = DEFAULT_
   }
   return new OpenAiAieProvider();
 }
+
+/**
+ * A provider that decides mock / openai / unconfigured AT EACH CALL, not when
+ * the importing module loads.
+ *
+ * Found in production (2026-09-25): every AIE gateway was built at module
+ * load with `createAieAiProvider()`, and on the production server that read
+ * of AIE_AI_PROVIDER saw no value -- every payslip AI call failed with
+ * PROVIDER_UNAVAILABLE (the unconfigured stand-in) while AIE_AI_PROVIDER was
+ * set to 'openai' in Amplify, and every setting read at CALL time (the
+ * per-document AI switch, the masking key, the malware switch) worked. Under
+ * `next dev` the settings are loaded before any module, which is why DEV never
+ * showed it. Resolving per call makes the provider follow the same settings
+ * the rest of the request sees.
+ *
+ * The missing-key refusal still happens, now as a typed ProviderError (AUTH)
+ * at call time rather than a module-load crash -- the gateway turns it into a
+ * provider_error outcome with that category, never a silent mock.
+ */
+export function createLazyAieAiProvider(mockScript: MockAieProviderScript = DEFAULT_MOCK_SCRIPT): AieAiProvider {
+  const resolve = (): AieAiProvider => {
+    try {
+      return createAieAiProvider(mockScript);
+    } catch (e) {
+      throw new ProviderError('AUTH', e instanceof Error ? e.message : 'AI provider could not be created');
+    }
+  };
+  return {
+    get providerName() {
+      return getAieAiProviderKind();
+    },
+    // async so a resolution failure is a rejected promise, as the interface promises.
+    generateStructured: async (req) => resolve().generateStructured(req),
+    validateProviderHealth: async () => resolve().validateProviderHealth(),
+    estimateCost: (inputTokens, outputTokens, model) => resolve().estimateCost(inputTokens, outputTokens, model),
+  };
+}

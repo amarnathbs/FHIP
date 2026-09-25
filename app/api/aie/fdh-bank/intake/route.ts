@@ -8,7 +8,7 @@ import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
@@ -40,7 +40,7 @@ import '@/lib/aie/adapters/fdhBankStatement'; // side-effecting registration (sc
 // both must be 'true' or every call short-circuits to
 // `kill_switch_blocked` before the (mock) provider is ever invoked. Both
 // default OFF.
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled() && isAieFdhBankAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });

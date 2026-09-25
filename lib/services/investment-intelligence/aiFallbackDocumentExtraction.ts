@@ -47,7 +47,7 @@ import { unitDeltaForTransaction } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
 import { fromPlainNumber, scaledToDecimalString } from './decimal';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { getAieAiModel, getAieAiMaxOutputTokensPerDocument } from '@/lib/aie/config';
@@ -64,7 +64,7 @@ import {
 // AIE intake routes. The kill switch (isAieAiFallbackEnabled) defaults OFF,
 // so constructing this eagerly never causes a real provider call unless an
 // operator has explicitly enabled it.
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
