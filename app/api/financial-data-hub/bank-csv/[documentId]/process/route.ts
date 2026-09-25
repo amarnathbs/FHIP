@@ -12,7 +12,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   try {
     const result = await processBankCsvDocument(user.id, documentId);
     return ok({
-      document_id: result.document.id,
+      // 2026-09-25: for a byte-identical re-upload, the ORIGINAL upload the
+      // result belongs to (its import summary, or its AI draft to confirm).
+      document_id: result.duplicateOfDocumentId ?? result.document.id,
+      duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
+      duplicate: Boolean(result.duplicateOfDocumentId),
       certification_status: result.certificationStatus,
       processing_status: result.document.processing_status,
       reconciliation_status: result.reconciliationStatus,

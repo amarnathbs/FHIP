@@ -32,6 +32,7 @@
 
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   ingestionJobsRepository,
@@ -118,6 +119,10 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new BankCsvProcessingError('invalid_state', `cannot run detection while the document is ${document.processing_status}`);
   }
+  // 2026-09-25: a byte-identical copy of an already-imported CSV is not read
+  // at all; processing it answers with the original (see
+  // processBankCsvDocument).
+  if (await findImportedIdenticalCsv(userId, documentId)) return document;
   // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
   if (!checkFdhDocumentMalwareAdmission(document).admitted) {
     throw new BankCsvProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
@@ -261,6 +266,18 @@ export interface ProcessBankCsvResult {
   rejectedRows: number;
   certificationStatus: string | null;
   reconciliationStatus: string | null;
+  /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
+   * upload that was already imported. Nothing was read for the copy; the
+   * summary is the original's, with nothing created by this upload. */
+  duplicateOfDocumentId?: string;
+}
+
+/** The earlier, already-imported upload this CSV is a byte-identical copy
+ * of, if any (identicalUpload.ts). CSV imports have no AI draft to carry on
+ * with, so only a settled import counts. */
+async function findImportedIdenticalCsv(userId: string, documentId: string): Promise<string | null> {
+  const match = await findEarlierIdenticalUpload(userId, documentId, { ...IDENTICAL_UPLOAD_SPECS.bank, includePendingDrafts: false });
+  return match?.kind === 'evidence' ? match.documentId : null;
 }
 
 /** Removes every row a PRIOR (failed) processing attempt for this document
@@ -278,6 +295,14 @@ export async function processBankCsvDocument(userId: string, documentId: string)
   // IDEMPOTENCY (spec 37, 56): already certified/settled — return as-is.
   if (document.certification_status && ['certified', 'review_required', 'rejected'].includes(document.certification_status) && document.processing_completed_at) {
     return summariseExisting(document);
+  }
+
+  // 2026-09-25: a byte-identical re-upload of a CSV already imported is never
+  // parsed again -- the original's summary, nothing created by this upload.
+  const originalId = await findImportedIdenticalCsv(userId, documentId);
+  if (originalId) {
+    const original = await getOwnedDocument(userId, originalId);
+    return { ...summariseExisting(original), transactionsCreated: 0, duplicatesSkipped: original.certified_row_count ?? 0, rejectedRows: 0, duplicateOfDocumentId: originalId };
   }
 
   if (!document.detection_status || document.detection_status === 'invalid' || document.detection_status === 'unsupported') {

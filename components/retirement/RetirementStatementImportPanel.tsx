@@ -30,6 +30,14 @@ import {
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
 import { readApiJson as readJson } from '@/lib/financial-data-hub/clientApiEnvelope';
+import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
+import {
+  useWaitingImports,
+  WaitingImportsList,
+  discardAiDraft,
+  DUPLICATE_UPLOAD_MESSAGE,
+  type WaitingImport,
+} from '@/components/financial-data-hub/WaitingImports';
 
 type Phase =
   | 'form'
@@ -178,15 +186,15 @@ interface AiFallbackDraft {
 interface Member { id: string; member_type: 'self' | 'spouse'; target_retirement_age: number | null }
 interface AccountOption { id: string; account_name: string; account_type: string | null; currency_code: string; owner: string }
 
-interface ProposalField {
-  field_name: string;
-  value_kind: string;
-  proposed_value: string | null;
-  existing_value: string | null;
-  is_recommended: boolean;
-  requires_confirmation: boolean;
-  reason_code: string;
-}
+// 2026-09-25: the comparison rows are read through the shared
+// `normaliseProposedFields` (lib/import-bridge/proposedFieldShape.ts). This
+// panel used to cast them as snake_case, but POST .../proposal returns the
+// adapter's draft fields in camelCase (fieldName, proposedValue, ...), so
+// every label and value was undefined: a blank comparison table, nothing
+// ticked, and "Add as a new retirement account" sent an empty selection the
+// apply step refuses (NO_FIELDS_SELECTED) -- the payslip panel's production
+// defect of the same day, in the retirement panel.
+type ProposalField = ProposedField;
 
 interface CurrentVsStatement {
   current: string | null;
@@ -317,6 +325,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   useEffect(() => () => {
     scanPollCancelRef.current.cancelled = true;
   }, []);
+  // 2026-09-25: statements this user left part-way through. Before, a reload
+  // stranded an AI reading, an unapproved statement or an unapplied comparison.
+  const { items: waiting, reload: reloadWaiting } = useWaitingImports('retirement');
 
   useEffect(() => {
     let cancelled = false;
@@ -395,6 +406,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     // single-call upload response and the post-scan `/process` response funnel
     // through this one function, so this single branch covers both paths.
     if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      // For a re-upload, `document_id` is the ORIGINAL upload whose reading
+      // still awaits a check (2026-09-25) -- the confirm goes there.
+      if (data.duplicate_of_document_id) setMessage(DUPLICATE_UPLOAD_MESSAGE);
       setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
       setPhase('ai_fallback_review');
       return;
@@ -405,10 +419,13 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       return;
     }
     if (data.pipeline_status === 'duplicate_statement') {
+      // 2026-09-25: `document_id` is now the ORIGINAL upload. It used to be
+      // the copy, which has no statement of its own, so this review 404ed and
+      // the panel dead-ended on a blank screen.
       setPhase('duplicate');
-      setMessage('You have already imported this exact statement, so nothing was added again.');
+      setMessage(DUPLICATE_UPLOAD_MESSAGE);
       await loadReview(docId);
-      setPhase('duplicate');
+      setPhase((p) => (p === 'error' ? p : 'duplicate'));
       return;
     }
     await loadReview(docId);
@@ -508,23 +525,32 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     } finally { setBusy(false); }
   }, [documentId, loadReview]);
 
-  const handleGenerateProposal = useCallback(async () => {
-    if (!documentId) return;
+  const handleGenerateProposal = useCallback(async (forDocumentId?: string) => {
+    const target = forDocumentId ?? documentId;
+    if (!target) return;
     setBusy(true); setMessage(null);
     try {
-      const res = await fetch(`/api/financial-data-hub/retirement-statement/${documentId}/proposal`, { method: 'POST' });
+      const res = await fetch(`/api/financial-data-hub/retirement-statement/${target}/proposal`, { method: 'POST' });
       const body = await readJson(res);
-      if (!res.ok) { setMessage(String(body.error ?? 'Could not prepare the comparison.')); return; }
+      // 2026-09-25: this statement's comparison was already decided (a
+      // re-upload leads back to it). Say so; never offer a second apply.
+      if (!res.ok && body.error === 'already_decided') {
+        setPhase(body.outcome === 'kept_existing' ? 'kept_existing' : 'applied');
+        setMessage(String(body.message ?? 'This statement has already been added to your retirement accounts.'));
+        reloadWaiting();
+        return;
+      }
+      if (!res.ok) { setMessage(String(body.message ?? body.error ?? 'Could not prepare the comparison.')); return; }
       setProposalId(String(body.proposal_id));
-      const nextFields = (body.fields as ProposalField[]) ?? [];
+      const nextFields = normaliseProposedFields(body.fields);
       setFields(nextFields);
       // Only RECOMMENDED fields are ticked by default. Contribution rates
       // require explicit confirmation and so start unticked (spec section 109).
-      setSelected(new Set(nextFields.filter((f) => f.is_recommended && !f.requires_confirmation).map((f) => f.field_name)));
+      setSelected(new Set(nextFields.filter((f) => f.isRecommended && !f.requiresConfirmation).map((f) => f.fieldName)));
       setDecision(body.recommended_apply_mode === 'add_new' ? 'add_new' : 'update_existing');
       setPhase('comparing');
     } finally { setBusy(false); }
-  }, [documentId]);
+  }, [documentId, reloadWaiting]);
 
   const toggleField = useCallback((name: string) => {
     setSelected((prev) => {
@@ -572,9 +598,10 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         setPhase('applied');
         setMessage('Your retirement account has been updated from this statement.');
       }
+      reloadWaiting(); // this statement is no longer waiting
       onApplied?.();
     } finally { setBusy(false); }
-  }, [documentId, proposalId, decision, selected, onApplied, handleGenerateProposal]);
+  }, [documentId, proposalId, decision, selected, onApplied, handleGenerateProposal, reloadWaiting]);
 
   /** Removes one AI-read line the user judges wrong. Deletion is the only
    * per-row edit offered, deliberately: the statement's own summary figures
@@ -614,11 +641,30 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         return;
       }
       setAiDraft(null);
+      reloadWaiting();
       await loadReview(documentId);
     } finally {
       setBusy(false);
     }
-  }, [aiDraft, documentId, loadReview]);
+  }, [aiDraft, documentId, loadReview, reloadWaiting]);
+
+  /** Continue a statement left part-way through (2026-09-25). */
+  const resumeWaiting = useCallback(async (item: WaitingImport) => {
+    if (item.country_code === 'AU' || item.country_code === 'IN') setJurisdiction(item.country_code);
+    setDocumentId(item.document_id);
+    setMessage(null);
+    setProposalId(null);
+    if (item.stage === 'ai_draft' && item.ai_fallback_draft) {
+      setAiDraft(item.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
+      return;
+    }
+    setBusy(true);
+    try {
+      await loadReview(item.document_id);
+    } finally { setBusy(false); }
+    if (item.stage === 'compare') await handleGenerateProposal(item.document_id);
+  }, [loadReview, handleGenerateProposal]);
 
   const reset = useCallback(() => {
     setPhase('form'); setBusy(false); setMessage(null); setFile(null);
@@ -654,6 +700,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           </p>
         </div>
       )}
+
+      {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
       {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-3">
@@ -860,6 +908,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             <button
               type="button"
               onClick={() => {
+                // 2026-09-25: recorded on the server too, so the reading is not
+                // offered again as something to continue.
+                if (documentId) void discardAiDraft(documentId).then(reloadWaiting);
                 setAiDraft(null);
                 setMessage('We could not read this statement. Please check the file, or add these details manually.');
                 setPhase('unable_to_read');
@@ -1040,7 +1091,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
               </p>
             )}
             {statement.approval_status === 'approved' && !proposalId && (
-              <button type="button" onClick={handleGenerateProposal} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+              <button type="button" onClick={() => handleGenerateProposal()} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
                 Continue to comparison
               </button>
             )}
@@ -1067,21 +1118,21 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
               </thead>
               <tbody>
                 {fields.map((f) => {
-                  const changed = f.proposed_value !== f.existing_value;
-                  const label = FIELD_LABELS[f.field_name] ?? f.field_name;
+                  const changed = f.proposedValue !== f.existingValue;
+                  const label = FIELD_LABELS[f.fieldName] ?? f.fieldName;
                   return (
-                    <tr key={f.field_name} className="border-b border-gray-100">
+                    <tr key={f.fieldName} className="border-b border-gray-100">
                       <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{label}</th>
-                      <td className="py-2 pr-2">{displayValue(f.existing_value, f.value_kind, currency)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposed_value, f.value_kind, currency)}</td>
+                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind, currency)}</td>
+                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind, currency)}</td>
                       <td className="py-2">
                         <label className="inline-flex items-center gap-2">
                           <input
-                            type="checkbox" checked={selected.has(f.field_name)}
-                            onChange={() => toggleField(f.field_name)}
+                            type="checkbox" checked={selected.has(f.fieldName)}
+                            onChange={() => toggleField(f.fieldName)}
                             aria-label={`Apply ${label}`}
                           />
-                          {f.requires_confirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
                         </label>
                       </td>
                     </tr>
@@ -1110,7 +1161,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           </fieldset>
 
           <div className="flex gap-3">
-            <button type="button" onClick={handleGenerateProposal} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            <button type="button" onClick={() => handleGenerateProposal()} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm">
               Refresh comparison
             </button>
             <button type="button" onClick={handleApply} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50">

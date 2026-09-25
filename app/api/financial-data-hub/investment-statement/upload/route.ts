@@ -87,11 +87,13 @@ export async function POST(req: Request) {
       bytes,
     );
     const reviewDocumentId =
-      result.pipelineStatus === 'duplicate_statement' && result.document.duplicate_of_document_id
-        ? result.document.duplicate_of_document_id
-        : result.document.id;
+      // 2026-09-25: the original upload the service carried on with (evidence
+      // OR an AI draft awaiting review), found by the shared identical-upload
+      // rule -- never the copy, which has nothing of its own to review.
+      result.duplicateOfDocumentId ?? result.document.id;
     return ok({
       document_id: reviewDocumentId,
+      duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
       processing_status: result.document.processing_status,
       pipeline_status: result.pipelineStatus,
       statement_id: result.statementId,

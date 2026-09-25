@@ -62,6 +62,13 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import {
+  useWaitingImports,
+  WaitingImportsList,
+  discardAiDraft,
+  DUPLICATE_UPLOAD_MESSAGE,
+  type WaitingImport,
+} from '@/components/financial-data-hub/WaitingImports';
 
 type Phase =
   | 'form'
@@ -131,6 +138,9 @@ interface ProcessSummary {
   transactionsCreated: number;
   duplicatesSkipped: number;
   reconciliationStatus: string | null;
+  /** 2026-09-25: this upload was a byte-identical copy of a statement already
+   * imported; nothing was read again and nothing new was created. */
+  alreadyImported?: boolean;
 }
 
 async function readJson(res: Response) {
@@ -165,6 +175,10 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => () => {
     scanPollCancelRef.current.cancelled = true;
   }, []);
+  // 2026-09-25: AI readings this user left unchecked. Before, closing the
+  // panel or reloading the page stranded a reading that had been paid for --
+  // and re-uploading the file paid for another one.
+  const { items: waiting, reload: reloadWaiting } = useWaitingImports('bank');
 
   useEffect(() => {
     let cancelled = false;
@@ -240,6 +254,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         // Best-effort only; transactions are still correctable by hand.
       }
       setAiDraft(null);
+      reloadWaiting();
       setSummary({
         transactionsCreated: data.transactions_created ?? 0,
         duplicatesSkipped: data.duplicates_skipped ?? 0,
@@ -257,11 +272,14 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   // proved works end-to-end (upload -> detect -> process -> categorise ->
   // approve). `password` is only ever sent on the bank-PDF path, and only
   // once the upload step has already told us this document needs one.
-  async function runProcessing(docId: string, csv: boolean, pdfPassword?: string) {
+  async function runProcessing(docId: string, csv: boolean, pdfPassword?: string, knownCopy = false) {
     setPhase('processing');
     setMessage(null);
 
-    if (csv) {
+    // A byte-identical copy of a statement already imported is never read
+    // again (2026-09-25): processing answers straight away with the original,
+    // so format detection is skipped too.
+    if (csv && !knownCopy) {
       const detectRes = await fetch(`/api/financial-data-hub/bank-csv/${docId}/detect`, { method: 'POST' });
       const { ok: detectOk, json: detectJson } = await readJson(detectRes);
       if (!detectOk) {
@@ -286,24 +304,41 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     }
 
     const data = processJson.data ?? {};
+    // 2026-09-25: a re-upload of a statement already imported. Nothing was
+    // read and nothing new was created; say so and point at the review page.
+    if (data.duplicate && data.pipeline_status !== 'ai_fallback_available') {
+      setMessage(DUPLICATE_UPLOAD_MESSAGE);
+      setSummary({
+        transactionsCreated: 0,
+        duplicatesSkipped: data.duplicates_skipped ?? 0,
+        reconciliationStatus: data.reconciliation_status ?? null,
+        alreadyImported: true,
+      });
+      setPhase('done');
+      return;
+    }
+    // AIE bank-statement AI-fallback. Checked BEFORE the password branch
+    // (2026-09-25): a draft means the file was already read, so a password
+    // code still on the document must not send the user back to the password
+    // prompt -- that is how a resumed draft would otherwise dead-end. For a
+    // re-upload, `document_id` is the ORIGINAL upload whose reading awaits a
+    // check, and the confirm goes there.
+    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      setDocumentId((data.document_id as string | undefined) ?? docId);
+      setMessage(data.duplicate_of_document_id ? DUPLICATE_UPLOAD_MESSAGE : null);
+      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
+      return;
+    }
     if (data.error_code === 'password_required' || data.error_code === 'password_invalid') {
       if (data.error_code === 'password_invalid') setPassword('');
       setMessage(data.error_code === 'password_invalid' ? FAILURE_MESSAGES.password_invalid : null);
       setPhase('awaiting_password');
       return;
     }
-    // AIE bank-statement AI-fallback (2026-09-23). Checked BEFORE the generic
-    // `error_code` branch below: when the native parse fails on a
-    // readable-but-unrecognised layout, the service returns a DRAFT instead
-    // of failing, and the document is deliberately left in `processing` with
-    // no error code. Ordering matters — placed after this branch, a perfectly
-    // good draft would still be read as a hard failure on any response that
-    // also carried an error code.
-    if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
-      setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
-      setPhase('ai_fallback_review');
-      return;
-    }
+    // (The AI-fallback draft branch, 2026-09-23, now sits above the password
+    // branch -- see there. It must stay before the generic `error_code`
+    // branch below, or a perfectly good draft would be read as a failure.)
 
     if (data.error_code) {
       failWith(data.error_code, 'This file could not be processed.');
@@ -362,6 +397,14 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       const docId = data.document_id as string;
       setDocumentId(docId);
 
+      // 2026-09-25: a byte-identical re-upload of a statement already imported
+      // (or whose AI reading awaits a check). Go straight to the original --
+      // no account question, no password prompt, no second read.
+      if (data.duplicate_of_document_id) {
+        await runProcessing(docId, csv, undefined, true);
+        return;
+      }
+
       if (data.account_resolution === 'ambiguous') {
         setMessage(
           'We couldn’t automatically match this statement to one of your accounts. Try adding the last few digits of the account or card number above and uploading again.',
@@ -414,6 +457,15 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  /** Continue an AI reading left unchecked (2026-09-25). */
+  function resumeWaiting(item: WaitingImport) {
+    if (item.stage !== 'ai_draft' || !item.ai_fallback_draft) return;
+    setDocumentId(item.document_id);
+    setMessage(null);
+    setAiDraft(item.ai_fallback_draft as AiFallbackDraft);
+    setPhase('ai_fallback_review');
+  }
+
   async function handleSubmitPassword() {
     if (!documentId || !password) return;
     setBusy(true);
@@ -441,6 +493,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       )}
+
+      {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={resumeWaiting} />}
 
       {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-4">
@@ -505,6 +559,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
 
       {phase === 'ai_fallback_review' && aiDraft && (
         <div className="mt-4 space-y-4">
+          {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
           <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
             We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
             check these transactions before saving — <strong>nothing has been saved yet</strong>.
@@ -591,6 +646,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => {
+                // 2026-09-25: recorded on the server too, so the reading is not
+                // offered again as something to continue.
+                if (documentId) void discardAiDraft(documentId).then(reloadWaiting);
                 setAiDraft(null);
                 setMessage(FAILURE_MESSAGES.layout_unsupported);
                 setPhase('error');
@@ -660,7 +718,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       {phase === 'done' && (
         <div className="mt-4 space-y-3">
           <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
-            {summary && summary.transactionsCreated > 0
+            {summary?.alreadyImported
+              ? `${DUPLICATE_UPLOAD_MESSAGE} Nothing new was added.`
+              : summary && summary.transactionsCreated > 0
               ? `Done. ${summary.transactionsCreated} transaction${summary.transactionsCreated === 1 ? '' : 's'} extracted${
                   summary.duplicatesSkipped > 0
                     ? ` (${summary.duplicatesSkipped} already-imported duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped)`

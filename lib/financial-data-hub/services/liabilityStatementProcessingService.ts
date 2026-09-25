@@ -38,6 +38,7 @@ import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/liability/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import {
   isAieLiabilityAiFallbackEnabled,
   requestLiabilityAiExtraction,
@@ -136,6 +137,11 @@ export interface UploadLiabilityStatementResult {
    * you to review", never a silent auto-write of an AI guess.
    */
   aiFallbackDraft?: LiabilityStatementAiFallbackDraft;
+  /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
+   * one that already has a result (evidence, or an AI draft awaiting review).
+   * The result returned is the ORIGINAL's, and the caller must carry on with
+   * this document id -- the copy has nothing of its own to review. */
+  duplicateOfDocumentId?: string;
 }
 
 /**
@@ -339,11 +345,19 @@ async function resolveLiabilityStatementDocument(
   // earlier statement's evidence (if it finished processing) is returned
   // unchanged, never re-extracted, never a second `fdh_liability_statements`
   // row.
-  if (document.duplicate_of_document_id) {
-    const existingStatementId = await getLiabilityStatementIdForDocument(userId, document.duplicate_of_document_id);
-    if (existingStatementId) {
-      return { document, statementId: existingStatementId, pipelineStatus: 'duplicate_statement' };
-    }
+  //
+  // 2026-09-25: found through the shared identical-upload rule, not
+  // `duplicate_of_document_id` (which points at the NEWEST earlier copy, so a
+  // third upload pointed at the second -- a copy with no evidence -- and was
+  // read, and on the AI path paid for, all over again). Checked before any
+  // download, parse or AI call. An original whose AI draft still awaits
+  // review is carried on with too: the user confirms THAT draft, once.
+  const identical = await findEarlierIdenticalUpload(userId, document.id, IDENTICAL_UPLOAD_SPECS.liability);
+  if (identical?.kind === 'evidence') {
+    return { document, statementId: identical.evidenceId, pipelineStatus: 'duplicate_statement', duplicateOfDocumentId: identical.documentId };
+  }
+  if (identical?.kind === 'pending_draft') {
+    return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: identical.payload as LiabilityStatementAiFallbackDraft, duplicateOfDocumentId: identical.documentId };
   }
 
   // Real-malware-gate wiring (2026-09-21): see the identical comment in
@@ -360,6 +374,15 @@ async function resolveLiabilityStatementDocument(
   // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
   if (!checkFdhDocumentMalwareAdmission(document).admitted) {
     throw new LiabilityStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
+  // 2026-09-25: a draft the server already issued for THIS document is
+  // returned before the file is downloaded or parsed again -- resuming a
+  // draft must not depend on the raw file still existing (the backstop purges
+  // it) and must never pay for a second read.
+  const ownPending = await loadPendingAiFallbackDraft(userId, document.id);
+  if (ownPending.found) {
+    return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: ownPending.payload as LiabilityStatementAiFallbackDraft };
   }
 
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
@@ -398,12 +421,8 @@ async function resolveLiabilityStatementDocument(
       // here with the SAME certified `decodeCsvBytes()` the native extractor
       // itself uses (encoding sniffing included), purely so the masking layer
       // has text to work on. No second download and no second decoder.
-      // 2026-09-25: a pending server-issued draft is returned as-is, so a
-      // repeated /process never pays for a second provider call.
-      const pending = await loadPendingAiFallbackDraft(userId, document.id);
-      if (pending.found) {
-        return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: pending.payload as LiabilityStatementAiFallbackDraft };
-      }
+      // (A draft already issued for this document was returned above, before
+      // the download.)
       const decoded = decodeCsvBytes(download.bytes).text;
       const fallback = await attemptAiLiabilityFallback(userId, document.id, decoded);
       if (fallback.ok) {

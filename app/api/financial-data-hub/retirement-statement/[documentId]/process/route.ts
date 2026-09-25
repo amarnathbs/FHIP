@@ -61,7 +61,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     );
 
     return ok({
-      document_id: result.document.id,
+      // 2026-09-25: a byte-identical re-upload carries on with the ORIGINAL
+      // upload (its statement, or its AI draft awaiting review). Returning
+      // the copy's id here sent the panel to review a document with no
+      // statement of its own -- a dead end ("No statement evidence has been
+      // extracted from this document yet").
+      document_id: result.duplicateOfDocumentId ?? result.document.id,
+      duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
       statement_id: result.statementId,
       pipeline_status: result.pipelineStatus,
       failure_kind: result.failureKind ?? null,

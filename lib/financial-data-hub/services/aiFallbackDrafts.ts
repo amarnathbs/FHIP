@@ -169,3 +169,20 @@ export async function documentsWithPendingAiFallbackDrafts(documentIds: string[]
   if (error) return new Set();
   return new Set(((data ?? []) as Array<{ statement_upload_id: string }>).map((r) => r.statement_upload_id));
 }
+
+/** 2026-09-25: the user said an AI reading "doesn't look right". Its pending
+ * draft is marked `discarded` so it is no longer offered to resume (and can
+ * no longer be confirmed). Scoped by document AND user; reports whether a
+ * row actually changed (a zero-row update is not a success). */
+export async function discardPendingAiFallbackDraft(userId: string, documentId: string): Promise<{ discarded: boolean }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('fdh_ai_fallback_drafts')
+    .update({ status: 'discarded' })
+    .eq('statement_upload_id', documentId)
+    .eq('user_id', userId)
+    .eq('status', 'pending_review')
+    .select('id');
+  if (error) return { discarded: false };
+  return { discarded: ((data ?? []) as unknown[]).length > 0 };
+}

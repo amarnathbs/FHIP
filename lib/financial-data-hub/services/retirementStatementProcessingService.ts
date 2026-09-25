@@ -73,6 +73,7 @@ import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier, figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/retirement/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 // The retirement service holds only BYTES at its failure branch — there is no
 // extracted-text variable, because detection decodes the CSV into a local and
 // never returns it. `decodeCsvBytes` is the same pure decoder the detector
@@ -155,6 +156,10 @@ export interface UploadRetirementStatementResult {
    * statement row and refuses.
    */
   aiFallbackDraft?: RetirementAiDraftForReview;
+  /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
+   * one that already has a result; the caller carries on with THAT upload
+   * (the copy has no statement of its own, so reviewing it dead-ended). */
+  duplicateOfDocumentId?: string;
 }
 
 /**
@@ -396,13 +401,20 @@ async function resolveRetirementStatementDocument(
   // hash, reused unchanged. Never re-extracted, never a second statement row —
   // which is what makes "duplicate activities 0, duplicate proposals 0,
   // duplicate accounts 0" true without any FDH-12 code being involved.
-  if (document.duplicate_of_document_id) {
-    const existingStatementId = await getRetirementStatementIdForDocument(
-      userId, document.duplicate_of_document_id,
-    );
-    if (existingStatementId) {
-      return { document, statementId: existingStatementId, pipelineStatus: 'duplicate_statement', ...empty };
-    }
+  //
+  // 2026-09-25: the shared identical-upload rule (identicalUpload.ts), checked
+  // before any download, parse or AI call -- see the liability sibling for
+  // why `duplicate_of_document_id` alone sent a third upload back through the
+  // parser and the AI.
+  const identical = await findEarlierIdenticalUpload(userId, document.id, IDENTICAL_UPLOAD_SPECS.retirement);
+  if (identical?.kind === 'evidence') {
+    return { document, statementId: identical.evidenceId, pipelineStatus: 'duplicate_statement', duplicateOfDocumentId: identical.documentId, ...empty };
+  }
+  if (identical?.kind === 'pending_draft') {
+    return {
+      document, statementId: null, pipelineStatus: 'ai_fallback_available',
+      aiFallbackDraft: identical.payload as RetirementAiDraftForReview, duplicateOfDocumentId: identical.documentId, ...empty,
+    };
   }
 
   // Real-malware-gate wiring (2026-09-21): see the identical comment in
@@ -421,6 +433,17 @@ async function resolveRetirementStatementDocument(
   // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
   if (!checkFdhDocumentMalwareAdmission(document).admitted) {
     throw new RetirementStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
+  // 2026-09-25: a draft already issued for THIS document is returned before
+  // the file is downloaded or parsed again (resume after a reload; the raw
+  // file may already be purged). Never a second provider call.
+  const ownPending = await loadPendingAiFallbackDraft(userId, document.id);
+  if (ownPending.found) {
+    return {
+      document, statementId: null, pipelineStatus: 'ai_fallback_available',
+      aiFallbackDraft: ownPending.payload as RetirementAiDraftForReview, ...empty,
+    };
   }
 
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
@@ -479,16 +502,8 @@ async function resolveRetirementStatementDocument(
     // function), so a draft offered AFTER `failDocument` could never be
     // confirmed. The document is therefore deliberately left in `queued`.
     if (RETIREMENT_AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(extraction.kind)) {
-      // 2026-09-25: a draft the server already issued for this document is
-      // returned as-is -- a repeated /process (reload, retry) never pays for
-      // a second provider call while the first draft awaits review.
-      const pending = await loadPendingAiFallbackDraft(userId, document.id);
-      if (pending.found) {
-        return {
-          document, statementId: null, pipelineStatus: 'ai_fallback_available',
-          aiFallbackDraft: pending.payload as RetirementAiDraftForReview, ...empty,
-        };
-      }
+      // (A draft already issued for this document was returned above, before
+      // the download -- a repeated /process never pays for a second call.)
       const fallback = await attemptAiRetirementFallback(userId, document.id, download.bytes, {
         jurisdiction: metadata.jurisdiction,
         currencyCode: metadata.currencyCode,

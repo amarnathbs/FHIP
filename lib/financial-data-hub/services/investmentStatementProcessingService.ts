@@ -54,6 +54,7 @@ import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/auInvestment/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import {
   isAieInvestmentStatementAiFallbackEnabled,
   requestAuInvestmentAiExtraction,
@@ -114,6 +115,9 @@ export interface UploadAuInvestmentStatementResult {
   activitiesExtracted: number;
   /** Populated ONLY when `pipelineStatus === 'ai_fallback_available'`. */
   aiFallbackDraft?: AuInvestmentStatementAiFallbackDraft;
+  /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
+   * one that already has a result; the caller carries on with THAT upload. */
+  duplicateOfDocumentId?: string;
 }
 
 /**
@@ -308,11 +312,17 @@ async function resolveAuInvestmentStatementDocument(
   // Duplicate whole-document upload (spec sections 54, 106, 120) — the same
   // already-certified FDH-3 signal every FDH phase reuses. Never
   // re-extracted, never a second `fdh_investment_statements` row.
-  if (document.duplicate_of_document_id) {
-    const existingStatementId = await getAuInvestmentStatementIdForDocument(userId, document.duplicate_of_document_id);
-    if (existingStatementId) {
-      return { document, statementId: existingStatementId, pipelineStatus: 'duplicate_statement', positionsExtracted: 0, activitiesExtracted: 0 };
-    }
+  //
+  // 2026-09-25: the shared identical-upload rule (identicalUpload.ts), checked
+  // before any download, parse or AI call -- see the liability sibling for
+  // why `duplicate_of_document_id` alone sent a third upload back through the
+  // parser and the AI.
+  const identical = await findEarlierIdenticalUpload(userId, document.id, IDENTICAL_UPLOAD_SPECS.investment);
+  if (identical?.kind === 'evidence') {
+    return { document, statementId: identical.evidenceId, pipelineStatus: 'duplicate_statement', positionsExtracted: 0, activitiesExtracted: 0, duplicateOfDocumentId: identical.documentId };
+  }
+  if (identical?.kind === 'pending_draft') {
+    return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: identical.payload as AuInvestmentStatementAiFallbackDraft, duplicateOfDocumentId: identical.documentId };
   }
 
   // Real-malware-gate wiring (2026-09-21): `completeUpload()` left this
@@ -336,6 +346,14 @@ async function resolveAuInvestmentStatementDocument(
   // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
   if (!checkFdhDocumentMalwareAdmission(document).admitted) {
     throw new AuInvestmentStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
+  // 2026-09-25: a draft already issued for THIS document is returned before
+  // the file is downloaded or parsed again (resume after a reload; the raw
+  // file may already be purged).
+  const ownPending = await loadPendingAiFallbackDraft(userId, document.id);
+  if (ownPending.found) {
+    return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: ownPending.payload as AuInvestmentStatementAiFallbackDraft };
   }
 
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
@@ -380,12 +398,9 @@ async function resolveAuInvestmentStatementDocument(
     // `confirmAiAuInvestmentFallback`'s header) and is bounded by the cost
     // admission ledger rather than by this branch.
     if (AU_INVESTMENT_AI_FALLBACK_ELIGIBLE_KINDS.includes(extraction.kind)) {
-      // 2026-09-25: a pending server-issued draft is returned as-is. This
-      // closes the "sequential retry bills again" limitation disclosed above.
-      const pending = await loadPendingAiFallbackDraft(userId, document.id);
-      if (pending.found) {
-        return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: pending.payload as AuInvestmentStatementAiFallbackDraft };
-      }
+      // (A draft already issued for this document was returned above, before
+      // the download; that closes the "sequential retry bills again"
+      // limitation disclosed above, for a re-upload of the same bytes too.)
       const fallback = await attemptAiAuInvestmentFallback(userId, document.id, decodeCsvBytes(download.bytes).text, {
         statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
         // CALLER CONTEXT ONLY — never the AI's impression of the page. The

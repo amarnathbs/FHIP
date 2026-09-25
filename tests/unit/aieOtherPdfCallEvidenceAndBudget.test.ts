@@ -25,7 +25,9 @@ vi.mock('@/lib/aie/provider/gateway', () => ({
     }
   },
 }));
-vi.mock('@/lib/aie/provider/providerFactory', () => ({ createAieAiProvider: () => ({}) }));
+// 2026-09-25: both factories, since main now builds every gateway with the per-call
+// lazy provider (createLazyAieAiProvider) -- a mock without it broke at import.
+vi.mock('@/lib/aie/provider/providerFactory', () => ({ createAieAiProvider: () => ({}), createLazyAieAiProvider: () => ({}) }));
 vi.mock('@/lib/aie/cost/costAdmission', () => ({ reserveConservativeAiCost: vi.fn(), settleAiCost: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({

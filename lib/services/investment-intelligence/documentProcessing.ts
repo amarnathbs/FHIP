@@ -164,6 +164,27 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const { data: doc, error: docErr } = await admin.from('ii_source_documents').select('*').eq('id', sourceDocumentId).eq('user_id', userId).maybeSingle();
   if (docErr || !doc) return { ok: false, status: 'not_found', parseRunId: null, error: 'Source document not found.' };
 
+  // 2026-09-25: resuming an AI reading that awaits the user's review ("Review
+  // AI-extracted data", or a byte-identical re-upload, which the upload route
+  // answers with this same document). Before, every such click re-downloaded
+  // and re-parsed the PDF and opened a new parse run just to find the review
+  // that already existed. The review is returned straight away -- no
+  // download, no parse, never a provider call.
+  if (!input.forceReparse && doc.status === 'ai_review_pending') {
+    const { data: pendingReview } = await admin
+      .from('ii_ai_extraction_reviews')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('source_document_id', sourceDocumentId)
+      .eq('status', 'pending_review')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (pendingReview) {
+      return { ok: false, status: 'ai_review_pending', parseRunId: null, error: null, aiExtractionReviewId: pendingReview.id as string };
+    }
+  }
+
   // Computed unconditionally (not just when `!input.forceReparse`) so it
   // can also guard every failure path below: once a genuine SUCCEEDED run
   // exists for this document, no subsequent failed attempt -- however it

@@ -69,7 +69,8 @@ import {
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
-import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS, type IdenticalUploadMatch } from './identicalUpload';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
 import { rangesOverlap } from '../bank-csv/reconciliation';
 import { moneyEquals } from '../domain/money';
@@ -126,7 +127,11 @@ export interface ProcessBankPdfResult {
   rejectedRows: number;
   certificationStatus: string | null;
   reconciliationStatus: string | null;
-  pipelineStatus: PdfPipelineStatus | 'idempotent_existing' | 'ai_fallback_available';
+  pipelineStatus: PdfPipelineStatus | 'idempotent_existing' | 'ai_fallback_available' | 'duplicate_statement';
+  /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
+   * upload that was already imported (or whose AI draft still awaits review).
+   * Nothing was read for the copy; the caller carries on with THAT upload. */
+  duplicateOfDocumentId?: string;
   /**
    * Populated ONLY when `pipelineStatus === 'ai_fallback_available'`. A DRAFT
    * an AI read off a statement the deterministic parser could not segment —
@@ -253,6 +258,21 @@ export async function processBankPdfDocument(userId: string, documentId: string,
   if (document.certification_status && ['certified', 'review_required', 'rejected'].includes(document.certification_status) && document.processing_completed_at) {
     return summariseExisting(document);
   }
+
+  // 2026-09-25: resuming an AI draft this document already has (a reload, a
+  // closed panel). The document is parked in `processing` while its draft
+  // awaits review, which the state check below refuses -- so before this a
+  // resume could only ever fail. Returned without reading anything again.
+  if (document.processing_status === 'processing') {
+    const own = await loadPendingAiFallbackDraft(userId, documentId);
+    if (own.found) return draftResult(document, own.payload as BankStatementAiFallbackDraft);
+  }
+
+  // 2026-09-25: a byte-identical re-upload of a statement already imported
+  // (or whose AI draft awaits review) carries on with that upload -- no
+  // download, no parse, no password prompt, no second AI call.
+  const identical = await findEarlierIdenticalUpload(userId, documentId, IDENTICAL_UPLOAD_SPECS.bank);
+  if (identical) return identicalUploadResult(userId, document, identical);
 
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new BankPdfProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
@@ -1021,6 +1041,39 @@ async function confirmClaimedBankStatementDraft(
   });
 
   return persistBankPdfPipelineResult({ userId, documentId, document, pipeline, priorRanges });
+}
+
+function draftResult(document: FdhStatementUpload, draft: BankStatementAiFallbackDraft, duplicateOfDocumentId?: string): ProcessBankPdfResult {
+  return {
+    document,
+    transactionsCreated: 0,
+    duplicatesSkipped: 0,
+    duplicateCandidates: 0,
+    rejectedRows: 0,
+    certificationStatus: null,
+    reconciliationStatus: null,
+    pipelineStatus: 'ai_fallback_available',
+    aiFallbackDraft: draft,
+    ...(duplicateOfDocumentId ? { duplicateOfDocumentId } : {}),
+  };
+}
+
+/** The result for a copy of an earlier upload: the original's draft, or the
+ * original's import summary with nothing created by this upload. */
+async function identicalUploadResult(userId: string, copy: FdhStatementUpload, match: IdenticalUploadMatch): Promise<ProcessBankPdfResult> {
+  if (match.kind === 'pending_draft') return draftResult(copy, match.payload as BankStatementAiFallbackDraft, match.documentId);
+  const original = await getOwnedDocument(userId, match.documentId);
+  return {
+    document: original,
+    transactionsCreated: 0,
+    duplicatesSkipped: original.certified_row_count ?? 0,
+    duplicateCandidates: 0,
+    rejectedRows: 0,
+    certificationStatus: original.certification_status,
+    reconciliationStatus: original.reconciliation_status,
+    pipelineStatus: 'duplicate_statement',
+    duplicateOfDocumentId: match.documentId,
+  };
 }
 
 function summariseExisting(document: FdhStatementUpload): ProcessBankPdfResult {

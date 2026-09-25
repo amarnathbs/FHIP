@@ -90,6 +90,7 @@ import {
   AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
 } from '@/lib/aie/adapters/payslip';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
@@ -979,36 +980,10 @@ export async function findEarlierIdenticalPayslip(
   userId: string,
   documentId: string,
 ): Promise<{ documentId: string; payrollEventId: string } | null> {
-  const admin = createAdminClient();
-  const { data: doc } = await admin
-    .from('fdh_statement_uploads')
-    .select('file_hash')
-    .eq('id', documentId)
-    .eq('user_id', userId)
-    .maybeSingle();
-  const fileHash = (doc as { file_hash: string | null } | null)?.file_hash;
-  if (!fileHash) return null;
-
-  const { data: copies } = await admin
-    .from('fdh_statement_uploads')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('document_type', 'payslip')
-    .eq('file_hash', fileHash)
-    .neq('id', documentId)
-    .order('created_at', { ascending: true })
-    .limit(20);
-  const ids = ((copies ?? []) as Array<{ id: string }>).map((c) => c.id);
-  if (ids.length === 0) return null;
-
-  const { data: events } = await admin
-    .from('fdh_payroll_events')
-    .select('id, statement_upload_id')
-    .eq('user_id', userId)
-    .in('statement_upload_id', ids);
-  const byDoc = new Map(((events ?? []) as Array<{ id: string; statement_upload_id: string }>).map((e) => [e.statement_upload_id, e.id]));
-  const original = ids.find((id) => byDoc.has(id));
-  return original ? { documentId: original, payrollEventId: byDoc.get(original)! } : null;
+  // The shared rule (identicalUpload.ts), which every statement type now uses
+  // too. Evidence only, exactly as the payslip fix shipped it.
+  const match = await findEarlierIdenticalUpload(userId, documentId, { ...IDENTICAL_UPLOAD_SPECS.payslip, includePendingDrafts: false });
+  return match?.kind === 'evidence' ? { documentId: match.documentId, payrollEventId: match.evidenceId } : null;
 }
 
 /** The upload a payroll event was extracted from (for pointing a duplicate at its original). */
