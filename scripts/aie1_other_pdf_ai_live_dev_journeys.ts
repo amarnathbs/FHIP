@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- DEV harness: untyped PostgREST/HTTP JSON read back for assertions */
 /**
  * AIE other-PDF AI proof (2026-09-25) -- LIVE DEV journeys for the AI
  * fallback of every document type other than payslip, with REAL GPT-4o mini.

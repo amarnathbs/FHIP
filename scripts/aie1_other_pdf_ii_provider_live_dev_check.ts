@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- DEV harness: untyped PostgREST/HTTP JSON read back for assertions */
 /**
  * AIE other-PDF AI proof (2026-09-25) -- Investment Intelligence: a
  * PROVIDER-LEVEL live DEV check with REAL gpt-4o-mini.
