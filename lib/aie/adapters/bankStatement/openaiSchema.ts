@@ -17,6 +17,7 @@
 
 import {
   aieScalarFieldJsonSchema,
+  aieMoneyFieldJsonSchema,
   aieLineItemArrayJsonSchema,
   aieDocumentFactsJsonSchema,
   aieNullableString,
@@ -32,8 +33,8 @@ export const BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA: Record<string, unknown> = 
     maskedAccountIdentifier: aieScalarFieldJsonSchema(),
     statementPeriodStart: aieScalarFieldJsonSchema(),
     statementPeriodEnd: aieScalarFieldJsonSchema(),
-    declaredOpeningBalance: aieScalarFieldJsonSchema(),
-    declaredClosingBalance: aieScalarFieldJsonSchema(),
+    declaredOpeningBalance: aieMoneyFieldJsonSchema(),
+    declaredClosingBalance: aieMoneyFieldJsonSchema(),
     allTransactionsListed: { type: 'boolean' },
     transactions: aieLineItemArrayJsonSchema({
       maxItems: AIE_BANK_STATEMENT_MAX_TRANSACTIONS,

@@ -42,6 +42,11 @@ import { deleteDocumentObject, verifyDocumentObjectAbsent } from './storage';
 import { assertPurgeTransition, isAllowedPurgeTransition, isPurgeEligible } from '../domain/documentLifecycle';
 import { buildStatementUploadPurgePatch } from '../domain/privacy';
 import { decideRawFileBackstopAction } from '../domain/rawFileBackstop';
+import { documentsWithPendingAiFallbackDrafts } from './aiFallbackDrafts';
+
+/** Statuses at which the document's structured evidence is already persisted
+ * (AIE-1 final completion, 2026-09-25 -- see rawFileBackstop.ts). */
+const DURABLE_RESULT_STATUSES: readonly string[] = ['extracted', 'review_required', 'ready_for_approval'];
 import {
   computePurgeDueDateMinutes,
   FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES,
@@ -276,13 +281,22 @@ export async function enforceRawFileHardBackstop(
     .returns<FdhStatementUpload[]>();
 
   let forcedPurgeCount = 0;
+  // AIE-1 final completion (2026-09-25): documents whose structured result is
+  // already durable keep their processing status; only the raw file goes.
+  const pendingDraftDocIds = await documentsWithPendingAiFallbackDrafts(
+    (candidates ?? []).filter((d) => d.processing_status === 'processing').map((d) => d.id),
+  );
   for (const doc of candidates ?? []) {
+    const hasDurableStructuredResult =
+      DURABLE_RESULT_STATUSES.includes(doc.processing_status) ||
+      (doc.processing_status === 'processing' && pendingDraftDocIds.has(doc.id));
     const decision = decideRawFileBackstopAction(
       {
         processingStatus: doc.processing_status,
         purgeStatus: doc.raw_document_purge_status,
         receivedAtIso: doc.uploaded_at ?? doc.created_at,
         purgeDueAtIso: doc.raw_document_purge_due_at,
+        hasDurableStructuredResult,
       },
       Date.now(),
       maxAgeMinutes,
@@ -301,7 +315,7 @@ export async function enforceRawFileHardBackstop(
         .update({
           raw_document_purge_status: 'pending',
           raw_document_purge_due_at: nowIso,
-          purge_reason: 'raw_retention_hard_backstop_60min',
+          purge_reason: `raw_retention_hard_backstop_${maxAgeMinutes}min`,
         })
         .eq('id', doc.id);
       await recordDocumentAuditEvent({

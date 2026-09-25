@@ -3,6 +3,8 @@ import { isAieDocumentIntakeEnabled, isAieAiFallbackEnabled, isUserInAiePilotCoh
 import { isAieIiAdapterEnabled } from '@/lib/aie/adapters/investment-intelligence/featureFlags';
 import { getIntakeForUser, listAuditEventsForIntake, updateIntakeStatus } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
+import { getMalwareScanState } from '@/lib/aie/malware/scanStateRepository';
+import { isRealScanAdmissible } from '@/lib/aie/malware/realScanGate';
 import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf/password';
 import { createDefaultDeps } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
@@ -89,6 +91,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ intakeI
     // document and break the one-run-per-intake assumption acceptance relies
     // on.
     return bad(`this document is not awaiting processing (status: ${intake.status})`, 409, 'not_awaiting_processing');
+  }
+
+  // AIE-1 final completion (2026-09-25). DEFECT: the intake route leaves a
+  // document whose real scan is still PENDING in `quarantined` -- the same
+  // status this route treats as "ready to process" -- and nothing here looked
+  // at the scan, so the II pipeline read and parsed bytes GuardDuty had not
+  // cleared (or had blocked, if the sweep later decided it). Only a clean
+  // verdict (or the scan switched off entirely) is admitted now; a pending
+  // scan is a retryable 409, never processing.
+  const scan = await getMalwareScanState('aie_document_intake', intakeId);
+  if (!isRealScanAdmissible(scan?.status)) {
+    if (scan?.status === 'pending') {
+      return bad('This document is still being scanned for safety. Please try again in a moment.', 409, 'malware_scan_pending');
+    }
+    return bad('This file could not be cleared by our security scan, so it cannot be processed.', 422, 'malware_scan_blocked');
   }
 
   if (password !== undefined) {

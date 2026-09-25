@@ -121,7 +121,9 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
    * conservative number, not the expensive one. */
   lineItemDocument?: boolean;
 }): Promise<AieAdapterExtractionOutcome<z.infer<TSchema>>> {
-  const idempotencyKey = `${params.idempotencyPrefix}:${params.requestId ?? randomUUID()}`;
+  // AIE-1 final completion (2026-09-25): per-attempt key; `requestId` is only
+  // a correlation id. See the payslip adapter's gateway for defect D1.
+  const idempotencyKey = `${params.idempotencyPrefix}:${params.requestId ?? 'adhoc'}:${randomUUID()}`;
   const result = await sharedGateway.requestFieldCompletion({
     systemPrompt: params.systemPrompt,
     maskedUserPrompt: params.maskedText,

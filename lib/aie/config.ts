@@ -58,6 +58,20 @@ export function getAieAiModel(): string {
   return process.env.AIE_AI_MODEL?.trim() || 'gpt-4o-mini';
 }
 
+/**
+ * AIE-1 final production completion (2026-09-25): the product contract is
+ * OpenAI GPT-4o mini ONLY -- no substitution, no escalation. `AIE_AI_MODEL`
+ * may re-pin between the alias and its dated snapshot, nothing else. The
+ * gateway refuses any other value before reserving budget or calling the
+ * provider (which also closes the pricing gap where an unknown model was
+ * silently priced as gpt-4o-mini).
+ */
+export const AIE_PERMITTED_MODELS: readonly string[] = Object.freeze(['gpt-4o-mini', 'gpt-4o-mini-2024-07-18']);
+
+export function isPermittedAieModel(model: string): boolean {
+  return AIE_PERMITTED_MODELS.includes(model);
+}
+
 /** Request timeout for one provider call (mission section 6.4/7.6: "define
  * a scan-wait deadline" style bounded wait — this is the AI-call analogue).
  * Default 20s: generous for a small masked-text completion, bounded so a
@@ -169,6 +183,16 @@ export function estimateOpenAiCostUsd(inputTokens: number, outputTokens: number,
  * substitution", and separately, no real provider traffic without an
  * explicit, reviewed opt-in). Set to `'openai'` only once
  * `AIE_OPENAI_API_KEY` is genuinely configured for this environment. */
-export function getAieAiProviderKind(): 'mock' | 'openai' {
-  return process.env.AIE_AI_PROVIDER === 'openai' ? 'openai' : 'mock';
+export function getAieAiProviderKind(): 'mock' | 'openai' | 'unconfigured' {
+  const value = process.env.AIE_AI_PROVIDER;
+  if (value === 'openai') return 'openai';
+  if (value === 'mock') return 'mock';
+  // AIE-1 final production completion (2026-09-25). Found by reading the
+  // production Amplify environment: AIE_AI_PROVIDER is NOT set there, so the
+  // old default silently selected the MOCK provider in production. Any AI
+  // fallback enabled there would have "succeeded" against a mock that returns
+  // `{ fields: [] }` -- a silent substitution the contract forbids. An unset
+  // value now selects the mock only under the test runner; everywhere else it
+  // is 'unconfigured', which fails every call closed as provider_unavailable.
+  return process.env.NODE_ENV === 'test' || process.env.VITEST ? 'mock' : 'unconfigured';
 }

@@ -19,7 +19,9 @@
 
 const MISSING_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous', 'conflicting_values_on_document'];
 
-function moneyFieldJsonSchema() {
+/** Plain `{ value, missingReasonCode }` envelope (dates, text): the Zod side
+ * applies no cross-field rule to these. */
+function plainFieldJsonSchema() {
   return {
     type: 'object',
     additionalProperties: false,
@@ -31,12 +33,40 @@ function moneyFieldJsonSchema() {
   };
 }
 
+/**
+ * AIE-1 final production completion (2026-09-25): MONEY fields enforce the Zod
+ * side's "exactly one of value / missingReasonCode" rule STRUCTURALLY via
+ * `anyOf`. Found live: gpt-4o-mini answered every absent field (e.g. the NPS
+ * fields on an Australian payslip) as `{ value: null, missingReasonCode:
+ * null }`, so every realistic payslip came back `schema_rejected` after a
+ * billed call (DEV request req_9df4a731402e427e9bba12823983d672). See
+ * `lib/aie/adapters/shared/openaiFactsSchema.ts#aieMoneyFieldJsonSchema`.
+ */
+function moneyFieldJsonSchema() {
+  return {
+    anyOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['value', 'missingReasonCode'],
+        properties: { value: { type: 'string' }, missingReasonCode: { type: 'null' } },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['value', 'missingReasonCode'],
+        properties: { value: { type: 'null' }, missingReasonCode: { type: 'string', enum: [...MISSING_REASON_ENUM] } },
+      },
+    ],
+  };
+}
+
 function dateFieldJsonSchema() {
-  return moneyFieldJsonSchema();
+  return plainFieldJsonSchema();
 }
 
 function textFieldJsonSchema() {
-  return moneyFieldJsonSchema();
+  return plainFieldJsonSchema();
 }
 
 function payFrequencyFieldJsonSchema() {

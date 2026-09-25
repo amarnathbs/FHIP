@@ -25,6 +25,8 @@
  * comment).
  */
 
+import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -242,6 +244,12 @@ export async function processBankPdfDocument(userId: string, documentId: string,
 
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new BankPdfProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
+  }
+
+  // AIE-1 final completion (2026-09-25): never re-process a file the malware
+  // gate blocked or never scanned (see `checkFdhDocumentMalwareAdmission`).
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new BankPdfProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
   }
 
   // PASSWORD RATE LIMIT (spec 24) — consulted BEFORE the one decrypt
@@ -821,6 +829,7 @@ export type AiBankStatementFallbackOutcome = { ok: true; draft: BankStatementAiF
 export async function attemptAiBankStatementFallback(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
   const gate = evaluateAiFallbackGate({
     userId,
+    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieBankStatementAiFallbackEnabled(),
     extractedText,
   });

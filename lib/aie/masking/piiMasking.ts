@@ -78,6 +78,7 @@ export type AiePiiType =
   | 'phone'
   | 'person_name_label'
   | 'address_label'
+  | 'government_id' // AIE-1 final completion (2026-09-25): Medicare, passport, driver licence
   | 'long_digit_run';
 
 interface PiiPattern {
@@ -586,6 +587,55 @@ const PII_PATTERNS: PiiPattern[] = [
     // name is Title Case or ALL CAPS; requiring at least one capital keeps
     // this from matching prose that happens to follow one of these labels.
     valuePredicate: (value) => /[A-Z]/.test(value),
+  },
+
+  // AIE-1 final production completion (2026-09-25) — FOUR MORE GAPS, found by
+  // `scripts/aie1_masking_synthetic_pii_probe.ts` planting synthetic values in
+  // a payslip-shaped text and reading what `maskText` let through (5 of 16
+  // survived, and `containsUnmaskedPii` could not see any of them because it
+  // shares these patterns):
+  //
+  // (1) A BARE `Name:` / `Account Name:` / `Payee:` / `Paid To:` label. The
+  //     rule above deliberately omits a bare `name` alternative because
+  //     `Scheme Name:` / `Fund Name:` / `Employer Name:` carry NON-personal
+  //     facts the adapters exist to read. This rule keeps that property by
+  //     anchoring to the START OF THE LINE: `Scheme Name: X` starts with
+  //     "Scheme", so it never matches, while a line that begins `Name:` is a
+  //     person's name on every payslip / statement layout in this repository.
+  {
+    type: 'person_name_label',
+    pattern:
+      /^([^\S\r\n]*(?:name|account[^\S\r\n]*name|payee(?:[^\S\r\n]*name)?|paid[^\S\r\n]*to|pay[^\S\r\n]*to)[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gim,
+    valueGroup: 2,
+    valuePredicate: (value) => /[A-Z]/.test(value),
+  },
+  // (2) An employee / staff / payroll identifier. Label-anchored; the value
+  //     must contain a digit so prose after the label is never tokenised.
+  {
+    type: 'account_reference',
+    pattern:
+      /\b((?:employee|staff|payroll|personnel|worker)[^\S\r\n]*(?:id|no|number|#|code)\.?[^\S\r\n]*[:.\-#][^\S\r\n]*)([A-Za-z0-9][A-Za-z0-9\-/]{2,24})/gi,
+    valueGroup: 2,
+    valuePredicate: (value) => /\d/.test(value),
+  },
+  // (3) Government identity numbers that are not tax ids: Medicare, passport,
+  //     driver licence. Label-anchored for the same reason as every rule in
+  //     this section; the value must contain a digit.
+  {
+    type: 'government_id',
+    pattern:
+      /\b((?:medicare|passport|driver'?s?[^\S\r\n]*licen[cs]e|licen[cs]e)(?:[^\S\r\n]*(?:card|no|number|#))?\.?[^\S\r\n]*[:.\-#][^\S\r\n]*)([A-Za-z0-9][A-Za-z0-9 ]{3,18}[A-Za-z0-9])/gi,
+    valueGroup: 2,
+    valuePredicate: (value) => /\d/.test(value),
+  },
+  // (4) AU LANDLINES. The pre-M2 phone rule below covers mobiles only, by
+  //     design ("deliberately narrow"). A landline has an equally fixed
+  //     shape -- area code 02/03/07/08 then eight digits, often written
+  //     `(02) 9555 0199` -- and a leading-zero area code is what keeps it off
+  //     money figures (an amount never starts `0[2378]` followed by 8 digits).
+  {
+    type: 'phone',
+    pattern: /(?:\+61[ -]?[2378]|\(0[2378]\)|\b0[2378])[ -]?\d{4}[ -]?\d{4}\b/g,
   },
 
   // M3 (Phase 4) — ADDRESS. Closes M2-OPEN-7, which recorded address as the

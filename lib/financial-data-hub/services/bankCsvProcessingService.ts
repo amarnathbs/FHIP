@@ -30,6 +30,7 @@
  * two files already established.
  */
 
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -116,6 +117,10 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
   }
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new BankCsvProcessingError('invalid_state', `cannot run detection while the document is ${document.processing_status}`);
+  }
+  // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new BankCsvProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
   }
 
   const download = await downloadDocumentObject(document.raw_document_storage_reference);
@@ -277,6 +282,10 @@ export async function processBankCsvDocument(userId: string, documentId: string)
 
   if (!document.detection_status || document.detection_status === 'invalid' || document.detection_status === 'unsupported') {
     throw new BankCsvProcessingError('invalid_state', 'this document has not been successfully detected');
+  }
+  // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new BankCsvProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
   }
   if (document.detection_status === 'ambiguous' || document.detection_status === 'manual_mapping_required') {
     if (!document.mapping_template_id) {

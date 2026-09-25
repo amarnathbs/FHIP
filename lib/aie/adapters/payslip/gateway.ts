@@ -29,9 +29,20 @@ const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
 
+/** AIE-1 final completion (2026-09-25): call evidence -- identifiers and
+ * counts only -- so the caller can record which metered OpenAI request(s)
+ * produced a draft. Never document content. */
+export interface PayslipAiCallEvidence {
+  idempotencyKey: string;
+  providerRequestIds: string[];
+  inputTokens?: number;
+  outputTokens?: number;
+  model: string;
+}
+
 export type PayslipAiExtractionOutcome =
-  | { outcome: 'success'; facts: PayslipDocumentFacts }
-  | { outcome: 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted' | 'schema_rejected' | 'timeout' | 'rate_limited' | 'provider_error' | 'refused' };
+  | { outcome: 'success'; facts: PayslipDocumentFacts; evidence?: PayslipAiCallEvidence }
+  | { outcome: 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted' | 'schema_rejected' | 'timeout' | 'rate_limited' | 'provider_error' | 'refused'; evidence?: PayslipAiCallEvidence };
 
 /**
  * Exported (not inlined) so `tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts`
@@ -63,7 +74,12 @@ export const PAYSLIP_AI_EXTRACTION_SYSTEM_PROMPT =
  */
 export async function requestPayslipAiExtraction(params: { maskedText: string; requestId?: string }): Promise<PayslipAiExtractionOutcome> {
   registerPayslipDocumentFactsSchema();
-  const idempotencyKey = `payslip-ai-fallback:${params.requestId ?? randomUUID()}`;
+  // AIE-1 final completion (2026-09-25): `requestId` is a CORRELATION id (the
+  // document id), not the attempt identity. The key used to be exactly the
+  // document id, so re-processing a failed document replayed a settled key,
+  // which migration 0152 re-admitted without metering (defect D1). Every
+  // attempt now gets its own key; since 0195 a replayed key is refused.
+  const idempotencyKey = `payslip-ai-fallback:${params.requestId ?? 'adhoc'}:${randomUUID()}`;
   const result = await gateway.requestFieldCompletion({
     systemPrompt: PAYSLIP_AI_EXTRACTION_SYSTEM_PROMPT,
     maskedUserPrompt: params.maskedText,
@@ -75,10 +91,17 @@ export async function requestPayslipAiExtraction(params: { maskedText: string; r
     idempotencyKey,
   });
 
+  const evidence: PayslipAiCallEvidence = {
+    idempotencyKey,
+    providerRequestIds: result.providerRequestIds ?? [],
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    model: getAieAiModel(),
+  };
   if (result.outcome !== 'success') {
-    return { outcome: result.outcome };
+    return { outcome: result.outcome, evidence };
   }
   const parsed = payslipDocumentFactsSchema.safeParse(result.data);
-  if (!parsed.success) return { outcome: 'schema_rejected' };
-  return { outcome: 'success', facts: parsed.data };
+  if (!parsed.success) return { outcome: 'schema_rejected', evidence };
+  return { outcome: 'success', facts: parsed.data, evidence };
 }

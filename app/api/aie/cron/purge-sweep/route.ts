@@ -1,5 +1,9 @@
 import { ok, bad } from '@/lib/api';
 import { enforceAieRawFileHardBackstop, findDuePurges, purgeExpiredMaskTokenMaps, runPurgeAttempt } from '@/lib/aie/services/purge';
+import { sweepRealScanObjects } from '@/lib/aie/malware/scanObjectPurge';
+import { enforceIiSourceDocumentRetentionBackstop } from '@/lib/services/investment-intelligence/sourceDocumentPurge';
+import { releaseStaleAiCostReservations } from '@/lib/aie/cost/costAdmission';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * AIE-1 closure mission (sections 4 & 9) — the AIE temporary-document purge
@@ -42,7 +46,28 @@ export async function POST(req: Request) {
     results.push({ intakeId: intake.id, status: result.status });
   }
 
+  // AIE-1 final completion (2026-09-25) -- three more backstops, each
+  // independent of the others and of the document sweep above:
+  //   1. the S3 copies made for GuardDuty (never deleted before this change)
+  //      for every row with a terminal verdict, across FDH, AIE and II;
+  //   2. the Investment Intelligence original-PDF retention backstop (24h);
+  //   3. AI cost reservations never settled (crash / failed settle), settled
+  //      conservatively at the full reservation after 60 minutes.
+  // Counts only in the response; nothing identifying.
+  const scanObjects = await sweepRealScanObjects();
+  const iiBackstop = await enforceIiSourceDocumentRetentionBackstop(createAdminClient());
+  const staleCostReservationsReleased = await releaseStaleAiCostReservations(60);
+
   return ok({
+    real_scan_objects_attempted: scanObjects.attempted,
+    real_scan_objects_purged: scanObjects.purged,
+    real_scan_objects_not_purged: scanObjects.notPurged,
+    real_scan_objects_not_purged_by_outcome: scanObjects.byOutcome,
+    real_scan_object_table_errors: scanObjects.tableErrors.length,
+    ii_retention_backstop_scanned: iiBackstop.scanned,
+    ii_retention_backstop_purged: iiBackstop.purged,
+    ii_retention_backstop_failed: iiBackstop.failed,
+    stale_cost_reservations_released: staleCostReservationsReleased,
     mask_token_map_ttl_hours: maskTokenTtl.ttlHours,
     mask_token_map_rows_deleted: maskTokenTtl.deleted,
     hard_backstop_scanned: backstop.scanned,

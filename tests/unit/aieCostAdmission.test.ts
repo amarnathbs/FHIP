@@ -81,14 +81,38 @@ describe('settleAiCost', () => {
     let captured: Record<string, unknown> | null = null;
     rpcImpl = async (fn, args) => {
       captured = args;
-      expect(fn).toBe('aie_settle_ai_cost');
-      return { data: null, error: null };
+      // Migration 0195: settlement goes through the v2 function, which
+      // releases the amount STORED on the reservation (no caller figure).
+      expect(fn).toBe('aie_settle_ai_cost_v2');
+      return { data: [{ settled: true, already_settled: false }], error: null };
     };
-    await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 100, actualOutputTokens: 50, model: 'gpt-4o-mini-2024-07-18', idempotencyKey: 'attempt-settle-1' });
-    expect((captured as unknown as { p_reserved_usd: number }).p_reserved_usd).toBe(0.01);
+    const result = await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 100, actualOutputTokens: 50, model: 'gpt-4o-mini-2024-07-18', idempotencyKey: 'attempt-settle-1', providerRequestIds: ['req_1'], callOutcome: 'success' });
+    expect(result.settled).toBe(true);
+    expect((captured as unknown as { p_provider_request_ids: string[] }).p_provider_request_ids).toEqual(['req_1']);
+    expect((captured as unknown as { p_model: string }).p_model).toBe('gpt-4o-mini-2024-07-18');
+    expect((captured as unknown as { p_billing_uncertain: boolean }).p_billing_uncertain).toBe(false);
     expect((captured as unknown as { p_actual_usd: number }).p_actual_usd).toBeGreaterThan(0);
     expect((captured as unknown as { p_input_tokens: number }).p_input_tokens).toBe(100);
     expect((captured as unknown as { p_idempotency_key: string }).p_idempotency_key).toBe('attempt-settle-1');
+  });
+
+  it('falls back to the 0152 function when 0195 is not applied (deploy-order safety)', async () => {
+    const calls: string[] = [];
+    rpcImpl = async (fn) => {
+      calls.push(fn);
+      if (fn === 'aie_settle_ai_cost_v2') return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } };
+      return { data: null, error: null };
+    };
+    const result = await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 1, actualOutputTokens: 1, model: 'gpt-4o-mini', idempotencyKey: 'k-fallback' });
+    expect(calls).toEqual(['aie_settle_ai_cost_v2', 'aie_settle_ai_cost']);
+    expect(result.settled).toBe(true);
+  });
+
+  it('reports (never swallows) a settlement error', async () => {
+    rpcImpl = async () => ({ data: null, error: { code: '42501', message: 'permission denied' } });
+    const result = await settleAiCost({ reservedUsd: 0.01, actualInputTokens: 1, actualOutputTokens: 1, model: 'gpt-4o-mini', idempotencyKey: 'k-err' });
+    expect(result.settled).toBe(false);
+    expect(result.error).toContain('permission denied');
   });
 
   it('settles at the full reserved amount when treatAsFullReservedCost is set (uncertain/timeout charge)', async () => {

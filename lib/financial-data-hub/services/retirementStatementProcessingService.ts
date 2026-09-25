@@ -37,6 +37,8 @@
  * 93, 94). No OCR is claimed anywhere.
  */
 
+import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { statementUploadsRepository } from '../repositories';
@@ -315,6 +317,11 @@ async function resolveRetirementStatementDocument(
     );
   }
 
+  // AIE-1 final completion (2026-09-25): see `checkFdhDocumentMalwareAdmission`.
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new RetirementStatementProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
   if (!download.ok) throw new RetirementStatementProcessingError('internal_error', download.message);
 
@@ -439,7 +446,7 @@ export async function attemptAiRetirementFallback(
     return { ok: false, reason: 'could_not_decode_bytes' };
   }
 
-  const gate = evaluateAiFallbackGate({ userId, adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
+  const gate = evaluateAiFallbackGate({ userId, cohortEmail: await resolveEmailForAiePilotCohort(userId), adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
   if (!gate.ok) {
     if (gate.reason === 'masking_below_policy') {
       await recordDocumentAuditEvent({

@@ -141,6 +141,13 @@ export class OpenAiAieProvider implements AieAiProvider {
     let cumulativeInputTokens = 0;
     let cumulativeOutputTokens = 0;
     let attemptCount = 0;
+    // AIE-1 final completion (2026-09-25): the OpenAI `x-request-id` of EVERY
+    // HTTP attempt, so each billed request is traceable in the OpenAI
+    // dashboard and recorded per call (migration 0195). Identifiers only.
+    const providerRequestIds: string[] = [];
+    // True once at least one request has been handed to the network. A
+    // failure after that point may have been billed without usage reported.
+    let requestSent = false;
     const addUsage = (body: OpenAiChatCompletionResponse | null): void => {
       cumulativeInputTokens += body?.usage?.prompt_tokens ?? 0;
       cumulativeOutputTokens += body?.usage?.completion_tokens ?? 0;
@@ -160,7 +167,7 @@ export class OpenAiAieProvider implements AieAiProvider {
     /** Stamp the usage incurred SO FAR onto an error on its way out, so the
      * gateway can settle it instead of assuming zero. */
     const withUsage = <E>(err: E): E =>
-      attachAieCumulativeUsage(err, { cumulativeInputTokens, cumulativeOutputTokens, attemptCount });
+      attachAieCumulativeUsage(err, { cumulativeInputTokens, cumulativeOutputTokens, attemptCount, providerRequestIds: [...providerRequestIds], requestSent });
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) await sleep(backoffMs(attempt));
@@ -170,6 +177,7 @@ export class OpenAiAieProvider implements AieAiProvider {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let response: Response;
+      requestSent = true;
       try {
         response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
           method: 'POST',
@@ -212,6 +220,8 @@ export class OpenAiAieProvider implements AieAiProvider {
       }
       clearTimeout(timer);
       const latencyMs = Date.now() - start;
+      const requestId = response.headers?.get?.('x-request-id');
+      if (requestId) providerRequestIds.push(requestId.slice(0, 200));
 
       if (response.status === 401 || response.status === 403) {
         // Terminal, never retried, and the body is not read — an auth
@@ -278,6 +288,7 @@ export class OpenAiAieProvider implements AieAiProvider {
           finalAttemptInputTokens,
           finalAttemptOutputTokens,
           attemptCount,
+          providerRequestIds: [...providerRequestIds],
           latencyMs,
           modelVersion,
           finishReason: 'content_filter',
@@ -307,6 +318,7 @@ export class OpenAiAieProvider implements AieAiProvider {
           finalAttemptInputTokens,
           finalAttemptOutputTokens,
           attemptCount,
+          providerRequestIds: [...providerRequestIds],
           latencyMs,
           modelVersion,
           finishReason: 'error',
@@ -320,6 +332,7 @@ export class OpenAiAieProvider implements AieAiProvider {
         finalAttemptInputTokens,
         finalAttemptOutputTokens,
         attemptCount,
+        providerRequestIds: [...providerRequestIds],
         // `latencyMs` stays deliberately PER-ATTEMPT (this attempt's own
         // wall-clock), NOT a sum across retries: it is used as a provider
         // responsiveness signal, and summing in backoff sleeps would make it

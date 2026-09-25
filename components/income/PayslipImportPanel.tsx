@@ -548,7 +548,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           decision,
-          selectedFields: decision === 'apply_selected_fields' ? Array.from(selected) : undefined,
+          // AIE-1 final completion (2026-09-25), found by the live DEV journey:
+          // `add_new` used to send NO fields, and `fdh9_apply_income_proposal`
+          // (0091/0120) resolves an empty selection to NO_FIELDS_SELECTED for
+          // every decision except `update_existing` -- so "add as new income"
+          // could never succeed for a user with no matching Income row. It
+          // now sends the recommended selection the review already shows
+          // (for a new row: every recommended field, since nothing exists).
+          selectedFields: decision === 'apply_selected_fields' || decision === 'add_new' ? Array.from(selected) : undefined,
         }),
       });
       const { ok, status, json } = await readJson(res);
