@@ -59,7 +59,7 @@ import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf
 import { MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR } from '@/lib/financial-data-hub/bank-pdf/constants';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
-import { getAiFallbackDocumentExtraction, type AiFallbackDocumentOutcome, type AieDocumentProvider, type AiFallbackDocumentContext } from './aiFallbackDocumentExtraction';
+import { getAiFallbackDocumentExtraction, iiAiCallEvidenceMetadata, type AiFallbackDocumentOutcome, type AieDocumentProvider } from './aiFallbackDocumentExtraction';
 import { maskText } from '@/lib/aie/masking/piiMasking';
 
 /** The limiter's own rolling window, restated here only to bound the DB query
@@ -80,9 +80,6 @@ export interface ProcessSourceDocumentInput {
    * addendum, wired to the real AIE pipeline 2026-09-20) — defaults to the
    * real provider resolution. Never set outside tests/manual verification. */
   aiDocumentProviderOverride?: AieDocumentProvider | null;
-  /** Test/DI seam for the auto-apply step (2026-09-20) — defaults to the
-   * real applyAiExtractionReview(). Never set outside tests. */
-  aiApplyOverride?: AiFallbackDocumentContext['applyOverride'];
 }
 
 export interface ProcessSourceDocumentResult {
@@ -153,12 +150,40 @@ function honestFailureMessage(baseMessage: string, aiOutcome: AiFallbackDocument
 // import site keeps working.
 export { openReconciliationCase } from './reconciliationCases';
 
+/** 2026-09-25: model, cost key, OpenAI request ids and token counts of the
+ * II AI call (identifiers and counts only -- audit.ts's metadata rule), so
+ * every billed call is attributable, including a billed-but-unusable one. */
+function aiEvidenceMetadataFor(aiOutcome: AiFallbackDocumentOutcome): Record<string, unknown> {
+  return 'evidence' in aiOutcome ? iiAiCallEvidenceMetadata(aiOutcome.evidence) : {};
+}
+
 export async function processSourceDocument(input: ProcessSourceDocumentInput): Promise<ProcessSourceDocumentResult> {
   const admin = createAdminClient();
   const { userId, sourceDocumentId } = input;
 
   const { data: doc, error: docErr } = await admin.from('ii_source_documents').select('*').eq('id', sourceDocumentId).eq('user_id', userId).maybeSingle();
   if (docErr || !doc) return { ok: false, status: 'not_found', parseRunId: null, error: 'Source document not found.' };
+
+  // 2026-09-25: resuming an AI reading that awaits the user's review ("Review
+  // AI-extracted data", or a byte-identical re-upload, which the upload route
+  // answers with this same document). Before, every such click re-downloaded
+  // and re-parsed the PDF and opened a new parse run just to find the review
+  // that already existed. The review is returned straight away -- no
+  // download, no parse, never a provider call.
+  if (!input.forceReparse && doc.status === 'ai_review_pending') {
+    const { data: pendingReview } = await admin
+      .from('ii_ai_extraction_reviews')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('source_document_id', sourceDocumentId)
+      .eq('status', 'pending_review')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (pendingReview) {
+      return { ok: false, status: 'ai_review_pending', parseRunId: null, error: null, aiExtractionReviewId: pendingReview.id as string };
+    }
+  }
 
   // Computed unconditionally (not just when `!input.forceReparse`) so it
   // can also guard every failure path below: once a genuine SUCCEEDED run
@@ -420,33 +445,14 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceDocumentId,
       parseRunId,
       triggerReason: 'format_unrecognized',
-      request: { maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText },
+      // 2026-09-25: masked lazily, AFTER the flag and cohort gates -- see
+      // AiFallbackDocumentContext.buildRequest for the crash this fixes.
+      buildRequest: () => ({ maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText }),
       providerOverride: input.aiDocumentProviderOverride,
-      applyOverride: input.aiApplyOverride,
     });
-    if (aiOutcome.outcome === 'applied') {
-      await admin.from('ii_document_parse_runs').update({ run_status: 'succeeded', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, errors: [{ code: 'ai_fallback_applied', message: 'Format not recognized by the deterministic parser; an AI-assisted extraction was applied automatically.', severity: 'info' }] }).eq('id', parseRunId);
-      await emitAuditEvent({ userId, eventType: 'ai_fallback_applied', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { triggerReason: 'format_unrecognized', reviewId: aiOutcome.reviewId, parseRunId, ...aiOutcome.summary } });
-      return {
-        ok: true,
-        status: 'parsed',
-        parseRunId,
-        error: null,
-        aiExtractionReviewId: aiOutcome.reviewId,
-        summary: {
-          sourceDetected: detection.detection.sourceKey,
-          sourceConfidence: detection.detection.confidence,
-          accountsFound: aiOutcome.summary.accountsFound,
-          schemesFound: aiOutcome.summary.schemesFound,
-          transactionsFound: aiOutcome.summary.newTransactionsCount,
-          holdingsFound: aiOutcome.summary.schemesFound,
-          duplicateTransactionsLinked: aiOutcome.summary.duplicateTransactionsLinked,
-          reconciliationCasesOpened: 0,
-          newTransactionsCount: aiOutcome.summary.newTransactionsCount,
-          missingTransactionsCount: aiOutcome.summary.missingTransactionsCount,
-        },
-      };
-    }
+    const aiEvidenceMeta = aiEvidenceMetadataFor(aiOutcome);
+    // 2026-09-25: no 'applied' branch any more -- an AI read always stops at
+    // review (see aiFallbackDocumentExtraction.ts's outcome type).
     if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
       await updateDocumentStatusUnlessSucceeded({
         status: 'ai_review_pending',
@@ -455,7 +461,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         extraction_method: extractionMethod,
       });
       await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence, errors: [{ code: 'ai_review_pending', message: 'Format not recognized by the deterministic parser; an AI-assisted extraction is pending user review.', severity: 'info' }] }).eq('id', parseRunId);
-      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'format_unrecognized', reviewId: aiOutcome.reviewId, parseRunId } });
+      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'format_unrecognized', reviewId: aiOutcome.reviewId, parseRunId, ...aiEvidenceMeta } });
       return { ok: false, status: 'ai_review_pending', parseRunId, error: null, aiExtractionReviewId: aiOutcome.reviewId };
     }
 
@@ -475,7 +481,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       details: { sourceConfidence: detection.detection.confidence, candidates: detection.allCandidates, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence }).eq('id', parseRunId);
-    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'source_undetected_or_unsupported', parseRunId } });
+    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'source_undetected_or_unsupported', parseRunId, aiFallbackOutcome: aiOutcome.outcome, ...aiEvidenceMeta } });
     return { ok: false, status, parseRunId, error: honestFailureMessage('Statement source/format could not be confidently identified.', aiOutcome), reconciliationCaseId: caseId };
   }
 
@@ -499,10 +505,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       sourceDocumentId,
       parseRunId,
       triggerReason: 'parse_failed',
-      request: { maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText },
+      buildRequest: () => ({ maskedDocumentText: maskText(text, { tenantKey: userId }).maskedText }),
       providerOverride: input.aiDocumentProviderOverride,
-      applyOverride: input.aiApplyOverride,
     });
+    const aiEvidenceMeta = aiEvidenceMetadataFor(aiOutcome);
     if (aiOutcome.outcome === 'pending_review' || aiOutcome.outcome === 'already_pending') {
       await updateDocumentStatusUnlessSucceeded({
         status: 'ai_review_pending',
@@ -512,7 +518,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         extraction_method: extractionMethod,
       });
       await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: [...validation.errors.map((e) => ({ code: 'validation_error', message: e, severity: 'error' as const })), { code: 'ai_review_pending', message: 'Parser validation failed; an AI-assisted extraction is pending user review.', severity: 'info' as const }] }).eq('id', parseRunId);
-      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'parse_failed', reviewId: aiOutcome.reviewId, parseRunId } });
+      await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'ai_review_pending', triggerReason: 'parse_failed', reviewId: aiOutcome.reviewId, parseRunId, ...aiEvidenceMeta } });
       return { ok: false, status: 'ai_review_pending', parseRunId, error: null, aiExtractionReviewId: aiOutcome.reviewId };
     }
 
@@ -532,7 +538,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       details: { errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: validation.errors }).eq('id', parseRunId);
-    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'validation_failed', errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome, parseRunId } });
+    await emitAuditEvent({ userId, eventType: 'parse_failed', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'system', metadata: { reason: 'validation_failed', errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome, parseRunId, ...aiEvidenceMeta } });
     return { ok: false, status: 'parse_failed', parseRunId, error: honestFailureMessage(validation.errors.join('; '), aiOutcome), reconciliationCaseId: caseId };
   }
 

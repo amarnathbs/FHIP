@@ -99,6 +99,11 @@ export function aieDateField() {
     .strict();
 }
 
+/** Read-side cap for a partial account/member identifier an AI returns. Wide
+ * on purpose: the value is sanitised (tokens and anything over 40 chars
+ * dropped) before any review or write -- see `reviewableMaskedIdentifier`. */
+export const AIE_AI_IDENTIFIER_READ_MAX = 300;
+
 export function aieTextField(maxLength = 200) {
   return z
     .object({

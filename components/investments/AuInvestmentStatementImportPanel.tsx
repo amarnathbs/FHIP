@@ -25,6 +25,13 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import {
+  useWaitingImports,
+  WaitingImportsList,
+  discardAiDraft,
+  DUPLICATE_UPLOAD_MESSAGE,
+  type WaitingImport,
+} from '@/components/financial-data-hub/WaitingImports';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
 // CSV extractor could not read this layout and an AI read a DRAFT off the same
@@ -155,6 +162,14 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
   // lifetime of the `ai_fallback_review` phase; cleared by `reset()` and on
   // confirm. Nothing in this draft exists in the database yet.
   const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
+  // 2026-09-25: true when the draft on screen was resumed from the waiting
+  // list rather than read from this session's upload -- the form's CSV-kind
+  // choice then says nothing about it, so the confirm leaves the kind to the
+  // server (which infers it from the reviewed lines).
+  const [draftResumed, setDraftResumed] = useState(false);
+  // 2026-09-25: statements this user left part-way through. Before, a reload
+  // stranded an AI reading, an unapproved statement or an unapplied one.
+  const { items: waiting, reload: reloadWaiting } = useWaitingImports('investment');
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -186,6 +201,7 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     setPositions([]);
     setActivities([]);
     setAiDraft(null);
+    setDraftResumed(false);
   }
 
   /** Removes one AI-read line the user judges wrong. Deletion is the only
@@ -214,7 +230,7 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         body: JSON.stringify({
           // The user's own form choice travels back with the confirmation —
           // the statement's kind is caller context, never the model's reading.
-          csv_kind: csvKind,
+          csv_kind: draftResumed ? undefined : csvKind,
           holdings: aiDraft.holdings,
           activities: aiDraft.activities,
           institutionName: institutionName || aiDraft.institutionName,
@@ -231,6 +247,8 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
         return;
       }
       setAiDraft(null);
+      setDraftResumed(false);
+      reloadWaiting();
       // The confirm route returns the SAME envelope as upload/process, so the
       // journey rejoins the ordinary path here: review -> match -> approve ->
       // apply, with nothing downstream aware that a model was involved.
@@ -270,7 +288,10 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     // AI-fallback response deliberately carries NO statement_id, because
     // nothing has been written yet.
     if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      // For a re-upload, `document_id` is the ORIGINAL upload whose reading
+      // still awaits a check (2026-09-25) -- the confirm goes there.
       setDocumentId(data.document_id as string);
+      setMessage(data.duplicate_of_document_id ? DUPLICATE_UPLOAD_MESSAGE : null);
       setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
       setPhase('ai_fallback_review');
       return;
@@ -282,7 +303,8 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     }
     setDocumentId(data.document_id as string);
     if (data.duplicate) {
-      setMessage('This statement has already been uploaded. Showing the evidence already on file.');
+      // `document_id` is the ORIGINAL upload (the copy has no evidence of its own).
+      setMessage(DUPLICATE_UPLOAD_MESSAGE);
       await loadReview(data.document_id as string);
       setPhase('duplicate');
       return;
@@ -370,6 +392,24 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
     }
   }
 
+  /** Continue a statement left part-way through (2026-09-25). */
+  async function resumeWaiting(item: WaitingImport) {
+    setDocumentId(item.document_id);
+    setMessage(null);
+    if (item.stage === 'ai_draft' && item.ai_fallback_draft) {
+      setAiDraft(item.ai_fallback_draft as AiFallbackDraft);
+      setDraftResumed(true);
+      setPhase('ai_fallback_review');
+      return;
+    }
+    setBusy(true);
+    try {
+      await loadReview(item.document_id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleMatchAll() {
     if (!documentId) return;
     setBusy(true);
@@ -434,6 +474,7 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
       if (!ok) throw new Error(json.error ?? 'The change could not be saved.');
       setApplyResult({ applied_count: json.data.applied_count });
       setPhase('applied');
+      reloadWaiting(); // this statement is no longer waiting
       onApplied?.();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
@@ -462,6 +503,8 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
           </p>
         </div>
       )}
+
+      {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
       {uploadEnabled !== false && phase === 'form' && (
         <div className="mt-4 space-y-4">
@@ -533,6 +576,7 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
 
       {phase === 'ai_fallback_review' && aiDraft && (
         <div className="mt-4 space-y-4">
+          {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
           <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
             We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
             check these lines before saving — <strong>nothing has been saved yet</strong>.
@@ -653,7 +697,11 @@ export function AuInvestmentStatementImportPanel({ onClose, onApplied }: { onClo
             <button
               type="button"
               onClick={() => {
+                // 2026-09-25: recorded on the server too, so the reading is not
+                // offered again as something to continue.
+                if (documentId) void discardAiDraft(documentId).then(reloadWaiting);
                 setAiDraft(null);
+                setDraftResumed(false);
                 setMessage(AI_FALLBACK_DECLINED_MESSAGE);
                 setPhase('unable_to_read');
               }}

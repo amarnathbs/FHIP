@@ -33,11 +33,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   try {
     const result = await processBankPdfDocument(user.id, documentId, password);
     return ok({
-      document_id: result.document.id,
+      // 2026-09-25: for a byte-identical re-upload, the ORIGINAL upload the
+      // result belongs to (its import summary, or its AI draft to confirm).
+      document_id: result.duplicateOfDocumentId ?? result.document.id,
+      duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
+      duplicate: Boolean(result.duplicateOfDocumentId),
       pipeline_status: result.pipelineStatus,
       certification_status: result.certificationStatus,
       processing_status: result.document.processing_status,
-      error_code: result.document.error_code,
+      // A copy never carries its own state (e.g. its password prompt) into the original's result.
+      error_code: result.duplicateOfDocumentId ? null : result.document.error_code,
       reconciliation_status: result.reconciliationStatus,
       transactions_created: result.transactionsCreated,
       duplicates_skipped: result.duplicatesSkipped,

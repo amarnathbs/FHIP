@@ -28,6 +28,7 @@ import { recertifyPosition } from './documentProcessing';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import type { AieExtractedHolding } from './aiFallbackDocumentExtraction';
 import type { IiTransactionType, IiPlanType, IiOptionType } from './types';
 
@@ -48,6 +49,9 @@ export function validateCanonicalType(raw: string): IiTransactionType {
 export interface ApplyAiExtractionReviewResult {
   ok: boolean;
   error: string | null;
+  /** 2026-09-25: lets the accept route answer a replay with 409 rather than a
+   * generic 400. */
+  code?: 'not_found' | 'already_decided' | 'apply_failed';
   summary?: {
     accountsFound: number;
     schemesFound: number;
@@ -57,20 +61,73 @@ export interface ApplyAiExtractionReviewResult {
   };
 }
 
+/** Deletes and verifies the original statement file once the user has
+ * decided -- the staged review row carries everything accept needs, so the
+ * PDF has no further use. Best effort (the 24-hour backstop remains). */
+async function purgeDecidedSourceDocument(admin: ReturnType<typeof createAdminClient>, userId: string, sourceDocumentId: string): Promise<void> {
+  const { data } = await admin.from('ii_source_documents').select('storage_path, storage_purged_at').eq('id', sourceDocumentId).eq('user_id', userId).maybeSingle();
+  const row = data as { storage_path: string | null; storage_purged_at: string | null } | null;
+  if (row?.storage_path && !row.storage_purged_at) await purgeSourceDocumentStorage(admin, sourceDocumentId, row.storage_path);
+}
+
 export async function applyAiExtractionReview(userId: string, reviewId: string): Promise<ApplyAiExtractionReviewResult> {
   const admin = createAdminClient();
 
-  const { data: review, error: reviewErr } = await admin
+  const { data: current, error: reviewErr } = await admin
     .from('ii_ai_extraction_reviews')
-    .select('*')
+    .select('id, status, source_document_id')
     .eq('id', reviewId)
     .eq('user_id', userId)
     .maybeSingle();
-  if (reviewErr || !review) return { ok: false, error: 'AI extraction review not found.' };
-  if (review.status !== 'pending_review') return { ok: false, error: `This review has already been ${review.status}.` };
+  if (reviewErr || !current) return { ok: false, error: 'AI extraction review not found.', code: 'not_found' };
+  if (current.status !== 'pending_review') return { ok: false, error: `This review has already been ${current.status}.`, code: 'already_decided' };
 
-  const { data: doc } = await admin.from('ii_source_documents').select('country_code, owner_member_id').eq('id', review.source_document_id).eq('user_id', userId).maybeSingle();
-  if (!doc) return { ok: false, error: 'Source document not found.' };
+  const { data: doc } = await admin.from('ii_source_documents').select('country_code, owner_member_id').eq('id', current.source_document_id).eq('user_id', userId).maybeSingle();
+  if (!doc) return { ok: false, error: 'Source document not found.', code: 'not_found' };
+
+  // 2026-09-25 (other-PDF AI proof): CLAIM FIRST, in one conditional update.
+  // The status used to be read above and only written 'accepted' at the very
+  // END, after every canonical insert -- two concurrent accepts (a double
+  // click, a replayed request) both passed the read and both wrote. Now
+  // exactly one request moves pending_review -> accepted; every other finds
+  // zero rows and writes nothing. A failure below reverts the claim so the
+  // user can retry (the transaction fingerprints make a retry idempotent).
+  const decidedAt = new Date().toISOString();
+  const { data: claimedRows, error: claimErr } = await admin
+    .from('ii_ai_extraction_reviews')
+    .update({ status: 'accepted', decided_at: decidedAt, decided_by: userId })
+    .eq('id', reviewId)
+    .eq('user_id', userId)
+    .eq('status', 'pending_review')
+    .select('*');
+  if (claimErr) return { ok: false, error: 'Could not accept this AI extraction review.', code: 'apply_failed' };
+  const review = ((claimedRows ?? []) as Record<string, unknown>[])[0];
+  if (!review) return { ok: false, error: 'This review has already been decided.', code: 'already_decided' };
+
+  try {
+    const result = await writeAcceptedReview(admin, userId, reviewId, review, doc as { country_code: string; owner_member_id: string | null });
+    await purgeDecidedSourceDocument(admin, userId, review.source_document_id as string);
+    return result;
+  } catch (e) {
+    await admin
+      .from('ii_ai_extraction_reviews')
+      .update({ status: 'pending_review', decided_at: null, decided_by: null })
+      .eq('id', reviewId)
+      .eq('user_id', userId)
+      .eq('status', 'accepted');
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not apply this AI extraction review.', code: 'apply_failed' };
+  }
+}
+
+async function writeAcceptedReview(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  reviewId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  review: Record<string, any>,
+  doc: { country_code: string; owner_member_id: string | null },
+): Promise<ApplyAiExtractionReviewResult> {
+  void reviewId;
   const countryCode = doc.country_code as string;
   const currencyCode = countryCode === 'IN' ? 'INR' : 'AUD';
 
@@ -388,9 +445,9 @@ export async function applyAiExtractionReview(userId: string, reviewId: string):
     await recertifyPosition(userId, accountId, instrumentId);
   }
 
+  // The review row was already moved to 'accepted' by the claim.
   const nowIso = new Date().toISOString();
-  await admin.from('ii_ai_extraction_reviews').update({ status: 'accepted', decided_at: nowIso, decided_by: userId }).eq('id', reviewId);
-  await admin.from('ii_source_documents').update({ status: 'parsed', parse_completed_at: nowIso }).eq('id', review.source_document_id);
+  await admin.from('ii_source_documents').update({ status: 'parsed', parse_completed_at: nowIso }).eq('id', review.source_document_id).eq('user_id', userId);
 
   return {
     ok: true,
@@ -412,7 +469,17 @@ export async function rejectAiExtractionReview(userId: string, reviewId: string)
   if (review.status !== 'pending_review') return { ok: false, error: `This review has already been ${review.status}.` };
 
   const nowIso = new Date().toISOString();
-  await admin.from('ii_ai_extraction_reviews').update({ status: 'rejected', decided_at: nowIso, decided_by: userId }).eq('id', reviewId);
+  // 2026-09-25: conditional, like accept -- a reject racing an accept cannot
+  // flip an already-accepted review.
+  const { data: rejectedRows } = await admin
+    .from('ii_ai_extraction_reviews')
+    .update({ status: 'rejected', decided_at: nowIso, decided_by: userId })
+    .eq('id', reviewId)
+    .eq('user_id', userId)
+    .eq('status', 'pending_review')
+    .select('id');
+  if (!rejectedRows || rejectedRows.length === 0) return { ok: false, error: 'This review has already been decided.' };
+  await purgeDecidedSourceDocument(admin, userId, review.source_document_id as string);
   // Revert the document to the honest original failure status it would
   // have shown had AI-fallback never been attempted (see documentProcessing
   // .ts's honestFailureMessage — the "you declined" wording is derived from

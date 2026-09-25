@@ -30,7 +30,7 @@
  * contains the word "rollover".
  */
 
-import type { RetirementActivityType } from './types';
+import { RETIREMENT_ACTIVITY_TYPES, type RetirementActivityType } from './types';
 
 export interface RetirementLabelRule {
   terms: readonly string[];
@@ -207,6 +207,17 @@ export function classifyRetirementActivity(
 ): RetirementActivityType {
   const folded = fold(label);
   if (!folded) return 'UNKNOWN';
+
+  // 2026-09-25 (release register F-16): a Type cell that IS one of this
+  // module's own activity codes (`EMPLOYER_CONTRIBUTION`, `personal
+  // contribution`, `Salary-Sacrifice` ...) means exactly that code. The
+  // phrase rules below match "employer contribution" with a space, so the
+  // underscore spelling fell through every rule and a statement that named
+  // its own types was classified UNKNOWN line by line -- which also left the
+  // lines out of the reconciliation identity. Exact code only: no partial
+  // match, no guess.
+  const asCode = label.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if ((RETIREMENT_ACTIVITY_TYPES as readonly string[]).includes(asCode)) return asCode as RetirementActivityType;
 
   for (const rule of RETIREMENT_LABEL_RULES) {
     if (rule.jurisdictions && !rule.jurisdictions.includes(jurisdiction)) continue;

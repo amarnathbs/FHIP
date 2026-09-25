@@ -26,6 +26,13 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import {
+  useWaitingImports,
+  WaitingImportsList,
+  discardAiDraft,
+  DUPLICATE_UPLOAD_MESSAGE,
+  type WaitingImport,
+} from '@/components/financial-data-hub/WaitingImports';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
@@ -415,6 +422,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   useEffect(() => () => {
     scanPollCancelRef.current.cancelled = true;
   }, []);
+  // 2026-09-25: statements this user left part-way through (an AI reading to
+  // check, evidence to approve, a comparison to apply). Before, closing the
+  // panel or reloading the page stranded them -- nothing listed them.
+  const { items: waiting, reload: reloadWaiting } = useWaitingImports('liability');
 
   useEffect(() => {
     let cancelled = false;
@@ -573,7 +584,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     // null `statement_id` (deliberately — nothing has been written yet), so
     // ordering here is load-bearing, not stylistic.
     if (data.pipeline_status === 'ai_fallback_available' && data.ai_fallback_draft) {
+      // `document_id` is the ORIGINAL upload when this was a re-upload of a
+      // statement whose AI reading still awaits a check (2026-09-25), so the
+      // confirm below goes to the draft the server actually issued.
       setDocumentId(data.document_id as string);
+      setMessage(data.duplicate_of_document_id ? DUPLICATE_UPLOAD_MESSAGE : null);
       setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
       setAiFacilityType('');
       setPhase('ai_fallback_review');
@@ -586,7 +601,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     }
     setDocumentId(data.document_id as string);
     if (data.duplicate) {
-      setMessage('This statement has already been uploaded. Showing the evidence already on file.');
+      // `document_id` is the ORIGINAL upload (the copy has no evidence of its own).
+      setMessage(DUPLICATE_UPLOAD_MESSAGE);
       await loadReview(data.document_id as string);
       setPhase((p) => (p === 'error' ? p : 'duplicate'));
       return;
@@ -666,6 +682,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         return;
       }
       setAiDraft(null);
+      reloadWaiting();
       await loadReview(json.data.document_id as string);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
@@ -771,7 +788,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       const { ok, json } = await readJson(res);
       if (!ok) throw new Error(json.error ?? 'Could not approve this statement evidence.');
       await loadReview(documentId);
-      await handleGenerateProposal();
+      await handleGenerateProposal(documentId);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -780,12 +797,21 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     }
   }
 
-  async function handleGenerateProposal() {
-    if (!documentId) return;
+  async function handleGenerateProposal(forDocumentId?: string) {
+    const target = forDocumentId ?? documentId;
+    if (!target) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/financial-data-hub/liability-statement/${documentId}/proposal`, { method: 'POST' });
+      const res = await fetch(`/api/financial-data-hub/liability-statement/${target}/proposal`, { method: 'POST' });
       const { ok, json } = await readJson(res);
+      // 2026-09-25: this statement's comparison was already decided (a
+      // re-upload leads back to it). Say so; never offer a second apply.
+      if (!ok && json.error === 'already_decided') {
+        setMessage(json.message ?? null);
+        setPhase(json.outcome === 'kept_existing' ? 'kept_existing' : 'applied');
+        reloadWaiting();
+        return;
+      }
       if (!ok) throw new Error(json.error ?? 'We could not prepare a comparison for this statement.');
       setProposalId(json.data.proposal_id as string);
       const pfields = (json.data.fields as ProposedField[]) ?? [];
@@ -804,6 +830,29 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Continue a statement left part-way through (2026-09-25). */
+  async function resumeWaiting(item: WaitingImport) {
+    setStatementType(item.document_type === 'loan_statement' ? 'loan' : 'credit_card');
+    if (item.country_code === 'AU' || item.country_code === 'IN') setCountry(item.country_code);
+    if (item.currency_code === 'AUD' || item.currency_code === 'INR') setCurrency(item.currency_code);
+    setDocumentId(item.document_id);
+    setMessage(null);
+    setProposalId(null);
+    if (item.stage === 'ai_draft' && item.ai_fallback_draft) {
+      setAiDraft(item.ai_fallback_draft as AiFallbackDraft);
+      setAiFacilityType('');
+      setPhase('ai_fallback_review');
+      return;
+    }
+    setBusy(true);
+    try {
+      await loadReview(item.document_id);
+    } finally {
+      setBusy(false);
+    }
+    if (item.stage === 'compare') await handleGenerateProposal(item.document_id);
   }
 
   async function handleApply() {
@@ -853,6 +902,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         setPhase('applied');
         onApplied?.();
       }
+      reloadWaiting(); // this statement is no longer waiting
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -889,6 +939,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           </p>
         </div>
       )}
+
+      {phase === 'type_select' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
       {uploadEnabled !== false && phase === 'type_select' && (
         <div className="mt-4 space-y-4">
@@ -998,6 +1050,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
 
       {phase === 'ai_fallback_review' && aiDraft && (
         <div className="mt-4 space-y-4">
+          {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
           <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900">
             We could not recognise this statement&apos;s layout automatically, so we used AI to read it instead. Please
             check these figures before saving — <strong>nothing has been saved yet</strong>.
@@ -1106,6 +1159,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={() => {
+                // 2026-09-25: recorded on the server too, so the reading is not
+                // offered again as something to continue.
+                if (documentId) void discardAiDraft(documentId).then(reloadWaiting);
                 setAiDraft(null);
                 setMessage("We couldn't recognise the layout of this statement. Please check the file, or add this liability manually.");
                 setPhase('unable_to_read');
@@ -1281,7 +1337,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             </div>
           )}
           {statement.approval_status === 'approved' && !proposalId && (
-            <button type="button" onClick={handleGenerateProposal} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+            <button type="button" onClick={() => handleGenerateProposal()} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
               Continue to liability comparison
             </button>
           )}
@@ -1422,7 +1478,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           </fieldset>
 
           <div className="flex gap-3">
-            <button type="button" onClick={handleGenerateProposal} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm">
+            <button type="button" onClick={() => handleGenerateProposal()} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm">
               Refresh comparison
             </button>
             <button type="button" onClick={handleApply} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50">

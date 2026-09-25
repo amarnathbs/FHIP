@@ -59,6 +59,7 @@ import {
   aieMissingReasonSchema,
   aieLineItemMoney,
   aieLineItemDate,
+  AIE_AI_IDENTIFIER_READ_MAX,
 } from '../shared/factsFields';
 
 export const AIE_LIABILITY_FACTS_SCHEMA_NAME = 'aie_liability_statement_document_facts';
@@ -138,7 +139,12 @@ export const liabilityStatementDocumentFactsSchema = z
      * genuine last-4 — which is the only form FDH-10 stores anyway
      * (`chk_fdh_liability_statements_masked_identifier` is the DB-side
      * backstop, and the confirm route re-checks it before any write). */
-    maskedIdentifier: aieTextField(40),
+    // 2026-09-25 (other-PDF AI proof): READ limit widened to AIE_AI_IDENTIFIER_READ_MAX.
+    // Found live: gpt-4o-mini copied masking tokens (~56 chars each) into this
+    // field and the WHOLE billed extraction was schema_rejected for a value the
+    // draft discards anyway (a token or anything over 40 chars is dropped
+    // before review). The stored-value limits are enforced downstream, unchanged.
+    maskedIdentifier: aieTextField(AIE_AI_IDENTIFIER_READ_MAX),
     statementPeriodStart: aieDateField(),
     statementPeriodEnd: aieDateField(),
     statementDate: aieDateField(),

@@ -41,6 +41,7 @@ import {
   aieLineItemMoney,
   aieLineItemQuantity,
   aieLineItemDate,
+  AIE_AI_IDENTIFIER_READ_MAX,
 } from '../shared/factsFields';
 import { RETIREMENT_ACTIVITY_TYPES } from '@/lib/financial-data-hub/retirement/types';
 
@@ -98,7 +99,12 @@ export const retirementDocumentFactsSchema = z
     schemaVersion: z.literal(AIE_RETIREMENT_FACTS_SCHEMA_VERSION),
     documentMissingReasonCode: aieMissingReasonSchema,
     fundName: aieTextField(200),
-    maskedAccountIdentifier: aieTextField(64),
+    // 2026-09-25 (other-PDF AI proof): READ limit widened to AIE_AI_IDENTIFIER_READ_MAX.
+    // Found live: gpt-4o-mini copied masking tokens (~56 chars each) into this
+    // field and the WHOLE billed extraction was schema_rejected for a value the
+    // draft discards anyway (a token or anything over 40 chars is dropped
+    // before review). The stored-value limits are enforced downstream, unchanged.
+    maskedAccountIdentifier: aieTextField(AIE_AI_IDENTIFIER_READ_MAX),
     statementDate: aieDateField(),
     statementStartDate: aieDateField(),
     statementEndDate: aieDateField(),

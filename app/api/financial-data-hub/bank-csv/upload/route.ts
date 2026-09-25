@@ -3,6 +3,7 @@ import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/f
 import { FDH_MAX_FILE_SIZE_BYTES } from '@/lib/financial-data-hub/domain/fileValidation';
 import { uploadBankCsv } from '@/lib/financial-data-hub/services/bankCsvUploadService';
 import { FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from '@/lib/financial-data-hub/services/identicalUpload';
 import { bankCsvUploadMetadataSchema } from '@/lib/financial-data-hub/validation/bankCsv';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
@@ -42,8 +43,14 @@ export async function POST(req: Request) {
 
   try {
     const { document, accountResolution } = await uploadBankCsv(user.id, parsed.data, bytes);
+    // 2026-09-25: a byte-identical re-upload of a statement already imported
+    // (or whose AI draft awaits review) is flagged here, so the panel goes
+    // straight to the original instead of asking for a password or an account
+    // it does not need. Nothing is read for the copy.
+    const identical = await findEarlierIdenticalUpload(user.id, document.id, IDENTICAL_UPLOAD_SPECS.bank);
     return ok({
       document_id: document.id,
+      duplicate_of_document_id: identical?.documentId ?? null,
       processing_status: document.processing_status,
       error_code: document.error_code,
       account_resolution: accountResolution,

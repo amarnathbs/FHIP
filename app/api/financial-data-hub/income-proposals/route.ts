@@ -1,5 +1,5 @@
 import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
-import { listReadyIncomeProposals } from '@/lib/import-bridge/incomeProposalService';
+import { listReadyIncomeProposalsWithSource } from '@/lib/import-bridge/incomeProposalService';
 
 // GET /api/financial-data-hub/income-proposals — every 'ready' Income
 // proposal awaiting a user decision (spec section 59: do not keep
@@ -7,6 +7,7 @@ import { listReadyIncomeProposals } from '@/lib/import-bridge/incomeProposalServ
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const proposals = await listReadyIncomeProposals(user.id);
+  // With the source upload and a payslip summary, so the panel can resume one.
+  const proposals = await listReadyIncomeProposalsWithSource(user.id);
   return ok({ proposals });
 }

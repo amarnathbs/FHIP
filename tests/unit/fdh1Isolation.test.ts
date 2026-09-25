@@ -717,6 +717,15 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // it returns; the only cross-user read (pending-draft ids for the purge
       // backstop) returns ids only.
       path.join(FDH_LIB, 'services', 'aiFallbackDrafts.ts'),
+      // 2026-09-25 (re-upload and resume across every upload type) adds a
+      // TWELFTH: identicalUpload.ts, the shared "is this a byte-identical copy
+      // of an earlier upload with a result" rule. It runs inside processing,
+      // which can be driven by the scan-sweep cron with no user session, and
+      // reads `fdh_ai_fallback_drafts` (no user write path) -- the same
+      // reasons payslipProcessingService.ts already reads these rows with the
+      // service role. READ ONLY, and every query is scoped by
+      // `.eq('user_id', userId)`; it never matches across users.
+      path.join(FDH_LIB, 'services', 'identicalUpload.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

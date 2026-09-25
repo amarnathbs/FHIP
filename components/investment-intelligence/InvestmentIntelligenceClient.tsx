@@ -347,6 +347,12 @@ export function InvestmentIntelligenceClient() {
         setNotice('This file is identical to one you have already uploaded, so no second document was created. You are now viewing the existing document.');
       }
       selectDocument(json.data.id);
+      // 2026-09-25: the existing document's AI reading still awaits review --
+      // carry straight on to it (the server returns the existing review
+      // without reading the file again).
+      if (json.data?.deduplicated && json.data?.status === 'ai_review_pending') {
+        await handleProcess(json.data.id as string);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {

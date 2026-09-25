@@ -194,3 +194,44 @@ export async function listReadyIncomeProposals(userId: string) {
     .order('generated_at', { ascending: false });
   return data ?? [];
 }
+
+/**
+ * The same 'ready' proposals, with the upload each came from and a short
+ * summary of its payslip -- so the Income-tab panel can offer "continue" for
+ * a proposal the user left (closed the panel, reloaded the page). Before
+ * 2026-09-25 nothing on screen listed them, so a closed panel stranded its
+ * proposal; a re-upload only reached the duplicate guard.
+ */
+export async function listReadyIncomeProposalsWithSource(userId: string) {
+  const proposals = await listReadyIncomeProposals(userId);
+  const eventIds = [...new Set(proposals.map((p) => p.source_payroll_event_id).filter(Boolean))] as string[];
+  if (eventIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data: events } = await supabase
+    .from('fdh_payroll_events')
+    .select('id, statement_upload_id, employer_name, gross_pay, net_pay, pay_frequency, payment_date, currency_code')
+    .eq('user_id', userId)
+    .in('id', eventIds);
+  type Ev = { id: string; statement_upload_id: string | null; employer_name: string | null; gross_pay: number | null; net_pay: number | null; pay_frequency: string | null; payment_date: string | null; currency_code: string | null };
+  const byId = new Map(((events ?? []) as Ev[]).map((e) => [e.id, e]));
+  return proposals
+    .map((p) => {
+      const e = byId.get(p.source_payroll_event_id as string);
+      if (!e?.statement_upload_id) return null;
+      return {
+        id: p.id as string, // kept: the list's original key
+        proposal_id: p.id as string,
+        source_payroll_event_id: p.source_payroll_event_id as string,
+        document_id: e.statement_upload_id,
+        recommended_apply_mode: p.recommended_apply_mode as string,
+        generated_at: p.generated_at as string,
+        employer_name: e.employer_name,
+        gross_pay: e.gross_pay,
+        net_pay: e.net_pay,
+        pay_frequency: e.pay_frequency,
+        payment_date: e.payment_date,
+        currency_code: e.currency_code,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+}

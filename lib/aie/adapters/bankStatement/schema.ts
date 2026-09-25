@@ -33,7 +33,7 @@
 
 import { z } from 'zod';
 import { aieSchemaRegistry } from '../../schema/schemaRegistry';
-import { aieDateField, aieMoneyField, aieTextField, aieMissingReasonSchema, aieLineItemMoney, aieLineItemDate } from '../shared/factsFields';
+import { aieDateField, aieMoneyField, aieTextField, aieMissingReasonSchema, aieLineItemMoney, aieLineItemDate, AIE_AI_IDENTIFIER_READ_MAX } from '../shared/factsFields';
 
 export const AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME = 'aie_bank_statement_document_facts';
 export const AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION = '1';
@@ -97,7 +97,12 @@ export const bankStatementDocumentFactsSchema = z
      * last-4 — which is exactly the only form FDH-3 stores anyway
      * (`maskedAccountIdentifier` is re-checked and dropped downstream if it
      * still contains a long digit run). */
-    maskedAccountIdentifier: aieTextField(64),
+    // 2026-09-25 (other-PDF AI proof): READ limit widened to AIE_AI_IDENTIFIER_READ_MAX.
+    // Found live: gpt-4o-mini copied masking tokens (~56 chars each) into this
+    // field and the WHOLE billed extraction was schema_rejected for a value the
+    // draft discards anyway (a token or anything over 40 chars is dropped
+    // before review). The stored-value limits are enforced downstream, unchanged.
+    maskedAccountIdentifier: aieTextField(AIE_AI_IDENTIFIER_READ_MAX),
     statementPeriodStart: aieDateField(),
     statementPeriodEnd: aieDateField(),
     declaredOpeningBalance: aieMoneyField(),

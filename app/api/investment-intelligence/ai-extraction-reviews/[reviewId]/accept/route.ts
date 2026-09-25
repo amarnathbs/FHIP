@@ -14,6 +14,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ rev
   const { reviewId } = await params;
 
   const result = await applyAiExtractionReview(user.id, reviewId);
-  if (!result.ok) return bad(result.error ?? 'Could not accept this AI extraction review.', 400);
+  if (!result.ok) {
+    // 2026-09-25: a replayed or concurrent accept is a conflict (409), the
+    // same answer every FDH confirm route gives; nothing was written.
+    const status = result.code === 'already_decided' ? 409 : result.code === 'not_found' ? 404 : 400;
+    return bad(result.error ?? 'Could not accept this AI extraction review.', status);
+  }
   return ok(result.summary);
 }

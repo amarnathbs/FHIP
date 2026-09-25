@@ -90,6 +90,7 @@ import {
   AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
 } from '@/lib/aie/adapters/payslip';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
+import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
@@ -291,6 +292,24 @@ export async function processPayslipDocument(userId: string, documentId: string,
   // `checkFdhDocumentMalwareAdmission`'s header for the defect this closes.
   if (!checkFdhDocumentMalwareAdmission(document).admitted) {
     throw new PayslipProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+
+  // Byte-identical re-upload (2026-09-25): the same user already turned these
+  // exact bytes into a payroll event, so parsing again -- and especially
+  // paying for a second AI read -- can only reach the same duplicate. Found in
+  // production when a re-upload of an AI-read payslip paid for a second
+  // OpenAI call and then dead-ended. Short-circuit to the existing event.
+  const identical = await findEarlierIdenticalPayslip(userId, documentId);
+  if (identical) {
+    if (document.processing_status === 'failed') {
+      await cleanupPriorAttempt(userId, documentId);
+      await adminUpdateStatementUpload(userId, documentId, { processing_status: 'queued', error_code: null });
+    }
+    assertDocumentTransition('queued', 'processing');
+    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'processing', processing_started_at: new Date().toISOString() });
+    assertDocumentTransition('processing', 'extracted');
+    const finalDoc = await adminUpdateStatementUpload(userId, documentId, { processing_status: 'extracted', error_code: null });
+    return { document: (finalDoc ?? document) as FdhStatementUpload, payrollEventId: identical.payrollEventId, pipelineStatus: 'duplicate_payslip' };
   }
 
   // --- M12C §10 (`M2-OPEN-8`) — password brute-force limiter ----------------
@@ -950,6 +969,35 @@ export async function correctPayrollEvent(
  * today — one payslip document produces at most one payroll event). Used by
  * every downstream route (review, approve, propose) that only knows the
  * document id from the URL. */
+/**
+ * The earlier payslip this upload is a byte-identical copy of, if the same
+ * user already turned those exact bytes into a payroll event. Service-role
+ * read, always scoped to `userId` (processing can run from the scan-sweep
+ * cron with no user session). Oldest match wins, so every copy points at the
+ * original rather than at another copy.
+ */
+export async function findEarlierIdenticalPayslip(
+  userId: string,
+  documentId: string,
+): Promise<{ documentId: string; payrollEventId: string } | null> {
+  // The shared rule (identicalUpload.ts), which every statement type now uses
+  // too. Evidence only, exactly as the payslip fix shipped it.
+  const match = await findEarlierIdenticalUpload(userId, documentId, { ...IDENTICAL_UPLOAD_SPECS.payslip, includePendingDrafts: false });
+  return match?.kind === 'evidence' ? { documentId: match.documentId, payrollEventId: match.evidenceId } : null;
+}
+
+/** The upload a payroll event was extracted from (for pointing a duplicate at its original). */
+export async function getDocumentIdForPayrollEvent(userId: string, payrollEventId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('fdh_payroll_events')
+    .select('statement_upload_id')
+    .eq('user_id', userId)
+    .eq('id', payrollEventId)
+    .maybeSingle();
+  return (data as { statement_upload_id: string | null } | null)?.statement_upload_id ?? null;
+}
+
 export async function getPayrollEventIdForDocument(userId: string, documentId: string): Promise<string | null> {
   const supabase = await createClient();
   const { data } = await supabase

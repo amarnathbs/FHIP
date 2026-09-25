@@ -6,6 +6,7 @@ import {
   LiabilityProposalError,
 } from '@/lib/import-bridge/liabilityProposalService';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { findDecidedProposalForStatement, alreadyDecidedResponse } from '@/lib/import-bridge/decidedProposal';
 
 async function resolveProposalIdForDocument(userId: string, documentId: string): Promise<string | null> {
   const statementId = await getLiabilityStatementIdForDocument(userId, documentId);
@@ -35,6 +36,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
 
   const statementId = await getLiabilityStatementIdForDocument(user.id, documentId);
   if (!statementId) return bad('No statement evidence has been extracted from this document yet.', 404);
+
+  // 2026-09-25: apply exactly once. A re-upload now leads back to this
+  // statement; if its comparison was already decided, say so rather than
+  // offering it for a second write.
+  const decided = await findDecidedProposalForStatement(user.id, 'source_liability_statement_id', statementId);
+  if (decided) return alreadyDecidedResponse(decided, 'liabilities');
 
   try {
     const { proposalId, recommendedApplyMode } = await generateLiabilityProposal(user.id, statementId);

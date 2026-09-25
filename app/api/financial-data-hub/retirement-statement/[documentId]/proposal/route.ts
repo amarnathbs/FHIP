@@ -5,6 +5,7 @@ import { retirementAdapter, type ExistingRetirementRow, type RetirementEvidence 
 import { persistRetirementProposal } from '@/lib/import-bridge/supabaseStore';
 import { fetchAllRows } from '@/lib/financial-data-hub/bank-csv/pagination';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { findDecidedProposalForStatement, alreadyDecidedResponse } from '@/lib/import-bridge/decidedProposal';
 
 // POST /api/financial-data-hub/retirement-statement/{documentId}/proposal
 //   -> generate the Current vs Proposed comparison
@@ -50,6 +51,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   if (statement.approval_status !== 'approved') {
     return bad('Approve the statement evidence before comparing it with your retirement accounts.', 409);
   }
+
+  // 2026-09-25: apply exactly once. A re-upload now leads back to this
+  // statement; if its comparison was already decided, say so rather than
+  // offering it for a second write.
+  const decided = await findDecidedProposalForStatement(user.id, 'source_retirement_statement_id', statementId);
+  if (decided) return alreadyDecidedResponse(decided, 'retirement accounts');
 
   const supabase = await createClient();
 

@@ -15,6 +15,7 @@
 import type { PdfStatementMetadata } from '@/lib/financial-data-hub/bank-pdf/metadata';
 import type { ReadBankStatementRow } from '@/lib/financial-data-hub/bank-pdf/orchestrator';
 import type { BankStatementDocumentFacts } from './schema';
+import { figureIsPrinted } from '../shared/reviewDraft';
 
 export const AIE_BANK_STATEMENT_PARSER_NAME = 'aie_bank_statement_ai_fallback';
 export const AIE_BANK_STATEMENT_PARSER_VERSION = '1';
@@ -45,6 +46,36 @@ export interface MappedBankStatementDraft {
   allTransactionsListed: boolean;
   institutionName: string | null;
   warnings: string[];
+}
+
+/**
+ * 2026-09-25 (other-PDF AI proof): keeps only figures the document actually
+ * PRINTS. A running balance or a declared opening/closing balance the page
+ * does not show is set to null (with a warning the user sees), because the
+ * reconciliation that decides certification must never check the model's
+ * own arithmetic against itself -- see `figureIsPrinted`. An amount that is
+ * not found verbatim is kept (the user reviews every line) but flagged.
+ */
+export function keepOnlyPrintedBankFigures(mapped: MappedBankStatementDraft, documentText: string): MappedBankStatementDraft {
+  const warnings = [...mapped.warnings];
+  const rows = mapped.rows.map((r) => {
+    if (!figureIsPrinted(r.amountOriginal, documentText)) warnings.push(`ai_row_${r.sourceRowNumber}_amount_not_found_in_document`);
+    if (r.balanceAfter !== null && !figureIsPrinted(r.balanceAfter, documentText)) {
+      warnings.push(`ai_row_${r.sourceRowNumber}_balance_not_printed_dropped`);
+      return { ...r, balanceAfter: null };
+    }
+    return r;
+  });
+  const md = { ...mapped.statementMetadata };
+  if (md.declaredOpeningBalance !== null && md.declaredOpeningBalance !== undefined && !figureIsPrinted(md.declaredOpeningBalance, documentText)) {
+    warnings.push('ai_opening_balance_not_printed_dropped');
+    md.declaredOpeningBalance = null;
+  }
+  if (md.declaredClosingBalance !== null && md.declaredClosingBalance !== undefined && !figureIsPrinted(md.declaredClosingBalance, documentText)) {
+    warnings.push('ai_closing_balance_not_printed_dropped');
+    md.declaredClosingBalance = null;
+  }
+  return { ...mapped, rows, statementMetadata: md, warnings };
 }
 
 /**
