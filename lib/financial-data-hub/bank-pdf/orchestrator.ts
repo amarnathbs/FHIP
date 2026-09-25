@@ -31,6 +31,7 @@ import { extractPdfStatementMetadata, type PdfStatementMetadata } from './metada
 import { computeEconomicFingerprint, computeSourceRowHash, ECONOMIC_FINGERPRINT_VERSION } from '../bank-csv/fingerprint';
 import { decideDedup, addToDedupIndex, type DedupIndex } from '../bank-csv/dedup';
 import { reconcileBalances, computeDateCoverage } from '../bank-csv/reconciliation';
+import { sumMoney } from '../domain/money';
 import type { BalanceReconciliationResult, DateCoverageResult } from '../bank-csv/reconciliation';
 import { decideCertification } from '../bank-csv/orchestrator';
 import type { CertificationDecision } from '../bank-csv/orchestrator';
@@ -374,6 +375,46 @@ export interface RunPdfPipelineFromReadRowsInput {
  * balance rollforward computed below, which is arithmetic over the rows
  * themselves rather than an opinion about them.
  */
+/**
+ * 2026-09-25 (other-PDF AI proof): the STATEMENT-LEVEL rollforward, for a
+ * read statement that prints no running balance per line (a letter, a
+ * summary, many credit-union layouts). `reconcileBalances` needs per-row
+ * balances and otherwise answers `not_available`, which let such a statement
+ * through with NO arithmetic check at all -- a missing or doubled line was
+ * invisible. When the statement itself declares an opening AND a closing
+ * balance, this checks opening + credits - debits = closing, exactly (zero
+ * tolerance, the same money arithmetic), and records the declared closing as
+ * the reported figure so a mismatch is kept as a variance, never balanced
+ * away. Returns null (leaving `not_available`) when either balance is absent.
+ */
+export function reconcileDeclaredOpeningToClosing(
+  rows: readonly { amountOriginal: number; creditDebit: FdhCreditDebit }[],
+  metadata: PdfStatementMetadata,
+  currencyCode: string,
+): ReturnType<typeof reconcileBalances> | null {
+  const opening = metadata.declaredOpeningBalance;
+  const closing = metadata.declaredClosingBalance;
+  if (opening === null || opening === undefined || closing === null || closing === undefined) return null;
+  const credits = rows.filter((r) => r.creditDebit === 'credit').map((r) => r.amountOriginal);
+  const debits = rows.filter((r) => r.creditDebit === 'debit').map((r) => r.amountOriginal);
+  const extractedCredits = credits.length ? sumMoney(credits, currencyCode) : 0;
+  const extractedDebits = debits.length ? sumMoney(debits, currencyCode) : 0;
+  const expectedClosingBalance = sumMoney([opening, extractedCredits, -extractedDebits], currencyCode);
+  const variance = sumMoney([expectedClosingBalance, -closing], currencyCode);
+  return {
+    status: variance === 0 ? 'reconciled' : 'failed',
+    method: 'balance_rollforward',
+    openingBalance: opening,
+    extractedCredits,
+    extractedDebits,
+    expectedClosingBalance,
+    reportedClosingBalance: closing,
+    variance,
+    varianceTolerance: 0,
+    firstBreakRowNumber: null,
+  };
+}
+
 export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRowsInput): PdfPipelineResult {
   const accepted: AcceptedPdfTransactionPlan[] = [];
 
@@ -440,7 +481,7 @@ export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRows
   const nonDuplicateAccepted = accepted.filter((a) => a.dedupStatus !== 'duplicate_confirmed');
   const duplicateConfirmed = accepted.filter((a) => a.dedupStatus === 'duplicate_confirmed');
 
-  const reconciliation = reconcileBalances(
+  const rowLevel = reconcileBalances(
     nonDuplicateAccepted.map((a) => ({
       sourceRowNumber: a.sourceRowNumber,
       amountOriginal: a.amountOriginal,
@@ -449,6 +490,9 @@ export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRows
     })),
     input.currencyCode,
   );
+  const reconciliation = rowLevel.status === 'not_available' && nonDuplicateAccepted.length > 0
+    ? reconcileDeclaredOpeningToClosing(nonDuplicateAccepted, input.statementMetadata, input.currencyCode) ?? rowLevel
+    : rowLevel;
   const dateCoverage = computeDateCoverage(
     nonDuplicateAccepted.map((a) => a.transactionDate),
     input.declaredPeriodStart ?? input.statementMetadata.statementPeriodStart ?? null,

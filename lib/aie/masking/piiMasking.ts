@@ -411,6 +411,18 @@ const PII_PATTERNS: PiiPattern[] = [
       /\b((?:hin|srn|holder[^\S\r\n]*identification(?:[^\S\r\n]*(?:no|number))?|securityholder[^\S\r\n]*reference(?:[^\S\r\n]*(?:no|number))?|shareholder[^\S\r\n]*reference(?:[^\S\r\n]*(?:no|number))?)\.?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Z0-9][A-Z0-9/\-]{3,24})/gi,
     valueGroup: 2,
   },
+  // 2026-09-25 (other-PDF AI proof) -- the SAME identifier printed with only
+  // a space after the label (`HIN X0001234567`, common in broker prose and
+  // CSV narrative columns) matched nothing: the rule above requires `:`, `.`
+  // or `-`. Found by the fixtures' masking pre-check
+  // (`scripts/aie1_other_pdf_masking_precheck.ts`). Restricted to the exact
+  // HIN/SRN value shape (one letter + 10 digits) so a bare space separator
+  // cannot swallow ordinary words that follow "HIN"/"SRN".
+  {
+    type: 'holder_identification_number',
+    pattern: /\b((?:hin|srn)[^\S\r\n]+)([A-Za-z][0-9]{10})\b/gi,
+    valueGroup: 2,
+  },
 
   // MEMBER / CUSTOMER / CLIENT / LOAN-ACCOUNT / CRN REFERENCE. The
   // account-class identifier on a retirement statement (`Member No: 4821993`),

@@ -59,6 +59,7 @@ import {
   isAieBankStatementAiFallbackEnabled,
   requestBankStatementAiExtraction,
   mapBankStatementFactsToDraft,
+  keepOnlyPrintedBankFigures,
   AIE_BANK_STATEMENT_PARSER_NAME,
   AIE_BANK_STATEMENT_PARSER_VERSION,
   AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
@@ -864,7 +865,11 @@ export async function attemptAiBankStatementFallback(userId: string, documentId:
     return { ok: false, reason: result.outcome };
   }
 
-  const mapped = mapBankStatementFactsToDraft(result.facts);
+  const read = mapBankStatementFactsToDraft(result.facts);
+  // 2026-09-25: only figures the page actually prints survive (see
+  // keepOnlyPrintedBankFigures) -- checked locally against the extracted
+  // text, which never leaves this process.
+  const mapped = read ? keepOnlyPrintedBankFigures(read, extractedText) : null;
   if (!mapped) {
     await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };

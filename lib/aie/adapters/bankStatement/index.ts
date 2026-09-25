@@ -49,6 +49,7 @@ export {
 export { BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA } from './openaiSchema';
 export {
   mapBankStatementFactsToDraft,
+  keepOnlyPrintedBankFigures,
   AIE_BANK_STATEMENT_PARSER_NAME,
   AIE_BANK_STATEMENT_PARSER_VERSION,
   AIE_BANK_STATEMENT_MIN_TRANSACTIONS,
