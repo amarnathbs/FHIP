@@ -13,7 +13,8 @@
  * Run (server up on :3962):
  *   AIE1_MANIFEST=<scratch>/aie1_other_pdf_manifest.jsonl \
  *     npx tsx scripts/aie1_other_pdf_ai_live_dev_journeys.ts http://localhost:3962 [journey...]
- * Journeys: bank bank-outsider bank-nonrecon bank-insufficient liability retirement investment outsiders
+ * Journeys: bank bank-outsider bank-nonrecon bank-insufficient liability retirement investment
+ *           liability-nonrecon retirement-nonrecon outsiders
  */
 import { devFetch, BASE, ANON, env, recordArtefact, makeChecker, assertDev } from './aie1_final_dev_harness.mjs';
 import * as fx from './aie1_other_pdf_fixtures';
@@ -458,6 +459,34 @@ async function main() {
         return [acts.length === 2 && amt('BUY') === 2000 && amt('DIVIDEND') === 120, JSON.stringify({ acts: acts.length, buy: amt('BUY'), dividend: amt('DIVIDEND') })];
       },
     });
+  }
+
+  /** A figure that does not reconcile stays unresolved: the model reports the
+   * printed closing, and after the user confirms, the statement's own
+   * reconciliation is NOT 'reconciled'. */
+  async function nonReconciling(tag: string, route: string, params: Record<string, string>, bytes: Buffer, table: string, printedClosing: number, draftClosing: (d: any) => unknown, confirmBody: (d: any) => unknown) {
+    const up = await statementUpload(pilot, route, params, bytes);
+    const draft = up.res.json?.data?.ai_fallback_draft;
+    check(`${tag} the AI reports the closing balance AS PRINTED (${printedClosing}), not the arithmetic result`, !!draft && near(draftClosing(draft), printedClosing), JSON.stringify({ p: up.res.json?.data?.pipeline_status, closing: draft ? draftClosing(draft) : null }));
+    const confirm = await app(pilot, `/api/financial-data-hub/${route}/${up.documentId}/ai-fallback/confirm`, { method: 'POST', json: confirmBody(draft) });
+    const st = await rows(table, `statement_upload_id=eq.${up.documentId}`, 'id,reconciliation_status');
+    check(`${tag} after confirm the statement's reconciliation is NOT reconciled (the 12.50 gap stays unresolved; nothing is balanced)`, confirm.status === 200 && st.length === 1 && st[0].reconciliation_status !== 'reconciled' && !!st[0].reconciliation_status,
+      JSON.stringify({ confirm: confirm.status, st }));
+    evidence[tag] = { documentId: up.documentId, closing: draft ? draftClosing(draft) : null, reconciliation: st[0]?.reconciliation_status ?? null };
+  }
+
+  if (want('liability-nonrecon')) {
+    console.log('\n--- L2 liability: a printed closing that does not reconcile stays unresolved ---');
+    const params = { statement_type: 'credit_card', country_code: 'AU', currency_code: 'AUD', institution_name: 'Synthetic Card Co', masked_identifier: 'OPL2' };
+    await nonReconciling('L2', 'liability-statement', params, fx.liabilityLetterCsv(`${RUN}-l2`, { closingPrinted: '440.00' }), 'fdh_liability_statements', fx.LIABILITY_NON_RECONCILING_PRINTED_CLOSING,
+      (d) => d.header?.closingBalance,
+      (d) => ({ metadata: { ...params, opening_balance: d.header?.openingBalance, closing_balance: d.header?.closingBalance }, facilityType: 'credit_card', activities: d.activities, aiWarnings: d.warnings }));
+  }
+  if (want('retirement-nonrecon')) {
+    console.log('\n--- R2 retirement: a printed closing that does not reconcile stays unresolved ---');
+    const params = { jurisdiction: 'AU', currency_code: 'AUD', fund_name: 'Imaginary Super Fund', masked_account_identifier: 'OPR2', statement_period_start: '2026-07-01', statement_period_end: '2026-07-31' };
+    await nonReconciling('R2', 'retirement-statement', params, fx.retirementLetterCsv(`${RUN}-r2`, { closingPrinted: fx.RETIREMENT_NON_RECONCILING_PRINTED_CLOSING }), 'fdh_retirement_statements', Number(fx.RETIREMENT_NON_RECONCILING_PRINTED_CLOSING),
+      (d) => d.closingBalance, (d) => d);
   }
 
   if (want('outsiders')) {

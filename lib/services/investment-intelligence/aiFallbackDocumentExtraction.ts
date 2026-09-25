@@ -244,7 +244,7 @@ export const II_AI_DOCUMENT_EXTRACTION_SYSTEM_PROMPT =
  * that masks nothing itself (the caller supplies already-masked text, per
  * this module's own contract) and calls the gateway directly.
  */
-async function resolveAieDocumentProvider(): Promise<AieDocumentProvider | null> {
+export async function resolveAieDocumentProvider(): Promise<AieDocumentProvider | null> {
   registerInvestmentDocumentFactsSchema();
   return async (req: AieDocumentExtractionRequest): Promise<AieDocumentExtractionResult> => {
     const idempotencyKey = `ii-doc-extract:${randomUUID()}`;

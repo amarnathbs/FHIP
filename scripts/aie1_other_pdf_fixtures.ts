@@ -125,7 +125,10 @@ export const LIABILITY_EXPECTED = {
   ],
 } as const;
 
-export function liabilityLetterCsv(runTag: string): Buffer {
+/** NON-RECONCILING variant: prints 440.00 owed at the end; the lines give
+ * 427.50 (variance 12.50). */
+export const LIABILITY_NON_RECONCILING_PRINTED_CLOSING = 440;
+export function liabilityLetterCsv(runTag: string, opts: { closingPrinted?: string } = {}): Buffer {
   return Buffer.from([
     'Synthetic Card Co - card account letter (synthetic test institution)',
     `Card holder: ${PLANTED_PII.name}`,
@@ -135,7 +138,7 @@ export function liabilityLetterCsv(runTag: string): Buffer {
     'On 5 July 2026 you made a purchase of 85.40 at Fictional Grocer',
     'On 9 July 2026 you made a purchase of 42.10 at Imaginary Pharmacy',
     'On 15 July 2026 we received your payment of 200.00 - thank you',
-    'At the end of the period you owed 427.50',
+    `At the end of the period you owed ${opts.closingPrinted ?? '427.50'}`,
     `Reference ${runTag}`,
     '',
   ].join('\n'));
@@ -160,7 +163,10 @@ export const RETIREMENT_EXPECTED = {
   ],
 } as const;
 
-export function retirementLetterCsv(runTag: string): Buffer {
+/** NON-RECONCILING variant: prints 10700.00; the lines give 10687.50
+ * (variance 12.50). */
+export const RETIREMENT_NON_RECONCILING_PRINTED_CLOSING = '10700.00';
+export function retirementLetterCsv(runTag: string, opts: { closingPrinted?: string } = {}): Buffer {
   return Buffer.from([
     'Imaginary Super Fund - member letter (synthetic test fund)',
     `Member: ${PLANTED_PII.name}`,
@@ -171,7 +177,7 @@ export function retirementLetterCsv(runTag: string): Buffer {
     'On 1 July 2026 your employer Synthetic Works Pty Ltd paid a super guarantee contribution of 500.00',
     'On 15 July 2026 you made a personal after-tax contribution of 200.00',
     'On 31 July 2026 an administration fee of 12.50 was deducted',
-    'Your balance on 31 July 2026 was 10687.50',
+    `Your balance on 31 July 2026 was ${opts.closingPrinted ?? '10687.50'}`,
     `Reference ${runTag}`,
     '',
   ].join('\n'));
