@@ -117,6 +117,14 @@ describe('a read statement with no per-line balance is reconciled opening -> clo
     expect(p.reconciliation?.variance).toBe(0);
   });
 
+  it('PARTIAL per-line balances (seen live: one computed balance coincided with the printed closing and survived) do not decide; the printed opening/closing do', async () => {
+    const { runBankPdfPipelineFromReadRows } = await import('@/lib/financial-data-hub/bank-pdf/orchestrator');
+    const rows = base.rows.map((r, i) => (i === 2 ? { ...r, balanceAfter: 2776.55 } : r));
+    const p = runBankPdfPipelineFromReadRows({ ...base, rows, statementMetadata: { declaredOpeningBalance: 2000, declaredClosingBalance: 2776.55, maskedAccountIdentifier: null, statementPeriodStart: null, statementPeriodEnd: null } });
+    expect(p.reconciliation?.status).toBe('reconciled');
+    expect(p.reconciliation?.variance).toBe(0);
+  });
+
   it('no declared closing: still not_available (nothing is assumed)', async () => {
     const { runBankPdfPipelineFromReadRows } = await import('@/lib/financial-data-hub/bank-pdf/orchestrator');
     const p = runBankPdfPipelineFromReadRows({ ...base, statementMetadata: { declaredOpeningBalance: 2000, declaredClosingBalance: null, maskedAccountIdentifier: null, statementPeriodStart: null, statementPeriodEnd: null } });

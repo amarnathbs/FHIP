@@ -490,7 +490,12 @@ export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRows
     })),
     input.currencyCode,
   );
-  const reconciliation = rowLevel.status === 'not_available' && nonDuplicateAccepted.length > 0
+  // Row-level evidence decides only when EVERY line carries a balance. With
+  // none or only some (a read letter; a statement printing a balance per page;
+  // or a single figure that coincides with a printed one -- seen live), the
+  // printed opening and closing balances decide instead, when both exist.
+  const rowLevelConclusive = rowLevel.status === 'reconciled' || rowLevel.status === 'failed';
+  const reconciliation = !rowLevelConclusive && nonDuplicateAccepted.length > 0
     ? reconcileDeclaredOpeningToClosing(nonDuplicateAccepted, input.statementMetadata, input.currencyCode) ?? rowLevel
     : rowLevel;
   const dateCoverage = computeDateCoverage(

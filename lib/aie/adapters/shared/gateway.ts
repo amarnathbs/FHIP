@@ -58,6 +58,9 @@ export interface AieAdapterCallEvidence {
   inputTokens?: number;
   outputTokens?: number;
   model: string;
+  /** On schema_rejected only: `path:code` per issue -- never a value. Lets
+   * an operator see WHY a billed call was unusable (e.g. a date format). */
+  schemaErrorCodes?: string[];
 }
 
 export type AieAdapterExtractionOutcome<TFacts> =
@@ -74,6 +77,7 @@ export function adapterCallEvidenceMetadata(evidence: AieAdapterCallEvidence | u
     ai_provider_request_ids: evidence.providerRequestIds.slice(0, 5),
     ai_input_tokens: evidence.inputTokens ?? null,
     ai_output_tokens: evidence.outputTokens ?? null,
+    ...(evidence.schemaErrorCodes?.length ? { ai_schema_error_codes: evidence.schemaErrorCodes.slice(0, 10) } : {}),
   };
 }
 
@@ -171,9 +175,13 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
     model: getAieAiModel(),
   };
   if (result.outcome !== 'success') {
+    if (result.outcome === 'schema_rejected' && result.errorCodes?.length) evidence.schemaErrorCodes = result.errorCodes;
     return { outcome: result.outcome, evidence };
   }
   const parsed = params.schema.safeParse(result.data);
-  if (!parsed.success) return { outcome: 'schema_rejected', evidence };
+  if (!parsed.success) {
+    evidence.schemaErrorCodes = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}:${i.code}`);
+    return { outcome: 'schema_rejected', evidence };
+  }
   return { outcome: 'success', facts: parsed.data as z.infer<TSchema>, evidence };
 }
