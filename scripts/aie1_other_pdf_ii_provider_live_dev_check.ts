@@ -64,7 +64,7 @@ async function main() {
   const check = (label: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`  ${ok ? 'PASS' : 'FAIL'}  II-PROV  ${label}${detail ? '\n        ' + detail : ''}`); };
 
   const det = parseExtractedDocument(TEXT);
-  check('the deterministic II parser registry cannot identify this statement (the AI-fallback trigger)', !det.parser || !det.parsed, JSON.stringify({ source: det.detection.detection.sourceKey, confidence: det.detection.detection.confidence }));
+  check('the deterministic II parser registry cannot identify this statement (the AI-fallback trigger)', !det.detection.parser || !det.parsed, JSON.stringify({ source: det.detection.detection.sourceKey, confidence: det.detection.detection.confidence }));
 
   const masked = maskText(TEXT, { tenantKey: 'aie1-other-ii-provider-check' }).maskedText;
   const survivors = PII.filter((p) => masked.includes(p));
