@@ -6,6 +6,7 @@ import {
   PayslipProcessingError,
   PAYSLIP_FAILURE_MESSAGES,
   toPayslipAiDraftForReview,
+  getDocumentIdForPayrollEvent,
 } from '@/lib/financial-data-hub/services/payslipProcessingService';
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
@@ -43,6 +44,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       payroll_event_id: result.payrollEventId,
       pipeline_status: result.pipelineStatus,
       duplicate: result.pipelineStatus === 'duplicate_payslip',
+      // Where to carry on from: the upload the duplicate matches (2026-09-25).
+      duplicate_of_document_id: result.pipelineStatus === 'duplicate_payslip' && result.payrollEventId ? await getDocumentIdForPayrollEvent(user.id, result.payrollEventId) : null,
       // AI-fallback addition: present only when pipeline_status is
       // 'ai_fallback_available'. Nothing has been written yet — this is a
       // DRAFT for the caller to show the user for review/correction, then

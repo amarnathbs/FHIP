@@ -159,6 +159,20 @@ const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
   'employer_retirement_contribution', 'net_pay',
 ];
 
+/** A payslip already read and waiting to be added (GET /income-proposals). */
+interface WaitingPayslip {
+  proposal_id: string;
+  document_id: string;
+  employer_name: string | null;
+  gross_pay: number | null;
+  net_pay: number | null;
+  pay_frequency: string | null;
+  payment_date: string | null;
+  currency_code: string | null;
+}
+
+const DUPLICATE_MESSAGE = 'You have already uploaded this payslip, so FHIP is continuing with the copy already on file.';
+
 /** Honest, non-technical wording for where a gross figure came from. */
 const GROSS_SOURCE_NOTE: Record<string, string> = {
   stated_on_document: '',
@@ -237,6 +251,21 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // 2026-09-25: payslips already read and waiting to be added. Before this,
+  // closing the panel or reloading the page stranded a proposal -- nothing on
+  // screen listed it, and re-uploading only reached the duplicate guard.
+  const [waiting, setWaiting] = useState<WaitingPayslip[]>([]);
+
+  const loadWaiting = useCallback(() => {
+    fetch('/api/financial-data-hub/income-proposals')
+      .then((res) => (res.ok ? res.json() : { data: { proposals: [] } }))
+      .then((json) => setWaiting(Array.isArray(json.data?.proposals) ? (json.data.proposals as WaitingPayslip[]) : []))
+      .catch(() => setWaiting([]));
+  }, []);
+
+  useEffect(() => {
+    loadWaiting();
+  }, [loadWaiting]);
 
   useEffect(() => {
     let cancelled = false;
@@ -445,8 +474,13 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         return;
       }
       if (processJson.data.duplicate) {
-        setMessage('This payslip has already been uploaded. Showing the evidence already on file.');
-        await loadReview(docId);
+        // Carry on with the ORIGINAL upload: this copy has no payroll
+        // evidence of its own, so reviewing it dead-ends (production,
+        // 2026-09-25).
+        const original = (processJson.data.duplicate_of_document_id as string | null) ?? docId;
+        setDocumentId(original);
+        setMessage(DUPLICATE_MESSAGE);
+        await loadReview(original);
         setPhase((p) => (p === 'error' ? p : 'duplicate'));
         return;
       }
@@ -477,8 +511,10 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       if (!ok) throw new Error(json.error ?? 'We could not save this payslip.');
       setAiDraft(null);
       if (json.data.duplicate) {
-        setMessage('This payslip has already been uploaded. Showing the evidence already on file.');
-        await loadReview(documentId);
+        const original = (json.data.duplicate_of_document_id as string | null) ?? documentId;
+        setDocumentId(original);
+        setMessage(DUPLICATE_MESSAGE);
+        await loadReview(original);
         setPhase((p) => (p === 'error' ? p : 'duplicate'));
         return;
       }
@@ -508,13 +544,28 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     }
   }
 
-  async function handleGenerateProposal() {
-    if (!documentId) return;
+  /** Continue a payslip that was read earlier and is still waiting to be added. */
+  async function resumeWaiting(w: WaitingPayslip) {
+    setDocumentId(w.document_id);
+    setMessage(null);
+    await handleGenerateProposal(w.document_id);
+  }
+
+  async function handleGenerateProposal(forDocumentId?: string) {
+    const target = forDocumentId ?? documentId;
+    if (!target) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/financial-data-hub/payslip/${documentId}/proposal`, { method: 'POST' });
+      const res = await fetch(`/api/financial-data-hub/payslip/${target}/proposal`, { method: 'POST' });
       const { ok, json } = await readJson(res);
-      if (!ok) throw new Error(json.error ?? 'We could not prepare an income comparison for this payslip.');
+      // A re-upload of an already-imported payslip: continue with the original.
+      if (!ok && json.error === 'duplicate_payslip' && typeof json.duplicate_of_document_id === 'string' && !forDocumentId) {
+        setDocumentId(json.duplicate_of_document_id);
+        setMessage(DUPLICATE_MESSAGE);
+        await handleGenerateProposal(json.duplicate_of_document_id);
+        return;
+      }
+      if (!ok) throw new Error(json.message ?? json.error ?? 'We could not prepare an income comparison for this payslip.');
       setProposalId(json.data.proposal_id as string);
       const pfields = normaliseProposedFields(json.data.fields);
       setFields(pfields);
@@ -572,6 +623,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         setPhase('applied');
         onApplied?.();
       }
+      loadWaiting(); // this proposal is no longer waiting
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
       setPhase('error');
@@ -622,6 +674,34 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             using the Income form below.
           </p>
         </div>
+      )}
+
+      {phase === 'form' && waiting.length > 0 && (
+        <section className="mt-4 space-y-2" aria-labelledby="payslips-waiting-heading">
+          <h3 id="payslips-waiting-heading" className="text-sm font-semibold">
+            {waiting.length === 1 ? 'A payslip is ready to add to your income' : `${waiting.length} payslips are ready to add to your income`}
+          </h3>
+          <ul className="space-y-2">
+            {waiting.map((w) => (
+              <li key={w.proposal_id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
+                <span>
+                  {w.employer_name ?? 'Employer not identified'}
+                  {w.gross_pay !== null && ` · ${money(w.gross_pay, w.currency_code ?? 'AUD')} gross`}
+                  {w.pay_frequency && ` · ${w.pay_frequency}`}
+                  {w.payment_date && ` · paid ${w.payment_date}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => resumeWaiting(w)}
+                  disabled={busy}
+                  className="rounded bg-trust px-3 py-1 text-white disabled:opacity-50"
+                >
+                  Review and add
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {uploadEnabled !== false && phase === 'form' && (
@@ -849,7 +929,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           {event.approval_status === 'approved' && !proposalId && (
             <button
               type="button"
-              onClick={handleGenerateProposal}
+              onClick={() => handleGenerateProposal()}
               disabled={busy}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
@@ -1006,7 +1086,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={handleGenerateProposal}
+              onClick={() => handleGenerateProposal()}
               disabled={busy}
               className="rounded border border-gray-300 px-3 py-1 text-sm"
             >
