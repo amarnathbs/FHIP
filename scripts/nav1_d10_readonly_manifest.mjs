@@ -174,7 +174,10 @@ try {
     for (const id of new Set([...a, ...b])) { addReason(id, 'pending_ai_review_isin'); mapped++; }
   }
   pendingReviews = { rows: rev.length, isins: isins.size, instruments: mapped };
-} catch (e) { pendingReviews = { error: e.message }; }
+} catch (e) {
+  // PGRST205: the table is not in this environment's schema (0160 not applied) -- nothing can be pending in it.
+  pendingReviews = /PGRST205/.test(e.message) ? { table_absent_in_this_environment: true, rows: 0 } : { error: e.message };
+}
 
 // Cross-check the independent user-held set against the deployed RPC (two definitions must agree).
 const rpcHeld = new Set((await pageAll('rpc/pc6_user_held_instrument_ids?select=instrument_id', 'instrument_id')).map((r) => r.instrument_id));
@@ -185,9 +188,9 @@ if (!heldAgree) throw new Error('independent user-held set disagrees with pc6_us
 
 // ---------------------------------------------------------------- per-instrument counts
 const instruments = (await pageAll('ii_instruments?select=id', 'id')).map((r) => r.id);
-log(`counting pre-changeover rows for ${instruments.length} instruments (GET count=exact, 6 in flight)`);
+log(`counting pre-changeover rows for ${instruments.length} instruments (GET count=exact, 4 in flight)`);
 let done = 0;
-const perInstrument = await pool(instruments, 6, async (id) => {
+const perInstrument = await pool(instruments, 4, async (id) => {
   const c = await count('ii_prices_nav', `instrument_id=eq.${id}&price_date=lt.${C}`);
   if (++done % 2000 === 0) log(`  ${done}/${instruments.length}`);
   return c;
@@ -221,8 +224,12 @@ const perYear = {};
 for (const [m, v] of Object.entries(perMonth)) perYear[m.slice(0, 4)] = (perYear[m.slice(0, 4)] ?? 0) + v.candidate;
 
 // ---------------------------------------------------------------- canary: exact PK list
-const canary = { instruments: [], ids: [] };
+// A few WHOLE instruments with substantial history (1,000+ pre-changeover
+// rows), in instrument_id order, up to the ceiling. Whole instruments keep the
+// canary easy to verify, and to restore by re-hydrating from AMFI.
+const canary = { instruments: [], ids: [], rule: `whole candidate instruments with >= 1000 pre-changeover rows, instrument_id order, cumulative rows <= ${CANARY_CEILING}` };
 for (const id of candidateInstruments) {
+  if (perInstrumentMap[id] < 1000) continue;
   if (canary.ids.length + perInstrumentMap[id] > CANARY_CEILING) continue;
   const rows = await pageAll(`ii_prices_nav?select=id,price_date&instrument_id=eq.${id}&price_date=lt.${C}`, 'id');
   if (rows.length !== perInstrumentMap[id]) throw new Error(`canary drift on ${id}: ${rows.length} vs ${perInstrumentMap[id]}`);
@@ -322,7 +329,7 @@ const manifest = {
     per_instrument_counts_md5_definition: 'md5 of lines instrument_id:candidate_rows in uuid order joined by newline -- reproducible in SQL, see NAV1_D10_manifest_sql_for_PO.sql Q3',
     full_primary_key_checksum: 'NOT COMPUTED via PostgREST (~22M ids). SQL for the PO: docs/nav1/NAV1_D10_manifest_sql_for_PO.sql',
   },
-  canary: { ceiling: CANARY_CEILING, rows: canary.ids.length, instruments: canary.instruments, primary_key_sha256: canaryChecksum, primary_key_md5: md5(canary.ids.join(NL)), primary_key_file: 'canary_ids.txt (sorted ii_prices_nav.id, one per line)' },
+  canary: { ceiling: CANARY_CEILING, rule: canary.rule, rows: canary.ids.length, instruments: canary.instruments, primary_key_sha256: canaryChecksum, primary_key_md5: md5(canary.ids.join(NL)), primary_key_file: 'canary_ids.txt (sorted ii_prices_nav.id, one per line)' },
   samples: { candidate: candSample, protected: protSample, post_changeover: postSample },
   assertions,
   no_mutation_evidence: { requests: requestLog, client: 'GET-only wrapper; no method parameter exists; host asserted before every request', snapshot_before: before, snapshot_after: after },
