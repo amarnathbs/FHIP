@@ -38,6 +38,9 @@ export interface PayslipAiCallEvidence {
   inputTokens?: number;
   outputTokens?: number;
   model: string;
+  /** Present only when the provider call threw: a category code, never a
+   * message (see describeProviderFailure). */
+  failureCode?: string;
 }
 
 export type PayslipAiExtractionOutcome =
@@ -97,6 +100,7 @@ export async function requestPayslipAiExtraction(params: { maskedText: string; r
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
     model: getAieAiModel(),
+    ...(result.failureCode ? { failureCode: result.failureCode } : {}),
   };
   if (result.outcome !== 'success') {
     return { outcome: result.outcome, evidence };

@@ -456,7 +456,7 @@ export function toPayslipAiDraftForReview(extraction: PayrollExtraction): Record
 }
 
 /** Identifiers and counts only (auditLog.ts's own metadata rule). */
-function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestIds: string[]; inputTokens?: number; outputTokens?: number; model: string } | undefined): Record<string, unknown> {
+function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestIds: string[]; inputTokens?: number; outputTokens?: number; model: string; failureCode?: string } | undefined): Record<string, unknown> {
   if (!evidence) return {};
   return {
     ai_model: evidence.model,
@@ -464,6 +464,8 @@ function aiEvidenceMetadata(evidence: { idempotencyKey: string; providerRequestI
     ai_provider_request_ids: evidence.providerRequestIds.slice(0, 5),
     ai_input_tokens: evidence.inputTokens ?? null,
     ai_output_tokens: evidence.outputTokens ?? null,
+    // Only when the provider call threw: its category code (never a message).
+    ...(evidence.failureCode ? { ai_failure_code: evidence.failureCode } : {}),
   };
 }
 
