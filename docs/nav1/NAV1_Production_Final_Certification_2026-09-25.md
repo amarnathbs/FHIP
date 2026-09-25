@@ -55,7 +55,22 @@
 
 ## A. Executive verdict
 
-# CONDITIONAL PASS
+# FAIL
+
+**Why FAIL.** Daily forward-NAV collection is non-negotiable requirement #4. It **failed on its first genuine scheduled tick** (25 Sep 03:30 UTC, Verified, read-only):
+
+- The run opened its batch and fetched and parsed AMFI's file. It stopped 4.4 s later: last write at 03:30:06.12, which matches pg_net's 5-second default timeout.
+- It wrote **no 24 Sep NAV rows**. AMFI's own file has 24 Sep NAVs for 8,589 schemes.
+- Its batch is still `running`, and `last_success_at` did not advance.
+
+**Cause.** 0187 (daily) and 0188 (weekly scheme master) omit the pg_net timeout. The request is dropped at 5 s, and the handler stops with it.
+
+**Remedy (not applied).** Migration **0202** gives both jobs an explicit 300-second pg_net timeout, so pg_net no longer hangs up first. Then 24 Sep needs a gap backfill.
+
+**0202 removes the observed failure, but does not prove the run fits.** Manual DEV daily runs took about 55 s, and it is unproven whether the platform lets a request run past its ~30 s gateway limit. The 26 Sep tick is the test. If it still fails, the ingest must be restructured.
+
+- Until 0202 is applied, **every** daily tick, and the 30 Sep scheme-master tick, is expected to fail the same way. Apply it **before 26 Sep 03:30 UTC**, or 25 Sep's NAVs will be lost too.
+- This is FAIL rather than CONDITIONAL PASS because the requirement is not being met in production today. The fix is small, but it is not live.
 
 **What is working in production:**
 
@@ -78,10 +93,9 @@
    - The retention predicate is executable by `anon` and `authenticated`. Under row-level security such a caller sees no holdings and gets "deletable" for a held fund. **Verified live on DEV.**
    - Migration **0200** restricts it to the service role. The same migration also closes two more fail-open paths: a NULL input, and scheme mergers.
 
-**Why not FULL PASS:**
+**Also open, beyond the FAIL above:**
 
-- The fairness fix and migrations 0199–0201 are not merged or applied.
-- The first scheduled daily NAV tick: see §3.1.
+- The fairness fix and migrations 0199–0202 are not merged or applied.
 - The first scheme-master tick (30 Sep) is pending.
 - The 18-point UI journey is **Blocked** for this agent.
 - The backup/PITR restore proof is **Blocked**.
@@ -96,14 +110,14 @@
 | Full-universe backfill disabled | Live switch query | **Verified** | `pc6_full_universe_historical_backfill.enabled = false` (00:0x UTC 25 Sep) |
 | Selective hydration | Covered and uncovered scheduled runs | **Covered: Verified. Uncovered: Blocked** | 22 consecutive scheduled no-op runs, 14:00 24 Sep to 00:30 25 Sep, each 0.7–1.2 s. No uncovered held fund exists in production, and the session cannot create one. |
 | Starvation fixed | Negative control + production proof | **Budget fix: Verified live. Fairness fix: Repository evidence** | Production `perInstrument` went from 10 to 17 at 22:30. The fairness fix has 18 tests; 15 fail on `713561d` and 15 on the pre-fix loop. It is not deployed. |
-| Daily NAV | Genuine scheduled tick | **See §3.1** | First tick 25 Sep 03:30 UTC |
-| Scheme master | Genuine scheduled tick | **Pending, not passed** | First tick Tue 30 Sep 03:00 UTC |
+| Daily NAV | Genuine scheduled tick | **FAILED (Verified)** | Tick fired on time (batch +1.7 s). The run died about 4.4 s in, at pg_net's 5 s default timeout. 0 rows for 24 Sep (AMFI has 8,589). Fix: 0202, not applied. |
+| Scheme master | Genuine scheduled tick | **Pending, expected to FAIL without 0202** | First tick Tue 30 Sep 03:00 UTC. Same missing timeout (0188). |
 | UI journey | 18/18 real browser checkpoints | **Blocked (0/18)** | The agent may not enter a password or token to sign in, and the Browser pane cannot upload a file. Runbook in §4. |
 | Report pinning | Real finalization write + independent query | **Production: Not testable. Repository and PGlite: Verified** | Production has 1 report (5 Aug, before the writer existed) and 0 premium users, so no pin could have been written. Idempotent upsert proven in PGlite (0200 P5-7). |
 | Statement holds | Real certification behaviour | **DEV: Verified live. Production: Blocked (SQL proposed)** | DEV 7/7, full cleanup, zero residue. Production proof is Q7, a rolled-back transaction. |
 | Retention completeness | Protection traceability and anti-joins | **Verified, with 3 fail-open paths fixed in 0200 (not applied)** | §5 matrix; PGlite 39/39; manifest anti-joins 15/15 |
 | Provider accuracy | AMFI reconciliation and fallback governance | **Verified for held funds. Recoverability gap found** | 720/720 exact; 0 TIGZIG rows in production; canary fidelity 4 of 5 funds |
-| Migrations | DEV/production behavioural verification | **Partial** | Objects present in production (OpenAPI). Cron is not visible (SQL proposed). 0199–0201 are not applied anywhere. |
+| Migrations | DEV/production behavioural verification | **Partial** | Objects present in production (OpenAPI). Cron is not visible (SQL proposed). 0187/0188 lack a pg_net timeout (F-12). 0199–0202 are not applied anywhere. |
 | Manifest | ID, checksum and zero protected intersections | **Verified (aggregate). Full primary-key checksum: Blocked (SQL for PO)** | `NAV1-D10-production-2026-09-25-ffdff57ed75a`: two runs identical; 15/15 assertions |
 | Recovery | DEV rehydration and backup restoration | **Source fidelity: Verified. Delete/rehydrate cycle: Blocked until 0201 is on DEV. Backup: Blocked** | §8 |
 | Deletion | Exact PO authorization and reconciliation | **Not started (STOP GATE 1)** | Zero production NAV rows deleted |
@@ -219,13 +233,14 @@
 | **0199** | **14/14** |
 | **0200** | **39/39** |
 | **0201** | **8/8** |
+| **0202** | **11/11** (written after the 03:30 tick) |
 | Stage E canary SQL | **9/9** |
 
 **Migration numbering:**
 
 - 0195–0197 now belong to AIE-1 on `main`.
 - **0198 is taken by the unpushed local branch `fix/fdh10-liability-zero-amount-atomic`** (`24281b8`). It was found by scanning every local and remote branch.
-- So this dispatch uses **0199, 0200 and 0201**, not 0198.
+- So this dispatch uses **0199, 0200, 0201 and 0202**, not 0198.
 - None drops or recreates a shared constraint. The 0199 script asserts that no other table's constraints change.
 
 ---
@@ -367,7 +382,59 @@ Negative-control outputs are saved in `nav1_completion/negctl_713561d.txt` and `
 
 ### 3.1 Daily NAV, first scheduled tick (25 Sep 03:30 UTC)
 
-<!-- DAILY_TICK_SECTION -->
+**Result: FAILED. The run did not complete.** Verified, read-only, observed 03:35–03:50 UTC. Checker: `scripts/nav1_p3_daily_tick_check.mjs`; output in `nav1_completion/p3_daily_tick_2026-09-25.json`.
+
+**Timeline**
+
+| UTC | Event |
+|---|---|
+| 03:30:00.1 | Hydration tick (`succeeded`, 1.4 s, 17/17 covered). Unaffected. |
+| 03:30:01.68 | Daily batch `1e125ae4…` opened, `running`, **1.7 s after the tick**. Cron fired, and the vault secret and route auth worked. |
+| 03:30:01.70 | AMFI `NAVAll.txt` fetched and parsed: 1,522,938 bytes, parser `pc6-amfi-parser-v1`. |
+| 03:30:06.12 | **Last write**: the batch's 17 rejection rows. The same 17 rejections appear on DEV daily runs, so the parse is normal. |
+| after that | Nothing. At 03:49: batch still `running`; `rows_read` 0; **24 Sep NAV rows = 0**; `pc6_amfi_daily_nav.last_success_at` still 24 Sep 04:22. |
+
+**What the tick did prove**
+
+- Only **one** daily batch was created in the window. There is no sign of a DEV job also calling production, which is indirect support for 0194.
+- The job is not a slow one. The manual DEV daily runs of 20 Sep took about 55 s end to end, and the 24 Sep manual gap run took 8 s. A live process would have finished long before 03:49.
+
+**Independent AMFI check**
+
+- AMFI's `NAVAll.txt` at 03:49 carries **24-Sep-2026 NAVs for 8,589 schemes**. Production has 0.
+- Trailing coverage is unchanged: 23 Sep 8,662; 22 Sep 8,712; 21 Sep 8,718.
+- On the same checker's run against 23 Sep data, 434/434 comparable values matched AMFI exactly. The stored daily values are accurate when the job does run.
+
+**Root cause**
+
+- 0187 and 0188 call `net.http_post` **without** `timeout_milliseconds`. pg_net's default is 5 s.
+- The request was dropped about 5 s after it was sent (03:30:01.6 + 5 s ≈ 03:30:06.6). The last database write was at 03:30:06.12, and nothing followed. The platform ended the handler when the caller disconnected.
+- 0193 sets 30 s for hydration. Its header's assumption that a longer run "still completes on the server" is contradicted by this tick.
+- **Classification:** Verified (timeline) plus Repository evidence (the missing parameter). The HTTP layer (`net._http_response`) is Blocked; SQL Q2c shows it.
+
+**Consequences**
+
+- 24 Sep NAVs are missing in production.
+- `NAVAll.txt` only ever carries the latest date, so the next successful daily run will not fill 24 Sep. That needs the same history-endpoint gap backfill used for 20–23 Sep on 24 Sep.
+- The stuck batch is reconciled as stale by the next ingest run (15-minute rule).
+
+**Fix: migration 0202** (PGlite 11/11)
+
+- Re-registers both jobs with identical schedule, URL, secret and body, plus `timeout_milliseconds := 300000`.
+- Production only; removes stray copies elsewhere.
+- **Apply before 26 Sep 03:30 UTC.**
+- **Not proven sufficient.** A daily run may take 30–60 s. Whether the platform lets a request run past its ~30 s gateway limit is unproven:
+  - 0193 recorded a hydration run that continued after a 504;
+  - this tick shows a run that stopped on disconnect.
+- If the 26 Sep 03:30 tick still does not close its batch, the ingest must be restructured into bounded chunks, or moved off the HTTP request path.
+
+**Not assessable this tick** (the run never reached them): the reconciliation-gated `succeeded` status, re-run idempotency, and correction handling.
+
+**Second, lower-risk defect**
+
+- The ingest job's AMFI download (`referenceIngestJob.ts:214`) is a plain `fetch` with **no timeout**. That is the same class as hydration defect #5 fixed on 24 Sep.
+- It was not the cause today, because the fetch succeeded. But a hung AMFI response would stall the run until the platform kills it.
+- Not fixed: F-13.
 
 ### 3.2 Scheme master
 
@@ -598,12 +665,12 @@ Until then: no FULL PASS, and no production deletion.
 1. **Deployed SHA and migrations.**
    - `713561d` (operator-confirmed) is behaviourally live (§1.1). `8b6692c` has been merged since; its deployment is unverified.
    - 0166–0194 are on `main`; production objects are present (§1.3).
-   - **0199, 0200 and 0201 are not applied anywhere.**
+   - **0199, 0200, 0201 and 0202 are not applied anywhere.**
 2. **Starvation evidence.** §2: the budget fix is live; the fairness fix is on the branch, not deployed.
 3. **0194 isolation.** §3.0: PGlite 9/9; cron rows Blocked (Q2/Q2b).
 4. **Scheduled proofs.**
    - Hydration: Verified (no-op).
-   - Daily NAV: §3.1.
+   - Daily NAV: **FAILED** on its first scheduled tick (§3.1, F-12); 24 Sep missing.
    - Scheme master: pending (30 Sep).
 5. **UI journey.** Blocked, 0/18 (§4).
 6. **Traceability.** §5.
@@ -658,6 +725,8 @@ Until then: no FULL PASS, and no production deletion.
 
 | ID | Severity | Discovery | Root cause | Fix | Tests | Deployment | Residual risk |
 |---|---|---|---|---|---|---|---|
+| F-12 | **P1, live production impact** | First scheduled daily tick, 25 Sep 03:30 (Verified) | 0187/0188 omit `timeout_milliseconds`; pg_net drops the request at 5 s and the run dies with it | **0202** (300 s, production only) | PGlite 11/11: negative control shows no timeout before 0202 | Not applied | 24 Sep NAVs missing (needs backfill). Every tick until 0202 is applied will fail. Whether a 30–60 s run survives the gateway limit is unproven; restructuring may be needed. |
+| F-13 | Low | Code review during the F-12 diagnosis | Daily/scheme-master AMFI download has no per-request timeout (`referenceIngestJob.ts:214`) | Not fixed | — | — | A hung AMFI response stalls the run |
 | F-1 | **P1 for Stage E** (no production harm yet) | Live DEV: a 600-row delete, then a 1-row delete, timed out | Self-FKs `superseded_by_id` and `correction_of_id` have no index, so every deleted row costs two full-table scans | Migration **0201** (partial indexes) | PGlite 8/8: sequential scan before, index after, FK still enforced | Not applied | Plain `CREATE INDEX` briefly blocks writes while it builds. The file gives the `CONCURRENTLY` form. |
 | F-2 | **P1** | Live DEV: `anon` got TRUE (deletable) for a held fund | Supabase default EXECUTE plus SECURITY INVOKER under RLS | **0200**: revoke from public/anon/authenticated; grant to `service_role` | PGlite P5-9a–f with negative controls | Not applied | None known. Nothing else calls these functions (grep). |
 | F-3 | **P1 for Stage E scope** | Live: canary fidelity check (HSBC Short Term Fund, 925 of 3,199) | AMFI publishes pre-merger history under the former fund house's code; the adapter asks the current one | **Not fixed.** Canary narrowed to 4 proven-recoverable funds. Options: adapter fallback to former fund-house codes, or a code-free query; or a pre-expansion recoverability scan. | Fidelity script | — | Deleting history of fund-house-merged schemes is unrecoverable except by backup (Blocked) |
@@ -705,7 +774,10 @@ No DEV user was created, and the DEV kill switch was not touched: the D.11 scrip
   - the 18-point UI journey;
   - the production uncovered-fund proof;
   - pushing the branch (permission denied).
-- **Pending:** the scheme-master tick (30 Sep). The daily tick: see §3.1.
+- **Failed:** the first scheduled daily tick (§3.1).
+- **Pending:** the scheme-master tick (30 Sep). It is expected to fail the same way unless 0202 is applied first.
+- **Unproven:** whether 0202's longer timeout is enough. The 26 Sep 03:30 tick is the test.
+- **Unread:** the HTTP status of the failed tick (`net._http_response`, Q2c).
 - **Deployed SHA:** there is no version endpoint. Evidence is behavioural and operator-confirmed.
 - **The manifest's migration-set hash** is the repository set at the generator commit (it includes the unapplied 0199–0201). It is not the applied set.
 - **Rotation fallback** gives eventual reach only while the set of funds needing a fetch is stable. The ledger ordering has no such limit.
@@ -716,14 +788,20 @@ No DEV user was created, and the DEV kill switch was not touched: the D.11 scrip
 ## F. Product Owner decisions
 
 1. **Merge** `fix/nav1-production-completion-2026-09-25` to `main` (this deploys). **Not authorized in this dispatch.** The branch also needs pushing; push was denied to this session.
-2. **Apply 0199, 0200 and 0201** to DEV, then production (§H). Suggested order: 0201 outside the 03:30 and :00/:30 windows, then 0200, then 0199. Each is independent. The code tolerates 0199's absence.
-3. **Stage E scope decision on F-3.**
+2. **URGENT: apply 0202 to production before 26 Sep 03:30 UTC.**
+   - It is a no-op on DEV, and needs no code merge.
+   - Then backfill 24 Sep NAVs with the same history-endpoint gap procedure used for 20–23 Sep on 24 Sep.
+   - Watch the 26 Sep tick. The stuck batch `1e125ae4…` is reconciled automatically by the next ingest run.
+3. **Apply 0199, 0200 and 0201** to DEV, then production (§H).
+   - Suggested order: 0201 outside the 03:30 and :00/:30 windows, then 0200, then 0199.
+   - Each is independent. The code tolerates 0199's absence.
+4. **Stage E scope decision on F-3.**
    - (a) Fix the adapter for fund-house changes, then run a recoverability scan before expansion; or
    - (b) exclude schemes whose fund house changed; or
    - (c) accept backup-only recovery for them, once backup restore is evidenced.
-4. **F-6:** should a manifest-write failure mark the report failed so retry can pin it?
-5. **Backup/PITR evidence** (§8.B).
-6. **STOP GATE 1** (§9). Not recommended until items 2 and 5 are complete.
+5. **F-6:** should a manifest-write failure mark the report failed so retry can pin it?
+6. **Backup/PITR evidence** (§8.B).
+7. **STOP GATE 1** (§9). Not recommended until items 2, 3 and 6 are complete, and the daily NAV job has run successfully on schedule.
 
 Authorization status for this dispatch:
 
@@ -752,6 +830,7 @@ All SQL is in `docs/nav1/NAV1_D10_manifest_sql_for_PO.sql` and is read-only unle
 | Q6 | Table, index and database sizes; dead tuples | P9 item 10 / P11 baseline |
 | **Q7** | **0168 hold proof in a transaction that ends in ROLLBACK** (synthetic user, account and instrument created inside it) | P0.3. Expected: 0 → 1 → 1 holds; residue 0 after rollback. |
 | Q8 | After 0200: EXECUTE grants on the three functions | Proves the F-2 fix is live |
+| P-0 | **Apply 0202 before 26 Sep 03:30 UTC**, then backfill 24 Sep with the history-endpoint gap procedure used for 20–23 Sep. After the 26 Sep tick, run `node scripts/nav1_p3_daily_tick_check.mjs 2026-09-26T03:30:00Z 2026-09-25 <out>` (read-only). | Restores daily NAV collection (F-12) |
 | P-1 | After merge and deploy: watch the next hydration batch for `notes.telemetry.ordering` (`rotation_fallback` until 0199, then `least_recently_attempted`) | Fairness fix live |
 | P-2 | Optional uncovered-fund proof, **only after 0201**: attach a synthetic user's truth row (inside a scoped script) to one non-held fund with a verified AMFI source. Wait for the next tick and check it is hydrated even though 17 covered funds sort around it. Remove the synthetic rows afterwards. | The brief's P1 post-deploy proof. Needs a production write, so it needs the PO. |
 
@@ -764,8 +843,9 @@ All SQL is in `docs/nav1/NAV1_D10_manifest_sql_for_PO.sql` and is read-only unle
 | `supabase/migrations/0199_nav1_hydration_attempt_ledger.sql` | Attempt ledger for fair hydration ordering | `node scripts/nav1_0199_pglite_verification.mjs` → 14/14 |
 | `supabase/migrations/0200_nav1_retention_predicate_fail_closed.sql` | Service-role-only predicate; never NULL; merge families | `node scripts/nav1_0200_pglite_verification.mjs` → 39/39 |
 | `supabase/migrations/0201_nav1_prices_nav_self_fk_indexes.sql` | Stage E prerequisite: index the self-FKs | `node scripts/nav1_0201_pglite_verification.mjs` → 8/8 |
+| **`supabase/migrations/0202_nav1_nav_schedules_http_timeout.sql`** | **URGENT.** 300 s pg_net timeout on the daily and scheme-master jobs; production only | `node scripts/nav1_0202_pglite_verification.mjs` → 11/11 |
 
-Copies of all three are in the scratchpad `nav1_completion/` folder.
+Copies of all four are in the scratchpad `nav1_completion/` folder.
 
 ---
 
@@ -780,4 +860,5 @@ Copies of all three are in the scratchpad `nav1_completion/` folder.
 | `770ca1c` | DEV 0168 proof; fidelity check; P6 probe |
 | `50e5e19` | Stage E canary proposal SQL and its PGlite check |
 | `6660d68` | Merge of `origin/main` (`8b6692c`) |
+| (next) | 0202, its PGlite script, the daily-tick checker, and report updates |
 | final | This report |
