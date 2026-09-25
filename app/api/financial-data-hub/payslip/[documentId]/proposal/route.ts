@@ -1,5 +1,5 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
-import { getPayrollEventIdForDocument } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { getPayrollEventIdForDocument, findEarlierIdenticalPayslip } from '@/lib/financial-data-hub/services/payslipProcessingService';
 import {
   generateIncomeProposal,
   getIncomeProposalForReview,
@@ -33,7 +33,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   if (!user) return unauthenticated!;
 
   const payrollEventId = await getPayrollEventIdForDocument(user.id, documentId);
-  if (!payrollEventId) return bad('No payroll evidence has been extracted from this document yet.', 404);
+  if (!payrollEventId) {
+    // A re-upload of an already-imported payslip has no payroll event of its
+    // own. Point at the original instead of dead-ending (production,
+    // 2026-09-25: "No payroll evidence has been extracted" after a re-upload).
+    const original = await findEarlierIdenticalPayslip(user.id, documentId);
+    if (original) {
+      return Response.json(
+        {
+          error: 'duplicate_payslip',
+          message: 'This payslip was already imported. Continue with the copy already on file.',
+          duplicate_of_document_id: original.documentId,
+        },
+        { status: 409 },
+      );
+    }
+    return bad('No payroll evidence has been extracted from this document yet.', 404);
+  }
 
   try {
     const { proposalId, recommendedApplyMode } = await generateIncomeProposal(user.id, payrollEventId);

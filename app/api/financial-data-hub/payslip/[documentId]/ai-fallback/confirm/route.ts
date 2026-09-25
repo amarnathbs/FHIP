@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
-import { confirmAiPayslipFallback, PayslipProcessingError, PAYSLIP_FAILURE_MESSAGES } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { confirmAiPayslipFallback, PayslipProcessingError, PAYSLIP_FAILURE_MESSAGES, getDocumentIdForPayrollEvent } from '@/lib/financial-data-hub/services/payslipProcessingService';
 import { PAYROLL_COUNTRIES, PAY_FREQUENCIES } from '@/lib/financial-data-hub/payslip/types';
 
 // POST /api/financial-data-hub/payslip/{documentId}/ai-fallback/confirm
@@ -112,6 +112,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       payroll_event_id: result.payrollEventId,
       pipeline_status: result.pipelineStatus,
       duplicate: result.pipelineStatus === 'duplicate_payslip',
+      // Where to carry on from: the upload the duplicate matches (2026-09-25).
+      duplicate_of_document_id: result.pipelineStatus === 'duplicate_payslip' && result.payrollEventId ? await getDocumentIdForPayrollEvent(user.id, result.payrollEventId) : null,
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {
