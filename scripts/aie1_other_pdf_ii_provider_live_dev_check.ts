@@ -7,7 +7,7 @@
  * `ii_ai_extraction_reviews` (migration 0160), and 0160 is NOT applied on DEV
  * (PostgREST: PGRST205, table absent). So the full journey -- upload, real
  * scan, staged review, accept, one canonical write, replay refused, PDF
- * purged -- cannot run on DEV until the PO applies 0160 and 0202. What CAN be
+ * purged -- cannot run on DEV until the PO applies 0160 and 0203. What CAN be
  * proven now, and is proven here, is the half that talks to OpenAI: the exact
  * production provider (same gateway, same schema, same prompt, the line-item
  * output budget, real cost reserve/settle on the DEV ledger), reading a
