@@ -70,7 +70,7 @@ import {
 } from '@/lib/aie/adapters/retirement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
-import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
+import { reviewableMaskedIdentifier, figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/retirement/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 // The retirement service holds only BYTES at its failure branch — there is no
@@ -579,7 +579,18 @@ export async function attemptAiRetirementFallback(
     return { ok: false, reason: result.outcome };
   }
 
-  const extraction = mapRetirementFactsToExtraction(result.facts, context);
+  const read = mapRetirementFactsToExtraction(result.facts, context);
+  // 2026-09-25: an opening/closing balance the page does not print is
+  // dropped -- the reconciliation identity must never check the model's own
+  // arithmetic against itself (live finding on the bank adapter).
+  const dropped: string[] = [];
+  const extraction = read ? { ...read } : null;
+  if (extraction) {
+    for (const key of ['openingBalance', 'closingBalance'] as const) {
+      const v = extraction[key];
+      if (v !== undefined && !figureIsPrinted(Number(v), text)) { extraction[key] = undefined; dropped.push(key); }
+    }
+  }
   if (!extraction) {
     await recordDocumentAuditEvent({
       userId, documentId,
@@ -607,7 +618,7 @@ export async function attemptAiRetirementFallback(
   await recordDocumentAuditEvent({
     userId, documentId,
     eventType: 'retirement_statement_ai_fallback_draft_ready', actorType: 'system',
-    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, activities: draft.activities.length },
+    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, activities: draft.activities.length, ...(dropped.length ? { dropped_unprinted_figures: dropped } : {}) },
   });
   return { ok: true, extraction: draft };
 }

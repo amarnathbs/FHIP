@@ -35,6 +35,7 @@ import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
+import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/liability/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import {
@@ -651,6 +652,16 @@ export async function persistLiabilityStatementEvidence(
   return statementId;
 }
 
+/** Drops an opening/closing balance the document does not print, with a
+ * warning the user sees (exported for its unit test). */
+export function keepOnlyPrintedLiabilityBalances<T extends { header: { openingBalance?: number; closingBalance?: number }; warnings: string[] }>(mapped: T, documentText: string): T {
+  const header = { ...mapped.header };
+  const warnings = [...mapped.warnings];
+  if (header.openingBalance !== undefined && !figureIsPrinted(header.openingBalance, documentText)) { header.openingBalance = undefined; warnings.push('ai_opening_balance_not_printed_dropped'); }
+  if (header.closingBalance !== undefined && !figureIsPrinted(header.closingBalance, documentText)) { header.closingBalance = undefined; warnings.push('ai_closing_balance_not_printed_dropped'); }
+  return { ...mapped, header, warnings };
+}
+
 export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAiFallbackDraft } | { ok: false; reason: string };
 
 /**
@@ -693,7 +704,11 @@ export async function attemptAiLiabilityFallback(userId: string, documentId: str
     return { ok: false, reason: result.outcome };
   }
 
-  const mapped = mapLiabilityStatementFactsToDraft(result.facts);
+  const read = mapLiabilityStatementFactsToDraft(result.facts);
+  // 2026-09-25: the opening/closing balances anchor the reconciliation, so a
+  // figure the page does not print is dropped (see figureIsPrinted) -- the
+  // same rule the bank adapter applies after the live finding there.
+  const mapped = read ? keepOnlyPrintedLiabilityBalances(read, extractedText) : null;
   if (!mapped) {
     await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };

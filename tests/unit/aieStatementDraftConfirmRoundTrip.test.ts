@@ -196,7 +196,7 @@ describe('AI draft -> panel body -> confirm route', () => {
       pensionPayments: v(null), investmentEarnings: v(null), fees: v(null), insurancePremiums: v(null), tax: v(null),
     };
     const svc = await import('@/lib/financial-data-hub/services/retirementStatementProcessingService');
-    const out = await svc.attemptAiRetirementFallback('user-rt', 'doc-rt', new TextEncoder().encode(SYNTHETIC_TEXT), { jurisdiction: 'AU', currencyCode: 'AUD', statementType: 'retirement_statement_csv', accountType: 'unknown' });
+    const out = await svc.attemptAiRetirementFallback('user-rt', 'doc-rt', new TextEncoder().encode(`${SYNTHETIC_TEXT} Opening balance 10000.00, closing balance 10700.00.`), { jurisdiction: 'AU', currencyCode: 'AUD', statementType: 'retirement_statement_csv', accountType: 'unknown' });
     expect(out.ok).toBe(true);
     const draft = (out as { extraction: unknown }).extraction;
     confirmMocks.retirement.mockResolvedValue({ document: { id: 'doc-rt' }, statementId: 's-1', pipelineStatus: 'ok', activitiesExtracted: 2, activitiesDeduplicated: 0, positionsExtracted: 0 });
