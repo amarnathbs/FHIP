@@ -283,13 +283,19 @@ export async function enforceRawFileHardBackstop(
   let forcedPurgeCount = 0;
   // AIE-1 final completion (2026-09-25): documents whose structured result is
   // already durable keep their processing status; only the raw file goes.
+  // 2026-09-25 (other-PDF AI proof): the liability, retirement and investment
+  // statement services leave a document `queued` (not `processing`) while its
+  // AI draft awaits review, so a pending draft protects those states too.
+  // Without this the backstop forced such a document to `rejected` and the
+  // user's confirm was refused, stranding a draft that was paid for.
+  const DRAFT_PARKING_STATUSES: readonly string[] = ['processing', 'queued', 'uploaded'];
   const pendingDraftDocIds = await documentsWithPendingAiFallbackDrafts(
-    (candidates ?? []).filter((d) => d.processing_status === 'processing').map((d) => d.id),
+    (candidates ?? []).filter((d) => DRAFT_PARKING_STATUSES.includes(d.processing_status)).map((d) => d.id),
   );
   for (const doc of candidates ?? []) {
     const hasDurableStructuredResult =
       DURABLE_RESULT_STATUSES.includes(doc.processing_status) ||
-      (doc.processing_status === 'processing' && pendingDraftDocIds.has(doc.id));
+      (DRAFT_PARKING_STATUSES.includes(doc.processing_status) && pendingDraftDocIds.has(doc.id));
     const decision = decideRawFileBackstopAction(
       {
         processingStatus: doc.processing_status,

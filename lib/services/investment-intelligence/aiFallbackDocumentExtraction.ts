@@ -18,16 +18,13 @@
 // PO's own instruction: try the SAME AI-fallback mechanism first; only show
 // that message if AI-fallback is ALSO tried and ALSO fails.
 //
-// 2026-09-20 PO instruction (supersedes the 2026-09-17 "explicit accept"
-// requirement below): extraction is fully automatic — no customer-facing
-// confirmation screen — but the actual WRITE into canonical
-// ii_transactions/ii_holding_snapshots rows must behave the same way a
-// normal, successfully-parsed statement's write does. This is done by
-// staging the SAME `ii_ai_extraction_reviews` row this module always wrote
-// (kept as the audit/idempotency record and the underlying data shape),
-// then immediately invoking `applyAiExtractionReview()` — the exact same
-// write path a human "accept" click already used — instead of waiting for
-// one. See getAiFallbackDocumentExtraction()'s final step below.
+// 2026-09-20 PO instruction made extraction fully automatic (the staged
+// review was applied immediately, with no human look). 2026-09-25 (other-PDF
+// AI proof): REVERSED to review-before-write, because a reviewer required it
+// before II_AI_FALLBACK_ENABLED may be switched on. The staged
+// `ii_ai_extraction_reviews` row is now the end of this module's work; only
+// the explicit accept route (aiExtractionReviewApply.ts) writes canonical
+// ii_transactions/ii_holding_snapshots rows, claimed exactly once.
 //
 // resolveAieDocumentProvider() calls the REAL, already-merged AIE pipeline
 // (lib/aie/provider/gateway.ts + the AIE-1.2 Investment adapter's own
@@ -50,7 +47,7 @@ import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
-import { getAieAiModel, getAieAiMaxOutputTokensPerDocument } from '@/lib/aie/config';
+import { getAieAiModel, getAieAiMaxOutputTokensPerLineItemDocument } from '@/lib/aie/config';
 import {
   investmentDocumentFactsSchema,
   registerInvestmentDocumentFactsSchema,
@@ -125,9 +122,43 @@ export interface AieDocumentExtractionResult {
    * "no period, no comparison" principle). */
   statementPeriodStartIso: string | null;
   statementPeriodEndIso: string | null;
+  /** Set by the real provider; absent from test fakes. */
+  evidence?: IiAiCallEvidence;
 }
 
 export type AieDocumentProvider = (req: AieDocumentExtractionRequest) => Promise<AieDocumentExtractionResult>;
+
+/** 2026-09-25 (other-PDF AI proof): identifiers and counts only -- never
+ * content -- so each II AI call is attributable to its metered OpenAI
+ * request(s), as the FDH adapters and the payslip reference record. */
+export interface IiAiCallEvidence {
+  idempotencyKey: string;
+  providerRequestIds: string[];
+  inputTokens?: number;
+  outputTokens?: number;
+  model: string;
+}
+
+/** Thrown by the real provider when the gateway call did not succeed, so the
+ * evidence of a BILLED-but-unusable call (schema_rejected, refused) is not
+ * lost on the failure path. */
+export class IiAiProviderOutcomeError extends Error {
+  constructor(readonly outcome: string, readonly evidence: IiAiCallEvidence) {
+    super(`AIE document extraction did not succeed (outcome: ${outcome}).`);
+    this.name = 'IiAiProviderOutcomeError';
+  }
+}
+
+export function iiAiCallEvidenceMetadata(evidence: IiAiCallEvidence | undefined | null): Record<string, unknown> {
+  if (!evidence) return {};
+  return {
+    ai_model: evidence.model,
+    ai_cost_key: evidence.idempotencyKey,
+    ai_provider_request_ids: evidence.providerRequestIds.slice(0, 5),
+    ai_input_tokens: evidence.inputTokens ?? null,
+    ai_output_tokens: evidence.outputTokens ?? null,
+  };
+}
 
 function decimalStringToNumber(s: string | null): number {
   if (s === null) return NaN; // missing evidence stays unusable, never coerced to a false 0
@@ -223,20 +254,34 @@ async function resolveAieDocumentProvider(): Promise<AieDocumentProvider | null>
       schemaName: AIE_II_DOCUMENT_FACTS_SCHEMA_NAME,
       schemaVersion: AIE_II_DOCUMENT_FACTS_SCHEMA_VERSION,
       model: getAieAiModel(),
-      maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
+      // 2026-09-25: a whole statement (positions, each with its transaction
+      // ledger and source locations) is a LINE-ITEM document. The 512-token
+      // scalar budget truncates any realistic one mid-JSON, which the gateway
+      // then reports as a billed schema_rejected/provider_error.
+      maxOutputTokens: getAieAiMaxOutputTokensPerLineItemDocument(),
       requestedFields: [],
       idempotencyKey,
     });
 
+    const evidence: IiAiCallEvidence = {
+      idempotencyKey,
+      providerRequestIds: result.providerRequestIds ?? [],
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      model: getAieAiModel(),
+    };
     if (result.outcome !== 'success') {
-      throw new Error(`AIE document extraction did not succeed (outcome: ${result.outcome}).`);
+      throw new IiAiProviderOutcomeError(result.outcome, evidence);
     }
-    const facts = investmentDocumentFactsSchema.parse(result.data);
+    const parsedFacts = investmentDocumentFactsSchema.safeParse(result.data);
+    if (!parsedFacts.success) throw new IiAiProviderOutcomeError('schema_rejected', evidence);
+    const facts = parsedFacts.data;
     return {
       holdings: mapDocumentFactsToHoldings(facts),
       providerConfidence: 1, // P4/REC-04: the schema carries no confidence channel by design — a fixed value, never derived from provider metadata
       statementPeriodStartIso: facts.statementPeriodStartIso,
       statementPeriodEndIso: facts.statementPeriodEndIso,
+      evidence,
     };
   };
 }
@@ -251,26 +296,17 @@ export type AiFallbackDocumentOutcome =
   | { outcome: 'unavailable'; reason: string }
   | { outcome: 'already_pending'; reviewId: string; holdings: AieExtractedHolding[] }
   | { outcome: 'already_decided'; reviewId: string; status: 'accepted' | 'rejected' }
-  // 2026-09-20 PO instruction: extraction is fully automatic, so a fresh
-  // success now normally resolves as 'applied' — canonical rows already
-  // written, via the exact same applyAiExtractionReview() write path a
-  // human "accept" click uses. 'pending_review' is kept as a real, reachable
-  // outcome for the case where the auto-apply step itself fails (e.g. every
-  // extracted scheme turned out ambiguous) — the review row still exists
-  // and can be applied later via the existing accept API route, rather than
-  // the extraction being silently lost.
-  | { outcome: 'applied'; reviewId: string; holdings: AieExtractedHolding[]; summary: ApplySummary }
-  | { outcome: 'pending_review'; reviewId: string; holdings: AieExtractedHolding[] }
-  | { outcome: 'no_usable_data'; reason: string }
-  | { outcome: 'still_failed'; reason: string };
-
-interface ApplySummary {
-  accountsFound: number;
-  schemesFound: number;
-  newTransactionsCount: number;
-  duplicateTransactionsLinked: number;
-  missingTransactionsCount: number;
-}
+  // 2026-09-25 (other-PDF AI proof): REVIEW BEFORE WRITE, restored. The
+  // 2026-09-20 instruction made a fresh success auto-apply ('applied'),
+  // writing AI-read holdings and transactions into canonical ii_* rows with
+  // no human look at them -- the only AI path in the product that did. A
+  // reviewer required review-before-write before II_AI_FALLBACK_ENABLED may
+  // be switched on. A fresh success now ALWAYS stops at 'pending_review'; the
+  // canonical write happens only from the explicit accept route, exactly
+  // once (aiExtractionReviewApply.ts's conditional claim).
+  | { outcome: 'pending_review'; reviewId: string; holdings: AieExtractedHolding[]; evidence?: IiAiCallEvidence }
+  | { outcome: 'no_usable_data'; reason: string; evidence?: IiAiCallEvidence }
+  | { outcome: 'still_failed'; reason: string; evidence?: IiAiCallEvidence };
 
 export interface AiFallbackDocumentContext {
   userId: string;
@@ -282,17 +318,19 @@ export interface AiFallbackDocumentContext {
   sourceDocumentId: string;
   parseRunId: string | null;
   triggerReason: AiFallbackTriggerReason;
-  request: AieDocumentExtractionRequest;
+  /** Already-masked request. Either this or `buildRequest`. */
+  request?: AieDocumentExtractionRequest;
+  /** 2026-09-25: a thunk that MASKS the document text, evaluated only after
+   * the flag and cohort gates pass. The caller used to mask eagerly, before
+   * any gate, and `maskText` throws when `AIE_MASK_TOKEN_ENCRYPTION_KEY` is
+   * unset (production today) -- so an unrecognised statement containing any
+   * PII crashed processing with a 500 even with II AI switched OFF. A throw
+   * here is now a fail-closed 'unavailable' outcome, never a crash and never
+   * an unmasked call. */
+  buildRequest?: () => AieDocumentExtractionRequest;
   /** Test/DI seam — defaults to the real resolveAieDocumentProvider(). Unit
    * tests inject a fake provider here rather than ever calling a real one. */
   providerOverride?: AieDocumentProvider | null;
-  /** Test/DI seam for the auto-apply step — defaults to the real
-   * applyAiExtractionReview() (dynamically imported to avoid a static
-   * circular import: aiExtractionReviewApply.ts imports recertifyPosition
-   * from documentProcessing.ts, which imports this module). Unit tests
-   * inject a fake here to verify the orchestration without touching
-   * ii_transactions. */
-  applyOverride?: (userId: string, reviewId: string) => Promise<{ ok: boolean; error: string | null; summary?: ApplySummary }>;
 }
 
 /** Minimum bar for "usable data" per the PO's own wording: scheme identity,
@@ -307,6 +345,9 @@ function hasUsableData(result: AieDocumentExtractionResult): boolean {
  * The single entry point documentProcessing.ts calls at its two early
  * failure points. Idempotent per source document: a reprocess click never
  * re-sends an already-pending-or-decided document to the provider again.
+ *
+ * WRITES NO CANONICAL ROW. It stages an ii_ai_extraction_reviews row and
+ * stops; the user accepts or rejects it through the review panel.
  */
 export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
   if (!isAiFallbackEnabled()) return { outcome: 'disabled' };
@@ -339,6 +380,15 @@ export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentCon
     }
   }
 
+  let request: AieDocumentExtractionRequest;
+  try {
+    if (ctx.request) request = ctx.request;
+    else if (ctx.buildRequest) request = ctx.buildRequest();
+    else return { outcome: 'unavailable', reason: 'No document text was supplied. No AI provider was called.' };
+  } catch {
+    return { outcome: 'unavailable', reason: 'masking_unavailable' };
+  }
+
   const provider = ctx.providerOverride !== undefined ? ctx.providerOverride : await resolveAieDocumentProvider();
   if (!provider) {
     // resolveAieDocumentProvider() only ever returns null if constructing
@@ -351,13 +401,17 @@ export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentCon
 
   let result: AieDocumentExtractionResult;
   try {
-    result = await provider(ctx.request);
+    result = await provider(request);
   } catch (e) {
-    return { outcome: 'still_failed', reason: e instanceof Error ? e.message : 'AI-fallback document extraction failed.' };
+    return {
+      outcome: 'still_failed',
+      reason: e instanceof Error ? e.message : 'AI-fallback document extraction failed.',
+      evidence: e instanceof IiAiProviderOutcomeError ? e.evidence : undefined,
+    };
   }
 
   if (!hasUsableData(result)) {
-    return { outcome: 'no_usable_data', reason: 'The AI-fallback extraction did not produce a scheme with a cost value, market value, and a positive unit balance for any holding.' };
+    return { outcome: 'no_usable_data', reason: 'The AI-fallback extraction did not produce a scheme with a cost value, market value, and a positive unit balance for any holding.', evidence: result.evidence };
   }
 
   const { data: created, error } = await admin
@@ -376,21 +430,7 @@ export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentCon
     .select('id')
     .single();
   if (error || !created) {
-    return { outcome: 'still_failed', reason: error?.message ?? 'Could not stage the AI-extracted holdings for review.' };
+    return { outcome: 'still_failed', reason: error?.message ?? 'Could not stage the AI-extracted holdings for review.', evidence: result.evidence };
   }
-  const reviewId = created.id as string;
-
-  // Auto-apply: reuse the exact same write path a human "accept" click
-  // already used (applyAiExtractionReview) rather than waiting for one —
-  // see this module's header and the 2026-09-20 PO instruction. A failure
-  // here (e.g. every scheme resolved ambiguous, or a DB error) leaves the
-  // review row genuinely pending — never silently dropped — so the existing
-  // accept API route remains a working fallback path.
-  const apply =
-    ctx.applyOverride ?? (await import('./aiExtractionReviewApply')).applyAiExtractionReview;
-  const applied = await apply(ctx.userId, reviewId);
-  if (applied.ok && applied.summary) {
-    return { outcome: 'applied', reviewId, holdings: result.holdings, summary: applied.summary };
-  }
-  return { outcome: 'pending_review', reviewId, holdings: result.holdings };
+  return { outcome: 'pending_review', reviewId: created.id as string, holdings: result.holdings, evidence: result.evidence };
 }

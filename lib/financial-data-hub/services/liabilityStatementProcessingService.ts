@@ -34,6 +34,9 @@ import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
+import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/liability/schema';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import {
   isAieLiabilityAiFallbackEnabled,
   requestLiabilityAiExtraction,
@@ -146,13 +149,35 @@ export interface UploadLiabilityStatementResult {
  * computed on the client is ever trusted.
  */
 export interface LiabilityStatementAiFallbackDraft {
-  activities: LiabilityStatementActivity[];
+  /** 2026-09-25: exactly the keys the confirm route's strict activity schema
+   * accepts. The panel posts these rows verbatim; `sourceRowNumber` used to
+   * ride along and made every confirm fail with 422. */
+  activities: LiabilityAiDraftActivity[];
   header: MappedLiabilityStatementHeader;
   /** The model's own claim that it listed every printed line. Shown to the
    * user in words. Never the only completeness check — the reconciliation
    * arithmetic recomputed at confirm time is. */
   allActivitiesListed: boolean;
   warnings: string[];
+}
+
+export type LiabilityAiDraftActivity = Pick<
+  LiabilityStatementActivity,
+  'activityType' | 'activityDate' | 'amount' | 'descriptionRaw' | 'merchantRaw' | 'principalComponent' | 'interestComponent' | 'feeComponent'
+>;
+
+/** The reviewable projection of the mapped activities. Exported for the
+ * draft/confirm round-trip unit test. */
+export function toLiabilityAiDraftActivities(activities: readonly LiabilityStatementActivity[]): LiabilityAiDraftActivity[] {
+  return activities.map((a) => {
+    const row: LiabilityAiDraftActivity = { activityType: a.activityType, activityDate: a.activityDate, amount: a.amount };
+    if (a.descriptionRaw !== undefined) row.descriptionRaw = a.descriptionRaw;
+    if (a.merchantRaw !== undefined) row.merchantRaw = a.merchantRaw;
+    if (a.principalComponent !== undefined) row.principalComponent = a.principalComponent;
+    if (a.interestComponent !== undefined) row.interestComponent = a.interestComponent;
+    if (a.feeComponent !== undefined) row.feeComponent = a.feeComponent;
+    return row;
+  });
 }
 
 /** Same discipline as `loadBankCandidates` (payslip): a read of the
@@ -372,6 +397,12 @@ async function resolveLiabilityStatementDocument(
       // here with the SAME certified `decodeCsvBytes()` the native extractor
       // itself uses (encoding sniffing included), purely so the masking layer
       // has text to work on. No second download and no second decoder.
+      // 2026-09-25: a pending server-issued draft is returned as-is, so a
+      // repeated /process never pays for a second provider call.
+      const pending = await loadPendingAiFallbackDraft(userId, document.id);
+      if (pending.found) {
+        return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: pending.payload as LiabilityStatementAiFallbackDraft };
+      }
       const decoded = decodeCsvBytes(download.bytes).text;
       const fallback = await attemptAiLiabilityFallback(userId, document.id, decoded);
       if (fallback.ok) {
@@ -657,27 +688,47 @@ export async function attemptAiLiabilityFallback(userId: string, documentId: str
       documentId,
       eventType: 'liability_statement_ai_fallback_provider_outcome',
       actorType: 'system',
-      metadata: { outcome: result.outcome },
+      metadata: { outcome: result.outcome, ...adapterCallEvidenceMetadata(result.evidence) },
     });
     return { ok: false, reason: result.outcome };
   }
 
   const mapped = mapLiabilityStatementFactsToDraft(result.facts);
   if (!mapped) {
-    await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_insufficient_fields', actorType: 'system' });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_draft_ready', actorType: 'system' });
-  return {
-    ok: true,
-    draft: {
-      activities: mapped.activities,
-      header: mapped.header,
-      allActivitiesListed: mapped.allActivitiesListed,
-      warnings: mapped.warnings,
-    },
+  const draft: LiabilityStatementAiFallbackDraft = {
+    activities: toLiabilityAiDraftActivities(mapped.activities),
+    header: mapped.header,
+    allActivitiesListed: mapped.allActivitiesListed,
+    warnings: mapped.warnings,
   };
+  // 2026-09-25: persisted BEFORE the user sees it (0197) -- see the payslip
+  // reference. Confirm is then accepted only against this draft, once.
+  const saved = await saveAiFallbackDraft({
+    userId,
+    documentId,
+    documentType: 'liability_statement',
+    schemaName: AIE_LIABILITY_FACTS_SCHEMA_NAME,
+    schemaVersion: AIE_LIABILITY_FACTS_SCHEMA_VERSION,
+    payload: draft,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
+  });
+  if (!saved.persisted && saved.reason === 'write_failed') {
+    console.error(`liability AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
+    return { ok: false, reason: 'draft_not_persisted' };
+  }
+
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'liability_statement_ai_fallback_draft_ready',
+    actorType: 'system',
+    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, activities: draft.activities.length },
+  });
+  return { ok: true, draft };
 }
 
 /** What the confirm route hands back after the user has reviewed the draft. */
@@ -768,8 +819,30 @@ export async function confirmAiLiabilityFallback(
     throw new LiabilityStatementProcessingError('invalid_state', 'A loan statement cannot be saved as a credit card facility.');
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_confirmed', actorType: 'user' });
+  // 2026-09-25: the conditional claim of the server-issued draft (0197). It
+  // closes the two residuals disclosed above: a confirm for a document that
+  // never produced a draft, and two confirms racing past the check-then-act.
+  const claim = await claimPendingAiFallbackDraft({ userId, documentId, confirmedPayload: { facilityType, activities: reviewed.activities } });
+  if (!claim.claimed && claim.reason !== 'table_missing') {
+    throw new LiabilityStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
 
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_confirmed', actorType: 'user' });
+  try {
+    return await persistConfirmedLiabilityDraft(userId, documentId, document, reviewed, facilityType);
+  } catch (e) {
+    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    throw e;
+  }
+}
+
+async function persistConfirmedLiabilityDraft(
+  userId: string,
+  documentId: string,
+  document: FdhStatementUpload,
+  reviewed: ReviewedLiabilityStatementDraft,
+  facilityType: LiabilityFacilityType,
+): Promise<UploadLiabilityStatementResult> {
   // The marker warning is ALWAYS added, never conditionally. Its first job is
   // provenance (the evidence row itself records that it was AI-read and
   // user-confirmed), and its second is that

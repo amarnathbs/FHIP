@@ -69,6 +69,10 @@ import {
   mapRetirementFactsToExtraction,
 } from '@/lib/aie/adapters/retirement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
+import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
+import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/retirement/schema';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 // The retirement service holds only BYTES at its failure branch — there is no
 // extracted-text variable, because detection decodes the CSV into a local and
 // never returns it. `decodeCsvBytes` is the same pure decoder the detector
@@ -150,7 +154,104 @@ export interface UploadRetirementStatementResult {
    * confirm a no-op rather than a double-write: the second call finds a
    * statement row and refuses.
    */
-  aiFallbackDraft?: RetirementStatementExtraction;
+  aiFallbackDraft?: RetirementAiDraftForReview;
+}
+
+/**
+ * 2026-09-25 (other-PDF AI proof): the REVIEWABLE projection of an AI-read
+ * retirement extraction -- exactly the keys the confirm route's strict body
+ * schema accepts. The panel posts this object back verbatim; before this
+ * projection it posted the whole internal extraction (`parserName`,
+ * `parserVersion`, `extractionConfidence`, `warnings`, the YTD keys, per-row
+ * `currencyCode`/`sourceRowNumber`), so every confirm returned 422.
+ */
+export interface RetirementAiDraftForReview {
+  statementType: RetirementStatementType;
+  jurisdiction: RetirementJurisdiction;
+  accountType: RetirementAccountType;
+  currencyCode: string;
+  fundName?: string;
+  maskedAccountIdentifier?: string;
+  statementDate?: string;
+  statementStartDate?: string;
+  statementEndDate?: string;
+  openingBalance?: string;
+  closingBalance?: string;
+  employerContributions?: string;
+  personalContributions?: string;
+  salarySacrifice?: string;
+  governmentContributions?: string;
+  rolloversIn?: string;
+  rolloversOut?: string;
+  withdrawals?: string;
+  pensionPayments?: string;
+  investmentEarnings?: string;
+  fees?: string;
+  insurancePremiums?: string;
+  tax?: string;
+  activities: Array<{
+    activityType: RetirementStatementExtraction['activities'][number]['activityType'];
+    amount: string;
+    activityDate?: string;
+    descriptionRaw?: string;
+    employerNameRaw?: string;
+    isSummaryTotal: boolean;
+    isYearToDate: boolean;
+  }>;
+  positions: Array<{
+    optionNameRaw: string;
+    assetClassRaw?: string;
+    units?: string;
+    unitPrice?: string;
+    marketValue?: string;
+    valuationDate?: string;
+  }>;
+}
+
+const RETIREMENT_DRAFT_SCALAR_KEYS = [
+  'fundName', 'statementDate', 'statementStartDate', 'statementEndDate',
+  'openingBalance', 'closingBalance', 'employerContributions', 'personalContributions', 'salarySacrifice',
+  'governmentContributions', 'rolloversIn', 'rolloversOut', 'withdrawals', 'pensionPayments',
+  'investmentEarnings', 'fees', 'insurancePremiums', 'tax',
+] as const;
+
+/** Exported for the draft/confirm round-trip unit test. Undefined keys are
+ * omitted (JSON drops them anyway), never sent as null-vs-absent ambiguity. */
+export function toRetirementAiDraftForReview(ex: RetirementStatementExtraction): RetirementAiDraftForReview {
+  const out: RetirementAiDraftForReview = {
+    statementType: ex.statementType,
+    jurisdiction: ex.jurisdiction,
+    accountType: ex.accountType,
+    currencyCode: ex.currencyCode,
+    activities: ex.activities.map((a) => {
+      const row: RetirementAiDraftForReview['activities'][number] = {
+        activityType: a.activityType,
+        amount: a.amount,
+        isSummaryTotal: a.isSummaryTotal,
+        isYearToDate: a.isYearToDate,
+      };
+      if (a.activityDate !== undefined) row.activityDate = a.activityDate;
+      if (a.descriptionRaw !== undefined) row.descriptionRaw = a.descriptionRaw;
+      if (a.employerNameRaw !== undefined) row.employerNameRaw = a.employerNameRaw;
+      return row;
+    }),
+    positions: ex.positions.map((p) => {
+      const row: RetirementAiDraftForReview['positions'][number] = { optionNameRaw: p.optionNameRaw };
+      if (p.assetClassRaw !== undefined) row.assetClassRaw = p.assetClassRaw;
+      if (p.units !== undefined) row.units = p.units;
+      if (p.unitPrice !== undefined) row.unitPrice = p.unitPrice;
+      if (p.marketValue !== undefined) row.marketValue = p.marketValue;
+      if (p.valuationDate !== undefined) row.valuationDate = p.valuationDate;
+      return row;
+    }),
+  };
+  const identifier = reviewableMaskedIdentifier(ex.maskedAccountIdentifier);
+  if (identifier !== null) out.maskedAccountIdentifier = identifier;
+  for (const key of RETIREMENT_DRAFT_SCALAR_KEYS) {
+    const v = ex[key];
+    if (v !== undefined) (out as unknown as Record<string, unknown>)[key] = v;
+  }
+  return out;
 }
 
 /**
@@ -378,6 +479,16 @@ async function resolveRetirementStatementDocument(
     // function), so a draft offered AFTER `failDocument` could never be
     // confirmed. The document is therefore deliberately left in `queued`.
     if (RETIREMENT_AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(extraction.kind)) {
+      // 2026-09-25: a draft the server already issued for this document is
+      // returned as-is -- a repeated /process (reload, retry) never pays for
+      // a second provider call while the first draft awaits review.
+      const pending = await loadPendingAiFallbackDraft(userId, document.id);
+      if (pending.found) {
+        return {
+          document, statementId: null, pipelineStatus: 'ai_fallback_available',
+          aiFallbackDraft: pending.payload as RetirementAiDraftForReview, ...empty,
+        };
+      }
       const fallback = await attemptAiRetirementFallback(userId, document.id, download.bytes, {
         jurisdiction: metadata.jurisdiction,
         currencyCode: metadata.currencyCode,
@@ -415,7 +526,7 @@ async function resolveRetirementStatementDocument(
   return persistRetirementEvidence({ userId, document, ex, smsf });
 }
 
-export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementStatementExtraction } | { ok: false; reason: string };
+export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementAiDraftForReview } | { ok: false; reason: string };
 
 /**
  * The one call site that reaches the AI provider for a retirement statement.
@@ -463,7 +574,7 @@ export async function attemptAiRetirementFallback(
     await recordDocumentAuditEvent({
       userId, documentId,
       eventType: 'retirement_statement_ai_fallback_provider_outcome', actorType: 'system',
-      metadata: { outcome: result.outcome },
+      metadata: { outcome: result.outcome, ...adapterCallEvidenceMetadata(result.evidence) },
     });
     return { ok: false, reason: result.outcome };
   }
@@ -473,12 +584,32 @@ export async function attemptAiRetirementFallback(
     await recordDocumentAuditEvent({
       userId, documentId,
       eventType: 'retirement_statement_ai_fallback_insufficient_fields', actorType: 'system',
+      metadata: adapterCallEvidenceMetadata(result.evidence),
     });
     return { ok: false, reason: 'insufficient_fields' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_draft_ready', actorType: 'system' });
-  return { ok: true, extraction };
+  const draft = toRetirementAiDraftForReview(extraction);
+  const saved = await saveAiFallbackDraft({
+    userId,
+    documentId,
+    documentType: 'retirement_statement',
+    schemaName: AIE_RETIREMENT_FACTS_SCHEMA_NAME,
+    schemaVersion: AIE_RETIREMENT_FACTS_SCHEMA_VERSION,
+    payload: draft,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
+  });
+  if (!saved.persisted && saved.reason === 'write_failed') {
+    console.error(`retirement AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
+    return { ok: false, reason: 'draft_not_persisted' };
+  }
+
+  await recordDocumentAuditEvent({
+    userId, documentId,
+    eventType: 'retirement_statement_ai_fallback_draft_ready', actorType: 'system',
+    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, activities: draft.activities.length },
+  });
+  return { ok: true, extraction: draft };
 }
 
 /**
@@ -531,10 +662,24 @@ export async function confirmAiRetirementFallback(
     throw new RetirementStatementProcessingError('invalid_state', 'This statement has already been saved.');
   }
 
+  // 2026-09-25: only a draft the server actually issued can be confirmed, and
+  // only once. The two checks above were a check-then-act (two racing
+  // confirms could both pass them) and accepted a confirm for a document that
+  // never produced a draft; the conditional claim closes both.
+  const claim = await claimPendingAiFallbackDraft({ userId, documentId, confirmedPayload: extraction });
+  if (!claim.claimed && claim.reason !== 'table_missing') {
+    throw new RetirementStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_confirmed', actorType: 'user' });
 
   const smsf = detectSmsf(smsfContext.fundName ?? extraction.fundName, smsfContext.statementTextSample);
-  return persistRetirementEvidence({ userId, document, ex: extraction, smsf });
+  try {
+    return await persistRetirementEvidence({ userId, document, ex: extraction, smsf });
+  } catch (e) {
+    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    throw e;
+  }
 }
 
 /**

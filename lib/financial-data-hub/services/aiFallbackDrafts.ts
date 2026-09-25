@@ -20,7 +20,18 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
-export type DraftDocumentType = 'payslip';
+/** `document_type` is free text in 0197 (no CHECK), so widening this union
+ * needs no migration. 2026-09-25 (other-PDF AI proof): the four statement
+ * adapters now persist their drafts too -- before, their AI result existed
+ * only in the HTTP response, the confirm step accepted any client body for a
+ * document that had never produced a draft, and a replayed or concurrent
+ * confirm was guarded only by a check-then-act. */
+export type DraftDocumentType =
+  | 'payslip'
+  | 'bank_statement'
+  | 'liability_statement'
+  | 'retirement_statement'
+  | 'investment_statement';
 
 function isMissingTable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
@@ -104,6 +115,32 @@ export async function claimPendingAiFallbackDraft(params: {
   const rows = (data ?? []) as Array<{ id: string; payload: unknown }>;
   if (rows.length === 0) return { claimed: false, reason: 'none_pending' };
   return { claimed: true, draftId: rows[0].id, payload: rows[0].payload };
+}
+
+export type LoadPendingDraftResult =
+  | { found: true; draftId: string; payload: unknown }
+  | { found: false; reason: 'none_pending' | 'table_missing' | 'read_failed' };
+
+/** The document's single pending draft, if any. Used by the statement
+ * services that keep the document `queued` while a draft waits: a repeated
+ * `/process` call returns the draft the server already issued instead of
+ * paying for a second provider call. */
+export async function loadPendingAiFallbackDraft(userId: string, documentId: string): Promise<LoadPendingDraftResult> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('fdh_ai_fallback_drafts')
+    .select('id, payload')
+    .eq('statement_upload_id', documentId)
+    .eq('user_id', userId)
+    .eq('status', 'pending_review')
+    .limit(1);
+  if (error) {
+    if (isMissingTable(error)) return { found: false, reason: 'table_missing' };
+    return { found: false, reason: 'read_failed' };
+  }
+  const rows = (data ?? []) as Array<{ id: string; payload: unknown }>;
+  if (rows.length === 0) return { found: false, reason: 'none_pending' };
+  return { found: true, draftId: rows[0].id, payload: rows[0].payload };
 }
 
 /** Undo a claim when the downstream write failed, so the user can retry. */

@@ -51,6 +51,9 @@ import type { FdhStatementUpload } from '../domain/types';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
+import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/auInvestment/schema';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import {
   isAieInvestmentStatementAiFallbackEnabled,
   requestAuInvestmentAiExtraction,
@@ -377,6 +380,12 @@ async function resolveAuInvestmentStatementDocument(
     // `confirmAiAuInvestmentFallback`'s header) and is bounded by the cost
     // admission ledger rather than by this branch.
     if (AU_INVESTMENT_AI_FALLBACK_ELIGIBLE_KINDS.includes(extraction.kind)) {
+      // 2026-09-25: a pending server-issued draft is returned as-is. This
+      // closes the "sequential retry bills again" limitation disclosed above.
+      const pending = await loadPendingAiFallbackDraft(userId, document.id);
+      if (pending.found) {
+        return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: pending.payload as AuInvestmentStatementAiFallbackDraft };
+      }
       const fallback = await attemptAiAuInvestmentFallback(userId, document.id, decodeCsvBytes(download.bytes).text, {
         statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
         // CALLER CONTEXT ONLY — never the AI's impression of the page. The
@@ -581,21 +590,18 @@ export async function attemptAiAuInvestmentFallback(
       documentId,
       eventType: 'investment_statement_ai_fallback_provider_outcome',
       actorType: 'system',
-      metadata: { outcome: result.outcome },
+      metadata: { outcome: result.outcome, ...adapterCallEvidenceMetadata(result.evidence) },
     });
     return { ok: false, reason: result.outcome };
   }
 
   const mapped = mapAuInvestmentFactsToExtraction(result.facts, context);
   if (!mapped) {
-    await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_insufficient_fields', actorType: 'system' });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_draft_ready', actorType: 'system' });
-  return {
-    ok: true,
-    draft: {
+  const draft: AuInvestmentStatementAiFallbackDraft = {
       // The draft carries only the RAW READING. Caller context (currency,
       // country, statement type, masked account identifier) is deliberately
       // NOT echoed to the client and not accepted back from it — the confirm
@@ -626,8 +632,29 @@ export async function attemptAiAuInvestmentFallback(
       statementPeriodEnd: mapped.statementPeriodEnd ?? null,
       allRowsListed: !mapped.warnings.includes('ai_reported_rows_incomplete'),
       warnings: mapped.warnings,
-    },
   };
+  // 2026-09-25: persisted BEFORE the user sees it (0197), as for payslips.
+  const saved = await saveAiFallbackDraft({
+    userId,
+    documentId,
+    documentType: 'investment_statement',
+    schemaName: AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME,
+    schemaVersion: AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION,
+    payload: draft,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
+  });
+  if (!saved.persisted && saved.reason === 'write_failed') {
+    console.error(`investment AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
+    return { ok: false, reason: 'draft_not_persisted' };
+  }
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'investment_statement_ai_fallback_draft_ready',
+    actorType: 'system',
+    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, holdings: draft.holdings.length, activities: draft.activities.length },
+  });
+  return { ok: true, draft };
 }
 
 /** What the confirm route hands back after the user has reviewed (and
@@ -711,6 +738,14 @@ export async function confirmAiAuInvestmentFallback(
     throw new AuInvestmentStatementProcessingError('invalid_state', 'At least one holding or transaction is required.');
   }
 
+  // 2026-09-25: the conditional claim of the server-issued draft (0197)
+  // closes the check-then-act race disclosed above, and refuses a confirm for
+  // a document that never produced a draft.
+  const claim = await claimPendingAiFallbackDraft({ userId, documentId, confirmedPayload: reviewed });
+  if (!claim.claimed && claim.reason !== 'table_missing') {
+    throw new AuInvestmentStatementProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_confirmed', actorType: 'user' });
 
   // Statement kind: the user's own declared choice when supplied, otherwise
@@ -784,12 +819,18 @@ export async function confirmAiAuInvestmentFallback(
     warnings: ['read_by_ai_fallback_not_native_parser', 'user_confirmed_ai_fallback_draft'],
   };
 
-  const persisted = await persistAuInvestmentEvidence({
-    userId,
-    documentId,
-    statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
-    extraction,
-  });
+  let persisted: PersistAuInvestmentEvidenceResult;
+  try {
+    persisted = await persistAuInvestmentEvidence({
+      userId,
+      documentId,
+      statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+      extraction,
+    });
+  } catch (e) {
+    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    throw e;
+  }
 
   return {
     document,

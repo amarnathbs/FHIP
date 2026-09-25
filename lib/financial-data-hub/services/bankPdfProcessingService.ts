@@ -61,9 +61,14 @@ import {
   mapBankStatementFactsToDraft,
   AIE_BANK_STATEMENT_PARSER_NAME,
   AIE_BANK_STATEMENT_PARSER_VERSION,
+  AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
+  AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
   type MappedBankStatementDraft,
 } from '@/lib/aie/adapters/bankStatement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
+import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
 import { rangesOverlap } from '../bank-csv/reconciliation';
 import { moneyEquals } from '../domain/money';
@@ -150,7 +155,11 @@ export interface ProcessBankPdfResult {
  * from the reviewed rows at confirm time. Nothing computed on the client is
  * ever trusted. */
 export interface BankStatementAiFallbackDraft {
-  rows: ReadBankStatementRow[];
+  /** 2026-09-25: exactly the keys the confirm route's strict row schema
+   * accepts. `sourceRowNumber` used to ride along and made every confirm from
+   * the real panel (which posts these rows verbatim) fail with 422. Row
+   * numbers are re-assigned server-side from the reviewed order anyway. */
+  rows: BankStatementAiDraftRow[];
   institutionName: string | null;
   maskedAccountIdentifier: string | null;
   statementPeriodStart: string | null;
@@ -163,6 +172,8 @@ export interface BankStatementAiFallbackDraft {
   allTransactionsListed: boolean;
   warnings: string[];
 }
+
+export type BankStatementAiDraftRow = Omit<ReadBankStatementRow, 'sourceRowNumber'>;
 
 /** Removes every row a PRIOR (failed) processing attempt for this document
  * produced — the compensating cleanup that makes a retry safe (spec 89-90),
@@ -848,26 +859,57 @@ export async function attemptAiBankStatementFallback(userId: string, documentId:
       documentId,
       eventType: 'bank_statement_ai_fallback_provider_outcome',
       actorType: 'system',
-      metadata: { outcome: result.outcome },
+      metadata: { outcome: result.outcome, ...adapterCallEvidenceMetadata(result.evidence) },
     });
     return { ok: false, reason: result.outcome };
   }
 
   const mapped = mapBankStatementFactsToDraft(result.facts);
   if (!mapped) {
-    await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_insufficient_fields', actorType: 'system' });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_draft_ready', actorType: 'system' });
-  return { ok: true, draft: toDraft(mapped) };
+  const draft = toBankStatementAiDraftForReview(mapped);
+  // 2026-09-25: persisted BEFORE the user sees it (migration 0197), so the
+  // confirm is accepted only against a draft the server issued, exactly once.
+  const saved = await saveAiFallbackDraft({
+    userId,
+    documentId,
+    documentType: 'bank_statement',
+    schemaName: AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
+    schemaVersion: AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
+    payload: draft,
+    providerIdempotencyKey: result.evidence?.idempotencyKey ?? null,
+  });
+  if (!saved.persisted && saved.reason === 'write_failed') {
+    console.error(`bank statement AI draft for ${documentId} could not be persisted: ${saved.detail ?? 'unknown'}`);
+    return { ok: false, reason: 'draft_not_persisted' };
+  }
+
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'bank_statement_ai_fallback_draft_ready',
+    actorType: 'system',
+    metadata: { ...adapterCallEvidenceMetadata(result.evidence), draft_persisted: saved.persisted, rows: draft.rows.length },
+  });
+  return { ok: true, draft };
 }
 
-function toDraft(mapped: MappedBankStatementDraft): BankStatementAiFallbackDraft {
+/** The reviewable projection -- exactly what the panel shows and the confirm
+ * route accepts back. Exported for the draft/confirm round-trip unit test. */
+export function toBankStatementAiDraftForReview(mapped: MappedBankStatementDraft): BankStatementAiFallbackDraft {
   return {
-    rows: mapped.rows,
+    rows: mapped.rows.map((r) => ({
+      transactionDate: r.transactionDate,
+      descriptionRaw: r.descriptionRaw,
+      amountOriginal: r.amountOriginal,
+      creditDebit: r.creditDebit,
+      balanceAfter: r.balanceAfter,
+    })),
     institutionName: mapped.institutionName,
-    maskedAccountIdentifier: mapped.statementMetadata.maskedAccountIdentifier,
+    maskedAccountIdentifier: reviewableMaskedIdentifier(mapped.statementMetadata.maskedAccountIdentifier),
     statementPeriodStart: mapped.statementMetadata.statementPeriodStart,
     statementPeriodEnd: mapped.statementMetadata.statementPeriodEnd,
     declaredOpeningBalance: mapped.statementMetadata.declaredOpeningBalance,
@@ -916,7 +958,33 @@ export async function confirmAiBankStatementFallback(
     throw new BankPdfProcessingError('invalid_state', 'At least one transaction is required.');
   }
 
+  // 2026-09-25: claim the durable draft the server issued (migration 0197).
+  // One conditional update: a replayed or concurrent confirmation finds
+  // nothing pending and writes nothing. Without 0197 the `processing` gate
+  // above remains the guard (pre-0197 behaviour).
+  const claim = await claimPendingAiFallbackDraft({ userId, documentId, confirmedPayload: reviewed });
+  if (!claim.claimed && claim.reason !== 'table_missing') {
+    throw new BankPdfProcessingError('invalid_state', 'This statement has no AI-extracted draft awaiting confirmation.');
+  }
+
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_confirmed', actorType: 'user' });
+  try {
+    return await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed);
+  } catch (e) {
+    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    throw e;
+  }
+}
+
+async function confirmClaimedBankStatementDraft(
+  userId: string,
+  documentId: string,
+  document: FdhStatementUpload,
+  reviewed: Parameters<typeof confirmAiBankStatementFallback>[2],
+): Promise<ProcessBankPdfResult> {
+  if (!document.financial_account_id) {
+    throw new BankPdfProcessingError('account_unresolved', 'account identity is ambiguous — resolve it before confirming');
+  }
 
   // Re-loaded here rather than carried across the two requests: the dedup
   // index must reflect the account's state NOW, at write time, not as it was
