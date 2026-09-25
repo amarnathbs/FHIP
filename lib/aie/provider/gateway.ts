@@ -56,6 +56,34 @@ export interface AieFieldCompletionResult {
   /** AIE-1 final completion: provider request ids of every HTTP attempt made
    * for this call (OpenAI `x-request-id`). Empty when nothing was sent. */
   providerRequestIds?: string[];
+  /** Set only when the provider call threw: a CATEGORY code, never a message
+   * (GW-10) -- the ProviderError code (AUTH, TIMEOUT, INVALID_REQUEST, ...),
+   * or NON_PROVIDER_ERROR:<error class>[:<network cause code>]. The full
+   * sanitised message goes to the server log only. */
+  failureCode?: string;
+}
+
+const FAILURE_DETAIL_MAX = 240;
+const CODE_TOKEN = /^[A-Za-z0-9_]{1,40}$/;
+
+/** `code`: a category safe to hand to callers and persist (identifier
+ * tokens only, no free text). `detail`: a bounded, secret-redacted one-line
+ * summary for the SERVER LOG ONLY -- it may carry runtime text such as host
+ * names, which GW-10 keeps away from callers. Neither ever contains the
+ * masked prompt or the document. */
+export function describeProviderFailure(e: unknown): { code: string; detail: string } {
+  let code: string = e instanceof ProviderError ? e.code : 'NON_PROVIDER_ERROR';
+  let detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  const cause = e instanceof Error ? (e as Error & { cause?: unknown }).cause : undefined;
+  if (!(e instanceof ProviderError) && e instanceof Error && CODE_TOKEN.test(e.name)) code += `:${e.name}`;
+  if (cause instanceof Error) {
+    const causeCode = (cause as Error & { code?: unknown }).code;
+    if (!(e instanceof ProviderError) && typeof causeCode === 'string' && CODE_TOKEN.test(causeCode)) code += `:${causeCode}`;
+    detail += ` (cause ${cause.name}${typeof causeCode === 'string' ? ` ${causeCode}` : ''}: ${cause.message})`;
+  }
+  detail = detail.replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-[redacted]').replace(/\s+/g, ' ').trim();
+  if (detail.length > FAILURE_DETAIL_MAX) detail = `${detail.slice(0, FAILURE_DETAIL_MAX - 3)}...`;
+  return { code, detail };
 }
 
 export interface AieGatewayOptions {
@@ -246,11 +274,18 @@ export class AieDocumentAiGateway {
         // provider reported nothing at all.
         ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}),
       });
-      // GW-10: never return the raw provider error to the caller.
+      // GW-10: never return the raw provider error to the caller -- only its
+      // category code; the sanitised message goes to the server log. Without
+      // these the first production payslip attempts (2026-09-25) recorded a
+      // bare 'provider_error' with no request id and no way to tell a missing
+      // key from a network failure from a local exception.
+      const failure = describeProviderFailure(e);
+      console.error(`aie gateway provider failure for key ${req.idempotencyKey}: ${failure.code} -- ${failure.detail}`);
       return {
         outcome,
         providerRequestIds: incurred?.providerRequestIds ?? [],
         ...(incurred ? { inputTokens: incurred.cumulativeInputTokens, outputTokens: incurred.cumulativeOutputTokens } : {}),
+        failureCode: failure.code,
       };
     }
 
