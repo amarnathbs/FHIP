@@ -11,7 +11,7 @@ import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intell
 import { resolveHouseholdCountryForUser, UnresolvedHouseholdCountryError } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { createDefaultDeps } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
@@ -23,7 +23,7 @@ import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 // provider-selection module, and `tests/unit/aieIiAdapterProhibitions.test.ts`
 // enforces it. The kill switch defaults OFF, so no AI fallback can fire
 // unless an operator has explicitly enabled it.
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });

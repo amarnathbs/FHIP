@@ -8,7 +8,7 @@
  * `featureFlags.ts`'s header for why that shape, not the heavier
  * orchestrator pipeline, is this adapter's model): one shared
  * `AieDocumentAiGateway` per process, wired to the real OpenAI-backed
- * provider via `createAieAiProvider()`, gated by the SAME global
+ * provider via `createLazyAieAiProvider()` (chosen per call), gated by the SAME global
  * `AIE_AI_FALLBACK_ENABLED` kill switch every other AI call in this codebase
  * shares, with the SAME atomic cost-admission reserve/settle every other AI
  * call shares. Constructing this eagerly never causes a real provider call —
@@ -18,13 +18,13 @@
 
 import { randomUUID } from 'crypto';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { getAieAiModel, getAieAiMaxOutputTokensPerDocument } from '@/lib/aie/config';
 import { payslipDocumentFactsSchema, registerPayslipDocumentFactsSchema, AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME, AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION, type PayslipDocumentFacts } from './schema';
 
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });
