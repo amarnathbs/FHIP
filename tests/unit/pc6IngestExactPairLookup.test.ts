@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
 import { loadExistingObservations, ExistingStateLookupError, EXACT_PAIR_MAX_PER_CALL, type NavPair } from '@/lib/services/investment-intelligence/pc6/exactPairLookup';
 import { parseNavAll } from '@/lib/services/investment-intelligence/pc6/amfiParser';
+import { createWriteBudget, resolveBudgetMs, PC6_INGEST_DEFAULT_BUDGET_MS } from '@/lib/services/investment-intelligence/pc6/ingestBudget';
 import { planImport, type InstrumentResolutionIndex } from '@/lib/services/investment-intelligence/pc6/referenceImportRunner';
 import type { ExistingObservation, NavQualityStatus } from '@/lib/services/investment-intelligence/pc6/referenceDataQuality';
 import { FakeDb, buildNavAll, seedUniverse, addDaysIso, PG_MAX_ROWS, type Row } from './support/pc6IngestFakeDb';
@@ -82,6 +83,35 @@ function buildFixture() {
   const candidateDates = [...new Set(parsed.records.map((r) => r.navDate))];
   return { db, fx, parsed, index, pairs, candidateIds, candidateDates };
 }
+
+describe('PC6 write budget (ingestBudget.ts)', () => {
+  it('starts a unit only if its projected end fits; the grace applies to the FIRST unit only; estimates learn the slowest unit', () => {
+    let now = 0;
+    const b = createWriteBudget({ startedAtMs: 0, budgetMs: 18_000, clock: () => now });
+    now = 15_000;
+    expect(b.canStart('insert_chunk')).toBe(true); // 15 + 2 (initial estimate) <= 18
+    now = 16_500;
+    expect(b.canStart('insert_chunk')).toBe(true); // 18.5 > 18 but first unit: <= 18 + 3
+    now = 19_500;
+    expect(b.canStart('insert_chunk')).toBe(false); // 21.5 > 21: not even the first unit
+    b.record('insert_chunk', 4_000); // a unit done, and it took 4 s
+    now = 14_500;
+    expect(b.canStart('insert_chunk')).toBe(false); // 14.5 + 4 (learned) > 18, and no grace any more
+    now = 13_900;
+    expect(b.canStart('insert_chunk')).toBe(true);
+    expect(b.canStart('correction')).toBe(true); // per-kind estimates
+    expect(createWriteBudget({ startedAtMs: 0, budgetMs: Infinity, clock: () => 1e12 }).canStart('insert_chunk')).toBe(true);
+  });
+
+  it('resolves the budget: explicit, then PC6_INGEST_BUDGET_MS, then 18 s; nonsense is ignored', () => {
+    expect(resolveBudgetMs(12_000, '9000')).toBe(12_000);
+    expect(resolveBudgetMs(undefined, '9000')).toBe(9_000);
+    expect(resolveBudgetMs(undefined, undefined)).toBe(PC6_INGEST_DEFAULT_BUDGET_MS);
+    expect(resolveBudgetMs(-5, 'abc')).toBe(PC6_INGEST_DEFAULT_BUDGET_MS);
+    expect(resolveBudgetMs(Infinity, '9000')).toBe(Infinity);
+    expect(PC6_INGEST_DEFAULT_BUDGET_MS).toBe(18_000);
+  });
+});
 
 describe('PC6 exact-pair lookup vs the old cross-product lookup (same fixture)', () => {
   it('ANTI-VACUITY: the fixture reproduces the defect -- the old query reads far more rows than the file has pairs', async () => {

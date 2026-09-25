@@ -20,13 +20,15 @@
 // PROGRESS FLOOR. If the read phase alone used the budget, one unit may still
 // start while it fits within `budgetMs + progressGraceMs`, so a slow-but-
 // working day makes progress rather than looping on zero-progress partials.
-// The defaults (18 s + 5 s = 23 s, plus the unit itself) stay under 28 s.
+// With the defaults the first unit must be projected to END by 21 s (18 s +
+// 3 s); a unit that overruns its estimate still leaves room for the platform
+// cold start inside 28 s.
 
 /** Default wall-clock budget per invocation, measured from invocation start. */
 export const PC6_INGEST_DEFAULT_BUDGET_MS = 18_000;
 
 /** Extra room allowed ONLY for the first write unit of an invocation. */
-export const PC6_INGEST_PROGRESS_GRACE_MS = 5_000;
+export const PC6_INGEST_PROGRESS_GRACE_MS = 3_000;
 
 /** Upper bound accepted from an HTTP caller (the route); anything larger would outlive the 28 s platform limit. */
 export const PC6_INGEST_MAX_HTTP_BUDGET_MS = 22_000;
