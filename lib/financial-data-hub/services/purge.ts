@@ -260,6 +260,21 @@ export async function sweepAbandonedUploadSessions(limit = 100): Promise<number>
  * only, per the LR-1 architectural invariant — nothing here reads or needs
  * the raw file to decide anything.
  */
+/** Upload ids (from the given set) that already have statement EVIDENCE rows
+ * in any of the three statement-evidence tables. Errors read as "no evidence"
+ * for that table (the pre-existing behaviour), never as a crash. */
+export const STATEMENT_EVIDENCE_TABLES = ['fdh_liability_statements', 'fdh_retirement_statements', 'fdh_investment_statements'] as const;
+async function documentsWithStatementEvidence(admin: ReturnType<typeof createAdminClient>, documentIds: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (documentIds.length === 0) return found;
+  for (const table of STATEMENT_EVIDENCE_TABLES) {
+    const { data, error } = await admin.from(table).select('statement_upload_id').in('statement_upload_id', documentIds);
+    if (error) continue;
+    for (const r of (data ?? []) as Array<{ statement_upload_id: string }>) found.add(r.statement_upload_id);
+  }
+  return found;
+}
+
 export async function enforceRawFileHardBackstop(
   maxAgeMinutes: number = FDH_DOCUMENT_RAW_MAX_LIFETIME_MINUTES,
   limit = 200,
@@ -292,10 +307,21 @@ export async function enforceRawFileHardBackstop(
   const pendingDraftDocIds = await documentsWithPendingAiFallbackDrafts(
     (candidates ?? []).filter((d) => DRAFT_PARKING_STATUSES.includes(d.processing_status)).map((d) => d.id),
   );
+  // 2026-09-25 (other-PDF AI proof, found live on DEV): the liability,
+  // retirement and AU-investment statement services write their evidence rows
+  // but never move the document out of `queued` (natively or after an AI
+  // confirm), so 50 minutes later this backstop forced every such document to
+  // `rejected` although its evidence was written and awaiting approval -- the
+  // same class as release-register F-4. A document with an evidence row is
+  // durable: purge the file, keep the status.
+  const evidenceDocIds = await documentsWithStatementEvidence(
+    admin,
+    (candidates ?? []).filter((d) => DRAFT_PARKING_STATUSES.includes(d.processing_status)).map((d) => d.id),
+  );
   for (const doc of candidates ?? []) {
     const hasDurableStructuredResult =
       DURABLE_RESULT_STATUSES.includes(doc.processing_status) ||
-      (DRAFT_PARKING_STATUSES.includes(doc.processing_status) && pendingDraftDocIds.has(doc.id));
+      (DRAFT_PARKING_STATUSES.includes(doc.processing_status) && (pendingDraftDocIds.has(doc.id) || evidenceDocIds.has(doc.id)));
     const decision = decideRawFileBackstopAction(
       {
         processingStatus: doc.processing_status,
