@@ -8,7 +8,7 @@ import { isRealScanAdmissible } from '@/lib/aie/malware/realScanGate';
 import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf/password';
 import { createDefaultDeps } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intelligence/dispatch';
 import { resolveHouseholdCountryForUser, UnresolvedHouseholdCountryError } from '@/lib/aie/adapters/investment-intelligence/householdContext';
@@ -52,7 +52,7 @@ import { resolveHouseholdCountryForUser, UnresolvedHouseholdCountryError } from 
  * which is outside M3's scope and is not touched here.)
  */
 
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });

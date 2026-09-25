@@ -6,7 +6,7 @@
 // writes nothing -- that is the job's own real behaviour, not a script bug.
 //
 // Usage:
-//   node scripts/pc6_run_ingest.mjs <sourceConfigId> <jobKey> [--production] [--dry]
+//   node scripts/pc6_run_ingest.mjs <sourceConfigId> <jobKey> [--production] [--dry] [--budget-ms=N]
 //
 // Examples:
 //   node scripts/pc6_run_ingest.mjs amfi_scheme_master pc6_amfi_scheme_master --production
@@ -34,11 +34,18 @@ if (!sourceConfigId || !jobKey) {
   process.exit(1);
 }
 
+// A hand run has no 28 s platform limit, so by default it is NOT time-
+// budgeted (the job itself defaults to 18 s for the HTTP route). Pass
+// --budget-ms=18000 to reproduce exactly what one scheduled call does.
+const budgetArg = process.argv.find((a) => a.startsWith('--budget-ms='));
+const budgetMs = budgetArg ? Number(budgetArg.split('=')[1]) : Infinity;
+
 const { runReferenceIngest } = await import('../lib/services/investment-intelligence/pc6/referenceIngestJob.ts');
 const result = await runReferenceIngest({
   jobKey,
   sourceConfigId,
   asOfDate: new Date().toISOString().slice(0, 10),
   dryRun,
+  budgetMs,
 });
 console.log(JSON.stringify(result, null, 2));

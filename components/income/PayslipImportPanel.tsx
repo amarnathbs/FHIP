@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -165,15 +166,8 @@ const GROSS_SOURCE_NOTE: Record<string, string> = {
   user_corrected: 'You corrected this figure.',
 };
 
-interface ProposedField {
-  fieldName: string;
-  valueKind: string;
-  proposedValue: string | null;
-  existingValue: string | null;
-  isRecommended: boolean;
-  requiresConfirmation: boolean;
-  reasonCode: string;
-}
+// The API sends snake_case rows; normaliseProposedFields maps them (see its
+// header for the production defect this fixes).
 
 const FIELD_LABELS: Record<string, string> = {
   source_name: 'Name',
@@ -522,7 +516,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       const { ok, json } = await readJson(res);
       if (!ok) throw new Error(json.error ?? 'We could not prepare an income comparison for this payslip.');
       setProposalId(json.data.proposal_id as string);
-      const pfields = (json.data.fields as ProposedField[]) ?? [];
+      const pfields = normaliseProposedFields(json.data.fields);
       setFields(pfields);
       const defaultSel = new Set(
         pfields.filter((f) => f.isRecommended && !f.requiresConfirmation && f.proposedValue !== f.existingValue).map((f) => f.fieldName),

@@ -14,7 +14,7 @@ import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 
 import { isAieInsuranceAdapterEnabled } from '@/lib/aie/adapters/insurance/featureFlags';
 import { buildInsuranceReconciliationRule } from '@/lib/aie/adapters/insurance/reconciliation';
@@ -56,7 +56,7 @@ registerInsuranceAdapterSchema();
 // disclosed gap (three routes each independently hardcoded the mock with
 // no switch to a real provider anywhere). Still gated by AIE-1.1's global
 // kill switch, defaulted OFF, regardless of which provider is selected.
-const gateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });

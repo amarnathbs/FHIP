@@ -20,12 +20,12 @@
 import { randomUUID } from 'crypto';
 import type { z } from 'zod';
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
-import { createAieAiProvider } from '@/lib/aie/provider/providerFactory';
+import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { getAieAiModel, getAieAiMaxOutputTokensPerDocument, getAieAiMaxOutputTokensPerLineItemDocument } from '@/lib/aie/config';
 
-const sharedGateway = new AieDocumentAiGateway(createAieAiProvider(), {
+const sharedGateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
   isKillSwitchEnabled: () => isAieAiFallbackEnabled(),
   costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost },
 });

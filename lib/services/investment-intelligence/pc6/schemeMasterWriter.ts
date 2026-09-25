@@ -22,6 +22,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AmfiSchemeNavRecord } from './amfiParser';
 import type { InstrumentResolutionIndex } from './referenceImportRunner';
 import { fetchAllRows } from '../pagination';
+import { mapWithConcurrency, type WriteBudget } from './ingestBudget';
 
 export interface SchemeMasterWriteCounts {
   resolved: number;
@@ -34,6 +35,13 @@ export interface SchemeMasterWriteCounts {
 export interface SchemeMasterWriteResult {
   counts: SchemeMasterWriteCounts;
   errors: string[];
+  /**
+   * Resolved schemes whose identity change was planned but NOT written in
+   * this invocation because the time budget ran out (2026-09-25; see
+   * ingestBudget.ts). 0 means the run is complete. A rerun re-reads current
+   * state, so the written ones are then 'unchanged' and only these remain.
+   */
+  remaining: number;
 }
 
 function identityChecksum(r: AmfiSchemeNavRecord): string {
@@ -59,7 +67,13 @@ export async function writeSchemeMasterRows(
   records: AmfiSchemeNavRecord[],
   index: InstrumentResolutionIndex,
   opts: { countryCode: string; currencyCode: string; sourceId: string | null; importBatchId: string; asOfDate: string },
-  chunkSize: number
+  chunkSize: number,
+  /**
+   * Optional wall-clock budget (2026-09-25). Without one the writer runs to
+   * completion, exactly as before. With one, it stops starting new write
+   * chunks once the budget is used and reports what is left in `remaining`.
+   */
+  budget?: WriteBudget
 ): Promise<SchemeMasterWriteResult> {
   const counts: SchemeMasterWriteCounts = { resolved: 0, unresolved: 0, inserted: 0, unchanged: 0, superseded: 0 };
   const errors: string[] = [];
@@ -81,7 +95,7 @@ export async function writeSchemeMasterRows(
     resolvedEntries.push({ instrumentId, record });
   }
 
-  if (resolvedEntries.length === 0) return { counts, errors };
+  if (resolvedEntries.length === 0) return { counts, errors, remaining: 0 };
 
   // Chunked on the request side (an .in() filter with the full ~14,358-code
   // AMFI universe in one call risks the request URL itself, not just the
@@ -90,12 +104,16 @@ export async function writeSchemeMasterRows(
   // referenceIngestJob.ts already hit: with the full universe resolved,
   // most of it now has a "current" row on every subsequent run, and an
   // unpaged select would only ever see the first page of it.
-  const currentRows: { id: string; amfi_scheme_code: string; record_checksum: string }[] = [];
+  //
+  // Up to 4 chunks in flight (2026-09-25): 29 sequential reads took 5.8 s
+  // against production, a fifth of the 28 s request limit.
   const allCodes = resolvedEntries.map((e) => e.record.amfiSchemeCode);
-  for (let i = 0; i < allCodes.length; i += chunkSize) {
-    const codeSlice = allCodes.slice(i, i + chunkSize);
-    try {
-      const rows = await fetchAllRows<{ id: string; amfi_scheme_code: string; record_checksum: string }>(() =>
+  const codeSlices: string[][] = [];
+  for (let i = 0; i < allCodes.length; i += chunkSize) codeSlices.push(allCodes.slice(i, i + chunkSize));
+  let currentRows: { id: string; amfi_scheme_code: string; record_checksum: string }[];
+  try {
+    const pages = await mapWithConcurrency(codeSlices, 4, (codeSlice) =>
+      fetchAllRows<{ id: string; amfi_scheme_code: string; record_checksum: string }>(() =>
         db
           .from('ii_scheme_master')
           .select('id, amfi_scheme_code, record_checksum')
@@ -103,30 +121,27 @@ export async function writeSchemeMasterRows(
           .is('effective_to', null)
           .in('amfi_scheme_code', codeSlice)
           .order('id')
-      );
-      currentRows.push(...rows);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'Could not read current scheme-master state.');
-      return { counts, errors };
-    }
+      )
+    );
+    currentRows = pages.flat();
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : 'Could not read current scheme-master state.');
+    return { counts, errors, remaining: 0 };
   }
   const currentByCode = new Map<string, CurrentRow>(currentRows.map((r) => [r.amfi_scheme_code, { id: r.id, record_checksum: r.record_checksum }]));
 
-  const toClose: string[] = []; // ii_scheme_master.id
-  const toInsert: Record<string, unknown>[] = [];
+  // One planned change per scheme whose identity is new or different;
+  // `closeId` is the current row it replaces, if any.
+  const changes: { closeId: string | null; row: Record<string, unknown> }[] = [];
 
   for (const { instrumentId, record } of resolvedEntries) {
     const checksum = identityChecksum(record);
     const current = currentByCode.get(record.amfiSchemeCode);
-    if (current) {
-      if (current.record_checksum === checksum) {
-        counts.unchanged += 1;
-        continue;
-      }
-      toClose.push(current.id);
-      counts.superseded += 1;
+    if (current && current.record_checksum === checksum) {
+      counts.unchanged += 1;
+      continue;
     }
-    toInsert.push({
+    changes.push({ closeId: current ? current.id : null, row: {
       instrument_id: instrumentId,
       amfi_scheme_code: record.amfiSchemeCode,
       scheme_name: record.schemeName,
@@ -148,28 +163,41 @@ export async function writeSchemeMasterRows(
       record_checksum: checksum,
       effective_from: opts.asOfDate,
       effective_to: null,
-    });
+    } });
   }
 
-  // Close out superseded "current" rows FIRST -- the unique index
-  // (country_code, amfi_scheme_code) where effective_to is null allows only
-  // one open row at a time, so the old one must stop being open before the
-  // new one can become it.
-  for (let i = 0; i < toClose.length; i += chunkSize) {
-    const slice = toClose.slice(i, i + chunkSize);
-    const { error } = await db.from('ii_scheme_master').update({ effective_to: opts.asOfDate }).in('id', slice);
-    if (error) errors.push(error.message);
+  // Written chunk by chunk (2026-09-25; previously every close, then every
+  // insert), so a budget can stop BETWEEN chunks without leaving a scheme
+  // closed-but-not-replaced. Within a chunk the superseded "current" rows are
+  // closed FIRST -- the unique index (country_code, amfi_scheme_code) where
+  // effective_to is null allows only one open row at a time, so the old one
+  // must stop being open before the new one can become it. A chunk whose
+  // close fails is not inserted (the insert could only violate that index).
+  let processed = 0;
+  for (let i = 0; i < changes.length; i += chunkSize) {
+    if (budget && !budget.canStart('scheme_master_chunk')) break;
+    const slice = changes.slice(i, i + chunkSize);
+    processed = i + slice.length;
+    const writeChunk = async () => {
+      const closeIds = slice.map((c) => c.closeId).filter((x): x is string => x !== null);
+      if (closeIds.length > 0) {
+        const { error } = await db.from('ii_scheme_master').update({ effective_to: opts.asOfDate }).in('id', closeIds);
+        if (error) {
+          errors.push(error.message);
+          return;
+        }
+        counts.superseded += closeIds.length;
+      }
+      const { error } = await db.from('ii_scheme_master').insert(slice.map((c) => c.row));
+      if (error) {
+        errors.push(error.message);
+        return;
+      }
+      counts.inserted += slice.length;
+    };
+    if (budget) await budget.time('scheme_master_chunk', writeChunk);
+    else await writeChunk();
   }
 
-  for (let i = 0; i < toInsert.length; i += chunkSize) {
-    const slice = toInsert.slice(i, i + chunkSize);
-    const { error } = await db.from('ii_scheme_master').insert(slice);
-    if (error) {
-      errors.push(error.message);
-      continue;
-    }
-    counts.inserted += slice.length;
-  }
-
-  return { counts, errors };
+  return { counts, errors, remaining: changes.length - processed };
 }
