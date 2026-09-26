@@ -662,6 +662,28 @@ function errorText(json: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Reads pages 1..upToPage (so a confirmation or a new Apply is reflected in
+ * every page shown so far). Never throws.
+ */
+async function loadHistoryPages(upToPage: number): Promise<{ items: RetirementHistoryItem[]; total: number; hasMore: boolean } | { error: string }> {
+  try {
+    const collected: RetirementHistoryItem[] = [];
+    let last: RetirementHistoryPage | null = null;
+    for (let p = 1; p <= upToPage; p += 1) {
+      const res = await fetch(fdhApi.retirementStatements(p, PAGE_SIZE));
+      const json: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) return { error: errorText(json, 'Could not load your imported statements.') };
+      last = normaliseRetirementHistory(json);
+      collected.push(...last.items);
+      if (!last.hasMore) break;
+    }
+    return { items: collected, total: last?.total ?? collected.length, hasMore: last?.hasMore ?? false };
+  } catch {
+    return { error: 'Could not load your imported statements.' };
+  }
+}
+
 /** The Retirement tab's statement history (fetches, pages, confirms). */
 export function RetirementStatementHistory({ refreshKey = 0 }: { refreshKey?: number }) {
   const [items, setItems] = useState<RetirementHistoryItem[]>([]);
@@ -672,34 +694,24 @@ export function RetirementStatementHistory({ refreshKey = 0 }: { refreshKey?: nu
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyActivityId, setBusyActivityId] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
-  const load = useCallback(async (upToPage: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Re-reads every page shown so far, so a confirmation or a new Apply is
-      // reflected everywhere at once.
-      const collected: RetirementHistoryItem[] = [];
-      let last: RetirementHistoryPage | null = null;
-      for (let p = 1; p <= upToPage; p += 1) {
-        const res = await fetch(fdhApi.retirementStatements(p, PAGE_SIZE));
-        const json: unknown = await res.json().catch(() => ({}));
-        if (!res.ok) { setError(errorText(json, 'Could not load your imported statements.')); return; }
-        last = normaliseRetirementHistory(json);
-        collected.push(...last.items);
-        if (!last.hasMore) break;
+  useEffect(() => {
+    let cancelled = false;
+    void loadHistoryPages(page).then((result) => {
+      if (cancelled) return;
+      if ('error' in result) {
+        setError(result.error);
+      } else {
+        setError(null);
+        setItems(result.items);
+        setTotal(result.total);
+        setHasMore(result.hasMore);
       }
-      setItems(collected);
-      setTotal(last?.total ?? collected.length);
-      setHasMore(last?.hasMore ?? false);
-    } catch {
-      setError('Could not load your imported statements.');
-    } finally {
       setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(page); }, [load, page, refreshKey]);
+    });
+    return () => { cancelled = true; };
+  }, [page, refreshKey, reloadTick]);
 
   const confirm = useCallback(async (item: RetirementHistoryItem, activity: RetirementActivityRow) => {
     const documentId = item.statement.statement_upload_id;
@@ -720,11 +732,12 @@ export function RetirementStatementHistory({ refreshKey = 0 }: { refreshKey?: nu
         : data.counted_as === 'income'
           ? 'Confirmed. This bank payment now counts once, as retirement income.'
           : 'Confirmed. This bank payment now counts as a transfer into (or out of) super, not as spending or income.');
-      await load(page);
+      setLoading(true);
+      setReloadTick((t) => t + 1);
     } finally {
       setBusyActivityId(null);
     }
-  }, [load, page]);
+  }, []);
 
   return (
     <RetirementStatementHistoryView
@@ -735,7 +748,7 @@ export function RetirementStatementHistory({ refreshKey = 0 }: { refreshKey?: nu
       error={error}
       notice={notice}
       busyActivityId={busyActivityId}
-      onLoadMore={() => setPage((p) => p + 1)}
+      onLoadMore={() => { setLoading(true); setPage((p) => p + 1); }}
       onConfirmBankLeg={(item, a) => void confirm(item, a)}
     />
   );

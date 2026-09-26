@@ -309,7 +309,7 @@ describe('0211 on real Postgres (PGlite, full migration chain) + the brief\'s or
 
   it('rollover A -> B and holdings in super: Net Worth counts each fund\'s closing balance ONCE and never the holdings', async () => {
     const out = runPglite().out!;
-    const rows = out.rolloverAccounts.map((r) => ({ ...r, user_id: USER, is_active: true }));
+    const rows: Row[] = out.rolloverAccounts.map((r) => ({ ...r, user_id: USER, is_active: true }));
     const res = await selectRetirement(USER, { client: makeFakeSupabase(tables(profile(), { retirement_accounts: rows })).client });
     if (res.status !== 'ok') throw new Error('unavailable');
     const byName = Object.fromEntries(res.lines.map((l) => [l.name, l.balance.amountNative]));
