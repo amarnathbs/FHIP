@@ -12,7 +12,7 @@
  * exactly as the API returns them (a camelCase cast would render blank --
  * tests/unit/fdh10LiabilityLedgerUi.test.tsx holds the contract).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { fdhPages } from '@/lib/import-bridge/fdhRoutes';
 import {
@@ -32,6 +32,7 @@ export interface HistoryActivityRow {
   amount: number;
   currency_code: string;
   description_raw: string | null;
+  gst_amount_raw: string | null;
   bank_match_status: string;
   ledger_disposition: string | null;
   ledger: {
@@ -52,7 +53,17 @@ export interface HistoryStatementRow {
   statement_period_start: string | null;
   statement_period_end: string | null;
   currency_code: string;
-  drawdowns_total: number | null;
+  statement_date: string | null;
+  due_date: string | null;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  opening_principal: number | null;
+  closing_principal: number | null;
+  interest_rate: number | null;
+  credit_limit: number | null;
+  minimum_payment: number | null;
+  totals: Record<string, number | null>;
+  reconciliation_status: string;
   ledger_status: string;
   ledger_rejected_reason: string | null;
   extraction_warnings: { code: string; row?: number; detail?: string }[];
@@ -61,6 +72,21 @@ export interface HistoryStatementRow {
 }
 
 const money = (v: number | null | undefined, currency: string) => (v === null || v === undefined ? '—' : formatMoneyExact(v, currency));
+
+const TOTAL_LABELS: Record<string, string> = {
+  purchases: 'Purchases', cash_advances: 'Cash advances', refunds: 'Refunds', payments: 'Payments', interest: 'Interest',
+  fees: 'Fees', adjustments: 'Adjustments', drawdowns: 'Drawdowns (money borrowed — never income)', capitalised: 'Interest/fees added to the loan',
+  principal_repayments: 'Repayments applied to the balance',
+};
+
+const RECONCILIATION_TEXT: Record<string, string> = {
+  reconciled: 'The statement adds up exactly.',
+  variance: 'The statement figures do not add up exactly.',
+  insufficient_data: 'The statement could not be checked (a balance or a line direction is missing).',
+};
+
+/** Figures FHIP does not read from card/loan statements (registry: E, with this copy). */
+export const NOT_READ_FROM_STATEMENTS = 'Not read from statements: available credit, rate type, repayment frequency, maturity date, arrears and any nickname — add them on the liability itself if you need them.';
 
 function settlementText(a: HistoryActivityRow): string | null {
   if (a.activity_type !== 'PAYMENT' && a.activity_type !== 'PRINCIPAL') return null;
@@ -77,9 +103,30 @@ export function StatementHistoryTable({ statement }: { statement: HistoryStateme
       {statement.ledger_status === 'rejected' && (
         <p className="rounded bg-gray-50 px-3 py-2 text-sm">You rejected this statement, so none of its lines are counted.</p>
       )}
-      {statement.drawdowns_total !== null && statement.drawdowns_total > 0 && (
-        <p className="text-sm">Drawdowns this period: {money(statement.drawdowns_total, c)} <span className="text-xs text-muted">(money borrowed — never income)</span></p>
-      )}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+        {statement.statement_type === 'credit_card' ? (
+          <>
+            <dt className="text-muted">Opening balance</dt><dd>{money(statement.opening_balance, c)}</dd>
+            <dt className="text-muted">Closing balance</dt><dd>{money(statement.closing_balance, c)}</dd>
+            <dt className="text-muted">Credit limit</dt><dd>{money(statement.credit_limit, c)}</dd>
+            <dt className="text-muted">Minimum payment</dt><dd>{money(statement.minimum_payment, c)}</dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-muted">Opening principal</dt><dd>{money(statement.opening_principal, c)}</dd>
+            <dt className="text-muted">Closing principal</dt><dd>{money(statement.closing_principal, c)}</dd>
+          </>
+        )}
+        <dt className="text-muted">Interest rate</dt><dd>{statement.interest_rate !== null ? `${statement.interest_rate}% p.a.` : '—'}</dd>
+        <dt className="text-muted">Statement date</dt><dd>{statement.statement_date ?? '—'}</dd>
+        <dt className="text-muted">Due date</dt><dd>{statement.due_date ?? '—'}</dd>
+        {Object.entries(statement.totals).filter(([, v]) => v !== null).map(([k, v]) => (
+          <Fragment key={k}>
+            <dt className="text-muted">{TOTAL_LABELS[k] ?? k}</dt><dd>{money(v, c)}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      <p className="text-xs text-muted">{RECONCILIATION_TEXT[statement.reconciliation_status] ?? ''} {NOT_READ_FROM_STATEMENTS}</p>
       {statement.extraction_warnings.length > 0 && (
         <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900" aria-label="Notes from reading this statement">
           {statement.extraction_warnings.map((w, i) => <li key={`${w.code}-${i}`}>{describeExtractionWarning(w)}</li>)}
@@ -107,6 +154,7 @@ export function StatementHistoryTable({ statement }: { statement: HistoryStateme
                   <td className="py-1 pr-2">
                     <span className="font-medium">{outcome.label}</span>
                     {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
+                    {a.gst_amount_raw && <span className="block text-xs text-muted">GST shown on statement: {a.gst_amount_raw}</span>}
                   </td>
                   <td className="py-1 pr-2 text-right whitespace-nowrap">{money(a.amount, a.currency_code)}</td>
                   <td className="py-1">

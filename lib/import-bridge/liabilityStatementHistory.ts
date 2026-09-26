@@ -33,6 +33,8 @@ export interface HistoryActivity {
   amount: number;
   currency_code: string;
   description_raw: string | null;
+  /** India GST as printed (evidence only, never summed). */
+  gst_amount_raw: string | null;
   bank_match_status: string;
   ledger_disposition: string | null;
   ledger: HistoryLedgerRow | null;
@@ -47,14 +49,17 @@ export interface HistoryStatement {
   statement_period_start: string | null;
   statement_period_end: string | null;
   currency_code: string;
+  statement_date: string | null;
+  due_date: string | null;
+  opening_balance: number | null;
   closing_balance: number | null;
+  opening_principal: number | null;
   closing_principal: number | null;
-  purchases_total: number | null;
-  payments_total: number | null;
-  interest_total: number | null;
-  fees_total: number | null;
-  drawdowns_total: number | null;
-  principal_repayments_total: number | null;
+  interest_rate: number | null;
+  credit_limit: number | null;
+  minimum_payment: number | null;
+  /** Every persisted activity total (WP-10, G5) -- the statement as printed. */
+  totals: Record<'purchases' | 'cash_advances' | 'refunds' | 'payments' | 'interest' | 'fees' | 'adjustments' | 'drawdowns' | 'capitalised' | 'principal_repayments', number | null>;
   reconciliation_status: string;
   ledger_status: string;
   ledger_applied_at: string | null;
@@ -70,7 +75,13 @@ export interface LiabilityStatementHistory {
   statements: HistoryStatement[];
 }
 
-const STATEMENT_COLUMNS = 'id, statement_upload_id, statement_type, institution_name, masked_identifier, statement_period_start, statement_period_end, currency_code, closing_balance, closing_principal, purchases_total, payments_total, interest_total, fees_total, drawdowns_total, principal_repayments_total, reconciliation_status, ledger_status, ledger_applied_at, ledger_rejected_reason, extraction_warnings, approval_status';
+const TOTAL_KEYS = ['purchases', 'cash_advances', 'refunds', 'payments', 'interest', 'fees', 'adjustments', 'drawdowns', 'capitalised', 'principal_repayments'] as const;
+const STATEMENT_COLUMNS = [
+  'id', 'statement_upload_id', 'statement_type', 'institution_name', 'masked_identifier', 'statement_period_start', 'statement_period_end',
+  'statement_date', 'due_date', 'currency_code', 'opening_balance', 'closing_balance', 'opening_principal', 'closing_principal',
+  'interest_rate', 'credit_limit', 'minimum_payment', ...TOTAL_KEYS.map((k) => `${k}_total`),
+  'reconciliation_status', 'ledger_status', 'ledger_applied_at', 'ledger_rejected_reason', 'extraction_warnings', 'approval_status',
+].join(', ');
 
 /** Returns null when the liability is not the user's (the route answers 404). */
 export async function loadLiabilityStatementHistory(client: ReadModelClient, userId: string, liabilityId: string): Promise<LiabilityStatementHistory | null> {
@@ -93,7 +104,7 @@ export async function loadLiabilityStatementHistory(client: ReadModelClient, use
   const activities = await fetchAllByIds<Record<string, unknown>>('fdh_liability_statement_activities', statements.map((s) => s.id as string), (chunk, from, to) =>
     client
       .from('fdh_liability_statement_activities')
-      .select('id, statement_id, activity_type, activity_date, amount, currency_code, description_raw, bank_match_status, ledger_disposition, ledger_transaction_id, ledger_duplicate_of_transaction_id, source_row_number')
+      .select('id, statement_id, activity_type, activity_date, amount, currency_code, description_raw, gst_amount_raw, bank_match_status, ledger_disposition, ledger_transaction_id, ledger_duplicate_of_transaction_id, source_row_number')
       .eq('user_id', userId)
       .in('statement_id', chunk)
       .order('id', { ascending: true })
@@ -130,6 +141,7 @@ export async function loadLiabilityStatementHistory(client: ReadModelClient, use
       amount: Number(a.amount),
       currency_code: a.currency_code as string,
       description_raw: (a.description_raw as string | null) ?? null,
+      gst_amount_raw: (a.gst_amount_raw as string | null) ?? null,
       bank_match_status: a.bank_match_status as string,
       ledger_disposition: (a.ledger_disposition as string | null) ?? null,
       ledger: row
@@ -161,14 +173,16 @@ export async function loadLiabilityStatementHistory(client: ReadModelClient, use
         statement_period_start: (s.statement_period_start as string | null) ?? null,
         statement_period_end: (s.statement_period_end as string | null) ?? null,
         currency_code: s.currency_code as string,
+        statement_date: (s.statement_date as string | null) ?? null,
+        due_date: (s.due_date as string | null) ?? null,
+        opening_balance: num(s.opening_balance),
         closing_balance: num(s.closing_balance),
+        opening_principal: num(s.opening_principal),
         closing_principal: num(s.closing_principal),
-        purchases_total: num(s.purchases_total),
-        payments_total: num(s.payments_total),
-        interest_total: num(s.interest_total),
-        fees_total: num(s.fees_total),
-        drawdowns_total: num(s.drawdowns_total),
-        principal_repayments_total: num(s.principal_repayments_total),
+        interest_rate: num(s.interest_rate),
+        credit_limit: num(s.credit_limit),
+        minimum_payment: num(s.minimum_payment),
+        totals: Object.fromEntries(TOTAL_KEYS.map((k) => [k, num(s[`${k}_total`])])) as HistoryStatement['totals'],
         reconciliation_status: s.reconciliation_status as string,
         ledger_status: (s.ledger_status as string | undefined) ?? 'not_applied',
         ledger_applied_at: (s.ledger_applied_at as string | null) ?? null,

@@ -14,13 +14,13 @@ Every field an active upload adapter extracts, every evidence column and every a
 | bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 33 | 33 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
-| liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
-| liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
+| liabilityStatement | WP-10 | 145 | 29 | 22 | 34 | 47 | 13 | 11 | 11 | 0 |
+| liabilityActivityLedger | WP-11 | 10 | 0 | 8 | 0 | 0 | 2 | 0 | 0 | 0 |
 | auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
 | retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **890** | 131 | 111 | 274 | 336 | 38 | 336 | | 21 |
 
 ## Open gaps by id
 
@@ -32,13 +32,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | EXP-G14 | P2 | WP-08 | 18 |
 | EXP-G15 | P2 | WP-08 | 2 |
 | EXP-G4 | P1 | WP-08 | 2 |
-| G1 | P0 | WP-11 | 30 |
-| G13 | P3 | WP-11 | 2 |
-| G2 | P1 | WP-11 | 9 |
-| G4 | P1 | WP-10 | 2 |
-| G5 | P1 | WP-10, WP-11 | 12 |
-| G6 | P2 | WP-10 | 16 |
-| G7 | P1 | WP-07, WP-11 | 30 |
+| G7 | P1 | WP-07 | 11 |
 | GAP-01 | P0 | WP-03 | 1 |
 | GAP-03 | P1 | WP-09 | 2 |
 | GAP-04 | P1 | WP-09 | 3 |
@@ -66,7 +60,6 @@ Every field an active upload adapter extracts, every evidence column and every a
 | INV-G7 | P2 | WP-12 | 19 |
 | INV-G8 | P2 | WP-12 | 9 |
 | INV-G9 | P2 | WP-12 | 17 |
-| X-01 | P1 | WP-11 | 3 |
 
 ## bankStatement (owner WP-08)
 
@@ -452,46 +445,46 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `statementType` | D metadata | fdh_liability_statements.statement_type | — | compliant | — | — |
 | `country` | A state | liabilities.country_code | Liabilities tab | compliant | — | — |
-| `currencyCode` | A state | liabilities.currency_code (unsupported currency refused) | Liabilities tab | open_gap | G13 (P3) | WP-11 |
+| `currencyCode` | A state | liabilities.currency_code (AUD/INR only; any other currency is refused with a visible reason) | Liabilities tab | compliant | — | — |
 | `facilityType` | A state | liabilities.debt_type | Liabilities tab | compliant | — | — |
-| `nickname` | E unsupported | not persisted (a display nickname is not a canonical fact) | — | open_gap | G6 (P2) | WP-10 |
+| `nickname` | E unsupported | not persisted (a display nickname is not a canonical fact) | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
 | `institutionName` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
 | `maskedIdentifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
-| `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
-| `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
-| `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
+| `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | Liabilities tab → Statement history | compliant | — | — |
+| `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | Liabilities tab → Statement history | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | Liabilities tab → Statement history | compliant | — | — |
 | `dueDate` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
-| `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
+| `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | Liabilities tab → Statement history | compliant | — | — |
 | `closingBalance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
 | `creditLimit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
-| `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
-| `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
-| `availableCredit` | E unsupported | not populated (shown as "Not shown on statement") | — | open_gap | G6 (P2) | WP-10 |
-| `openingPrincipal` | C evidence | evidence:fdh_liability_statements.opening_principal | — | open_gap | G7 (P1) | WP-11 |
+| `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | compliant | — | — |
+| `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab; Liabilities tab → Statement history | compliant | — | — |
+| `availableCredit` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `openingPrincipal` | C evidence | evidence:fdh_liability_statements.opening_principal | Liabilities tab → Statement history | compliant | — | — |
 | `closingPrincipal` | A state | liabilities.balance (loan) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
-| `rateType` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `repaymentFrequency` | E unsupported | not populated (proposal reads null) | — | open_gap | G6 (P2) | WP-10 |
-| `maturityDate` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `arrearsAmount` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `activities` | B event | fdh_transactions (card/loan facility ledger row, WP-11) | — | open_gap | G1 (P0) | WP-11 |
+| `rateType` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `repaymentFrequency` | E unsupported | not read from statements (proposal reads null) | Liabilities tab → Import Statement (review) ("Not shown on statement"); Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `maturityDate` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `arrearsAmount` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `activities` | B event | fdh_transactions (card/loan facility ledger row, 0209) | Liabilities tab → Statement history | compliant | — | — |
 | `parserName` | D metadata | fdh_liability_statements.parser_name | — | compliant | — | — |
 | `parserVersion` | D metadata | fdh_liability_statements.parser_version | — | compliant | — | — |
 | `extractionConfidence` | D metadata | fdh_liability_statements.extraction_confidence | — | compliant | — | — |
-| `warnings` | E unsupported | fdh_liability_statements.extraction_warnings (0207) | — | open_gap | G6 (P2) | WP-10 |
+| `warnings` | E unsupported | fdh_liability_statements.extraction_warnings (excluded rows and unchecked figures, with the reason) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history (notes) | compliant | — | — |
 
 ### liability_native · ts_interface · `fdh:liability/types.ts#LiabilityStatementActivity`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `activityType` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | — | open_gap | G1 (P0) | WP-11 |
-| `activityDate` | B event | fdh_transactions.transaction_date | — | open_gap | G1 (P0) | WP-11 |
-| `amount` | B event | fdh_transactions.amount_original | — | open_gap | G1 (P0) | WP-11 |
-| `descriptionRaw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | — | open_gap | G1 (P0) | WP-11 |
-| `merchantRaw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw | — | open_gap | G1 (P0) | WP-11 |
-| `principalComponent` | B event | fdh_transaction_allocations (debt_principal) | — | open_gap | G2 (P1) | WP-11 |
-| `interestComponent` | B event | fdh_transaction_allocations (debt_interest) | — | open_gap | G2 (P1) | WP-11 |
-| `feeComponent` | B event | fdh_transaction_allocations (fee) | — | open_gap | G2 (P1) | WP-11 |
-| `gstAmountRaw` | C evidence | evidence:fdh_liability_statement_activities.gst_amount_raw (0207; never summed) | — | open_gap | G6 (P2) | WP-10 |
+| `activityType` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | Liabilities tab → Statement history | compliant | — | — |
+| `activityDate` | B event | fdh_transactions.transaction_date | Liabilities tab → Statement history | compliant | — | — |
+| `amount` | B event | fdh_transactions.amount_original | Liabilities tab → Statement history | compliant | — | — |
+| `descriptionRaw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | Liabilities tab → Statement history | compliant | — | — |
+| `merchantRaw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw (copied to the ledger row) | Financial Activity (transaction detail) | compliant | — | — |
+| `principalComponent` | B event | fdh_transaction_allocations (debt_principal) | Liabilities tab → Statement history | compliant | — | — |
+| `interestComponent` | B event | fdh_transaction_allocations (debt_interest) | Liabilities tab → Statement history | compliant | — | — |
+| `feeComponent` | B event | fdh_transaction_allocations (fee) | Liabilities tab → Statement history | compliant | — | — |
+| `gstAmountRaw` | C evidence | evidence:fdh_liability_statement_activities.gst_amount_raw (never summed) | Liabilities tab → Statement history | compliant | — | — |
 | `sourceRowNumber` | D metadata | fdh_liability_statement_activities.source_row_number | — | compliant | — | — |
 
 ### liability_ai · zod_schema · `aie:liability/schema.ts#liabilityStatementDocumentFactsSchema`
@@ -502,30 +495,30 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `documentMissingReasonCode` | D metadata | aie run evidence | — | compliant | — | — |
 | `institutionName` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
 | `maskedIdentifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
-| `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
-| `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
-| `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
+| `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | Liabilities tab → Statement history | compliant | — | — |
+| `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | Liabilities tab → Statement history | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | Liabilities tab → Statement history | compliant | — | — |
 | `dueDate` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
-| `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
+| `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | Liabilities tab → Statement history | compliant | — | — |
 | `closingBalance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
 | `creditLimit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
-| `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
-| `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
-| `allActivitiesListed` | C evidence | evidence: AI draft completeness flag | — | open_gap | G6 (P2) | WP-10 |
-| `activities` | B event | fdh_transactions (card/loan facility ledger row, WP-11) | — | open_gap | G1 (P0) | WP-11 |
+| `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | compliant | — | — |
+| `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab; Liabilities tab → Statement history | compliant | — | — |
+| `allActivitiesListed` | C evidence | evidence: AI draft completeness flag | Liabilities tab → Import Statement (AI draft review) | compliant | — | — |
+| `activities` | B event | fdh_transactions (card/loan facility ledger row, 0209) | Liabilities tab → Statement history | compliant | — | — |
 
 ### liability_ai · zod_schema · `aie:liability/schema.ts#liabilityStatementActivitySchema`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `activityType` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | — | open_gap | G1 (P0) | WP-11 |
-| `activityDate` | B event | fdh_transactions.transaction_date | — | open_gap | G1 (P0) | WP-11 |
-| `amount` | B event | fdh_transactions.amount_original | — | open_gap | G1 (P0) | WP-11 |
-| `descriptionRaw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | — | open_gap | G1 (P0) | WP-11 |
-| `merchantRaw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw | — | open_gap | G1 (P0) | WP-11 |
-| `principalComponent` | B event | fdh_transaction_allocations (debt_principal) | — | open_gap | G2 (P1) | WP-11 |
-| `interestComponent` | B event | fdh_transaction_allocations (debt_interest) | — | open_gap | G2 (P1) | WP-11 |
-| `feeComponent` | B event | fdh_transaction_allocations (fee) | — | open_gap | G2 (P1) | WP-11 |
+| `activityType` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | Liabilities tab → Statement history | compliant | — | — |
+| `activityDate` | B event | fdh_transactions.transaction_date | Liabilities tab → Statement history | compliant | — | — |
+| `amount` | B event | fdh_transactions.amount_original | Liabilities tab → Statement history | compliant | — | — |
+| `descriptionRaw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | Liabilities tab → Statement history | compliant | — | — |
+| `merchantRaw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw (copied to the ledger row) | Financial Activity (transaction detail) | compliant | — | — |
+| `principalComponent` | B event | fdh_transaction_allocations (debt_principal) | Liabilities tab → Statement history | compliant | — | — |
+| `interestComponent` | B event | fdh_transaction_allocations (debt_interest) | Liabilities tab → Statement history | compliant | — | — |
+| `feeComponent` | B event | fdh_transaction_allocations (fee) | Liabilities tab → Statement history | compliant | — | — |
 
 ### liability_native · db_column · `db:fdh_liability_statements`
 
@@ -535,40 +528,40 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `user_id` | D metadata | fdh_liability_statements.user_id | — | compliant | — | — |
 | `household_id` | D metadata | fdh_liability_statements.household_id | — | compliant | — | — |
 | `statement_upload_id` | D metadata | fdh_liability_statements.statement_upload_id | — | compliant | — | — |
-| `financial_account_id` | D metadata | fdh_liability_statements.financial_account_id (set by the Apply RPC) | — | open_gap | G7 (P1) | WP-11 |
-| `liability_id` | D metadata | fdh_liability_statements.liability_id (set by the Apply RPC) | — | open_gap | G7 (P1) | WP-11 |
+| `financial_account_id` | D metadata | fdh_liability_statements.financial_account_id (set by the Apply RPC) | — | compliant | — | — |
+| `liability_id` | D metadata | fdh_liability_statements.liability_id (set by the Apply RPC) | — | compliant | — | — |
 | `statement_type` | D metadata | fdh_liability_statements.statement_type | — | compliant | — | — |
 | `facility_type` | A state | liabilities.debt_type | Liabilities tab | compliant | — | — |
 | `country_code` | A state | liabilities.country_code | Liabilities tab | compliant | — | — |
-| `currency_code` | A state | liabilities.currency_code (unsupported currency refused) | Liabilities tab | open_gap | G13 (P3) | WP-11 |
+| `currency_code` | A state | liabilities.currency_code (AUD/INR only; any other currency is refused with a visible reason) | Liabilities tab | compliant | — | — |
 | `institution_name` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
 | `masked_identifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
-| `statement_period_start` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
-| `statement_period_end` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
-| `statement_date` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
+| `statement_period_start` | C evidence | evidence:fdh_liability_statements.statement_period_start | Liabilities tab → Statement history | compliant | — | — |
+| `statement_period_end` | C evidence | evidence:fdh_liability_statements.statement_period_end | Liabilities tab → Statement history | compliant | — | — |
+| `statement_date` | C evidence | evidence:fdh_liability_statements.statement_date | Liabilities tab → Statement history | compliant | — | — |
 | `due_date` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
-| `opening_balance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
+| `opening_balance` | C evidence | evidence:fdh_liability_statements.opening_balance | Liabilities tab → Statement history | compliant | — | — |
 | `closing_balance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
 | `credit_limit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
-| `minimum_payment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
-| `interest_rate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
-| `available_credit` | E unsupported | not populated (shown as "Not shown on statement") | — | open_gap | G6 (P2) | WP-10 |
-| `opening_principal` | C evidence | evidence:fdh_liability_statements.opening_principal | — | open_gap | G7 (P1) | WP-11 |
+| `minimum_payment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | compliant | — | — |
+| `interest_rate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab; Liabilities tab → Statement history | compliant | — | — |
+| `available_credit` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `opening_principal` | C evidence | evidence:fdh_liability_statements.opening_principal | Liabilities tab → Statement history | compliant | — | — |
 | `closing_principal` | A state | liabilities.balance (loan) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
-| `rate_type` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `repayment_frequency` | E unsupported | not populated (proposal reads null) | — | open_gap | G6 (P2) | WP-10 |
-| `maturity_date` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `arrears_amount` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
-| `purchases_total` | C evidence | evidence:fdh_liability_statements.purchases_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `cash_advances_total` | C evidence | evidence:fdh_liability_statements.cash_advances_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `interest_total` | C evidence | evidence:fdh_liability_statements.interest_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `fees_total` | C evidence | evidence:fdh_liability_statements.fees_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `payments_total` | C evidence | evidence:fdh_liability_statements.payments_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `refunds_total` | C evidence | evidence:fdh_liability_statements.refunds_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `adjustments_total` | C evidence | evidence:fdh_liability_statements.adjustments_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `drawdowns_total` | C evidence | evidence:fdh_liability_statements.drawdowns_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `capitalised_total` | C evidence | evidence:fdh_liability_statements.capitalised_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
-| `principal_repayments_total` | C evidence | evidence:fdh_liability_statements.principal_repayments_total (must equal the ledger sum per type) | — | open_gap | G5 (P1) | WP-10 |
+| `rate_type` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `repayment_frequency` | E unsupported | not read from statements (proposal reads null) | Liabilities tab → Import Statement (review) ("Not shown on statement"); Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `maturity_date` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `arrears_amount` | E unsupported | not read from statements | Liabilities tab → Statement history ("Not read from statements …") | compliant | — | — |
+| `purchases_total` | C evidence | evidence:fdh_liability_statements.purchases_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `cash_advances_total` | C evidence | evidence:fdh_liability_statements.cash_advances_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `interest_total` | C evidence | evidence:fdh_liability_statements.interest_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `fees_total` | C evidence | evidence:fdh_liability_statements.fees_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `payments_total` | C evidence | evidence:fdh_liability_statements.payments_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `refunds_total` | C evidence | evidence:fdh_liability_statements.refunds_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `adjustments_total` | C evidence | evidence:fdh_liability_statements.adjustments_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `drawdowns_total` | C evidence | evidence:fdh_liability_statements.drawdowns_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `capitalised_total` | C evidence | evidence:fdh_liability_statements.capitalised_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
+| `principal_repayments_total` | C evidence | evidence:fdh_liability_statements.principal_repayments_total (equals the ledger sum per type; computeStatementTotals) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history | compliant | — | — |
 | `reconciliation_status` | D metadata | fdh_liability_statements.reconciliation_status | — | compliant | — | — |
 | `reconciliation_variance` | D metadata | fdh_liability_statements.reconciliation_variance | — | compliant | — | — |
 | `parser_name` | D metadata | fdh_liability_statements.parser_name | — | compliant | — | — |
@@ -585,7 +578,10 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `user_corrected_fields` | D metadata | fdh_liability_statements.user_corrected_fields | — | compliant | — | — |
 | `last_corrected_at` | D metadata | fdh_liability_statements.last_corrected_at | — | compliant | — | — |
 | `last_corrected_by` | D metadata | fdh_liability_statements.last_corrected_by | — | compliant | — | — |
-| `extraction_warnings` | E unsupported | fdh_liability_statements.extraction_warnings (0207; rendered by WP-11) | — | open_gap | G6 (P2) | WP-10 |
+| `extraction_warnings` | E unsupported | fdh_liability_statements.extraction_warnings (excluded rows and unchecked figures, with the reason) | Liabilities tab → Import Statement (review); Liabilities tab → Statement history (notes) | compliant | — | — |
+| `ledger_status` | D metadata | fdh_liability_statements.ledger_status (not_applied / applied / rejected; set by the Apply RPC, shown in Statement history) | — | compliant | — | — |
+| `ledger_applied_at` | D metadata | fdh_liability_statements.ledger_applied_at | — | compliant | — | — |
+| `ledger_rejected_reason` | D metadata | fdh_liability_statements.ledger_rejected_reason ("You rejected this statement" in Statement history) | — | compliant | — | — |
 
 ### liability_native · db_column · `db:fdh_liability_statement_activities`
 
@@ -594,26 +590,29 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_liability_statement_activities.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_liability_statement_activities.user_id | — | compliant | — | — |
 | `statement_id` | D metadata | fdh_liability_statement_activities.statement_id | — | compliant | — | — |
-| `activity_type` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | — | open_gap | G1 (P0) | WP-11 |
-| `activity_date` | B event | fdh_transactions.transaction_date | — | open_gap | G1 (P0) | WP-11 |
-| `amount` | B event | fdh_transactions.amount_original | — | open_gap | G1 (P0) | WP-11 |
-| `description_raw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | — | open_gap | G1 (P0) | WP-11 |
-| `merchant_raw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw | — | open_gap | G1 (P0) | WP-11 |
-| `principal_component` | B event | fdh_transaction_allocations (debt_principal) | — | open_gap | G2 (P1) | WP-11 |
-| `interest_component` | B event | fdh_transaction_allocations (debt_interest) | — | open_gap | G2 (P1) | WP-11 |
-| `fee_component` | B event | fdh_transaction_allocations (fee) | — | open_gap | G2 (P1) | WP-11 |
-| `currency_code` | B event | fdh_transactions.currency_original | — | open_gap | G1 (P0) | WP-11 |
-| `description_clean` | C evidence | evidence:fdh_liability_statement_activities.description_clean | — | open_gap | G1 (P0) | WP-11 |
-| `merchant_id` | D metadata | fdh_liability_statement_activities.merchant_id (category lives on the ledger row) | — | open_gap | G1 (P0) | WP-11 |
-| `category_id` | B event | fdh_transactions.category_id (R8 category only, never economic type) | — | open_gap | G1 (P0) | WP-11 |
-| `linked_transaction_id` | D metadata | the bank leg of a PAYMENT (source of the confirmed settlement link) | — | open_gap | G4 (P1) | WP-10 |
-| `bank_match_status` | D metadata | fdh_liability_statement_activities.bank_match_status | — | open_gap | G4 (P1) | WP-10 |
+| `activity_type` | B event | fdh_transactions.economic_transaction_type (see liabilityActivityLedger) | Liabilities tab → Statement history | compliant | — | — |
+| `activity_date` | B event | fdh_transactions.transaction_date | Liabilities tab → Statement history | compliant | — | — |
+| `amount` | B event | fdh_transactions.amount_original | Liabilities tab → Statement history | compliant | — | — |
+| `description_raw` | C evidence | evidence:fdh_liability_statement_activities.description_raw (copied to the ledger row) | Liabilities tab → Statement history | compliant | — | — |
+| `merchant_raw` | C evidence | evidence:fdh_liability_statement_activities.merchant_raw (copied to the ledger row) | Financial Activity (transaction detail) | compliant | — | — |
+| `principal_component` | B event | fdh_transaction_allocations (debt_principal) | Liabilities tab → Statement history | compliant | — | — |
+| `interest_component` | B event | fdh_transaction_allocations (debt_interest) | Liabilities tab → Statement history | compliant | — | — |
+| `fee_component` | B event | fdh_transaction_allocations (fee) | Liabilities tab → Statement history | compliant | — | — |
+| `currency_code` | B event | fdh_transactions.currency_original | Liabilities tab → Statement history | compliant | — | — |
+| `description_clean` | C evidence | evidence:fdh_liability_statement_activities.description_clean | Financial Activity (transaction detail) | compliant | — | — |
+| `merchant_id` | D metadata | fdh_liability_statement_activities.merchant_id (category lives on the ledger row) | — | compliant | — | — |
+| `category_id` | B event | fdh_transactions.category_id (R8 category only, never economic type) | Financial Activity | compliant | — | — |
+| `linked_transaction_id` | D metadata | the bank leg of a PAYMENT (re-verified and confirmed as a settlement link by the Apply RPC) | — | compliant | — | — |
+| `bank_match_status` | D metadata | fdh_liability_statement_activities.bank_match_status (shown per repayment in review and history) | — | compliant | — | — |
 | `review_status` | D metadata | fdh_liability_statement_activities.review_status | — | compliant | — | — |
 | `source_row_number` | D metadata | fdh_liability_statement_activities.source_row_number | — | compliant | — | — |
 | `created_at` | D metadata | fdh_liability_statement_activities.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_liability_statement_activities.updated_at | — | compliant | — | — |
-| `ledger_transaction_id` | D metadata | the fdh_transactions row this activity became (0207; set by WP-11) | — | open_gap | G1 (P0) | WP-11 |
-| `gst_amount_raw` | C evidence | evidence:fdh_liability_statement_activities.gst_amount_raw (0207; never summed) | — | open_gap | G6 (P2) | WP-10 |
+| `ledger_transaction_id` | D metadata | the fdh_transactions row this activity became (0207; set by the Apply RPC) | — | compliant | — | — |
+| `gst_amount_raw` | C evidence | evidence:fdh_liability_statement_activities.gst_amount_raw (never summed) | Liabilities tab → Statement history | compliant | — | — |
+| `bank_match_candidate_ids` | D metadata | the possible bank debits of an ambiguous repayment (review picker; the choice is re-verified) | — | compliant | — | — |
+| `ledger_disposition` | D metadata | fdh_liability_statement_activities.ledger_disposition (recorded / duplicate / not counted / rejected; shown in Statement history) | — | compliant | — | — |
+| `ledger_duplicate_of_transaction_id` | D metadata | the earlier ledger row an overlapping statement line duplicates (never inserted twice) | — | compliant | — | — |
 
 ## liabilityActivityLedger (owner WP-11)
 
@@ -621,16 +620,16 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `PURCHASE` | B event | fdh_transactions(card facility debit, type=expense, R8-categorised) | — | open_gap | G1 (P0) | WP-11 |
-| `REFUND` | B event | fdh_transactions(card facility credit, type=refund; optional refund_original link) | — | open_gap | G1 (P0) | WP-11 |
-| `PAYMENT` | B event | fdh_transactions(facility credit, type=transfer) + fdh_transaction_links(credit_card_settlement \| loan_payment, confirmed) | — | open_gap | G1 (P0) | WP-11 |
-| `CASH_ADVANCE` | B event | fdh_transactions(facility debit, type=cash_withdrawal) | — | open_gap | G1 (P0) | WP-11 |
-| `INTEREST` | B event | fdh_transactions(facility debit, type=debt_interest) | — | open_gap | G1 (P0) | WP-11 |
-| `FEE` | B event | fdh_transactions(facility debit, type=fee) | — | open_gap | G1 (P0) | WP-11 |
-| `PRINCIPAL` | B event | fdh_transactions(loan credit, type=debt_principal) | — | open_gap | G1 (P0) | WP-11 |
-| `LOAN_ADVANCE` | B event | fdh_transactions(loan debit, type=transfer) | — | open_gap | G1 (P0) | WP-11 |
-| `ADJUSTMENT` | B event | fdh_transactions(after the user resolves it; Apply is blocked until then) | — | open_gap | G5 (P1) | WP-11 |
-| `OTHER` | B event | fdh_transactions(after the user resolves it; Apply is blocked until then) | — | open_gap | G5 (P1) | WP-11 |
+| `PURCHASE` | B event | fdh_transactions(card facility debit, type=expense, R8-categorised) | Liabilities tab → Statement history | compliant | — | — |
+| `REFUND` | B event | fdh_transactions(card facility credit, type=refund; optional refund_original link) | Liabilities tab → Statement history | compliant | — | — |
+| `PAYMENT` | B event | fdh_transactions(facility credit, type=transfer) + fdh_transaction_links(credit_card_settlement \| loan_payment, confirmed) | Liabilities tab → Statement history | compliant | — | — |
+| `CASH_ADVANCE` | B event | fdh_transactions(facility debit, type=cash_withdrawal) | Liabilities tab → Statement history | compliant | — | — |
+| `INTEREST` | B event | fdh_transactions(facility debit, type=debt_interest) | Liabilities tab → Statement history | compliant | — | — |
+| `FEE` | B event | fdh_transactions(facility debit, type=fee) | Liabilities tab → Statement history | compliant | — | — |
+| `PRINCIPAL` | B event | fdh_transactions(loan credit, type=debt_principal) | Liabilities tab → Statement history | compliant | — | — |
+| `LOAN_ADVANCE` | B event | fdh_transactions(loan debit, type=transfer) | Liabilities tab → Statement history | compliant | — | — |
+| `ADJUSTMENT` | E unsupported | not counted: fdh_liability_statement_activities.ledger_disposition = excluded_unclassified (Apply is BLOCKING_REVIEW until the user acknowledges it) | Liabilities tab → Statement history ("Not counted — we cannot tell what it is") | compliant | — | — |
+| `OTHER` | E unsupported | not counted: fdh_liability_statement_activities.ledger_disposition = excluded_unclassified (Apply is BLOCKING_REVIEW until the user acknowledges it) | Liabilities tab → Statement history ("Not counted — we cannot tell what it is") | compliant | — | — |
 
 ## auInvestmentStatement (owner WP-12)
 

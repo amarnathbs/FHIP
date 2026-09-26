@@ -181,8 +181,12 @@ describe('the other rules bite (named failures)', () => {
   });
 
   it('R7: strict mode names every open P0/P1 gap', () => {
-    const strict = checkRegistry(REGISTRY_FILES, baseline, { gapRegister, strict: true }).map((v) => v.message);
+    // WP-11 closed the real G1 entries, so the control re-opens one in memory
+    // (the rule, not today's data, is what is under test).
+    const reopened = withEntries('liabilityActivityLedger', (es) => es.map((e) => (e.field === 'PURCHASE' ? { ...e, status: 'open_gap', gapId: 'G1', severity: 'P0', ownerWp: 'WP-11' } : e)), 1);
+    const strict = checkRegistry(reopened, baseline, { gapRegister, strict: true }).map((v) => v.message);
     expect(strict).toContain('R7 strict: liability_ledger.PURCHASE (enum:LIABILITY_ACTIVITY_TYPES) is an open P0 gap (G1)');
+    expect(checkRegistry(reopened, baseline, { gapRegister, strict: false }).filter((v) => v.rule === 'R7')).toEqual([]);
   });
 
   it('R10: a registry change without regenerating the doc is detected', () => {
