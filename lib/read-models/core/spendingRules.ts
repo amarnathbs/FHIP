@@ -26,7 +26,9 @@
  *     typed: card purchases $200 + $20 and a $220 repayment are spending $220.
  *  7. A bank leg that approved broker evidence corroborates is re-bucketed:
  *     BUY funding -> investment (spending 0), SELL proceeds -> asset_sale
- *     (income 0). A dividend credit stays income: it is the single leg.
+ *     (income 0), a broker-cash deposit -> investment, a broker-cash
+ *     withdrawal -> transfer (WP-12). A dividend credit stays income: it is
+ *     the single leg.
  *  8. Refunds net against spending ONLY with a CONFIRMED refund_original /
  *     reversal_original link to a counted spending line (PO D-01, the
  *     certified FDH-7 rule). Any other refund is shown as unlinked, never
@@ -220,6 +222,10 @@ export function effectiveBucket(input: {
     if (c.kind === 'investment_activity') {
       if (c.activityType === 'BUY' && base !== 'investment') return { bucket: 'investment', reason: 'broker_buy_corroboration' };
       if (c.activityType === 'SELL' && base !== 'asset_sale') return { bucket: 'asset_sale', reason: 'broker_sell_corroboration' };
+      // WP-12 (INV-G4): money moved INTO broker cash is invested (spending 0);
+      // money taken OUT of broker cash is a transfer back (income 0).
+      if (c.activityType === 'CASH_DEPOSIT' && base !== 'investment') return { bucket: 'investment', reason: 'broker_deposit_corroboration' };
+      if (c.activityType === 'CASH_WITHDRAWAL' && base !== 'transfer') return { bucket: 'transfer', reason: 'broker_withdrawal_corroboration' };
     }
     if (c.kind === 'liability_activity' && c.activityType === 'PAYMENT' && base !== 'transfer') {
       return { bucket: 'transfer', reason: 'facility_payment_corroboration' };

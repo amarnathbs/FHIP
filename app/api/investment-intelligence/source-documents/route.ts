@@ -5,7 +5,7 @@ import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-in
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from '@/lib/services/investment-intelligence/uploadAdmission';
 import { createHash } from 'crypto';
-import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
+import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -141,6 +141,11 @@ export async function POST(req: Request) {
   });
   if (!scan.admitted && scan.reason === 'blocked') {
     return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
+  }
+  // UPL-02 (canonical-upload WP-12): the scan is on but cannot run here --
+  // fail closed, never parse an unscanned document.
+  if (!scan.admitted && scan.reason === 'scanner_unavailable') {
+    return bad(II_SCAN_UNAVAILABLE_MESSAGE, 503, 'malware_scan_unavailable');
   }
 
   return ok({ ...doc, scan_pending: !scan.admitted });

@@ -41,6 +41,43 @@ function isKnownTransactionType(v: string): v is AuStatementTransactionType {
   return (AU_STATEMENT_TRANSACTION_TYPES as readonly string[]).includes(v.toUpperCase());
 }
 
+/**
+ * Canonical-upload WP-12 (INV-G6). Every numeric that reaches a numeric(20,4)
+ * or numeric(20,6) evidence column is PARSED here, never passed through raw:
+ * before this, one '$19.95' brokerage cell or one '1,234.50' market value
+ * made the whole batch insert fail -- and that failure was swallowed, so the
+ * statement showed "0 holdings". A cell that cannot be read is reported as a
+ * row warning and left null (never 0).
+ *
+ *  - money (market value, brokerage, franking, withholding): FDH's own
+ *    `parseAmountField` grammar ('$', ',', '(x)', '-x'), magnitude only;
+ *  - unit prices: 6 dp, via the exact-quantity parser after stripping '$'/','.
+ */
+type CellParse = { ok: true; value: string | undefined } | { ok: false };
+
+function parseMoneyCell(raw: string | undefined): CellParse {
+  const s = (raw ?? '').trim();
+  if (!s || s === '-' || s === '--') return { ok: true, value: undefined };
+  const parsed = parseAmountField(s);
+  if (!parsed.ok || parsed.magnitude === null) return { ok: false };
+  return { ok: true, value: String(parsed.magnitude) };
+}
+
+function parsePriceCell(raw: string | undefined): CellParse {
+  const s = (raw ?? '').trim().replace(/[$]/g, '').replace(/,/g, '').trim();
+  if (!s || s === '-' || s === '--') return { ok: true, value: undefined };
+  const q = parseExactQuantity(s);
+  if (!q.ok) return { ok: false };
+  return { ok: true, value: s };
+}
+
+/** Summary lines a portfolio export prints BELOW the holdings. They are
+ * statement totals, not holdings, and must never become a position that then
+ * blocks approval as an "unresolved security" (INV-G8). */
+const CASH_ROW = /^(cash|cash balance|cash account|cash holding|settlement cash|cash management account|available cash)$/i;
+const TOTAL_ROW = /^(total|total value|total portfolio|total portfolio value|portfolio total|portfolio value|closing value|closing balance|grand total)$/i;
+const OPENING_ROW = /^(opening value|opening balance|opening portfolio value)$/i;
+
 export interface AuTransactionCsvColumnMap {
   date: string;
   type: string;
@@ -157,7 +194,20 @@ export function extractAuTransactionsFromCsv(input: AuTransactionCsvExtractionIn
     if (settlementIdx >= 0 && row[settlementIdx]) {
       const sd = parseDateWithFormat(row[settlementIdx], dateFormat.format);
       if (sd.ok && sd.iso) settlementDate = sd.iso;
+      else warnings.push(`row_${i + 1}_unparseable_settlement_date`);
     }
+
+    // INV-G6: parsed, never raw (see parseMoneyCell). An unreadable cell is a
+    // visible row warning and a null value, never a failed batch.
+    const cell = (idx: number) => (idx >= 0 ? row[idx] : undefined);
+    const price = parsePriceCell(cell(priceIdx));
+    if (!price.ok) warnings.push(`row_${i + 1}_unparseable_price`);
+    const brokerage = parseMoneyCell(cell(brokerageIdx));
+    if (!brokerage.ok) warnings.push(`row_${i + 1}_unparseable_brokerage`);
+    const franking = parseMoneyCell(cell(frankingIdx));
+    if (!franking.ok) warnings.push(`row_${i + 1}_unparseable_franking_credit`);
+    const withholding = parseMoneyCell(cell(withholdingIdx));
+    if (!withholding.ok) warnings.push(`row_${i + 1}_unparseable_withholding_tax`);
 
     transactions.push({
       transactionType,
@@ -167,13 +217,13 @@ export function extractAuTransactionsFromCsv(input: AuTransactionCsvExtractionIn
       tickerRaw: tickerIdx >= 0 ? row[tickerIdx] || undefined : undefined,
       isin: isinIdx >= 0 ? row[isinIdx] || undefined : undefined,
       quantity,
-      unitPrice: priceIdx >= 0 && row[priceIdx] ? row[priceIdx] : undefined,
+      unitPrice: price.ok ? price.value : undefined,
       amount: String(amountResult.magnitude),
       currencyCode: input.currencyCode,
       descriptionRaw: rawType,
-      brokerageRaw: brokerageIdx >= 0 ? row[brokerageIdx] || undefined : undefined,
-      frankingCreditRaw: frankingIdx >= 0 ? row[frankingIdx] || undefined : undefined,
-      withholdingTaxRaw: withholdingIdx >= 0 ? row[withholdingIdx] || undefined : undefined,
+      brokerageRaw: brokerage.ok ? brokerage.value : undefined,
+      frankingCreditRaw: franking.ok ? franking.value : undefined,
+      withholdingTaxRaw: withholding.ok ? withholding.value : undefined,
       sourceRowNumber: i + 1,
     });
   });
@@ -257,24 +307,63 @@ export function extractAuPositionsFromCsv(input: AuPositionCsvExtractionInput): 
 
   const positions: AuStatementPositionEvidence[] = [];
   const warnings: string[] = [];
+  let cashBalance: string | undefined;
+  let closingPortfolioValue: string | undefined;
+  let openingPortfolioValue: string | undefined;
+
+  // INV-G6: the valuation date is PARSED (it used to be stored raw, so one
+  // DD/MM/YYYY cell failed the whole positions insert, silently). The format
+  // is inferred from the column itself with FDH's own date grammar; a
+  // genuinely ambiguous or unreadable cell falls back to the statement date
+  // with a visible row warning, never a guess.
+  const valuationSamples = valuationDateIdx >= 0 ? rows.slice(0, 50).map((r) => (r[valuationDateIdx] ?? '').trim()).filter(Boolean) : [];
+  const valuationFormat = valuationSamples.length > 0 ? inferDateFormat(valuationSamples) : null;
 
   rows.forEach((row, i) => {
     const name = (row[nameIdx] ?? '').trim();
     if (!name) return;
+
+    // INV-G8: summary lines are statement totals, never holdings.
+    const summaryValue = valueIdx >= 0 ? parseMoneyCell(row[valueIdx]) : ({ ok: true, value: undefined } as CellParse);
+    if (CASH_ROW.test(name) || TOTAL_ROW.test(name) || OPENING_ROW.test(name)) {
+      if (!summaryValue.ok || summaryValue.value === undefined) {
+        warnings.push(`row_${i + 1}_unparseable_summary_value`);
+        return;
+      }
+      if (CASH_ROW.test(name)) cashBalance = summaryValue.value;
+      else if (TOTAL_ROW.test(name)) closingPortfolioValue = summaryValue.value;
+      else openingPortfolioValue = summaryValue.value;
+      return;
+    }
+
     const q = parseExactQuantity((row[quantityIdx] ?? '').replace(/,/g, ''));
     if (!q.ok) {
       warnings.push(`row_${i + 1}_unparseable_quantity`);
       return;
     }
+
+    const price = priceIdx >= 0 ? parsePriceCell(row[priceIdx]) : ({ ok: true, value: undefined } as CellParse);
+    if (!price.ok) warnings.push(`row_${i + 1}_unparseable_price`);
+    const value = valueIdx >= 0 ? parseMoneyCell(row[valueIdx]) : ({ ok: true, value: undefined } as CellParse);
+    if (!value.ok) warnings.push(`row_${i + 1}_unparseable_market_value`);
+
+    let valuationDate = input.defaultValuationDate;
+    const rawValuation = valuationDateIdx >= 0 ? (row[valuationDateIdx] ?? '').trim() : '';
+    if (rawValuation) {
+      const parsedDate = valuationFormat ? parseDateWithFormat(rawValuation, valuationFormat.format) : parseDateWithFormat(rawValuation, 'YYYY-MM-DD');
+      if (parsedDate.ok && parsedDate.iso) valuationDate = parsedDate.iso;
+      else warnings.push(`row_${i + 1}_unparseable_valuation_date_used_statement_date`);
+    }
+
     positions.push({
       securityNameRaw: name,
       tickerRaw: tickerIdx >= 0 ? row[tickerIdx] || undefined : undefined,
       isin: isinIdx >= 0 ? row[isinIdx] || undefined : undefined,
       quantity: (row[quantityIdx] ?? '').replace(/,/g, '').trim(),
-      unitPrice: priceIdx >= 0 && row[priceIdx] ? row[priceIdx] : undefined,
-      marketValue: valueIdx >= 0 && row[valueIdx] ? row[valueIdx] : undefined,
+      unitPrice: price.ok ? price.value : undefined,
+      marketValue: value.ok ? value.value : undefined,
       currencyCode: input.currencyCode,
-      valuationDate: valuationDateIdx >= 0 && row[valuationDateIdx] ? row[valuationDateIdx] : input.defaultValuationDate,
+      valuationDate,
       sourceRowNumber: i + 1,
     });
   });
@@ -292,6 +381,9 @@ export function extractAuPositionsFromCsv(input: AuPositionCsvExtractionInput): 
       institutionName: input.institutionName,
       maskedAccountIdentifier: input.maskedAccountIdentifier,
       statementDate: input.statementDate,
+      openingPortfolioValue,
+      closingPortfolioValue,
+      cashBalance,
       positions,
       transactions: [],
       parserName: POSITION_PARSER_NAME,
@@ -300,4 +392,42 @@ export function extractAuPositionsFromCsv(input: AuPositionCsvExtractionInput): 
       warnings,
     },
   };
+}
+
+/** One persisted extraction warning (fdh_investment_statements.extraction_warnings, 0207). */
+export interface PersistedExtractionWarning {
+  code: string;
+  count: number;
+  /** True when the rows this code names were NOT stored as evidence at all. */
+  rowsDropped: boolean;
+  /** Source row numbers, when the warning is row-level (at most 50 listed). */
+  rows?: number[];
+}
+
+/** Row-level warning codes whose row was dropped rather than stored with a null cell. */
+const DROPPED_ROW_CODES = new Set(['unrecognised_transaction_type', 'unparseable_date', 'unparseable_amount', 'unparseable_quantity_position', 'unparseable_summary_value']);
+
+/**
+ * Canonical-upload WP-12 (INV-G6): collapses the extractor's warning strings
+ * into the persisted, user-visible shape. Before this the warnings were never
+ * stored, so the rows they described vanished silently.
+ */
+export function summariseExtractionWarnings(warnings: readonly string[], kind: 'transaction' | 'portfolio'): PersistedExtractionWarning[] {
+  const byCode = new Map<string, PersistedExtractionWarning>();
+  for (const w of warnings) {
+    const m = /^row_(\d+)_(.+)$/.exec(w);
+    let code = m ? m[2] : w;
+    if (code.startsWith('unrecognised_transaction_type')) code = 'unrecognised_transaction_type';
+    // A position row with an unreadable quantity is dropped; a transaction row
+    // with one is kept (quantity null), so the two need distinct codes.
+    const dropKey = code === 'unparseable_quantity' && kind === 'portfolio' ? 'unparseable_quantity_position' : code;
+    const entry = byCode.get(code) ?? { code, count: 0, rowsDropped: DROPPED_ROW_CODES.has(dropKey) };
+    entry.count += 1;
+    if (m) {
+      entry.rows = entry.rows ?? [];
+      if (entry.rows.length < 50) entry.rows.push(Number(m[1]));
+    }
+    byCode.set(code, entry);
+  }
+  return [...byCode.values()];
 }

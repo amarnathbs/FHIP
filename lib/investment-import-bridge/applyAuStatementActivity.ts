@@ -39,6 +39,7 @@ import { parseExactDecimal, scaledToDecimalString } from '@/lib/services/investm
 import type { IiTransactionType } from '@/lib/services/investment-intelligence/types';
 import type { AuStatementTransactionType } from '@/lib/financial-data-hub/investment/types';
 import type { BridgeApplyResult } from './types';
+import { lineNamesASecurity, AU_LINE_WITHOUT_SECURITY_REASON, type AuLineIdentity } from './auLineRules';
 
 const FDH11_SOURCE_KEY = 'fdh11_au_statement';
 
@@ -75,6 +76,69 @@ const ACTIVITY_TO_CANONICAL_TYPE: Record<AuStatementTransactionType, IiTransacti
   UNKNOWN: null,
 };
 
+/**
+ * WP-12 (INV-G9, PO D-11): the reason a skipped line shows the user. Every
+ * type with no canonical representation has one; nothing is skipped silently.
+ */
+export const AU_ACTIVITY_SKIP_REASONS: Partial<Record<AuStatementTransactionType, string>> = {
+  INTEREST: 'Broker cash is not tracked yet: interest paid on your broker cash account stays as statement evidence and is not added to your Investments or Net Worth.',
+  CASH_DEPOSIT: 'Broker cash is not tracked yet: this deposit into your broker cash account stays as statement evidence. The money leaving your bank account is recorded as invested, not spent.',
+  CASH_WITHDRAWAL: 'Broker cash is not tracked yet: this withdrawal from your broker cash account stays as statement evidence. The money arriving in your bank account is recorded as a transfer, not income.',
+  CORPORATE_ACTION_EVIDENCE: 'Corporate actions (splits, mergers, rights issues) are never applied automatically. Please review this line and update the holding yourself if needed.',
+  OTHER: 'This line type is not added automatically. Please review it and add it yourself if needed.',
+  UNKNOWN: 'We could not tell what kind of transaction this line is, so it was not added. Please review it and add it yourself if needed.',
+};
+
+function parseOptionalMoney(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim().replace(/[$,]/g, '').replace(/^\((.*)\)$/, '$1').replace(/^-/, '');
+  if (!s) return null;
+  const parsed = parseExactDecimal(s);
+  return parsed.ok ? scaledToDecimalString(parsed.scaled, 2) : null;
+}
+
+function sourceDescriptionFor(activityType: string, descriptionRaw: string | null): string {
+  const desc = (descriptionRaw ?? '').trim();
+  if (activityType === 'DISTRIBUTION') return desc && desc.toUpperCase() !== 'DISTRIBUTION' ? `DISTRIBUTION: ${desc}` : 'DISTRIBUTION';
+  return desc || activityType;
+}
+
+interface ActivityOccurrenceRow {
+  id: string;
+  statement_id: string;
+  activity_type: string;
+  trade_date: string | null;
+  settlement_date: string | null;
+  amount: number | string;
+  quantity: number | string | null;
+  unit_price: number | string | null;
+  matched_instrument_id: string | null;
+  source_row_number: number | null;
+}
+
+/** 1-based position of this line among IDENTICAL lines of the same statement (source row, then id, order). */
+async function occurrenceWithinStatement(admin: ReturnType<typeof createAdminClient>, userId: string, a: ActivityOccurrenceRow): Promise<number> {
+  const { data } = await admin
+    .from('fdh_investment_statement_activities')
+    .select('id, activity_type, trade_date, settlement_date, amount, quantity, unit_price, matched_instrument_id, source_row_number')
+    .eq('user_id', userId)
+    .eq('statement_id', a.statement_id)
+    .eq('activity_type', a.activity_type)
+    .eq('amount', a.amount);
+  const same = (x: unknown, y: unknown) => (x === null || x === undefined ? null : String(Number(x))) === (y === null || y === undefined ? null : String(Number(y)));
+  const twins = ((data ?? []) as ActivityOccurrenceRow[]).filter(
+    (r) =>
+      (r.trade_date ?? r.settlement_date) === (a.trade_date ?? a.settlement_date) &&
+      r.matched_instrument_id === a.matched_instrument_id &&
+      same(r.quantity, a.quantity) &&
+      same(r.unit_price, a.unit_price),
+  );
+  const key = (r: ActivityOccurrenceRow) => `${String(r.source_row_number ?? 0).padStart(10, '0')}|${r.id}`;
+  twins.sort((x, y) => (key(x) < key(y) ? -1 : 1));
+  const index = twins.findIndex((r) => r.id === a.id);
+  return index < 0 ? 1 : index + 1;
+}
+
 export interface ApplyAuStatementActivityInput {
   userId: string;
   activityId: string;
@@ -110,6 +174,27 @@ export async function applyAuStatementActivity(input: ApplyAuStatementActivityIn
   if (statement.approval_status !== 'approved') {
     return { ok: false, code: 'NOT_APPROVED', canonicalTransactionId: null, error: 'Statement evidence has not been approved yet — no canonical write may occur (spec section 63).' };
   }
+
+  // WP-12 (INV-G3/INV-G9, PO D-11): an activity type with no canonical
+  // Investment Intelligence representation is decided HERE, before the
+  // security check. It used to be checked after it, so a broker-cash line
+  // (which has no security to match) stopped at NOT_MATCHED forever instead of
+  // being skipped with a reason the user can read.
+  const earlyType = ACTIVITY_TO_CANONICAL_TYPE[activity.activity_type as AuStatementTransactionType];
+  const namesNoSecurity = !lineNamesASecurity(activity as unknown as AuLineIdentity);
+  if (!earlyType || namesNoSecurity) {
+    const reason = !earlyType
+      ? (AU_ACTIVITY_SKIP_REASONS[activity.activity_type as AuStatementTransactionType] ?? `No canonical Investment Intelligence representation for activity type ${activity.activity_type}.`)
+      : AU_LINE_WITHOUT_SECURITY_REASON;
+    await admin
+      .from('fdh_investment_statement_activities')
+      .update({ apply_status: 'skipped', apply_rejected_reason: reason })
+      .eq('id', activityId)
+      .eq('user_id', userId)
+      .eq('apply_status', 'pending');
+    return { ok: false, code: 'CANONICAL_TYPE_UNSUPPORTED', canonicalTransactionId: null, error: reason };
+  }
+
   if (activity.security_match_status !== 'matched' || !activity.matched_instrument_id) {
     return { ok: false, code: 'NOT_MATCHED', canonicalTransactionId: null, error: 'This activity has no confirmed security match.' };
   }
@@ -127,16 +212,7 @@ export async function applyAuStatementActivity(input: ApplyAuStatementActivityIn
     return { ok: false, code: 'FOREIGN_ACCOUNT', canonicalTransactionId: null, error: 'The matched investment account does not belong to this user.' };
   }
 
-  const canonicalType = ACTIVITY_TO_CANONICAL_TYPE[activity.activity_type as AuStatementTransactionType];
-  if (!canonicalType) {
-    // Mark as skipped (never left silently 'pending' forever) with a clear
-    // reason — never fabricates a canonical row for an unsupported type.
-    await admin
-      .from('fdh_investment_statement_activities')
-      .update({ apply_status: 'skipped', apply_rejected_reason: `No canonical Investment Intelligence representation for activity type ${activity.activity_type}.` })
-      .eq('id', activityId);
-    return { ok: false, code: 'CANONICAL_TYPE_UNSUPPORTED', canonicalTransactionId: null, error: `Activity type ${activity.activity_type} has no canonical representation today.` };
-  }
+  const canonicalType: IiTransactionType = earlyType as IiTransactionType;
 
   // --- Compare-and-swap claim (spec section 122) --------------------------
   const { data: claimed, error: claimErr } = await admin
@@ -161,6 +237,17 @@ export async function applyAuStatementActivity(input: ApplyAuStatementActivityIn
     const unitsParsed = activity.quantity !== null ? parseExactDecimal(String(activity.quantity)) : null;
     const priceParsed = activity.unit_price !== null ? parseExactDecimal(String(activity.unit_price)) : null;
     if (!amountParsed.ok) throw new Error('Activity amount is not a valid exact decimal.');
+    const feesParsed = activity.brokerage_raw !== null && activity.brokerage_raw !== undefined ? parseExactDecimal(String(activity.brokerage_raw)) : null;
+    const withholdingParsed = parseOptionalMoney(activity.withholding_tax_raw);
+
+    // INV-G7: two GENUINE identical same-day trades on one statement used to
+    // collapse into one canonical row (the fingerprint had no per-line
+    // component). The occurrence index of an identical line WITHIN this
+    // statement now joins the fingerprint -- occurrence 1 keeps the original
+    // `null` reference, so the SAME trade seen again on an overlapping
+    // statement still resolves to the same row (and every row applied before
+    // WP-12 keeps its fingerprint).
+    const occurrence = await occurrenceWithinStatement(admin, userId, activity as unknown as ActivityOccurrenceRow);
 
     const fingerprint = computeTransactionFingerprint({
       sourceKey: FDH11_SOURCE_KEY,
@@ -171,7 +258,9 @@ export async function applyAuStatementActivity(input: ApplyAuStatementActivityIn
       amountScaled: amountParsed.scaled,
       unitsScaled: unitsParsed && unitsParsed.ok ? unitsParsed.scaled : null,
       navScaled: priceParsed && priceParsed.ok ? priceParsed.scaled : null,
-      sourceReference: null, // AU statements rarely carry a stable per-line reference — never fabricated
+      // AU statements rarely carry a stable per-line reference — never
+      // fabricated; only the in-statement occurrence of an identical line.
+      sourceReference: occurrence > 1 ? `occurrence:${occurrence}` : null,
     });
 
     // --- Idempotency / duplicate-statement / overlap dedup (spec 54-58, 106-107) ---
@@ -201,6 +290,15 @@ export async function applyAuStatementActivity(input: ApplyAuStatementActivityIn
           gross_amount: scaledToDecimalString(amountParsed.scaled, 2),
           source_reference: null,
           transaction_fingerprint: fingerprint,
+          // INV-G7: brokerage, withholding tax and the statement's own wording
+          // used to be dropped here although ii_transactions has the columns
+          // (0040). A DISTRIBUTION keeps its identity in source_description
+          // (ii_transactions has no 'distribution' type; it is recorded as a
+          // dividend-type cash distribution, never silently renamed).
+          fees: feesParsed && feesParsed.ok ? scaledToDecimalString(feesParsed.scaled, 2) : null,
+          taxes: withholdingParsed,
+          source_description: sourceDescriptionFor(activity.activity_type as string, (activity.description_raw as string | null) ?? null),
+          parser_code: FDH11_SOURCE_KEY,
         })
         .select('id')
         .single();

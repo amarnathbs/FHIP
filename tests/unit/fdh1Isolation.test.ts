@@ -568,6 +568,17 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // through one RPC (fdh10_match_liability_payment); it imports no FDH
       // service or repository.
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'liabilityBankBackMatch.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-12 (2026-09-27).
+      // `lib/investment-import-bridge/brokerBankRematch.ts` is the WP-12 entry
+      // behind the post-bank-approval matcher seam: a REAL, intentional
+      // import of the FDH-11 service's `rematchAuStatementsAfterBankApproval`
+      // (the broker <-> bank matcher lives in the Hub, next to the evidence it
+      // updates). It lives in the investment bridge -- the directory already
+      // approved for FDH-11 consumers above -- and names no Input Data
+      // register. The seam (lib/import-bridge/postBankApprovalMatchers.ts)
+      // loads it by a dynamic import of THIS path, so the seam itself stays
+      // free of the FDH literal and needs no entry.
+      path.join(REPO_ROOT, 'lib', 'investment-import-bridge', 'brokerBankRematch.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

@@ -44,7 +44,14 @@ import { createHash } from 'crypto';
 export type IiScanAdmission =
   | { admitted: true }
   | { admitted: false; reason: 'pending' }
-  | { admitted: false; reason: 'blocked'; status: string };
+  | { admitted: false; reason: 'blocked'; status: string }
+  // Canonical-upload WP-12 (UPL-02): the real scan is switched ON but this
+  // database cannot record a verdict (migration 0196 not applied). Before,
+  // the document was admitted on the structural check alone -- the scan the
+  // operator switched on silently did not happen. Now it fails CLOSED; the
+  // routes answer 503 so the user retries later rather than having an
+  // unscanned file parsed.
+  | { admitted: false; reason: 'scanner_unavailable' };
 
 const BLOCKING = ['malicious', 'suspicious', 'scan_failed', 'scan_timeout', 'unknown'];
 
@@ -90,8 +97,8 @@ export async function startIiRealScan(params: {
 }): Promise<IiScanAdmission> {
   if (!isRealMalwareScanEnabled()) return { admitted: true };
   if (!params.hasScanColumns) {
-    console.error('ii real-scan: migration 0196 is not applied; upload admitted on the structural check only');
-    return { admitted: true };
+    console.error('ii real-scan: the scan is on but migration 0196 is not applied; refusing the upload (fail closed)');
+    return { admitted: false, reason: 'scanner_unavailable' };
   }
   const result = await initiateRealMalwareScan({
     pipeline: 'ii',
@@ -123,7 +130,10 @@ export async function ensureIiRealScanAdmissible(userId: string, sourceDocumentI
   const row = doc as { storage_path: string | null; mime_type: string; parse_error: string | null; storage_purged_at: string | null; malware_scan_status?: string | null };
   if (!('malware_scan_status' in (doc as object))) {
     if (isRealMalwareScanEnabled()) {
-      console.error('ii real-scan admission: migration 0196 is not applied; II uploads are structural-check only until it is');
+      // UPL-02: fail closed -- the scan is on, so an unscannable document is
+      // never parsed on the structural check alone.
+      console.error('ii real-scan admission: the scan is on but migration 0196 is not applied; refusing to parse (fail closed)');
+      return { admitted: false, reason: 'scanner_unavailable' };
     }
     return { admitted: true };
   }
@@ -175,4 +185,5 @@ export async function ensureIiRealScanAdmissible(userId: string, sourceDocumentI
 
 /** User-facing copy: never reveals which verdict was reached. */
 export const II_SCAN_PENDING_MESSAGE = 'Your document is being scanned for safety. This usually takes a few seconds.';
+export const II_SCAN_UNAVAILABLE_MESSAGE = 'Our document safety scanner is temporarily unavailable, so this document has not been processed. Please try again later.';
 export const II_SCAN_BLOCKED_MESSAGE = 'This file could not be cleared by our security scan, so it was not processed and has been deleted. Please upload the document again.';

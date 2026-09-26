@@ -12,11 +12,27 @@
  * Same No-Silent-Apply / compare-and-swap / idempotency discipline as
  * `applyAuStatementActivity.ts` — see that file's header for the full
  * rationale, not repeated verbatim here.
+ *
+ * Canonical-upload WP-12 (2026-09-27):
+ *  - INV-G5: the matched account must belong to THIS user (FOREIGN_ACCOUNT),
+ *    exactly like the activity path. Before, a forged statement row carrying
+ *    another user's `canonical_account_id` reached a service-role write of
+ *    that user's `ii_holding_snapshots`. Migration 0213 closes the same hole
+ *    at the database (authoritative INSERT + same-tenant triggers).
+ *  - INV-G7: a holding whose statement printed no market value is SKIPPED
+ *    with a visible reason -- it used to be written as a $0 holding (null is
+ *    never 0). The statement's unit price is kept as `source_nav` with
+ *    `price_source = 'statement_price'`.
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scaledToDecimalString, parseExactDecimal } from '@/lib/services/investment-intelligence/decimal';
 import type { BridgeApplyResult } from './types';
+
+const FDH11_SOURCE_KEY = 'fdh11_au_statement';
+
+export const POSITION_NO_MARKET_VALUE_REASON =
+  'The statement did not print a market value for this holding, so it was not added. A missing value is never recorded as $0 — add the holding yourself or upload a statement that shows its value.';
 
 export interface ApplyAuStatementPositionInput {
   userId: string;
@@ -55,10 +71,29 @@ export async function applyAuStatementPosition(input: ApplyAuStatementPositionIn
   const canonicalAccountId = statement.canonical_account_id as string | null;
   if (!canonicalAccountId) return { ok: false, code: 'NOT_MATCHED', canonicalTransactionId: null, error: 'No confirmed investment account.' };
 
+  // INV-G5: the same FOREIGN_ACCOUNT check the activity path has always had.
+  const { data: acct, error: acctErr } = await admin.from('ii_accounts').select('id, user_id').eq('id', canonicalAccountId).maybeSingle();
+  if (acctErr || !acct || acct.user_id !== userId) {
+    return { ok: false, code: 'FOREIGN_ACCOUNT', canonicalTransactionId: null, error: 'The matched investment account does not belong to this user.' };
+  }
+
+  // INV-G7: null market value -> skipped with a reason, never a $0 holding.
+  const valueParsed = position.market_value !== null && position.market_value !== undefined ? parseExactDecimal(String(position.market_value)) : null;
+  if (!valueParsed || !valueParsed.ok) {
+    await admin
+      .from('fdh_investment_statement_positions')
+      .update({ apply_status: 'skipped', apply_rejected_reason: POSITION_NO_MARKET_VALUE_REASON })
+      .eq('id', positionId)
+      .eq('user_id', userId)
+      .eq('apply_status', 'pending');
+    return { ok: false, code: 'CANONICAL_TYPE_UNSUPPORTED', canonicalTransactionId: null, error: POSITION_NO_MARKET_VALUE_REASON };
+  }
+
   const { data: claimed } = await admin
     .from('fdh_investment_statement_positions')
     .update({ apply_status: 'applying' })
     .eq('id', positionId)
+    .eq('user_id', userId)
     .eq('apply_status', 'pending')
     .select('id')
     .maybeSingle();
@@ -73,7 +108,7 @@ export async function applyAuStatementPosition(input: ApplyAuStatementPositionIn
   try {
     const unitsParsed = parseExactDecimal(String(position.quantity));
     if (!unitsParsed.ok) throw new Error('Position quantity is not a valid exact decimal.');
-    const valueParsed = position.market_value !== null ? parseExactDecimal(String(position.market_value)) : null;
+    const priceParsed = position.unit_price !== null && position.unit_price !== undefined ? parseExactDecimal(String(position.unit_price)) : null;
 
     // Upsert-on-conflict, exactly like documentProcessing.ts's own holding
     // snapshot write — a re-uploaded/overlapping statement for the SAME
@@ -89,7 +124,10 @@ export async function applyAuStatementPosition(input: ApplyAuStatementPositionIn
           quality_status: 'warning',
           as_of_date: position.valuation_date,
           units: scaledToDecimalString(unitsParsed.scaled),
-          value: valueParsed && valueParsed.ok ? scaledToDecimalString(valueParsed.scaled, 2) : '0',
+          value: scaledToDecimalString(valueParsed.scaled, 2),
+          source_nav: priceParsed && priceParsed.ok ? scaledToDecimalString(priceParsed.scaled) : null,
+          price_source: priceParsed && priceParsed.ok ? 'statement_price' : null,
+          parser_code: FDH11_SOURCE_KEY,
         },
         { onConflict: 'account_id,instrument_id,as_of_date' },
       )
@@ -100,7 +138,8 @@ export async function applyAuStatementPosition(input: ApplyAuStatementPositionIn
     await admin
       .from('fdh_investment_statement_positions')
       .update({ apply_status: 'applied', canonical_holding_snapshot_id: snap.id, applied_at: new Date().toISOString(), applied_by: userId })
-      .eq('id', positionId);
+      .eq('id', positionId)
+      .eq('user_id', userId);
 
     return { ok: true, code: null, canonicalTransactionId: snap.id as string, error: null };
   } catch (e) {

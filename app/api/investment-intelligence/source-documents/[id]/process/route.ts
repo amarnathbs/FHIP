@@ -5,6 +5,7 @@ import {
   ensureIiRealScanAdmissible,
   II_SCAN_PENDING_MESSAGE,
   II_SCAN_BLOCKED_MESSAGE,
+  II_SCAN_UNAVAILABLE_MESSAGE,
 } from '@/lib/services/investment-intelligence/realScanAdmission';
 
 // A real-world CAMS consolidated statement with many schemes/transactions
@@ -56,6 +57,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!scan.admitted) {
     if (scan.reason === 'not_found') return bad('Source document not found.', 404);
     if (scan.reason === 'pending') return bad(II_SCAN_PENDING_MESSAGE, 409, 'malware_scan_pending');
+    // UPL-02 (canonical-upload WP-12): scan on, scanner unusable -> fail closed.
+    if (scan.reason === 'scanner_unavailable') return bad(II_SCAN_UNAVAILABLE_MESSAGE, 503, 'malware_scan_unavailable');
     return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
   }
 
