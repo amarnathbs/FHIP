@@ -17,7 +17,6 @@ import { describe, expect, it } from 'vitest';
 import { buildCanonicalFinancialSnapshot } from '@/lib/read-models/snapshot';
 import { buildCanonicalAppendix, type CanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
 import { makeFakeSupabase, type Row } from './readModels/helpers/fakeSupabase';
-import { tables } from './readModels/helpers/fixtures';
 import { householdI, householdM, USER } from './helpers/canonicalGoldenHouseholds';
 
 async function snapshotOf(t: Record<string, Row[]>) {

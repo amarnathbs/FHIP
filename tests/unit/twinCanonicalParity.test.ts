@@ -12,8 +12,9 @@
  * NEGATIVE CONTROL (run against the base branch, feature/canonical-upload-
  * foundation f79374f): the Twin's private computeDashboard() ignored approved
  * bank lines, the superseded flag and business entities, read the OLDEST 12
- * snapshots, summed AUD + INR raw, and truncated a 1000+ row register -- every
- * `it` below except the fail-closed one fails there.
+ * snapshots, summed AUD + INR raw, truncated a 1000+ row register and
+ * coerced a failed read to [] -- every `it` below fails there except the
+ * remittance one (its planned rows were already read correctly).
  */
 import { describe, expect, it, vi } from 'vitest';
 

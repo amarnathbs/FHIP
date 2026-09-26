@@ -65,12 +65,15 @@ Oracle, Household M vs Household I: planned groceries of $800 a month and covere
 | Expenses tab: "Actual (imported)" section, provenance label, statement link, variance per group | actual, and combined `varianceMonthly` | WP-07 |
 | Dashboard: monthly expenses, surplus, savings rate, `hasExpenses`, essential / lifestyle, top expenses, emergency-fund months | combined | WP-03 |
 | Health Score, Financial DNA, Resilience, Goals affordability, Recommendations, AI context, section status | combined, from one `buildCanonicalFinancialSnapshot` per request | WP-04 |
-| Financial Twin / benchmark: expense ratio, housing and remittance by group | combined | WP-05 |
-| Forecast: forward projection | planned | WP-05 |
-| Forecast: variance and calibration display | actual | WP-05 |
-| Resilience / retirement essentials baseline | combined `essentialMonthly` | WP-05 |
-| Reports: calculations | combined | WP-06 |
-| Reports: appendix | planned **and** actual lines, each with provenance | WP-06 |
+| Financial Twin / benchmark: income band, expense ratio, surplus, Net Worth | the shared `loadDashboard()` figure (combined once WP-03 lands); the Twin no longer has a private Dashboard | WP-05 (done) |
+| Financial Twin: `housing_cost_ratio` | combined `housing` group **plus** household owner-occupied home-loan debt service (`home_loan` / `construction_loan`, or `debt_type = 'mortgage'`) from `selectLiabilities`; a manual `mortgage` row that duplicates the loan is excluded from planned and counted once, via debt service | WP-05 (done) |
+| Financial Twin: `remittance_burden` | counted **planned** `family_support_remittance` rows (the FDH-2 taxonomy has no remittance category; an overseas transfer is typed `transfer`, never spending) | WP-05 (done) |
+| Forecast: Net Worth / resilience projection | the shared `loadDashboard()` surplus and essentials (combined once WP-03 lands) | WP-05 (done) |
+| Forecast: retirement, debt, investment and cross-border inputs | the canonical register loaders and rules (`lib/services/forecastCanonicalInputs.ts`): paged, fail closed, unsupported currency excluded, null contribution frequency = unknown | WP-05 (done) |
+| Forecast: variance display | actual values; a failed read is status `unavailable`, never an actual of 0; goals converted per goal before summing | WP-05 (done) |
+| Reports: calculations | combined (through `source.dashboard`) | WP-06 (done) |
+| Reports: appendix | planned **and** actual lines, each with provenance, excluded rows marked "not counted" with the reason, currency on every row, retirement included; a per-group reconciliation shows which side the combined figure took (`lib/engines/reportCanonicalAppendix.ts`) | WP-06 (done) |
+| Reports: staleness and Data Quality freshness | also approved imported lines, allocations, links, Investment Intelligence snapshots and publications, and applied proposals (`lib/read-models/freshness.ts`) | WP-06 (done) |
 | FDH Activity, Category review | actual, using the same `spendingRules` (no mirrored constants) | WP-08 |
 | `financial_snapshots.monthly_expenses` | combined, over complete covered months | WP-03 |
 | Debt service (surplus, DSR, cash outflow) | `selectLiabilities`, never the expense figure (section 7) | WP-03 |

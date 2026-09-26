@@ -17,7 +17,6 @@ import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
 import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
-import { convertToReportingCurrency } from '@/lib/engines/fx';
 import { computeAllocatedMonthlyContribution, computeLiveLinkedFundingValue } from '@/lib/services/goalFundingAllocation';
 import { loadLinkedContributionSources, type GoalFundingSourceRow } from '@/lib/services/goalsData';
 import { accountsEligibleForHouseholdContributionForecast } from '@/lib/engines/forecast/smsfContributionGuard';
