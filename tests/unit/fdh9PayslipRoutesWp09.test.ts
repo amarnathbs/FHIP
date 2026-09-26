@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
   approveResult: { ok: true, incomeOwner: 'self', alreadyApproved: false } as Record<string, unknown>,
   predecessor: null as null | { payroll_event_id: string },
   supersedeCalls: [] as string[][],
-  audit: vi.fn(async () => undefined),
+  audit: vi.fn(async (event: unknown) => { void event; }),
   generate: vi.fn(),
   applyResult: { ok: true } as Record<string, unknown>,
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
