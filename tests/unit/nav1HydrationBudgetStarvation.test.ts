@@ -53,6 +53,10 @@ function deps(held: string[], covered: Set<string>, over: Partial<HydrationDeps>
     claimBatch: async () => ({ batchId: 'batch-1', blocked: null, error: null }),
     updateBatchProgress,
     recordBatch: async () => ({ error: null }),
+    // An empty attempt ledger (0198): nothing attempted yet, so the fair order
+    // is the candidate order. Fairness itself is in nav1HydrationFairOrdering.test.ts.
+    fetchAttemptLedger: async () => ({ records: new Map(), error: null }),
+    recordAttempt: async () => ({ error: null }),
     ...over,
   };
   return { d, updateBatchProgress };

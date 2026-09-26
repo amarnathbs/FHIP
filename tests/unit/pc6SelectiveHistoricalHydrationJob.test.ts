@@ -168,7 +168,12 @@ describe('runSelectiveHistoricalHydration', () => {
     });
     const result = await runSelectiveHistoricalHydration({ changeoverDate: C, adapter, deps, maxInstruments: 1 });
     expect(result.instrumentsNeedingHydration).toBe(2);
-    expect(result.perInstrument).toHaveLength(1); // only ONE instrument actually processed, even though it needs the fetch chunked into several calls
+    // Only ONE instrument actually processed, even though it needs the fetch
+    // chunked into several calls. Since the NAV 1 completion fix the other is
+    // listed too, as 'deferred', so the batch accounts for every held fund.
+    expect(result.perInstrument.filter((p) => p.outcome !== 'deferred')).toHaveLength(1);
+    expect(result.perInstrument.filter((p) => p.outcome === 'deferred')).toHaveLength(1);
+    expect(result.telemetry?.deferred).toBe(1);
   });
 
   it('a chunk that fails midway leaves earlier chunks committed and reports a precise resume point', async () => {
