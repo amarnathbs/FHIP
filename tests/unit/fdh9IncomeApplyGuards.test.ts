@@ -200,5 +200,5 @@ describe('the correction form covers the full RPC vocabulary (GAP-07)', () => {
     const block = panel.slice(panel.indexOf('const CORRECTABLE_FIELDS = ['), panel.indexOf('] as const;', panel.indexOf('const CORRECTABLE_FIELDS = [')));
     const panelKeys = [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
     expect(panelKeys).toEqual(rpcKeys);
-  });
+  }, 30_000); // cold import of the payslip service is slow under a parallel run
 });
