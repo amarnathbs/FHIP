@@ -24,8 +24,10 @@ import type { ImportApplyErrorCode, PersistedApplyMode, UserApplyDecision } from
 export interface ApplyRetirementProposalRequest {
   proposalId: string;
   decision: UserApplyDecision;
-  /** Ignored for `keep_existing`. Omit (or leave empty) for `update_existing`
-   * to mean "every field the proposal contains". */
+  /** Ignored for `keep_existing`. The review screen always sends the ticked
+   * list (WP-13). Omitted/empty on `update_existing` means only the
+   * RECOMMENDED fields that need no confirmation (0211) -- never "every field
+   * the proposal contains", which silently applied unticked contributions. */
   selectedFields?: string[];
 }
 
@@ -49,6 +51,9 @@ interface RpcResponse {
 export const RETIREMENT_APPLY_REFUSAL_CODES = [
   'SMSF_ACCOUNT_NOT_IMPORTABLE',
   'EVIDENCE_NOT_APPROVED',
+  // GAP-RET-11 (WP-13): added by 0119 but never mapped here, so it collapsed
+  // to WRITE_FAILED and the apply route answered 400 instead of 409.
+  'MEMBER_MISMATCH',
 ] as const;
 export type RetirementApplyRefusalCode = (typeof RETIREMENT_APPLY_REFUSAL_CODES)[number];
 

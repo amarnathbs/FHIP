@@ -49,4 +49,8 @@ export const fdhApi = {
   liabilityStatement: (documentId: string) => `${BASE_API}/liability-statement/${enc(documentId)}`,
   retirementStatement: (documentId: string) => `${BASE_API}/retirement-statement/${enc(documentId)}`,
   investmentStatement: (documentId: string) => `${BASE_API}/investment-statement/${enc(documentId)}`,
+  // WP-13: the Retirement tab's statement history (paged list) and the
+  // user's confirmation of a matched bank payment on one statement line.
+  retirementStatements: (page = 1, pageSize = 10) => `${BASE_API}/retirement-statement?page=${enc(String(page))}&page_size=${enc(String(pageSize))}`,
+  retirementStatementBankLeg: (documentId: string) => `${BASE_API}/retirement-statement/${enc(documentId)}/bank-leg`,
 } as const;

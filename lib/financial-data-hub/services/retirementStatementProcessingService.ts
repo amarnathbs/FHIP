@@ -55,6 +55,7 @@ import { matchContributionToPayslip, type PayrollEventEvidence } from '../retire
 import { matchRetirementActivityToBank, type BankTransactionEvidence } from '../retirement/bankMatching';
 import { matchRolloverCounterpart, type RolloverLeg } from '../retirement/rolloverIntelligence';
 import { minorUnitsToDecimalString } from '../retirement/money';
+import { structureExtractionWarnings } from '../retirement/warnings';
 import type { RetirementJurisdiction, RetirementStatementExtraction, RetirementStatementType, RetirementAccountType } from '../retirement/types';
 // AIE retirement-statement AI-fallback (2026-09-23). Follows the pattern
 // proven by the payslip and bank-statement paths: call the shared AIE gateway
@@ -733,6 +734,38 @@ export async function confirmAiRetirementFallback(
  * ordinary super entirely, and it must not become an AI-influenced judgement
  * by the back door.
  */
+/**
+ * WP-13 (GAP-RET-05): the evidence could only be PARTLY saved (the statement
+ * header exists, its lines do not). Never leave that looking like a success:
+ * the statement is marked extraction_failed (so it can never be approved or
+ * applied -- fdh12_approve_retirement_statement refuses NOT_EXTRACTED), the
+ * upload is marked failed with a visible error code, the failure is audited,
+ * and the caller gets an error instead of a zero-line "success".
+ */
+async function failPartialEvidence(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  documentId: string,
+  statementId: string,
+  reason: 'activity_insert_failed' | 'position_insert_failed',
+): Promise<never> {
+  await admin.from('fdh_retirement_statements')
+    .update({ extraction_status: 'extraction_failed', review_status: 'pending' })
+    .eq('id', statementId).eq('user_id', userId);
+  await admin.from('fdh_statement_uploads')
+    .update({ processing_status: 'failed', error_code: 'extraction_failed', review_status: 'pending' })
+    .eq('id', documentId).eq('user_id', userId);
+  await recordDocumentAuditEvent({
+    userId, documentId,
+    eventType: 'retirement_statement_extraction_failed', actorType: 'system',
+    metadata: { statementId, reason },
+  });
+  throw new RetirementStatementProcessingError(
+    'internal_error',
+    'We could not save every line of this statement, so nothing from it will be used. Please try uploading it again.',
+  );
+}
+
 export async function persistRetirementEvidence(params: {
   userId: string;
   document: FdhStatementUpload;
@@ -786,6 +819,10 @@ export async function persistRetirementEvidence(params: {
       smsf_evidence: smsf.evidence.length > 0 ? { reason: smsf.reason, evidence: smsf.evidence } : null,
       review_status: smsf.classification === 'not_smsf' ? 'not_required' : 'pending',
       source_provenance: `${ex.parserName}@${ex.parserVersion}`,
+      // WP-13 (GAP-RET-05): what the parser skipped, summed or could not
+      // classify is persisted evidence now, shown on review and in the
+      // Retirement tab's statement history (column: 0207; guarded: 0211).
+      extraction_warnings: structureExtractionWarnings(ex.warnings),
     })
     .select('id')
     .single();
@@ -854,7 +891,10 @@ export async function persistRetirementEvidence(params: {
     }));
     activitiesDeduplicated = decisions.filter((d) => d.isDuplicate).length;
     const { error: actErr } = await admin.from('fdh_retirement_statement_activities').insert(rows);
-    if (!actErr) activitiesExtracted = rows.length;
+    // WP-13 (GAP-RET-05): a failed insert used to be swallowed, leaving a
+    // "successful" statement with zero activity lines.
+    if (actErr) await failPartialEvidence(admin, userId, document.id, statementId, 'activity_insert_failed');
+    activitiesExtracted = rows.length;
   }
 
   // --- Positions: EVIDENCE ONLY (spec sections 12-13, 40, 71) -------------
@@ -877,7 +917,8 @@ export async function persistRetirementEvidence(params: {
       source_row_number: p.sourceRowNumber ?? null,
     }));
     const { error: posErr } = await admin.from('fdh_retirement_statement_positions').insert(rows);
-    if (!posErr) positionsExtracted = rows.length;
+    if (posErr) await failPartialEvidence(admin, userId, document.id, statementId, 'position_insert_failed');
+    positionsExtracted = rows.length;
   }
 
   if (smsf.classification !== 'not_smsf') {
@@ -1090,10 +1131,68 @@ export async function matchRetirementContributionsToPayslips(
  * returns `not_expected` for them, so a super fee or an employer contribution
  * never generates an unmatched-bank review item.
  */
+/**
+ * WP-13 (GAP-RET-07): run after the user approves a BANK statement (the
+ * post-bank-approval matcher seam, lib/import-bridge/postBankApprovalMatchers.ts).
+ *
+ * Retirement lines that cross the household-cash boundary (a personal
+ * contribution debit, a withdrawal or pension credit) are bank-matched once,
+ * when the retirement statement is processed -- which misses every bank
+ * statement uploaded LATER. This revisits only the lines still unmatched,
+ * on the user's own extracted, non-SMSF statements, with the same certified
+ * matcher. It LINKS only: re-bucketing the bank leg needs the user's explicit
+ * confirmation (fdh12_confirm_retirement_bank_leg, migration 0211).
+ * Idempotent: an already-matched or user-confirmed line is never touched.
+ */
+export async function rematchRetirementActivitiesAfterBankApproval(userId: string): Promise<{ statements: number; linked: number }> {
+  const admin = createAdminClient();
+  const open = await fetchAllRows(() =>
+    admin
+      .from('fdh_retirement_statement_activities')
+      .select('id, statement_id')
+      .eq('user_id', userId)
+      .in('activity_type', ['PERSONAL_CONTRIBUTION', 'WITHDRAWAL', 'PENSION_PAYMENT', 'OTHER'])
+      .in('bank_match_status', [...RETIREMENT_BANK_REMATCHABLE_STATUSES])
+      .eq('is_summary_total', false)
+      .eq('is_year_to_date', false)
+      .is('duplicate_of_activity_id', null)
+      .is('bank_leg_confirmed_at', null)
+      .order('id', { ascending: true }));
+  const candidateIds = [...new Set((open ?? []).map((a) => a.statement_id as string))];
+  if (candidateIds.length === 0) return { statements: 0, linked: 0 };
+
+  const eligible: string[] = [];
+  for (let i = 0; i < candidateIds.length; i += 200) {
+    const rows = await fetchAllRows(() =>
+      admin
+        .from('fdh_retirement_statements')
+        .select('id')
+        .eq('user_id', userId)
+        .in('id', candidateIds.slice(i, i + 200))
+        .eq('extraction_status', 'extracted')
+        .eq('smsf_classification', 'not_smsf')
+        .order('id', { ascending: true }));
+    for (const r of rows ?? []) eligible.push(r.id as string);
+  }
+
+  let linked = 0;
+  for (const statementId of eligible) {
+    const r = await matchRetirementActivitiesToBank(userId, statementId, { onlyUnmatched: true });
+    if (r.error) throw new RetirementStatementProcessingError('internal_error', 'retirement bank re-match failed');
+    linked += r.newlyMatched;
+  }
+  return { statements: eligible.length, linked };
+}
+
+/** Bank-match states a re-match (after a LATER bank approval) may revisit.
+ * 'matched' and 'multiple_candidates' (awaiting the user) are never revisited. */
+export const RETIREMENT_BANK_REMATCHABLE_STATUSES = ['no_match', 'bank_evidence_not_available', 'not_attempted'] as const;
+
 export async function matchRetirementActivitiesToBank(
   userId: string,
   statementId: string,
-): Promise<{ matched: number; noMatch: number; multipleCandidates: number; notExpected: number; noBankEvidence: number; error: string | null }> {
+  options: { onlyUnmatched?: boolean } = {},
+): Promise<{ matched: number; noMatch: number; multipleCandidates: number; notExpected: number; noBankEvidence: number; newlyMatched: number; error: string | null }> {
   const admin = createAdminClient();
 
   const { data: stmt } = await admin
@@ -1106,7 +1205,7 @@ export async function matchRetirementActivitiesToBank(
     activities = await fetchAllRows(() =>
       admin
         .from('fdh_retirement_statement_activities')
-        .select('id, activity_type, amount, currency_code, activity_date')
+        .select('id, activity_type, amount, currency_code, activity_date, bank_match_status, linked_transaction_id, bank_leg_confirmed_at')
         .eq('user_id', userId)
         .eq('statement_id', statementId)
         .eq('is_summary_total', false)
@@ -1114,7 +1213,7 @@ export async function matchRetirementActivitiesToBank(
         .is('duplicate_of_activity_id', null)
         .order('id', { ascending: true }));
   } catch (e) {
-    return { matched: 0, noMatch: 0, multipleCandidates: 0, notExpected: 0, noBankEvidence: 0, error: e instanceof Error ? e.message : String(e) };
+    return { matched: 0, noMatch: 0, multipleCandidates: 0, notExpected: 0, noBankEvidence: 0, newlyMatched: 0, error: e instanceof Error ? e.message : String(e) };
   }
 
   const bankTxns = await fetchAllRows(() =>
@@ -1127,17 +1226,29 @@ export async function matchRetirementActivitiesToBank(
   const claimed = await fetchAllRows(() =>
     admin
       .from('fdh_retirement_statement_activities')
-      .select('linked_transaction_id')
+      .select('id, linked_transaction_id')
       .eq('user_id', userId)
       .not('linked_transaction_id', 'is', null)
       .order('linked_transaction_id', { ascending: true }));
-  const claimedIds = new Set((claimed ?? []).map((r) => r.linked_transaction_id as string));
+  // bank leg -> the activity that holds it. A leg is unavailable only when a
+  // DIFFERENT activity holds it: re-running the match must never strip an
+  // activity of its own link (it used to, because its own leg counted as
+  // "claimed" -- the match then fell to no_match and the link was nulled).
+  const claimedBy = new Map((claimed ?? []).map((r) => [r.linked_transaction_id as string, r.id as string] as const));
 
-  let matched = 0, noMatch = 0, multipleCandidates = 0, notExpected = 0, noBankEvidence = 0;
+  let matched = 0, noMatch = 0, multipleCandidates = 0, notExpected = 0, noBankEvidence = 0, newlyMatched = 0;
+  const rematchable = new Set<string>(RETIREMENT_BANK_REMATCHABLE_STATUSES);
 
   for (const activity of activities ?? []) {
+    // A leg the USER confirmed (0211, fdh12_confirm_retirement_bank_leg) is
+    // settled: its link is never re-derived.
+    if (activity.bank_leg_confirmed_at) { matched += 1; continue; }
+    if (options.onlyUnmatched && !rematchable.has(activity.bank_match_status as string)) continue;
     const pool = (bankTxns ?? [])
-      .filter((t) => !claimedIds.has(t.id as string)) as unknown as BankTransactionEvidence[];
+      .filter((t) => {
+        const holder = claimedBy.get(t.id as string);
+        return holder === undefined || holder === activity.id;
+      }) as unknown as BankTransactionEvidence[];
 
     const result = matchRetirementActivityToBank(
       {
@@ -1150,11 +1261,21 @@ export async function matchRetirementActivitiesToBank(
       pool,
     );
 
-    if (result.status === 'matched') { matched += 1; if (result.transactionId) claimedIds.add(result.transactionId); }
+    if (result.status === 'matched') {
+      matched += 1;
+      if (result.transactionId) {
+        if (result.transactionId !== activity.linked_transaction_id) newlyMatched += 1;
+        for (const [txnId, holder] of claimedBy) if (holder === activity.id) claimedBy.delete(txnId);
+        claimedBy.set(result.transactionId, activity.id as string);
+      }
+    }
     else if (result.status === 'no_match') noMatch += 1;
     else if (result.status === 'multiple_candidates') multipleCandidates += 1;
     else if (result.status === 'not_expected') notExpected += 1;
     else noBankEvidence += 1;
+    if (result.status !== 'matched') {
+      for (const [txnId, holder] of claimedBy) if (holder === activity.id) claimedBy.delete(txnId);
+    }
 
     await admin
       .from('fdh_retirement_statement_activities')
@@ -1174,7 +1295,7 @@ export async function matchRetirementActivitiesToBank(
     metadata: { matched, noMatch, multipleCandidates, notExpected, noBankEvidence },
   });
 
-  return { matched, noMatch, multipleCandidates, notExpected, noBankEvidence, error: null };
+  return { matched, noMatch, multipleCandidates, notExpected, noBankEvidence, newlyMatched, error: null };
 }
 
 /**

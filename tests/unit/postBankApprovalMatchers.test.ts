@@ -85,6 +85,7 @@ describe('runPostBankApprovalMatchers (pure runner)', () => {
       wp09_payroll_bank_rematch: 'WP-09',
       wp11_liability_repayment_back_match: 'WP-11',
       wp12_broker_bank_rematch: 'WP-12',
+      wp13_retirement_bank_rematch: 'WP-13',
     };
     for (const [id, owner] of Object.entries(expected)) {
       expect(POST_BANK_APPROVAL_MATCHERS.filter((m) => m.id === id).map((m) => m.ownerWp), id).toEqual([owner]);

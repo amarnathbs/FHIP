@@ -307,6 +307,18 @@ function extractSummary(
   const out: RetirementStatementExtraction = { ...base };
   let populated = 0;
   let unparseable = 0;
+  // WP-13 (GAP-RET-05). Nothing is dropped silently any more:
+  //   * a label matching no rule is COUNTED (and named) as a warning;
+  //   * several lines landing in the same MOVEMENT field are SUMMED in minor
+  //     units ("Administration fee" + "Indirect cost" are both fees) instead
+  //     of the last one overwriting the others, and the summing is recorded;
+  //   * two different figures for the same BALANCE are never added -- the
+  //     first is kept and the conflict is recorded for review.
+  const unrecognisedLabels: string[] = [];
+  const movementTotals = new Map<string, bigint>();
+  const movementLineCounts = new Map<string, number>();
+  const balanceValues = new Map<string, bigint>();
+  const conflictingBalances = new Set<string>();
 
   for (const row of rows) {
     if (isBlankRow(row)) continue;
@@ -315,7 +327,10 @@ function extractSummary(
     if (label === '' && rawAmount === '') continue;
 
     const field = matchSummaryItem(label);
-    if (!field) continue;
+    if (!field) {
+      unrecognisedLabels.push(label === '' ? '(blank label)' : label.slice(0, 60));
+      continue;
+    }
 
     const minorUnits = tryParseMoneyToMinorUnits(rawAmount);
     if (minorUnits === null) { unparseable += 1; continue; }
@@ -329,17 +344,44 @@ function extractSummary(
     // label text is the fallback for files that leave it blank.
     const periodCell = iPeriod >= 0 ? cell(row, iPeriod) : '';
     const isYtd = periodCell !== '' ? looksYearToDate(periodCell) : looksYearToDate(label);
+    let target: string = field;
     if (isYtd) {
-      if (field === 'employerContributions') { out.ytdEmployerContributions = minorUnitsToDecimalString(magnitude); populated += 1; }
-      else if (field === 'personalContributions') { out.ytdPersonalContributions = minorUnitsToDecimalString(magnitude); populated += 1; }
-      continue;
+      if (field === 'employerContributions') target = 'ytdEmployerContributions';
+      else if (field === 'personalContributions') target = 'ytdPersonalContributions';
+      else {
+        // A YTD figure for any other field has nowhere honest to go: the
+        // period columns must never hold it (spec 114-116). Counted, not lost.
+        unrecognisedLabels.push(`${label.slice(0, 50)} (year to date)`);
+        continue;
+      }
     }
-    (out as unknown as Record<string, string>)[field] =
-      minorUnitsToDecimalString(isBalance ? minorUnits : magnitude);
+    if (isBalance) {
+      const previous = balanceValues.get(target);
+      if (previous === undefined) balanceValues.set(target, minorUnits);
+      else if (previous !== minorUnits) conflictingBalances.add(target);
+    } else {
+      movementTotals.set(target, (movementTotals.get(target) ?? ZERO) + magnitude);
+      movementLineCounts.set(target, (movementLineCounts.get(target) ?? 0) + 1);
+    }
     populated += 1;
   }
 
+  for (const [target, value] of balanceValues) {
+    (out as unknown as Record<string, string>)[target] = minorUnitsToDecimalString(value);
+  }
+  for (const [target, value] of movementTotals) {
+    (out as unknown as Record<string, string>)[target] = minorUnitsToDecimalString(value);
+  }
+
   if (unparseable > 0) warnings.push(`unreadable_summary_rows_skipped:${unparseable}`);
+  if (unrecognisedLabels.length > 0) {
+    warnings.push(`unrecognised_summary_rows:${unrecognisedLabels.length}`);
+    for (const l of unrecognisedLabels.slice(0, 10)) warnings.push(`unrecognised_summary_label=${l}`);
+  }
+  for (const [target, n] of movementLineCounts) {
+    if (n > 1) warnings.push(`summed_summary_lines:${target}:${n}`);
+  }
+  for (const target of conflictingBalances) warnings.push(`conflicting_balance_lines:${target}`);
 
   if (populated === 0) {
     return { ok: false, kind: 'layout_unsupported', error: 'No readable retirement figures were found in this file.' };

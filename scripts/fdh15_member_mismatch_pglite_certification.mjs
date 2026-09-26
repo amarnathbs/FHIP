@@ -202,10 +202,23 @@ async function main() {
 
   console.log('--- ANTI-VACUITY: reproduce the ORIGINAL (pre-fix) failure on an isolated schema copy ---');
   {
-    const dbOld = await buildDb(undefined, ['0119_fdh15_retirement_member_mismatch_guard.sql', '0120_fdh15_income_member_mismatch_guard.sql']);
+    // "Without the guard" must also leave out every LATER migration that
+    // re-creates the same function carrying the guard forward (e.g. 0211,
+    // WP-13, re-creates fdh12_apply_retirement_proposal on top of 0119). They
+    // are derived from the ledger so the control keeps meaning "the pre-fix
+    // function" however many successors exist.
+    const redefinedAfter = (fn, after) => fs.readdirSync(MIG)
+      .filter((x) => x.endsWith('.sql') && x.slice(0, 4) > after)
+      .filter((x) => fs.readFileSync(path.join(MIG, x), 'utf8').replace(/--.*$/gm, '').includes(`create or replace function ${fn}(`));
+    const withoutGuards = [
+      '0119_fdh15_retirement_member_mismatch_guard.sql', '0120_fdh15_income_member_mismatch_guard.sql',
+      ...redefinedAfter('fdh12_apply_retirement_proposal', '0119'),
+      ...redefinedAfter('fdh9_apply_income_proposal', '0120'),
+    ];
+    const dbOld = await buildDb(undefined, withoutGuards);
     const inc = await incomeScenario(dbOld);
     check('HARNESS ANTI-VACUITY (Income): WITHOUT 0120, the forged Self->Spouse apply SUCCEEDS (proves this harness genuinely detects the guard\'s absence)', inc.result?.ok === true && Number(inc.spouseAfter) === 9000, JSON.stringify(inc.result));
-    const dbOld2 = await buildDb(undefined, ['0119_fdh15_retirement_member_mismatch_guard.sql', '0120_fdh15_income_member_mismatch_guard.sql']);
+    const dbOld2 = await buildDb(undefined, withoutGuards);
     const ret = await retirementScenario(dbOld2);
     check('HARNESS ANTI-VACUITY (Retirement): WITHOUT 0119, the forged Self->Spouse apply SUCCEEDS (proves this harness genuinely detects the guard\'s absence)', ret.result?.ok === true && Number(ret.spouseAfter) === 999000, JSON.stringify(ret.result));
   }

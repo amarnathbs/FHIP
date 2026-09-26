@@ -62,6 +62,7 @@ export const POST_BANK_APPROVAL_MATCHERS: readonly PostBankApprovalMatcher[] = [
   { id: 'wp09_payroll_bank_rematch', ownerWp: 'WP-09', run: (ctx) => import('./payslipBankRematch').then((m) => m.runPayslipBankRematch(ctx)) },
   liabilityBankBackMatcher, // WP-11: card/loan repayment -> bank debit back-match
   { id: 'wp12_broker_bank_rematch', ownerWp: 'WP-12', run: async (ctx) => (await import('@/lib/investment-import-bridge/brokerBankRematch')).runBrokerBankRematch(ctx) },
+  { id: 'wp13_retirement_bank_rematch', ownerWp: 'WP-13', run: (ctx) => import('./retirementBankLegLink').then((m) => m.runRetirementBankRematch(ctx)) },
 ];
 
 export interface PostBankApprovalMatcherResult {

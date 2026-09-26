@@ -23,7 +23,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
-import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import {
+  RetirementStatementDetails,
+  normaliseRetirementActivity,
+  normaliseRetirementPosition,
+  normaliseRetirementStatement,
+  type RetirementActivityRow,
+  type RetirementPositionRow,
+  type RetirementStatementRow,
+} from '@/components/retirement/RetirementStatementHistory';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -71,59 +79,13 @@ const SCAN_REJECTION_MESSAGES: Record<string, string> = {
 
 type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
 
-interface Statement {
-  id: string;
-  statement_type: string;
-  retirement_jurisdiction: string;
-  account_type: string;
-  fund_name: string | null;
-  masked_account_identifier: string | null;
-  currency_code: string;
-  statement_date: string | null;
-  statement_start_date: string | null;
-  statement_end_date: string | null;
-  opening_balance: string | null;
-  closing_balance: string | null;
-  employer_contributions: string | null;
-  personal_contributions: string | null;
-  investment_earnings: string | null;
-  fees: string | null;
-  insurance_premiums: string | null;
-  tax: string | null;
-  extraction_status: string;
-  reconciliation_status: string;
-  reconciliation_variance: string | null;
-  account_match_status: string;
-  canonical_account_id: string | null;
-  retirement_member_id: string | null;
-  smsf_classification: string;
-  approval_status: string;
-  review_status: string;
-}
-
-interface Activity {
-  id: string;
-  activity_type: string;
-  activity_date: string | null;
-  amount: string;
-  currency_code: string;
-  description_raw: string | null;
-  is_summary_total: boolean;
-  is_year_to_date: boolean;
-  payslip_match_status: string;
-  payslip_match_variance: string | null;
-  bank_match_status: string;
-  rollover_match_status: string;
-  duplicate_of_activity_id: string | null;
-}
-
-interface Position {
-  id: string;
-  option_name_raw: string;
-  asset_class_raw: string | null;
-  market_value: string | null;
-  currency_code: string;
-}
+// WP-13 (GAP-RET-04): the review reads EVERY persisted field -- the same row
+// shapes, normalisers and details component as the Retirement tab's statement
+// history (RetirementStatementHistory.tsx), so review and history can never
+// disagree about what the statement said.
+type Statement = RetirementStatementRow;
+type Activity = RetirementActivityRow;
+type Position = RetirementPositionRow;
 
 /**
  * AIE retirement-statement AI-fallback (2026-09-23) — the draft the service
@@ -216,51 +178,28 @@ const FIELD_LABELS: Record<string, string> = {
   contribution_frequency: 'Contribution frequency',
 };
 
-/** Plain-language labels. Note ROLLOVER is labelled a TRANSFER, never income
- * (spec section 149) — a user must understand the money moved between
- * retirement accounts rather than arriving as new money. */
-const ACTIVITY_LABELS: Record<string, string> = {
-  EMPLOYER_CONTRIBUTION: 'Employer contribution',
-  PERSONAL_CONTRIBUTION: 'Personal contribution',
-  SALARY_SACRIFICE: 'Salary sacrifice',
-  GOVERNMENT_CONTRIBUTION: 'Government contribution',
-  ROLLOVER_IN: 'Transfer in (rollover)',
-  ROLLOVER_OUT: 'Transfer out (rollover)',
-  INVESTMENT_EARNINGS: 'Investment earnings',
-  INTEREST: 'Interest',
-  DISTRIBUTION: 'Distribution',
-  FEE: 'Fee',
-  INSURANCE_PREMIUM: 'Insurance premium',
-  TAX: 'Tax',
-  PENSION_PAYMENT: 'Pension payment',
-  WITHDRAWAL: 'Withdrawal',
-  ADJUSTMENT: 'Adjustment',
-  OTHER: 'Other',
-  UNKNOWN: 'Not recognised',
+/** WP-13: the proposal's review reasons, in words (GAP-RET-02 / GAP-RET-06). */
+const REVIEW_REASON_TEXT: Record<string, string> = {
+  statement_is_older_than_one_already_applied_balance_not_recommended:
+    'This statement is older than one you have already applied to this account, so its balance is not ticked. Tick it only if you want to go back to this older balance.',
+  statement_date_unknown_a_statement_is_already_applied_balance_not_recommended:
+    'This statement shows no date and another statement is already applied to this account, so its balance is not ticked.',
+  statement_period_unknown_contribution_rate_not_proposed:
+    'The statement period is unknown, so its contribution totals cannot be turned into a yearly rate and are not offered.',
+  existing_contribution_frequency_unknown_contribution_rates_cannot_be_combined:
+    'Your account has a contribution with no frequency set. Set its frequency on the Retirement grid before applying contribution rates from a statement.',
+  contribution_frequency_is_not_a_regular_rate_contributions_not_proposed:
+    'The contribution frequency on this statement is not a regular rate, so contribution amounts are not offered.',
+  no_closing_balance_on_statement: 'The statement shows no closing balance, so your balance is not changed.',
+  statement_does_not_balance_review_the_figures: 'The figures on this statement do not add up. Check them before applying.',
+  statement_lacks_enough_detail_to_check_the_balance: 'This statement does not show enough detail to check the figures.',
+  more_than_one_account_could_match_this_statement: 'More than one of your accounts could match this statement.',
+  ambiguous_account_match_review_required: 'More than one of your accounts could match this statement.',
+  confirm_which_household_member_this_account_belongs_to: 'Confirm whose account this is before applying.',
 };
+const reviewReasonText = (code: string) => REVIEW_REASON_TEXT[code] ?? code.replace(/_/g, ' ');
 
-/** Explains WHERE the money went, so an internal movement is never mistaken
- * for household cash (spec sections 39-42, 148). */
-const ACTIVITY_NOTES: Record<string, string> = {
-  EMPLOYER_CONTRIBUTION: 'Paid by your employer into the fund — not household spending or extra take-home pay.',
-  SALARY_SACRIFICE: 'Deducted from pay before tax — not household spending.',
-  GOVERNMENT_CONTRIBUTION: 'Paid by the government into the fund — not salary.',
-  PERSONAL_CONTRIBUTION: 'A transfer from your bank into retirement — not household spending.',
-  ROLLOVER_IN: 'Moved in from another retirement account — not new money.',
-  ROLLOVER_OUT: 'Moved out to another retirement account — not spending.',
-  INVESTMENT_EARNINGS: 'Earned and kept inside the fund — no money reached your bank account.',
-  INTEREST: 'Credited inside the fund — no money reached your bank account.',
-  DISTRIBUTION: 'Credited inside the fund — no money reached your bank account.',
-  FEE: 'Deducted from your retirement balance — not a separate household bill.',
-  INSURANCE_PREMIUM: 'Paid from your retirement balance — not a separate household bill.',
-  TAX: 'Deducted from your retirement balance by the fund.',
-};
-
-const RECONCILIATION_LABEL: Record<string, string> = {
-  reconciled: 'The figures on this statement add up.',
-  variance: 'The figures on this statement do not add up. Check them before applying.',
-  insufficient_data: 'This statement does not show enough detail to check the figures.',
-};
+const CONTRIBUTION_FIELDS = new Set(['employer_contribution', 'personal_contribution']);
 
 function money(value: string | null | undefined, currency: string): string {
   // NEVER renders "$0" for an absent value (spec section 94). "Not shown on
@@ -310,6 +249,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   const [chosenAccountId, setChosenAccountId] = useState<string>('');
 
   const [proposalId, setProposalId] = useState<string | null>(null);
+  const [reviewReasons, setReviewReasons] = useState<string[]>([]);
+  const [busyActivityId, setBusyActivityId] = useState<string | null>(null);
   const [fields, setFields] = useState<ProposalField[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [decision, setDecision] = useState<Decision>('update_existing');
@@ -359,9 +300,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     const res = await fetch(`/api/financial-data-hub/retirement-statement/${docId}`);
     const body = await readJson(res);
     if (!res.ok) { setPhase('error'); setMessage(String(body.error ?? 'Could not load this statement.')); return; }
-    setStatement(body.statement as Statement);
-    setActivities((body.activities as Activity[]) ?? []);
-    setPositions((body.positions as Position[]) ?? []);
+    const stmt = normaliseRetirementStatement(body.statement);
+    if (!stmt) { setPhase('error'); setMessage('Could not load this statement.'); return; }
+    setStatement(stmt);
+    setActivities((Array.isArray(body.activities) ? body.activities : []).map(normaliseRetirementActivity).filter((a): a is Activity => a !== null));
+    setPositions((Array.isArray(body.positions) ? body.positions : []).map(normaliseRetirementPosition).filter((p): p is Position => p !== null));
     setMembers((body.members as Member[]) ?? []);
     setAccounts((body.accounts as AccountOption[]) ?? []);
     setCurrentVsStatement((body.current_vs_statement as CurrentVsStatement | null) ?? null);
@@ -544,6 +487,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       setProposalId(String(body.proposal_id));
       const nextFields = normaliseProposedFields(body.fields);
       setFields(nextFields);
+      const summary = body.summary as { reviewReasons?: unknown } | undefined;
+      setReviewReasons(Array.isArray(summary?.reviewReasons) ? summary!.reviewReasons.filter((r): r is string => typeof r === 'string') : []);
       // Only RECOMMENDED fields are ticked by default. Contribution rates
       // require explicit confirmation and so start unticked (spec section 109).
       setSelected(new Set(nextFields.filter((f) => f.isRecommended && !f.requiresConfirmation).map((f) => f.fieldName)));
@@ -552,16 +497,57 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     } finally { setBusy(false); }
   }, [documentId, reloadWaiting]);
 
+  // WP-13 (GAP-RET-02 / D-12): a contribution amount is a rate only together
+  // with its frequency, so the two are ticked and unticked together (the apply
+  // RPC refuses one without the other).
   const toggleField = useCallback((name: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
+      const hasFrequency = fields.some((f) => f.fieldName === 'contribution_frequency');
+      if (next.has(name)) {
+        next.delete(name);
+        if (name === 'contribution_frequency') for (const c of CONTRIBUTION_FIELDS) next.delete(c);
+        if (CONTRIBUTION_FIELDS.has(name) && ![...CONTRIBUTION_FIELDS].some((c) => next.has(c))) next.delete('contribution_frequency');
+      } else {
+        next.add(name);
+        if (CONTRIBUTION_FIELDS.has(name) && hasFrequency) next.add('contribution_frequency');
+        if (name === 'contribution_frequency') {
+          for (const f of fields) if (CONTRIBUTION_FIELDS.has(f.fieldName)) next.add(f.fieldName);
+        }
+      }
       return next;
     });
-  }, []);
+  }, [fields]);
+
+  /** WP-13 (GAP-RET-07): the user confirms a matched bank payment. */
+  const handleConfirmBankLeg = useCallback(async (activity: Activity) => {
+    if (!documentId) return;
+    setBusyActivityId(activity.id); setMessage(null);
+    try {
+      const res = await fetch(`/api/financial-data-hub/retirement-statement/${documentId}/bank-leg`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activity_id: activity.id }),
+      });
+      const body = await readJson(res);
+      if (!res.ok) { setMessage(String(body.error ?? 'This bank payment could not be confirmed.')); return; }
+      setMessage(body.outcome === 'skipped_user_override'
+        ? 'Confirmed. You had already categorised this bank payment yourself, so it was left as you set it.'
+        : body.counted_as === 'income'
+          ? 'Confirmed. This bank payment now counts once, as retirement income.'
+          : 'Confirmed. This bank payment now counts as a transfer into (or out of) super, not as spending or income.');
+      await loadReview(documentId);
+    } finally { setBusyActivityId(null); }
+  }, [documentId, loadReview]);
 
   const handleApply = useCallback(async () => {
     if (!documentId || !proposalId) return;
+    // WP-13 (GAP-RET-01): nothing ticked means nothing to apply -- never
+    // "apply everything".
+    if (decision !== 'keep_existing' && selected.size === 0) {
+      setMessage('Tick at least one detail to apply, or choose to keep your account as it is.');
+      return;
+    }
     setBusy(true); setMessage(null);
     try {
       const res = await fetch(`/api/financial-data-hub/retirement-statement/${documentId}/apply`, {
@@ -570,14 +556,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         body: JSON.stringify({
           proposal_id: proposalId,
           decision,
-          // `add_new` and `apply_selected_fields` both need the tick list;
-          // `update_existing` means "everything proposed" and sends none.
-          // (FDH-10 shipped a live bug here by sending the list only for
-          // `apply_selected_fields`, which made `add_new` fail
-          // NO_FIELDS_SELECTED. Same shape, fixed from the start.)
-          selected_fields: decision === 'update_existing' || decision === 'keep_existing'
-            ? undefined
-            : [...selected],
+          // WP-13 (GAP-RET-01 / X-01): EVERY decision that writes sends the
+          // ticked list. `update_existing` used to send none, which the RPC
+          // read as "every proposed field" -- silently applying the
+          // contribution amounts the user had left unticked.
+          selected_fields: decision === 'keep_existing' ? undefined : [...selected],
         }),
       });
       const body = await readJson(res);
@@ -670,12 +653,14 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     setPhase('form'); setBusy(false); setMessage(null); setFile(null);
     setDocumentId(null); setStatement(null); setActivities([]); setPositions([]);
     setCurrentVsStatement(null); setProposalId(null); setFields([]); setSelected(new Set());
+    setReviewReasons([]);
     setChosenAccountId(''); setChosenMemberId('');
     setAiDraft(null);
   }, []);
 
   return (
     <section
+      id="import-retirement-statement"
       className="rounded-lg border border-gray-200 bg-white p-4"
       role="region"
       aria-label="Import a retirement statement"
@@ -944,28 +929,19 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         <div className="mt-4 space-y-4">
           <h3 className="font-semibold">What we read from this statement</h3>
 
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-            <div><dt className="text-muted">Fund</dt><dd>{statement.fund_name ?? 'Not identified'}</dd></div>
-            <div><dt className="text-muted">Member number</dt><dd>{statement.masked_account_identifier ?? 'Not shown'}</dd></div>
-            <div><dt className="text-muted">Period</dt><dd>{statement.statement_start_date ?? '—'} to {statement.statement_end_date ?? '—'}</dd></div>
-            <div><dt className="text-muted">Opening balance</dt><dd>{money(statement.opening_balance, currency)}</dd></div>
-            <div><dt className="text-muted">Closing balance</dt><dd>{money(statement.closing_balance, currency)}</dd></div>
-            <div><dt className="text-muted">Employer contributions</dt><dd>{money(statement.employer_contributions, currency)}</dd></div>
-            <div><dt className="text-muted">Personal contributions</dt><dd>{money(statement.personal_contributions, currency)}</dd></div>
-            <div><dt className="text-muted">Investment earnings</dt><dd>{money(statement.investment_earnings, currency)}</dd></div>
-            <div><dt className="text-muted">Fees</dt><dd>{money(statement.fees, currency)}</dd></div>
-            <div><dt className="text-muted">Insurance premiums</dt><dd>{money(statement.insurance_premiums, currency)}</dd></div>
-            <div><dt className="text-muted">Tax</dt><dd>{money(statement.tax, currency)}</dd></div>
-          </dl>
-
-          {/* Reconciliation status, stated in words as well as by colour
-              (spec section 151: non-colour statuses). */}
-          <p className="rounded bg-gray-50 px-3 py-2 text-sm">
-            <strong>Balance check:</strong>{' '}
-            {RECONCILIATION_LABEL[statement.reconciliation_status] ?? statement.reconciliation_status}
-            {statement.reconciliation_status === 'variance' && statement.reconciliation_variance
-              && ` Difference: ${money(statement.reconciliation_variance, currency)}.`}
-          </p>
+          {/* WP-13 (GAP-RET-04): EVERY persisted header total, the parser's
+              warnings, every activity column (payslip / bank / rollover
+              match) and every holdings column -- the same component the
+              Retirement tab's statement history renders after Apply. The
+              balance check is stated in words (spec section 151). A matched
+              bank payment can be confirmed once the statement is approved. */}
+          <RetirementStatementDetails
+            statement={statement}
+            activities={activities}
+            positions={positions}
+            busyActivityId={busyActivityId}
+            onConfirmBankLeg={(a) => void handleConfirmBankLeg(a)}
+          />
 
           {/* --- Member and account matching (spec sections 15-19, 112) ----- */}
           <div className="space-y-2">
@@ -1013,69 +989,6 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             </div>
           )}
 
-          {/* --- Activity evidence ----------------------------------------- */}
-          {activities.length > 0 && (
-            <div className="overflow-x-auto">
-              <h4 className="mb-2 text-sm font-semibold">Activity on this statement</h4>
-              <table className="w-full min-w-[560px] border-collapse text-sm">
-                <caption className="sr-only">Retirement activity read from this statement</caption>
-                <thead>
-                  <tr className="border-b border-gray-200 text-left">
-                    <th scope="col" className="py-2 pr-2">Date</th>
-                    <th scope="col" className="py-2 pr-2">What happened</th>
-                    <th scope="col" className={`py-2 pr-2 ${NUM_HEADER_CLASS}`}>Amount</th>
-                    <th scope="col" className="py-2">Matched payslip</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((a) => (
-                    <tr key={a.id} className="border-b border-gray-100">
-                      <td className="py-2 pr-2">{a.activity_date ?? '—'}</td>
-                      <th scope="row" className="py-2 pr-2 text-left font-normal">
-                        {ACTIVITY_LABELS[a.activity_type] ?? a.activity_type}
-                        {a.is_summary_total && <span className="ml-2 text-xs text-muted">(statement total — not counted separately)</span>}
-                        {a.is_year_to_date && <span className="ml-2 text-xs text-muted">(year to date — not counted separately)</span>}
-                        {a.duplicate_of_activity_id && <span className="ml-2 text-xs text-muted">(already imported)</span>}
-                        {ACTIVITY_NOTES[a.activity_type] && (
-                          <span className="block text-xs text-muted">{ACTIVITY_NOTES[a.activity_type]}</span>
-                        )}
-                      </th>
-                      <td className={`py-2 pr-2 ${NUM_CELL_CLASS}`}>{money(a.amount, a.currency_code)}</td>
-                      <td className={`py-2 ${NUM_CELL_CLASS}`}>
-                        {/* spec section 148: ONE financial event, annotated —
-                            never two. */}
-                        {a.payslip_match_status === 'matched' && 'Yes'}
-                        {a.payslip_match_status === 'payslip_evidence_not_available' && 'No payslip on file'}
-                        {a.payslip_match_status === 'variance_review_required' && `Amounts differ — please check (${money(a.payslip_match_variance, a.currency_code)})`}
-                        {a.payslip_match_status === 'multiple_candidates' && 'More than one possible payslip — please choose'}
-                        {a.payslip_match_status === 'no_match' && 'No'}
-                        {a.payslip_match_status === 'not_attempted' && '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* --- Investment options: EVIDENCE ONLY (spec sections 12-13) ---- */}
-          {positions.length > 0 && (
-            <div>
-              <h4 className="mb-1 text-sm font-semibold">What your super is invested in</h4>
-              <p className="mb-2 text-xs text-muted">
-                Shown for information only. These are already part of your super balance, so they are
-                not added to your investments as well.
-              </p>
-              <ul className="text-sm">
-                {positions.map((p) => (
-                  <li key={p.id} className="border-b border-gray-100 py-1">
-                    {p.option_name_raw} — {money(p.market_value, p.currency_code)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           <div className="flex flex-wrap gap-3">
             {statement.approval_status !== 'approved' && (
               <button
@@ -1104,6 +1017,17 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           <h3 className="font-semibold">Your retirement account vs this statement</h3>
           {phase === 'stale' && message && (
             <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>
+          )}
+          {reviewReasons.length > 0 && (
+            <ul className="list-disc space-y-1 rounded bg-amber-50 py-2 pl-8 pr-3 text-sm text-amber-900">
+              {reviewReasons.map((r) => <li key={r}>{reviewReasonText(r)}</li>)}
+            </ul>
+          )}
+          {fields.some((f) => CONTRIBUTION_FIELDS.has(f.fieldName)) && (
+            <p className="text-xs text-muted">
+              Contribution amounts are shown as a yearly rate worked out from the statement period. They change your
+              retirement accounts only if you tick them, and always together with how often they are paid.
+            </p>
           )}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] border-collapse text-sm">

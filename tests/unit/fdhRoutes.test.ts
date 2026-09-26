@@ -47,7 +47,10 @@ describe('fdhPages', () => {
       [fdhApi.liabilityStatement('X'), `financial-data-hub/liability-statement/${id}`],
       [fdhApi.retirementStatement('X'), `financial-data-hub/retirement-statement/${id}`],
       [fdhApi.investmentStatement('X'), `financial-data-hub/investment-statement/${id}`],
+      [fdhApi.retirementStatements(2, 5).split('?')[0], 'financial-data-hub/retirement-statement'],
+      [fdhApi.retirementStatementBankLeg('X'), `financial-data-hub/retirement-statement/${id}/bank-leg`],
     ] as const;
+    expect(fdhApi.retirementStatements(2, 5)).toBe('/api/financial-data-hub/retirement-statement?page=2&page_size=5');
     for (const [href, dir] of apis) {
       expect(href.startsWith('/api/financial-data-hub/')).toBe(true);
       expect(fs.existsSync(path.join(ROOT, 'app', 'api', dir, 'route.ts')), `${dir} has no route.ts`).toBe(true);

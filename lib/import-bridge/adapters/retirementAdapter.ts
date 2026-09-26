@@ -28,7 +28,11 @@
  * time by `lib/services/forecastData.ts`), currently written by nothing in
  * FDH. Proposed with `requiresConfirmation: true`, because they feed the
  * retirement forecast and a statement's period total is only the user's
- * ongoing rate if the user says so. Never ticked by default.
+ * ongoing rate if the user says so. Never ticked by default. WP-13 (PO
+ * decision D-12, GAP-RET-02): the period total is ANNUALISED over the
+ * statement period and always proposed together with
+ * `contribution_frequency = 'annually'` -- never a bare total that consumers
+ * would read as a monthly rate. No usable period -> no contribution proposal.
  *
  * `account_name` / `account_type` / `currency_code` / `country_code` / `owner`
  * — proposed ONLY when creating a new account (`!target`), exactly like
@@ -145,12 +149,28 @@ export interface RetirementEvidence {
   countryCode?: string;
   /** Exact decimal string. */
   closingBalance?: string;
-  /** The statement's own employer/personal contribution totals for the period,
-   * and the period's length, so the review UI can show what frequency the
-   * proposed rate represents. */
+  /** The statement's own employer/personal contribution TOTALS for its period
+   * (a period total, never a rate). */
   employerContributions?: string;
   personalContributions?: string;
+  /**
+   * An EXPLICIT frequency the totals above already represent (the totals are
+   * then a rate of that frequency, used as-is). The proposal route never sets
+   * it: it passes the statement period instead, and the adapter annualises
+   * (PO decision D-12).
+   */
   contributionFrequency?: string;
+  /** The statement period (ISO dates), used to annualise the totals (D-12)
+   * and as the balance's as-of date (GAP-RET-06). */
+  statementStartDate?: string;
+  statementEndDate?: string;
+  statementDate?: string;
+  /**
+   * accountId -> the latest as-of date (statement end date, else statement
+   * date) of a statement ALREADY APPLIED to that account (GAP-RET-06). An
+   * older statement must not silently regress the balance.
+   */
+  appliedAsOfByAccount?: Record<string, string>;
   /** Which household member the statement resolved to. Drives `owner`. */
   memberType?: 'self' | 'spouse';
   /** True when SMSF routing fired. An SMSF statement must never reach the
@@ -188,6 +208,93 @@ const FIELD_KINDS: Record<string, ImportValueKind> = {
   personal_contribution: 'money',
   contribution_frequency: 'enum',
 };
+
+// ---------------------------------------------------------------------------
+// Contribution annualisation (PO decision D-12, GAP-RET-02)
+// ---------------------------------------------------------------------------
+
+/** Frequencies a contribution RATE may carry (the RPC's own list, 0211). */
+export const CONTRIBUTION_RATE_FREQUENCIES = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually'] as const;
+export type ContributionRateFrequency = (typeof CONTRIBUTION_RATE_FREQUENCIES)[number];
+
+/** Payments per year for each rate frequency. */
+export const PAYMENTS_PER_YEAR: Record<ContributionRateFrequency, number> = {
+  weekly: 52, fortnightly: 26, monthly: 12, quarterly: 4, annually: 1,
+};
+
+const SCALE = BigInt(10000);
+const MONEY_RE = /^(-)?(\d+)(?:\.(\d{1,4}))?$/;
+
+/** Exact decimal string -> integer ten-thousandths. null when unreadable. */
+function toUnits(value: string | number | null | undefined): bigint | null {
+  if (value === null || value === undefined) return null;
+  const m = MONEY_RE.exec(String(value).trim());
+  if (!m) return null;
+  const units = BigInt(m[2]) * SCALE + BigInt((m[3] ?? '').padEnd(4, '0'));
+  return m[1] ? -units : units;
+}
+
+/** Integer ten-thousandths -> a 2dp decimal string, rounding half away from zero. */
+function unitsToMoney(units: bigint): string {
+  const neg = units < BigInt(0);
+  const abs = neg ? -units : units;
+  const cents = (abs + BigInt(50)) / BigInt(100);
+  const whole = cents / BigInt(100);
+  const frac = (cents % BigInt(100)).toString().padStart(2, '0');
+  return `${neg && cents > BigInt(0) ? '-' : ''}${whole}.${frac}`;
+}
+
+/** a * num / den, rounded half away from zero, in integer arithmetic. */
+function mulDivRound(a: bigint, num: bigint, den: bigint): bigint {
+  const p = a * num;
+  const neg = p < BigInt(0);
+  const abs = neg ? -p : p;
+  const q = (abs * BigInt(2) + den) / (den * BigInt(2));
+  return neg ? -q : q;
+}
+
+const DAY_MS = 86_400_000;
+function isoDay(s: string | undefined): number | null {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(t) ? t / DAY_MS : null;
+}
+
+/**
+ * How many whole months a statement period covers: inclusive days divided by
+ * the average month length, rounded. 1 Jul - 30 Jun = 12; 1 Apr - 30 Jun = 3;
+ * 1 Aug - 31 Aug = 1. null when either date is missing or the period is
+ * shorter than about half a month (too short to be a rate).
+ */
+export function statementPeriodMonths(start: string | undefined, end: string | undefined): number | null {
+  const s = isoDay(start);
+  const e = isoDay(end);
+  if (s === null || e === null || e < s) return null;
+  const months = Math.round((e - s + 1) / (365.25 / 12));
+  return months >= 1 ? months : null;
+}
+
+/**
+ * A statement PERIOD total restated as an ANNUAL amount (D-12): total x 12 /
+ * months-in-period, exact to the cent. An annual statement's $12,000 SG stays
+ * $12,000 a year (never $12,000 a month); a quarterly $3,000 becomes $12,000.
+ */
+export function annualisePeriodTotal(total: string, start: string | undefined, end: string | undefined): { annual: string; months: number } | null {
+  const units = toUnits(total);
+  const months = statementPeriodMonths(start, end);
+  if (units === null || months === null) return null;
+  return { annual: unitsToMoney(mulDivRound(units, BigInt(12), BigInt(months))), months };
+}
+
+/** An existing rate restated at another frequency, exact to the cent. */
+export function restateRate(amount: string | number, from: ContributionRateFrequency, to: ContributionRateFrequency): string | null {
+  const units = toUnits(typeof amount === 'number' ? amount.toFixed(4) : amount);
+  if (units === null) return null;
+  return unitsToMoney(mulDivRound(units, BigInt(PAYMENTS_PER_YEAR[from]), BigInt(PAYMENTS_PER_YEAR[to])));
+}
+
+const isRateFrequency = (f: string | null | undefined): f is ContributionRateFrequency =>
+  typeof f === 'string' && (CONTRIBUTION_RATE_FREQUENCIES as readonly string[]).includes(f);
 
 function foldName(s: string | null | undefined): string | null {
   if (!s) return null;
@@ -293,6 +400,90 @@ function field(
   };
 }
 
+type ContributionColumn = 'employer_contribution' | 'personal_contribution';
+const CONTRIBUTION_COLUMNS: readonly ContributionColumn[] = ['employer_contribution', 'personal_contribution'];
+
+/**
+ * The contribution fields of a proposal (D-12, GAP-RET-02). Returns either
+ * NOTHING or every amount together with `contribution_frequency`:
+ *
+ *   - the statement's period totals are annualised over the statement period
+ *     and proposed with frequency 'annually' (an explicit
+ *     `evidence.contributionFrequency` is honoured as-is instead);
+ *   - with no usable period the amounts are NOT proposed at all, and a review
+ *     reason says why -- never a total dressed up as a monthly rate;
+ *   - contribution_frequency is shared by both columns, so when it changes, an
+ *     existing contribution the statement does not restate is converted to
+ *     the new frequency and proposed too, so ticking the frequency can never
+ *     silently re-mean it (the RPC refuses that combination, 0211).
+ *
+ * Every field is confirmation-gated and unticked by default.
+ */
+function contributionFields(
+  evidence: RetirementEvidence,
+  target: ExistingRetirementRow | null,
+  reviewReasons: string[],
+): ProposedField[] {
+  const totals: [ContributionColumn, string | undefined][] = [
+    ['employer_contribution', evidence.employerContributions],
+    ['personal_contribution', evidence.personalContributions],
+  ];
+  const present = totals.filter((t): t is [ContributionColumn, string] => t[1] !== undefined);
+  if (present.length === 0) return [];
+
+  let frequency: ContributionRateFrequency;
+  const amounts = new Map<ContributionColumn, { value: string; reason: string }>();
+  if (evidence.contributionFrequency !== undefined) {
+    if (!isRateFrequency(evidence.contributionFrequency)) {
+      reviewReasons.push('contribution_frequency_is_not_a_regular_rate_contributions_not_proposed');
+      return [];
+    }
+    frequency = evidence.contributionFrequency;
+    for (const [col, v] of present) amounts.set(col, { value: v, reason: `statement_${col}_rate_as_stated` });
+  } else {
+    const annualised = present.map(([col, v]) => [col, annualisePeriodTotal(v, evidence.statementStartDate, evidence.statementEndDate)] as const);
+    if (annualised.some(([, a]) => a === null)) {
+      reviewReasons.push('statement_period_unknown_contribution_rate_not_proposed');
+      return [];
+    }
+    frequency = 'annually';
+    for (const [col, a] of annualised) {
+      amounts.set(col, {
+        value: a!.annual,
+        reason: a!.months === 12 ? `statement_${col}_annual_total` : `statement_${col}_annualised_from_${a!.months}_months`,
+      });
+    }
+  }
+
+  if (target && target.contribution_frequency !== frequency) {
+    for (const col of CONTRIBUTION_COLUMNS) {
+      if (amounts.has(col)) continue;
+      const existingValue = target[col];
+      if (existingValue === null || existingValue === undefined || Number(existingValue) === 0) continue;
+      const restated = isRateFrequency(target.contribution_frequency)
+        ? restateRate(existingValue, target.contribution_frequency, frequency)
+        : null;
+      if (restated === null) {
+        reviewReasons.push('existing_contribution_frequency_unknown_contribution_rates_cannot_be_combined');
+        continue;
+      }
+      amounts.set(col, { value: restated, reason: `existing_${col}_restated_${frequency}` });
+    }
+  }
+
+  const gated = { isRecommended: false, requiresConfirmation: true };
+  const out: ProposedField[] = [];
+  for (const col of CONTRIBUTION_COLUMNS) {
+    const a = amounts.get(col);
+    if (a) out.push(field(col, a.value, target, { ...gated, reasonCode: a.reason }));
+  }
+  out.push(field('contribution_frequency', frequency, target, {
+    ...gated,
+    reasonCode: evidence.contributionFrequency !== undefined ? 'statement_rate_frequency_as_stated' : 'annualised_from_statement_period',
+  }));
+  return out;
+}
+
 export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, ExistingRetirementRow> = {
   domain: 'retirement',
   applicableFields: RETIREMENT_APPLICABLE_FIELDS,
@@ -340,39 +531,38 @@ export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, Existing
 
     // --- current_balance: the statement's CLOSING balance -------------------
     if (evidence.closingBalance !== undefined) {
+      // GAP-RET-06: an OLDER statement than one already applied to this
+      // account must not silently regress its balance. It is still offered
+      // (the user may know better) but never ticked by default, and the RPC's
+      // default selection (0211) only applies recommended, confirmation-free
+      // fields.
+      const asOf = evidence.statementEndDate ?? evidence.statementDate;
+      const lastApplied = target ? evidence.appliedAsOfByAccount?.[target.id] : undefined;
+      const olderThanApplied = lastApplied !== undefined && (asOf === undefined || asOf < lastApplied);
+      if (olderThanApplied) {
+        reviewReasons.push(asOf === undefined
+          ? 'statement_date_unknown_a_statement_is_already_applied_balance_not_recommended'
+          : 'statement_is_older_than_one_already_applied_balance_not_recommended');
+      }
       fields.push(field('current_balance', evidence.closingBalance, target, {
-        reasonCode: 'statement_closing_balance',
+        isRecommended: !olderThanApplied,
+        requiresConfirmation: olderThanApplied,
+        reasonCode: olderThanApplied ? 'statement_older_than_last_applied' : 'statement_closing_balance',
       }));
     } else {
       // Spec section 94: no closing balance means we say so, never $0.
       reviewReasons.push('no_closing_balance_on_statement');
     }
 
-    // --- contribution RATES: confirmation-gated ----------------------------
+    // --- contribution RATES: confirmation-gated, always WITH a frequency ----
     // These change forecast inputs. A statement's period total is not
     // automatically the user's ongoing contribution rate, so they are never
-    // ticked by default and always require an explicit confirmation.
-    if (evidence.employerContributions !== undefined) {
-      fields.push(field('employer_contribution', evidence.employerContributions, target, {
-        isRecommended: false,
-        requiresConfirmation: true,
-        reasonCode: 'statement_period_employer_contributions',
-      }));
-    }
-    if (evidence.personalContributions !== undefined) {
-      fields.push(field('personal_contribution', evidence.personalContributions, target, {
-        isRecommended: false,
-        requiresConfirmation: true,
-        reasonCode: 'statement_period_personal_contributions',
-      }));
-    }
-    if (evidence.contributionFrequency !== undefined) {
-      fields.push(field('contribution_frequency', evidence.contributionFrequency, target, {
-        isRecommended: false,
-        requiresConfirmation: true,
-        reasonCode: 'derived_from_statement_period_length',
-      }));
-    }
+    // ticked by default and always require an explicit confirmation. And an
+    // amount is never proposed without the frequency it is a rate OF
+    // (GAP-RET-02): consumers read the column as a rate, so a bare annual
+    // total read as $12,000 a MONTH. D-12: the period total is annualised and
+    // proposed with contribution_frequency = 'annually'.
+    for (const f of contributionFields(evidence, target, reviewReasons)) fields.push(f);
 
     return {
       targetDomain: 'retirement',
@@ -383,7 +573,7 @@ export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, Existing
       recommendedApplyMode,
       duplicateOfEntityId: duplicate.outcome === 'single_match' ? duplicate.accountId : null,
       fields,
-      summary: buildSummary(evidence, target, reviewReasons),
+      summary: buildSummary(evidence, target, reviewReasons, fields),
     };
   },
 
@@ -408,6 +598,12 @@ export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, Existing
     const known = new Set(fields.map((f) => f.fieldName));
     for (const name of selected) {
       if (!known.has(name)) return { ok: false, error: `Field ${name} is not part of this proposal.` };
+    }
+    // GAP-RET-02 / D-12 (mirrors fdh12_apply_retirement_proposal, 0211): an
+    // amount is a rate only together with its frequency.
+    const names = new Set(selected);
+    if ((names.has('employer_contribution') || names.has('personal_contribution')) && !names.has('contribution_frequency')) {
+      return { ok: false, error: 'A contribution amount can only be applied together with how often it is paid.' };
     }
     return { ok: true };
   },
@@ -439,6 +635,7 @@ function buildSummary(
   evidence: RetirementEvidence,
   target: ExistingRetirementRow | null,
   reviewReasons: string[],
+  fields: readonly ProposedField[],
 ): ImportProposalDraft['summary'] {
   const lines: { label: string; value: string; note?: string }[] = [];
   const show = (v: string | undefined, note?: string) =>
@@ -448,6 +645,12 @@ function buildSummary(
   lines.push({ label: 'Account type', value: evidence.accountType.replace(/_/g, ' ') });
   lines.push({ label: 'Closing balance', ...show(evidence.closingBalance) });
   lines.push({
+    label: 'Statement period',
+    value: evidence.statementStartDate || evidence.statementEndDate
+      ? `${evidence.statementStartDate ?? 'not shown'} to ${evidence.statementEndDate ?? 'not shown'}`
+      : 'Not shown on statement',
+  });
+  lines.push({
     label: 'Employer contributions (this period)',
     ...show(evidence.employerContributions, 'Evidence — not added to your income or expenses'),
   });
@@ -455,6 +658,16 @@ function buildSummary(
     label: 'Personal contributions (this period)',
     ...show(evidence.personalContributions, 'A transfer into retirement, not household spending'),
   });
+  const frequency = fields.find((f) => f.fieldName === 'contribution_frequency')?.proposedValue ?? null;
+  for (const f of fields) {
+    if ((f.fieldName === 'employer_contribution' || f.fieldName === 'personal_contribution') && f.proposedValue !== null && frequency) {
+      lines.push({
+        label: f.fieldName === 'employer_contribution' ? 'Proposed employer contribution rate' : 'Proposed personal contribution rate',
+        value: `${f.proposedValue} (${frequency})`,
+        note: 'Applied only if you tick it',
+      });
+    }
+  }
 
   return {
     title: target
