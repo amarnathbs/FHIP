@@ -514,13 +514,13 @@ export function RetirementStatementDetails({ statement, activities, positions, o
                   </th>
                   <td className="py-2 pr-2">{a.description_raw ?? '—'}</td>
                   <td className="py-2 pr-2">{a.employer_name_raw ?? '—'}</td>
-                  <td className={`py-2 pr-2 ${NUM_CELL_CLASS}`}>{statementMoney(a.amount, a.currency_code)}</td>
-                  <td className="py-2 pr-2">
-                    {matchText('payslip', a.payslip_match_status)}
+                  <td className={`py-2 pr-2 ${NUM_CELL_CLASS}`}>
+                    {statementMoney(a.amount, a.currency_code)}
                     {a.payslip_match_status === 'variance_review_required' && a.payslip_match_variance && (
-                      <span className="block text-xs text-muted">Difference {statementMoney(a.payslip_match_variance, a.currency_code)}</span>
+                      <span className="block text-xs text-muted">payslip differs by {statementMoney(a.payslip_match_variance, a.currency_code)}</span>
                     )}
                   </td>
+                  <td className="py-2 pr-2">{matchText('payslip', a.payslip_match_status)}</td>
                   <td className="py-2 pr-2">{bankCell(a, canConfirm, onConfirmBankLeg, busyActivityId === a.id)}</td>
                   <td className="py-2">{a.activity_type === 'ROLLOVER_IN' || a.activity_type === 'ROLLOVER_OUT' ? matchText('rollover', a.rollover_match_status) : '—'}</td>
                 </tr>
