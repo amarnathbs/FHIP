@@ -156,9 +156,8 @@ export function StatementHistoryTable({ statement }: { statement: HistoryStateme
                     {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
                     {a.gst_amount_raw && <span className="block text-xs text-muted">GST shown on statement: {a.gst_amount_raw}</span>}
                   </td>
-                  <td className="py-1 pr-2 text-right whitespace-nowrap">{money(a.amount, a.currency_code)}</td>
-                  <td className="py-1">
-                    {disposition ?? (a.ledger ? outcome.counts : statement.ledger_status === 'not_applied' ? 'Not recorded yet' : outcome.counts)}
+                  <td className="py-1 pr-2 text-right whitespace-nowrap">
+                    {money(a.amount, a.currency_code)}
                     {a.ledger && a.ledger.allocations.length > 0 && (
                       <ul className="mt-1 text-xs text-muted">
                         {a.ledger.allocations.map((al, i) => (
@@ -166,6 +165,9 @@ export function StatementHistoryTable({ statement }: { statement: HistoryStateme
                         ))}
                       </ul>
                     )}
+                  </td>
+                  <td className="py-1">
+                    {disposition ?? (a.ledger ? outcome.counts : statement.ledger_status === 'not_applied' ? 'Not recorded yet' : outcome.counts)}
                     {settlement && a.ledger && <span className="block text-xs text-muted">{settlement}</span>}
                   </td>
                 </tr>

@@ -458,7 +458,14 @@ begin
     values (p_user, v_st.facility_type, coalesce(v_st.country_code, v_liab.country_code, case when v_st.currency_code = 'INR' then 'IN' else 'AU' end),
             v_st.currency_code, coalesce(nullif(trim(v_liab.liability_name), ''), 'Imported facility'), v_st.masked_identifier,
             'fdh10:liability:' || p_liability_id::text, 'active', coalesce(v_st.statement_period_end, v_st.statement_date), v_owner_role, p_liability_id)
+    -- Two statements of a NEW facility applied at the same moment: the second
+    -- waits on the unique index, inserts nothing, and locks the first's row.
+    on conflict do nothing
     returning id, currency_code into v_account, v_account_currency;
+    if v_account is null then
+      select id, currency_code into v_account, v_account_currency
+        from fdh_financial_accounts where user_id = p_user and liability_id = p_liability_id for update;
+    end if;
   else
     update fdh_financial_accounts
        set owner_role = coalesce(v_owner_role, owner_role),

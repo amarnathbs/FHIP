@@ -1708,7 +1708,6 @@ export function ActivityLedgerPreview(props: {
             {activities.map((a) => {
               const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
               const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
-              const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
               return (
                 <tr key={a.id} className="border-b border-gray-100 align-top">
                   <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
@@ -1716,34 +1715,21 @@ export function ActivityLedgerPreview(props: {
                     <span className="font-medium">{outcome.label}</span>
                     {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
                   </td>
-                  <td className="py-1 pr-2 text-right whitespace-nowrap">{money(a.amount, currency)}</td>
-                  <td className="py-1">
-                    {outcome.counts}
+                  <td className="py-1 pr-2 text-right whitespace-nowrap">
+                    {money(a.amount, currency)}
                     {split && (
                       <span className="block text-xs text-muted">
                         Principal {money(a.principal_component ?? 0, currency)} · interest {money(a.interest_component ?? 0, currency)} · fee {money(a.fee_component ?? 0, currency)}
                       </span>
                     )}
+                  </td>
+                  <td className="py-1">
+                    {outcome.counts}
                     {(a.activity_type === 'PAYMENT' || a.activity_type === 'PRINCIPAL') && a.bank_match_status !== 'multiple_candidates' && (
                       <span className="block text-xs text-muted">{bankMatchLabel[a.bank_match_status]}</span>
                     )}
                     {a.bank_match_status === 'multiple_candidates' && (
-                      <fieldset className="mt-1 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-                        <legend className="font-medium">Which bank payment was this repayment?</legend>
-                        {candidates.map((c) => (
-                          <label key={c.id} className="flex items-center gap-2">
-                            <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === c.id} onChange={() => onChoose(a.id, c.id)} />
-                            {c.transaction_date} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
-                          </label>
-                        ))}
-                        <label className="flex items-center gap-2">
-                          <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === 'none'} onChange={() => onChoose(a.id, 'none')} />
-                          None of these
-                        </label>
-                        <button type="button" disabled={busy || !candidateChoice[a.id]} onClick={() => onSaveChoice(a.id)} className="rounded border border-amber-700 px-2 py-0.5 disabled:opacity-50">
-                          Save my choice
-                        </button>
-                      </fieldset>
+                      <span className="block text-xs text-amber-900">Choose the bank payment below the table.</span>
                     )}
                   </td>
                 </tr>
@@ -1755,6 +1741,27 @@ export function ActivityLedgerPreview(props: {
           </tbody>
         </table>
       </div>
+      {activities.filter((a) => a.bank_match_status === 'multiple_candidates').map((a) => {
+        const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
+        return (
+          <fieldset key={a.id} className="mt-2 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
+            <legend className="font-medium">Which bank payment was the {a.activity_date} repayment of {money(a.amount, currency)}?</legend>
+            {candidates.map((c) => (
+              <label key={c.id} className="flex items-center gap-2">
+                <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === c.id} onChange={() => onChoose(a.id, c.id)} />
+                {c.transaction_date} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
+              </label>
+            ))}
+            <label className="flex items-center gap-2">
+              <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === 'none'} onChange={() => onChoose(a.id, 'none')} />
+              None of these
+            </label>
+            <button type="button" disabled={busy || !candidateChoice[a.id]} onClick={() => onSaveChoice(a.id)} className="rounded border border-amber-700 px-2 py-0.5 disabled:opacity-50">
+              Save my choice
+            </button>
+          </fieldset>
+        );
+      })}
     </div>
   );
 }
