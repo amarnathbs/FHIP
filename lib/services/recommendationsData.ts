@@ -14,7 +14,7 @@
 // own detector, since fabricating a match without real underlying logic
 // would violate this app's deterministic-accuracy principle.
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard } from '@/lib/services/dashboardData';
+import { loadDashboard, loadDashboardContext, type DashboardContext } from '@/lib/services/dashboardData';
 import { resolveForecastPageContext, getForecastVariance, type VarianceForecastCategory, type VarianceStatus } from '@/lib/services/forecastData';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import type { ComponentResult as HealthScoreComponentResult } from '@/lib/engines/healthScore';
@@ -86,14 +86,17 @@ function resilienceSignal(dashboard: DashboardSummary): { status: ForecastStatus
   return { status: 'at_risk', result: 'unfavourable' };
 }
 
+// WP-04 (DC-15): the canonical snapshot's Dashboard (combined basis) -- pass
+// the request's DashboardContext when the caller already built one.
 export async function buildCategorySignals(
   userId: string,
   requestedScenarioId: string | undefined,
-  client?: SupabaseServerClient
+  client?: SupabaseServerClient,
+  context?: DashboardContext
 ): Promise<{ signals: EvaluationContext[]; profileId: string; scenarioId: string }> {
   const supabase = client ?? (await createClient());
   const [dashboard, { profile, activeScenario }] = await Promise.all([
-    loadDashboard(userId, supabase),
+    loadDashboard(userId, supabase, context),
     resolveForecastPageContext(userId, requestedScenarioId, supabase),
   ]);
   const scenarioId = activeScenario.id;
@@ -176,10 +179,10 @@ export function pillarSignalsFromComponents(components: HealthScoreComponentResu
   return signals;
 }
 
-export async function buildPillarSignals(userId: string, client?: SupabaseServerClient): Promise<EvaluationContext[]> {
+export async function buildPillarSignals(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<EvaluationContext[]> {
   const supabase = client ?? (await createClient());
   const [healthScore, profileRes] = await Promise.all([
-    loadHealthScore(userId, supabase),
+    loadHealthScore(userId, supabase, context),
     supabase.from('user_profiles').select('country_of_residence').eq('user_id', userId).maybeSingle(),
   ]);
   const countryCode = (profileRes.data?.country_of_residence as string | null) ?? null;
@@ -388,9 +391,12 @@ export async function buildReportActionMatches(
 ): Promise<ReportActionItem[]> {
   const supabase = client ?? (await createClient());
 
-  const signalListPromises: Promise<EvaluationContext[]>[] = [buildPillarSignals(userId, supabase)];
+  // WP-04 (DC-15): one canonical snapshot shared by the pillar (Score) and
+  // forecast-variance signals of this report.
+  const context = await loadDashboardContext(userId, supabase);
+  const signalListPromises: Promise<EvaluationContext[]>[] = [buildPillarSignals(userId, supabase, context)];
   if (options.includeForecastSignals) {
-    signalListPromises.push(buildCategorySignals(userId, undefined, supabase).then((r) => r.signals));
+    signalListPromises.push(buildCategorySignals(userId, undefined, supabase, context).then((r) => r.signals));
   }
   const [signalLists, library] = await Promise.all([Promise.all(signalListPromises), loadActiveLibrary(supabase, 'include_in_monthly_report')]);
   const signals = signalLists.flat();

@@ -125,12 +125,35 @@ describe('Financial DNA classification — synthetic personas', () => {
         { expense_name: 'Lifestyle', amount: 500, frequency: 'monthly', is_essential: false },
       ],
       assets: [{ current_value: 3000, asset_class: 'cash' }],
+      // WP-03 (PO D-08): a revolving card's repayment is no longer surplus
+      // debt service when the household's consumption is counted as expense,
+      // so this persona's $3,500/month burden now sits on instalment debt
+      // (same DSR as before: 3,500 / 7,500). The card-carried version of the
+      // same household is pinned by the next test, so the shift is visible.
+      liabilities: [
+        { balance: 25000, interest_rate: 19, monthly_repayment: 2200, debt_type: 'personal_loan' },
+        { balance: 15000, interest_rate: 14, monthly_repayment: 1300, debt_type: 'personal_loan' },
+      ],
+    });
+    expect(result.primaryProfileCode).toBe('debt_constrained_builder');
+  });
+
+  it('PO D-08 (WP-03): the same burden carried on a revolving card no longer classifies as debt-constrained', () => {
+    const result = classify({
+      income: [{ amount: 7500, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
+      expenses: [
+        { expense_name: 'Essentials', amount: 3500, frequency: 'monthly', is_essential: true },
+        { expense_name: 'Lifestyle', amount: 500, frequency: 'monthly', is_essential: false },
+      ],
+      assets: [{ current_value: 3000, asset_class: 'cash' }],
       liabilities: [
         { balance: 25000, interest_rate: 19, monthly_repayment: 2200, debt_type: 'credit_card' },
         { balance: 15000, interest_rate: 14, monthly_repayment: 1300, debt_type: 'personal_loan' },
       ],
     });
-    expect(result.primaryProfileCode).toBe('debt_constrained_builder');
+    // Before WP-03 this household was 'debt_constrained_builder'. Disclosed to
+    // the PO as a D-08 consequence for manual cards carrying a large balance.
+    expect(result.primaryProfileCode).not.toBe('debt_constrained_builder');
   });
 
   it('Persona F: Future-Ready Professional', () => {

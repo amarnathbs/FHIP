@@ -26,6 +26,7 @@ import {
 import type { CanonicalFinancialSnapshot, CanonicalFinancialSnapshotResult } from '@/lib/read-models/snapshot';
 import type { ExpensesReadModelData } from '@/lib/read-models/expenses';
 import type { IncomeReadModelData } from '@/lib/read-models/income';
+import { householdDebtServiceUnderD08 } from '@/lib/read-models/liabilities';
 import { groupForExpenseItem, type CanonicalExpenseGroup } from '@/lib/read-models/core/categoryGroups';
 import { coveredMonthlyAverage, type NormalisedLedger } from '@/lib/read-models/core/ledger';
 import { roundMoney, type ReadModelUnavailable } from '@/lib/read-models/core/types';
@@ -133,6 +134,11 @@ export function expenseFigures(expenses: ExpensesReadModelData): CanonicalExpens
   };
 }
 
+/** D-08's premise: the household's consumption is counted as expense somewhere. */
+export function consumptionCounted(expenses: Pick<ExpensesReadModelData, 'planned' | 'actual'>): boolean {
+  return expenses.planned.lines.some((l) => l.excludedReason === null) || expenses.actual.byGroup.some((g) => g.coveredLineCount > 0);
+}
+
 /** Every cash-flow section unavailable for the same reason (e.g. the FX/profile read failed). */
 export function allUnavailableCashFlow(u: ReadModelUnavailable): CanonicalCashFlowInput {
   const x = unavailable(u);
@@ -161,7 +167,7 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
     debtService: s.liabilities.status === 'ok'
       ? {
         status: 'ok',
-        householdMonthly: s.liabilities.householdDebtServiceMonthly,
+        householdMonthly: householdDebtServiceUnderD08(s.liabilities, s.expenses.status === 'ok' ? consumptionCounted(s.expenses) : true),
         costOfDebtMonthly: s.liabilities.householdCostOfDebtMonthly,
         principalMonthly: s.liabilities.householdPrincipalMonthly,
       }

@@ -17,7 +17,7 @@
 import '@/lib/serverOnly';
 import type { CanonicalFinancialSnapshot } from './snapshot';
 import { computeActualExpenses, computeCombinedExpenses } from './expenses';
-import { computeLiabilities, type LiabilityLine, type LiabilityRow } from './liabilities';
+import { computeLiabilities, householdDebtServiceUnderD08, type LiabilityLine, type LiabilityRow } from './liabilities';
 import { coveredMonthlyAverage, type NormalisedLedger } from './core/ledger';
 import type { CoverageIndex } from './core/coverage';
 import { roundMoney } from './core/types';
@@ -103,15 +103,17 @@ export function computeMonthCashFlow(snapshot: CanonicalFinancialSnapshot, month
     cardRepaymentRule: snapshot.liabilities.cardRepaymentRule,
   });
 
+  const consumption = snapshot.expenses.planned.lines.some((l) => l.excludedReason === null) || actual.byGroup.some((g) => g.coveredLineCount > 0);
+  const debtService = householdDebtServiceUnderD08(liabilities, consumption);
   const incomeForSurplus = netIncomeKnown || grossIncome;
-  const surplus = roundMoney(incomeForSurplus - combined.monthly - liabilities.householdDebtServiceMonthly);
+  const surplus = roundMoney(incomeForSurplus - combined.monthly - debtService);
   return {
     month,
     grossIncome,
     netIncomeKnown,
     netIncomeUnknownComponents,
     expenses: combined.monthly,
-    debtService: liabilities.householdDebtServiceMonthly,
+    debtService,
     incomeForSurplus,
     surplus,
     savingsRate: incomeForSurplus > 0 ? surplus / incomeForSurplus : null,

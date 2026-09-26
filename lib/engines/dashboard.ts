@@ -851,6 +851,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
         }
         return [{ r, monthly }];
       });
+    const consumptionCounted = householdExpenses.some((r) => !isDuplicateDebtServiceExpense(r, servicedFamilies));
     const essential = sumBy(expenses.filter((e) => e.r.is_essential), (e) => e.monthly);
     const lifestyle = sumBy(expenses.filter((e) => !e.r.is_essential), (e) => e.monthly);
     return {
@@ -873,11 +874,15 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       lifestyleMonthlyExpenses: lifestyle,
       totalMonthlyExpenses: essential + lifestyle,
       expenseLines: expenses.map((e) => ({ name: e.r.expense_name, monthly: e.monthly, source: 'planned' })),
-      // PO D-08, applied equally to manual and imported households: a
-      // revolving facility's repayment is not debt service on top of the
-      // purchases its balance is built from. LR-FI-1 §12/§22: household only.
+      // PO D-08, applied equally to manual and imported households: when the
+      // household's consumption is counted as expense, a revolving facility's
+      // repayment is not debt service on top of the purchases its balance is
+      // built from. With NO counted consumption the premise does not hold and
+      // the repayment is the only record of that outflow, so it stays (same
+      // rule as the read model's householdDebtServiceUnderD08). LR-FI-1
+      // §12/§22: household liabilities only.
       debtMonthlyRepayments: sumBy(
-        householdLiabilities.filter((l) => debtServiceClassFor(l.debt_type, l.master_item_key) !== 'revolving'),
+        householdLiabilities.filter((l) => !consumptionCounted || debtServiceClassFor(l.debt_type, l.master_item_key) !== 'revolving'),
         (l) => reportingValue(l.currency_code, l.monthly_repayment ?? 0)
       ),
       costOfDebtMonthly: 0,
@@ -1250,7 +1255,10 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const countryMap = new Map<string, number>();
   for (const i of input.investments) {
     if (!i.country_code) continue;
-    countryMap.set(i.country_code, (countryMap.get(i.country_code) ?? 0) + reportingValue(i.currency_code, i.current_value));
+    // Deliberately NOT converted (DD-009 / CUR-002, iiR3NetWorthCertification):
+    // like assetsByCountry, a per-country view shows each holding as recorded,
+    // in its own currency. netWorthByCountryConverted is the converted view.
+    countryMap.set(i.country_code, (countryMap.get(i.country_code) ?? 0) + i.current_value);
   }
   const investmentByCountry = Array.from(countryMap.entries()).map(([countryCode, value]) => ({ countryCode, value }));
   const countriesInUse = Array.from(

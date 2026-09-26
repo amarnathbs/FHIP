@@ -611,8 +611,22 @@ describe('LR-FI-1 — data-layer guards', () => {
   const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 
   it('loadDashboard selects `owner` on all four cash-flow registers', () => {
-    const src = read('lib/services/dashboardData.ts');
+    // WP-03: income and expense rows now reach the Dashboard ONLY through the
+    // canonical read models (lib/read-models), which apply the same household
+    // / SMSF split; liabilities and insurance are still read by the loader for
+    // the balance-sheet breakdowns. The guard follows each register to the
+    // file that actually reads it.
+    const where: Record<string, string> = {
+      income_sources: 'lib/read-models/income.ts',
+      expense_items: 'lib/read-models/expenses.ts',
+      liabilities: 'lib/services/dashboardData.ts',
+      insurance_policies: 'lib/services/dashboardData.ts',
+    };
+    expect(read('lib/services/dashboardData.ts')).not.toContain("from('income_sources')");
+    expect(read('lib/services/dashboardData.ts')).not.toContain("from('expense_items')");
+    expect(read('lib/read-models/liabilities.ts')).toMatch(/from\('liabilities'\)[\s\S]*?\.select\('[^']*\bowner\b/);
     for (const table of ['income_sources', 'expense_items', 'liabilities', 'insurance_policies']) {
+      const src = read(where[table]);
       const block = src.slice(src.indexOf(`from('${table}')`));
       const select = block.slice(block.indexOf('.select('), block.indexOf('.eq('));
       expect(select, `${table} must select owner`).toContain('owner');

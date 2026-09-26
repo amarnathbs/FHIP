@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
-import { loadDashboard, getFxRateAudInr, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { getFxRateAudInr, loadDashboardContext, type DashboardContext, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { selectAssets, selectInvestments, selectRetirement } from '@/lib/read-models';
 import { buildResilienceInput } from '@/lib/services/resilienceData';
 import { computeResilience } from '@/lib/engines/resilience';
 import { computeGoalAffordability, type AffordabilityResult } from '@/lib/engines/goalAffordability';
@@ -283,7 +284,8 @@ function toGoalRecord(row: Record<string, unknown>, allocatedMonthlyContribution
 export async function loadLinkedContributionSources(
   userId: string,
   fundingSourcesByGoal: Map<string, GoalFundingSourceRow[]>,
-  client: SupabaseServerClient
+  client: SupabaseServerClient,
+  context?: DashboardContext
 ): Promise<{
   investmentsById: Map<string, AllocatedContributionInvestment>;
   retirementAccountsById: Map<string, AllocatedContributionRetirementAccount>;
@@ -306,36 +308,43 @@ export async function loadLinkedContributionSources(
   // so computeLiveLinkedFundingValue() can convert a percentage-based
   // source into the goal's own currency instead of assuming they match.
   const currentValueById = new Map<string, LiveLinkedCurrentValue>();
+
+  // WP-04 (DC-14 / DC-18): the linked records come from the canonical read
+  // models -- the request's snapshot when one is passed, otherwise the
+  // selectors themselves (paged, active rows only, like the old queries). A
+  // read that failed THROWS: it used to be ignored, so a linked source silently
+  // contributed $0 and the goal looked further behind than it really was.
+  const snapshot = context && context.userId === userId && context.snapshot.status === 'ok' ? context.snapshot : null;
+  const failed = (what: string): never => {
+    throw new Error(`Goal funding sources unavailable: ${what} could not be read`);
+  };
   if (assetIds.size > 0) {
-    const { data } = await client.from('assets').select('id, current_value, currency_code').eq('user_id', userId).eq('is_active', true).in('id', Array.from(assetIds));
-    for (const row of data ?? []) currentValueById.set(row.id as string, { value: Number(row.current_value ?? 0), currencyCode: (row.currency_code as string) ?? null });
+    const model = snapshot ? snapshot.assets : await selectAssets(userId, { client });
+    if (model.status !== 'ok') return failed('assets');
+    for (const line of model.lines) {
+      if (assetIds.has(line.id)) currentValueById.set(line.id, { value: line.value.amountNative, currencyCode: line.value.currency });
+    }
   }
   if (investmentIds.size > 0) {
-    const { data } = await client
-      .from('investments')
-      .select('id, annual_contribution, current_value, currency_code')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .in('id', Array.from(investmentIds));
-    for (const row of data ?? []) {
-      investmentsById.set(row.id as string, { annualContribution: (row.annual_contribution as number) ?? null });
-      currentValueById.set(row.id as string, { value: Number(row.current_value ?? 0), currencyCode: (row.currency_code as string) ?? null });
+    const model = snapshot ? snapshot.investments : await selectInvestments(userId, { client });
+    if (model.status !== 'ok') return failed('investments');
+    for (const line of model.lines) {
+      if (!investmentIds.has(line.id)) continue;
+      investmentsById.set(line.id, { annualContribution: line.annualContribution });
+      currentValueById.set(line.id, { value: line.value.amountNative, currencyCode: line.value.currency });
     }
   }
   if (retirementIds.size > 0) {
-    const { data } = await client
-      .from('retirement_accounts')
-      .select('id, employer_contribution, personal_contribution, contribution_frequency, current_balance, currency_code')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .in('id', Array.from(retirementIds));
-    for (const row of data ?? []) {
-      retirementAccountsById.set(row.id as string, {
-        employerContribution: (row.employer_contribution as number) ?? null,
-        personalContribution: (row.personal_contribution as number) ?? null,
-        contributionFrequency: (row.contribution_frequency as string) ?? null,
+    const model = snapshot ? snapshot.retirement : await selectRetirement(userId, { client });
+    if (model.status !== 'ok') return failed('retirement accounts');
+    for (const line of model.lines) {
+      if (!retirementIds.has(line.id)) continue;
+      retirementAccountsById.set(line.id, {
+        employerContribution: line.employerContribution?.amountNative ?? null,
+        personalContribution: line.personalContribution?.amountNative ?? null,
+        contributionFrequency: line.employerContribution?.frequency ?? line.personalContribution?.frequency ?? null,
       });
-      currentValueById.set(row.id as string, { value: Number(row.current_balance ?? 0), currencyCode: (row.currency_code as string) ?? null });
+      currentValueById.set(line.id, { value: line.balance.amountNative, currencyCode: line.balance.currency });
     }
   }
   return { investmentsById, retirementAccountsById, currentValueById };
@@ -352,11 +361,12 @@ export interface SingleGoalForecastInputs {
 // what-if scenario endpoint (never persisted, mirrors lib/engines/whatIf.ts).
 export async function buildGoalForecastInputs(userId: string, goalId: string): Promise<SingleGoalForecastInputs | null> {
   const supabase = await createClient();
-  const [goalRes, config, goalTypes, dashboard, profileRes, fxRateAudInr] = await Promise.all([
+  const [goalRes, config, goalTypes, dashboardContext, profileRes, fxRateAudInr] = await Promise.all([
     supabase.from('user_goals').select('*').eq('id', goalId).eq('user_id', userId).single(),
     loadGoalPlanningConfig(),
     loadGoalTypes(),
-    loadDashboard(userId),
+    // WP-04: the same request client as every other read here (it used to open its own).
+    loadDashboardContext(userId, supabase),
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
     // G6 Contract 6 — for computeLiveLinkedFundingValue()'s cross-currency conversion below.
     getFxRateAudInr(supabase),
@@ -368,10 +378,10 @@ export async function buildGoalForecastInputs(userId: string, goalId: string): P
   const row = { ...goalRes.data, forecast_logic_key: typeRef?.forecast_logic_key ?? 'generic' };
   const reportingCurrency = (profileRes.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
 
-  const extras = await buildExtrasForGoal(userId, row, dashboard.essentialMonthlyExpenses, reportingCurrency);
+  const extras = await buildExtrasForGoal(userId, row, dashboardContext.summary.essentialMonthlyExpenses, reportingCurrency);
 
   const fundingSourcesByGoal = await loadFundingSourcesByGoal(userId, [goalId], supabase);
-  const { investmentsById, retirementAccountsById, currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
+  const { investmentsById, retirementAccountsById, currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase, dashboardContext);
   const thisGoalFundingSources = fundingSourcesByGoal.get(goalId) ?? [];
   const allocatedMonthlyContribution = computeAllocatedMonthlyContribution(
     thisGoalFundingSources.map((s) => ({
@@ -404,7 +414,9 @@ export async function buildGoalForecastInputs(userId: string, goalId: string): P
 // needs to display goal data (e.g. the dashboard summary card) without
 // writing a new goal_forecasts row on every view. loadGoalsPage below wraps
 // this with the actual immutable-history persistence for the main Goals page.
-export async function computeGoalsPagePayload(userId: string, client?: SupabaseServerClient): Promise<{
+// WP-04 (DC-15): pass the request's DashboardContext when the caller has one;
+// the Dashboard summary and the Resilience input then share ONE snapshot.
+export async function computeGoalsPagePayload(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<{
   payload: GoalsPagePayload;
   rawGoalsById: Map<string, Record<string, unknown>>;
   config: GoalPlanningConfig;
@@ -412,7 +424,9 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
 }> {
   const supabase = client ?? (await createClient());
 
-  const [goalsRes, config, goalTypes, dashboard, resilienceInput, profileRes, fxRateAudInr] = await Promise.all([
+  const ctx = context && context.userId === userId ? context : await loadDashboardContext(userId, supabase);
+  const dashboard = ctx.summary;
+  const [goalsRes, config, goalTypes, resilienceInput, profileRes, fxRateAudInr] = await Promise.all([
     supabase
       .from('user_goals')
       .select('*')
@@ -420,8 +434,7 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
       .not('status', 'in', '(archived,cancelled)'),
     loadGoalPlanningConfig(supabase),
     loadGoalTypes(supabase),
-    loadDashboard(userId, supabase),
-    buildResilienceInput(userId, supabase),
+    buildResilienceInput(userId, supabase, ctx),
     supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
     // G6 Contract 6 — for computeLiveLinkedFundingValue()'s cross-currency conversion below.
     getFxRateAudInr(supabase),
@@ -445,7 +458,7 @@ export async function computeGoalsPagePayload(userId: string, client?: SupabaseS
     loadFundingSourcesByGoal(userId, goalIds, supabase),
     loadMilestonesByGoal(userId, goalIds, supabase),
   ]);
-  const { investmentsById, retirementAccountsById, currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
+  const { investmentsById, retirementAccountsById, currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase, ctx);
 
   const today = new Date();
   const goals: GoalPayload[] = [];

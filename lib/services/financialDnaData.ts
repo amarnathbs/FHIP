@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { fetchAllRows, loadDashboardContext, type DashboardContext, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadLiabilityRows } from '@/lib/read-models/liabilities';
 import { ageFromDob } from '@/lib/engines/age';
 import {
   classifyFinancialDna,
@@ -8,7 +9,7 @@ import {
   type DnaProfileInput,
   type DnaResult,
 } from '@/lib/engines/financialDna';
-import { summarizePropertyDebtByPurpose, type PropertyDebtSummary } from '@/lib/engines/propertyLiabilityLinks';
+import { summarizePropertyDebtByPurpose, type LiabilityLite, type PropertyDebtSummary, type PropertyLiabilityLinkLite } from '@/lib/engines/propertyLiabilityLinks';
 
 function monthStart(date = new Date()): string {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -41,30 +42,46 @@ export interface FinancialDnaPayload extends DnaResult {
   // canonical classification for future DNA scoring work and for reports/
   // dashboard consumption today.
   propertyDebtBreakdown: PropertyDebtSummary[];
+  // WP-04 (DC-14): false when the liabilities or their property links could
+  // not be read. The breakdown is then empty BECAUSE it is unknown, and the
+  // page says so instead of showing "no property debt".
+  propertyDebtBreakdownAvailable: boolean;
 }
 
 // Fetches this user's liabilities and active property_liability_links and
 // classifies each liability's debt purpose (spec s.27-31). Read-only.
+//
+// WP-04 (DC-14 / DC-18): liabilities come from the request's canonical
+// snapshot when one is passed, otherwise from the Liabilities read model's own
+// paged loader; links are paged too. A failed read THROWS -- it is never
+// turned into an empty list that reads as "no property debt".
 export async function loadPropertyDebtBreakdown(
   userId: string,
-  client?: SupabaseServerClient
+  client?: SupabaseServerClient,
+  context?: DashboardContext
 ): Promise<PropertyDebtSummary[]> {
   const supabase = client ?? (await createClient());
-  const [liabilitiesRes, linksRes] = await Promise.all([
-    supabase.from('liabilities').select('id, debt_type, master_item_key, balance, currency_code').eq('user_id', userId).eq('is_active', true),
+  const snapshot = context && context.userId === userId ? context.snapshot : null;
+  const liabilities: LiabilityLite[] = snapshot && snapshot.status === 'ok' && snapshot.liabilities.status === 'ok'
+    ? snapshot.liabilities.lines.map((l) => ({ id: l.id, debt_type: l.debtType, master_item_key: l.masterItemKey, balance: l.balance.amountNative, currency_code: l.balance.currency }))
+    : (await loadLiabilityRows(userId, supabase)).rows.map((r) => ({ id: r.id, debt_type: r.debt_type, master_item_key: r.master_item_key, balance: Number(r.balance), currency_code: r.currency_code }));
+  const links = await fetchAllRows<PropertyLiabilityLinkLite>((from, to) =>
     supabase
       .from('property_liability_links')
       .select('liability_id, link_type, is_active, allocation_percent')
       .eq('user_id', userId)
-      .eq('is_active', true),
-  ]);
-  return summarizePropertyDebtByPurpose(liabilitiesRes.data ?? [], linksRes.data ?? []);
+      .eq('is_active', true)
+      .order('liability_id', { ascending: true })
+      .range(from, to)
+  );
+  return summarizePropertyDebtByPurpose(liabilities, links);
 }
 
 // Builds the classification input without persisting — used by the real GET
 // route (which persists afterwards) and the what-if scenario endpoint (which
 // never persists).
-export async function buildDnaInput(userId: string, client?: SupabaseServerClient): Promise<DnaProfileInput> {
+// WP-04 (DC-15): reads the request's DashboardContext when one is passed.
+export async function buildDnaInput(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<DnaProfileInput> {
   const supabase = client ?? (await createClient());
 
   const [profileRes, householdRes, configRes, previousRes] = await Promise.all([
@@ -80,7 +97,7 @@ export async function buildDnaInput(userId: string, client?: SupabaseServerClien
       .maybeSingle(),
   ]);
 
-  const dashboard = await loadDashboard(userId, supabase);
+  const dashboard = (context && context.userId === userId ? context : await loadDashboardContext(userId, supabase)).summary;
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
   const isRetired = /retired/i.test(employmentStatus);
@@ -107,11 +124,13 @@ export async function loadArchetypes(client?: SupabaseServerClient): Promise<Rec
   return map;
 }
 
-export async function loadFinancialDna(userId: string, client?: SupabaseServerClient): Promise<FinancialDnaPayload> {
+export async function loadFinancialDna(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<FinancialDnaPayload> {
   const supabase = client ?? (await createClient());
+  // One snapshot for the classification AND the property-debt breakdown.
+  const ctx = context && context.userId === userId ? context : await loadDashboardContext(userId, supabase);
 
-  const [input, archetypes, historyRes, propertyDebtBreakdown] = await Promise.all([
-    buildDnaInput(userId, supabase),
+  const [input, archetypes, historyRes, propertyDebt] = await Promise.all([
+    buildDnaInput(userId, supabase, ctx),
     loadArchetypes(supabase),
     supabase
       .from('financial_dna_profiles')
@@ -119,8 +138,12 @@ export async function loadFinancialDna(userId: string, client?: SupabaseServerCl
       .eq('user_id', userId)
       .order('profile_month', { ascending: true })
       .limit(12),
-    loadPropertyDebtBreakdown(userId, supabase),
+    loadPropertyDebtBreakdown(userId, supabase, ctx).then(
+      (rows) => ({ rows, available: true }),
+      () => ({ rows: [] as PropertyDebtSummary[], available: false })
+    ),
   ]);
+  const propertyDebtBreakdown = propertyDebt.rows;
 
   const result = classifyFinancialDna(input);
 
@@ -205,5 +228,5 @@ export async function loadFinancialDna(userId: string, client?: SupabaseServerCl
     }
   }
 
-  return { ...result, archetypes, history: (historyRes.data ?? []) as DnaHistoryPoint[], propertyDebtBreakdown };
+  return { ...result, archetypes, history: (historyRes.data ?? []) as DnaHistoryPoint[], propertyDebtBreakdown, propertyDebtBreakdownAvailable: propertyDebt.available };
 }
