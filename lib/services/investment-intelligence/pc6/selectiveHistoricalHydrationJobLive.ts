@@ -7,7 +7,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
-import type { HydrationDeps, HydrationJobResult, HydrationWriteRow, PerInstrumentOutcome } from './selectiveHistoricalHydrationJob';
+import type { HydrationAttemptRecord, HydrationDeps, HydrationJobResult, HydrationWriteRow, PerInstrumentOutcome } from './selectiveHistoricalHydrationJob';
 import { buildHydrationBatchRow, HYDRATION_BATCH_KIND, HYDRATION_STALE_RUNNING_MINUTES } from './selectiveHistoricalHydrationJob';
 import { reconcileStaleRunningBatches } from './referenceImportRunner';
 import type { FundHouseResolver } from './adapters/amfiHistoricalAdapter';
@@ -257,6 +257,56 @@ export function createLiveHydrationDeps(): HydrationDeps {
       // the job simply walks back as it did before 0190, so treat it as none.
       if (error) return null;
       return (data?.floor_date as string | undefined) ?? null;
+    },
+
+    async fetchAttemptLedger() {
+      // 0198. Any error -- including the table not existing yet, because the
+      // code can deploy before the migration is applied -- returns null, and
+      // the job falls back to a rotating order and says so. Never throws.
+      type Row = { instrument_id: string; last_attempted_at: string; last_outcome: string; consecutive_failures: number; attempts_total: number; last_success_at: string | null };
+      try {
+        const rows = await fetchAllRows<Row>(() =>
+          db.from('ii_nav_hydration_attempts')
+            .select('instrument_id, last_attempted_at, last_outcome, consecutive_failures, attempts_total, last_success_at')
+            .order('instrument_id')
+        );
+        const records = new Map<string, HydrationAttemptRecord>();
+        for (const r of rows) {
+          records.set(r.instrument_id, {
+            instrumentId: r.instrument_id,
+            lastAttemptedAt: r.last_attempted_at,
+            lastOutcome: r.last_outcome as HydrationAttemptRecord['lastOutcome'],
+            consecutiveFailures: r.consecutive_failures,
+            attemptsTotal: r.attempts_total,
+            lastSuccessAt: r.last_success_at,
+          });
+        }
+        return { records, error: null };
+      } catch (e) {
+        return { records: null, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+
+    async recordAttempt(record: HydrationAttemptRecord, detail: string) {
+      // `.select()` so a write that silently touched no row is caught.
+      const { data, error } = await db
+        .from('ii_nav_hydration_attempts')
+        .upsert(
+          {
+            instrument_id: record.instrumentId,
+            last_attempted_at: record.lastAttemptedAt,
+            last_outcome: record.lastOutcome,
+            last_detail: detail.slice(0, 2000),
+            consecutive_failures: record.consecutiveFailures,
+            attempts_total: record.attemptsTotal,
+            last_success_at: record.lastSuccessAt,
+            updated_at: record.lastAttemptedAt,
+          },
+          { onConflict: 'instrument_id' },
+        )
+        .select('instrument_id');
+      if (error) return { error: error.message };
+      return { error: (data ?? []).length === 1 ? null : 'attempt record upsert affected no row' };
     },
 
     async recordHistoryFloor(instrumentId: string, floorDate: string, detail: string) {
