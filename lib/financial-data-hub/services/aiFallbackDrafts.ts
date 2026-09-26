@@ -143,7 +143,59 @@ export async function loadPendingAiFallbackDraft(userId: string, documentId: str
   return { found: true, draftId: rows[0].id, payload: rows[0].payload };
 }
 
-/** Undo a claim when the downstream write failed, so the user can retry. */
+/**
+ * The canonical tables a confirmed statement draft writes, keyed by upload.
+ * Checked before a failed confirmation hands its draft back.
+ */
+const CANONICAL_TABLES_BY_UPLOAD = [
+  'fdh_transactions',
+  'fdh_payroll_events',
+  'fdh_liability_statements',
+  'fdh_retirement_statements',
+  'fdh_investment_statements',
+] as const;
+
+/**
+ * Undo a claim ONLY if the failed confirmation wrote nothing canonical.
+ *
+ * Production, 2026-09-26: a bank statement's confirmation wrote its 9
+ * transactions, then failed on a later status update; the draft was handed
+ * back as `pending_review`, so confirming again would have imported the
+ * statement a second time. If any canonical row exists for the upload, the
+ * draft stays `confirmed` (the write happened; the document is left for
+ * review) and `released` is false. An unreadable check also keeps the claim --
+ * never re-open a draft we cannot prove is unwritten.
+ */
+export async function releaseClaimedAiFallbackDraftIfNothingWritten(
+  userId: string,
+  draftId: string,
+  documentId: string,
+): Promise<{ released: boolean; reason?: 'rows_written' | 'check_failed' }> {
+  const admin = createAdminClient();
+  for (const table of CANONICAL_TABLES_BY_UPLOAD) {
+    const { data, error } = await admin
+      .from(table)
+      .select('id')
+      .eq('statement_upload_id', documentId)
+      .eq('user_id', userId)
+      .limit(1);
+    if (error) {
+      if (isMissingTable(error)) continue;
+      console.error(`AI draft ${draftId}: could not check ${table} before releasing (${error.message}) -- keeping it confirmed`);
+      return { released: false, reason: 'check_failed' };
+    }
+    if (((data ?? []) as unknown[]).length > 0) {
+      console.error(`AI draft ${draftId}: confirmation failed AFTER writing ${table} rows for upload ${documentId} -- keeping it confirmed so it cannot be imported twice`);
+      return { released: false, reason: 'rows_written' };
+    }
+  }
+  await releaseClaimedAiFallbackDraft(userId, draftId);
+  return { released: true };
+}
+
+/** Undo a claim when the downstream write failed, so the user can retry.
+ * Callers use releaseClaimedAiFallbackDraftIfNothingWritten, which checks
+ * first; this is the unconditional primitive it ends with. */
 export async function releaseClaimedAiFallbackDraft(userId: string, draftId: string): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin

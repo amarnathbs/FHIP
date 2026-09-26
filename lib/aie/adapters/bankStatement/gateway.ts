@@ -36,7 +36,7 @@ export type BankStatementAiExtractionOutcome = AieAdapterExtractionOutcome<BankS
 export const BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPrompt(
   'The evidence is a bank or credit-card account statement. Read the statement header (institution, account identifier, period, and the opening and closing balances the statement itself declares) and then every transaction line in the transaction table, in the order printed. ' +
     'For each transaction report the date, the description exactly as printed, the amount as a positive number, whether it was money IN to the account (credit) or money OUT of it (debit), and the running balance printed after it if the statement prints one (otherwise null). ' +
-    'Do not include opening-balance, closing-balance, subtotal, carried-forward or "total" summary lines as transactions — they are not transactions, and including them would double-count. ' +
+    'Do not include opening-balance, closing-balance, subtotal, brought-forward, carried-forward (including "Balance b/f", "B/F", "C/F") or "total" summary lines as transactions, even when they are printed inside the transaction table with a date and an amount — they are not transactions, and including them would double-count. ' +
     `Report at most ${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} transactions; if the statement prints more than that, report the first ${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} and set allTransactionsListed to false. Set allTransactionsListed to true only if you have listed every transaction printed in the document.`,
 );
 

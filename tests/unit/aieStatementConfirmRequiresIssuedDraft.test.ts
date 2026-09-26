@@ -19,7 +19,7 @@ const { claimMock, inserts, docRow } = vi.hoisted(() => ({
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn(),
   claimPendingAiFallbackDraft: claimMock,
-  releaseClaimedAiFallbackDraft: vi.fn(),
+  releaseClaimedAiFallbackDraft: vi.fn(), releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
   loadPendingAiFallbackDraft: vi.fn().mockResolvedValue({ found: false, reason: 'none_pending' }),
   documentsWithPendingAiFallbackDrafts: vi.fn().mockResolvedValue(new Set()),
 }));

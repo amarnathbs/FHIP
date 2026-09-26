@@ -45,7 +45,7 @@ vi.mock('@/lib/aie/pilotCohortEmail', () => ({
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: async () => ({ persisted: false, reason: 'table_missing' }),
   claimPendingAiFallbackDraft: async () => ({ claimed: false, reason: 'table_missing' }),
-  releaseClaimedAiFallbackDraft: async () => undefined,
+  releaseClaimedAiFallbackDraft: async () => undefined, releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
   documentsWithPendingAiFallbackDrafts: async () => new Set(),
 }));
 

@@ -16,6 +16,7 @@ import type { PdfStatementMetadata } from '@/lib/financial-data-hub/bank-pdf/met
 import type { ReadBankStatementRow } from '@/lib/financial-data-hub/bank-pdf/orchestrator';
 import type { BankStatementDocumentFacts } from './schema';
 import { figureIsPrinted } from '../shared/reviewDraft';
+import { isStatementSummaryLine } from '../shared/statementSummaryLines';
 
 export const AIE_BANK_STATEMENT_PARSER_NAME = 'aie_bank_statement_ai_fallback';
 export const AIE_BANK_STATEMENT_PARSER_VERSION = '1';
@@ -103,6 +104,13 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts):
     // that the extraction was incomplete.
     if (amount === undefined) {
       warnings.push(`ai_row_${index + 1}_unreadable_amount`);
+      return;
+    }
+    // A balance / summary line the model reported as a transaction
+    // ("Brought forward" in production, 2026-09-26). Dropped, and recorded, so
+    // it can neither enter the draft nor double-count in the rollforward.
+    if (isStatementSummaryLine(t.descriptionRaw)) {
+      warnings.push(`ai_row_${index + 1}_summary_line_dropped`);
       return;
     }
     if (amount < 0) {

@@ -69,7 +69,7 @@ import {
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
-import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS, type IdenticalUploadMatch } from './identicalUpload';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
 import { rangesOverlap } from '../bank-csv/reconciliation';
@@ -996,7 +996,7 @@ export async function confirmAiBankStatementFallback(
   try {
     return await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed);
   } catch (e) {
-    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
 }
