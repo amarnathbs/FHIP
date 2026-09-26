@@ -1,4 +1,4 @@
-import { formatMoneyWhole, localeForReportingCurrency } from '@/lib/engines/money';
+import { formatMoneyWhole, formatMoneyCode, localeForReportingCurrency } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
@@ -23,6 +23,7 @@ import { ReportTrendChart, ReportScenarioBarChart } from '@/components/forecast/
 import type { ReportContent } from '@/lib/services/reportContentData';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { isCanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -483,6 +484,12 @@ export function ReportPreview({
                 <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
               </div>
               <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
+              {/* WP-06: shown beside Net Worth, never added to it (PO D-04 / D-05). */}
+              {((netWorth.sectionData.notInNetWorth as { label: string; count: number; total: number }[] | undefined) ?? []).map((item) => (
+                <p key={item.label} className="mt-1 text-xs text-gray-500">
+                  Not included in net worth — {item.label}: {item.count} item{item.count === 1 ? '' : 's'}, {fmt(item.total)}.
+                </p>
+              ))}
               {/* Same assets-vs-liabilities comparison as the Page 2 chart,
                   reused here as the "visual representation" companion to
                   this section's own numeric Stat grid — anchored to the Net
@@ -1538,7 +1545,94 @@ export function ReportPreview({
               <SectionCard title={appendices.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{appendices.narrativeText}</p>
               </SectionCard>
-              {(
+              {/* WP-06: a report generated after WP-06 stores the canonical
+                  appendix (planned + imported lines with provenance, currency,
+                  counted / not-counted); an older stored report keeps its
+                  original register tables, rendered exactly as before. */}
+              {isCanonicalAppendix(appendices.sectionData.canonical) ? (
+                <>
+                  {appendices.sectionData.canonical.tables.map((t) =>
+                    t.rows.length === 0 ? null : (
+                      <SectionCard key={t.key} title={t.title} className="report-section">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-gray-500">
+                              <th className="py-1">Item</th>
+                              <th className="py-1">Source</th>
+                              <th className={NUM_HEADER_CLASS}>Amount</th>
+                              <th className={NUM_HEADER_CLASS}>In {currency}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {t.rows.map((row, i) => (
+                              <tr key={i} className={`border-t ${row.counted ? '' : 'text-gray-400'}`}>
+                                <td className="py-1">
+                                  {row.name}
+                                  {row.detail ? <span className="block text-xs text-gray-400">{row.detail}</span> : null}
+                                  {row.note ? <span className="block text-xs text-gray-500">{row.note}</span> : null}
+                                </td>
+                                <td className="py-1 text-xs">{row.provenance}</td>
+                                <td className={NUM_CELL_CLASS}>{formatMoneyCode(row.amountNative, row.currency)}</td>
+                                <td className={NUM_CELL_CLASS}>{row.amountReporting === null ? '—' : fmt(row.amountReporting)}</td>
+                              </tr>
+                            ))}
+                            <tr className="border-t font-medium">
+                              <td className="py-1" colSpan={3}>Counted total{t.measure === 'monthly' ? ' (per month)' : ''}</td>
+                              <td className={NUM_CELL_CLASS}>{fmt(t.countedTotal)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </SectionCard>
+                    )
+                  )}
+                  {appendices.sectionData.canonical.reconciliation.expenses && (
+                    <SectionCard title="How monthly expenses were calculated" className="report-section">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {appendices.sectionData.canonical.reconciliation.expenses.byGroup.map((g) => (
+                            <tr key={g.group} className="border-t">
+                              <td className="py-1">{g.label}</td>
+                              <td className="py-1 text-xs text-gray-500">{g.basis === 'actual' ? 'Imported actual average' : g.basis === 'planned' ? 'Your plan' : '—'}</td>
+                              <td className={NUM_CELL_CLASS}>{fmt(g.monthly)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t font-medium">
+                            <td className="py-1" colSpan={2}>Monthly expenses used in this report</td>
+                            <td className={NUM_CELL_CLASS}>{fmt(appendices.sectionData.canonical.reconciliation.expenses.combinedMonthly)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </SectionCard>
+                  )}
+                  {appendices.sectionData.canonical.notInCalculations.length > 0 && (
+                    <SectionCard title="Shown but not counted" className="report-section">
+                      <ul className="text-sm text-gray-600">
+                        {appendices.sectionData.canonical.notInCalculations.map((n) => (
+                          <li key={n.label}>
+                            {n.label}: {n.count} item{n.count === 1 ? '' : 's'}
+                            {n.total !== 0 ? `, ${fmt(n.total)}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </SectionCard>
+                  )}
+                  {((appendices.sectionData.insurancePolicies as Record<string, unknown>[] | undefined) ?? []).length > 0 && (
+                    <SectionCard title="Insurance policies" className="report-section">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {(appendices.sectionData.insurancePolicies as Record<string, unknown>[]).map((row, i) => (
+                            <tr key={i} className="border-t">
+                              <td className="py-1">{(row.policy_name as string) ?? '—'}</td>
+                              <td className="py-1 text-right">{fmt(row.cover_amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </SectionCard>
+                  )}
+                </>
+              ) : (
+              (
                 [
                   ['Investments', 'investments', 'investment_name', 'current_value'],
                   ['Insurance policies', 'insurancePolicies', 'policy_name', 'cover_amount'],
@@ -1564,7 +1658,8 @@ export function ReportPreview({
                     </table>
                   </SectionCard>
                 );
-              })}
+              })
+              )}
               <p className="text-justify text-xs text-gray-400">{appendices.limitationText}</p>
             </div>
           )}

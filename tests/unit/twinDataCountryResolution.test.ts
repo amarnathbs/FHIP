@@ -56,9 +56,19 @@ vi.mock('@/lib/services/financialDnaData', () => ({
 vi.mock('@/lib/services/goalsData', () => ({
   computeGoalsPagePayload: vi.fn().mockResolvedValue({ payload: { goals: [], summary: null } }),
 }));
-vi.mock('@/lib/services/dashboardData', () => ({
-  getFxRateAudInr: vi.fn().mockResolvedValue(56),
-}));
+// WP-05 (DC-04): the Twin no longer runs a private computeDashboard() -- it
+// takes the ONE shared loadDashboard() figure. Mocked here (like the four
+// engines above) with the real engine's empty-household result, because this
+// suite tests country resolution, not the Dashboard.
+vi.mock('@/lib/services/dashboardData', async () => {
+  const { computeDashboard } = await vi.importActual<typeof import('@/lib/engines/dashboard')>('@/lib/engines/dashboard');
+  return {
+    getFxRateAudInr: vi.fn().mockResolvedValue(56),
+    loadDashboard: vi.fn(async () =>
+      computeDashboard({ income: [], expenses: [], assets: [], liabilities: [], investments: [], retirement: [], insurance: [], goals: [], snapshots: [] }, 'AUD', 56)
+    ),
+  };
+});
 
 // Imported AFTER the vi.mock calls above (hoisted by vitest regardless of
 // declaration order, but kept in this order for readability).
@@ -104,6 +114,41 @@ function makeFakeClient(tables: Record<string, Row[]>) {
         return builder;
       },
       order() {
+        return builder;
+      },
+      // WP-05: the canonical read-model snapshot and the paged Twin register
+      // reads chain .range()/.in()/.is()/.not()/date filters; implemented with
+      // real semantics (range slices, filters filter) rather than no-ops.
+      range(from: number, to: number) {
+        filtered = filtered.slice(from, to + 1);
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        filtered = filtered.filter((r) => vals.includes(r[col]));
+        return builder;
+      },
+      is(col: string, val: unknown) {
+        filtered = filtered.filter((r) => (r[col] ?? null) === val);
+        return builder;
+      },
+      not(col: string, op: string, val: unknown) {
+        if (op === 'is' && val === null) filtered = filtered.filter((r) => r[col] !== null && r[col] !== undefined);
+        return builder;
+      },
+      gte(col: string, val: string) {
+        filtered = filtered.filter((r) => String(r[col]) >= val);
+        return builder;
+      },
+      lte(col: string, val: string) {
+        filtered = filtered.filter((r) => String(r[col]) <= val);
+        return builder;
+      },
+      lt(col: string, val: string) {
+        filtered = filtered.filter((r) => String(r[col]) < val);
+        return builder;
+      },
+      gt(col: string, val: string) {
+        filtered = filtered.filter((r) => String(r[col]) > val);
         return builder;
       },
       limit(n: number) {

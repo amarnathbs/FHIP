@@ -352,6 +352,12 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
             liabilityByType: d.liabilityByType,
             liquidAssetRatio: d.liquidAssetRatio,
             propertyConcentration: d.propertyConcentration,
+            // WP-06: Net Worth is the ONE canonical figure (source.dashboard).
+            // Items the household can see but that are deliberately NOT in it
+            // -- imported holdings not yet added to Net Worth (PO D-05), bank
+            // closing balances not yet Applied as a cash asset (PO D-04) --
+            // are listed beside it, never added to it.
+            notInNetWorth: source.notInNetWorth ?? [],
           }
         : {},
     narrativeText:
@@ -362,7 +368,7 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
       status === 'included'
         ? {
             allocation: d.netWorthAllocation,
-            summary: `Your recorded assets total ${formatMoneyWhole(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoneyWhole(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoneyWhole(d.netWorth, source.currency)}.`,
+            summary: `Your recorded assets total ${formatMoneyWhole(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoneyWhole(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoneyWhole(d.netWorth, source.currency)}.${(source.notInNetWorth ?? []).map((i) => ` Not included: ${i.label} (${i.count} item${i.count === 1 ? '' : 's'}, ${formatMoneyWhole(i.total, source.currency)}).`).join('')}`,
           }
         : null,
     sourceReferences: { financialSnapshotMonth: source.reportMonth },
@@ -853,6 +859,11 @@ export function buildDataQuality(
     // reportSnapshotResolver.loadDataFreshness) — so it is non-null exactly
     // when the register this row is labelled for has records, and it is the
     // very timestamp rendered in the Last Updated column.
+    //
+    // WP-06: for income and expenses this is the newer of the register's
+    // updated_at and the newest APPROVED imported statement line of that kind
+    // (reportSnapshotResolver.loadDataFreshness), because the canonical
+    // Income / Expense read models count those lines.
     //
     // Presence is now keyed off that, not off dashboard.hasAssets et al.
     // dashboard.hasAssets is deliberately true when investments OR retirement

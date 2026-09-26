@@ -49,9 +49,9 @@ export interface PlannedExpenseLine {
   name: string;
   group: CanonicalExpenseGroup;
   groupUnmapped: boolean;
-  essential: boolean;
-  /** expense_items.master_item_key (WP-03: the Dashboard's core-survival subset). */
+  /** expense_items.master_item_key (WP-03: the Dashboard's core-survival subset; WP-05: Twin remittance = 'family_support_remittance'). */
   masterItemKey: string | null;
+  essential: boolean;
   frequency: string;
   owner: string | null;
   amountNative: number;
@@ -162,7 +162,7 @@ export function computePlannedExpenses(
     else if (monthlyReporting === null) excludedReason = 'unconverted';
     if (excludedReason === 'unconverted') addUnconverted(unconverted, row.currency_code, monthlyNative);
     return {
-      id: row.id, name: row.expense_name, group, groupUnmapped: unmapped, essential: Boolean(row.is_essential), masterItemKey: row.master_item_key, frequency: row.frequency,
+      id: row.id, name: row.expense_name, group, groupUnmapped: unmapped, masterItemKey: row.master_item_key, essential: Boolean(row.is_essential), frequency: row.frequency,
       owner: row.owner, amountNative: Number(row.amount), currency: row.currency_code, monthlyNative, monthlyReporting, excludedReason,
       provenance: provenance('manual'),
     };

@@ -44,6 +44,10 @@ export interface LiabilityRow {
   currency_code: string;
   owner: string | null;
   source_type: string | null;
+  /** WP-05 (Twin / debt and cross-border forecasts). */
+  country_code?: string | null;
+  interest_rate_type?: string | null;
+  fixed_rate_expiry?: string | null;
 }
 
 /** 'exclude_revolving' = PO D-08 (default). 'include' = the pre-programme Dashboard rule. */
@@ -74,6 +78,12 @@ export interface LiabilityLine {
   balance: MoneyValue;
   contractualMonthly: MoneyValue | null;
   minimumPayment: MoneyValue | null;
+  /** WP-05: as recorded (percent, or null when not captured). */
+  interestRate: number | null;
+  interestRateType: string | null;
+  fixedRateExpiry: string | null;
+  creditLimit: number | null;
+  countryCode: string | null;
   facilityAccountIds: string[];
   actual: LiabilityActualFigures | null;
   /** Reporting currency, per month. null only when unconverted. */
@@ -187,6 +197,11 @@ export function computeLiabilities(
       balance,
       contractualMonthly,
       minimumPayment,
+      interestRate: row.interest_rate == null ? null : Number(row.interest_rate),
+      interestRateType: row.interest_rate_type ?? null,
+      fixedRateExpiry: row.fixed_rate_expiry ?? null,
+      creditLimit: row.credit_limit == null ? null : Number(row.credit_limit),
+      countryCode: row.country_code ?? null,
       facilityAccountIds,
       actual,
       debtServiceMonthly,
@@ -228,7 +243,7 @@ export async function loadLiabilityRows(userId: string, client: ReadModelClient)
   const rows = await fetchAllRows<LiabilityRow>('liabilities', (from, to) =>
     client
       .from('liabilities')
-      .select('id, liability_name, debt_type, master_item_key, balance, monthly_repayment, minimum_payment, interest_rate, credit_limit, currency_code, owner, source_type')
+      .select('id, liability_name, debt_type, master_item_key, balance, monthly_repayment, minimum_payment, interest_rate, credit_limit, currency_code, owner, source_type, country_code, interest_rate_type, fixed_rate_expiry')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('id', { ascending: true })

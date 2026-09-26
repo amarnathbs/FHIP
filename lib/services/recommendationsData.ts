@@ -66,7 +66,7 @@ function toLibraryStatus(status: VarianceStatus): ForecastStatus | null {
   // baseline_established means a forecast baseline exists but no elapsed
   // comparison period does yet — there's no performance signal to recommend
   // against, same as insufficient_data (no baseline at all).
-  if (status === 'insufficient_data' || status === 'baseline_established') return null;
+  if (status === 'insufficient_data' || status === 'baseline_established' || status === 'unavailable') return null;
   if (status === 'significantly_ahead') return 'ahead_of_plan';
   return status;
 }

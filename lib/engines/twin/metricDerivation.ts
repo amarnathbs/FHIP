@@ -46,7 +46,14 @@ function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
 }
 
-function growthPct(values: { month: string; value: number }[]): number | null {
+// WP-05 (DC-14): a snapshot month whose stored value is null is a MISSING
+// point, never a zero -- it is dropped from the series, not scored as 0.
+function knownPoints(values: { month: string; value: number | null }[]): { month: string; value: number }[] {
+  return values.filter((v): v is { month: string; value: number } => v.value !== null && Number.isFinite(v.value));
+}
+
+function growthPct(series: { month: string; value: number | null }[]): number | null {
+  const values = knownPoints(series);
   if (values.length < 2) return null;
   const first = values[0].value;
   const last = values[values.length - 1].value;
@@ -91,9 +98,10 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
   set('passive_income_ratio', d.grossMonthlyIncome > 0 ? (d.passiveMonthlyIncome / d.grossMonthlyIncome) * 100 : null);
   set('monthly_surplus', d.hasIncome || d.hasExpenses ? d.monthlySurplus : null);
   set('surplus_margin', d.savingsRate !== null ? d.savingsRate * 100 : null);
+  const surplusPoints = source.snapshots12m.filter((s) => s.monthlySurplus !== null);
   set(
     'positive_cashflow_consistency',
-    source.snapshots12m.length > 0 ? (source.snapshots12m.filter((s) => s.monthlySurplus > 0).length / source.snapshots12m.length) * 100 : null,
+    surplusPoints.length > 0 ? (surplusPoints.filter((s) => (s.monthlySurplus as number) > 0).length / surplusPoints.length) * 100 : null,
     'No monthly history recorded yet.'
   );
 
@@ -315,7 +323,7 @@ export interface FutureSelfValues {
 // from 12 months of snapshot history). No other metric gets a fabricated
 // multi-year forecast (spec: "uses existing deterministic forecasts").
 export function computeFutureSelfValues(source: TwinSourceData): FutureSelfValues {
-  const netWorthSeries = source.snapshots12m.map((s) => s.netWorth);
+  const netWorthSeries = source.snapshots12m.map((s) => s.netWorth).filter((v): v is number => v !== null);
   let netWorthIn5Years: number | null = null;
   if (netWorthSeries.length >= 2) {
     const first = netWorthSeries[0];
