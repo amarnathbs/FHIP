@@ -619,19 +619,35 @@ describe('LR-FI-1 — data-layer guards', () => {
     }
   });
 
-  it('the Twin loads the same four registers with `owner`', () => {
+  // WP-05 (DC-04), updated with reason: the Twin used to run its own private
+  // computeDashboard() over its own register reads, and this guard checked
+  // those reads selected `owner`. That private copy is deleted -- the Twin now
+  // takes the ONE shared loadDashboard() (whose owner selects the test above
+  // guards) and the canonical read-model snapshot, whose selectors apply the
+  // SMSF household rule themselves (isHouseholdOwner / excludedReason
+  // 'smsf_owned'; behaviour proven in tests/unit/twinCanonicalParity.test.ts).
+  it('the Twin has no private Dashboard: it uses the shared owner-aware loadDashboard and the canonical snapshot', () => {
     const src = read('lib/services/twinData.ts');
-    const dashboardForTwin = src.slice(src.indexOf('async function loadDashboardForTwin'));
-    for (const table of ['income_sources', 'expense_items', 'liabilities', 'insurance_policies']) {
-      const block = dashboardForTwin.slice(dashboardForTwin.indexOf(`from('${table}')`));
-      expect(block.slice(0, block.indexOf('.eq(')), `${table} must select owner`).toContain('owner');
-    }
+    expect(src).not.toContain('computeDashboard(');
+    expect(src).not.toContain('loadDashboardForTwin');
+    expect(src).toContain('loadDashboard(userId, supabase)');
+    expect(src).toContain('buildCanonicalFinancialSnapshot(userId, { client: supabase })');
   });
 
-  it('pure cash-flow registers read outside computeDashboard exclude SMSF at the query level', () => {
-    expect(read('lib/services/twinData.ts')).toContain(".neq('owner', SMSF_OWNER)");
-    const report = read('lib/services/reportSnapshotResolver.ts');
-    expect(report.match(/\.neq\('owner', SMSF_OWNER\)/g)?.length).toBe(2);
+  // WP-05 / WP-06, updated with reason: the Twin's housing/remittance figures
+  // and the Premium report appendix no longer read expense_items /
+  // income_sources directly (each needed its own `.neq('owner', SMSF_OWNER)`).
+  // They are built from the canonical Expense / Income read models, which
+  // exclude SMSF-owned rows from every household figure and LIST them in the
+  // appendix as "not counted" (tests/unit/twinCanonicalParity.test.ts,
+  // tests/unit/reportCanonicalAppendix.test.ts).
+  it('no pure cash-flow register is read raw outside the read models by the Twin or the report', () => {
+    for (const file of ['lib/services/twinData.ts', 'lib/services/reportSnapshotResolver.ts']) {
+      const src = read(file);
+      expect(src, file).not.toContain("from('expense_items')");
+      expect(src, file).not.toContain("from('income_sources')");
+    }
+    expect(read('lib/read-models/core/types.ts')).toContain("return owner !== 'smsf';");
   });
 
   it('the SMSF owner literal lives in exactly one place', () => {

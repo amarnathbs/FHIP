@@ -212,7 +212,7 @@ function nullableNumber(v: unknown): number | null {
 export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceDataOutcome> {
   const supabase = client ?? (await createClient());
 
-  const [homeCountry, profileRes, householdRes, retirementRows, retirementMembersRes, insuranceRows, snapshotsRes, crossBorderRes] =
+  const [homeCountry, profileRes, householdRes, retirementMembersRes, snapshotsRes, crossBorderRes] =
     await Promise.all([
       // Canonical resolver (lib/services/jurisdiction.ts) — the single
       // source of truth every other correctly-behaving module uses. Fails
@@ -231,24 +231,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       getUserFullExperienceHomeCountry(userId, supabase),
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
-      // WP-05 (DC-18): paged -- a >1000-row register is never truncated.
-      fetchAllRows<TwinRetirementRow>('retirement_accounts', (from, to) =>
-        supabase
-          .from('retirement_accounts')
-          .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .order('id', { ascending: true })
-          .range(from, to)),
       supabase.from('retirement_members').select('member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true).eq('member_type', 'self').maybeSingle(),
-      fetchAllRows<TwinInsuranceRow>('insurance_policies', (from, to) =>
-        supabase
-          .from('insurance_policies')
-          .select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .order('id', { ascending: true })
-          .range(from, to)),
       // WP-05: the MOST RECENT 12 monthly snapshots (newest first, reversed
       // below). The old read ordered ascending with limit(12) and so took the
       // household's OLDEST twelve months once it had more than a year of
@@ -285,9 +268,27 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
   // shown beside. It now takes the ONE shared loadDashboard() figure, and the
   // Twin-only inputs (housing, remittance, balance-sheet rows) come from the
   // canonical read-model snapshot.
-  const [dashboard, snapshot, healthScore, resilience, dna, goalsResult] = await Promise.all([
+  const [dashboard, snapshot, retirementRows, insuranceRows, healthScore, resilience, dna, goalsResult] = await Promise.all([
     loadDashboard(userId, supabase),
     buildCanonicalFinancialSnapshot(userId, { client: supabase }),
+    // WP-05 (DC-18): paged -- a >1000-row register is never truncated; a
+    // failed read fails the run closed instead of reading as "none".
+    fetchAllRows<TwinRetirementRow>('retirement_accounts', (from, to) =>
+      supabase
+        .from('retirement_accounts')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to)),
+    fetchAllRows<TwinInsuranceRow>('insurance_policies', (from, to) =>
+      supabase
+        .from('insurance_policies')
+        .select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to)),
     loadHealthScore(userId, supabase),
     loadResilience(userId, supabase),
     loadFinancialDna(userId, supabase),
