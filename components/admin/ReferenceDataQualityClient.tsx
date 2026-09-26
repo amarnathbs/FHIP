@@ -35,7 +35,7 @@ interface QualityPayload {
   outliers?: Panel<Array<Record<string, unknown>>>;
   corrections?: Panel<Array<Record<string, unknown>>>;
   risk_free?: Panel<Record<string, { status: string; detail?: string; freshness: { state: string; detail: string } }>>;
-  job_control?: Panel<Array<{ job_key: string; enabled: boolean; disabled_reason: string | null; last_success_at: string | null; consecutive_failures: number }>>;
+  job_control?: Panel<Array<{ job_key: string; enabled: boolean; disabled_reason: string | null; last_success_at: string | null; last_failure_at?: string | null; consecutive_failures: number }>>;
   blocked_sources?: Panel<Array<{ sourceKey: string; label: string; licence: string; reason: string; termsUrl: string | null }>>;
   scheme_mapping_gaps?: Panel<Array<Record<string, unknown>>>;
 }
@@ -209,7 +209,7 @@ export default function ReferenceDataQualityClient() {
           {(payload.job_control?.data ?? []).map((j) => (
             <li key={j.job_key} style={{ marginBottom: '0.5rem' }}>
               <code>{j.job_key}</code> — {j.enabled ? 'enabled' : 'DISABLED'}
-              {j.disabled_reason ? `: ${j.disabled_reason}` : ''}. Last success {j.last_success_at ?? 'never'}; consecutive failures {j.consecutive_failures}.
+              {j.disabled_reason ? `: ${j.disabled_reason}` : ''}. Last success {j.last_success_at ?? 'never'}; last failure {j.last_failure_at ?? 'none recorded'}; consecutive failures {j.consecutive_failures}.
               {JOB_SOURCE_CONFIG[j.job_key] && (
                 <>
                   {' '}
