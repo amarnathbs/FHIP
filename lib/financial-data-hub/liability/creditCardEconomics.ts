@@ -190,3 +190,29 @@ export interface CashAdvanceTreatment {
 export function classifyCashAdvance(): CashAdvanceTreatment {
   return { economicType: 'cash_withdrawal', expenseContribution: 0 };
 }
+
+/**
+ * WP-11: THE LEDGER MAPPING the Apply RPC writes (migration 0209,
+ * `fdh10_internal_write_statement_ledger`, between its LEDGER_MAPPING_BEGIN /
+ * LEDGER_MAPPING_END markers). Direction is the effect on the FACILITY
+ * balance: debit raises what is owed, credit lowers it. The economic type is
+ * exactly `classifyStatementActivity`'s; ADJUSTMENT / OTHER have no ledger
+ * mapping (they are resolved by the user or recorded as not counted).
+ *
+ * tests/unit/fdh10ApplyLedgerMapping.test.ts proves the SQL CASE equals this
+ * constant and this constant equals `classifyStatementActivity` for all ten
+ * activity types -- so the certified pure function is no longer a control
+ * that no production path calls (G2).
+ */
+export const LIABILITY_LEDGER_MAPPING: Readonly<Record<LiabilityActivityType, { creditDebit: 'credit' | 'debit'; economicType: FdhEconomicTransactionType } | null>> = {
+  PURCHASE: { creditDebit: 'debit', economicType: 'expense' },
+  REFUND: { creditDebit: 'credit', economicType: 'refund' },
+  PAYMENT: { creditDebit: 'credit', economicType: 'transfer' },
+  CASH_ADVANCE: { creditDebit: 'debit', economicType: 'cash_withdrawal' },
+  INTEREST: { creditDebit: 'debit', economicType: 'debt_interest' },
+  FEE: { creditDebit: 'debit', economicType: 'fee' },
+  PRINCIPAL: { creditDebit: 'credit', economicType: 'debt_principal' },
+  LOAN_ADVANCE: { creditDebit: 'debit', economicType: 'transfer' },
+  ADJUSTMENT: null,
+  OTHER: null,
+};
