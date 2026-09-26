@@ -875,7 +875,14 @@ export async function confirmAiAuInvestmentFallback(
     // a button, and a reviewer looking at the evidence later should be able
     // to tell an AI-read statement from a column-mapped one.
     extractionConfidence: AIE_AU_INVESTMENT_EXTRACTION_CONFIDENCE,
-    warnings: ['read_by_ai_fallback_not_native_parser', 'user_confirmed_ai_fallback_draft'],
+    warnings: [
+      'read_by_ai_fallback_not_native_parser',
+      'user_confirmed_ai_fallback_draft',
+      // WP-12 (INV-G11): the model's own "I could not list every line" (the
+      // 40-row cap) used to be dropped at confirm; it is now a persisted,
+      // visible warning on the statement.
+      ...(claim.claimed && (claim.payload as { allRowsListed?: boolean } | null)?.allRowsListed === false ? ['ai_reported_rows_incomplete'] : []),
+    ],
   };
 
   let persisted: PersistAuInvestmentEvidenceResult;

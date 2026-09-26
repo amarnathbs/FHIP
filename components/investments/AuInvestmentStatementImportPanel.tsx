@@ -224,6 +224,8 @@ const WARNING_LABELS: Record<string, string> = {
   unparseable_summary_value: 'was a total or cash line we could not read',
   zero_positions_extracted: 'no holdings could be read from this file',
   read_by_ai_fallback_not_native_parser: 'this statement was read by AI and confirmed by you',
+  user_confirmed_ai_fallback_draft: 'you checked the AI reading before it was saved',
+  ai_reported_rows_incomplete: 'the AI could not list every line on this statement — add any missing lines yourself',
 };
 
 const money = (v: number | string | null | undefined, currency = 'AUD') =>
@@ -255,7 +257,7 @@ export function AuInvestmentStatementImportPanel({
   const [institutionName, setInstitutionName] = useState('');
   const [maskedAccountIdentifier, setMaskedAccountIdentifier] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(resumeDocumentId ?? null);
   const [message, setMessage] = useState<string | null>(null);
   const [statement, setStatement] = useState<Statement | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -337,8 +339,9 @@ export function AuInvestmentStatementImportPanel({
   // WP-12 (PO D-05): opened from the Investments tab's "Imported statements"
   // list to finish a statement or add its holdings to Net Worth.
   useEffect(() => {
+    // documentId is initialised from resumeDocumentId (the page remounts the
+    // panel with a new key for each statement).
     if (!resumeDocumentId) return;
-    setDocumentId(resumeDocumentId);
     void (async () => {
       const loaded = await loadReview(resumeDocumentId);
       if (loaded?.statement.approval_status === 'approved') {
@@ -1063,6 +1066,12 @@ export function AuInvestmentStatementImportPanel({
             <dd>
               {statement.statement_start_date || statement.statement_end_date ? `${statement.statement_start_date ?? '?'} to ${statement.statement_end_date ?? '?'}` : 'Not shown'}
             </dd>
+            {statement.opening_portfolio_value !== null && (
+              <>
+                <dt className="text-muted">Opening value</dt>
+                <dd>{money(statement.opening_portfolio_value, statement.base_currency)}</dd>
+              </>
+            )}
             {statement.closing_portfolio_value !== null && (
               <>
                 <dt className="text-muted">Statement total</dt>

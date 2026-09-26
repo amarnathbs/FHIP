@@ -16,11 +16,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 | payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
 | liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
 | liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
-| auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
+| auInvestmentStatement | WP-12 | 168 | 42 | 35 | 21 | 58 | 12 | 0 | 0 | 0 |
 | retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **885** | 131 | 117 | 271 | 332 | 34 | 355 | | 21 |
 
 ## Open gaps by id
 
@@ -57,15 +57,6 @@ Every field an active upload adapter extracts, every evidence column and every a
 | GAP-RET-07 | P2 | WP-13 | 5 |
 | GAP-RET-08 | P2 | WP-07 | 3 |
 | GAP-RET-09 | P2 | WP-13 | 2 |
-| INV-G1 | P0 | WP-12 | 2 |
-| INV-G11 | P3 | WP-12 | 1 |
-| INV-G2 | P0 | WP-12 | 6 |
-| INV-G3 | P0 | WP-12 | 5 |
-| INV-G4 | P1 | WP-12 | 9 |
-| INV-G6 | P1 | WP-12 | 6 |
-| INV-G7 | P2 | WP-12 | 19 |
-| INV-G8 | P2 | WP-12 | 9 |
-| INV-G9 | P2 | WP-12 | 17 |
 | X-01 | P1 | WP-11 | 3 |
 
 ## bankStatement (owner WP-08)
@@ -638,59 +629,59 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `statementType` | C evidence | evidence:fdh_investment_statements.statement_type (import history) | — | open_gap | INV-G9 (P2) | WP-12 |
+| `statementType` | C evidence | evidence:fdh_investment_statements.statement_type | Investments tab: Imported statements | compliant | — | — |
 | `country` | D metadata | fdh_investment_statements.investment_jurisdiction | — | compliant | — | — |
-| `currencyCode` | A state | ii_accounts.currency_code | Investment Intelligence screens | compliant | — | — |
-| `institutionName` | A state | ii_accounts.institution_name | Investment Intelligence screens | compliant | — | — |
-| `maskedAccountIdentifier` | A state | ii_accounts.account_number_masked ("Add as new account") | — | open_gap | INV-G3 (P0) | WP-12 |
-| `nickname` | E unsupported | not persisted as a canonical fact | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statementDate` | C evidence | evidence:fdh_investment_statements.statement_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statementPeriodStart` | C evidence | evidence:fdh_investment_statements.statement_start_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statementPeriodEnd` | C evidence | evidence:fdh_investment_statements.statement_end_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `openingPortfolioValue` | C evidence | evidence:fdh_investment_statements.opening_portfolio_value (reconciliation input) | — | open_gap | INV-G8 (P2) | WP-12 |
-| `closingPortfolioValue` | C evidence | evidence:fdh_investment_statements.closing_portfolio_value (reconciliation input) | — | open_gap | INV-G8 (P2) | WP-12 |
-| `cashBalance` | E unsupported | broker cash unsupported for now (D-11), shown with visible text | — | open_gap | INV-G8 (P2) | WP-12 |
-| `positions` | A state | ii_holding_snapshots | — | open_gap | INV-G2 (P0) | WP-12 |
-| `transactions` | B event | ii_transactions | — | open_gap | INV-G1 (P0) | WP-12 |
+| `currencyCode` | A state | ii_accounts.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `institutionName` | A state | ii_accounts.institution_name | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `maskedAccountIdentifier` | A state | ii_accounts.account_number_masked ("Add as new account") | AU import panel (statement review) | compliant | — | — |
+| `nickname` | D metadata | fdh_investment_statements.nickname (no extractor sets it; never a financial fact) | — | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_investment_statements.statement_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statementPeriodStart` | C evidence | evidence:fdh_investment_statements.statement_start_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statementPeriodEnd` | C evidence | evidence:fdh_investment_statements.statement_end_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `openingPortfolioValue` | C evidence | evidence:fdh_investment_statements.opening_portfolio_value (from an "Opening value" line) | AU import panel (statement review) | compliant | — | — |
+| `closingPortfolioValue` | C evidence | evidence:fdh_investment_statements.closing_portfolio_value (from a "Total" line; reconciles the holdings) | AU import panel (statement review) | compliant | — | — |
+| `cashBalance` | E unsupported | broker cash unsupported for now (D-11): stored as evidence, never counted | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `positions` | A state | ii_holding_snapshots | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `transactions` | B event | ii_transactions | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 | `parserName` | D metadata | fdh_investment_statements.parser | — | compliant | — | — |
 | `parserVersion` | D metadata | fdh_investment_statements.parser_version | — | compliant | — | — |
 | `extractionConfidence` | D metadata | fdh_investment_statements.extraction_confidence | — | compliant | — | — |
-| `warnings` | E unsupported | fdh_investment_statements.extraction_warnings (0207) | — | open_gap | INV-G6 (P1) | WP-12 |
+| `warnings` | E unsupported | fdh_investment_statements.extraction_warnings (0207): "N rows could not be read" | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
 
 ### au_investment_native · ts_interface · `fdh:investment/types.ts#AuStatementPositionEvidence`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `securityNameRaw` | A state | ii_instruments.instrument_name ("Create security") | — | open_gap | INV-G3 (P0) | WP-12 |
-| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | A state | ii_holding_snapshots.units | — | open_gap | INV-G2 (P0) | WP-12 |
-| `unitPrice` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `marketValue` | A state | ii_holding_snapshots.value (null refused, never 0) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `valuationDate` | A state | ii_holding_snapshots.as_of_date (parsed) | — | open_gap | INV-G6 (P1) | WP-12 |
-| `exchange` | A state | ii_instrument_identifiers (defaults ASX) | Investment Intelligence screens | compliant | — | — |
-| `currencyCode` | A state | ii_holding_snapshots.currency_code | Investment Intelligence screens | compliant | — | — |
+| `securityNameRaw` | A state | ii_instruments.instrument_name ("Create security") | AU import panel (statement review) | compliant | — | — |
+| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | A state | ii_holding_snapshots.units | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `unitPrice` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `marketValue` | A state | ii_holding_snapshots.value (null refused with a visible reason, never 0) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `valuationDate` | A state | ii_holding_snapshots.as_of_date (parsed; unreadable -> statement date + warning) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `exchange` | A state | ii_instrument_identifiers (defaults ASX) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `currencyCode` | A state | ii_holding_snapshots.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 | `sourceRowNumber` | D metadata | fdh_investment_statement_positions.source_row_number | — | compliant | — | — |
 
 ### au_investment_native · ts_interface · `fdh:investment/types.ts#AuStatementTransactionEvidence`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `transactionType` | B event | ii_transactions.transaction_type (+ bank leg corroboration) | — | open_gap | INV-G4 (P1) | WP-12 |
-| `tradeDate` | B event | ii_transactions.transaction_date | Investment Intelligence screens | compliant | — | — |
-| `settlementDate` | C evidence | evidence:fdh_investment_statement_activities.settlement_date (import history) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `securityNameRaw` | A state | ii_instruments (match input) | Investment Intelligence screens | compliant | — | — |
-| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | B event | ii_transactions.units | Investment Intelligence screens | compliant | — | — |
-| `unitPrice` | B event | ii_transactions.price_per_unit | Investment Intelligence screens | compliant | — | — |
-| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens | compliant | — | — |
-| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `currencyCode` | B event | ii_transactions.currency_code | Investment Intelligence screens | compliant | — | — |
-| `descriptionRaw` | C evidence | ii_transactions.source_description | — | open_gap | INV-G7 (P2) | WP-12 |
-| `brokerageRaw` | B event | ii_transactions.fees (parsed) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `frankingCreditRaw` | C evidence | evidence: franking credit (tax), visible | — | open_gap | INV-G7 (P2) | WP-12 |
-| `withholdingTaxRaw` | C evidence | ii_transactions.taxes | — | open_gap | INV-G7 (P2) | WP-12 |
-| `sourceRowNumber` | D metadata | fdh_investment_statement_activities.source_row_number | — | compliant | — | — |
+| `transactionType` | B event | ii_transactions.transaction_type (+ the corroborated bank leg re-typed via fdh_transactions) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `tradeDate` | B event | ii_transactions.transaction_date | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `settlementDate` | C evidence | evidence:fdh_investment_statement_activities.settlement_date | AU import panel (statement review) | compliant | — | — |
+| `securityNameRaw` | A state | ii_instruments (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | B event | ii_transactions.units | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `unitPrice` | B event | ii_transactions.price_per_unit | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `currencyCode` | B event | ii_transactions.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `descriptionRaw` | B event | ii_transactions.source_description (DISTRIBUTION keeps its name here) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `brokerageRaw` | B event | ii_transactions.fees (parsed) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `frankingCreditRaw` | C evidence | evidence:fdh_investment_statement_activities.franking_credit_raw (tax evidence, parsed) | AU import panel (statement review) | compliant | — | — |
+| `withholdingTaxRaw` | B event | ii_transactions.taxes (parsed) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `sourceRowNumber` | D metadata | fdh_investment_statement_activities.source_row_number (+ in-statement occurrence in the fingerprint) | — | compliant | — | — |
 
 ### au_investment_ai · zod_schema · `aie:auInvestment/schema.ts#auInvestmentDocumentFactsSchema`
 
@@ -698,59 +689,59 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `schemaVersion` | D metadata | aie run evidence | — | compliant | — | — |
 | `documentMissingReasonCode` | D metadata | aie run evidence | — | compliant | — | — |
-| `institutionName` | A state | ii_accounts.institution_name | Investment Intelligence screens | compliant | — | — |
-| `statementDate` | C evidence | evidence:fdh_investment_statements.statement_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statementPeriodStart` | C evidence | evidence:fdh_investment_statements.statement_start_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statementPeriodEnd` | C evidence | evidence:fdh_investment_statements.statement_end_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `allRowsListed` | E unsupported | incomplete extraction must block Apply (40-row cap) | — | open_gap | INV-G11 (P3) | WP-12 |
-| `holdings` | A state | ii_holding_snapshots | — | open_gap | INV-G2 (P0) | WP-12 |
-| `transactions` | B event | ii_transactions | — | open_gap | INV-G1 (P0) | WP-12 |
+| `institutionName` | A state | ii_accounts.institution_name | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_investment_statements.statement_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statementPeriodStart` | C evidence | evidence:fdh_investment_statements.statement_start_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statementPeriodEnd` | C evidence | evidence:fdh_investment_statements.statement_end_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `allRowsListed` | C evidence | fdh_investment_statements.extraction_warnings: ai_reported_rows_incomplete (40-row cap), persisted at confirm | AU import panel (statement review) (draft and saved statement) | compliant | — | — |
+| `holdings` | A state | ii_holding_snapshots | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `transactions` | B event | ii_transactions | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 
 ### au_investment_ai · zod_schema · `aie:auInvestment/schema.ts#auInvestmentHoldingSchema`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `securityNameRaw` | A state | ii_instruments.instrument_name ("Create security") | — | open_gap | INV-G3 (P0) | WP-12 |
-| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | A state | ii_holding_snapshots.units | — | open_gap | INV-G2 (P0) | WP-12 |
-| `unitPrice` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `marketValue` | A state | ii_holding_snapshots.value (null refused, never 0) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `valuationDate` | A state | ii_holding_snapshots.as_of_date (parsed) | — | open_gap | INV-G6 (P1) | WP-12 |
+| `securityNameRaw` | A state | ii_instruments.instrument_name ("Create security") | AU import panel (statement review) | compliant | — | — |
+| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | A state | ii_holding_snapshots.units | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `unitPrice` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `marketValue` | A state | ii_holding_snapshots.value (null refused with a visible reason, never 0) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `valuationDate` | A state | ii_holding_snapshots.as_of_date (parsed; unreadable -> statement date + warning) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
 
 ### au_investment_ai · zod_schema · `aie:auInvestment/schema.ts#auInvestmentActivitySchema`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `transactionType` | B event | ii_transactions.transaction_type (+ bank leg corroboration) | — | open_gap | INV-G4 (P1) | WP-12 |
-| `tradeDate` | B event | ii_transactions.transaction_date | Investment Intelligence screens | compliant | — | — |
-| `settlementDate` | C evidence | evidence:fdh_investment_statement_activities.settlement_date (import history) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `securityNameRaw` | A state | ii_instruments (match input) | Investment Intelligence screens | compliant | — | — |
-| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | B event | ii_transactions.units | Investment Intelligence screens | compliant | — | — |
-| `unitPrice` | B event | ii_transactions.price_per_unit | Investment Intelligence screens | compliant | — | — |
-| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens | compliant | — | — |
-| `brokerage` | B event | ii_transactions.fees | — | open_gap | INV-G7 (P2) | WP-12 |
+| `transactionType` | B event | ii_transactions.transaction_type (+ the corroborated bank leg re-typed via fdh_transactions) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `tradeDate` | B event | ii_transactions.transaction_date | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `settlementDate` | C evidence | evidence:fdh_investment_statement_activities.settlement_date | AU import panel (statement review) | compliant | — | — |
+| `securityNameRaw` | A state | ii_instruments (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `tickerRaw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | B event | ii_transactions.units | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `unitPrice` | B event | ii_transactions.price_per_unit | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `brokerage` | B event | ii_transactions.fees | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 
 ### au_investment_native · enum_value · `enum:AU_STATEMENT_TRANSACTION_TYPES`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `BUY` | B event | ii_transactions(purchase); the bank funding leg is investment (spending 0) | — | open_gap | INV-G4 (P1) | WP-12 |
-| `SELL` | B event | ii_transactions(sale); the bank proceeds leg is asset_sale (ordinary income 0) | — | open_gap | INV-G4 (P1) | WP-12 |
-| `DIVIDEND` | B event | ii_transactions(dividend); the bank credit is the single household-income leg | — | open_gap | INV-G4 (P1) | WP-12 |
-| `DISTRIBUTION` | B event | ii_transactions(distribution subtype; today recorded as dividend) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `INTEREST` | E unsupported | broker cash interest: skipped, reason shown (D-11) | — | open_gap | INV-G8 (P2) | WP-12 |
-| `BROKERAGE` | B event | ii_transactions(fee) | Investment Intelligence screens | compliant | — | — |
-| `FEE` | B event | ii_transactions(fee) | Investment Intelligence screens | compliant | — | — |
-| `TRANSFER_IN` | B event | ii_transactions(transfer_in) | Investment Intelligence screens | compliant | — | — |
-| `TRANSFER_OUT` | B event | ii_transactions(transfer_out) | Investment Intelligence screens | compliant | — | — |
-| `CASH_DEPOSIT` | E unsupported | broker cash: skipped, reason shown (D-11) | — | open_gap | INV-G8 (P2) | WP-12 |
-| `CASH_WITHDRAWAL` | E unsupported | broker cash: skipped, reason shown (D-11) | — | open_gap | INV-G8 (P2) | WP-12 |
-| `DRP` | B event | ii_transactions(reinvestment) | Investment Intelligence screens | compliant | — | — |
-| `CORPORATE_ACTION_EVIDENCE` | E unsupported | skipped; the reason must be shown | — | open_gap | INV-G9 (P2) | WP-12 |
-| `OTHER` | E unsupported | skipped; the reason must be shown | — | open_gap | INV-G9 (P2) | WP-12 |
-| `UNKNOWN` | E unsupported | skipped; the reason must be shown | — | open_gap | INV-G9 (P2) | WP-12 |
+| `BUY` | B event | ii_transactions(purchase); the corroborated bank funding leg -> investment (spending 0) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `SELL` | B event | ii_transactions(sale); the corroborated bank proceeds leg -> asset_sale (ordinary income 0) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `DIVIDEND` | B event | ii_transactions(dividend); the bank credit stays the single household-income leg (corroboration only) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `DISTRIBUTION` | B event | ii_transactions(dividend, source_description DISTRIBUTION); bank credit = the one income leg | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `INTEREST` | E unsupported | broker cash interest: skipped with the D-11 reason | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
+| `BROKERAGE` | B event | ii_transactions(fee); a line naming no security is skipped with a reason | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `FEE` | B event | ii_transactions(fee); a line naming no security is skipped with a reason | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `TRANSFER_IN` | B event | ii_transactions(transfer_in) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `TRANSFER_OUT` | B event | ii_transactions(transfer_out) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `CASH_DEPOSIT` | E unsupported | broker cash: skipped with the D-11 reason; the bank leg -> investment (spending 0) | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
+| `CASH_WITHDRAWAL` | E unsupported | broker cash: skipped with the D-11 reason; the bank leg -> transfer (income 0) | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
+| `DRP` | B event | ii_transactions(reinvestment) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `CORPORATE_ACTION_EVIDENCE` | E unsupported | never auto-applied: skipped with a reason | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
+| `OTHER` | E unsupported | skipped with a reason | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
+| `UNKNOWN` | E unsupported | skipped with a reason | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
 
 ### au_investment_native · db_column · `db:fdh_investment_statements`
 
@@ -761,23 +752,23 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `household_id` | D metadata | fdh_investment_statements.household_id | — | compliant | — | — |
 | `statement_upload_id` | D metadata | fdh_investment_statements.statement_upload_id | — | compliant | — | — |
 | `canonical_account_id` | D metadata | fdh_investment_statements.canonical_account_id | — | compliant | — | — |
-| `statement_type` | C evidence | evidence:fdh_investment_statements.statement_type | — | open_gap | INV-G9 (P2) | WP-12 |
+| `statement_type` | C evidence | evidence:fdh_investment_statements.statement_type | Investments tab: Imported statements | compliant | — | — |
 | `investment_jurisdiction` | D metadata | fdh_investment_statements.investment_jurisdiction | — | compliant | — | — |
-| `institution_name` | A state | ii_accounts.institution_name | Investment Intelligence screens | compliant | — | — |
-| `masked_account_identifier` | A state | ii_accounts.account_number_masked | — | open_gap | INV-G3 (P0) | WP-12 |
-| `nickname` | E unsupported | never set | — | open_gap | INV-G9 (P2) | WP-12 |
-| `base_currency` | A state | ii_accounts.currency_code | Investment Intelligence screens | compliant | — | — |
-| `statement_date` | C evidence | evidence:fdh_investment_statements.statement_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statement_start_date` | C evidence | evidence:fdh_investment_statements.statement_start_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `statement_end_date` | C evidence | evidence:fdh_investment_statements.statement_end_date | — | open_gap | INV-G9 (P2) | WP-12 |
-| `opening_portfolio_value` | C evidence | evidence:fdh_investment_statements.opening_portfolio_value | — | open_gap | INV-G8 (P2) | WP-12 |
-| `closing_portfolio_value` | C evidence | evidence:fdh_investment_statements.closing_portfolio_value | — | open_gap | INV-G8 (P2) | WP-12 |
-| `cash_balance` | E unsupported | broker cash unsupported for now (D-11) | — | open_gap | INV-G8 (P2) | WP-12 |
+| `institution_name` | A state | ii_accounts.institution_name | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `masked_account_identifier` | A state | ii_accounts.account_number_masked | AU import panel (statement review) | compliant | — | — |
+| `nickname` | D metadata | fdh_investment_statements.nickname (no extractor sets it) | — | compliant | — | — |
+| `base_currency` | A state | ii_accounts.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `statement_date` | C evidence | evidence:fdh_investment_statements.statement_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statement_start_date` | C evidence | evidence:fdh_investment_statements.statement_start_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `statement_end_date` | C evidence | evidence:fdh_investment_statements.statement_end_date | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
+| `opening_portfolio_value` | C evidence | evidence:fdh_investment_statements.opening_portfolio_value | AU import panel (statement review) | compliant | — | — |
+| `closing_portfolio_value` | C evidence | evidence:fdh_investment_statements.closing_portfolio_value | AU import panel (statement review) | compliant | — | — |
+| `cash_balance` | E unsupported | broker cash unsupported for now (D-11): shown, never counted | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
 | `parser` | D metadata | fdh_investment_statements.parser | — | compliant | — | — |
 | `parser_version` | D metadata | fdh_investment_statements.parser_version | — | compliant | — | — |
 | `extraction_confidence` | D metadata | fdh_investment_statements.extraction_confidence | — | compliant | — | — |
 | `extraction_status` | D metadata | fdh_investment_statements.extraction_status | — | compliant | — | — |
-| `reconciliation_status` | D metadata | fdh_investment_statements.reconciliation_status (computed at persist) | — | open_gap | INV-G6 (P1) | WP-12 |
+| `reconciliation_status` | D metadata | fdh_investment_statements.reconciliation_status (statement totals, computed at persist; shown in the panel) | — | compliant | — | — |
 | `review_status` | D metadata | fdh_investment_statements.review_status | — | compliant | — | — |
 | `approval_status` | D metadata | fdh_investment_statements.approval_status | — | compliant | — | — |
 | `approved_at` | D metadata | fdh_investment_statements.approved_at | — | compliant | — | — |
@@ -787,7 +778,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `source_provenance` | D metadata | fdh_investment_statements.source_provenance | — | compliant | — | — |
 | `created_at` | D metadata | fdh_investment_statements.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_investment_statements.updated_at | — | compliant | — | — |
-| `extraction_warnings` | E unsupported | fdh_investment_statements.extraction_warnings (0207) | — | open_gap | INV-G6 (P1) | WP-12 |
+| `extraction_warnings` | E unsupported | fdh_investment_statements.extraction_warnings (0207) | AU import panel (statement review); Investments tab: Imported statements | compliant | — | — |
 
 ### au_investment_native · db_column · `db:fdh_investment_statement_positions`
 
@@ -796,18 +787,19 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_investment_statement_positions.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_investment_statement_positions.user_id | — | compliant | — | — |
 | `statement_id` | D metadata | fdh_investment_statement_positions.statement_id | — | compliant | — | — |
-| `security_name_raw` | A state | ii_instruments.instrument_name ("Create security") | — | open_gap | INV-G3 (P0) | WP-12 |
-| `ticker_raw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | A state | ii_holding_snapshots.units | — | open_gap | INV-G2 (P0) | WP-12 |
-| `unit_price` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `market_value` | A state | ii_holding_snapshots.value (null refused, never 0) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `valuation_date` | A state | ii_holding_snapshots.as_of_date (parsed) | — | open_gap | INV-G6 (P1) | WP-12 |
-| `exchange` | A state | ii_instrument_identifiers | Investment Intelligence screens | compliant | — | — |
-| `currency_code` | A state | ii_holding_snapshots.currency_code | Investment Intelligence screens | compliant | — | — |
+| `security_name_raw` | A state | ii_instruments.instrument_name ("Create security") | AU import panel (statement review) | compliant | — | — |
+| `ticker_raw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `isin` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | A state | ii_holding_snapshots.units | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `unit_price` | A state | ii_holding_snapshots.source_nav (price_source statement_price) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `market_value` | A state | ii_holding_snapshots.value (null refused with a visible reason, never 0) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `valuation_date` | A state | ii_holding_snapshots.as_of_date (parsed; unreadable -> statement date + warning) | Investments tab (Imported, not yet in Net Worth, then the Investments grid after "Add to Net Worth") | compliant | — | — |
+| `exchange` | A state | ii_instrument_identifiers | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `currency_code` | A state | ii_holding_snapshots.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 | `security_match_status` | D metadata | fdh_investment_statement_positions.security_match_status | — | compliant | — | — |
 | `matched_instrument_id` | D metadata | fdh_investment_statement_positions.matched_instrument_id | — | compliant | — | — |
-| `apply_status` | D metadata | fdh_investment_statement_positions.apply_status (must start pending) | — | open_gap | INV-G2 (P0) | WP-12 |
+| `apply_status` | D metadata | fdh_investment_statement_positions.apply_status (created 'pending'; 0213 default + backfill) | — | compliant | — | — |
+| `apply_rejected_reason` | E unsupported | fdh_investment_statement_positions.apply_rejected_reason (0213): why a holding was not added | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
 | `canonical_holding_snapshot_id` | D metadata | fdh_investment_statement_positions.canonical_holding_snapshot_id | — | compliant | — | — |
 | `applied_at` | D metadata | fdh_investment_statement_positions.applied_at | — | compliant | — | — |
 | `applied_by` | D metadata | fdh_investment_statement_positions.applied_by | — | compliant | — | — |
@@ -822,31 +814,31 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_investment_statement_activities.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_investment_statement_activities.user_id | — | compliant | — | — |
 | `statement_id` | D metadata | fdh_investment_statement_activities.statement_id | — | compliant | — | — |
-| `activity_type` | B event | ii_transactions.transaction_type (+ bank leg corroboration) | — | open_gap | INV-G4 (P1) | WP-12 |
-| `trade_date` | B event | ii_transactions.transaction_date | Investment Intelligence screens | compliant | — | — |
-| `settlement_date` | C evidence | evidence:fdh_investment_statement_activities.settlement_date (import history) | — | open_gap | INV-G7 (P2) | WP-12 |
-| `security_name_raw` | A state | ii_instruments (match input) | Investment Intelligence screens | compliant | — | — |
-| `ticker_raw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens | compliant | — | — |
-| `quantity` | B event | ii_transactions.units | Investment Intelligence screens | compliant | — | — |
-| `unit_price` | B event | ii_transactions.price_per_unit | Investment Intelligence screens | compliant | — | — |
-| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens | compliant | — | — |
-| `isin` | A state | ii_instrument_identifiers | Investment Intelligence screens | compliant | — | — |
-| `currency_code` | B event | ii_transactions.currency_code | Investment Intelligence screens | compliant | — | — |
-| `description_raw` | C evidence | ii_transactions.source_description | — | open_gap | INV-G7 (P2) | WP-12 |
-| `brokerage_raw` | B event | ii_transactions.fees | — | open_gap | INV-G7 (P2) | WP-12 |
-| `franking_credit_raw` | C evidence | evidence: franking credit, visible | — | open_gap | INV-G7 (P2) | WP-12 |
-| `withholding_tax_raw` | C evidence | ii_transactions.taxes | — | open_gap | INV-G7 (P2) | WP-12 |
+| `activity_type` | B event | ii_transactions.transaction_type (+ the corroborated bank leg re-typed via fdh_transactions) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `trade_date` | B event | ii_transactions.transaction_date | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `settlement_date` | C evidence | evidence:fdh_investment_statement_activities.settlement_date | AU import panel (statement review) | compliant | — | — |
+| `security_name_raw` | A state | ii_instruments (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `ticker_raw` | A state | ii_instrument_identifiers (match input) | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `quantity` | B event | ii_transactions.units | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `unit_price` | B event | ii_transactions.price_per_unit | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `amount` | B event | ii_transactions.gross_amount | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `isin` | A state | ii_instrument_identifiers | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `currency_code` | B event | ii_transactions.currency_code | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `description_raw` | B event | ii_transactions.source_description | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `brokerage_raw` | B event | ii_transactions.fees | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
+| `franking_credit_raw` | C evidence | evidence:fdh_investment_statement_activities.franking_credit_raw | AU import panel (statement review) | compliant | — | — |
+| `withholding_tax_raw` | B event | ii_transactions.taxes | Investment Intelligence screens; Investments tab once added to Net Worth | compliant | — | — |
 | `security_match_status` | D metadata | fdh_investment_statement_activities.security_match_status | — | compliant | — | — |
 | `matched_instrument_id` | D metadata | fdh_investment_statement_activities.matched_instrument_id | — | compliant | — | — |
-| `linked_transaction_id` | D metadata | the corroborated bank leg | — | open_gap | INV-G4 (P1) | WP-12 |
-| `bank_match_status` | D metadata | fdh_investment_statement_activities.bank_match_status | — | open_gap | INV-G4 (P1) | WP-12 |
-| `bank_match_candidates` | D metadata | fdh_investment_statement_activities.bank_match_candidates | — | open_gap | INV-G4 (P1) | WP-12 |
+| `linked_transaction_id` | D metadata | the corroborated bank leg (fdh_transactions; one-to-one, re-verified by the read models) | — | compliant | — | — |
+| `bank_match_status` | D metadata | fdh_investment_statement_activities.bank_match_status (shown as "bank payment found") | — | compliant | — | — |
+| `bank_match_candidates` | D metadata | fdh_investment_statement_activities.bank_match_candidates | — | compliant | — | — |
 | `review_status` | D metadata | fdh_investment_statement_activities.review_status | — | compliant | — | — |
 | `apply_status` | D metadata | fdh_investment_statement_activities.apply_status | — | compliant | — | — |
 | `canonical_transaction_id` | D metadata | fdh_investment_statement_activities.canonical_transaction_id | — | compliant | — | — |
 | `applied_at` | D metadata | fdh_investment_statement_activities.applied_at | — | compliant | — | — |
 | `applied_by` | D metadata | fdh_investment_statement_activities.applied_by | — | compliant | — | — |
-| `apply_rejected_reason` | E unsupported | the skip / rejection reason, rendered to the user | — | open_gap | INV-G9 (P2) | WP-12 |
+| `apply_rejected_reason` | E unsupported | the skip / rejection reason, rendered to the user | AU import panel Apply results + Investments tab: Imported statements ("Why N lines were kept as evidence only") | compliant | — | — |
 | `source_row_number` | D metadata | fdh_investment_statement_activities.source_row_number | — | compliant | — | — |
 | `created_at` | D metadata | fdh_investment_statement_activities.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_investment_statement_activities.updated_at | — | compliant | — | — |
