@@ -198,10 +198,15 @@ describe('GAP-RET-02 / D-12: contribution totals are annualised and always paire
     const dash = async (r: Row) => loadDashboard(USER, makeFakeSupabase(tables(profile(), { retirement_accounts: [r] })).client as never);
     const imported = await dash(row({ employer_contribution: Number(applied.employer_contribution), contribution_frequency: applied.contribution_frequency }));
     expect(imported.retirementEmployerMonthlyContribution).toBe(1000);
-    // NEGATIVE CONTROL (the base branch's outcome): the same total, applied
-    // WITHOUT a frequency, reads as $12,000 a MONTH.
+    // CONTROL: the same total applied WITHOUT a frequency. On the WP-13 base
+    // branch (legacy Dashboard) it read as $12,000 a MONTH. After the stage-2
+    // integration the Dashboard is WP-03's canonical one, which treats a
+    // missing frequency as UNKNOWN (GAP-RET-02 consumer side): it contributes
+    // nothing rather than being assumed monthly. Either way it is never the
+    // $1,000/month an applied, frequency-paired row gives.
     const base = await dash(row({ employer_contribution: 12000, contribution_frequency: null }));
-    expect(base.retirementEmployerMonthlyContribution).toBe(12000);
+    expect(base.retirementEmployerMonthlyContribution).not.toBe(1000);
+    expect(base.retirementEmployerMonthlyContribution).toBe(0);
   });
 });
 

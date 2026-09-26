@@ -110,7 +110,11 @@ export interface PremiumSourceData {
   // here so the Premium report's own investment totals can never again
   // drift from the correctly-converted canonical figure shown elsewhere in
   // the same report.
-  fxRateAudInr: number;
+  // Stage-2 integration (WP-03 DC-14 x WP-06): null ONLY when the canonical
+  // snapshot could not be read AND the direct FX read failed too. A failed read
+  // is never replaced by the default rate; the chapters that need a rate then
+  // report themselves unavailable instead of converting at an assumed one.
+  fxRateAudInr: number | null;
   // II-R10 continuation — Investment Intelligence chapters (spec sections
   // 21-32). Each is null when the module has no data for this user (spec
   // section 39-40: never a page of fabricated zeros) or is not applicable
@@ -370,7 +374,11 @@ export async function resolveReportSourceData(
         .eq('user_id', userId)
         .order('snapshot_month', { ascending: true })
         .limit(400),
-      getFxRateAudInr(supabase),
+      // WP-03 (DC-14): getFxRateAudInr throws on a failed read instead of
+      // returning the default. Only the snapshot-unavailable fallback needs it,
+      // so a failure here must not abort the whole report (WP-06: the appendix
+      // is then "unavailable"); it becomes null, never the default rate.
+      getFxRateAudInr(supabase).catch((): number | null => null),
       // II-R10 continuation chapters. Each loader already fails safe to
       // null internally (spec section 39) — the .catch() here is defence
       // in depth only, so one chapter's failure can never abort the whole

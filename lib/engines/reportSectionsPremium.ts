@@ -228,9 +228,19 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
   // dashboard.ts's per-country breakdowns, which show local totals "as
   // recorded" by design; every row within one country bucket already shares
   // one currency, so there's nothing to convert there.
+  //
+  // Stage-2 integration (WP-03 DC-14): the rate is null only when neither the
+  // canonical snapshot nor the direct FX read resolved. The fallback path below
+  // would then have to convert at an ASSUMED rate, so the chapter reports
+  // itself unavailable instead. (When the snapshot resolved, `canonical` is set
+  // and the rate is the snapshot's own, never null.)
+  const fxRate = premium.fxRateAudInr;
+  if (fxRate === null) {
+    return empty('investment_analysis', 18, 'Investment totals are unavailable for this report because the exchange rate could not be read. No figure is shown rather than one converted at an assumed rate.');
+  }
   const toReportingCurrency = (amount: number, rowCurrencyCode: string | null | undefined) => {
     const rowCurrency: SupportedCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : source.currency;
-    return convertToReportingCurrency(amount, rowCurrency, source.currency, premium.fxRateAudInr);
+    return convertToReportingCurrency(amount, rowCurrency, source.currency, fxRate);
   };
   //
   // WP-06 (DC-08): when the canonical snapshot resolved, this chapter uses
@@ -246,7 +256,7 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
   const costOf = (r: (typeof rows)[number]): number => {
     if (!canonical) return toReportingCurrency(r.cost_base ?? 0, r.currency_code);
     if (r.currency_code !== 'AUD' && r.currency_code !== 'INR') return 0;
-    return convertToReportingCurrency(r.cost_base ?? 0, r.currency_code, source.currency, premium.fxRateAudInr);
+    return convertToReportingCurrency(r.cost_base ?? 0, r.currency_code, source.currency, fxRate);
   };
   const totalCurrentValue = canonical ? canonical.publishedTotal : rows.reduce((s, r) => s + (valueOf(r) ?? 0), 0);
   const totalCostBase = rows.filter((r) => valueOf(r) !== null).reduce((s, r) => s + costOf(r), 0);
