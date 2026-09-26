@@ -50,6 +50,7 @@ import {
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
   FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
+  FDH_DOCUMENT_AUDIT_EVENT_TYPES_CANONICAL_UPLOAD_ADDED,
 } from '@/lib/financial-data-hub/constants/enums';
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -98,6 +99,9 @@ export const AUDIT_EVENT_PHASE_CONSTANTS: ReadonlyMap<string, readonly (readonly
     ]],
     ['0185', [FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED]],
     ['0186', [FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED]],
+    // Approved Upload -> Canonical User Data programme (WP-01). The only
+    // widening that programme is allowed; every later package reuses it.
+    ['0207', [FDH_DOCUMENT_AUDIT_EVENT_TYPES_CANONICAL_UPLOAD_ADDED]],
   ]);
 
 /**

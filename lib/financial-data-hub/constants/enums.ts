@@ -341,14 +341,26 @@ export const FDH_ERROR_CODES_FDH3_REAL_MALWARE_SCAN_ADDED = [
   'malware_scan_unknown',
 ] as const;
 
+/**
+ * CANONICAL-UPLOAD PROGRAMME WIDENING (migration
+ * `0207_canonical_upload_schema_foundation.sql`, UPL-01 / residual R-14-8):
+ * a bounded wall-clock extraction timeout, distinct from `extraction_failed`
+ * so an import panel can tell the user to retry rather than that the file is
+ * unreadable. 0207 is the ONLY migration of that programme allowed to widen
+ * this constraint; `tests/unit/canonical0207SchemaContract.test.ts` derives
+ * the predecessor (0179) from the ledger and proves a strict superset.
+ */
+export const FDH_ERROR_CODES_CANONICAL_UPLOAD_ADDED = ['extraction_timeout'] as const;
+
 /** The complete current error-code set (FDH-1 + FDH-5 + FDH-3-structural-scan
- * widening). Used everywhere OUTSIDE the frozen fdh1SchemaContract.test.ts
- * assertion. */
+ * widening + FDH-3 real-scan widening + canonical-upload widening). Used
+ * everywhere OUTSIDE the frozen fdh1SchemaContract.test.ts assertion. */
 export const FDH_ALL_ERROR_CODES = [
   ...FDH_ERROR_CODES,
   ...FDH_ERROR_CODES_FDH5_ADDED,
   ...FDH_ERROR_CODES_FDH3_STRUCTURAL_SCAN_ADDED,
   ...FDH_ERROR_CODES_FDH3_REAL_MALWARE_SCAN_ADDED,
+  ...FDH_ERROR_CODES_CANONICAL_UPLOAD_ADDED,
 ] as const;
 export type FdhErrorCode = (typeof FDH_ALL_ERROR_CODES)[number];
 
@@ -1225,6 +1237,28 @@ export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED = [
   'liability_statement_corrected',
 ] as const;
 
+/** Approved Upload -> Canonical User Data programme (migration
+ * `0207_canonical_upload_schema_foundation.sql`). 0207 is the ONLY migration
+ * of that programme allowed to widen this constraint, so every event type the
+ * later packages (WP-08..WP-13) need is allocated here, once:
+ *   - liability_ledger_applied        WP-11: an Apply wrote card/loan ledger rows
+ *   - liability_statement_rejected    WP-11: "reject statement" (E with reason)
+ *   - payroll_bank_match_restamped    WP-09: payslip re-matched after bank approval
+ *   - payroll_event_superseded        WP-09: revised payslip supersedes an earlier one
+ *   - bank_leg_reclassified_by_import 0207's fdh_internal_reclassify_corroborated_leg()
+ *   - investment_positions_published  WP-12: AU positions added to Net Worth (D-05)
+ *   - post_approval_matcher_failed    0207's post-bank-approval matcher seam
+ * Metadata carries ids, types and counts only -- never document figures. */
+export const FDH_DOCUMENT_AUDIT_EVENT_TYPES_CANONICAL_UPLOAD_ADDED = [
+  'liability_ledger_applied',
+  'liability_statement_rejected',
+  'payroll_bank_match_restamped',
+  'payroll_event_superseded',
+  'bank_leg_reclassified_by_import',
+  'investment_positions_published',
+  'post_approval_matcher_failed',
+] as const;
+
 /** The complete current audit-event-type set (FDH-3 + R7 + R8 + FDH-5 +
  * FDH-7 + FDH-9 + FDH-10 + FDH-11 + FDH-12 + AIE payslip AI-fallback +
  * AIE unified document fallback + payslip correction + liability statement
@@ -1249,6 +1283,7 @@ export const FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES = [
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_AIE_INVESTMENT_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_PAYSLIP_CORRECTION_ADDED,
   ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_LIABILITY_CORRECTION_ADDED,
+  ...FDH_DOCUMENT_AUDIT_EVENT_TYPES_CANONICAL_UPLOAD_ADDED,
 ] as const;
 export type FdhDocumentAuditEventType = (typeof FDH_ALL_DOCUMENT_AUDIT_EVENT_TYPES)[number];
 
