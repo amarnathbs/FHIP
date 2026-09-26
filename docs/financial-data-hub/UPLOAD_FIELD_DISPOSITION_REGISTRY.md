@@ -11,7 +11,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Registry file | Owner | Entries | A | B | C | D | E | open_gap | ceiling | not_active |
 |---|---|---|---|---|---|---|---|---|---|---|
-| bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 33 | 33 | 0 |
+| bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 11 | 11 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
 | liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
@@ -20,18 +20,15 @@ Every field an active upload adapter extracts, every evidence column and every a
 | retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 407 | | 21 |
 
 ## Open gaps by id
 
 | Gap | Severity | Owner WP | Fields |
 |---|---|---|---|
 | DC-01 | P0 | WP-03 | 4 |
-| DC-16 | P2 | WP-08 | 2 |
+| DC-16 | P2 | WP-15 | 2 |
 | EXP-G1 | P0 | WP-07 | 5 |
-| EXP-G14 | P2 | WP-08 | 18 |
-| EXP-G15 | P2 | WP-08 | 2 |
-| EXP-G4 | P1 | WP-08 | 2 |
 | G1 | P0 | WP-11 | 30 |
 | G13 | P3 | WP-11 | 2 |
 | G2 | P1 | WP-11 | 9 |
@@ -76,14 +73,14 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `sourceRowNumber` | D metadata | fdh_transactions.source_row | — | compliant | — | — |
 | `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
-| `postedDate` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `valueDate` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `postedDate` | C evidence | evidence:fdh_transactions.posting_date | Category review > Statement details | compliant | — | — |
+| `valueDate` | C evidence | evidence:fdh_transactions.value_date | Category review > Statement details | compliant | — | — |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
 | `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
-| `referenceRaw` | C evidence | evidence:fdh_transactions.source_reference (dedup key) | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `referenceRaw` | C evidence | evidence:fdh_transactions.source_reference (dedup key) | Category review > Statement details | compliant | — | — |
 | `amountOriginal` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
-| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | Category review > Statement details | compliant | — | — |
 | `transactionTypeHint` | D metadata | fdh_transactions.transaction_type_hint | — | compliant | — | — |
 
 ### bank_pdf · ts_interface · `fdh:bank-pdf/orchestrator.ts#AcceptedPdfTransactionPlan`
@@ -97,11 +94,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
 | `amountOriginal` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
-| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | Category review > Statement details | compliant | — | — |
 | `transactionTypeHint` | D metadata | fdh_transactions.transaction_type_hint | — | compliant | — | — |
 | `sourceRowHash` | D metadata | fdh_transactions.source_row_hash | — | compliant | — | — |
 | `economicFingerprint` | D metadata | fdh_transactions.economic_fingerprint | — | compliant | — | — |
-| `dedupStatus` | D metadata | fdh_transactions.dedup_status | — | open_gap | EXP-G4 (P1) | WP-08 |
+| `dedupStatus` | D metadata | fdh_transactions.dedup_status | Category review ("removed as a duplicate") + Statement details | compliant | — | — |
 | `matchedTransactionId` | D metadata | fdh_duplicate_candidates.transaction_id_a | — | compliant | — | — |
 | `matchMethod` | D metadata | fdh_duplicate_candidates.match_method | — | compliant | — | — |
 | `dedupConfidence` | D metadata | fdh_duplicate_candidates.confidence | — | compliant | — | — |
@@ -112,10 +109,10 @@ Every field an active upload adapter extracts, every evidence column and every a
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
 | `declaredOpeningBalance` | C evidence | evidence:fdh_reconciliation_results.opening_balance | Bank import panel > review summary (reconciliation) | compliant | — | — |
-| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies) | — | open_gap | DC-16 (P2) | WP-08 |
-| `maskedAccountIdentifier` | D metadata | account matching (currently dropped) | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start (coverage input) | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end (coverage input) | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies) | Category review > Statement details (labelled "not in your Net Worth unless you add it as a cash asset") | open_gap | DC-16 (P2) | WP-15 |
+| `maskedAccountIdentifier` | D metadata | fdh_financial_accounts.masked_identifier / account_fingerprint (account matching; a mismatch raises a visible warning) | Category review > Statement details | compliant | — | — |
+| `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start (coverage input) | Category review header + Category review > Statement details | compliant | — | — |
+| `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end (coverage input) | Category review header + Category review > Statement details | compliant | — | — |
 
 ### bank_ai_draft · zod_schema · `aie:bankStatement/schema.ts#bankStatementDocumentFactsSchema`
 
@@ -123,14 +120,14 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `schemaVersion` | D metadata | fdh_ai_fallback_drafts.payload | — | compliant | — | — |
 | `documentMissingReasonCode` | D metadata | fdh_ai_fallback_drafts.payload | — | compliant | — | — |
-| `institutionName` | D metadata | fdh_financial_accounts.display_name (currently draft payload only) | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `maskedAccountIdentifier` | D metadata | account matching (currently dropped) | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `declaredOpeningBalance` | C evidence | evidence:fdh_reconciliation_results.opening_balance | Bank import panel > review summary (reconciliation) | compliant | — | — |
-| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04) | — | open_gap | DC-16 (P2) | WP-08 |
-| `allTransactionsListed` | C evidence | evidence: statement data-quality result | — | open_gap | EXP-G15 (P2) | WP-08 |
-| `transactions` | B event | fdh_transactions (one row per line, through the native pipeline) | Expenses > Import bank statement > category review | open_gap | EXP-G15 (P2) | WP-08 |
+| `institutionName` | D metadata | fdh_financial_accounts.display_name (names a generically-named account) | Category review > Statement details | compliant | — | — |
+| `maskedAccountIdentifier` | D metadata | fdh_financial_accounts.masked_identifier / account_fingerprint (account matching) | Category review > Statement details | compliant | — | — |
+| `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start | Category review header + Category review > Statement details | compliant | — | — |
+| `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end | Category review header + Category review > Statement details | compliant | — | — |
+| `declaredOpeningBalance` | C evidence | evidence:fdh_reconciliation_results.opening_balance | Category review > Statement details | compliant | — | — |
+| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04) | Category review > Statement details (labelled per D-04) | open_gap | DC-16 (P2) | WP-15 |
+| `allTransactionsListed` | C evidence | evidence:fdh_data_quality_results(low_extraction_confidence) + a blocking review item when false | Category review > Statement details + Category review "About this statement" | compliant | — | — |
+| `transactions` | B event | fdh_transactions (one row per line, through the native pipeline) | Expenses > Import bank statement > category review | compliant | — | — |
 
 ### bank_ai_draft · zod_schema · `aie:bankStatement/schema.ts#bankStatementTransactionSchema`
 
@@ -140,7 +137,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw | Financial Activity > transactions | compliant | — | — |
 | `amount` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
-| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | Category review > Statement details | compliant | — | — |
 
 ### bank_ledger · db_column · `db:fdh_transactions`
 
@@ -152,14 +149,14 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `financial_account_id` | D metadata | fdh_transactions.financial_account_id | — | compliant | — | — |
 | `statement_upload_id` | D metadata | fdh_transactions.statement_upload_id | — | compliant | — | — |
 | `transaction_date` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
-| `posting_date` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
-| `value_date` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `posting_date` | C evidence | evidence:fdh_transactions.posting_date | Category review > Statement details | compliant | — | — |
+| `value_date` | C evidence | evidence:fdh_transactions.value_date | Category review > Statement details | compliant | — | — |
 | `description_raw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
 | `description_clean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
 | `merchant_raw` | C evidence | evidence:fdh_transactions.merchant_raw | Financial Activity > merchants | compliant | — | — |
 | `merchant_id` | D metadata | fdh_transactions.merchant_id | — | compliant | — | — |
 | `amount_original` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
-| `currency_original` | B event | fdh_transactions.currency_original (converted once by the read models; unsupported fails closed) | Expenses > Import bank statement > category review | open_gap | EXP-G14 (P2) | WP-08 |
+| `currency_original` | B event | fdh_transactions.currency_original (the statement currency; a CSV currency column is checked against it and a different currency is rejected with a visible reason; converted once by the read models) | Expenses > Import bank statement > category review; Import panel + Statement details: "N lines could not be read" with reasons | compliant | — | — |
 | `amount_reporting_currency` | D metadata | fdh_transactions.amount_reporting_currency | — | compliant | — | — |
 | `reporting_currency` | D metadata | fdh_transactions.reporting_currency | — | compliant | — | — |
 | `fx_rate` | D metadata | fdh_transactions.fx_rate | — | compliant | — | — |
@@ -175,7 +172,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `classification_confidence` | D metadata | fdh_transactions.classification_confidence | — | compliant | — | — |
 | `extraction_confidence` | D metadata | fdh_transactions.extraction_confidence | — | compliant | — | — |
 | `classification_method` | D metadata | fdh_transactions.classification_method | — | compliant | — | — |
-| `source_reference` | C evidence | evidence:fdh_transactions.source_reference | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `source_reference` | C evidence | evidence:fdh_transactions.source_reference | Category review > Statement details | compliant | — | — |
 | `source_page` | D metadata | fdh_transactions.source_page | — | compliant | — | — |
 | `source_row` | D metadata | fdh_transactions.source_row | — | compliant | — | — |
 | `review_status` | D metadata | fdh_transactions.review_status | — | compliant | — | — |
@@ -185,8 +182,8 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `source_row_hash` | D metadata | fdh_transactions.source_row_hash | — | compliant | — | — |
 | `economic_fingerprint` | D metadata | fdh_transactions.economic_fingerprint | — | compliant | — | — |
 | `economic_fingerprint_version` | D metadata | fdh_transactions.economic_fingerprint_version | — | compliant | — | — |
-| `dedup_status` | D metadata | fdh_transactions.dedup_status | — | open_gap | EXP-G4 (P1) | WP-08 |
-| `balance_after` | C evidence | evidence:fdh_transactions.balance_after | — | open_gap | EXP-G14 (P2) | WP-08 |
+| `dedup_status` | D metadata | fdh_transactions.dedup_status | Category review ("removed as a duplicate") + Statement details | compliant | — | — |
+| `balance_after` | C evidence | evidence:fdh_transactions.balance_after | Category review > Statement details | compliant | — | — |
 | `transaction_type_hint` | D metadata | fdh_transactions.transaction_type_hint | — | compliant | — | — |
 | `parser_version_id` | D metadata | fdh_transactions.parser_version_id | — | compliant | — | — |
 | `mapping_template_id` | D metadata | fdh_transactions.mapping_template_id | — | compliant | — | — |

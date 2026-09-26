@@ -9,25 +9,30 @@ import type { RegistryFile } from './types';
 // Gap references (APPROVED_UPLOAD_CANONICAL_DATA_FLOW_MATRIX.md, gap register).
 const DC01 = gap('DC-01', 'P0', 'WP-03'); // read model done in WP-02; consumers switch in WP-03
 const EXPG1 = gap('EXP-G1', 'P0', 'WP-07');
-const EXPG4 = gap('EXP-G4', 'P1', 'WP-08');
-const EXPG14 = gap('EXP-G14', 'P2', 'WP-08');
-const EXPG15 = gap('EXP-G15', 'P2', 'WP-08');
-const DC16 = gap('DC-16', 'P2', 'WP-08');
+// WP-08 closed EXP-G4 (duplicate chain), EXP-G14 (dropped / invisible
+// fields) and EXP-G15 (incomplete AI extraction) for this file. DC-16 stays
+// open: the closing balance is now VISIBLE, labelled per D-04, in the
+// statement details drawer; the cash-asset proposal the user Applies is WP-15.
+const DC16 = gap('DC-16', 'P2', 'WP-15');
 
 const REVIEW = 'Expenses > Import bank statement > category review';
 const ACTIVITY = 'Financial Activity > transactions';
+/** WP-08: components/financial-data-hub/StatementDetailsDrawer.tsx, opened
+ * from the category review and the import panel. */
+const DETAILS = 'Category review > Statement details';
+const UNREAD = 'Import panel + Statement details: "N lines could not be read" with reasons';
 
 const CSV: Row[] = [
   ['sourceRowNumber', D, 'fdh_transactions.source_row'],
   ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW, DC01, 'economic date; averaged over complete covered months'],
-  ['postedDate', C, 'evidence:fdh_transactions.posting_date', null, EXPG14],
-  ['valueDate', C, 'evidence:fdh_transactions.value_date', null, EXPG14],
+  ['postedDate', C, 'evidence:fdh_transactions.posting_date', DETAILS],
+  ['valueDate', C, 'evidence:fdh_transactions.value_date', DETAILS],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
   ['descriptionClean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1, 'payee; the Expenses-tab actual line label'],
-  ['referenceRaw', C, 'evidence:fdh_transactions.source_reference (dedup key)', null, EXPG14],
+  ['referenceRaw', C, 'evidence:fdh_transactions.source_reference (dedup key)', DETAILS],
   ['amountOriginal', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW, null, 'direction only, never economic meaning'],
-  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', null, EXPG14],
+  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', DETAILS],
   ['transactionTypeHint', D, 'fdh_transactions.transaction_type_hint'],
 ];
 
@@ -39,11 +44,11 @@ const PDF_TXN: Row[] = [
   ['descriptionClean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1],
   ['amountOriginal', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW],
-  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', null, EXPG14],
+  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', DETAILS],
   ['transactionTypeHint', D, 'fdh_transactions.transaction_type_hint'],
   ['sourceRowHash', D, 'fdh_transactions.source_row_hash'],
   ['economicFingerprint', D, 'fdh_transactions.economic_fingerprint'],
-  ['dedupStatus', D, 'fdh_transactions.dedup_status', null, EXPG4, 'excluded duplicates never count (read model honours it; cascade fixed in WP-08)'],
+  ['dedupStatus', D, 'fdh_transactions.dedup_status', 'Category review ("removed as a duplicate") + Statement details', null, 'excluded duplicates never count, are never classified, never approved and never block the statement (WP-08, 0212)'],
   ['matchedTransactionId', D, 'fdh_duplicate_candidates.transaction_id_a'],
   ['matchMethod', D, 'fdh_duplicate_candidates.match_method'],
   ['dedupConfidence', D, 'fdh_duplicate_candidates.confidence'],
@@ -52,23 +57,23 @@ const PDF_TXN: Row[] = [
 
 const PDF_META: Row[] = [
   ['declaredOpeningBalance', C, 'evidence:fdh_reconciliation_results.opening_balance', 'Bank import panel > review summary (reconciliation)'],
-  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies)', null, DC16],
-  ['maskedAccountIdentifier', D, 'account matching (currently dropped)', null, EXPG14],
-  ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start (coverage input)', null, EXPG14],
-  ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end (coverage input)', null, EXPG14],
+  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies)', `${DETAILS} (labelled "not in your Net Worth unless you add it as a cash asset")`, DC16],
+  ['maskedAccountIdentifier', D, 'fdh_financial_accounts.masked_identifier / account_fingerprint (account matching; a mismatch raises a visible warning)', DETAILS],
+  ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start (coverage input)', `Category review header + ${DETAILS}`],
+  ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end (coverage input)', `Category review header + ${DETAILS}`],
 ];
 
 const AI_DOC: Row[] = [
   ['schemaVersion', D, 'fdh_ai_fallback_drafts.payload'],
   ['documentMissingReasonCode', D, 'fdh_ai_fallback_drafts.payload'],
-  ['institutionName', D, 'fdh_financial_accounts.display_name (currently draft payload only)', null, EXPG14],
-  ['maskedAccountIdentifier', D, 'account matching (currently dropped)', null, EXPG14],
-  ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start', null, EXPG14],
-  ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end', null, EXPG14],
-  ['declaredOpeningBalance', C, 'evidence:fdh_reconciliation_results.opening_balance', 'Bank import panel > review summary (reconciliation)'],
-  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04)', null, DC16],
-  ['allTransactionsListed', C, 'evidence: statement data-quality result', null, EXPG15],
-  ['transactions', B, 'fdh_transactions (one row per line, through the native pipeline)', REVIEW, EXPG15, 'the 80-row AI cap must force an incomplete-extraction review'],
+  ['institutionName', D, 'fdh_financial_accounts.display_name (names a generically-named account)', DETAILS],
+  ['maskedAccountIdentifier', D, 'fdh_financial_accounts.masked_identifier / account_fingerprint (account matching)', DETAILS],
+  ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start', `Category review header + ${DETAILS}`],
+  ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end', `Category review header + ${DETAILS}`],
+  ['declaredOpeningBalance', C, 'evidence:fdh_reconciliation_results.opening_balance', DETAILS],
+  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04)', `${DETAILS} (labelled per D-04)`, DC16],
+  ['allTransactionsListed', C, 'evidence:fdh_data_quality_results(low_extraction_confidence) + a blocking review item when false', `${DETAILS} + Category review "About this statement"`],
+  ['transactions', B, 'fdh_transactions (one row per line, through the native pipeline)', REVIEW, null, 'hitting the 80-row AI cap without a reconciled balance forces a blocking incomplete-extraction review item'],
 ];
 
 const AI_TXN: Row[] = [
@@ -76,30 +81,30 @@ const AI_TXN: Row[] = [
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw', ACTIVITY],
   ['amount', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW],
-  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', null, EXPG14],
+  ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', DETAILS],
 ];
 
 const TXN_TABLE: Row[] = [
   ...technical(['id', 'user_id', 'household_id', 'financial_account_id', 'statement_upload_id'], 'fdh_transactions'),
   ['transaction_date', B, 'fdh_transactions.transaction_date', REVIEW, DC01],
-  ['posting_date', C, 'evidence:fdh_transactions.posting_date', null, EXPG14],
-  ['value_date', C, 'evidence:fdh_transactions.value_date', null, EXPG14],
+  ['posting_date', C, 'evidence:fdh_transactions.posting_date', DETAILS],
+  ['value_date', C, 'evidence:fdh_transactions.value_date', DETAILS],
   ['description_raw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
   ['description_clean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1],
   ['merchant_raw', C, 'evidence:fdh_transactions.merchant_raw', 'Financial Activity > merchants'],
   ['merchant_id', D, 'fdh_transactions.merchant_id'],
   ['amount_original', B, 'fdh_transactions.amount_original', REVIEW],
-  ['currency_original', B, 'fdh_transactions.currency_original (converted once by the read models; unsupported fails closed)', REVIEW, EXPG14],
+  ['currency_original', B, 'fdh_transactions.currency_original (the statement currency; a CSV currency column is checked against it and a different currency is rejected with a visible reason; converted once by the read models)', `${REVIEW}; ${UNREAD}`],
   ...technical(['amount_reporting_currency', 'reporting_currency', 'fx_rate', 'fx_rate_date', 'fx_rate_source'], 'fdh_transactions'),
   ['credit_debit', B, 'fdh_transactions.credit_debit', REVIEW],
   ['economic_transaction_type', B, 'fdh_transactions.economic_transaction_type (one read-model bucket per value)', REVIEW],
   ['category_id', B, 'fdh_transactions.category_id (canonical expense group)', REVIEW, EXPG1],
   ['subcategory_id', B, 'fdh_transactions.subcategory_id (essential flag)', REVIEW, EXPG1],
   ...technical(['recurring_flag', 'subscription_flag', 'transfer_flag', 'classification_confidence', 'extraction_confidence', 'classification_method'], 'fdh_transactions'),
-  ['source_reference', C, 'evidence:fdh_transactions.source_reference', null, EXPG14],
+  ['source_reference', C, 'evidence:fdh_transactions.source_reference', DETAILS],
   ...technical(['source_page', 'source_row', 'review_status', 'user_override', 'created_at', 'updated_at', 'source_row_hash', 'economic_fingerprint', 'economic_fingerprint_version'], 'fdh_transactions'),
-  ['dedup_status', D, 'fdh_transactions.dedup_status', null, EXPG4],
-  ['balance_after', C, 'evidence:fdh_transactions.balance_after', null, EXPG14],
+  ['dedup_status', D, 'fdh_transactions.dedup_status', 'Category review ("removed as a duplicate") + Statement details'],
+  ['balance_after', C, 'evidence:fdh_transactions.balance_after', DETAILS],
   ...technical(['transaction_type_hint', 'parser_version_id', 'mapping_template_id', 'recurring_transaction_id', 'approval_status', 'approved_at', 'approved_by'], 'fdh_transactions'),
 ];
 
@@ -129,7 +134,7 @@ const UPLOAD_TABLE: Row[] = [
 export const bankStatementRegistry: RegistryFile = {
   id: 'bankStatement',
   ownerWp: 'WP-08',
-  OPEN_GAP_CEILING: 33,
+  OPEN_GAP_CEILING: 11,
   entries: [
     ...rows('bank_csv', 'ts_interface', 'fdh:bank-csv/normalize.ts#NormalizedTransactionCandidate', CSV),
     ...rows('bank_pdf', 'ts_interface', 'fdh:bank-pdf/orchestrator.ts#AcceptedPdfTransactionPlan', PDF_TXN),
