@@ -237,7 +237,7 @@ export async function loadReportInputsLastChangedAt(userId: string, client?: Sup
     })
   );
   // WP-06 (DC-09): imported data moves canonical figures too -- approving a
-  // statement (fdh_transactions.approved_at), a split or link, an AU broker
+  // statement (its lines' approved_at), a split or link, an AU broker
   // import into Investment Intelligence, a publication to Net Worth, or an
   // Applied payslip / statement proposal must make this month's stored report
   // stale, exactly as a manual register edit does.
