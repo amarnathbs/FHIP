@@ -533,6 +533,19 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // Retirement statement details, Investments imports) builds its links
       // through it and needs no further entry.
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'fdhRoutes.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-02 (2026-09-26).
+      // `lib/read-models/core/spendingRules.ts` is a REAL, intentional import
+      // of FDH's pure economic-type vocabulary (`FDH_ECONOMIC_TRANSACTION_TYPES`
+      // and its type, from `constants/enums.ts`) so the read model's
+      // type -> bucket map is compile-time exhaustive and can never drift
+      // from the FDH taxonomy. It imports no FDH service, repository or
+      // table name, and FDH itself imports nothing from lib/read-models --
+      // the direction of dependency is downstream -> FDH vocabulary only,
+      // the same "reuse the vocabulary, do not restate it" precedent as the
+      // AIE payslip adapter entries above. The ONLY file under
+      // lib/read-models that names FDH; every other read-model file is kept
+      // free of the literal so this stays a single entry.
+      path.join(REPO_ROOT, 'lib', 'read-models', 'core', 'spendingRules.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {
