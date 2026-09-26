@@ -27,6 +27,10 @@ import { cashAsset, householdI, householdM, P, P_DAY as DAY, P_END, P_START } fr
 
 afterEach(() => vi.restoreAllMocks());
 
+const now = new Date();
+// This (still open) month -- the ONLY month the pre-WP-03 loader read.
+const CUR_DAY = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+
 async function dashboard(t: Record<string, Row[]>, options: Parameters<typeof makeFakeSupabase>[1] = {}) {
   const fake = makeFakeSupabase(t, options);
   const d = await loadDashboard(USER, fake.client as never);
@@ -113,7 +117,11 @@ describe('economic oracles through the Dashboard', () => {
       fhip_import_applications: [{ user_id: USER, target_domain: 'income', source_payroll_event_id: 'pe', target_entity_id: 'src' }],
       fdh_financial_accounts: [account('bank')],
       fdh_statement_uploads: [statement('sb', 'bank', P_START, P_END)],
-      fdh_transactions: [txn({ id: 'sal', account: 'bank', statement: 'sb', date: DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary })],
+      fdh_transactions: [
+        txn({ id: 'sal', account: 'bank', statement: 'sb', date: DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary }),
+        // This month's credit (no statement covers the month yet): shown, never averaged, never added.
+        txn({ id: 'sal2', account: 'bank', statement: 'sb', date: CUR_DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary }),
+      ],
     });
     const { d } = await dashboard(t);
     expect(d.netMonthlyIncome).toBe(5000);

@@ -79,6 +79,7 @@ Oracle, Household M vs Household I: planned groceries of $800 a month and covere
 
 * A loan with facility-ledger events in covered months: debt service is the **actual** principal plus interest plus fee. This **replaces** the contractual `monthly_repayment` and is never added to it (D-09).
 * A revolving facility (credit card, line of credit, BNPL): its purchases are already counted as spending, so its minimum payment or `monthly_repayment` is **not** counted again (D-08). The same rule applies to manual households (M) and imported households (I). Only actual interest and fees count, and only when they have been imported. The rule is a named parameter (`cardRepaymentRule: 'exclude_revolving' | 'include'`); `include` is the pre-programme rule.
+* D-08's premise is "consumption counted as expense". When a household has **no** counted consumption at all (no ordinary planned expense line and no covered imported spending), the card repayment is the only record of that outflow, so it is counted once (`householdDebtServiceUnderD08`, WP-03). Without this, a card entered with an $800 repayment and no expenses would count $0 of outflow.
 * Interest and fees on a facility account not yet linked to a liability are counted in `unlinkedFacility`, so they are never lost between the two figures.
 
 Surplus = income − combined expenses − household debt service.

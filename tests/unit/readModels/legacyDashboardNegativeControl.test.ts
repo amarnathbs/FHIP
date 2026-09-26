@@ -36,6 +36,8 @@ const MONTH = `${prior.getUTCFullYear()}-${String(prior.getUTCMonth() + 1).padSt
 const START = `${MONTH}-01`;
 const END = monthEnd(MONTH);
 const DAY = `${MONTH}-15`;
+// This (still open) month -- the ONLY month the legacy loader read.
+const CUR_DAY = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
 
 const base = () => tables(profile(), taxonomy(), { fdh_financial_accounts: [account('bank')] }, { fdh_statement_uploads: [statement('s', 'bank', START, END)] });
 
@@ -106,7 +108,13 @@ describe('WP-03: the Dashboard now agrees with the canonical read model on every
       income_sources: [incomeSource('src', 'Acme salary', 6500, 'monthly', { net_amount: 5000, source_type: 'payslip_import' })],
       fdh_payroll_events: [{ id: 'pe', user_id: USER, employer_name: 'Acme', currency_code: 'AUD', payment_date: DAY, pay_period_end: DAY, gross_pay: 6500, net_pay: 5000, bonus_pay: null, overtime_pay: null, commission_pay: null, other_earnings: null, approval_status: 'approved', superseded_by_payroll_event_id: null, bank_match_transaction_id: 'sal', bank_match_status: 'matched' }],
       fhip_import_applications: [{ user_id: USER, target_domain: 'income', source_payroll_event_id: 'pe', target_entity_id: 'src' }],
-      fdh_transactions: [txn({ id: 'sal', account: 'bank', statement: 's', date: DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary })],
+      fdh_transactions: [
+        txn({ id: 'sal', account: 'bank', statement: 's', date: DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary }),
+        // This month's salary credit, already approved but in a month no
+        // statement covers yet: legacy added it to gross AND net on top of the
+        // payslip row; the read model shows it but does not average a partial month.
+        txn({ id: 'sal2', account: 'bank', statement: 's', date: CUR_DAY, amount: 5000, type: 'income', category: CAT.income, subcategory: SUB.salary }),
+      ],
     });
     const d = await dashboard(t);
     expect(d.netMonthlyIncome).toBe(5000);

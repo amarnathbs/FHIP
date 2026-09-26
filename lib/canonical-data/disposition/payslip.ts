@@ -5,13 +5,14 @@
 import { A, B, C, D, E, gap, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
-const GAP01 = gap('GAP-01', 'P0', 'WP-03'); // dedupe key honoured by selectIncome (WP-02); consumers switch in WP-03
+// GAP-01 and GAP-09 closed by WP-03 (2026-09-27): the Dashboard takes income
+// from selectIncome (payslip + its matched bank credit = one event), and an
+// unknown net is never replaced by the gross.
 const GAP03 = gap('GAP-03', 'P1', 'WP-09');
 const GAP04 = gap('GAP-04', 'P1', 'WP-09');
 const GAP05 = gap('GAP-05', 'P1', 'WP-09');
 const GAP07 = gap('GAP-07', 'P2', 'WP-09');
 const GAP08 = gap('GAP-08', 'P2', 'WP-09');
-const GAP09 = gap('GAP-09', 'P2', 'WP-03');
 const GAP10 = gap('GAP-10', 'P2', 'WP-09');
 const GAP12 = gap('GAP-12', 'P3', 'WP-09');
 const GAP15 = gap('GAP-15', 'P3', 'WP-09');
@@ -45,7 +46,7 @@ function payslipFacts(style: 'camel' | 'snake'): Row[] {
     [f('employeeRetirementContribution', 'employee_retirement_contribution'), C, EV('employee_retirement_contribution'), null, GAP07],
     [f('employerNpsContribution', 'employer_nps_contribution'), C, EV('employer_nps_contribution') + ' (never income)', null, GAP07],
     [f('employeeNpsContribution', 'employee_nps_contribution'), C, EV('employee_nps_contribution'), null, GAP07],
-    [f('netPay', 'net_pay'), A, 'income_sources.net_amount (null = unknown, never gross)', INCOME, GAP09],
+    [f('netPay', 'net_pay'), A, 'income_sources.net_amount (null = unknown, never gross)', INCOME],
   ];
 }
 
@@ -97,7 +98,7 @@ const EVENTS: Row[] = [
   ['ytd_employee_retirement', C, EV('ytd_employee_retirement'), null, GAP07],
   ...technical(['parser_name', 'parser_version', 'extraction_confidence', 'reconciliation_status', 'reconciliation_variance'], 'fdh_payroll_events'),
   ['bank_match_status', D, 'fdh_payroll_events.bank_match_status', null, GAP10],
-  ['bank_match_transaction_id', D, 'dedup link: the payslip and its bank credit are ONE income event (selectIncome)', null, GAP01],
+  ['bank_match_transaction_id', D, 'dedup link: the payslip and its bank credit are ONE income event (selectIncome)'],
   ...technical(['bank_match_confidence', 'review_status', 'approval_status', 'approved_at', 'approved_by'], 'fdh_payroll_events'),
   ['superseded_by_payroll_event_id', D, 'fdh_payroll_events.superseded_by_payroll_event_id', null, GAP15],
   ...technical(['payslip_fingerprint', 'created_at', 'updated_at', 'gross_pay_source', 'user_corrected_fields', 'last_corrected_at', 'last_corrected_by'], 'fdh_payroll_events'),
@@ -117,7 +118,7 @@ const COMPONENTS_TABLE: Row[] = [
 export const payslipRegistry: RegistryFile = {
   id: 'payslip',
   ownerWp: 'WP-09',
-  OPEN_GAP_CEILING: 87,
+  OPEN_GAP_CEILING: 83,
   entries: [
     ...rows('payslip_native', 'ts_interface', 'fdh:payslip/types.ts#PayrollExtraction', NATIVE),
     ...rows('payslip_native', 'ts_interface', 'fdh:payslip/types.ts#PayrollComponent', COMPONENT),
