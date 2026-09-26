@@ -27,6 +27,51 @@ async function loadEvidence(userId: string, statementId: string) {
   return statement;
 }
 
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * accountId -> the latest as-of date (statement_end_date, else statement_date)
+ * of a retirement statement already APPLIED to that account (GAP-RET-06).
+ * The current statement is excluded. Paginated: PostgREST caps a read at 1000
+ * rows silently.
+ */
+async function loadAppliedAsOfByAccount(supabase: ServerClient, userId: string, currentStatementId: string): Promise<Record<string, string>> {
+  const applications = await fetchAllRows(() =>
+    supabase
+      .from('fhip_import_applications')
+      .select('id, target_entity_id, source_retirement_statement_id')
+      .eq('user_id', userId)
+      .eq('target_domain', 'retirement')
+      .not('source_retirement_statement_id', 'is', null)
+      .order('id', { ascending: true }));
+  const relevant = (applications ?? []).filter((a) =>
+    a.target_entity_id && a.source_retirement_statement_id && a.source_retirement_statement_id !== currentStatementId);
+  const statementIds = [...new Set(relevant.map((a) => a.source_retirement_statement_id as string))];
+  if (statementIds.length === 0) return {};
+  const asOf = new Map<string, string>();
+  for (let i = 0; i < statementIds.length; i += 200) {
+    const chunk = statementIds.slice(i, i + 200);
+    const rows = await fetchAllRows(() =>
+      supabase
+        .from('fdh_retirement_statements')
+        .select('id, statement_end_date, statement_date')
+        .eq('user_id', userId)
+        .in('id', chunk)
+        .order('id', { ascending: true }));
+    for (const r of rows ?? []) {
+      const d = (r.statement_end_date as string | null) ?? (r.statement_date as string | null);
+      if (d) asOf.set(r.id as string, d);
+    }
+  }
+  const out: Record<string, string> = {};
+  for (const a of relevant) {
+    const d = asOf.get(a.source_retirement_statement_id as string);
+    const account = a.target_entity_id as string;
+    if (d && (!out[account] || d > out[account])) out[account] = d;
+  }
+  return out;
+}
+
 export async function POST(_req: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
@@ -80,6 +125,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
     memberType = (member?.member_type as 'self' | 'spouse' | undefined) ?? undefined;
   }
 
+  // GAP-RET-06: the as-of date of every statement ALREADY APPLIED to each of
+  // this user's accounts, so an older statement never silently regresses a
+  // balance a newer one set. Read, never inferred.
+  const appliedAsOfByAccount = await loadAppliedAsOfByAccount(supabase, user.id, statementId);
+
   const reviewReasons: string[] = [];
   if (statement.reconciliation_status === 'variance') reviewReasons.push('statement_does_not_balance_review_the_figures');
   if (statement.reconciliation_status === 'insufficient_data') reviewReasons.push('statement_lacks_enough_detail_to_check_the_balance');
@@ -98,6 +148,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
     closingBalance: (statement.closing_balance as string | null) ?? undefined,
     employerContributions: (statement.employer_contributions as string | null) ?? undefined,
     personalContributions: (statement.personal_contributions as string | null) ?? undefined,
+    // D-12 / GAP-RET-02: the period, so the adapter annualises the totals and
+    // pairs them with contribution_frequency = 'annually'. contributionFrequency
+    // is deliberately NOT set -- the totals are period totals, not a rate.
+    statementStartDate: (statement.statement_start_date as string | null) ?? undefined,
+    statementEndDate: (statement.statement_end_date as string | null) ?? undefined,
+    statementDate: (statement.statement_date as string | null) ?? undefined,
+    appliedAsOfByAccount,
     memberType,
     isSmsf: false,
     reviewReasons,

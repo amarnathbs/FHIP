@@ -7,6 +7,7 @@ import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 import { RetirementPlanningSection } from '@/components/retirement/RetirementPlanningSection';
 import { SmsfSection } from '@/components/retirement/smsf/SmsfSection';
 import { RetirementStatementImportPanel } from '@/components/retirement/RetirementStatementImportPanel';
+import { RetirementStatementHistory } from '@/components/retirement/RetirementStatementHistory';
 
 // Hierarchy per spec s.34: "Retirement Planning" (target ages) ->
 // "Retirement Accounts" (the grid below, industry/retail super etc.) with
@@ -26,10 +27,19 @@ import { RetirementStatementImportPanel } from '@/components/retirement/Retireme
 // section so the SMSF boundary reads correctly: a self-managed fund is managed
 // there, and an SMSF statement uploaded here is routed back to it rather than
 // imported as ordinary super (spec sections 10-11).
+//
+// WP-13 (Approved Upload -> Canonical programme):
+//   * "Import statement" is reachable from the top of the tab (brief:
+//     "Retirement -> Import Statement" discoverability), not only after
+//     scrolling past planning and SMSF;
+//   * the statement HISTORY is mounted under the import panel
+//     (GAP-RET-03): after Apply the statement's contributions, rollovers,
+//     earnings, fees, insurance, tax and holdings stay visible, and are never
+//     summed into Net Worth.
 export default function RetirementPage() {
   // Applying a statement changes canonical retirement rows, so the grid is
   // remounted to pick them up — the same refresh contract the Investments page
-  // uses for FDH-11.
+  // uses for FDH-11. The history re-reads on the same key.
   const [gridKey, setGridKey] = useState(0);
 
   return (
@@ -40,9 +50,19 @@ export default function RetirementPage() {
       subNav={<InvestmentsSubNav />}
       beforeGrid={
         <>
+          <nav aria-label="Ways to update your retirement accounts" className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted">Update your retirement accounts by hand below, or</span>
+            <a href="#import-retirement-statement" className="rounded bg-trust px-3 py-1 font-medium text-white">
+              Import statement
+            </a>
+            <a href="#imported-retirement-statements" className="rounded border border-gray-300 px-3 py-1">
+              Imported statements
+            </a>
+          </nav>
           <RetirementPlanningSection />
           <SmsfSection />
           <RetirementStatementImportPanel onApplied={() => setGridKey((k) => k + 1)} />
+          <RetirementStatementHistory refreshKey={gridKey} />
         </>
       }
     />

@@ -546,6 +546,15 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // lib/read-models that names FDH; every other read-model file is kept
       // free of the literal so this stays a single entry.
       path.join(REPO_ROOT, 'lib', 'read-models', 'core', 'spendingRules.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-13 (2026-09-27).
+      // `lib/import-bridge/retirementBankLegLink.ts` is the retirement <->
+      // bank-leg bridge. It is a REAL, intentional import of ONE FDH-12
+      // service entry point (`rematchRetirementActivitiesAfterBankApproval`),
+      // so a bank statement approved AFTER a super statement is matched by
+      // exactly the certified FDH-12 matcher and its own write path -- never
+      // a second copy of that matcher. It reads/writes no FDH table itself;
+      // its only other call is the 0211 RPC fdh12_confirm_retirement_bank_leg.
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'retirementBankLegLink.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

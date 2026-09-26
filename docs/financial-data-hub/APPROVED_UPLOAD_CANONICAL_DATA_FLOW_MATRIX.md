@@ -7,6 +7,7 @@ Baseline: origin/main `a115ee5`, read-only discovery copy. This file consolidate
 - **WP-00:** this matrix is now enforced in code. Every field, column and enum value below has an entry in the field-disposition registry (`lib/canonical-data/disposition/*`, generated as UPLOAD_FIELD_DISPOSITION_REGISTRY.md). Each open gap is `open_gap` and names an id from the gap register in section 10. The gate test fails on an orphan field (EXP-G14 registry, GAP-13, G6 registry, GAP-RET-10, INS-07 and INS-00 are closed by the registry itself).
 - **WP-01:** migration 0207 adds the additive columns and seams, and is the **only** widening of the shared CHECKs. The predecessors were derived from the ledger: `error_code` from **0179** (the plan said 0206, but 0206 does not touch that constraint; the ledger shows 0046 → 0071 → 0170 → 0179), and the audit event types from **0186** (109 values).
 - **WP-02:** the canonical read models (`lib/read-models`) implement the required destinations for DC-01/02/03/06/11/12/16, EXP-G2/G4 (read)/G5 (read)/G7/G9, GAP-01 (dedupe)/08/09, G9 and INV-G4 (dividend single leg). **No consumer has been switched yet** (WP-03..WP-07), so those gaps stay open in the register until the consumers switch.
+- **WP-13** (branch `feature/canonical-wp13`): retirement. Migration **0211** (predecessors from the ledger: apply RPC 0119 -- body carried verbatim incl. the SMSF refusal and MEMBER_MISMATCH; statements UPDATE guard 0113; activities UPDATE guard 0112) makes Apply confirmation-respecting (X-01), pairs every contribution amount with its frequency (D-12: annualised, 'annually'), adds BEFORE INSERT forgery guards (GAP-RET-09), write-guards extraction_warnings, and adds `fdh12_confirm_retirement_bank_leg` (GAP-RET-07). The Retirement tab shows every imported statement's evidence (contributions, rollovers, earnings, fees, insurance, tax, holdings labelled 'not added to Net Worth') and has an 'Import statement' link at the top. 128 retirement registry entries closed (ceiling 131 -> 3, the remaining 3 are GAP-RET-08, WP-07).
 
 ## Legend
 
@@ -422,17 +423,17 @@ Every gap id used above, with its severity and the work package(s) that close it
 | INV-G9 | P2 | WP-12 | Skipped and unsupported outcomes, and approved statements, are not user-visible after apply. |
 | INV-G10 | P2 | WP-12 | FDH-15 self vs spouse: the owner is never captured for AU broker accounts. |
 | INV-G11 | P3 | WP-12 | Minor defects. |
-| GAP-RET-01 | P1 | WP-13 | The default 'Update my existing retirement account' decision silently applies confirmation-gated contribution fields the user left unticked. |
-| GAP-RET-02 | P1 | WP-03, WP-05, WP-13 | A statement period total is written into a column consumers read as a rate, without a frequency. |
-| GAP-RET-03 | P1 | WP-13 | Retirement evidence is not user-visible after apply. |
-| GAP-RET-04 | P2 | WP-13 | Header evidence fields are persisted but never rendered, even during review: salary_sacrifice, government_contributions, rollovers_in, rollovers_out, withdrawals, pens... |
-| GAP-RET-05 | P2 | WP-01, WP-13 | Extraction silently drops data. |
-| GAP-RET-06 | P2 | WP-13 | There is no economic as-of date on the canonical balance. |
-| GAP-RET-07 | P2 | WP-13 | A personal contribution or withdrawal matched to a bank transaction is only linked (fdh_retirement_statement_activities.linked_transaction_id), never reclassified. |
-| GAP-RET-08 | P2 | WP-07, WP-13 | Imported retirement rows carry no provenance label. |
-| GAP-RET-09 | P2 | WP-13 | Authenticated users can INSERT forged approved evidence. |
+| GAP-RET-01 | P1 | WP-13 | The default 'Update my existing retirement account' decision silently applies confirmation-gated contribution fields the user left unticked. **Closed by WP-13** (0211: a NULL/empty selection on update_existing applies only recommended, confirmation-free fields; the panel always sends the ticked list). |
+| GAP-RET-02 | P1 | WP-03, WP-05, WP-13 | A statement period total is written into a column consumers read as a rate, without a frequency. **Write side closed by WP-13** (D-12: totals annualised over the statement period and proposed only with contribution_frequency='annually'; 0211 refuses an amount without its frequency, a non-rate frequency, and a frequency change that would re-mean an unticked existing contribution); consumers stay WP-03/WP-05. |
+| GAP-RET-03 | P1 | WP-13 | Retirement evidence is not user-visible after apply. **Closed by WP-13** (GET /api/financial-data-hub/retirement-statement, paged + user-scoped; RetirementStatementHistory on the Retirement tab). |
+| GAP-RET-04 | P2 | WP-13 | Header evidence fields are persisted but never rendered, even during review: salary_sacrifice, government_contributions, rollovers_in, rollovers_out, withdrawals, pens... **Closed by WP-13** (every header total, activity column and holdings column rendered in review and history by the same component). |
+| GAP-RET-05 | P2 | WP-01, WP-13 | Extraction silently drops data. **Closed by WP-13** (repeated summary lines summed in minor units; unrecognised labels counted and named; warnings persisted to extraction_warnings and rendered; 0211 write-guards them; a failed activity/position insert marks the statement extraction_failed). |
+| GAP-RET-06 | P2 | WP-13 | There is no economic as-of date on the canonical balance. **Closed by WP-13** (a statement older than the last applied one gets a review reason and its balance is not recommended, so the 0211 default selection never applies it). |
+| GAP-RET-07 | P2 | WP-13 | A personal contribution or withdrawal matched to a bank transaction is only linked (fdh_retirement_statement_activities.linked_transaction_id), never reclassified. **Closed by WP-13** (0211 fdh12_confirm_retirement_bank_leg: user-confirmed, re-verified, reclassified once via the 0207 helper -- contribution/withdrawal -> transfer, pension -> income; post-bank-approval matcher re-links later bank statements). |
+| GAP-RET-08 | P2 | WP-07, WP-13 | Imported retirement rows carry no provenance label. **History target provided by WP-13** (#imported-retirement-statements); the grid badge stays WP-07. |
+| GAP-RET-09 | P2 | WP-13 | Authenticated users can INSERT forged approved evidence. **Closed by WP-13** (0211 BEFORE INSERT guard on all three evidence tables; the service role is the only inserter). |
 | GAP-RET-10 | P2 | WP-00 | There is no field-disposition registry or CI test for the retirement adapter. |
-| GAP-RET-11 | P3 | WP-13 | MEMBER_MISMATCH (added by 0119:189-192) is not in GENERIC_CODES or RETIREMENT_APPLY_REFUSAL_CODES, so it collapses to WRITE_FAILED, and the apply route returns 400 ins... |
+| GAP-RET-11 | P3 | WP-13 | MEMBER_MISMATCH (added by 0119:189-192) is not in GENERIC_CODES or RETIREMENT_APPLY_REFUSAL_CODES, so it collapses to WRITE_FAILED, and the apply route returns 400 ins... **Closed by WP-13** (MEMBER_MISMATCH mapped as a retirement refusal -> 409). |
 | GAP-RET-12 | P3 | — | PDF super statements (the most common real format) are not machine-readable. |
 | UPL-01 | P2 | WP-01, WP-08, WP-09 | Payslip and bank PDF extraction has no wall-clock timeout, so residual R-14-8 (brief §129) is STILL OPEN on current main. |
 | UPL-02 | P2 | WP-12 | The India II CAS upload (the live, flag-free PDF surface) skips the real GuardDuty scan without any warning to the user when migration 0196's columns are absent. |
@@ -465,4 +466,4 @@ Every gap id used above, with its severity and the work package(s) that close it
 | DC-17 | P2 | WP-07 | The Expenses tab does not show approved imported actuals (the brief requires 'Woolworths $200 Groceries' to be visible alongside planned). |
 | DC-18 | P2 | WP-04, WP-05 | Unpaginated register reads outside Dashboard. |
 | DC-19 | P3 | WP-03 | Direct fdh_* reads in downstream code. |
-| X-01 | P1 | WP-09, WP-11, WP-13 | "Update existing" applies confirmation-gated fields the user left unticked (income 0120:113, liability 0096:840, retirement 0119:147). |
+| X-01 | P1 | WP-09, WP-11, WP-13 | "Update existing" applies confirmation-gated fields the user left unticked (income 0120:113, liability 0096:840, retirement 0119:147). **Retirement closed by WP-13** (0211: default field set excludes requires_confirmation). |

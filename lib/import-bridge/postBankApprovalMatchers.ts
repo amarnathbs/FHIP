@@ -56,6 +56,7 @@ export interface PostBankApprovalMatcher {
  * super personal contribution), so their edits never touch the same line.
  */
 export const POST_BANK_APPROVAL_MATCHERS: readonly PostBankApprovalMatcher[] = [
+  { id: 'wp13_retirement_bank_rematch', ownerWp: 'WP-13', run: (ctx) => import('./retirementBankLegLink').then((m) => m.runRetirementBankRematch(ctx)) },
 ];
 
 export interface PostBankApprovalMatcherResult {

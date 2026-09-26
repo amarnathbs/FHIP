@@ -17,10 +17,10 @@ Every field an active upload adapter extracts, every evidence column and every a
 | liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
 | liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
 | auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
-| retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
+| retirementStatement | WP-13 | 203 | 17 | 0 | 118 | 68 | 0 | 3 | 3 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **886** | 131 | 113 | 277 | 332 | 33 | 301 | | 21 |
 
 ## Open gaps by id
 
@@ -49,14 +49,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | GAP-10 | P2 | WP-09 | 1 |
 | GAP-12 | P3 | WP-09 | 3 |
 | GAP-15 | P3 | WP-09 | 1 |
-| GAP-RET-01 | P1 | WP-13 | 6 |
-| GAP-RET-03 | P1 | WP-13 | 56 |
-| GAP-RET-04 | P2 | WP-13 | 42 |
-| GAP-RET-05 | P2 | WP-13 | 8 |
-| GAP-RET-06 | P2 | WP-13 | 9 |
-| GAP-RET-07 | P2 | WP-13 | 5 |
 | GAP-RET-08 | P2 | WP-07 | 3 |
-| GAP-RET-09 | P2 | WP-13 | 2 |
 | INV-G1 | P0 | WP-12 | 2 |
 | INV-G11 | P3 | WP-12 | 1 |
 | INV-G2 | P0 | WP-12 | 6 |
@@ -862,62 +855,62 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `accountType` | A state | retirement_accounts.account_type (add new) | Retirement tab | compliant | — | — |
 | `currencyCode` | A state | retirement_accounts.currency_code | Retirement tab | compliant | — | — |
 | `fundName` | A state | retirement_accounts.account_name (add new) | Retirement tab | compliant | — | — |
-| `maskedAccountIdentifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `statementDate` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `maskedAccountIdentifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date (annualises contribution totals, D-12) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
-| `employerContributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `personalContributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `governmentContributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rolloversIn` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rolloversOut` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `pensionPayments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `investmentEarnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `fees` | C evidence | evidence:fdh_retirement_statements.fees (never a household expense) | — | open_gap | GAP-RET-05 (P2) | WP-13 |
-| `insurancePremiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `tax` | C evidence | evidence:fdh_retirement_statements.tax | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `ytdEmployerContributions` | C evidence | evidence:fdh_retirement_statements.ytd_employer_contributions (labelled YTD) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `ytdPersonalContributions` | C evidence | evidence:fdh_retirement_statements.ytd_personal_contributions (labelled YTD) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `activities` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `positions` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `employerContributions` | A state | retirement_accounts.employer_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `personalContributions` | A state | retirement_accounts.personal_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `governmentContributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rolloversIn` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rolloversOut` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `pensionPayments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `investmentEarnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `fees` | C evidence | evidence:fdh_retirement_statements.fees (repeated lines summed; never a household expense) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `insurancePremiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `tax` | C evidence | evidence:fdh_retirement_statements.tax | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ytdEmployerContributions` | C evidence | evidence:fdh_retirement_statements.ytd_employer_contributions (labelled YTD) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ytdPersonalContributions` | C evidence | evidence:fdh_retirement_statements.ytd_personal_contributions (labelled YTD) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `activities` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `positions` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `parserName` | D metadata | fdh_retirement_statements.parser | — | compliant | — | — |
 | `parserVersion` | D metadata | fdh_retirement_statements.parser_version | — | compliant | — | — |
 | `extractionConfidence` | D metadata | fdh_retirement_statements.extraction_confidence | — | compliant | — | — |
-| `warnings` | E unsupported | fdh_retirement_statements.extraction_warnings (0207) | — | open_gap | GAP-RET-05 (P2) | WP-13 |
+| `warnings` | C evidence | fdh_retirement_statements.extraction_warnings (0207; persisted by WP-13, write-guarded by 0211) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 
 ### retirement_native · ts_interface · `fdh:retirement/types.ts#RetirementActivityEvidence`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `activityType` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `activityDate` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `descriptionRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `employerNameRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `activityType` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `activityDate` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `descriptionRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `employerNameRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `isSummaryTotal` | D metadata | fdh_retirement_statement_activities.is_summary_total | — | compliant | — | — |
 | `isYearToDate` | D metadata | fdh_retirement_statement_activities.is_year_to_date | — | compliant | — | — |
-| `currencyCode` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `effectivePeriodStart` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `effectivePeriodEnd` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `currencyCode` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `effectivePeriodStart` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `effectivePeriodEnd` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `sourceRowNumber` | D metadata | fdh_retirement_statement_activities.source_row_number | — | compliant | — | — |
 
 ### retirement_native · ts_interface · `fdh:retirement/types.ts#RetirementPositionEvidence`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `optionNameRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `assetClassRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `unitPrice` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `marketValue` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `valuationDate` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `tickerRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `isin` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `currencyCode` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
+| `optionNameRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `assetClassRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `unitPrice` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `marketValue` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `valuationDate` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `tickerRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `isin` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `currencyCode` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `sourceRowNumber` | D metadata | fdh_retirement_statement_positions.source_row_number | — | compliant | — | — |
 
 ### retirement_ai · zod_schema · `aie:retirement/schema.ts#retirementDocumentFactsSchema`
@@ -927,36 +920,36 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `schemaVersion` | D metadata | aie run evidence | — | compliant | — | — |
 | `documentMissingReasonCode` | D metadata | aie run evidence | — | compliant | — | — |
 | `fundName` | A state | retirement_accounts.account_name (add new) | Retirement tab | compliant | — | — |
-| `maskedAccountIdentifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `statementDate` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `maskedAccountIdentifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementDate` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date (annualises contribution totals, D-12) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
-| `employerContributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `personalContributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `governmentContributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rolloversIn` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rolloversOut` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `pensionPayments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `investmentEarnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `fees` | C evidence | evidence:fdh_retirement_statements.fees (never a household expense) | — | open_gap | GAP-RET-05 (P2) | WP-13 |
-| `insurancePremiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `tax` | C evidence | evidence:fdh_retirement_statements.tax | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `activities` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `positions` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `employerContributions` | A state | retirement_accounts.employer_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `personalContributions` | A state | retirement_accounts.personal_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `governmentContributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rolloversIn` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rolloversOut` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `pensionPayments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `investmentEarnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `fees` | C evidence | evidence:fdh_retirement_statements.fees (repeated lines summed; never a household expense) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `insurancePremiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `tax` | C evidence | evidence:fdh_retirement_statements.tax | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `activities` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `positions` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 
 ### retirement_ai · zod_schema · `aie:retirement/schema.ts#retirementActivitySchema`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `activityType` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `activityDate` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `descriptionRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `employerNameRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `activityType` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `activityDate` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `descriptionRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `employerNameRaw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `isSummaryTotal` | D metadata | fdh_retirement_statement_activities.is_summary_total | — | compliant | — | — |
 | `isYearToDate` | D metadata | fdh_retirement_statement_activities.is_year_to_date | — | compliant | — | — |
 
@@ -964,34 +957,34 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `optionNameRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `assetClassRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `unitPrice` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `marketValue` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `valuationDate` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
+| `optionNameRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `assetClassRaw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `unitPrice` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `marketValue` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `valuationDate` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 
 ### retirement_native · enum_value · `enum:RETIREMENT_ACTIVITY_TYPES`
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `EMPLOYER_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); payslip + fund are ONE effect, never income | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `PERSONAL_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); the matched bank debit is a transfer (user-confirmed) | — | open_gap | GAP-RET-07 (P2) | WP-13 |
-| `SALARY_SACRIFICE` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `GOVERNMENT_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `ROLLOVER_IN` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); fund A -> fund B is income 0 / expense 0 / net worth 0 | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `ROLLOVER_OUT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); neutral | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `INVESTMENT_EARNINGS` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `INTEREST` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `DISTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `FEE` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); never a household expense | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `INSURANCE_PREMIUM` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `TAX` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `PENSION_PAYMENT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); household income via the bank credit, once | — | open_gap | GAP-RET-07 (P2) | WP-13 |
-| `WITHDRAWAL` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); the bank credit is a transfer / retirement income (user-confirmed) | — | open_gap | GAP-RET-07 (P2) | WP-13 |
-| `ADJUSTMENT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review | — | open_gap | GAP-RET-05 (P2) | WP-13 |
-| `OTHER` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review | — | open_gap | GAP-RET-05 (P2) | WP-13 |
-| `UNKNOWN` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review, never classified silently | — | open_gap | GAP-RET-05 (P2) | WP-13 |
+| `EMPLOYER_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); payslip + fund are ONE effect, never income | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `PERSONAL_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); the matched bank debit is a transfer (user-confirmed, fdh12_confirm_retirement_bank_leg) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `SALARY_SACRIFICE` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `GOVERNMENT_CONTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ROLLOVER_IN` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); fund A -> fund B is income 0 / expense 0 / net worth 0 | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ROLLOVER_OUT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); neutral | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `INVESTMENT_EARNINGS` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `INTEREST` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `DISTRIBUTION` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `FEE` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); never a household expense | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `INSURANCE_PREMIUM` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `TAX` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `PENSION_PAYMENT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); household income via the bank credit, once (user-confirmed) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `WITHDRAWAL` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); the bank credit is a transfer (user-confirmed) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ADJUSTMENT` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `OTHER` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `UNKNOWN` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger); shown for review, never classified silently | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 
 ### retirement_native · db_column · `db:fdh_retirement_statements`
 
@@ -1006,41 +999,41 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statement_type` | D metadata | fdh_retirement_statements.statement_type | — | compliant | — | — |
 | `retirement_jurisdiction` | D metadata | fdh_retirement_statements.retirement_jurisdiction | — | compliant | — | — |
 | `account_type` | A state | retirement_accounts.account_type | Retirement tab | compliant | — | — |
-| `nickname` | E unsupported | not persisted as a canonical fact | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `nickname` | C evidence | evidence:fdh_retirement_statements.nickname (user-correctable label) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `currency_code` | A state | retirement_accounts.currency_code | Retirement tab | compliant | — | — |
 | `fund_name` | A state | retirement_accounts.account_name (add new) | Retirement tab | compliant | — | — |
-| `masked_account_identifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `statement_date` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statement_start_date` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `statement_end_date` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
-| `opening_balance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `masked_account_identifier` | C evidence | evidence:fdh_retirement_statements.masked_account_identifier | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statement_date` | C evidence | evidence:fdh_retirement_statements.statement_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statement_start_date` | C evidence | evidence:fdh_retirement_statements.statement_start_date (annualises contribution totals, D-12) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `statement_end_date` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of; an older statement never silently regresses the balance) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `opening_balance` | C evidence | evidence:fdh_retirement_statements.opening_balance | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `closing_balance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
-| `employer_contributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `personal_contributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
-| `salary_sacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `government_contributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rollovers_in` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `rollovers_out` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `pension_payments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `investment_earnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `fees` | C evidence | evidence:fdh_retirement_statements.fees (never a household expense) | — | open_gap | GAP-RET-05 (P2) | WP-13 |
-| `insurance_premiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `tax` | C evidence | evidence:fdh_retirement_statements.tax | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `ytd_employer_contributions` | C evidence | evidence:fdh_retirement_statements.ytd_employer_contributions | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `ytd_personal_contributions` | C evidence | evidence:fdh_retirement_statements.ytd_personal_contributions | — | open_gap | GAP-RET-04 (P2) | WP-13 |
+| `employer_contributions` | A state | retirement_accounts.employer_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `personal_contributions` | A state | retirement_accounts.personal_contribution (annualised, only when ticked, with contribution_frequency; D-12) | Retirement tab > import review (comparison, ticked fields only) | compliant | — | — |
+| `salary_sacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `government_contributions` | C evidence | evidence:fdh_retirement_statements.government_contributions | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rollovers_in` | C evidence | evidence:fdh_retirement_statements.rollovers_in (neutral: income 0 / expense 0 / net worth 0) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `rollovers_out` | C evidence | evidence:fdh_retirement_statements.rollovers_out (neutral) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `withdrawals` | C evidence | evidence:fdh_retirement_statements.withdrawals (the bank credit is the household leg) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `pension_payments` | C evidence | evidence:fdh_retirement_statements.pension_payments (household income via the bank credit, once) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `investment_earnings` | C evidence | evidence:fdh_retirement_statements.investment_earnings | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `fees` | C evidence | evidence:fdh_retirement_statements.fees (repeated lines summed; never a household expense) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `insurance_premiums` | C evidence | evidence:fdh_retirement_statements.insurance_premiums | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `tax` | C evidence | evidence:fdh_retirement_statements.tax | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ytd_employer_contributions` | C evidence | evidence:fdh_retirement_statements.ytd_employer_contributions | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ytd_personal_contributions` | C evidence | evidence:fdh_retirement_statements.ytd_personal_contributions | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `parser` | D metadata | fdh_retirement_statements.parser | — | compliant | — | — |
 | `parser_version` | D metadata | fdh_retirement_statements.parser_version | — | compliant | — | — |
 | `extraction_confidence` | D metadata | fdh_retirement_statements.extraction_confidence | — | compliant | — | — |
 | `extraction_status` | D metadata | fdh_retirement_statements.extraction_status | — | compliant | — | — |
-| `reconciliation_status` | D metadata | fdh_retirement_statements.reconciliation_status (INSERT-forgeable until 0211) | — | open_gap | GAP-RET-09 (P2) | WP-13 |
+| `reconciliation_status` | D metadata | fdh_retirement_statements.reconciliation_status (system-authoritative on INSERT and UPDATE, 0211) | — | compliant | — | — |
 | `reconciliation_variance` | D metadata | fdh_retirement_statements.reconciliation_variance | — | compliant | — | — |
 | `account_match_status` | D metadata | fdh_retirement_statements.account_match_status | — | compliant | — | — |
 | `account_match_candidates` | D metadata | fdh_retirement_statements.account_match_candidates | — | compliant | — | — |
 | `smsf_classification` | D metadata | fdh_retirement_statements.smsf_classification | — | compliant | — | — |
 | `smsf_evidence` | D metadata | fdh_retirement_statements.smsf_evidence | — | compliant | — | — |
 | `review_status` | D metadata | fdh_retirement_statements.review_status | — | compliant | — | — |
-| `approval_status` | D metadata | fdh_retirement_statements.approval_status (INSERT-forgeable until 0211) | — | open_gap | GAP-RET-09 (P2) | WP-13 |
+| `approval_status` | D metadata | fdh_retirement_statements.approval_status (system-authoritative on INSERT and UPDATE, 0211) | — | compliant | — | — |
 | `approved_at` | D metadata | fdh_retirement_statements.approved_at | — | compliant | — | — |
 | `approved_by` | D metadata | fdh_retirement_statements.approved_by | — | compliant | — | — |
 | `duplicate_of_statement_id` | D metadata | fdh_retirement_statements.duplicate_of_statement_id | — | compliant | — | — |
@@ -1048,7 +1041,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `source_provenance` | D metadata | fdh_retirement_statements.source_provenance | — | compliant | — | — |
 | `created_at` | D metadata | fdh_retirement_statements.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_retirement_statements.updated_at | — | compliant | — | — |
-| `extraction_warnings` | E unsupported | fdh_retirement_statements.extraction_warnings (0207) | — | open_gap | GAP-RET-05 (P2) | WP-13 |
+| `extraction_warnings` | C evidence | fdh_retirement_statements.extraction_warnings (0207; write-guarded by 0211) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 
 ### retirement_native · db_column · `db:fdh_retirement_statement_activities`
 
@@ -1057,23 +1050,25 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_retirement_statement_activities.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_retirement_statement_activities.user_id | — | compliant | — | — |
 | `statement_id` | D metadata | fdh_retirement_statement_activities.statement_id | — | compliant | — | — |
-| `activity_type` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `activity_date` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `description_raw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `employer_name_raw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `activity_type` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `amount` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `activity_date` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `description_raw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `employer_name_raw` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `is_summary_total` | D metadata | fdh_retirement_statement_activities.is_summary_total | — | compliant | — | — |
 | `is_year_to_date` | D metadata | fdh_retirement_statement_activities.is_year_to_date | — | compliant | — | — |
-| `effective_period_start` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `effective_period_end` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `currency_code` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
+| `effective_period_start` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `effective_period_end` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `currency_code` | C evidence | evidence:fdh_retirement_statement_activities (contribution history; never posted to the household ledger) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `employer_normalised` | D metadata | fdh_retirement_statement_activities.employer_normalised | — | compliant | — | — |
 | `payslip_match_status` | D metadata | fdh_retirement_statement_activities.payslip_match_status | — | compliant | — | — |
 | `matched_payroll_event_id` | D metadata | fdh_retirement_statement_activities.matched_payroll_event_id | — | compliant | — | — |
 | `payslip_match_variance` | D metadata | fdh_retirement_statement_activities.payslip_match_variance | — | compliant | — | — |
 | `payslip_match_candidates` | D metadata | fdh_retirement_statement_activities.payslip_match_candidates | — | compliant | — | — |
-| `bank_match_status` | D metadata | fdh_retirement_statement_activities.bank_match_status | — | open_gap | GAP-RET-07 (P2) | WP-13 |
-| `linked_transaction_id` | D metadata | the matched bank leg (reclassified only with the user's confirmation) | — | open_gap | GAP-RET-07 (P2) | WP-13 |
+| `bank_match_status` | D metadata | fdh_retirement_statement_activities.bank_match_status (re-matched after a later bank approval, WP-13) | — | compliant | — | — |
+| `linked_transaction_id` | D metadata | the matched bank leg (reclassified only with the user's confirmation, 0211) | — | compliant | — | — |
+| `bank_leg_confirmed_at` | D metadata | fdh_retirement_statement_activities.bank_leg_confirmed_at (the user's confirmation, 0211) | — | compliant | — | — |
+| `bank_leg_confirmed_type` | D metadata | fdh_retirement_statement_activities.bank_leg_confirmed_type (transfer \| income; the bank leg's type after confirmation, 0211) | — | compliant | — | — |
 | `bank_match_candidates` | D metadata | fdh_retirement_statement_activities.bank_match_candidates | — | compliant | — | — |
 | `rollover_counterpart_activity_id` | D metadata | fdh_retirement_statement_activities.rollover_counterpart_activity_id | — | compliant | — | — |
 | `rollover_match_status` | D metadata | fdh_retirement_statement_activities.rollover_match_status | — | compliant | — | — |
@@ -1091,15 +1086,15 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_retirement_statement_positions.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_retirement_statement_positions.user_id | — | compliant | — | — |
 | `statement_id` | D metadata | fdh_retirement_statement_positions.statement_id | — | compliant | — | — |
-| `option_name_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `asset_class_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `unit_price` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `market_value` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `valuation_date` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `ticker_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `isin` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
-| `currency_code` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | — | open_gap | GAP-RET-04 (P2) | WP-13 |
+| `option_name_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `asset_class_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `units` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `unit_price` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `market_value` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `valuation_date` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `ticker_raw` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `isin` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
+| `currency_code` | C evidence | evidence:fdh_retirement_statement_positions ("holdings in super"; never Net Worth) | Retirement tab > Imported retirement statements (statement details) and the import review | compliant | — | — |
 | `source_row_number` | D metadata | fdh_retirement_statement_positions.source_row_number | — | compliant | — | — |
 | `created_at` | D metadata | fdh_retirement_statement_positions.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_retirement_statement_positions.updated_at | — | compliant | — | — |
