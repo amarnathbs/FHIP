@@ -18,6 +18,7 @@
  * that one is singled out).
  */
 
+import { roundToMoneyScale } from '@/lib/financial-data-hub/bank-csv/amount';
 import type { LiabilityStatementActivity } from '@/lib/financial-data-hub/liability/types';
 import type { LiabilityStatementDocumentFacts } from './schema';
 
@@ -47,7 +48,9 @@ export const AIE_LIABILITY_AI_EXTRACTION_CONFIDENCE = 0.5;
 export const AIE_LIABILITY_MIN_ACTIVITIES = 1;
 
 function money(value: string | null): number | undefined {
-  if (value === null) return undefined;
+  // `Number('')` is 0, so a blank string must be caught before the parse or it
+  // becomes exactly the coerced zero the comments below rule out.
+  if (value === null || value.trim() === '') return undefined;
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -149,6 +152,14 @@ export function mapLiabilityStatementFactsToDraft(facts: LiabilityStatementDocum
     // that the extraction was incomplete.
     if (amount === undefined) {
       warnings.push(`ai_activity_${index + 1}_unreadable_amount`);
+      return;
+    }
+    // A zero-amount line moves no money and is not activity evidence; the
+    // native CSV path excludes it the same way (`row_N_zero_amount`). Letting
+    // it through would only fail later, at confirm time, on
+    // `fdh_liability_statement_activities`' `CHECK (amount > 0)`.
+    if (roundToMoneyScale(Math.abs(amount)) === 0) {
+      warnings.push(`ai_activity_${index + 1}_zero_amount`);
       return;
     }
     if (amount < 0) {

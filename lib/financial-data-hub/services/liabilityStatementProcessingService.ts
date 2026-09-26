@@ -33,6 +33,7 @@ import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
+import { roundToMoneyScale } from '../bank-csv/amount';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
@@ -462,6 +463,43 @@ async function resolveLiabilityStatementDocument(
 }
 
 /**
+ * The row-level invariants `fdh_liability_statement_activities` enforces in
+ * the database (migration 0096), checked BEFORE anything is read or written.
+ *
+ * Both extraction paths already exclude what these rules reject (a zero line
+ * becomes a `row_N_zero_amount` / `ai_activity_N_zero_amount` warning), so a
+ * failure here means a caller bypassed that step. Refusing up front turns it
+ * into a controlled `invalid_state` with a message the user can act on,
+ * rather than a database CHECK violation surfacing as a 500. The database
+ * CHECKs remain the final guard; this does not replace them.
+ */
+export function assertPersistableLiabilityActivities(activities: readonly LiabilityStatementActivity[]): void {
+  activities.forEach((activity, index) => {
+    const row = activity.sourceRowNumber ?? index + 1;
+    if (!Number.isFinite(activity.amount) || roundToMoneyScale(activity.amount) <= 0) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has no positive amount, so this statement was not saved. Remove that line and try again.`,
+      );
+    }
+    const components = [activity.principalComponent, activity.interestComponent, activity.feeComponent];
+    if (components.some((c) => c !== undefined && c !== null && (!Number.isFinite(c) || c < 0))) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has an invalid repayment split, so this statement was not saved.`,
+      );
+    }
+    const componentSum = components.reduce<number>((sum, c) => sum + (c ?? 0), 0);
+    if (componentSum > activity.amount + 0.0001) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has a repayment split larger than its amount, so this statement was not saved.`,
+      );
+    }
+  });
+}
+
+/**
  * THE CANONICAL WRITE for a liability statement.
  *
  * EXPORTED 2026-09-23 (AIE unified document fallback) so that the AI-fallback
@@ -511,6 +549,7 @@ export async function persistLiabilityStatementEvidence(
   // through to the INSERT below.
   facilityType: LiabilityFacilityType,
 ): Promise<string> {
+  assertPersistableLiabilityActivities(activities);
   const supabase = await createClient();
   const isCreditCard = metadata.statementType === 'credit_card';
 
@@ -603,17 +642,12 @@ export async function persistLiabilityStatementEvidence(
     review_status: reconciliation.status === 'variance' || warnings.length > 0 ? 'pending' : 'not_required',
   };
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('fdh_liability_statements')
-    .insert(insertRow)
-    .select('id')
-    .single();
-  if (insertError || !inserted) throw new Error(insertError?.message ?? 'could not create statement evidence');
-  const statementId = (inserted as { id: string }).id;
-
   // Bank matching for PAYMENT activities only (spec sections 39-43) — never
   // for PURCHASE/REFUND/INTEREST/FEE, which are never matched against a
-  // bank transaction (only settled/expensed on their own terms).
+  // bank transaction (only settled/expensed on their own terms). Done for
+  // EVERY activity before anything is written, so the write below is a
+  // single call with nothing left to fail between its parts.
+  const activityRows: Record<string, unknown>[] = [];
   for (const activity of activities) {
     let bankMatchStatus: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted' | 'bank_evidence_not_available' = 'not_attempted';
     let linkedTransactionId: string | null = null;
@@ -633,9 +667,7 @@ export async function persistLiabilityStatementEvidence(
       linkedTransactionId = match.matchedTransactionId;
     }
 
-    const { error: actError } = await supabase.from('fdh_liability_statement_activities').insert({
-      user_id: userId,
-      statement_id: statementId,
+    activityRows.push({
       activity_type: activity.activityType,
       activity_date: activity.activityDate,
       amount: activity.amount,
@@ -650,15 +682,40 @@ export async function persistLiabilityStatementEvidence(
       review_status: bankMatchStatus === 'multiple_candidates' ? 'pending' : 'not_required',
       source_row_number: activity.sourceRowNumber ?? null,
     });
-    if (actError) throw new Error(actError.message);
   }
 
+  // ONE TRANSACTION (migration 0208). The statement row, every activity row
+  // and the `extracted` transition commit together or not at all. This
+  // replaces an INSERT-then-N-INSERTs-then-UPDATE sequence of separate
+  // PostgREST calls that, on 2026-09-25 in DEV, committed the statement row,
+  // failed the first activity INSERT on `CHECK (amount > 0)`, and left an
+  // orphan statement the user-scoped client has no DELETE policy to remove.
+  // The function is SECURITY INVOKER: every RLS policy and trigger that
+  // applied to the separate calls still applies.
   assertDocumentTransition('processing', 'extracted');
-  await supabase
-    .from('fdh_statement_uploads')
-    .update({ processing_status: 'extracted', error_code: null, processing_completed_at: new Date().toISOString() })
-    .eq('id', document.id)
-    .eq('user_id', userId);
+  const { data: persisted, error: persistError } = await supabase.rpc('fdh10_persist_liability_statement', {
+    p_statement_upload_id: document.id,
+    p_statement: insertRow,
+    p_activities: activityRows,
+  });
+  // A database error (a constraint, a trigger, the function itself missing
+  // because 0208 has not been applied) is an unexpected fault; its message is
+  // not user copy, so it is thrown as a plain Error and the route answers with
+  // its generic message. Nothing was committed.
+  if (persistError) throw new Error(persistError.message);
+  const outcome = persisted as { ok: boolean; code?: string; error?: string; statement_id?: string } | null;
+  if (!outcome?.ok || !outcome.statement_id) {
+    const code = outcome?.code;
+    if (code === 'EVIDENCE_EXISTS') {
+      throw new LiabilityStatementProcessingError('invalid_state', 'Evidence has already been saved for this statement.');
+    }
+    if (code === 'DOCUMENT_NOT_FOUND') throw new LiabilityStatementProcessingError('not_found', 'document not found');
+    if (code === 'INVALID_STATE') {
+      throw new LiabilityStatementProcessingError('invalid_state', outcome?.error ?? 'This statement can no longer be processed.');
+    }
+    throw new Error(outcome?.error ?? 'could not create statement evidence');
+  }
+  const statementId = outcome.statement_id;
 
   await recordDocumentAuditEvent({
     userId,
@@ -805,7 +862,11 @@ export interface ReviewedLiabilityStatementDraft {
  * assert the edge is legal, but the row itself stays `queued`/`uploaded` right
  * up until the `extracted` write inside `persistLiabilityStatementEvidence`.
  * Gating on `'processing'` here would therefore reject every legitimate
- * confirm. The equivalent guarantee is reconstructed from two conditions that
+ * confirm. (Since migration 0208 the persist RPC does pass the row through
+ * `processing` on its way to `extracted`, as 0076's transition guard
+ * requires, but only inside its own transaction; no other request can ever
+ * observe that state, so this gate is unaffected.) The equivalent guarantee
+ * is reconstructed from two conditions that
  * together mean the same thing:
  *   1. the document is still in `queued`/`uploaded` — i.e. it has not since
  *      been failed, rejected, extracted, approved or purged by anything else;

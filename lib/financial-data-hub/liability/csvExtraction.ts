@@ -20,7 +20,7 @@
  */
 
 import { decodeCsvBytes, detectDelimiter, findHeaderRowIndex, parseCsvSafe, CsvIntakeError } from '../bank-csv/csv';
-import { parseAmountField } from '../bank-csv/amount';
+import { parseAmountField, roundToMoneyScale } from '../bank-csv/amount';
 import { inferDateFormat, parseDateWithFormat } from '../bank-csv/dateFormats';
 import { CSV_HEADER_SCAN_DEPTH } from '../bank-csv/constants';
 import {
@@ -169,6 +169,18 @@ export function extractLiabilityStatementFromCsv(input: LiabilityCsvExtractionIn
     const amountResult = parseAmountField(row[amountIdx] ?? '');
     if (!amountResult.ok || amountResult.magnitude === null) {
       warnings.push(`row_${i + 1}_unparseable_amount`);
+      return;
+    }
+    // A zero-amount line (e.g. an issuer's "OPENING" or "$0.00 payment
+    // received" placeholder) moves no money and contributes nothing to any
+    // activity-type total, so it is not activity evidence. It is excluded,
+    // but never silently: the warning makes the omission visible and sends
+    // the statement to review. `fdh_liability_statement_activities.amount`
+    // is `CHECK (amount > 0)` (migration 0096), which stays the final guard.
+    // Live-reproduced in DEV 2026-09-25: letting the row through made the
+    // activity INSERT fail and the process route return 500.
+    if (roundToMoneyScale(amountResult.magnitude) === 0) {
+      warnings.push(`row_${i + 1}_zero_amount`);
       return;
     }
 

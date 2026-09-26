@@ -53,8 +53,10 @@ const activitySchema = z
     activityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     // Positive magnitude only; meaning is carried by `activityType`. A signed
     // amount here would be a second, contradictory encoding of direction and
-    // would invert one of the statement totals.
-    amount: z.number().finite().nonnegative(),
+    // would invert one of the statement totals. Strictly positive: a zero
+    // line is not activity evidence and would fail
+    // `fdh_liability_statement_activities`' `CHECK (amount > 0)` at write time.
+    amount: z.number().finite().positive(),
     descriptionRaw: z.string().max(500).nullable().optional(),
     merchantRaw: z.string().max(200).nullable().optional(),
     principalComponent: z.number().finite().nonnegative().nullable().optional(),
