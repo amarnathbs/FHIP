@@ -137,6 +137,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
   lte() { return this; }
   limit() { return this; }
   order() { return this; }
+  // WP-10 (G4): the candidate read now pages (fetchAllRows) and excludes
+  // debits already matched to another activity (`.in`).
+  in() { return this; }
+  range() { return Promise.resolve(this.run()); }
   single() { return Promise.resolve(this.run()).then((r) => ({ ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data })); }
   maybeSingle() { return this.single(); }
   then<A, B>(onF?: ((v: { data: unknown; error: { message: string } | null }) => A | PromiseLike<A>) | null, onR?: ((e: unknown) => B | PromiseLike<B>) | null) {
@@ -210,6 +214,22 @@ vi.mock('@/lib/financial-data-hub/services/storage', () => ({
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({
   recordDocumentAuditEvent: vi.fn(async (e: { eventType: string }) => { auditEvents.push(e.eventType); }),
 }));
+// Forward-port note (WP-10, 2026-09-27): since 24281b8 was written, main added
+// the shared identical-upload rule, the durable AI-draft store and the pilot
+// cohort lookup to this path (each reads through the service-role client).
+// None is what this suite tests, so each answers "nothing earlier / no draft",
+// exactly as tests/unit/fdh3AsyncMalwareScanResume.test.ts does.
+vi.mock('@/lib/financial-data-hub/services/identicalUpload', () => ({
+  findEarlierIdenticalUpload: async () => null,
+  IDENTICAL_UPLOAD_SPECS: { liability: {} },
+}));
+vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
+  loadPendingAiFallbackDraft: async () => ({ found: false, reason: 'none_pending' }),
+  saveAiFallbackDraft: async () => ({ persisted: false, reason: 'table_missing' }),
+  claimPendingAiFallbackDraft: async () => ({ claimed: false, reason: 'table_missing' }),
+  releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
+}));
+vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: async () => null }));
 
 import { POST as processRoute } from '@/app/api/financial-data-hub/liability-statement/[documentId]/process/route';
 import {
