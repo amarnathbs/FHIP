@@ -152,7 +152,7 @@ export function StatementCategoryReview({
       return;
     }
     const label = categories.find((c) => c.id === categoryId)?.label ?? 'the chosen category';
-    const rememberPayee = remember[item.id] ?? true;
+    const rememberPayee = remember[item.id] ?? false; // off unless the user ticks it (R8 spec 47: personal rules only from deliberate action; PO 2026-09-26)
     void run(`cat:${item.id}`, async () => {
       const result = await apiPost<SetCategoryResult>(`/api/financial-data-hub/bank-transactions/${item.id}/set-category`, {
         category_id: categoryId,
@@ -326,7 +326,7 @@ export function StatementCategoryReview({
                         <input
                           id={rememberId}
                           type="checkbox"
-                          checked={remember[item.id] ?? true}
+                          checked={remember[item.id] ?? false}
                           onChange={(e) => setRemember((r) => ({ ...r, [item.id]: e.target.checked }))}
                         />
                         <label htmlFor={rememberId} className="text-xs text-ink">
