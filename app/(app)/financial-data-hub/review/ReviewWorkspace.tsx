@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { formatMoney } from '@/lib/engines/money';
+import { formatMoney, formatMoneyCode } from '@/lib/engines/money';
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
 
 // Mirrors lib/financial-data-hub/constants/enums.ts FDH_ECONOMIC_TRANSACTION_TYPES
@@ -23,6 +24,7 @@ interface CategoryOption {
 interface QueueItem {
   id: string;
   financial_account_id: string;
+  statement_upload_id: string | null;
   transaction_date: string;
   description_clean: string | null;
   amount_original: number;
@@ -35,15 +37,48 @@ interface QueueItem {
   classification_confidence: number | null;
 }
 
-interface QueueSections {
+/** Exactly the snake_case keys `GET /api/financial-data-hub/review-queue`
+ * returns (pinned by tests/unit/fdhCategoryReviewRoutes.test.ts). */
+export interface QueueSections {
   needs_attention: number;
   transfers: number;
   possible_duplicates: number;
   uncategorised: number;
   low_confidence: number;
   recurring_candidates: number;
+  awaiting_approval: number;
   ready_to_approve: number;
 }
+
+export interface QueueStatement {
+  id: string;
+  period_start: string | null;
+  period_end: string | null;
+  file_name: string | null;
+  waiting: number;
+}
+
+interface QueueResponse {
+  items: QueueItem[];
+  sections: QueueSections;
+  statements: QueueStatement[];
+}
+
+/** Tiles whose number is exactly the length of the list they open. */
+const FILTER_TILES: Array<{ key: keyof QueueSections; reason: string; label: string }> = [
+  { key: 'needs_attention', reason: 'needs_attention', label: 'Need a decision' },
+  { key: 'uncategorised', reason: 'uncategorised', label: 'No category yet' },
+  { key: 'low_confidence', reason: 'low_confidence', label: 'Not sure of the category' },
+  { key: 'transfers', reason: 'transfers', label: 'Possible transfers' },
+  { key: 'possible_duplicates', reason: 'duplicates', label: 'Possible duplicates' },
+  { key: 'awaiting_approval', reason: 'awaiting_approval', label: 'Waiting for approval' },
+];
+
+const TYPE_LABEL: Record<string, string> = {
+  income: 'Income', expense: 'Spending', transfer: 'Transfer', investment: 'Investment', debt_principal: 'Loan repayment',
+  debt_interest: 'Interest', refund: 'Refund', asset_purchase: 'Investment purchase', asset_sale: 'Investment sale',
+  tax: 'Tax', fee: 'Fee', cash_withdrawal: 'Cash withdrawal', unknown: 'No category yet',
+};
 
 interface TxnDetail {
   id: string;
@@ -95,24 +130,33 @@ async function apiPost<T>(url: string, body: unknown): Promise<T> {
 }
 
 const REASON_LABEL: Record<string, string> = {
-  needs_attention: 'Needs attention',
+  needs_attention: 'Need a decision',
   transfers: 'Possible transfers',
   duplicates: 'Possible duplicates',
-  uncategorised: 'Uncategorised',
-  recurring: 'Recurring candidates',
+  uncategorised: 'No category yet',
+  low_confidence: 'Not sure of the category',
+  awaiting_approval: 'Waiting for approval',
 };
+
+function queueUrl(accountId: string | null, reason: string | null): string {
+  const qs = new URLSearchParams();
+  if (accountId) qs.set('account_id', accountId);
+  if (reason && REASON_LABEL[reason]) qs.set('reason', reason);
+  const s = qs.toString();
+  return `/api/financial-data-hub/review-queue${s ? `?${s}` : ''}`;
+}
 
 export function ReviewWorkspace({
   initialTransactionId,
-  initialStatementId,
   initialReason,
   initialAccountId,
+  fromParam,
   categories,
 }: {
   initialTransactionId: string | null;
-  initialStatementId: string | null;
   initialReason: string | null;
   initialAccountId: string | null;
+  fromParam: string;
   categories: CategoryOption[];
 }) {
   const router = useRouter();
@@ -120,7 +164,8 @@ export function ReviewWorkspace({
   const [queueError, setQueueError] = useState<string | null>(null);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [sections, setSections] = useState<QueueSections | null>(null);
-  const [reason, setReason] = useState<string | null>(initialReason);
+  const [statements, setStatements] = useState<QueueStatement[]>([]);
+  const [reason, setReason] = useState<string | null>(initialReason && REASON_LABEL[initialReason] ? initialReason : null);
 
   const [focusedId, setFocusedId] = useState<string | null>(initialTransactionId);
   const [focusLoading, setFocusLoading] = useState(false);
@@ -135,25 +180,20 @@ export function ReviewWorkspace({
   const [correctionField, setCorrectionField] = useState<'category_id' | 'economic_transaction_type'>('category_id');
   const [correctionValue, setCorrectionValue] = useState('');
 
-  const [statementId] = useState<string | null>(initialStatementId);
-  const [statementSummary, setStatementSummary] = useState<Record<string, unknown> | null>(null);
-  const [statementLoading, setStatementLoading] = useState(false);
-  const [statementError, setStatementError] = useState<string | null>(null);
-
   const loadQueue = useCallback(async () => {
     setQueueLoading(true);
     setQueueError(null);
     try {
-      const qs = initialAccountId ? `?account_id=${encodeURIComponent(initialAccountId)}` : '';
-      const data = await apiGet<{ items: QueueItem[]; sections: QueueSections }>(`/api/financial-data-hub/review-queue${qs}`);
+      const data = await apiGet<QueueResponse>(queueUrl(initialAccountId, reason));
       setItems(data.items);
       setSections(data.sections);
+      setStatements(data.statements ?? []);
     } catch (e) {
       setQueueError(e instanceof Error ? e.message : 'Could not load the review queue.');
     } finally {
       setQueueLoading(false);
     }
-  }, [initialAccountId]);
+  }, [initialAccountId, reason]);
 
   const loadFocused = useCallback(async (id: string) => {
     setFocusLoading(true);
@@ -176,25 +216,12 @@ export function ReviewWorkspace({
     }
   }, []);
 
-  const loadStatement = useCallback(async (id: string) => {
-    setStatementLoading(true);
-    setStatementError(null);
-    try {
-      const data = await apiGet<Record<string, unknown>>(`/api/financial-data-hub/documents/${id}/review-summary`);
-      setStatementSummary(data);
-    } catch (e) {
-      setStatementError(e instanceof Error ? e.message : 'Could not load this statement.');
-    } finally {
-      setStatementLoading(false);
-    }
-  }, []);
-
   // Each mount/param-change effect below re-does its fetch inline (rather
   // than calling the loadX() function by reference) with a `cancelled`
   // guard before every setState — the accepted pattern this codebase uses
   // for the react-hooks/set-state-in-effect rule (see
   // components/investment-intelligence/InvestmentIntelligenceClient.tsx).
-  // loadQueue/loadFocused/loadStatement themselves are still reused
+  // loadQueue/loadFocused themselves are still reused
   // directly by the retry buttons and post-action refresh below, where
   // calling them is not subject to this rule.
   useEffect(() => {
@@ -203,11 +230,11 @@ export function ReviewWorkspace({
       setQueueLoading(true);
       setQueueError(null);
       try {
-        const qs = initialAccountId ? `?account_id=${encodeURIComponent(initialAccountId)}` : '';
-        const data = await apiGet<{ items: QueueItem[]; sections: QueueSections }>(`/api/financial-data-hub/review-queue${qs}`);
+        const data = await apiGet<QueueResponse>(queueUrl(initialAccountId, reason));
         if (cancelled) return;
         setItems(data.items);
         setSections(data.sections);
+        setStatements(data.statements ?? []);
       } catch (e) {
         if (!cancelled) setQueueError(e instanceof Error ? e.message : 'Could not load the review queue.');
       } finally {
@@ -215,7 +242,7 @@ export function ReviewWorkspace({
       }
     })();
     return () => { cancelled = true; };
-  }, [initialAccountId]);
+  }, [initialAccountId, reason]);
 
   useEffect(() => {
     if (!focusedId) return;
@@ -244,33 +271,14 @@ export function ReviewWorkspace({
     return () => { cancelled = true; };
   }, [focusedId]);
 
-  useEffect(() => {
-    if (!statementId) return;
-    let cancelled = false;
-    (async () => {
-      setStatementLoading(true);
-      setStatementError(null);
-      try {
-        const data = await apiGet<Record<string, unknown>>(`/api/financial-data-hub/documents/${statementId}/review-summary`);
-        if (cancelled) return;
-        setStatementSummary(data);
-      } catch (e) {
-        if (!cancelled) setStatementError(e instanceof Error ? e.message : 'Could not load this statement.');
-      } finally {
-        if (!cancelled) setStatementLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [statementId]);
-
   function focusTransaction(id: string) {
     setFocusedId(id);
-    router.replace(`/financial-data-hub/review?transaction=${id}`, { scroll: false });
+    router.replace(`/financial-data-hub/review?transaction=${id}&from=${fromParam}`, { scroll: false });
   }
   function backToQueue() {
     setFocusedId(null);
     setTxn(null);
-    router.replace('/financial-data-hub/review', { scroll: false });
+    router.replace(`/financial-data-hub/review?from=${fromParam}`, { scroll: false });
     loadQueue();
   }
 
@@ -290,48 +298,13 @@ export function ReviewWorkspace({
     }
   }
 
-  const filteredItems = items.filter((it) => {
-    if (!reason || reason === 'needs_attention') return true;
-    if (reason === 'uncategorised') return it.economic_transaction_type === 'unknown';
-    if (reason === 'transfers') return it.economic_transaction_type === 'transfer';
-    return true;
-  });
-
-  // -------------------------------------------------------------------
-  // Statement-focused view
-  // -------------------------------------------------------------------
-  if (statementId) {
-    return (
-      <div className="space-y-4">
-        {statementLoading && <ResourceLoadingSkeleton rows={3} />}
-        {statementError && <ResourceErrorState message={statementError} onRetry={() => loadStatement(statementId)} />}
-        {statementSummary && (
-          <div className="rounded-compact border border-line bg-white p-4">
-            <h2 className="text-sm font-semibold text-ink">Statement review</h2>
-            <pre className="mt-2 overflow-x-auto text-xs text-muted">{JSON.stringify(statementSummary, null, 2)}</pre>
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => runAction('Statement approved.', () => apiPost(`/api/financial-data-hub/documents/${statementId}/approve`, {}))}
-              className="mt-3 rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Approve statement
-            </button>
-            {actionMessage && <p className="mt-2 text-sm text-positive">{actionMessage}</p>}
-            {actionError && <p className="mt-2 text-sm text-risk">{actionError}</p>}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // -------------------------------------------------------------------
   // Focused single-transaction view
   // -------------------------------------------------------------------
   if (focusedId) {
     return (
       <div className="space-y-4">
-        <button type="button" onClick={backToQueue} className="text-sm font-semibold text-trust hover:underline">
+        <button type="button" onClick={() => backToQueue()} className="text-sm font-semibold text-trust hover:underline">
           ← Back to review queue
         </button>
         {focusLoading && <ResourceLoadingSkeleton rows={4} />}
@@ -394,7 +367,7 @@ export function ReviewWorkspace({
                   >
                     <option value="">Select a category</option>
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label} ({c.economicType})</option>
+                      <option key={c.id} value={c.id}>{c.label} ({TYPE_LABEL[c.economicType] ?? c.economicType})</option>
                     ))}
                   </select>
                 ) : (
@@ -501,69 +474,116 @@ export function ReviewWorkspace({
   // -------------------------------------------------------------------
   // General queue view
   // -------------------------------------------------------------------
+  const awaiting = sections?.awaiting_approval ?? 0;
+  const emptyTitle = awaiting > 0 ? `${awaiting} transaction${awaiting === 1 ? ' is' : 's are'} waiting for your approval` : 'Nothing is waiting';
+  const emptyMessage = awaiting > 0
+    ? 'None of them need a decision. Approve them by category from the statement list above. Until you approve them they do not count toward your Monthly Surplus.'
+    : 'Every imported transaction has been approved.';
+
   return (
     <div className="space-y-4">
+      <p role="status" aria-live="polite" className="sr-only">
+        {sections ? `${sections.needs_attention} need a decision, ${awaiting} waiting for approval.` : ''}
+      </p>
+
+      {statements.length > 0 && (
+        <section aria-labelledby="statements-heading" className="rounded-compact border border-trust/30 bg-trust/5 p-4">
+          <h2 id="statements-heading" className="text-base font-semibold text-ink">Statements waiting for your approval</h2>
+          <p className="mt-1 text-sm text-muted">
+            The quickest way: review each statement by category, approve the totals, and only pick a category for the few
+            transactions we could not recognise.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {statements.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-compact border border-line bg-white px-3 py-2">
+                <span className="text-sm text-ink">
+                  {s.period_start && s.period_end ? `Statement ${s.period_start} to ${s.period_end}` : (s.file_name ?? 'Imported statement')}
+                  <span className="text-muted"> · {s.waiting} waiting</span>
+                </span>
+                <Link
+                  href={`/financial-data-hub/review?statement=${s.id}&from=${fromParam}`}
+                  className="rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white"
+                >
+                  Review by category
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {sections && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6" role="list" aria-label="Review categories">
-          {(['needs_attention', 'transfers', 'possible_duplicates', 'uncategorised', 'low_confidence', 'recurring_candidates'] as const).map((key) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" role="group" aria-label="Show transactions by reason">
+          {FILTER_TILES.map((tile) => (
             <button
-              key={key}
+              key={tile.key}
               type="button"
-              role="listitem"
-              onClick={() => setReason(key === 'possible_duplicates' ? 'duplicates' : key === 'recurring_candidates' ? 'recurring' : key)}
-              className="rounded-compact border border-line bg-white p-3 text-left hover:border-trust"
+              aria-pressed={(reason ?? 'needs_attention') === tile.reason}
+              onClick={() => setReason(tile.reason)}
+              className={`rounded-compact border bg-white p-3 text-left hover:border-trust ${(reason ?? 'needs_attention') === tile.reason ? 'border-trust' : 'border-line'}`}
             >
-              <p className="text-lg font-semibold text-ink">{sections[key]}</p>
-              <p className="text-xs text-muted">{key.replace(/_/g, ' ')}</p>
+              <p className="text-lg font-semibold text-ink">{sections[tile.key]}</p>
+              <p className="text-xs text-muted">{tile.label}</p>
             </button>
           ))}
         </div>
       )}
+      {sections && sections.recurring_candidates > 0 && (
+        <p className="text-xs text-muted">{sections.recurring_candidates} possible repeating payment{sections.recurring_candidates === 1 ? '' : 's'} found.</p>
+      )}
 
-      {reason && (
+      {reason && reason !== 'needs_attention' && (
         <p className="text-sm text-muted">
-          Filtered to: <span className="font-medium text-ink">{REASON_LABEL[reason] ?? reason}</span>{' '}
-          <button type="button" onClick={() => setReason(null)} className="ml-2 text-trust hover:underline">Clear filter</button>
+          Showing: <span className="font-medium text-ink">{REASON_LABEL[reason] ?? reason}</span>{' '}
+          <button type="button" onClick={() => setReason(null)} className="ml-2 text-trust hover:underline">Show what needs a decision</button>
         </p>
       )}
 
       {queueLoading && <ResourceLoadingSkeleton rows={6} />}
-      {queueError && <ResourceErrorState message={queueError} onRetry={loadQueue} />}
-      {!queueLoading && !queueError && filteredItems.length === 0 && (
-        <ResourceEmptyState title="Nothing to review" message="Every transaction in scope has already been reviewed." />
+      {queueError && <ResourceErrorState message={queueError} onRetry={() => { void loadQueue(); }} />}
+      {!queueLoading && !queueError && items.length === 0 && (
+        <ResourceEmptyState title={emptyTitle} message={emptyMessage} />
       )}
-      {!queueLoading && !queueError && filteredItems.length > 0 && (
+      {!queueLoading && !queueError && items.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <caption className="sr-only">Transactions awaiting review</caption>
+            <caption className="sr-only">{REASON_LABEL[reason ?? 'needs_attention']}</caption>
             <thead>
               <tr className="border-b border-line text-xs text-muted">
                 <th scope="col" className="py-2 pr-2 font-medium">Date</th>
                 <th scope="col" className="py-2 pr-2 font-medium">Description</th>
                 <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
                 <th scope="col" className="py-2 pr-2 font-medium">Type</th>
-                <th scope="col" className="py-2 pr-2 font-medium">Status</th>
                 <th scope="col" className="py-2 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((it) => (
+              {items.map((it) => (
                 <tr key={it.id} className="border-b border-line/60">
                   <td className="py-2 pr-2 text-ink">{it.transaction_date}</td>
                   <td className="py-2 pr-2 text-ink">{it.description_clean ?? '—'}</td>
                   <td className="py-2 pr-2 text-right tabular-nums text-ink">
-                    {formatMoney(it.amount_original, it.currency_original as 'AUD' | 'INR')}
+                    {formatMoneyCode(it.amount_original, it.currency_original)} {it.currency_original}
                   </td>
-                  <td className="py-2 pr-2 text-muted">{it.economic_transaction_type}</td>
-                  <td className="py-2 pr-2 text-muted">{it.review_status}</td>
+                  <td className="py-2 pr-2 text-muted">{TYPE_LABEL[it.economic_transaction_type] ?? it.economic_transaction_type}</td>
                   <td className="py-2">
-                    <button
-                      type="button"
-                      onClick={() => focusTransaction(it.id)}
-                      className="rounded-compact border border-trust px-2 py-1 text-xs font-semibold text-trust hover:bg-trust/5"
-                    >
-                      Review transaction
-                    </button>
+                    <span className="flex flex-wrap gap-2">
+                      {it.statement_upload_id && (
+                        <Link
+                          href={`/financial-data-hub/review?statement=${it.statement_upload_id}&from=${fromParam}`}
+                          className="rounded-compact bg-trust px-2 py-1 text-xs font-semibold text-white"
+                        >
+                          Review statement by category
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => focusTransaction(it.id)}
+                        className="rounded-compact border border-trust px-2 py-1 text-xs font-semibold text-trust hover:bg-trust/5"
+                      >
+                        Open transaction
+                      </button>
+                    </span>
                   </td>
                 </tr>
               ))}

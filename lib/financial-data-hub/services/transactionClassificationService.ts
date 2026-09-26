@@ -353,3 +353,77 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
 
   return summary;
 }
+
+/**
+ * Category-totals review (2026-09-26) — records that a PERSON chose this
+ * transaction's classification.
+ *
+ * Production defect this closes: a user picked a category for three
+ * uncategorised lines; `category_id` and `review_status` changed (the
+ * ordinary correction path) but `classification_method` stayed
+ * 'unclassified' and the confidence stayed empty, because migration 0068's
+ * trigger forbids the authenticated role from writing either column — only
+ * this sanctioned service-role file may. So the row still looked like an
+ * engine miss everywhere that reads the method.
+ *
+ * Called ONLY after the caller has already applied the user's choice through
+ * the ordinary, audited correction path (`correctTransaction`, which writes
+ * the `fdh_transaction_corrections` evidence the trigger requires). This
+ * function never changes the economic type or category itself; it stamps the
+ * method ('user_manual', which 0047's CHECK allows), full confidence, the
+ * transfer flag that follows from the chosen type, and — only when the old
+ * subcategory belongs to a different category — clears that now-contradictory
+ * subcategory (a NULL cannot be "evidenced" through the correction table,
+ * see `r8_transaction_field_evidenced`). Same discipline as every admin
+ * write above: scoped by `.eq('user_id', userId)`, and the returned rows are
+ * counted so a zero-row update can never report success.
+ */
+export async function recordUserClassificationDecision(
+  userId: string,
+  input: {
+    transactionId: string;
+    previousEconomicType: string;
+    newEconomicType: FdhTransaction['economic_transaction_type'];
+    previousCategoryId: string | null;
+    newCategoryId: string | null;
+    previousSubcategoryId: string | null;
+    clearSubcategory: boolean;
+  },
+): Promise<void> {
+  const admin = createAdminClient();
+  const patch: Record<string, unknown> = {
+    classification_method: 'user_manual',
+    classification_confidence: CONFIDENCE_SCORE.HIGH,
+    transfer_flag: input.newEconomicType === 'transfer',
+  };
+  if (input.clearSubcategory) patch.subcategory_id = null;
+
+  const { data, error } = await admin
+    .from('fdh_transactions')
+    .update(patch)
+    .eq('id', input.transactionId)
+    .eq('user_id', userId)
+    .select('id');
+  if (error) throw new Error(`could not record the classification decision: ${error.message}`);
+  if (!Array.isArray(data) || data.length !== 1) {
+    throw new Error('could not record the classification decision: the transaction was not updated');
+  }
+
+  const { error: historyError } = await admin.from('fdh_classification_history').insert({
+    user_id: userId,
+    transaction_id: input.transactionId,
+    previous_economic_transaction_type: input.previousEconomicType,
+    new_economic_transaction_type: input.newEconomicType,
+    previous_category_id: input.previousCategoryId,
+    new_category_id: input.newCategoryId,
+    previous_subcategory_id: input.previousSubcategoryId,
+    new_subcategory_id: input.clearSubcategory ? null : input.previousSubcategoryId,
+    classification_method: 'user_manual',
+    confidence: CONFIDENCE_SCORE.HIGH,
+    changed_by_type: 'user',
+    changed_by_user: userId,
+    global_rule_id: null,
+    user_rule_id: null,
+  });
+  if (historyError) throw new Error(`could not record classification history: ${historyError.message}`);
+}

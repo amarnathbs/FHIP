@@ -28,9 +28,9 @@ function nextMonthStart(date = new Date()): string {
 // 'cash_withdrawal' (what the cash was actually spent on is unknown — never
 // guessed), and 'refund'/'unknown' (handled separately below / excluded
 // until classified).
-const BANK_EXPENSE_TRANSACTION_TYPES = ['expense', 'fee', 'debt_interest', 'tax'] as const;
-const BANK_REFUND_TRANSACTION_TYPE = 'refund';
-const BANK_INCOME_TRANSACTION_TYPES = ['income'] as const;
+export const BANK_EXPENSE_TRANSACTION_TYPES = ['expense', 'fee', 'debt_interest', 'tax'] as const;
+export const BANK_REFUND_TRANSACTION_TYPE = 'refund';
+export const BANK_INCOME_TRANSACTION_TYPES = ['income'] as const;
 
 // Deliberately a small dedicated lookup, not the full forecasting
 // resolveAssumptions() tier stack (scenario -> profile -> country -> global)

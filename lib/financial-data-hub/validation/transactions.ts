@@ -286,3 +286,24 @@ export const fdhBulkTransactionApprovalSchema = z.object({
   transaction_ids: z.array(fdhUuid).min(1).max(500),
 });
 export type FdhBulkTransactionApprovalInput = z.infer<typeof fdhBulkTransactionApprovalSchema>;
+
+/** Category-totals review (2026-09-26): the user picks ONE category from the
+ * real, active `fdh_categories` list for one of their own transactions. The
+ * economic type is never accepted from the browser -- it is derived on the
+ * server from the chosen category, so a request cannot pair "Groceries" with
+ * "income". `remember_payee` is the user's explicit, visible choice to turn
+ * this decision into a personal rule (R8 spec 47: only by deliberate action). */
+export const fdhSetTransactionCategorySchema = z.object({
+  category_id: fdhUuid,
+  remember_payee: z.boolean().optional().default(false),
+});
+export type FdhSetTransactionCategoryInput = z.infer<typeof fdhSetTransactionCategorySchema>;
+
+/** Category-totals review: approve every still-pending transaction in ONE
+ * category group of one statement. The key is re-derived on the server from
+ * the statement's current rows; a stale or invented key simply matches no
+ * group (404), it never widens what gets approved. */
+export const fdhApproveCategoryGroupSchema = z.object({
+  group_key: z.string().min(1).max(300),
+});
+export type FdhApproveCategoryGroupInput = z.infer<typeof fdhApproveCategoryGroupSchema>;
