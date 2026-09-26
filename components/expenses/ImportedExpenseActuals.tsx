@@ -68,7 +68,8 @@ export function ImportedExpenseActuals({ refreshKey = 0 }: { refreshKey?: number
   return <ActualsBody data={data} page={page} setPage={setPage} group={group} setGroup={(g) => { setGroup(g); setPage(1); }} month={month} setMonth={(m) => { setMonth(m); setPage(1); }} />;
 }
 
-function ActualsBody({
+/** The loaded view (exported for the render contract test). */
+export function ActualsBody({
   data, page, setPage, group, setGroup, month, setMonth,
 }: {
   data: ImportedActualsOk;

@@ -164,6 +164,26 @@ describe('1,001 lines paginate', () => {
   });
 });
 
+describe('the Expenses tab renders what the route sends', () => {
+  it('Woolworths is rendered once with its source label and statement link; planned vs actual table; nothing-counted buckets are named', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { createElement } = await import('react');
+    const { ActualsBody } = await import('@/components/expenses/ImportedExpenseActuals');
+    state.tables = tables(woolworths('approved'), {
+      fdh_transactions: [txn({ account: 'bank', statement: 's-aug', date: '2026-08-20', amount: 300, type: 'cash_withdrawal', category: CAT.cash, description: 'ATM' })],
+    });
+    const d = okOf(await get());
+    const noop = () => undefined;
+    const html = renderToStaticMarkup(createElement(ActualsBody, { data: d, page: 1, setPage: noop, group: '', setGroup: noop, month: '', setMonth: noop }));
+    expect(html.match(/Woolworths/g)).toHaveLength(1);
+    expect(html).toContain('Imported from bank statement');
+    expect(html).toContain('View statement');
+    expect(html).toContain('data-testid="planned-vs-actual"');
+    expect(html).toContain('Cash withdrawals — spending unknown');
+    expect(html).not.toContain('ATM'); // a cash withdrawal is a named bucket, never a spending line
+  });
+});
+
 describe('fail closed and the wire contract', () => {
   it('a failed read is status "unavailable" -- never a $0 actual', async () => {
     state.tables = woolworths('approved');
