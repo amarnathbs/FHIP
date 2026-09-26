@@ -126,7 +126,7 @@ function query(table: string) {
   const q: Record<string, unknown> = {};
   const chain = (op: string) => (col: string, val?: unknown) => { entry.filters.push([op, col, val]); return q; };
   Object.assign(q, {
-    select: () => q, eq: chain('eq'), gte: chain('gte'), lte: chain('lte'), in: chain('in'), order: chain('order'),
+    select: () => q, eq: chain('eq'), gte: chain('gte'), lte: chain('lte'), in: chain('in'), order: chain('order'), limit: chain('limit'),
     range: async () => ({ data: table === 'fdh_transactions' ? bankRows : [], error: null }),
     then: (resolve: (v: unknown) => void) => resolve({ data: table === 'fdh_liability_statement_activities' ? matchedRows : [], error: null }),
   });
