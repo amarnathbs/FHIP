@@ -269,7 +269,44 @@ unless given `--budget-ms=18000`.
 
 ---
 
-## 9b. NAV 1 selective-historical-hydration schedule — DEFERRED, HUMAN-PRESENT
+## 9d. Monitoring selective hydration (live since 2026-09-24; updated 2026-09-27)
+
+Section 9b below is HISTORICAL: `0193` registered `pc6-selective-hydration`
+(every 30 minutes, production only) and enabled the job on 2026-09-24.
+
+**Source of truth, in this order:**
+
+1. `ii_reference_import_batches` rows with `batch_kind = 'nav_hydration'` — one
+   per tick. `notes.telemetry` has examined / alreadyCovered / needingFetch /
+   attempted / succeeded / failed / deferred / remaining / ordering.
+2. `ii_reference_job_control.pc6_selective_historical_hydration` — written by
+   the job after every terminal outcome **from the NAV 1 completion fix
+   (branch `fix/nav1-completion-2026-09-27`) onward**. Before that deploy it was
+   never written, so `last_success_at` was NULL on a healthy job ("Last success
+   never" on the admin page) — do not read a NULL there as "never ran".
+
+| Batch | `error_code` | Job control |
+|---|---|---|
+| `succeeded` | null (incl. the normal no-op: every held fund already covered) | `last_success_at` + `last_success_batch_id` advance; streak 0 |
+| `succeeded` | `HYDRATION_SOME_FETCHES_FAILED` / `HYDRATION_WORK_REMAINING` (a *partial* run) | unchanged — partial is neither success nor failure |
+| `failed` | `HYDRATION_NOTHING_SUCCEEDED` | `last_failure_at` advances; `consecutive_failures` + 1 |
+| `failed` | `STALE_RUNNING_RECONCILED` (the platform killed a run) | counted once as a failure by the next run |
+
+**Alert rules** (check after any deploy, and weekly):
+
+* no `nav_hydration` batch for > 35 minutes → the schedule or the route is down
+  (read `net._http_response`; a 401 means the cron secret);
+* `last_success_at` older than 2 hours while batches exist → every run is
+  partial or failing: read `notes.telemetry.persistentlyFailing` and
+  `perInstrument` for the funds that keep failing;
+* `consecutive_failures` >= 3 → act;
+* any batch `running` for > 30 minutes → it will be reconciled by the next run;
+  if it recurs, a provider is hanging.
+
+Scripted check (read-only, prints PASS/FAIL):
+`node scripts/nav1_scheduled_proof_check.mjs hydration <sinceIsoUtc> 17`.
+
+## 9b. NAV 1 selective-historical-hydration schedule — DEFERRED, HUMAN-PRESENT (HISTORICAL — see 9d)
 
 **Added 2026-09-21 (NAV 1 programme, `feature/nav1-selective-history-2026-09-21`).**
 Same deferred-activation discipline as section 9, for the NEW job this

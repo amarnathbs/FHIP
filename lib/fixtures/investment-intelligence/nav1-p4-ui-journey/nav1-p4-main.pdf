@@ -1,0 +1,119 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2580 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(CAMS Consolidated Account Statement) Tj
+0 -12 Td
+(Statement Period : 01-Apr-2023 To 18-Sep-2026) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 927010000001) Tj
+0 -12 Td
+(PAN: PCQAL0927F) Tj
+0 -12 Td
+(Name: NAVONE SYNTHETIC TESTUSER) Tj
+0 -12 Td
+(Holding Mode: SI) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(AMC Name: PPFAS Mutual Fund) Tj
+0 -12 Td
+(Scheme Name: Parag Parikh Flexi Cap Fund - Direct Plan - Growth) Tj
+0 -12 Td
+(ISIN: INF879O01027) Tj
+0 -12 Td
+(AMFI Code: 122639) Tj
+0 -12 Td
+(Registrar: CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Description                              Amount\(Rs.\)      Units         NAV\(Rs.\)      Unit Balance) Tj
+0 -12 Td
+(03-Apr-2023   SIP Purchase                          10,000.00  187.254  53.4035  187.254 [Ref: NAV1P4-001]) Tj
+0 -12 Td
+(03-Oct-2023   SIP Purchase                          10,000.00  160.014  62.4944  347.268 [Ref: NAV1P4-002]) Tj
+0 -12 Td
+(02-Apr-2024   SIP Purchase                          10,000.00  132.158  75.6672  479.426 [Ref: NAV1P4-003]) Tj
+0 -12 Td
+(01-Oct-2024   SIP Purchase                          10,000.00  112.808  88.6465  592.234 [Ref: NAV1P4-004]) Tj
+0 -12 Td
+(01-Apr-2025   SIP Purchase                          10,000.00  117.696  84.9643  709.930 [Ref: NAV1P4-005]) Tj
+0 -12 Td
+(02-Mar-2026   Redemption                            15,000.00  164.074  91.4220  545.856 [Ref: NAV1P4-006]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance as on 18-Sep-2026 : 545.856 Units   Valuation : Rs. 49,048.93   NAV as on 18-Sep-2026 : Rs. 89.8569) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Folio No: 927010000002) Tj
+0 -12 Td
+(PAN: PCQAL0927F) Tj
+0 -12 Td
+(Name: NAVONE SYNTHETIC TESTUSER) Tj
+0 -12 Td
+(Holding Mode: SI) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(AMC Name: SBI Mutual Fund) Tj
+0 -12 Td
+(Scheme Name: SBI Large Cap Fund - Regular Plan - Growth) Tj
+0 -12 Td
+(ISIN: INF200K01180) Tj
+0 -12 Td
+(AMFI Code: 103504) Tj
+0 -12 Td
+(Registrar: CAMS) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Date          Description                              Amount\(Rs.\)      Units         NAV\(Rs.\)      Unit Balance) Tj
+0 -12 Td
+(03-Apr-2023   Purchase                              25,000.00  403.497  61.9583  403.497 [Ref: NAV1P4-101]) Tj
+0 -12 Td
+(03-Oct-2023   Purchase                              15,000.00  209.857  71.4771  613.354 [Ref: NAV1P4-102]) Tj
+0 -12 Td
+(01-Apr-2025   Redemption                            52,225.13  613.354  85.1468  0.000 [Ref: NAV1P4-103]) Tj
+0 -12 Td
+() Tj
+0 -12 Td
+(Closing Unit Balance as on 18-Sep-2026 : 0.000 Units   Valuation : Rs. 0.00   NAV as on 18-Sep-2026 : Rs. 91.1604) Tj
+0 -12 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000002879 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2976
+%%EOF
