@@ -79,6 +79,16 @@ export interface LedgerStatementRow {
   document_type: string | null;
 }
 
+/** An FDH-10 card/loan statement: its period is coverage for its facility account. */
+export interface LedgerLiabilityStatementRow {
+  id: string;
+  statement_upload_id: string | null;
+  financial_account_id: string | null;
+  statement_period_start: IsoDate | null;
+  statement_period_end: IsoDate | null;
+  approval_status: string;
+}
+
 export interface LedgerCategoryRow {
   id: string;
   category_key: string;
@@ -104,6 +114,8 @@ export interface RawLedger {
   allocations: LedgerAllocationRow[];
   links: LedgerLinkRow[];
   statements: LedgerStatementRow[];
+  /** Approved FDH-10 statements linked to a facility account (set by WP-11). */
+  liabilityStatements: LedgerLiabilityStatementRow[];
   categories: LedgerCategoryRow[];
   subcategories: LedgerSubcategoryRow[];
   corroboration: RawCorroborationEvidence;
@@ -115,7 +127,7 @@ export interface RawLedger {
 
 export function emptyRawLedger(): RawLedger {
   return {
-    accounts: [], transactions: [], linkedRows: [], allocations: [], links: [], statements: [],
+    accounts: [], transactions: [], linkedRows: [], allocations: [], links: [], statements: [], liabilityStatements: [],
     categories: [], subcategories: [], corroboration: emptyCorroborationEvidence(), pendingApprovalCount: 0, ownerAttributionAvailable: true,
   };
 }
@@ -229,16 +241,34 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
       if (t.transaction_date > cur.max) cur.max = t.transaction_date;
     }
   }
+  // An upload with no financial_account_id takes the account of its own
+  // approved lines (all lines of one statement share one account).
+  const accountByStatement = new Map<string, string>();
+  for (const t of raw.transactions) if (t.statement_upload_id && !accountByStatement.has(t.statement_upload_id)) accountByStatement.set(t.statement_upload_id, t.financial_account_id);
   const periods: StatementPeriod[] = raw.statements
-    .filter((s) => s.financial_account_id)
-    .map((s) => ({
+    .map((s) => ({ s, accountId: s.financial_account_id ?? accountByStatement.get(s.id) ?? null }))
+    .filter((x): x is { s: LedgerStatementRow; accountId: string } => x.accountId !== null)
+    .map(({ s, accountId }) => ({
       statementUploadId: s.id,
-      accountId: s.financial_account_id as string,
+      accountId,
       periodStart: s.statement_period_start,
       periodEnd: s.statement_period_end,
       fallbackStart: txnDatesByStatement.get(s.id)?.min ?? null,
       fallbackEnd: txnDatesByStatement.get(s.id)?.max ?? null,
     }));
+  // Approved card/loan statements define coverage for their facility account
+  // (the WP-11 ledger rows live there), whatever the upload row's status.
+  for (const ls of raw.liabilityStatements) {
+    if (!ls.financial_account_id || ls.approval_status !== 'approved') continue;
+    periods.push({
+      statementUploadId: ls.statement_upload_id ?? ls.id,
+      accountId: ls.financial_account_id,
+      periodStart: ls.statement_period_start,
+      periodEnd: ls.statement_period_end,
+      fallbackStart: ls.statement_upload_id ? txnDatesByStatement.get(ls.statement_upload_id)?.min ?? null : null,
+      fallbackEnd: ls.statement_upload_id ? txnDatesByStatement.get(ls.statement_upload_id)?.max ?? null : null,
+    });
+  }
   const coverage = computeCoverage(periods, window);
 
   const linksByTxn = new Map<string, LedgerLinkRow[]>();
@@ -474,6 +504,15 @@ export async function loadApprovedLedger(userId: string, client: ReadModelClient
       .eq('processing_status', 'approved')
       .order('id', { ascending: true })
       .range(from, to));
+  const liabilityStatements = await fetchAllRows<LedgerLiabilityStatementRow>('fdh_liability_statements', (from, to) =>
+    client
+      .from('fdh_liability_statements')
+      .select('id, statement_upload_id, financial_account_id, statement_period_start, statement_period_end, approval_status')
+      .eq('user_id', userId)
+      .eq('approval_status', 'approved')
+      .not('financial_account_id', 'is', null)
+      .order('id', { ascending: true })
+      .range(from, to));
   const categories = await fetchAllRows<LedgerCategoryRow>('fdh_categories', (from, to) =>
     client.from('fdh_categories').select('id, category_key, display_name, fhip_mapping_key, essential_discretionary').order('id', { ascending: true }).range(from, to));
   const subcategories = await fetchAllRows<LedgerSubcategoryRow>('fdh_subcategories', (from, to) =>
@@ -490,7 +529,7 @@ export async function loadApprovedLedger(userId: string, client: ReadModelClient
       .range(from, to));
   const corroboration = await loadCorroborationEvidence(userId, client, ids);
   return {
-    accounts, transactions, linkedRows, allocations, links, statements, categories, subcategories, corroboration,
+    accounts, transactions, linkedRows, allocations, links, statements, liabilityStatements, categories, subcategories, corroboration,
     pendingApprovalCount: pending.length, ownerAttributionAvailable,
   };
 }

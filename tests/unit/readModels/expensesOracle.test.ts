@@ -238,6 +238,30 @@ describe('currency, owner, coverage window', () => {
     expect(e.actual.totalInWindow).toBe(1299);
   });
 
+  it('an approved upload with no financial_account_id takes its lines\' account for coverage', async () => {
+    const e = await run(tables(
+      { fdh_financial_accounts: [account('bank')] },
+      { fdh_statement_uploads: [statement('s-noacc', 'bank', '2026-08-01', '2026-08-31', { financial_account_id: null })] },
+      { fdh_transactions: [txn({ account: 'bank', statement: 's-noacc', date: '2026-08-12', amount: 120, type: 'expense', category: CAT.food })] },
+    ));
+    expect(e.coverage.coveredMonths).toEqual(['2026-08']);
+    expect(e.actual.monthly).toBe(120);
+  });
+
+  it('an approved card statement linked to its facility account (WP-11) defines that account\'s coverage', async () => {
+    const t = (approval: string) => tables(
+      { fdh_financial_accounts: [account('card', 'credit_card', { liability_id: 'L' })] },
+      { fdh_liability_statements: [{ id: 'ls', user_id: USER, statement_upload_id: 'up-card', financial_account_id: 'card', statement_period_start: '2026-08-01', statement_period_end: '2026-08-31', approval_status: approval }] },
+      { fdh_transactions: [txn({ account: 'card', statement: 'up-card', date: '2026-08-03', amount: 90, type: 'expense', category: CAT.food })] },
+    );
+    const approved = await run(t('approved'));
+    expect(approved.actual.monthly).toBe(90);
+    // Negative control: an unapproved statement gives no coverage -> shown as partial, not averaged.
+    const pending = await run(t('pending'));
+    expect(pending.actual.monthly).toBe(0);
+    expect(pending.actual.partialLineCount).toBe(1);
+  });
+
   it('averages over covered months only: 3 covered months of 200, 400, 600 -> 400/month', async () => {
     const e = await run(tables(
       { fdh_financial_accounts: [account('bank')] },
