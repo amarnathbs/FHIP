@@ -27,7 +27,10 @@ export const incomeGridConfig: GridConfig = {
     // its real income is instead tracked via an approved bank-statement/
     // payslip feed — see migration 0131's header comment for the full
     // double-count rationale. Never inferred, never defaulted true.
-    { name: 'superseded_by_bank_import', label: 'Tracked via bank/payslip import instead', type: 'checkbox' },
+    // WP-07: reworded for the planned-vs-actual model (PO D-02, D-07) —
+    // this is an explicit "leave this row out" override, not how imports are
+    // normally reconciled; hidden on a row an import itself wrote.
+    { name: 'superseded_by_bank_import', label: 'Leave out of my income (already counted from an imported payslip or bank statement)', type: 'checkbox', hiddenOnImportedRows: true },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
 };
@@ -51,7 +54,11 @@ export const expenseGridConfig: GridConfig = {
     // its real spending is instead tracked via an approved bank-statement
     // feed — see migration 0131's header comment for the full double-count
     // rationale. Never inferred, never defaulted true.
-    { name: 'superseded_by_bank_import', label: 'Tracked via bank import instead', type: 'checkbox' },
+    // WP-07: reworded for the planned-vs-actual model (PO D-02) — imported
+    // actuals are shown beside the plan and replace it per group
+    // automatically, so this is only an explicit "leave this planned row
+    // out" override. Hidden on a row an import itself wrote.
+    { name: 'superseded_by_bank_import', label: 'Leave out of my plan (always use my imported spending instead)', type: 'checkbox', hiddenOnImportedRows: true },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],
 };
@@ -115,6 +122,11 @@ export const liabilityGridConfig: GridConfig = {
     { name: 'fixed_rate_expiry', label: 'Fixed Rate Expiry', type: 'date' },
     { name: 'credit_limit', label: 'Credit Limit', type: 'number', step: '0.01' },
     { name: 'monthly_repayment', label: 'Monthly Repayment', type: 'number', step: '0.01' },
+    // WP-07 (G7): the FDH-10 statement fields (migration 0096) an imported
+    // card/loan statement fills — now visible and editable, never hidden.
+    { name: 'minimum_payment', label: 'Minimum Payment', type: 'number', step: '0.01' },
+    { name: 'due_date', label: 'Payment Due Date', type: 'date' },
+    { name: 'masked_identifier', label: 'Card / Account Number (masked)', type: 'text' },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],

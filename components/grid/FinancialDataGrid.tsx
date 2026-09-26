@@ -18,6 +18,8 @@ import type { ModuleKey } from '@/lib/services/appCapability';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { ProvenanceBadge } from '@/components/grid/ProvenanceBadge';
+import { isImportSourceType } from '@/lib/grid/provenance';
 
 interface MasterItem {
   item_key: string;
@@ -46,7 +48,12 @@ interface Row extends GridRow {
   currency_override?: boolean;
   country_code?: string;
   expanded: boolean;
-  source_type?: string; // R3 — 'investment_intelligence_published' | 'manual' | undefined (non-investments resources never set this)
+  // R3 introduced 'investment_intelligence_published'; WP-07 recognises every
+  // import provenance value (payslip_import, liability_statement_import,
+  // retirement_statement_import, bank_statement_import, bank_statement_average)
+  // — see lib/grid/provenance.ts. 'manual' / undefined = typed by the user.
+  source_type?: string;
+  last_imported_at?: string | null;
 }
 
 let customRowCounter = 0;
@@ -113,6 +120,10 @@ function isFieldLockedForRow(row: Row, fieldName: string): boolean {
 // lib/grid/assetFieldMetadata.ts. Defaults to true (shown) for any grid
 // that doesn't opt in, so every other module's behaviour is unchanged.
 function isFieldApplicableForRow(row: Row, fieldName: string, config: GridConfig): boolean {
+  // WP-07: a field marked hiddenOnImportedRows (the "exclude from my plan"
+  // opt-out) is neither shown nor submitted for a row an import wrote — that
+  // row IS the imported figure, so opting it out of itself is meaningless.
+  if (isImportSourceType(row.source_type) && config.fields.find((f) => f.name === fieldName)?.hiddenOnImportedRows) return false;
   return config.fieldVisibleForRow ? config.fieldVisibleForRow(fieldName, row.master_item_key ?? null) : true;
 }
 
@@ -926,6 +937,12 @@ export function FinancialDataGrid({
                       there to remove it from net worth.
                     </div>
                   )}
+                  {!isIiPublished(draft) && isImportSourceType(draft.source_type) && (
+                    <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
+                      <ProvenanceBadge row={draft} />{' '}
+                      You can still edit it here; a later import will offer to update it again.
+                    </div>
+                  )}
 
                   {draft.is_custom ? (
                     <div>
@@ -1137,11 +1154,7 @@ export function FinancialDataGrid({
                   <tr key={row.key} className="border-b last:border-0">
                     <td className="px-3 py-2">
                       {row.item_label}
-                      {isIiPublished(row) && (
-                        <span className="ml-2 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                          Imported via Investment Intelligence
-                        </span>
-                      )}
+                      <ProvenanceBadge row={row} className="ml-2" />
                       {warningsByRow.has(row.key) && (
                         <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
                       )}
@@ -1189,11 +1202,7 @@ export function FinancialDataGrid({
                     <p className="text-xs text-muted">
                       {ownerDisplayLabel(row.owner)} · {formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}
                     </p>
-                    {isIiPublished(row) && (
-                      <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                        Imported via Investment Intelligence
-                      </span>
-                    )}
+                    <ProvenanceBadge row={row} className="mt-1" />
                     {warningsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
                     )}

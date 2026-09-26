@@ -17,6 +17,9 @@ export interface GridFieldDef {
   step?: string;
   required?: boolean;
   defaultValue?: string | number | boolean;
+  // WP-07: neither shown nor submitted on a row an import wrote
+  // (source_type is an import value — lib/grid/provenance.ts).
+  hiddenOnImportedRows?: boolean;
 }
 
 export interface GridConfig {
