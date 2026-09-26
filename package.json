@@ -23,7 +23,8 @@
     "resources:p0:related-dry-run": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts",
     "resources:p0:related-apply": "tsx --env-file=.env.local scripts/resources/p0-content/load-related-content.ts -- --apply",
     "check:migrations": "node scripts/check-migration-versions.mjs",
-    "check:migrations:against-main": "node scripts/check-migration-versions-against-branch.mjs --against=origin/main"
+    "check:migrations:against-main": "node scripts/check-migration-versions-against-branch.mjs --against=origin/main",
+    "check:dispositions": "vitest run tests/unit/uploadFieldDispositionRegistry.test.ts tests/unit/uploadFieldDispositionRegistryAntiVacuity.test.ts tests/unit/inactiveUploadFlowGuard.test.ts && node scripts/generate-upload-field-disposition-doc.mjs --check"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
