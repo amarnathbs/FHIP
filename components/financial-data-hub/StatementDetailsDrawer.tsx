@@ -57,9 +57,17 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
     }
   }, [statementId]);
 
-  useEffect(() => {
-    if (open) void load(page);
-  }, [open, page, load]);
+  // Loading is driven by the user's own actions (open, next / previous),
+  // never by an effect, so no state is set during render or effect bodies.
+  function openDrawer() {
+    setOpen(true);
+    setPage(1);
+    void load(1);
+  }
+  function goTo(p: number) {
+    setPage(p);
+    void load(p);
+  }
 
   useEffect(() => {
     if (open) requestAnimationFrame(() => panelRef.current?.focus());
@@ -67,7 +75,7 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust">
+      <button type="button" onClick={() => openDrawer()} className="rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust">
         {buttonLabel}
       </button>
     );
@@ -173,9 +181,9 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
             </div>
             {pages > 1 && (
               <div className="mt-2 flex items-center gap-3 text-sm">
-                <button type="button" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous lines</button>
+                <button type="button" disabled={page <= 1 || loading} onClick={() => goTo(Math.max(1, page - 1))} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous lines</button>
                 <span className="text-muted">Page {page} of {pages}</span>
-                <button type="button" disabled={page >= pages || loading} onClick={() => setPage((p) => p + 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Next lines</button>
+                <button type="button" disabled={page >= pages || loading} onClick={() => goTo(page + 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Next lines</button>
               </div>
             )}
           </div>
