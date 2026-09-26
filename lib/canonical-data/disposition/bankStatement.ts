@@ -17,7 +17,7 @@ const DC16 = gap('DC-16', 'P2', 'WP-15');
 
 const REVIEW = 'Expenses > Import bank statement > category review';
 const ACTIVITY = 'Financial Activity > transactions';
-/** WP-08: components/financial-data-hub/StatementDetailsDrawer.tsx, opened
+/** WP-08: the StatementDetailsDrawer component, opened
  * from the category review and the import panel. */
 const DETAILS = 'Category review > Statement details';
 const UNREAD = 'Import panel + Statement details: "N lines could not be read" with reasons';

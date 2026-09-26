@@ -12,7 +12,7 @@
  * the parser on timeout, which stops pdf.js's asynchronous page loop at its
  * next yield. A hard kill would need a worker thread; that is not built here.
  *
- * Pure and dependency-free, so both lib/financial-data-hub and lib/aie can
+ * Pure and dependency-free, so both the FDH module and lib/aie can
  * use it without importing each other.
  */
 
