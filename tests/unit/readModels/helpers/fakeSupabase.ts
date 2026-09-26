@@ -29,11 +29,33 @@ export interface FakeRequest {
 
 const CAP = 1000;
 
+/** The chainable query surface the fake supports (loosely typed on purpose, like the real builder). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface FakeQuery extends PromiseLike<{ data: any; error: unknown }> {
+  select(cols?: string): FakeQuery;
+  eq(col: string, val: unknown): FakeQuery;
+  neq(col: string, val: unknown): FakeQuery;
+  in(col: string, vals: unknown[]): FakeQuery;
+  gte(col: string, val: string): FakeQuery;
+  lte(col: string, val: string): FakeQuery;
+  gt(col: string, val: string): FakeQuery;
+  lt(col: string, val: string): FakeQuery;
+  is(col: string, val: null): FakeQuery;
+  not(col: string, op: string, val: unknown): FakeQuery;
+  order(col: string, o?: { ascending?: boolean }): FakeQuery;
+  limit(n: number): FakeQuery;
+  range(a: number, b: number): FakeQuery;
+  single(): FakeQuery;
+  maybeSingle(): FakeQuery;
+  upsert(row: Row): Promise<{ data: null; error: null }>;
+  insert(row: Row): Promise<{ data: null; error: null }>;
+}
+
 export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSupabaseOptions = {}) {
   const requests: FakeRequest[] = [];
   const upserts: { table: string; row: Row }[] = [];
 
-  function from(table: string) {
+  function from(table: string): FakeQuery {
     let rows = [...(tables[table] ?? [])];
     let columns: string[] | null = null;
     let rangeFrom: number | null = null;
@@ -69,7 +91,7 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
       return { data: projected, error: null };
     };
 
-    const builder: Record<string, unknown> & PromiseLike<unknown> = {
+    const builder: FakeQuery = {
       select(cols?: string) {
         if (cols && cols !== '*') columns = cols.split(',').map((c) => c.trim()).filter(Boolean);
         return builder;
