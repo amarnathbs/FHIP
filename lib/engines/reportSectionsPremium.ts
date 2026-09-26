@@ -11,6 +11,7 @@ import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { isDomesticRecord, isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
+import { isCanonicalAppendix } from './reportCanonicalAppendix';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -203,9 +204,17 @@ function buildFinancialDnaFull(source: ReportSourceData, isFirstReport: boolean)
   };
 }
 
+/** WP-06 (DC-08): the "Imported, not yet in Net Worth" disclosure, or null when there is nothing to disclose. */
+function unpublishedDisclosure(source: ReportSourceData, premium: PremiumSourceData): string | null {
+  const u = premium.canonicalInvestments?.unpublished;
+  if (!u || u.count === 0) return null;
+  return `${u.label}: ${u.count} holding${u.count === 1 ? '' : 's'} imported into Investment Intelligence (${formatMoneyWhole(u.total, source.currency)}) ${u.count === 1 ? 'is' : 'are'} not included in this total or in your Net Worth until you add ${u.count === 1 ? 'it' : 'them'} to Net Worth.`;
+}
+
 function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   const rows = premium.investments;
-  if (rows.length === 0) return empty('investment_analysis', 18, 'No investment holdings are currently recorded.');
+  const disclosure = unpublishedDisclosure(source, premium);
+  if (rows.length === 0) return empty('investment_analysis', 18, disclosure ? `No investment holdings are currently counted in your Net Worth. ${disclosure}` : 'No investment holdings are currently recorded.');
 
   // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding — totals used
   // to sum each row's current_value/cost_base raw, regardless of
@@ -223,12 +232,28 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
     const rowCurrency: SupportedCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : source.currency;
     return convertToReportingCurrency(amount, rowCurrency, source.currency, premium.fxRateAudInr);
   };
-  const totalCurrentValue = rows.reduce((s, r) => s + toReportingCurrency(r.current_value, r.currency_code), 0);
-  const totalCostBase = rows.reduce((s, r) => s + toReportingCurrency(r.cost_base ?? 0, r.currency_code), 0);
+  //
+  // WP-06 (DC-08): when the canonical snapshot resolved, this chapter uses
+  // its ONE portfolio figure -- selectInvestments().publishedTotal, the value
+  // Net Worth counts -- and each holding's value converted by the same read
+  // model at the same FX rate. A holding in a currency the platform cannot
+  // convert is left out of the totals and disclosed (never added as if it
+  // were the reporting currency). The fallback below is the pre-WP-06 path,
+  // kept only for a report whose snapshot could not be read.
+  const canonical = premium.canonicalInvestments;
+  const valueOf = (r: (typeof rows)[number]): number | null =>
+    canonical ? (canonical.reportingValueById[r.id] ?? null) : toReportingCurrency(r.current_value, r.currency_code);
+  const costOf = (r: (typeof rows)[number]): number => {
+    if (!canonical) return toReportingCurrency(r.cost_base ?? 0, r.currency_code);
+    if (r.currency_code !== 'AUD' && r.currency_code !== 'INR') return 0;
+    return convertToReportingCurrency(r.cost_base ?? 0, r.currency_code, source.currency, premium.fxRateAudInr);
+  };
+  const totalCurrentValue = canonical ? canonical.publishedTotal : rows.reduce((s, r) => s + (valueOf(r) ?? 0), 0);
+  const totalCostBase = rows.filter((r) => valueOf(r) !== null).reduce((s, r) => s + costOf(r), 0);
   const byType = new Map<string, { type: string; label: string; value: number; count: number }>();
   const byCountry = new Map<string, { country: string; value: number; count: number }>();
   for (const r of rows) {
-    const convertedValue = toReportingCurrency(r.current_value, r.currency_code);
+    const convertedValue = valueOf(r) ?? 0;
     const t = byType.get(r.investment_type) ?? { type: r.investment_type, label: source.content.categoryLabel(r.investment_type), value: 0, count: 0 };
     t.value += convertedValue;
     t.count += 1;
@@ -254,11 +279,17 @@ function buildInvestmentAnalysis(source: ReportSourceData, premium: PremiumSourc
       unrealisedGain: totalCurrentValue - totalCostBase,
       byType: byTypeArr,
       byCountry: byCountryArr,
+      // WP-06 (DC-08): one portfolio total, reconciled. The II chapters below
+      // read Investment Intelligence's own holdings, which can also include
+      // imported positions not yet added to Net Worth -- disclosed here.
+      portfolioReconciliation: canonical
+        ? { netWorthInvestmentsTotal: canonical.publishedTotal, unconvertedHoldings: canonical.unconvertedCount, notYetInNetWorth: canonical.unpublished }
+        : null,
     },
     narrativeText:
       largestSharePct !== null
-        ? `Your recorded investment holdings total ${formatMoneyWhole(totalCurrentValue, source.currency)}, with ${byTypeArr[0].label} representing approximately ${largestSharePct.toFixed(0)}% of the total. Concentration in a single investment type is not automatically negative, but it may increase sensitivity to conditions affecting that type specifically.`
-        : null,
+        ? `Your recorded investment holdings total ${formatMoneyWhole(totalCurrentValue, source.currency)}, with ${byTypeArr[0].label} representing approximately ${largestSharePct.toFixed(0)}% of the total. Concentration in a single investment type is not automatically negative, but it may increase sensitivity to conditions affecting that type specifically.${disclosure ? ` ${disclosure}` : ''}`
+        : disclosure,
     chartData: { byType: byTypeArr, byCountry: byCountryArr },
     sourceReferences: {},
     confidenceLevel: null,
@@ -691,7 +722,12 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
     sourceReferences: { module: 'ii-r4-performance', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: null,
-    limitationText: 'Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.',
+    // WP-06 (DC-08): Investment Intelligence measures every holding it tracks,
+    // including imported positions not yet added to Net Worth; the report's
+    // single portfolio total (Investment Analysis / Net Worth) does not
+    // include those until the user adds them -- disclosed so the two figures
+    // reconcile.
+    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}`,
   };
 }
 
@@ -805,25 +841,37 @@ export function buildPriorityReviewItems(source: ReportSourceData, premium: Prem
   };
 }
 
+// WP-06 (DC-10 / EXP-G11 / GAP-02): the appendix lists the SAME line items
+// the calculations use -- see lib/engines/reportCanonicalAppendix.ts. Rows a
+// calculation leaves out are listed and marked "not counted" with the reason;
+// imported lines carry their provenance label; every row shows its currency.
 function buildAppendices(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
+  const canonical = premium.canonicalAppendix;
+  if (!isCanonicalAppendix(canonical)) {
+    return {
+      ...empty('appendices', 32, 'The itemised appendix could not be produced because the underlying records could not be read. No partial list is shown.'),
+      sectionTitle: PREMIUM_SECTION_TITLES.appendices,
+      sectionData: { insurancePolicies: premium.insurancePolicies },
+    };
+  }
   return {
     sectionCode: 'appendices',
     sectionTitle: PREMIUM_SECTION_TITLES.appendices,
     displayOrder: 32,
     sectionStatus: 'included',
     sectionData: {
-      investments: premium.investments,
+      canonical,
       insurancePolicies: premium.insurancePolicies,
-      assets: premium.assets,
-      liabilities: premium.liabilities,
-      incomeSources: premium.incomeSources,
-      expenseItems: premium.expenseItems,
     },
-    narrativeText: 'The tables below list every recorded item used in this report\'s calculations, for full transparency and reconciliation.',
+    narrativeText:
+      'The tables below list every recorded item used in this report\'s calculations — the items you entered and the statement lines you approved, each labelled with where it came from. Items that are shown but not counted are marked with the reason.',
     chartData: null,
-    sourceReferences: {},
+    sourceReferences: { appendixVersion: canonical.version },
     confidenceLevel: null,
-    limitationText: 'Fields such as rejected records or duplicate-record decisions are not shown as the platform does not yet track record-level review status.',
+    limitationText:
+      canonical.unavailable.length > 0
+        ? `Some records could not be read and are shown as unavailable, not as zero: ${canonical.unavailable.join(', ')}.`
+        : 'Amounts are shown in their own currency and converted to your reporting currency at one exchange rate. Planned and imported expenses are compared, never added together: for each category the report uses your imported actual average where a statement covers it, and your plan otherwise.',
   };
 }
 

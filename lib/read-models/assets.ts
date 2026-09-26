@@ -25,6 +25,8 @@ export interface AssetRow {
   master_item_key: string | null;
   source_type: string | null;
   linked_liability_id: string | null;
+  /** WP-05 (Twin / forecast cross-border). */
+  country_code?: string | null;
 }
 
 export interface BankAccountRow {
@@ -59,6 +61,8 @@ export interface AssetLine {
   household: boolean;
   linkedLiabilityId: string | null;
   value: MoneyValue;
+  /** WP-05: as recorded; null when not captured. */
+  countryCode: string | null;
   provenance: Provenance;
 }
 
@@ -103,6 +107,7 @@ export function computeAssets(input: {
       id: row.id, name: row.asset_name, assetClass: row.asset_class, masterItemKey: row.master_item_key, owner: row.owner,
       household: isHouseholdOwner(row.owner), linkedLiabilityId: row.linked_liability_id,
       value: { amountNative: Number(row.current_value), currency: row.currency_code, amountReporting },
+      countryCode: row.country_code ?? null,
       provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
     };
   });
@@ -143,15 +148,20 @@ export function computeAssets(input: {
   };
 }
 
-export async function loadAssetInputs(userId: string, client: ReadModelClient, bankAccounts: readonly BankAccountRow[]) {
-  const assets = await fetchAllRows<AssetRow>('assets', (from, to) =>
+/** The active `assets` register, paged (WP-05: also used alone by register-only consumers). */
+export async function loadAssetRows(userId: string, client: ReadModelClient): Promise<AssetRow[]> {
+  return fetchAllRows<AssetRow>('assets', (from, to) =>
     client
       .from('assets')
-      .select('id, asset_name, asset_class, current_value, currency_code, owner, master_item_key, source_type, linked_liability_id')
+      .select('id, asset_name, asset_class, current_value, currency_code, owner, master_item_key, source_type, linked_liability_id, country_code')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('id', { ascending: true })
       .range(from, to));
+}
+
+export async function loadAssetInputs(userId: string, client: ReadModelClient, bankAccounts: readonly BankAccountRow[]) {
+  const assets = await loadAssetRows(userId, client);
   const statements = await fetchAllRows<ApprovedStatementRow>('fdh_statement_uploads', (from, to) =>
     client
       .from('fdh_statement_uploads')

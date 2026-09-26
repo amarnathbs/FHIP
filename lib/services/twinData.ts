@@ -1,9 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseServerClient } from './dashboardData';
-import { getFxRateAudInr } from './dashboardData';
-import { computeDashboard, type DashboardSummary, computeInsuranceAdequacy } from '@/lib/engines/dashboard';
-import { SMSF_OWNER } from '@/lib/engines/householdContext';
-import { toMonthly } from '@/lib/engines/money';
+import { loadDashboard } from './dashboardData';
+import { type DashboardSummary, computeInsuranceAdequacy } from '@/lib/engines/dashboard';
 import { loadHealthScore, type HealthScorePayload } from './healthScoreData';
 import { loadResilience, type ResiliencePayload } from './resilienceData';
 import { loadFinancialDna } from './financialDnaData';
@@ -12,6 +10,9 @@ import type { DnaResult } from '@/lib/engines/financialDna';
 import { ageFromDateOfBirth, ageToAgeBand, normalizeEmploymentType, normalizeHouseholdType, deriveLifeStage, annualGrossIncomeToIncomeBand } from '@/lib/engines/twin/taxonomy';
 import type { AgeBand, EmploymentType, HouseholdTypeCode, IncomeBand, LifeStage } from '@/lib/engines/twin/taxonomy';
 import { getUserFullExperienceHomeCountry } from '@/lib/services/jurisdiction';
+import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshot } from '@/lib/read-models';
+import { fetchAllRows } from '@/lib/read-models/core/paginate';
+import { ReadModelUnavailableError, roundMoney } from '@/lib/read-models/core/types';
 
 export interface TwinRetirementRow {
   current_balance: number;
@@ -29,6 +30,13 @@ export interface TwinInsuranceRow {
   cover_type: string;
   waiting_period_days: number | null;
 }
+// WP-05 (DC-13): every money field on the three rows below is the REPORTING-
+// currency amount from the canonical selectors (lib/read-models), converted
+// once at the snapshot's single FX rate. The Twin's metric derivation sums
+// them (currency concentration, geographic diversification, LVR, unsecured /
+// high-interest debt), so a raw AUD + INR sum is no longer possible. A row in
+// an unsupported currency is left out of these arrays (fail closed) exactly as
+// it is left out of the Dashboard totals the Twin is compared against.
 export interface TwinInvestmentRow {
   current_value: number;
   investment_type: string;
@@ -50,6 +58,15 @@ export interface TwinAssetRow {
   master_item_key?: string | null;
   country_code: string | null;
   currency_code: string | null;
+}
+
+/** A monthly history point. null = the stored snapshot has no value (never a confirmed zero). */
+export interface TwinSnapshotPoint {
+  month: string;
+  netWorth: number | null;
+  monthlyIncome: number | null;
+  monthlyExpenses: number | null;
+  monthlySurplus: number | null;
 }
 
 export interface TwinHouseholdContext {
@@ -93,7 +110,8 @@ export interface TwinSourceData {
   rawAssets: TwinAssetRow[];
   expenseHousingMonthly: number;
   remittanceMonthly: number;
-  snapshots12m: { month: string; netWorth: number; monthlyIncome: number; monthlyExpenses: number; monthlySurplus: number }[];
+  /** The most recent (up to) 12 monthly snapshots, oldest first. */
+  snapshots12m: TwinSnapshotPoint[];
   hasMinimumData: boolean;
 }
 
@@ -106,10 +124,95 @@ export interface TwinSourceData {
 // honest response is "comparison unavailable" — not a computed benchmark.
 export type TwinSourceDataOutcome = { status: 'ok'; data: TwinSourceData } | { status: 'country_unresolved' };
 
+/**
+ * Housing cost for the Twin's housing_cost_ratio (WP-05, DC-04 / EXP-G10).
+ *
+ * The canonical Expense read model's COMBINED housing group (rent, rates,
+ * body corporate, maintenance... -- actual when the group has covered
+ * imported activity, otherwise the plan; never both, PO D-02), PLUS the
+ * household's owner-occupied home-loan debt service from the canonical
+ * Liability read model (actual principal + interest + fee replaces the
+ * contractual repayment when statement events exist, PO D-09).
+ *
+ * Why the loan term: a manual 'mortgage' expense row that duplicates a
+ * liability's repayment is excluded from planned expenses (it is counted once,
+ * in debt service), so the housing figure takes that one count from debt
+ * service instead. A 'mortgage' expense row with NO liability repayment on
+ * file is still a counted planned housing expense, and its loan contributes 0
+ * -- so the same money is never counted twice and never dropped.
+ * Investment-property loans are not the household's own housing cost.
+ */
+const OWNER_OCCUPIED_HOME_LOAN_KEYS = new Set(['home_loan', 'construction_loan']);
+
+export function twinHousingMonthly(snapshot: Pick<CanonicalFinancialSnapshot, 'expenses' | 'liabilities'>): number {
+  const expenses = requireSection(snapshot.expenses, 'expenses');
+  const liabilities = requireSection(snapshot.liabilities, 'liabilities');
+  const housingGroup = expenses.combined.byGroup.find((g) => g.group === 'housing')?.monthly ?? 0;
+  const homeLoanService = liabilities.lines
+    .filter((l) => l.household)
+    .filter((l) => (l.masterItemKey ? OWNER_OCCUPIED_HOME_LOAN_KEYS.has(l.masterItemKey) : l.debtType === 'mortgage'))
+    .reduce((s, l) => s + (l.debtServiceMonthly ?? 0), 0);
+  return roundMoney(housingGroup + homeLoanService);
+}
+
+/**
+ * Family-support remittance for the Twin's remittance_burden (WP-05).
+ * Counted planned rows keyed 'family_support_remittance', in reporting
+ * currency (superseded, SMSF-owned and unconverted rows excluded by the
+ * selector). The imported side has no remittance category in the FDH-2
+ * taxonomy (an overseas transfer is typed 'transfer', never spending), so
+ * there is no actual figure to prefer here -- disclosed in
+ * CANONICAL_EXPENSE_DATA_CONTRACT.md.
+ */
+export function twinRemittanceMonthly(snapshot: Pick<CanonicalFinancialSnapshot, 'expenses'>): number {
+  const expenses = requireSection(snapshot.expenses, 'expenses');
+  return roundMoney(
+    expenses.planned.lines
+      .filter((l) => l.excludedReason === null && l.masterItemKey === 'family_support_remittance')
+      .reduce((s, l) => s + (l.monthlyReporting ?? 0), 0),
+  );
+}
+
+/** The Twin's balance-sheet rows, all owners (as Net Worth), reporting currency, unconverted rows left out. */
+export function twinBalanceSheetRows(snapshot: Pick<CanonicalFinancialSnapshot, 'assets' | 'investments' | 'liabilities'>): {
+  rawAssets: TwinAssetRow[];
+  rawInvestments: TwinInvestmentRow[];
+  rawLiabilities: TwinLiabilityRow[];
+} {
+  const assets = requireSection(snapshot.assets, 'assets');
+  const investments = requireSection(snapshot.investments, 'investments');
+  const liabilities = requireSection(snapshot.liabilities, 'liabilities');
+  return {
+    rawAssets: assets.lines
+      .filter((l) => l.value.amountReporting !== null)
+      .map((l) => ({ current_value: l.value.amountReporting as number, asset_class: l.assetClass ?? 'other', master_item_key: l.masterItemKey, country_code: l.countryCode, currency_code: l.value.currency })),
+    rawInvestments: investments.lines
+      .filter((l) => l.value.amountReporting !== null)
+      .map((l) => ({ current_value: l.value.amountReporting as number, investment_type: l.investmentType ?? 'other', master_item_key: l.masterItemKey, country_code: l.countryCode, currency_code: l.value.currency })),
+    rawLiabilities: liabilities.lines
+      .filter((l) => l.balance.amountReporting !== null)
+      .map((l) => ({ balance: l.balance.amountReporting as number, debt_type: l.debtType, master_item_key: l.masterItemKey, interest_rate: l.interestRate, country_code: l.countryCode, currency_code: l.balance.currency })),
+  };
+}
+
+function requireSection<T extends { status: string }>(section: T | { status: 'unavailable'; reason: string; source: string }, name: string): Extract<T, { status: 'ok' }> {
+  if (section.status !== 'ok') {
+    // DC-14: a failed read is never benchmarked as a zero. The Twin run fails
+    // closed (no financial_twin_runs row is written from partial data).
+    const u = section as { reason?: string; source?: string };
+    throw new ReadModelUnavailableError(u.reason ?? 'unavailable', `twin:${name}:${u.source ?? name}`);
+  }
+  return section as Extract<T, { status: 'ok' }>;
+}
+
+function nullableNumber(v: unknown): number | null {
+  return v === null || v === undefined ? null : Number(v);
+}
+
 export async function loadTwinSourceData(userId: string, client?: SupabaseServerClient): Promise<TwinSourceDataOutcome> {
   const supabase = client ?? (await createClient());
 
-  const [homeCountry, profileRes, householdRes, expensesRes, retirementRes, retirementMembersRes, insuranceRes, investmentsRes, liabilitiesRes, assetsRes, snapshotsRes, crossBorderRes] =
+  const [homeCountry, profileRes, householdRes, retirementRows, retirementMembersRes, insuranceRows, snapshotsRes, crossBorderRes] =
     await Promise.all([
       // Canonical resolver (lib/services/jurisdiction.ts) — the single
       // source of truth every other correctly-behaving module uses. Fails
@@ -128,20 +231,35 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       getUserFullExperienceHomeCountry(userId, supabase),
       supabase.from('user_profiles').select('date_of_birth, employment_status, country_of_residence, secondary_country, preferred_currency').eq('user_id', userId).single(),
       supabase.from('households').select('household_type, marital_status, dependants_count, housing_tenure, residence_type, primary_country').eq('user_id', userId).maybeSingle(),
-      // LR-FI-1: this register feeds expenseHousingMonthly (housing_cost_ratio)
-      // and remittanceMonthly (remittance_burden) — both pure household
-      // operating cash flow, and both matched purely on master_item_key, so an
-      // SMSF property's 'mortgage'/'council_rates' expense row would otherwise
-      // be read as the household's own housing cost. expense_items has no
-      // balance-sheet role at all, so it is excluded at the query level.
-      supabase.from('expense_items').select('amount, frequency, master_item_key, is_essential').eq('user_id', userId).eq('is_active', true).neq('owner', SMSF_OWNER),
-      supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type').eq('user_id', userId).eq('is_active', true),
+      // WP-05 (DC-18): paged -- a >1000-row register is never truncated.
+      fetchAllRows<TwinRetirementRow>('retirement_accounts', (from, to) =>
+        supabase
+          .from('retirement_accounts')
+          .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+          .range(from, to)),
       supabase.from('retirement_members').select('member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true).eq('member_type', 'self').maybeSingle(),
-      supabase.from('insurance_policies').select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days').eq('user_id', userId).eq('is_active', true),
-      supabase.from('investments').select('current_value, investment_type, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-      supabase.from('liabilities').select('balance, debt_type, master_item_key, interest_rate, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-      supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-      supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
+      fetchAllRows<TwinInsuranceRow>('insurance_policies', (from, to) =>
+        supabase
+          .from('insurance_policies')
+          .select('cover_amount, premium, premium_frequency, cover_type, waiting_period_days')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+          .range(from, to)),
+      // WP-05: the MOST RECENT 12 monthly snapshots (newest first, reversed
+      // below). The old read ordered ascending with limit(12) and so took the
+      // household's OLDEST twelve months once it had more than a year of
+      // history -- every trend metric compared stale months. A failed read
+      // fails the run closed instead of reading as "no history".
+      supabase
+        .from('financial_snapshots')
+        .select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus')
+        .eq('user_id', userId)
+        .order('snapshot_month', { ascending: false })
+        .limit(12),
       // G6 Contract 10 (docs/country-programme/g6-data-contracts.md) — the
       // real cross-border signal, replacing the legacy Boolean(secondary_country)
       // read below (secondary_country in {'AU','IN'} only — this widens
@@ -158,13 +276,26 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     return { status: 'country_unresolved' };
   }
 
-  const [dashboard, healthScore, resilience, dna, goalsResult] = await Promise.all([
-    loadDashboardForTwin(userId, supabase),
+  // WP-05 (DC-04 / GAP-02 / EXP-G10): the Twin no longer computes its own
+  // DashboardSummary. The private loader it used to call read income_sources
+  // and expense_items raw -- no approved bank income or expenses, no
+  // superseded_by_bank_import flag, no SMSF property-loan override, no
+  // business entities, no paging, and errors coerced to [] -- so the Twin's
+  // income band, surplus and Net Worth diverged from the very Dashboard it is
+  // shown beside. It now takes the ONE shared loadDashboard() figure, and the
+  // Twin-only inputs (housing, remittance, balance-sheet rows) come from the
+  // canonical read-model snapshot.
+  const [dashboard, snapshot, healthScore, resilience, dna, goalsResult] = await Promise.all([
+    loadDashboard(userId, supabase),
+    buildCanonicalFinancialSnapshot(userId, { client: supabase }),
     loadHealthScore(userId, supabase),
     loadResilience(userId, supabase),
     loadFinancialDna(userId, supabase),
     computeGoalsPagePayload(userId, supabase),
   ]);
+  if (snapshot.status !== 'ok') {
+    throw new ReadModelUnavailableError(snapshot.reason, `twin:snapshot:${snapshot.source}`);
+  }
   const goals = goalsResult.payload;
 
   const profile = profileRes.data;
@@ -185,21 +316,21 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
   const incomeBand = annualGrossIncomeToIncomeBand(countryOfResidence, annualGrossIncome);
   const isCrossBorder = (crossBorderRes.count ?? 0) > 0 || dashboard.countriesInUse.length > 1;
 
-  const expenseHousingMonthly = (expensesRes.data ?? [])
-    .filter((e) => e.master_item_key === 'mortgage' || e.master_item_key === 'rent' || e.master_item_key === 'council_rates' || e.master_item_key === 'strata_fees')
-    .reduce((sum, e) => sum + toMonthly(Number(e.amount), e.frequency as Parameters<typeof toMonthly>[1]), 0);
-  const remittanceMonthly = (expensesRes.data ?? [])
-    .filter((e) => e.master_item_key === 'family_support_remittance')
-    .reduce((sum, e) => sum + toMonthly(Number(e.amount), e.frequency as Parameters<typeof toMonthly>[1]), 0);
+  const expenseHousingMonthly = twinHousingMonthly(snapshot);
+  const remittanceMonthly = twinRemittanceMonthly(snapshot);
+  const { rawAssets, rawInvestments, rawLiabilities } = twinBalanceSheetRows(snapshot);
 
   const insuranceAdequacy = computeInsuranceAdequacy(dashboard, dependantsCount);
 
-  const snapshots12m = (snapshotsRes.data ?? []).map((s) => ({
-    month: s.snapshot_month as string,
-    netWorth: Number(s.net_worth ?? 0),
-    monthlyIncome: Number(s.monthly_income ?? 0),
-    monthlyExpenses: Number(s.monthly_expenses ?? 0),
-    monthlySurplus: Number(s.monthly_surplus ?? 0),
+  if (snapshotsRes.error) throw new ReadModelUnavailableError('query_failed', 'twin:financial_snapshots');
+  if (retirementMembersRes.error) throw new ReadModelUnavailableError('query_failed', 'twin:retirement_members');
+  const snapshotRows = (snapshotsRes.data ?? []) as { snapshot_month: string; net_worth: number | null; monthly_income: number | null; monthly_expenses: number | null; monthly_surplus: number | null }[];
+  const snapshots12m: TwinSnapshotPoint[] = [...snapshotRows].reverse().map((s) => ({
+    month: s.snapshot_month,
+    netWorth: nullableNumber(s.net_worth),
+    monthlyIncome: nullableNumber(s.monthly_income),
+    monthlyExpenses: nullableNumber(s.monthly_expenses),
+    monthlySurplus: nullableNumber(s.monthly_surplus),
   }));
 
   const hasMinimumData =
@@ -208,6 +339,8 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     dashboard.hasIncome &&
     dashboard.hasExpenses &&
     (dashboard.hasAssets || dashboard.hasLiabilities);
+
+  const selfMember = retirementMembersRes.data as { target_retirement_age: number | null } | null;
 
   return {
     status: 'ok',
@@ -235,12 +368,12 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       resilience,
       dna,
       goals,
-      rawRetirement: (retirementRes.data ?? []) as TwinRetirementRow[],
-      selfTargetRetirementAge: (retirementMembersRes.data as { target_retirement_age: number | null } | null)?.target_retirement_age ?? null,
-      rawInsurance: (insuranceRes.data ?? []) as TwinInsuranceRow[],
-      rawInvestments: (investmentsRes.data ?? []) as TwinInvestmentRow[],
-      rawLiabilities: (liabilitiesRes.data ?? []) as TwinLiabilityRow[],
-      rawAssets: (assetsRes.data ?? []) as TwinAssetRow[],
+      rawRetirement: retirementRows,
+      selfTargetRetirementAge: selfMember?.target_retirement_age ?? null,
+      rawInsurance: insuranceRows,
+      rawInvestments,
+      rawLiabilities,
+      rawAssets,
       expenseHousingMonthly,
       remittanceMonthly,
       snapshots12m,
@@ -248,43 +381,3 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     },
   };
 }
-
-// Loads the shared dashboard summary without re-deriving any ratio the Twin
-// itself needs — reuses computeDashboard directly (the same engine
-// loadDashboard uses) so this module never recalculates a financial ratio.
-async function loadDashboardForTwin(userId: string, supabase: SupabaseServerClient): Promise<DashboardSummary> {
-  const [profile, income, expenses, assets, liabilities, investments, retirement, insurance, goals, snapshots, fxRateAudInr] = await Promise.all([
-    supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).single(),
-    // LR-FI-1: `owner` is selected on the four cash-flow-bearing registers so
-    // computeDashboard() can apply the household/SMSF separation here exactly
-    // as it does for loadDashboard() — the Twin must never see a different
-    // household cash-flow figure from the Dashboard it is compared against.
-    supabase.from('income_sources').select('amount, net_amount, frequency, master_item_key, employer_name, owner').eq('user_id', userId).eq('is_active', true),
-    supabase.from('expense_items').select('expense_name, amount, frequency, is_essential, master_item_key, expense_category, owner').eq('user_id', userId).eq('is_active', true),
-    supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('liabilities').select('balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner').eq('user_id', userId).eq('is_active', true),
-    supabase.from('investments').select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('retirement_accounts').select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code').eq('user_id', userId).eq('is_active', true),
-    supabase.from('insurance_policies').select('policy_name, cover_amount, premium, premium_frequency, cover_type, renewal_date, waiting_period_days, owner').eq('user_id', userId).eq('is_active', true),
-    supabase.from('user_goals').select('goal_name, target_amount, current_amount, currency_code, target_date, priority, status').eq('user_id', userId).eq('status', 'active'),
-    supabase.from('financial_snapshots').select('snapshot_month, net_worth, monthly_income, monthly_expenses, monthly_surplus, savings_rate, total_assets, total_liabilities').eq('user_id', userId).order('snapshot_month', { ascending: true }).limit(12),
-    getFxRateAudInr(supabase),
-  ]);
-  const currency = (profile.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
-  return computeDashboard(
-    {
-      income: income.data ?? [],
-      expenses: expenses.data ?? [],
-      assets: assets.data ?? [],
-      liabilities: liabilities.data ?? [],
-      investments: investments.data ?? [],
-      retirement: retirement.data ?? [],
-      insurance: insurance.data ?? [],
-      goals: goals.data ?? [],
-      snapshots: snapshots.data ?? [],
-    },
-    currency,
-    fxRateAudInr
-  );
-}
-

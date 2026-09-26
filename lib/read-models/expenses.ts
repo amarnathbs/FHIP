@@ -49,6 +49,8 @@ export interface PlannedExpenseLine {
   name: string;
   group: CanonicalExpenseGroup;
   groupUnmapped: boolean;
+  /** WP-05: the catalogue key (e.g. Twin remittance = 'family_support_remittance'). */
+  masterItemKey: string | null;
   essential: boolean;
   frequency: string;
   owner: string | null;
@@ -160,7 +162,7 @@ export function computePlannedExpenses(
     else if (monthlyReporting === null) excludedReason = 'unconverted';
     if (excludedReason === 'unconverted') addUnconverted(unconverted, row.currency_code, monthlyNative);
     return {
-      id: row.id, name: row.expense_name, group, groupUnmapped: unmapped, essential: Boolean(row.is_essential), frequency: row.frequency,
+      id: row.id, name: row.expense_name, group, groupUnmapped: unmapped, masterItemKey: row.master_item_key, essential: Boolean(row.is_essential), frequency: row.frequency,
       owner: row.owner, amountNative: Number(row.amount), currency: row.currency_code, monthlyNative, monthlyReporting, excludedReason,
       provenance: provenance('manual'),
     };

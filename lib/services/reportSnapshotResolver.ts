@@ -5,8 +5,10 @@ import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienc
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
-import { SMSF_OWNER } from '@/lib/engines/householdContext';
 import type { GoalsPagePayload } from '@/lib/services/goalsData';
+import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshotResult } from '@/lib/read-models';
+import { loadImportedCategoryFreshness, loadImportedInputsLastChangedAt, maxTimestamp } from '@/lib/read-models/freshness';
+import { buildCanonicalAppendix, type CanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
 import { computeSectionEligibility, isEligibleForOfficialMonthlyReport, type EligibilityInput } from '@/lib/engines/reportEligibility';
 import { listTwinRuns, getTwinRunDetail, type StoredTwinDetail } from '@/lib/services/financialTwinService';
 import { getPlanTier, type PlanTier } from '@/lib/services/entitlements';
@@ -58,35 +60,26 @@ export interface PremiumInsuranceRow {
   waiting_period_days: number | null;
 }
 
-export interface PremiumAssetRow {
-  asset_name: string;
-  current_value: number;
-  asset_class: string;
-  country_code: string;
+/**
+ * WP-06 (DC-08): the Premium investment chapter's totals come from the ONE
+ * canonical portfolio figure (selectInvestments().publishedTotal -- the
+ * figure Net Worth counts), converted once at the snapshot's FX rate. Holdings
+ * imported into Investment Intelligence but not yet added to Net Worth
+ * (PO D-05) are disclosed, never silently added or silently dropped.
+ */
+export interface ReportCanonicalInvestments {
+  publishedTotal: number;
+  /** investments.id -> reporting-currency value (null = currency not convertible). */
+  reportingValueById: Record<string, number | null>;
+  unconvertedCount: number;
+  unpublished: { label: string; count: number; total: number };
 }
 
-export interface PremiumLiabilityRow {
-  liability_name: string;
-  balance: number;
-  interest_rate: number | null;
-  monthly_repayment: number | null;
-  debt_type: string;
-  country_code: string;
-}
-
-export interface PremiumIncomeRow {
-  source_name: string | null;
-  employer_name: string | null;
-  amount: number;
-  frequency: string;
-}
-
-export interface PremiumExpenseRow {
-  expense_name: string;
-  amount: number;
-  frequency: string;
-  is_essential: boolean;
-  expense_category: string;
+/** What the report shows beside Net Worth but deliberately does not count in it (D-04 / D-05). */
+export interface NotInNetWorthItem {
+  label: string;
+  count: number;
+  total: number;
 }
 
 export interface GoalsOnTrackHistoryPoint {
@@ -98,10 +91,14 @@ export interface GoalsOnTrackHistoryPoint {
 export interface PremiumSourceData {
   investments: PremiumInvestmentRow[];
   insurancePolicies: PremiumInsuranceRow[];
-  assets: PremiumAssetRow[];
-  liabilities: PremiumLiabilityRow[];
-  incomeSources: PremiumIncomeRow[];
-  expenseItems: PremiumExpenseRow[];
+  // WP-06 (DC-10 / EXP-G11 / GAP-02): the appendix is built from the canonical
+  // read-model line items -- planned AND approved imported lines with their
+  // provenance, excluded rows marked, currency shown, retirement included --
+  // replacing the raw assets / liabilities / income_sources / expense_items
+  // register copies it used to list. null only when the canonical snapshot
+  // could not be read at all (the appendix then says so).
+  canonicalAppendix: CanonicalAppendix | null;
+  canonicalInvestments: ReportCanonicalInvestments | null;
   forecastReportData: ForecastReportData | null;
   goalsOnTrackHistory: GoalsOnTrackHistoryPoint[];
   // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding — Investment
@@ -147,6 +144,11 @@ export interface ReportSourceData {
   premium: PremiumSourceData | null; // null for free-tier users — Premium-only queries are skipped entirely, not just hidden
   commitments: CommitmentRow[]; // light query, loaded for every tier — powers the 90-day commitment timeline in both Free and Premium reports
   content: ReportContent; // report_content_library, replacing reportCopy.ts's hardcoded constants (Report v3 Phase 3a)
+  // WP-06: items shown beside Net Worth but deliberately NOT in it -- imported
+  // holdings not yet added to Net Worth (D-05) and bank closing balances not
+  // yet Applied as a cash asset (D-04). Optional so older fixtures/callers
+  // stay valid; absent/empty means nothing to disclose.
+  notInNetWorth?: NotInNetWorthItem[];
   // Real recommendation-engine matches (action_recommendation_master, filtered
   // to include_in_monthly_report=true) — pillar-triggered signals for every
   // tier, plus forecast-category signals too when planTier === 'premium'
@@ -179,6 +181,13 @@ export async function loadDataFreshness(userId: string, client?: SupabaseServerC
   FRESHNESS_TABLES.forEach(({ category }, i) => {
     dataFreshness[category] = (freshnessResults[i].data?.updated_at as string) ?? null;
   });
+  // WP-06: income and expenses are also recorded by APPROVED imported
+  // statement lines, which the canonical Income / Expense read models count.
+  // A household whose income or spending comes only from approved statements
+  // is no longer reported as "Missing" for a category the report includes.
+  const imported = await loadImportedCategoryFreshness(userId, supabase);
+  dataFreshness.income = maxTimestamp([dataFreshness.income, imported.income]);
+  dataFreshness.expenses = maxTimestamp([dataFreshness.expenses, imported.expenses]);
   return dataFreshness;
 }
 
@@ -227,11 +236,13 @@ export async function loadReportInputsLastChangedAt(userId: string, client?: Sup
       }
     })
   );
-  let newest: string | null = null;
-  for (const ts of results) {
-    if (ts && (newest === null || ts > newest)) newest = ts;
-  }
-  return newest;
+  // WP-06 (DC-09): imported data moves canonical figures too -- approving a
+  // statement (fdh_transactions.approved_at), a split or link, an AU broker
+  // import into Investment Intelligence, a publication to Net Worth, or an
+  // Applied payslip / statement proposal must make this month's stored report
+  // stale, exactly as a manual register edit does.
+  const imported = await loadImportedInputsLastChangedAt(userId, supabase);
+  return maxTimestamp([...results, imported]);
 }
 
 function monthStart(date = new Date()): string {
@@ -260,8 +271,12 @@ export async function resolveReportSourceData(
     supabase.from('households').select('household_name, household_type, dependants_count').eq('user_id', userId).maybeSingle(),
   ]);
 
-  const [dashboard, healthScore, resilience, dna, goals, financialTwin, commitmentsRes, content] = await Promise.all([
+  const [dashboard, canonicalSnapshot, healthScore, resilience, dna, goals, financialTwin, commitmentsRes, content] = await Promise.all([
     loadDashboard(userId, supabase),
+    // WP-06: the per-request canonical snapshot -- one FX rate, one window,
+    // one ledger -- that the appendix, the investment reconciliation and the
+    // Net Worth disclosures are all built from.
+    buildCanonicalFinancialSnapshot(userId, { client: supabase }),
     loadHealthScore(userId, supabase).catch(() => null),
     loadResilience(userId, supabase).catch(() => null),
     loadFinancialDna(userId, supabase).catch(() => null),
@@ -278,6 +293,7 @@ export async function resolveReportSourceData(
   const commitments = (commitmentsRes.data as CommitmentRow[]) ?? [];
 
   const currency = (profileRes.data?.preferred_currency as 'AUD' | 'INR') ?? 'AUD';
+  const notInNetWorth = notInNetWorthFrom(canonicalSnapshot);
 
   const { data: prevGoalSnapshots } = await supabase
     .from('goal_snapshots')
@@ -308,10 +324,6 @@ export async function resolveReportSourceData(
     const [
       investmentsRes,
       insuranceRes,
-      assetsRes,
-      liabilitiesRes,
-      incomeRes,
-      expensesRes,
       forecastReportData,
       goalSnapshotsRes,
       fxRateAudInr,
@@ -322,7 +334,7 @@ export async function resolveReportSourceData(
       reviewItems,
     ] = await Promise.all([
       // FDH-16 fix (FDH16-DEF-001, same root cause as dashboardData.ts):
-      // these 6 queries had no .range()/.limit() and were silently subject
+      // these queries had no .range()/.limit() and were silently subject
       // to PostgREST's default row cap (1000 on this project, live-confirmed)
       // for any household whose active row count in one register exceeds it.
       // fetchAllRows() pages through until a short page confirms completeness.
@@ -342,33 +354,12 @@ export async function resolveReportSourceData(
           .eq('is_active', true)
           .range(from, to)
       ),
-      fetchAllRows((from, to) => supabase.from('assets').select('asset_name, current_value, asset_class, country_code').eq('user_id', userId).eq('is_active', true).range(from, to)),
-      fetchAllRows((from, to) =>
-        supabase
-          .from('liabilities')
-          .select('liability_name, balance, interest_rate, monthly_repayment, debt_type, country_code')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .range(from, to)
-      ),
-      // LR-FI-1: the Premium Report's Appendices section states these tables
-      // "list every recorded item used in this report's calculations". Since
-      // computeDashboard() no longer reads SMSF-owned income/expense rows into
-      // any household figure this report shows, listing them here would
-      // misrepresent the reconciliation. Only these two registers are
-      // filtered — the liabilities/assets/investments/insurance appendices
-      // keep their SMSF rows, because those rows genuinely DO still feed the
-      // report's Net Worth and protection figures (§5, §28).
-      fetchAllRows((from, to) => supabase.from('income_sources').select('source_name, employer_name, amount, frequency').eq('user_id', userId).eq('is_active', true).neq('owner', SMSF_OWNER).range(from, to)),
-      fetchAllRows((from, to) =>
-        supabase
-          .from('expense_items')
-          .select('expense_name, amount, frequency, is_essential, expense_category')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .neq('owner', SMSF_OWNER)
-          .range(from, to)
-      ),
+      // WP-06: the assets / liabilities / income_sources / expense_items
+      // register copies the appendix used to list are gone -- the appendix is
+      // built from the canonical snapshot above (see buildCanonicalAppendix).
+      // LR-FI-1's SMSF rule is kept there by the selectors themselves:
+      // SMSF-owned income/expense rows are listed as "not counted", never as
+      // counted household items.
       buildForecastReportData(userId, undefined, supabase).catch(() => null),
       // goal_snapshots is only written when the Goals page itself is visited
       // (a pre-existing gap, not introduced here) — history may be sparse for
@@ -406,13 +397,13 @@ export async function resolveReportSourceData(
     premium = {
       investments: investmentsRes as PremiumInvestmentRow[],
       insurancePolicies: insuranceRes as PremiumInsuranceRow[],
-      assets: assetsRes as PremiumAssetRow[],
-      liabilities: liabilitiesRes as PremiumLiabilityRow[],
-      incomeSources: incomeRes as PremiumIncomeRow[],
-      expenseItems: expensesRes as PremiumExpenseRow[],
+      canonicalAppendix: canonicalSnapshot.status === 'ok' ? buildCanonicalAppendix(canonicalSnapshot) : null,
+      canonicalInvestments: canonicalInvestmentsFrom(canonicalSnapshot),
       forecastReportData,
       goalsOnTrackHistory,
-      fxRateAudInr,
+      // One FX rate per report: the snapshot's when it resolved, so the
+      // investment chapter and the appendix can never convert at two rates.
+      fxRateAudInr: canonicalSnapshot.status === 'ok' ? canonicalSnapshot.fx.fxRateAudInr : fxRateAudInr,
       investmentPerformance,
       sip,
       xray,
@@ -449,7 +440,34 @@ export async function resolveReportSourceData(
     premium,
     commitments,
     content,
+    notInNetWorth,
     actionRecommendations,
+  };
+}
+
+/** D-04 / D-05 disclosures shown beside Net Worth (never added to it). */
+export function notInNetWorthFrom(snapshot: CanonicalFinancialSnapshotResult): NotInNetWorthItem[] {
+  if (snapshot.status !== 'ok') return [];
+  const out: NotInNetWorthItem[] = [];
+  if (snapshot.investments.status === 'ok' && snapshot.investments.unpublished.count > 0) {
+    const u = snapshot.investments.unpublished;
+    out.push({ label: u.label, count: u.count, total: u.total });
+  }
+  if (snapshot.assets.status === 'ok' && snapshot.assets.bankBalanceEvidence.accounts.length > 0) {
+    const b = snapshot.assets.bankBalanceEvidence;
+    out.push({ label: b.label, count: b.accounts.length, total: b.total });
+  }
+  return out;
+}
+
+export function canonicalInvestmentsFrom(snapshot: CanonicalFinancialSnapshotResult): ReportCanonicalInvestments | null {
+  if (snapshot.status !== 'ok' || snapshot.investments.status !== 'ok') return null;
+  const inv = snapshot.investments;
+  return {
+    publishedTotal: inv.publishedTotal,
+    reportingValueById: Object.fromEntries(inv.lines.map((l) => [l.id, l.value.amountReporting])),
+    unconvertedCount: inv.lines.filter((l) => l.value.amountReporting === null).length,
+    unpublished: { label: inv.unpublished.label, count: inv.unpublished.count, total: inv.unpublished.total },
   };
 }
 

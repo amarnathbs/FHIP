@@ -26,10 +26,10 @@ function emptyPremium(overrides: Partial<PremiumSourceData> = {}): PremiumSource
   return {
     investments: [],
     insurancePolicies: [],
-    assets: [],
-    liabilities: [],
-    incomeSources: [],
-    expenseItems: [],
+    // WP-06: the raw assets / liabilities / income / expense register copies
+    // were replaced by the canonical appendix + investment reconciliation.
+    canonicalAppendix: null,
+    canonicalInvestments: null,
     forecastReportData: null,
     goalsOnTrackHistory: [],
     fxRateAudInr: 55,

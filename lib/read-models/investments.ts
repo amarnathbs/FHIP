@@ -32,6 +32,9 @@ export interface InvestmentRow {
   source_type: string | null;
   ii_canonical_account_id: string | null;
   ii_canonical_instrument_id: string | null;
+  /** WP-05: Twin geographic diversification and the forecast contribution leg. */
+  country_code?: string | null;
+  annual_contribution?: number | null;
 }
 
 export interface HoldingSnapshotRow {
@@ -58,6 +61,10 @@ export interface InvestmentLine {
   owner: string | null;
   household: boolean;
   value: MoneyValue;
+  /** WP-05: as recorded; null when not captured. */
+  countryCode: string | null;
+  /** WP-05: native currency, per year; null when not captured. */
+  annualContribution: number | null;
   provenance: Provenance;
 }
 
@@ -102,6 +109,8 @@ export function computeInvestments(input: {
       id: row.id, name: row.investment_name, investmentType: row.investment_type, masterItemKey: row.master_item_key,
       owner: row.owner, household: isHouseholdOwner(row.owner),
       value: { amountNative: Number(row.current_value), currency: row.currency_code, amountReporting },
+      countryCode: row.country_code ?? null,
+      annualContribution: row.annual_contribution == null ? null : Number(row.annual_contribution),
       provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
     };
   });
@@ -141,15 +150,20 @@ export function computeInvestments(input: {
   };
 }
 
-export async function loadInvestmentInputs(userId: string, client: ReadModelClient) {
-  const investments = await fetchAllRows<InvestmentRow>('investments', (from, to) =>
+/** The active `investments` register, paged (WP-05: also used alone by register-only consumers). */
+export async function loadInvestmentRows(userId: string, client: ReadModelClient): Promise<InvestmentRow[]> {
+  return fetchAllRows<InvestmentRow>('investments', (from, to) =>
     client
       .from('investments')
-      .select('id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, ii_canonical_account_id, ii_canonical_instrument_id')
+      .select('id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, ii_canonical_account_id, ii_canonical_instrument_id, country_code, annual_contribution')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('id', { ascending: true })
       .range(from, to));
+}
+
+export async function loadInvestmentInputs(userId: string, client: ReadModelClient) {
+  const investments = await loadInvestmentRows(userId, client);
   const snapshots = await fetchAllRows<HoldingSnapshotRow>('ii_holding_snapshots', (from, to) =>
     client
       .from('ii_holding_snapshots')

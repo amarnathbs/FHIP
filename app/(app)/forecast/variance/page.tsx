@@ -23,6 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   significantly_off_track: 'Significantly Off Track',
   baseline_established: 'Baseline Established',
   insufficient_data: 'Insufficient Data',
+  unavailable: 'Unavailable',
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -34,6 +35,7 @@ const STATUS_CLASS: Record<string, string> = {
   significantly_off_track: 'bg-risk/10 text-risk',
   baseline_established: 'bg-gray-100 text-muted',
   insufficient_data: 'bg-gray-100 text-muted',
+  unavailable: 'bg-gray-100 text-muted',
 };
 
 function fmt(value: number | null, currency: 'AUD' | 'INR') {

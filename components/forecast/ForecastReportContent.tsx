@@ -57,6 +57,7 @@ const STATUS_LABEL: Record<string, string> = {
   significantly_off_track: 'Significantly Off Track',
   baseline_established: 'Baseline Established',
   insufficient_data: 'Insufficient Data',
+  unavailable: 'Unavailable',
 };
 
 const VARIANCE_LABEL: Record<string, string> = {

@@ -21,6 +21,14 @@ import { convertToReportingCurrency } from '@/lib/engines/fx';
 import { computeAllocatedMonthlyContribution, computeLiveLinkedFundingValue } from '@/lib/services/goalFundingAllocation';
 import { loadLinkedContributionSources, type GoalFundingSourceRow } from '@/lib/services/goalsData';
 import { accountsEligibleForHouseholdContributionForecast } from '@/lib/engines/forecast/smsfContributionGuard';
+import {
+  forecastFx,
+  loadDebtForecastLiabilities,
+  loadForeignPosition,
+  loadInvestmentForecastHoldings,
+  loadRetirementForecastPosition,
+  sumGoalsInReportingCurrency,
+} from '@/lib/services/forecastCanonicalInputs';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -425,61 +433,24 @@ async function buildCalculatorInput(
     const reportingCurrency: 'AUD' | 'INR' = profile.base_currency;
     const foreignCurrency: 'AUD' | 'INR' = reportingCurrency === 'AUD' ? 'INR' : 'AUD';
 
-    const [assetsResult, investmentsResult, liabilitiesResult, retirementResult] = await Promise.all([
-      supabase.from('assets').select('current_value').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-      supabase
-        .from('investments')
-        .select('current_value, annual_contribution')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .eq('currency_code', foreignCurrency),
-      supabase
-        // App Review 2026-09-15, item 8: interest_rate added so the foreign
-        // leg can be amortised at the household's own recorded rates rather
-        // than the never-seeded assumption's hard-coded default.
-        .from('liabilities')
-        .select('balance, monthly_repayment, interest_rate')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .eq('currency_code', foreignCurrency),
-      supabase
-        .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .eq('currency_code', foreignCurrency),
-    ]);
-    if (assetsResult.error) throw new Error(assetsResult.error.message);
-    if (investmentsResult.error) throw new Error(investmentsResult.error.message);
-    if (liabilitiesResult.error) throw new Error(liabilitiesResult.error.message);
-    if (retirementResult.error) throw new Error(retirementResult.error.message);
-
-    const CONTRIBUTION_FREQUENCY_TO_MONTHLY: Record<string, number> = {
-      weekly: 52 / 12,
-      fortnightly: 26 / 12,
-      monthly: 1,
-      quarterly: 1 / 3,
-      annually: 1 / 12,
-    };
-    const foreignAssets = (assetsResult.data ?? []).reduce((sum, a) => sum + a.current_value, 0);
-    const foreignInvestments = (investmentsResult.data ?? []).reduce((sum, i) => sum + i.current_value, 0);
-    const foreignInvestmentMonthlyContribution = (investmentsResult.data ?? []).reduce((sum, i) => sum + (i.annual_contribution ?? 0) / 12, 0);
-    const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
-    const foreignLiabilityMonthlyRepayment = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + (l.monthly_repayment ?? 0), 0);
+    // WP-05 (DC-18 / DC-14 / GAP-RET-02): the foreign leg now comes from the
+    // canonical register loaders -- paged (never truncated at 1000 rows),
+    // failing closed (a failed read throws instead of forecasting 0), and a
+    // foreign retirement contribution with a NULL frequency is UNKNOWN and
+    // left out, never assumed monthly. Amounts stay in the foreign currency,
+    // exactly as crossBorderCalculator expects.
+    const foreign = await loadForeignPosition(userId, supabase, foreignCurrency);
+    const foreignAssets = foreign.assets;
+    const foreignInvestments = foreign.investments;
+    const foreignInvestmentMonthlyContribution = foreign.investmentMonthlyContribution;
+    const foreignLiabilities = foreign.liabilities;
+    const foreignLiabilityMonthlyRepayment = foreign.liabilityMonthlyRepayment;
     // App Review 2026-09-15, item 8 — balance-weighted actual rate across the
     // foreign-currency liabilities only, matching this leg's own population.
     // null when none of them records a rate.
-    const foreignLiabilitiesWithRate = (liabilitiesResult.data ?? []).filter((l) => l.interest_rate !== null && l.interest_rate !== undefined);
-    const foreignBalanceWithRate = foreignLiabilitiesWithRate.reduce((sum, l) => sum + l.balance, 0);
-    const foreignLiabilityRatePercent =
-      foreignBalanceWithRate > 0
-        ? foreignLiabilitiesWithRate.reduce((sum, l) => sum + (l.interest_rate as number) * l.balance, 0) / foreignBalanceWithRate
-        : null;
-    const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
-    const foreignRetirementMonthlyContribution = (retirementResult.data ?? []).reduce((sum, r) => {
-      const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[r.contribution_frequency ?? 'monthly'] ?? 1;
-      return sum + ((r.employer_contribution ?? 0) + (r.personal_contribution ?? 0)) * factor;
-    }, 0);
+    const foreignLiabilityRatePercent = foreign.liabilityRatePercent;
+    const foreignRetirement = foreign.retirement;
+    const foreignRetirementMonthlyContribution = foreign.retirementMonthlyContribution;
 
     const input: CrossBorderCalculatorInput = {
       baselineDate,
@@ -501,12 +472,19 @@ async function buildCalculatorInput(
   }
 
   if (forecastType === 'retirement') {
-    const [accountsResult, dobResult, retirementMembersResult, smsfFundsResult] = await Promise.all([
-      supabase
-        .from('retirement_accounts')
-        .select('id, current_balance, employer_contribution, personal_contribution, contribution_frequency, currency_code, owner')
-        .eq('user_id', userId)
-        .eq('is_active', true),
+    const retirementReportingCurrency: 'AUD' | 'INR' = profile.base_currency;
+    const retirementFxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
+    const [retirementPosition, dobResult, retirementMembersResult, smsfFundsResult] = await Promise.all([
+      // WP-05 (GAP-RET-02 / DC-18): the canonical retirement register loader
+      // (paged, fail closed) and the canonical Retirement rules, converted at
+      // THIS forecast's own reporting currency and FX assumption. Balances
+      // are converted per account before summing (the FHIP_50 P0 fix this
+      // branch already carried); an unsupported currency is now left out and
+      // counted instead of being treated as the reporting currency; and a
+      // contribution with a NULL contribution_frequency is UNKNOWN -- it is
+      // no longer read as a monthly rate (an imported statement's period
+      // total used to be projected ~12x).
+      loadRetirementForecastPosition(userId, supabase, forecastFx(retirementReportingCurrency, retirementFxRateAudInr, profile.country_code ?? null)),
       supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).single(),
       // Retirement Member UI (spec s.29) — Self/Spouse canonical target
       // retirement ages, used to split this forecast per member when they
@@ -520,34 +498,13 @@ async function buildCalculatorInput(
       // precisely). retirement_account_id is the only correct discriminator.
       supabase.from('smsf_funds').select('retirement_account_id').eq('user_id', userId).eq('is_active', true),
     ]);
-    if (accountsResult.error) throw new Error(accountsResult.error.message);
     if (smsfFundsResult.error) throw new Error(smsfFundsResult.error.message);
-    const accounts = accountsResult.data ?? [];
-    // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding: this used
-    // to sum each account's current_balance/contributions raw, regardless of
-    // currency_code, then labelled the sum with whichever account happened
-    // to be first in the array — a cross-border household with e.g. 216,600
-    // AUD + 1,100,000 INR + 30,000 AUD retirement accounts got "1,346,600"
-    // stamped AUD, overstating the true ~265,566 AUD position by over 1M.
-    // Convert every account to the forecast's reporting currency (same
-    // helper + same fx_rate_aud_inr assumption dashboard.ts's canonical
-    // totalRetirement already uses) before summing, so this starting
-    // balance can never again drift from the correctly-converted canonical
-    // figure shown elsewhere in the same report.
-    const retirementReportingCurrency: 'AUD' | 'INR' = profile.base_currency;
-    const retirementFxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
-    const toRetirementReportingCurrency = (amount: number, rowCurrencyCode: string | null | undefined) => {
-      const rowCurrency = rowCurrencyCode === 'AUD' || rowCurrencyCode === 'INR' ? rowCurrencyCode : retirementReportingCurrency;
-      return convertToReportingCurrency(amount, rowCurrency, retirementReportingCurrency, retirementFxRateAudInr);
-    };
-    const currentBalance = accounts.reduce((sum, a) => sum + toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code), 0);
-    const CONTRIBUTION_FREQUENCY_TO_MONTHLY: Record<string, number> = {
-      weekly: 52 / 12,
-      fortnightly: 26 / 12,
-      monthly: 1,
-      quarterly: 1 / 3,
-      annually: 1 / 12,
-    };
+    const accounts = retirementPosition.accounts;
+    // FHIP_50_User_Report_Accuracy_Validation_Review P0 finding (kept): every
+    // account is converted to the forecast's reporting currency before
+    // summing -- now through the canonical Retirement read model's own
+    // conversion (lib/read-models/retirement.ts computeRetirement).
+    const currentBalance = retirementPosition.currentBalance;
     // LR-6 (WP-07, NEG-06 "forecast contaminates household") — SMSF-fund-
     // linked accounts stay IN currentBalance above (SMSF wealth genuinely
     // belongs in the household's retirement net worth), but must never
@@ -561,11 +518,7 @@ async function buildCalculatorInput(
     // latent gap discovery flagged before it can ever be realised.
     const smsfLinkedAccountIds = new Set((smsfFundsResult.data ?? []).map((f) => f.retirement_account_id));
     const contributionEligibleAccounts = accountsEligibleForHouseholdContributionForecast(accounts, smsfLinkedAccountIds);
-    const monthlyContribution = contributionEligibleAccounts.reduce((sum, a) => {
-      const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
-      const convertedContribution = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
-      return sum + convertedContribution * factor;
-    }, 0);
+    const monthlyContribution = contributionEligibleAccounts.reduce((sum, a) => sum + a.monthlyContribution, 0);
     const currency = retirementReportingCurrency;
 
     // Forecasting P1 fix FHIP-FC-RET-001 — timing hierarchy:
@@ -639,13 +592,8 @@ async function buildCalculatorInput(
     ) {
       const selfAccounts = accounts.filter((a) => a.owner === 'self');
       const spouseAccounts = accounts.filter((a) => a.owner === 'spouse');
-      const sumBalance = (rows: typeof accounts) => rows.reduce((sum, a) => sum + toRetirementReportingCurrency(a.current_balance ?? 0, a.currency_code), 0);
-      const sumContribution = (rows: typeof accounts) =>
-        rows.reduce((sum, a) => {
-          const factor = CONTRIBUTION_FREQUENCY_TO_MONTHLY[a.contribution_frequency ?? 'monthly'] ?? 1;
-          const converted = toRetirementReportingCurrency((a.employer_contribution ?? 0) + (a.personal_contribution ?? 0), a.currency_code);
-          return sum + converted * factor;
-        }, 0);
+      const sumBalance = (rows: typeof accounts) => rows.reduce((sum, a) => sum + (a.balance ?? 0), 0);
+      const sumContribution = (rows: typeof accounts) => rows.reduce((sum, a) => sum + a.monthlyContribution, 0);
       if (selfAccounts.length > 0 && spouseAccounts.length > 0) {
         members = [
           {
@@ -700,18 +648,19 @@ async function buildCalculatorInput(
     // FHIP-FC-DEBT-001/002/003's risk ranking — already existed on
     // liabilities (used elsewhere, e.g. dashboard.ts's variable-rate/
     // credit-utilization ratios), just weren't selected here before.
-    const { data: liabilities, error } = await supabase
-      .from('liabilities')
-      .select('id, liability_name, balance, interest_rate, monthly_repayment, debt_type, currency_code, interest_rate_type, fixed_rate_expiry, credit_limit')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-    if (error) throw new Error(error.message);
+    //
+    // WP-05 (DC-18): the canonical liability register loader (paged, fail
+    // closed). Per-loan native balances, rates and the contractual repayment
+    // are what the amortisation needs; an imported loan's monthly_repayment
+    // is written by the liability-statement Apply, so a manual (M) and an
+    // imported (I) household with the same loan forecast identically.
+    const liabilities = await loadDebtForecastLiabilities(userId, supabase);
     const input: DebtCalculatorInput = {
       baselineDate,
       months,
       assumptions,
       additionalMonthlyRepayment,
-      liabilities: (liabilities ?? []).map((l) => ({
+      liabilities: liabilities.map((l) => ({
         id: l.id,
         name: l.liability_name,
         currentBalance: l.balance,
@@ -729,7 +678,7 @@ async function buildCalculatorInput(
         monthlyRepayment: l.monthly_repayment ?? 0,
         debtType: l.debt_type,
         currency: l.currency_code,
-        interestRateType: l.interest_rate_type ?? null,
+        interestRateType: (l.interest_rate_type as 'fixed' | 'variable' | null | undefined) ?? null,
         fixedRateExpiry: l.fixed_rate_expiry ?? null,
         creditLimit: l.credit_limit ?? null,
       })),
@@ -769,12 +718,15 @@ async function buildCalculatorInput(
 
     const fundingSourcesByGoal = new Map<string, GoalFundingSourceRow[]>();
     if (goalIds.length > 0) {
-      const { data: sources } = await supabase
+      const { data: sources, error: sourcesError } = await supabase
         .from('goal_funding_sources')
         .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true)
         .in('goal_id', goalIds);
+      // WP-05 (DC-14): a failed read no longer forecasts every goal as
+      // unfunded -- the run fails closed instead.
+      if (sourcesError) throw new Error(sourcesError.message);
       for (const s of sources ?? []) {
         const goalId = s.goal_id as string;
         const list = fundingSourcesByGoal.get(goalId) ?? [];
@@ -845,22 +797,23 @@ async function buildCalculatorInput(
     // master_item_key added for FHIP-FC-INV-001/002 — see
     // investmentCalculator.ts's resolveAssetClass() for why it's the
     // reliable asset-class signal rather than investment_type.
-    const { data: investments, error } = await supabase
-      .from('investments')
-      .select('id, investment_name, current_value, currency_code, investment_type, master_item_key, annual_contribution')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-    if (error) throw new Error(error.message);
+    //
+    // WP-05 (DC-18): the canonical `investments` register loader (paged, fail
+    // closed) -- the published register that Net Worth counts. Holdings
+    // imported into Investment Intelligence but not yet added to Net Worth
+    // (PO D-05) are deliberately not projected here, exactly as they are not
+    // in Net Worth.
+    const investments = await loadInvestmentForecastHoldings(userId, supabase);
     const input: InvestmentCalculatorInput = {
       baselineDate,
       months,
       assumptions,
-      investments: (investments ?? []).map((inv) => ({
+      investments: investments.map((inv) => ({
         id: inv.id,
         name: inv.investment_name,
         currentValue: inv.current_value,
         monthlyContribution: (inv.annual_contribution ?? 0) / 12,
-        investmentType: inv.investment_type,
+        investmentType: inv.investment_type as string,
         masterItemKey: inv.master_item_key ?? null,
         currency: inv.currency_code,
       })),
@@ -1369,7 +1322,9 @@ export type VarianceStatus =
   | 'at_risk'
   | 'significantly_off_track'
   | 'baseline_established'
-  | 'insufficient_data';
+  | 'insufficient_data'
+  // WP-05 (DC-14): the actual value could not be read. Never shown as 0.
+  | 'unavailable';
 
 export interface CategoryVariance {
   forecastCategory: VarianceForecastCategory;
@@ -1497,16 +1452,22 @@ async function getCurrentActualValue(
     // to what the user already sees for the same goals.
     // currency_code added for G6 Contract 6 — needed by
     // computeLiveLinkedFundingValue()'s cross-currency conversion below.
-    const { data: goals } = await supabase.from('user_goals').select('id, current_amount, target_amount, currency_code').eq('user_id', userId).eq('status', 'active');
+    //
+    // WP-05 (DC-14): every read here now fails closed -- a failed goals or
+    // funding read used to return an "actual" of 0, which the variance table
+    // then scored as "significantly off track".
+    const { data: goals, error: goalsError } = await supabase.from('user_goals').select('id, current_amount, target_amount, currency_code').eq('user_id', userId).eq('status', 'active');
+    if (goalsError) throw new Error(goalsError.message);
     const goalIds = (goals ?? []).map((g) => g.id as string);
     const fundingSourcesByGoal = new Map<string, GoalFundingSourceRow[]>();
     if (goalIds.length > 0) {
-      const { data: sources } = await supabase
+      const { data: sources, error: sourcesError } = await supabase
         .from('goal_funding_sources')
         .select('id, goal_id, source_type, linked_asset_id, linked_investment_id, linked_retirement_id, allocated_amount, allocation_percentage, currency_code')
         .eq('user_id', userId)
         .eq('is_active', true)
         .in('goal_id', goalIds);
+      if (sourcesError) throw new Error(sourcesError.message);
       for (const s of sources ?? []) {
         const goalId = s.goal_id as string;
         const list = fundingSourcesByGoal.get(goalId) ?? [];
@@ -1515,7 +1476,11 @@ async function getCurrentActualValue(
       }
     }
     const { currentValueById } = await loadLinkedContributionSources(userId, fundingSourcesByGoal, supabase);
-    const actual = (goals ?? []).reduce((sum, g) => {
+    const fxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
+    // WP-05 (DC-13): each goal's actual (its own currency) and target are
+    // converted to the forecast's reporting currency BEFORE summing. The old
+    // reduce added an INR goal's rupees to an AUD goal's dollars.
+    const perGoal = (goals ?? []).map((g) => {
       const liveLinkedFundingValue = computeLiveLinkedFundingValue(
         (fundingSourcesByGoal.get(g.id as string) ?? []).map((s) => ({
           sourceType: s.source_type,
@@ -1528,29 +1493,23 @@ async function getCurrentActualValue(
         currentValueById,
         // G6 Contract 6 — same rationale as buildCalculatorInput's 'goal' branch above.
         g.currency_code,
-        getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56)
+        fxRateAudInr
       );
-      return sum + (g.current_amount ?? 0) + liveLinkedFundingValue;
-    }, 0);
-    const target = (goals ?? []).reduce((sum, g) => sum + (g.target_amount ?? 0), 0);
-    return { actual, target };
+      return { currency_code: (g.currency_code as string | null) ?? null, actualNative: (g.current_amount ?? 0) + liveLinkedFundingValue, targetNative: g.target_amount ?? null };
+    });
+    const totals = sumGoalsInReportingCurrency(perGoal, forecastFx(profile.base_currency, fxRateAudInr));
+    return { actual: totals.actual, target: totals.target };
   }
   // cross_border — mirrors buildCalculatorInput's cross_border branch, but
   // only needs the live net-foreign-wealth figure, not a full monthly
   // calculator input.
   const reportingCurrency = profile.base_currency;
   const foreignCurrency: 'AUD' | 'INR' = reportingCurrency === 'AUD' ? 'INR' : 'AUD';
-  const [assetsResult, investmentsResult, liabilitiesResult, retirementResult] = await Promise.all([
-    supabase.from('assets').select('current_value').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-    supabase.from('investments').select('current_value').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-    supabase.from('liabilities').select('balance').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-    supabase.from('retirement_accounts').select('current_balance').eq('user_id', userId).eq('is_active', true).eq('currency_code', foreignCurrency),
-  ]);
-  const foreignAssets = (assetsResult.data ?? []).reduce((sum, a) => sum + a.current_value, 0);
-  const foreignInvestments = (investmentsResult.data ?? []).reduce((sum, i) => sum + i.current_value, 0);
-  const foreignRetirement = (retirementResult.data ?? []).reduce((sum, r) => sum + (r.current_balance ?? 0), 0);
-  const foreignLiabilities = (liabilitiesResult.data ?? []).reduce((sum, l) => sum + l.balance, 0);
-  const netForeignLocal = foreignAssets + foreignInvestments + foreignRetirement - foreignLiabilities;
+  // WP-05 (DC-18 / DC-14): the same canonical foreign-leg loader the
+  // calculator input uses -- paged and failing closed (a failed read used to
+  // make the actual net foreign wealth 0).
+  const foreign = await loadForeignPosition(userId, supabase, foreignCurrency);
+  const netForeignLocal = foreign.assets + foreign.investments + foreign.retirement - foreign.liabilities;
   const fxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
   const actual = foreignCurrency === 'INR' ? netForeignLocal / fxRateAudInr : netForeignLocal * fxRateAudInr;
   return { actual: round2(actual), target: null };
@@ -1604,7 +1563,36 @@ export async function getForecastVariance(
 
   const profile = profileResult.data ?? { base_currency: 'AUD' as const, country_code: null };
   const assumptions = await loadResolvedAssumptions(userId, profileId, scenarioId, profile.country_code, supabase);
-  const { actual: actualTillDate, target: liveTarget } = await getCurrentActualValue(userId, category, profile, assumptions, supabase, snapshot);
+  // WP-05 (DC-14): a failed read of the actual side is reported as
+  // 'unavailable' -- never as an actual of 0, which the variance bands would
+  // otherwise score as "significantly off track".
+  let actualResult: { actual: number; target: number | null };
+  try {
+    actualResult = await getCurrentActualValue(userId, category, profile, assumptions, supabase, snapshot);
+  } catch {
+    return {
+      forecastCategory: category,
+      hasOriginal: Boolean(originalRunResult.data),
+      baselineDate: originalRunResult.data?.baseline_date ?? null,
+      comparisonDate: effectiveComparisonDate,
+      dataLastUpdated,
+      startValue: null,
+      forecastTillDate: null,
+      actualTillDate: null,
+      varianceAmount: null,
+      variancePercentage: null,
+      result: null,
+      status: 'unavailable',
+      finalTarget: null,
+      revisedForecast: null,
+      finalTargetGap: null,
+      primaryDriver: 'The current value could not be read, so no variance is shown. Please try again later.',
+      forecastHorizonExceeded: false,
+      actualBasis: VARIANCE_ACTUAL_BASIS[category],
+      finalTargetBasis: VARIANCE_FINAL_TARGET_BASIS[category],
+    };
+  }
+  const { actual: actualTillDate, target: liveTarget } = actualResult;
 
   const originalRun = originalRunResult.data;
   if (!originalRun) {
