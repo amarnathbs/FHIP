@@ -649,14 +649,37 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "all_printed_rows_read"
+        },
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
+        "oracle-account-1",
         "oracle-account-1"
       ],
       "intakeStatusUpdates": [
         {
           "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
         },
         {
           "toStatus": "ready"
@@ -690,14 +713,37 @@
           "delta": 0,
           "tolerance": 0,
           "materiality": "all_printed_rows_read"
+        },
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
         }
       ],
       "accountIdentityReuseObserved": [
+        "oracle-account-1",
         "oracle-account-1"
       ],
       "intakeStatusUpdates": [
         {
           "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
         },
         {
           "toStatus": "ready"
