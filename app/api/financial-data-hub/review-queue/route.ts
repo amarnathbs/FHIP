@@ -7,23 +7,56 @@ const PAGE_SIZE_DEFAULT = 100;
 const PAGE_SIZE_MAX = 500;
 
 /**
- * The ONE definition of "needs your attention" used by BOTH the list and the
- * tiles (2026-09-26, production bug 2: the tiles counted 3 uncategorised and
- * 4 low-confidence lines while the list — filtered on `review_status` only —
- * said "Nothing to review"). A transaction needs attention when it is still
- * waiting for approval AND any of:
- *   - its review is still open (`review_status` pending / in_review);
+ * The ONE definition of "needs a decision" used by the list, the tiles AND
+ * the per-statement category review (2026-09-26, production bug 2: the tiles
+ * counted 3 uncategorised and 4 low-confidence lines while the list —
+ * filtered on `review_status` only — said "Nothing to review"). A transaction
+ * needs a decision when it is still waiting for approval AND any of:
  *   - it is uncategorised (`economic_transaction_type = 'unknown'` — the
  *     column FDH-7's approval gate and Monthly Surplus actually read);
  *   - it is low confidence: FDH-6's own boundary (`<= LOW`, 0.3 — see
- *     `domain/categoryReview.ts`), never a person's own decision.
- * The same three predicates are the `uncategorised` / `low_confidence` tile
+ *     `domain/categoryReview.ts`), never a person's own decision;
+ *   - something else still blocks its approval: a pending transfer/refund
+ *     match, a pending possible duplicate, or an open blocking review item
+ *     (the same facts `fdh7_transaction_has_blocking_issue` checks).
+ * `review_status` is deliberately NOT part of it: R8 sets it to 'pending'
+ * when a first classification run fails and never clears it when a later
+ * run (e.g. the user's own remembered-payee rule) succeeds, so it counted
+ * lines that were already categorised and approvable (found live on DEV).
+ * The same predicates are the `uncategorised` / `low_confidence` tile
  * filters, applied server-side (the old client-side filter only saw the
  * first page of 100 rows).
  */
 const UNCATEGORISED = 'economic_transaction_type.eq.unknown';
 const LOW_CONFIDENCE = `and(classification_confidence.lte.${LOW_CONFIDENCE_CEILING},economic_transaction_type.neq.unknown,user_override.is.false)`;
-const NEEDS_ATTENTION = `review_status.in.(pending,in_review),${UNCATEGORISED},${LOW_CONFIDENCE}`;
+/** Upper bound on the blocked-id set sent in one filter (keeps the request
+ * URL well under PostgREST's limit). Blocked lines beyond it still show in
+ * their statement's category review, which reads every row. */
+const BLOCKED_ID_CAP = 300;
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+/** Transactions whose approval is blocked by something other than their
+ * classification: a pending match, a pending possible duplicate, or an open
+ * blocking review item. */
+async function blockedTransactionIds(supabase: SupabaseClient, userId: string): Promise<string[]> {
+  const [links, dups, items] = await Promise.all([
+    supabase.from('fdh_transaction_links').select('transaction_id_from, transaction_id_to').eq('user_id', userId).eq('status', 'pending').limit(BLOCKED_ID_CAP),
+    supabase.from('fdh_duplicate_candidates').select('transaction_id_a, transaction_id_b').eq('user_id', userId).eq('status', 'pending').limit(BLOCKED_ID_CAP),
+    supabase.from('fdh_review_items').select('transaction_id').eq('user_id', userId).eq('severity', 'blocking').in('status', ['open', 'in_progress']).limit(BLOCKED_ID_CAP),
+  ]);
+  const ids = new Set<string>();
+  for (const l of (links.data ?? []) as Array<{ transaction_id_from: string; transaction_id_to: string | null }>) {
+    ids.add(l.transaction_id_from);
+    if (l.transaction_id_to) ids.add(l.transaction_id_to);
+  }
+  for (const d of (dups.data ?? []) as Array<{ transaction_id_a: string; transaction_id_b: string }>) {
+    ids.add(d.transaction_id_a);
+    ids.add(d.transaction_id_b);
+  }
+  for (const r of (items.data ?? []) as Array<{ transaction_id: string | null }>) if (r.transaction_id) ids.add(r.transaction_id);
+  return [...ids].slice(0, BLOCKED_ID_CAP);
+}
 
 const REASONS = ['needs_attention', 'uncategorised', 'low_confidence', 'awaiting_approval', 'transfers', 'duplicates'] as const;
 type Reason = (typeof REASONS)[number];
@@ -56,6 +89,10 @@ export async function GET(req: Request) {
   const reason: Reason = (REASONS as readonly string[]).includes(reasonParam ?? '') ? (reasonParam as Reason) : 'needs_attention';
 
   const supabase = await createClient();
+  const blockedIds = await blockedTransactionIds(supabase, user.id);
+  const NEEDS_ATTENTION = [UNCATEGORISED, LOW_CONFIDENCE, blockedIds.length > 0 ? `id.in.(${blockedIds.join(',')})` : null]
+    .filter(Boolean)
+    .join(',');
 
   // Link/duplicate-based tiles narrow the list to the transactions involved.
   let restrictToIds: string[] | null = null;

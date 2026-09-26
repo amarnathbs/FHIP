@@ -199,6 +199,21 @@ describe('one definition for tiles and list (production bug 2)', () => {
     expect(r.json.data.needs_decision.find((i: any) => i.id === TXN.cash)?.reason).toBe('low_confidence');
   });
 
+  it('"need a decision" in the queue is exactly the category review\'s decision list (a stale review flag does not count; a pending match does)', async () => {
+    // R8 leaves review_status 'pending' on a line a later rule classified.
+    Object.assign(txnRow(TXN.groceries), { review_status: 'pending' });
+    let q = await queue();
+    let r = (await getReview()).json.data;
+    expect(q.json.data.sections.needs_attention).toBe(r.counts.needs_decision);
+    expect(q.json.data.items.map((i: any) => i.id).sort()).toEqual(r.needs_decision.map((i: any) => i.id).sort());
+    expect(q.json.data.items.map((i: any) => i.id)).not.toContain(TXN.groceries);
+    h.db.insert('fdh_transaction_links', { user_id: USER_A, transaction_id_from: TXN.groceries, transaction_id_to: null, link_type: 'internal_transfer', status: 'pending', confidence: 0.3 });
+    q = await queue();
+    r = (await getReview()).json.data;
+    expect(q.json.data.sections.needs_attention).toBe(r.counts.needs_decision);
+    expect(q.json.data.items.map((i: any) => i.id)).toContain(TXN.groceries);
+  });
+
   it('lines waiting for approval are counted and their statement is offered for category review', async () => {
     const q = await queue();
     expect(q.json.data.sections.awaiting_approval).toBe(8);

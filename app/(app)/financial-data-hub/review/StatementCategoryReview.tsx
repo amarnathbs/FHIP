@@ -223,9 +223,12 @@ export function StatementCategoryReview({
           <ul className="mt-2 space-y-1 text-sm text-ink">
             {totals.map((t) => (
               <li key={t.currency}>
-                {counts.waiting_for_approval > 0 && (
+                {counts.ready_to_approve > 0 && (
                   <span className="block">
-                    Waiting for approval: income {money(t.waiting_income, t.currency)}, spending {money(t.waiting_spending, t.currency)}.
+                    Will count once you approve: income {money(t.waiting_income, t.currency)}, spending {money(t.waiting_spending, t.currency)}
+                    {counts.needs_decision > 0
+                      ? ` (plus the ${plural(counts.needs_decision, 'transaction', 'transactions')} that still ${counts.needs_decision === 1 ? 'needs' : 'need'} a category).`
+                      : '.'}
                   </span>
                 )}
                 {counts.approved > 0 && (
@@ -293,7 +296,8 @@ export function StatementCategoryReview({
                     <div className="mt-2 flex flex-wrap items-end gap-3">
                       <div className="flex flex-col">
                         <label htmlFor={selectId} className="text-xs font-medium text-ink">
-                          Category{suggested ? ` (suggested: ${suggested})` : ''}
+                          Category<span className="sr-only"> for {item.description ?? 'this transaction'}</span>
+                          {suggested ? ` (suggested: ${suggested})` : ''}
                         </label>
                         <select
                           id={selectId}
@@ -320,7 +324,9 @@ export function StatementCategoryReview({
                           checked={remember[item.id] ?? true}
                           onChange={(e) => setRemember((r) => ({ ...r, [item.id]: e.target.checked }))}
                         />
-                        <label htmlFor={rememberId} className="text-xs text-ink">Remember this payee next time</label>
+                        <label htmlFor={rememberId} className="text-xs text-ink">
+                          Remember this payee next time<span className="sr-only"> ({item.description ?? 'this transaction'})</span>
+                        </label>
                       </div>
                       <button
                         type="button"
@@ -328,7 +334,7 @@ export function StatementCategoryReview({
                         onClick={() => saveCategory(item)}
                         className="rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                       >
-                        Save category
+                        Save category<span className="sr-only"> for {item.description ?? 'this transaction'}</span>
                       </button>
                     </div>
                   ) : (
