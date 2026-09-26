@@ -873,7 +873,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       // re-upload leads back to it). Say so; never offer a second apply.
       if (!ok && json.error === 'already_decided') {
         setMessage(json.message ?? null);
-        setPhase(json.outcome === 'kept_existing' ? 'kept_existing' : 'applied');
+        setPhase(json.outcome === 'kept_existing' ? 'kept_existing' : json.outcome === 'rejected' ? 'rejected' : 'applied');
         reloadWaiting();
         return;
       }
