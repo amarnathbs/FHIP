@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { liabilityGridConfig } from '@/lib/grid/configs';
 import { LiabilityImportPanel } from '@/components/liabilities/LiabilityImportPanel';
+import { LiabilityStatementHistory } from '@/components/liabilities/LiabilityStatementHistory';
 
 // Liabilities tab layout (FDH-10 spec section 2): a header offering the two
 // entry points into Liabilities — manual entry (the existing grid below,
@@ -65,6 +66,9 @@ export default function LiabilitiesPage() {
       <hr className="border-gray-200" />
 
       <FinancialDataGrid key={gridKey} config={liabilityGridConfig} moduleKey="LIABILITIES" />
+
+      {/* WP-11 (G7): what each imported statement line became, after Apply. */}
+      <LiabilityStatementHistory refreshKey={gridKey} />
     </div>
   );
 }

@@ -25,6 +25,13 @@ async function resolveProposalIdForDocument(userId: string, documentId: string):
   return (data as { id: string } | null)?.id ?? null;
 }
 
+async function statementLedgerStatus(userId: string, statementId: string): Promise<string | null> {
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const { data } = await supabase.from('fdh_liability_statements').select('ledger_status').eq('id', statementId).eq('user_id', userId).maybeSingle();
+  return (data as { ledger_status?: string } | null)?.ledger_status ?? null;
+}
+
 // POST /api/financial-data-hub/liability-statement/{documentId}/proposal —
 // generate the Liability Import Proposal from approved statement evidence
 // (spec sections 4, 22, 41). Generating a proposal NEVER changes Liability
@@ -41,7 +48,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   // statement; if its comparison was already decided, say so rather than
   // offering it for a second write.
   const decided = await findDecidedProposalForStatement(user.id, 'source_liability_statement_id', statementId);
-  if (decided) return alreadyDecidedResponse(decided, 'liabilities');
+  if (decided) {
+    // WP-11 (G10): a statement the user REJECTED is not "kept existing".
+    if (decided.status === 'dismissed' && (await statementLedgerStatus(user.id, statementId)) === 'rejected') {
+      return Response.json(
+        { error: 'already_decided', message: 'You rejected this statement, so nothing from it is counted.', outcome: 'rejected', proposal_id: decided.proposalId },
+        { status: 409 },
+      );
+    }
+    return alreadyDecidedResponse(decided, 'liabilities');
+  }
 
   try {
     const { proposalId, recommendedApplyMode } = await generateLiabilityProposal(user.id, statementId);

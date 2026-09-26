@@ -169,9 +169,14 @@ describe('the other rules bite (named failures)', () => {
   });
 
   it('R5: an open gap naming an id the matrix does not have, or the wrong severity', () => {
-    const unknown = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'netPay' ? { ...e, gapId: 'GAP-99' } : e)));
+    // Integration: WP-03 closed GAP-09 (the last open payslip gap), so the
+    // control re-opens netPay in memory, raising the ceiling by the one entry
+    // it re-opens (the rule, not today's data, is what is under test).
+    const reopen = (gapId: string, severity: 'P0' | 'P2') => (e: FieldDispositionEntry): FieldDispositionEntry =>
+      e.adapter === 'payslip_native' && e.field === 'netPay' ? { ...e, status: 'open_gap', gapId, severity, ownerWp: 'WP-03' } : e;
+    const unknown = withEntries('payslip', (es) => es.map(reopen('GAP-99', 'P2')), 1);
     expect(check(unknown)).toEqual(['R5 unknown gap: payslip_native.netPay (fdh:payslip/types.ts#PayrollExtraction) names GAP-99, which is not in the matrix gap register']);
-    const wrongSev = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'netPay' ? { ...e, severity: 'P0' as const } : e)));
+    const wrongSev = withEntries('payslip', (es) => es.map(reopen('GAP-09', 'P0')), 1);
     expect(check(wrongSev)).toEqual(['R5 severity mismatch: payslip_native.netPay (fdh:payslip/types.ts#PayrollExtraction) says GAP-09 is P0, the matrix says P2']);
   });
 
@@ -181,8 +186,12 @@ describe('the other rules bite (named failures)', () => {
   });
 
   it('R7: strict mode names every open P0/P1 gap', () => {
-    const strict = checkRegistry(REGISTRY_FILES, baseline, { gapRegister, strict: true }).map((v) => v.message);
+    // WP-11 closed the real G1 entries, so the control re-opens one in memory
+    // (the rule, not today's data, is what is under test).
+    const reopened = withEntries('liabilityActivityLedger', (es) => es.map((e) => (e.field === 'PURCHASE' ? { ...e, status: 'open_gap', gapId: 'G1', severity: 'P0', ownerWp: 'WP-11' } : e)), 1);
+    const strict = checkRegistry(reopened, baseline, { gapRegister, strict: true }).map((v) => v.message);
     expect(strict).toContain('R7 strict: liability_ledger.PURCHASE (enum:LIABILITY_ACTIVITY_TYPES) is an open P0 gap (G1)');
+    expect(checkRegistry(reopened, baseline, { gapRegister, strict: false }).filter((v) => v.rule === 'R7')).toEqual([]);
   });
 
   it('R10: a registry change without regenerating the doc is detected', () => {

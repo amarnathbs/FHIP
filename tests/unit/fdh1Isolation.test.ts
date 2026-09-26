@@ -559,6 +559,15 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // the highest-risk rule in FDH-9. It writes only through the 0210
       // restamp RPC and imports no FDH service, repository or table module.
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'payslipBankRematch.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-11 (2026-09-27).
+      // `lib/import-bridge/liabilityBankBackMatch.ts` is a REAL, intentional
+      // import of FDH's certified, pure repayment matcher (`matchBankPayment`,
+      // liability/bankMatching.ts) and its pagination helper, so the post-bank-
+      // approval back-match applies exactly the rule the extraction-time match
+      // applies ("never amount alone") instead of restating it. Its writes go
+      // through one RPC (fdh10_match_liability_payment); it imports no FDH
+      // service or repository.
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'liabilityBankBackMatch.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

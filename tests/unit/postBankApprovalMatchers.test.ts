@@ -77,6 +77,14 @@ describe('runPostBankApprovalMatchers (pure runner)', () => {
       expect(m.ownerWp).toMatch(/^WP-\d{2}$/);
       expect(typeof m.run).toBe('function');
     }
+    // Integration: each package's own entry is present exactly once, owned by it.
+    const expected: Record<string, string> = {
+      wp09_payroll_bank_rematch: 'WP-09',
+      wp11_liability_repayment_back_match: 'WP-11',
+    };
+    for (const [id, owner] of Object.entries(expected)) {
+      expect(POST_BANK_APPROVAL_MATCHERS.filter((m) => m.id === id).map((m) => m.ownerWp), id).toEqual([owner]);
+    }
   });
 
   it('runs every matcher in order and returns their outcomes', async () => {

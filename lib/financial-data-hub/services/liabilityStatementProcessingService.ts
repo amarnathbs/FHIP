@@ -33,6 +33,7 @@ import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
+import { roundToMoneyScale } from '../bank-csv/amount';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
@@ -54,7 +55,8 @@ import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
-import { reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
+import { computeStatementTotals, reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
+import { toExtractionWarnings } from '../liability/extractionWarnings';
 import { matchBankPayment, type BankTransactionCandidate } from '../liability/bankMatching';
 import type {
   LiabilityExtractionFailureKind,
@@ -187,31 +189,70 @@ export function toLiabilityAiDraftActivities(activities: readonly LiabilityState
   });
 }
 
+/** A bank debit the user (or the engine) settled as a duplicate is never a
+ * repayment candidate. The same two values as the read models' duplicate rule
+ * (lib/read-models/core/spendingRules.ts), restated here because FDH imports
+ * nothing from lib/read-models (tests/unit/fdh1Isolation.test.ts). */
+const LIABILITY_MATCH_EXCLUDED_DEDUP_STATUSES: ReadonlySet<string> = new Set(['duplicate_confirmed', 'user_confirmed_duplicate']);
+
 /** Same discipline as `loadBankCandidates` (payslip): a read of the
  * already-certified `fdh_transactions` register within a generous window
  * around the activity's date, so `matchBankPayment` has real candidates. */
-async function loadBankCandidatesForPayment(
+/**
+ * WP-10 (G4): the candidate query no longer misses real candidates or offers
+ * impossible ones. Before, it read up to 100 unordered debits of ANY currency,
+ * approval state or duplicate state, so the true repayment could fall outside
+ * the 100, and a pending, duplicate or already-matched debit could be matched.
+ * Now: same currency as the statement, approved, not a confirmed duplicate,
+ * not already matched to another liability activity, every page read (no
+ * blind limit), nearest date first.
+ */
+export async function loadBankCandidatesForPayment(
   userId: string,
   paymentDate: string,
   amount: string | number,
   institutionName: string | undefined,
+  currencyCode: string,
 ): Promise<BankTransactionCandidate[]> {
   const supabase = await createClient();
-  const from = new Date(paymentDate);
-  from.setDate(from.getDate() - 7);
-  const to = new Date(paymentDate);
-  to.setDate(to.getDate() + 7);
-  const { data } = await supabase
-    .from('fdh_transactions')
-    .select('id, transaction_date, amount_original, description_clean, description_raw, merchant_raw')
-    .eq('user_id', userId)
-    .eq('credit_debit', 'debit')
-    .gte('transaction_date', from.toISOString().slice(0, 10))
-    .lte('transaction_date', to.toISOString().slice(0, 10))
-    .limit(100);
+  const from = new Date(`${paymentDate}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 7);
+  const to = new Date(`${paymentDate}T00:00:00Z`);
+  to.setUTCDate(to.getUTCDate() + 7);
+  type Row = { id: string; transaction_date: string; amount_original: number; description_clean: string | null; description_raw: string | null; merchant_raw: string | null; dedup_status: string };
+  const rows = await fetchAllRows<Row>(() =>
+    supabase
+      .from('fdh_transactions')
+      .select('id, transaction_date, amount_original, description_clean, description_raw, merchant_raw, dedup_status')
+      .eq('user_id', userId)
+      .eq('credit_debit', 'debit')
+      .eq('currency_original', currencyCode)
+      .eq('approval_status', 'approved')
+      .eq('amount_original', Number(amount).toFixed(4))
+      .gte('transaction_date', from.toISOString().slice(0, 10))
+      .lte('transaction_date', to.toISOString().slice(0, 10))
+      .order('id', { ascending: true }),
+  );
+  const eligible = rows.filter((t) => !LIABILITY_MATCH_EXCLUDED_DEDUP_STATUSES.has(t.dedup_status));
+  const alreadyMatched = new Set<string>();
+  const ids = eligible.map((t) => t.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: taken, error: takenError } = await supabase
+      .from('fdh_liability_statement_activities')
+      .select('linked_transaction_id')
+      .eq('user_id', userId)
+      .eq('bank_match_status', 'matched')
+      .in('linked_transaction_id', ids.slice(i, i + 200));
+    if (takenError) throw new Error(takenError.message);
+    for (const t of (taken ?? []) as Array<{ linked_transaction_id: string | null }>) if (t.linked_transaction_id) alreadyMatched.add(t.linked_transaction_id);
+  }
+  const target = new Date(`${paymentDate}T00:00:00Z`).getTime();
+  const data = eligible
+    .filter((t) => !alreadyMatched.has(t.id))
+    .sort((a, b) => Math.abs(new Date(`${a.transaction_date}T00:00:00Z`).getTime() - target) - Math.abs(new Date(`${b.transaction_date}T00:00:00Z`).getTime() - target) || a.id.localeCompare(b.id));
 
   const institution = institutionName?.trim().toLowerCase();
-  return ((data ?? []) as Array<{ id: string; transaction_date: string; amount_original: number; description_clean: string | null; description_raw: string | null; merchant_raw: string | null }>).map((t) => {
+  return (data as Row[]).map((t) => {
     const narrative = `${t.description_clean ?? ''} ${t.description_raw ?? ''} ${t.merchant_raw ?? ''}`.toLowerCase();
     return {
       transactionId: t.id,
@@ -462,6 +503,43 @@ async function resolveLiabilityStatementDocument(
 }
 
 /**
+ * The row-level invariants `fdh_liability_statement_activities` enforces in
+ * the database (migration 0096), checked BEFORE anything is read or written.
+ *
+ * Both extraction paths already exclude what these rules reject (a zero line
+ * becomes a `row_N_zero_amount` / `ai_activity_N_zero_amount` warning), so a
+ * failure here means a caller bypassed that step. Refusing up front turns it
+ * into a controlled `invalid_state` with a message the user can act on,
+ * rather than a database CHECK violation surfacing as a 500. The database
+ * CHECKs remain the final guard; this does not replace them.
+ */
+export function assertPersistableLiabilityActivities(activities: readonly LiabilityStatementActivity[]): void {
+  activities.forEach((activity, index) => {
+    const row = activity.sourceRowNumber ?? index + 1;
+    if (!Number.isFinite(activity.amount) || roundToMoneyScale(activity.amount) <= 0) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has no positive amount, so this statement was not saved. Remove that line and try again.`,
+      );
+    }
+    const components = [activity.principalComponent, activity.interestComponent, activity.feeComponent];
+    if (components.some((c) => c !== undefined && c !== null && (!Number.isFinite(c) || c < 0))) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has an invalid repayment split, so this statement was not saved.`,
+      );
+    }
+    const componentSum = components.reduce<number>((sum, c) => sum + (c ?? 0), 0);
+    if (componentSum > activity.amount + 0.0001) {
+      throw new LiabilityStatementProcessingError(
+        'invalid_state',
+        `Activity line ${row} has a repayment split larger than its amount, so this statement was not saved.`,
+      );
+    }
+  });
+}
+
+/**
  * THE CANONICAL WRITE for a liability statement.
  *
  * EXPORTED 2026-09-23 (AIE unified document fallback) so that the AI-fallback
@@ -511,61 +589,27 @@ export async function persistLiabilityStatementEvidence(
   // through to the INSERT below.
   facilityType: LiabilityFacilityType,
 ): Promise<string> {
+  assertPersistableLiabilityActivities(activities);
   const supabase = await createClient();
   const isCreditCard = metadata.statementType === 'credit_card';
 
-  const sumOf = (type: string) => activities.filter((a) => a.activityType === type).reduce((s, a) => s + a.amount, 0) || null;
-  const has = (type: string) => activities.some((a) => a.activityType === type);
-
-  const purchasesTotal = has('PURCHASE') ? sumOf('PURCHASE') : null;
-  const cashAdvancesTotal = has('CASH_ADVANCE') ? sumOf('CASH_ADVANCE') : null;
-  // Interest/fees reach an activity two different ways depending on
-  // statement shape, and a loan statement's total was silently dropping
-  // one of them: a credit card statement carries interest/fees as their
-  // OWN whole activities (activityType INTEREST/FEE, no component split),
-  // while a loan statement's repayment decomposition (auLoan.ts) embeds
-  // interestComponent/feeComponent inside a single PAYMENT activity and
-  // never emits a standalone INTEREST/FEE activityType at all. Summing
-  // only `sumOf('INTEREST'|'FEE')` -- keyed on activityType -- left every
-  // loan statement's interest_total/fees_total stuck at null even when
-  // real, statement-evidenced interest/fee amounts were extracted and
-  // visible per-activity, live-reproduced via a real $2,000 = $1,550
-  // principal + $430 interest + $20 fee repayment. Summing both the
-  // whole-activity and the component paths together is safe for either
-  // shape: credit-card INTEREST/FEE activities never populate these
-  // component fields, and loan PAYMENT activities never carry an
-  // INTEREST/FEE activityType, so there is no double-count either way.
-  const interestTotal =
-    (has('INTEREST') ? sumOf('INTEREST') ?? 0 : 0) + activities.reduce((s, a) => s + (a.interestComponent ?? 0), 0) || null;
-  const feesTotal =
-    (has('FEE') ? sumOf('FEE') ?? 0 : 0) + activities.reduce((s, a) => s + (a.feeComponent ?? 0), 0) || null;
-  const paymentsTotal = has('PAYMENT') ? sumOf('PAYMENT') : null;
-  const refundsTotal = has('REFUND') ? sumOf('REFUND') : null;
-  const drawdownsTotal = has('LOAN_ADVANCE') ? sumOf('LOAN_ADVANCE') : null;
-  const principalRepaymentsTotal = activities.reduce((s, a) => s + (a.principalComponent ?? 0), 0) || null;
-
-  const reconciliation = isCreditCard
-    ? reconcileCreditCardStatement({
-        openingBalance: metadata.openingBalance ?? null,
-        purchasesTotal,
-        cashAdvancesTotal,
-        interestTotal,
-        feesTotal,
-        paymentsTotal,
-        refundsTotal,
-        adjustmentsTotal: null,
-        closingBalance: metadata.closingBalance ?? null,
-        currencyCode: metadata.currencyCode,
-      })
-    : reconcileLoanStatement({
-        openingPrincipal: metadata.openingBalance ?? null,
-        drawdownsTotal,
-        capitalisedTotal: null,
-        principalRepaymentsTotal,
-        adjustmentsTotal: null,
-        closingPrincipal: metadata.closingBalance ?? null,
-        currencyCode: metadata.currencyCode,
-      });
+  // WP-10 (G5): ONE totals rule (computeStatementTotals) -- standalone
+  // PRINCIPAL lines, signed ADJUSTMENT lines, a loan's redraws and its
+  // capitalised interest/fees are no longer dropped from the totals or from
+  // the reconciliation identity.
+  const totals = computeStatementTotals({
+    statementType: metadata.statementType,
+    activities,
+    opening: metadata.openingBalance ?? null,
+    closing: metadata.closingBalance ?? null,
+    currencyCode: metadata.currencyCode,
+  });
+  const reconciliation = totals.reconciliation;
+  const allWarnings = [...warnings, ...totals.warnings];
+  const {
+    purchasesTotal, cashAdvancesTotal, interestTotal, feesTotal, paymentsTotal, refundsTotal,
+    adjustmentsTotal, drawdownsTotal, capitalisedTotal, principalRepaymentsTotal,
+  } = totals;
 
   const insertRow = {
     user_id: userId,
@@ -593,32 +637,33 @@ export async function persistLiabilityStatementEvidence(
     fees_total: feesTotal,
     payments_total: paymentsTotal,
     refunds_total: refundsTotal,
+    adjustments_total: adjustmentsTotal,
     drawdowns_total: drawdownsTotal,
+    capitalised_total: capitalisedTotal,
     principal_repayments_total: principalRepaymentsTotal,
     reconciliation_status: reconciliation.status,
     reconciliation_variance: reconciliation.variance,
     parser_name: parserName,
     parser_version: parserVersion,
     extraction_confidence: extractionConfidence,
-    review_status: reconciliation.status === 'variance' || warnings.length > 0 ? 'pending' : 'not_required',
+    review_status: reconciliation.status === 'variance' || allWarnings.length > 0 ? 'pending' : 'not_required',
+    // WP-10 (G6): every warning -- including each row the extraction
+    // EXCLUDED -- is kept as visible evidence (0207 column).
+    extraction_warnings: toExtractionWarnings(allWarnings),
   };
-
-  const { data: inserted, error: insertError } = await supabase
-    .from('fdh_liability_statements')
-    .insert(insertRow)
-    .select('id')
-    .single();
-  if (insertError || !inserted) throw new Error(insertError?.message ?? 'could not create statement evidence');
-  const statementId = (inserted as { id: string }).id;
 
   // Bank matching for PAYMENT activities only (spec sections 39-43) — never
   // for PURCHASE/REFUND/INTEREST/FEE, which are never matched against a
-  // bank transaction (only settled/expensed on their own terms).
+  // bank transaction (only settled/expensed on their own terms). Done for
+  // EVERY activity before anything is written, so the write below is a
+  // single call with nothing left to fail between its parts.
+  const activityRows: Record<string, unknown>[] = [];
   for (const activity of activities) {
     let bankMatchStatus: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted' | 'bank_evidence_not_available' = 'not_attempted';
     let linkedTransactionId: string | null = null;
+    let candidateIds: string[] | null = null;
     if (activity.activityType === 'PAYMENT') {
-      const candidates = await loadBankCandidatesForPayment(userId, activity.activityDate, activity.amount, metadata.institutionName);
+      const candidates = await loadBankCandidatesForPayment(userId, activity.activityDate, activity.amount, metadata.institutionName, metadata.currencyCode);
       const match = matchBankPayment(
         { paymentAmount: activity.amount, paymentDate: activity.activityDate, currencyCode: metadata.currencyCode },
         candidates,
@@ -631,11 +676,12 @@ export async function persistLiabilityStatementEvidence(
         match.outcome === 'multiple_candidates' ? 'multiple_candidates' :
         'bank_evidence_not_available';
       linkedTransactionId = match.matchedTransactionId;
+      // WP-10 (G4): the candidates are KEPT so the review screen can offer a
+      // picker; before, "several possible bank debits" was a dead end.
+      if (match.outcome === 'multiple_candidates') candidateIds = match.candidates.map((c) => c.transactionId);
     }
 
-    const { error: actError } = await supabase.from('fdh_liability_statement_activities').insert({
-      user_id: userId,
-      statement_id: statementId,
+    activityRows.push({
       activity_type: activity.activityType,
       activity_date: activity.activityDate,
       amount: activity.amount,
@@ -649,16 +695,43 @@ export async function persistLiabilityStatementEvidence(
       bank_match_status: bankMatchStatus,
       review_status: bankMatchStatus === 'multiple_candidates' ? 'pending' : 'not_required',
       source_row_number: activity.sourceRowNumber ?? null,
+      gst_amount_raw: activity.gstAmountRaw ?? null,
+      bank_match_candidate_ids: candidateIds,
     });
-    if (actError) throw new Error(actError.message);
   }
 
+  // ONE TRANSACTION (migration 0208). The statement row, every activity row
+  // and the `extracted` transition commit together or not at all. This
+  // replaces an INSERT-then-N-INSERTs-then-UPDATE sequence of separate
+  // PostgREST calls that, on 2026-09-25 in DEV, committed the statement row,
+  // failed the first activity INSERT on `CHECK (amount > 0)`, and left an
+  // orphan statement the user-scoped client has no DELETE policy to remove.
+  // The function is SECURITY INVOKER: every RLS policy and trigger that
+  // applied to the separate calls still applies.
   assertDocumentTransition('processing', 'extracted');
-  await supabase
-    .from('fdh_statement_uploads')
-    .update({ processing_status: 'extracted', error_code: null, processing_completed_at: new Date().toISOString() })
-    .eq('id', document.id)
-    .eq('user_id', userId);
+  const { data: persisted, error: persistError } = await supabase.rpc('fdh10_persist_liability_statement', {
+    p_statement_upload_id: document.id,
+    p_statement: insertRow,
+    p_activities: activityRows,
+  });
+  // A database error (a constraint, a trigger, the function itself missing
+  // because 0208 has not been applied) is an unexpected fault; its message is
+  // not user copy, so it is thrown as a plain Error and the route answers with
+  // its generic message. Nothing was committed.
+  if (persistError) throw new Error(persistError.message);
+  const outcome = persisted as { ok: boolean; code?: string; error?: string; statement_id?: string } | null;
+  if (!outcome?.ok || !outcome.statement_id) {
+    const code = outcome?.code;
+    if (code === 'EVIDENCE_EXISTS') {
+      throw new LiabilityStatementProcessingError('invalid_state', 'Evidence has already been saved for this statement.');
+    }
+    if (code === 'DOCUMENT_NOT_FOUND') throw new LiabilityStatementProcessingError('not_found', 'document not found');
+    if (code === 'INVALID_STATE') {
+      throw new LiabilityStatementProcessingError('invalid_state', outcome?.error ?? 'This statement can no longer be processed.');
+    }
+    throw new Error(outcome?.error ?? 'could not create statement evidence');
+  }
+  const statementId = outcome.statement_id;
 
   await recordDocumentAuditEvent({
     userId,
@@ -805,7 +878,11 @@ export interface ReviewedLiabilityStatementDraft {
  * assert the edge is legal, but the row itself stays `queued`/`uploaded` right
  * up until the `extracted` write inside `persistLiabilityStatementEvidence`.
  * Gating on `'processing'` here would therefore reject every legitimate
- * confirm. The equivalent guarantee is reconstructed from two conditions that
+ * confirm. (Since migration 0208 the persist RPC does pass the row through
+ * `processing` on its way to `extracted`, as 0076's transition guard
+ * requires, but only inside its own transaction; no other request can ever
+ * observe that state, so this gate is unaffected.) The equivalent guarantee
+ * is reconstructed from two conditions that
  * together mean the same thing:
  *   1. the document is still in `queued`/`uploaded` — i.e. it has not since
  *      been failed, rejected, extracted, approved or purged by anything else;
@@ -1193,5 +1270,54 @@ export async function getLiabilityStatementForReview(userId: string, statementId
       .order('activity_date', { ascending: true })
       .order('id', { ascending: true }),
   );
-  return { statement, activities };
+  // WP-11 (G4): the bank debits a repayment could be, so the review screen can
+  // offer a real choice instead of the dead-end "several possible matches".
+  const candidateIds = [...new Set(activities.flatMap((a) => (Array.isArray(a.bank_match_candidate_ids) ? (a.bank_match_candidate_ids as string[]) : [])))];
+  const bankCandidates: Record<string, unknown>[] = [];
+  for (let i = 0; i < candidateIds.length; i += 200) {
+    const { data } = await supabase
+      .from('fdh_transactions')
+      .select('id, transaction_date, amount_original, currency_original, description_clean')
+      .eq('user_id', userId)
+      .in('id', candidateIds.slice(i, i + 200));
+    bankCandidates.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+  return { statement, activities, bankCandidates };
+}
+
+/**
+ * WP-11 (G4): the user's choice for a repayment with several possible bank
+ * debits -- one of the persisted candidates, or none of them. The RPC
+ * (fdh10_match_liability_payment, migration 0209) re-verifies the debit
+ * (yours, a debit, same currency and amount, approved, not a duplicate, not
+ * already paying another line) and writes under the internal-write GUC.
+ */
+export async function chooseLiabilityPaymentMatch(
+  userId: string,
+  documentId: string,
+  activityId: string,
+  bankTransactionId: string | null,
+): Promise<{ outcome: 'matched' | 'none_of_these' }> {
+  const statementId = await getLiabilityStatementIdForDocument(userId, documentId);
+  if (!statementId) throw new LiabilityStatementProcessingError('not_found', 'No statement evidence has been extracted from this document yet.');
+  const supabase = await createClient();
+  const { data: activity } = await supabase
+    .from('fdh_liability_statement_activities')
+    .select('id')
+    .eq('id', activityId)
+    .eq('statement_id', statementId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (!activity) throw new LiabilityStatementProcessingError('not_found', 'That statement line could not be found.');
+  const { data, error } = await supabase.rpc('fdh10_match_liability_payment', {
+    p_activity_id: activityId,
+    p_bank_transaction_id: bankTransactionId,
+    p_method: 'user_pick',
+  });
+  if (error) throw new Error(error.message);
+  const result = data as { ok: boolean; code?: string; error?: string; outcome?: 'matched' | 'none_of_these' };
+  if (!result.ok) {
+    throw new LiabilityStatementProcessingError(result.code === 'ACTIVITY_NOT_FOUND' ? 'not_found' : 'invalid_state', result.error ?? 'That bank transaction could not be chosen.');
+  }
+  return { outcome: result.outcome ?? 'matched' };
 }

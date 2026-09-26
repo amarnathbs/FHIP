@@ -22,9 +22,12 @@
  *  - It never fails, delays beyond its own work, or changes the result of the
  *    approval that triggered it. The approval has already committed.
  *
- * This file deliberately imports nothing, so it can be unit-tested without a
- * database and adds nothing to any bundle it is not already in.
+ * This file imports nothing but the registered matchers themselves (one import
+ * line per package); `runPostBankApprovalMatchers` takes an explicit
+ * `matchers` option so it can be unit-tested without them.
  */
+
+import { liabilityBankBackMatcher } from './liabilityBankBackMatch';
 
 export type PostBankApprovalTrigger = 'statement_approve' | 'category_approve_all' | 'category_approve_group';
 
@@ -57,6 +60,7 @@ export interface PostBankApprovalMatcher {
  */
 export const POST_BANK_APPROVAL_MATCHERS: readonly PostBankApprovalMatcher[] = [
   { id: 'wp09_payroll_bank_rematch', ownerWp: 'WP-09', run: (ctx) => import('./payslipBankRematch').then((m) => m.runPayslipBankRematch(ctx)) },
+  liabilityBankBackMatcher, // WP-11: card/loan repayment -> bank debit back-match
 ];
 
 export interface PostBankApprovalMatcherResult {

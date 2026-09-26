@@ -38,7 +38,7 @@ export const AU_LOAN_GENERIC_V1: LiabilityCsvAdapter = {
     feeComponent: 'Fee',
     activityTypeAliases: {
       'repayment': 'PAYMENT' as LiabilityActivityType,
-      'redraw': 'CASH_ADVANCE' as LiabilityActivityType,
+      'redraw': 'LOAN_ADVANCE' as LiabilityActivityType, // WP-10 (G5): a redraw is a drawdown, never a cash advance
       'drawdown': 'LOAN_ADVANCE' as LiabilityActivityType,
     },
   },
