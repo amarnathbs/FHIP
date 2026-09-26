@@ -10,7 +10,7 @@ vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: vi
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: audit }));
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn().mockResolvedValue({ persisted: true, draftId: 'd' }),
-  claimPendingAiFallbackDraft: vi.fn(), releaseClaimedAiFallbackDraft: vi.fn(),
+  claimPendingAiFallbackDraft: vi.fn(), releaseClaimedAiFallbackDraft: vi.fn(), releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
   loadPendingAiFallbackDraft: vi.fn(), documentsWithPendingAiFallbackDrafts: vi.fn(),
 }));
 vi.mock('@/lib/aie/adapters/liability/gateway', async (importOriginal) => ({

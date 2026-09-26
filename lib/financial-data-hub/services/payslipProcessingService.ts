@@ -89,7 +89,7 @@ import {
   AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_NAME,
   AIE_PAYSLIP_DOCUMENT_FACTS_SCHEMA_VERSION,
 } from '@/lib/aie/adapters/payslip';
-import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraft } from './aiFallbackDrafts';
+import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten } from './aiFallbackDrafts';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
@@ -612,7 +612,7 @@ export async function confirmAiPayslipFallback(userId: string, documentId: strin
   try {
     return await persistPayrollEvidence(userId, documentId, document, extraction);
   } catch (e) {
-    if (claim.claimed) await releaseClaimedAiFallbackDraft(userId, claim.draftId);
+    if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
 }

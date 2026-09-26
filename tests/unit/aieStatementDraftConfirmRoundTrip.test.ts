@@ -40,7 +40,7 @@ vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAud
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn().mockResolvedValue({ persisted: true, draftId: 'draft-1' }),
   claimPendingAiFallbackDraft: vi.fn().mockResolvedValue({ claimed: true, draftId: 'draft-1', payload: {} }),
-  releaseClaimedAiFallbackDraft: vi.fn(),
+  releaseClaimedAiFallbackDraft: vi.fn(), releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
   loadPendingAiFallbackDraft: vi.fn().mockResolvedValue({ found: false, reason: 'none_pending' }),
   documentsWithPendingAiFallbackDrafts: vi.fn().mockResolvedValue(new Set()),
 }));
