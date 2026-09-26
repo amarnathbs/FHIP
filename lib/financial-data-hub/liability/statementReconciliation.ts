@@ -122,3 +122,145 @@ export function reconcileLoanStatement(input: LoanReconciliationInput): Reconcil
     variance,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Statement TOTALS (WP-10, gap G5). One pure function computes every persisted
+// per-type total AND the reconciliation verdict, so the persist path, its
+// tests and the ledger-invariant test share one definition.
+// ---------------------------------------------------------------------------
+
+export interface StatementTotalsActivity {
+  activityType: string;
+  amount: number;
+  principalComponent?: number;
+  interestComponent?: number;
+  feeComponent?: number;
+}
+
+export interface StatementTotals {
+  purchasesTotal: number | null;
+  cashAdvancesTotal: number | null;
+  interestTotal: number | null;
+  feesTotal: number | null;
+  paymentsTotal: number | null;
+  refundsTotal: number | null;
+  /** SIGNED. Null when there are no ADJUSTMENT lines, or when their direction
+   * cannot be established (see `adjustmentsSign`). */
+  adjustmentsTotal: number | null;
+  drawdownsTotal: number | null;
+  /** Loan only: standalone INTEREST / FEE lines charged to the loan balance. */
+  capitalisedTotal: number | null;
+  /** PAYMENT principal components + standalone PRINCIPAL lines (+ a loan's
+   * undecomposed PAYMENTs -- see computeStatementTotals). */
+  principalRepaymentsTotal: number | null;
+  reconciliation: ReconciliationResult;
+  /** Visible warnings the totals themselves raise (persisted with the others). */
+  warnings: string[];
+}
+
+/**
+ * THE totals rule (G5). Before WP-10 the persist path dropped three things:
+ * standalone PRINCIPAL lines were never summed, ADJUSTMENT lines were never
+ * summed (both reconciliations were passed `null`), and a loan's redraw
+ * (CASH_ADVANCE) and capitalised interest/fees were missing from the loan
+ * identity, so a correct loan statement showed a variance.
+ *
+ * ADJUSTMENT lines carry a magnitude but no direction. Their sign is taken
+ * from the balance identity ONLY when exactly one of +sum / -sum reconciles to
+ * the cent; otherwise the total stays null, the statement cannot be
+ * reconciled, and a warning says why. A reconciliation is never forced.
+ *
+ * LOAN TOTALS feed the certified loan identity DIRECTLY (so the correction
+ * path, which re-runs `reconcileLoanStatement` on the stored totals, gets the
+ * same answer as the persist path):
+ *   drawdowns_total            = LOAN_ADVANCE + CASH_ADVANCE (a cash advance /
+ *                                redraw on a loan is a drawdown);
+ *   capitalised_total          = standalone INTEREST + FEE lines (charged to
+ *                                the loan balance);
+ *   principal_repayments_total = principal components + PRINCIPAL lines +
+ *                                undecomposed PAYMENTs (a PAYMENT with no
+ *                                principal/interest/fee disclosed reduces the
+ *                                balance by its whole amount; the interest it
+ *                                covers was charged as a separate INTEREST line);
+ *   cash_advances_total        = null (folded into drawdowns).
+ * A decomposed PAYMENT reduces principal by its principal component only.
+ */
+export function computeStatementTotals(input: {
+  statementType: 'credit_card' | 'loan';
+  activities: readonly StatementTotalsActivity[];
+  opening: number | null;
+  closing: number | null;
+  currencyCode: string;
+}): StatementTotals {
+  const { activities, currencyCode } = input;
+  const isCard = input.statementType === 'credit_card';
+  const of = (type: string) => activities.filter((a) => a.activityType === type);
+  const total = (list: readonly number[]): number | null => (list.length === 0 ? null : sumMoney(list, currencyCode));
+  const sumType = (type: string) => total(of(type).map((a) => a.amount));
+  const hasComponents = (a: StatementTotalsActivity) =>
+    a.principalComponent !== undefined || a.interestComponent !== undefined || a.feeComponent !== undefined;
+
+  const interestParts = [...of('INTEREST').map((a) => a.amount), ...activities.filter((a) => a.interestComponent !== undefined && a.interestComponent > 0).map((a) => a.interestComponent as number)];
+  const feeParts = [...of('FEE').map((a) => a.amount), ...activities.filter((a) => a.feeComponent !== undefined && a.feeComponent > 0).map((a) => a.feeComponent as number)];
+  const principalParts = [...of('PRINCIPAL').map((a) => a.amount), ...activities.filter((a) => a.principalComponent !== undefined && a.principalComponent > 0).map((a) => a.principalComponent as number)];
+
+  const purchasesTotal = sumType('PURCHASE');
+  const cashAdvancesTotal = isCard ? sumType('CASH_ADVANCE') : null;
+  const paymentsTotal = sumType('PAYMENT');
+  const refundsTotal = sumType('REFUND');
+  const drawdownsTotal = isCard ? sumType('LOAN_ADVANCE') : total([...of('LOAN_ADVANCE'), ...of('CASH_ADVANCE')].map((a) => a.amount));
+  const interestTotal = total(interestParts);
+  const feesTotal = total(feeParts);
+  const principalRepaymentsTotal = isCard
+    ? total(principalParts)
+    : total([...principalParts, ...of('PAYMENT').filter((a) => !hasComponents(a)).map((a) => a.amount)]);
+  const capitalisedTotal = isCard ? null : total([...of('INTEREST'), ...of('FEE')].map((a) => a.amount));
+
+  const warnings: string[] = [];
+  const adjustmentMagnitude = sumType('ADJUSTMENT');
+  const otherCount = of('OTHER').length;
+  if (otherCount > 0) warnings.push(`other_activity_not_in_totals_${otherCount}`);
+
+  const reconcileWith = (adjustments: number | null): ReconciliationResult =>
+    isCard
+      ? reconcileCreditCardStatement({
+          openingBalance: input.opening, purchasesTotal, cashAdvancesTotal, interestTotal, feesTotal,
+          paymentsTotal, refundsTotal, adjustmentsTotal: adjustments, closingBalance: input.closing, currencyCode,
+        })
+      : reconcileLoanStatement({
+          openingPrincipal: input.opening,
+          drawdownsTotal,
+          capitalisedTotal,
+          principalRepaymentsTotal,
+          adjustmentsTotal: adjustments,
+          closingPrincipal: input.closing,
+          currencyCode,
+        });
+
+  let adjustmentsTotal: number | null = null;
+  let reconciliation: ReconciliationResult;
+  if (adjustmentMagnitude === null) {
+    reconciliation = reconcileWith(null);
+  } else {
+    const plus = reconcileWith(adjustmentMagnitude);
+    const minus = reconcileWith(-adjustmentMagnitude);
+    if (plus.status === 'reconciled' && minus.status !== 'reconciled') {
+      adjustmentsTotal = adjustmentMagnitude;
+      reconciliation = plus;
+      warnings.push('adjustment_sign_inferred_from_balance');
+    } else if (minus.status === 'reconciled' && plus.status !== 'reconciled') {
+      adjustmentsTotal = -adjustmentMagnitude;
+      reconciliation = minus;
+      warnings.push('adjustment_sign_inferred_from_balance');
+    } else {
+      // Direction unknown: the statement cannot be checked, and says so.
+      warnings.push('adjustment_direction_unknown');
+      reconciliation = { status: 'insufficient_data', expectedClosingBalance: null, reportedClosingBalance: input.closing, variance: null };
+    }
+  }
+
+  return {
+    purchasesTotal, cashAdvancesTotal, interestTotal, feesTotal, paymentsTotal, refundsTotal,
+    adjustmentsTotal, drawdownsTotal, capitalisedTotal, principalRepaymentsTotal, reconciliation, warnings,
+  };
+}

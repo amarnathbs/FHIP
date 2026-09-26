@@ -55,7 +55,8 @@ import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
-import { reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
+import { computeStatementTotals } from '../liability/statementReconciliation';
+import { toExtractionWarnings } from '../liability/extractionWarnings';
 import { matchBankPayment, type BankTransactionCandidate } from '../liability/bankMatching';
 import type {
   LiabilityExtractionFailureKind,
@@ -188,31 +189,70 @@ export function toLiabilityAiDraftActivities(activities: readonly LiabilityState
   });
 }
 
+/** A bank debit the user (or the engine) settled as a duplicate is never a
+ * repayment candidate. The same two values as the read models' duplicate rule
+ * (lib/read-models/core/spendingRules.ts), restated here because FDH imports
+ * nothing from lib/read-models (tests/unit/fdh1Isolation.test.ts). */
+const LIABILITY_MATCH_EXCLUDED_DEDUP_STATUSES: ReadonlySet<string> = new Set(['duplicate_confirmed', 'user_confirmed_duplicate']);
+
 /** Same discipline as `loadBankCandidates` (payslip): a read of the
  * already-certified `fdh_transactions` register within a generous window
  * around the activity's date, so `matchBankPayment` has real candidates. */
-async function loadBankCandidatesForPayment(
+/**
+ * WP-10 (G4): the candidate query no longer misses real candidates or offers
+ * impossible ones. Before, it read up to 100 unordered debits of ANY currency,
+ * approval state or duplicate state, so the true repayment could fall outside
+ * the 100, and a pending, duplicate or already-matched debit could be matched.
+ * Now: same currency as the statement, approved, not a confirmed duplicate,
+ * not already matched to another liability activity, every page read (no
+ * blind limit), nearest date first.
+ */
+export async function loadBankCandidatesForPayment(
   userId: string,
   paymentDate: string,
   amount: string | number,
   institutionName: string | undefined,
+  currencyCode: string,
 ): Promise<BankTransactionCandidate[]> {
   const supabase = await createClient();
-  const from = new Date(paymentDate);
-  from.setDate(from.getDate() - 7);
-  const to = new Date(paymentDate);
-  to.setDate(to.getDate() + 7);
-  const { data } = await supabase
-    .from('fdh_transactions')
-    .select('id, transaction_date, amount_original, description_clean, description_raw, merchant_raw')
-    .eq('user_id', userId)
-    .eq('credit_debit', 'debit')
-    .gte('transaction_date', from.toISOString().slice(0, 10))
-    .lte('transaction_date', to.toISOString().slice(0, 10))
-    .limit(100);
+  const from = new Date(`${paymentDate}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 7);
+  const to = new Date(`${paymentDate}T00:00:00Z`);
+  to.setUTCDate(to.getUTCDate() + 7);
+  type Row = { id: string; transaction_date: string; amount_original: number; description_clean: string | null; description_raw: string | null; merchant_raw: string | null; dedup_status: string };
+  const rows = await fetchAllRows<Row>(() =>
+    supabase
+      .from('fdh_transactions')
+      .select('id, transaction_date, amount_original, description_clean, description_raw, merchant_raw, dedup_status')
+      .eq('user_id', userId)
+      .eq('credit_debit', 'debit')
+      .eq('currency_original', currencyCode)
+      .eq('approval_status', 'approved')
+      .eq('amount_original', Number(amount).toFixed(4))
+      .gte('transaction_date', from.toISOString().slice(0, 10))
+      .lte('transaction_date', to.toISOString().slice(0, 10))
+      .order('id', { ascending: true }),
+  );
+  const eligible = rows.filter((t) => !LIABILITY_MATCH_EXCLUDED_DEDUP_STATUSES.has(t.dedup_status));
+  const alreadyMatched = new Set<string>();
+  const ids = eligible.map((t) => t.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: taken, error: takenError } = await supabase
+      .from('fdh_liability_statement_activities')
+      .select('linked_transaction_id')
+      .eq('user_id', userId)
+      .eq('bank_match_status', 'matched')
+      .in('linked_transaction_id', ids.slice(i, i + 200));
+    if (takenError) throw new Error(takenError.message);
+    for (const t of (taken ?? []) as Array<{ linked_transaction_id: string | null }>) if (t.linked_transaction_id) alreadyMatched.add(t.linked_transaction_id);
+  }
+  const target = new Date(`${paymentDate}T00:00:00Z`).getTime();
+  const data = eligible
+    .filter((t) => !alreadyMatched.has(t.id))
+    .sort((a, b) => Math.abs(new Date(`${a.transaction_date}T00:00:00Z`).getTime() - target) - Math.abs(new Date(`${b.transaction_date}T00:00:00Z`).getTime() - target) || a.id.localeCompare(b.id));
 
   const institution = institutionName?.trim().toLowerCase();
-  return ((data ?? []) as Array<{ id: string; transaction_date: string; amount_original: number; description_clean: string | null; description_raw: string | null; merchant_raw: string | null }>).map((t) => {
+  return (data as Row[]).map((t) => {
     const narrative = `${t.description_clean ?? ''} ${t.description_raw ?? ''} ${t.merchant_raw ?? ''}`.toLowerCase();
     return {
       transactionId: t.id,
@@ -553,58 +593,23 @@ export async function persistLiabilityStatementEvidence(
   const supabase = await createClient();
   const isCreditCard = metadata.statementType === 'credit_card';
 
-  const sumOf = (type: string) => activities.filter((a) => a.activityType === type).reduce((s, a) => s + a.amount, 0) || null;
-  const has = (type: string) => activities.some((a) => a.activityType === type);
-
-  const purchasesTotal = has('PURCHASE') ? sumOf('PURCHASE') : null;
-  const cashAdvancesTotal = has('CASH_ADVANCE') ? sumOf('CASH_ADVANCE') : null;
-  // Interest/fees reach an activity two different ways depending on
-  // statement shape, and a loan statement's total was silently dropping
-  // one of them: a credit card statement carries interest/fees as their
-  // OWN whole activities (activityType INTEREST/FEE, no component split),
-  // while a loan statement's repayment decomposition (auLoan.ts) embeds
-  // interestComponent/feeComponent inside a single PAYMENT activity and
-  // never emits a standalone INTEREST/FEE activityType at all. Summing
-  // only `sumOf('INTEREST'|'FEE')` -- keyed on activityType -- left every
-  // loan statement's interest_total/fees_total stuck at null even when
-  // real, statement-evidenced interest/fee amounts were extracted and
-  // visible per-activity, live-reproduced via a real $2,000 = $1,550
-  // principal + $430 interest + $20 fee repayment. Summing both the
-  // whole-activity and the component paths together is safe for either
-  // shape: credit-card INTEREST/FEE activities never populate these
-  // component fields, and loan PAYMENT activities never carry an
-  // INTEREST/FEE activityType, so there is no double-count either way.
-  const interestTotal =
-    (has('INTEREST') ? sumOf('INTEREST') ?? 0 : 0) + activities.reduce((s, a) => s + (a.interestComponent ?? 0), 0) || null;
-  const feesTotal =
-    (has('FEE') ? sumOf('FEE') ?? 0 : 0) + activities.reduce((s, a) => s + (a.feeComponent ?? 0), 0) || null;
-  const paymentsTotal = has('PAYMENT') ? sumOf('PAYMENT') : null;
-  const refundsTotal = has('REFUND') ? sumOf('REFUND') : null;
-  const drawdownsTotal = has('LOAN_ADVANCE') ? sumOf('LOAN_ADVANCE') : null;
-  const principalRepaymentsTotal = activities.reduce((s, a) => s + (a.principalComponent ?? 0), 0) || null;
-
-  const reconciliation = isCreditCard
-    ? reconcileCreditCardStatement({
-        openingBalance: metadata.openingBalance ?? null,
-        purchasesTotal,
-        cashAdvancesTotal,
-        interestTotal,
-        feesTotal,
-        paymentsTotal,
-        refundsTotal,
-        adjustmentsTotal: null,
-        closingBalance: metadata.closingBalance ?? null,
-        currencyCode: metadata.currencyCode,
-      })
-    : reconcileLoanStatement({
-        openingPrincipal: metadata.openingBalance ?? null,
-        drawdownsTotal,
-        capitalisedTotal: null,
-        principalRepaymentsTotal,
-        adjustmentsTotal: null,
-        closingPrincipal: metadata.closingBalance ?? null,
-        currencyCode: metadata.currencyCode,
-      });
+  // WP-10 (G5): ONE totals rule (computeStatementTotals) -- standalone
+  // PRINCIPAL lines, signed ADJUSTMENT lines, a loan's redraws and its
+  // capitalised interest/fees are no longer dropped from the totals or from
+  // the reconciliation identity.
+  const totals = computeStatementTotals({
+    statementType: metadata.statementType,
+    activities,
+    opening: metadata.openingBalance ?? null,
+    closing: metadata.closingBalance ?? null,
+    currencyCode: metadata.currencyCode,
+  });
+  const reconciliation = totals.reconciliation;
+  const allWarnings = [...warnings, ...totals.warnings];
+  const {
+    purchasesTotal, cashAdvancesTotal, interestTotal, feesTotal, paymentsTotal, refundsTotal,
+    adjustmentsTotal, drawdownsTotal, capitalisedTotal, principalRepaymentsTotal,
+  } = totals;
 
   const insertRow = {
     user_id: userId,
@@ -632,14 +637,19 @@ export async function persistLiabilityStatementEvidence(
     fees_total: feesTotal,
     payments_total: paymentsTotal,
     refunds_total: refundsTotal,
+    adjustments_total: adjustmentsTotal,
     drawdowns_total: drawdownsTotal,
+    capitalised_total: capitalisedTotal,
     principal_repayments_total: principalRepaymentsTotal,
     reconciliation_status: reconciliation.status,
     reconciliation_variance: reconciliation.variance,
     parser_name: parserName,
     parser_version: parserVersion,
     extraction_confidence: extractionConfidence,
-    review_status: reconciliation.status === 'variance' || warnings.length > 0 ? 'pending' : 'not_required',
+    review_status: reconciliation.status === 'variance' || allWarnings.length > 0 ? 'pending' : 'not_required',
+    // WP-10 (G6): every warning -- including each row the extraction
+    // EXCLUDED -- is kept as visible evidence (0207 column).
+    extraction_warnings: toExtractionWarnings(allWarnings),
   };
 
   // Bank matching for PAYMENT activities only (spec sections 39-43) — never
@@ -651,8 +661,9 @@ export async function persistLiabilityStatementEvidence(
   for (const activity of activities) {
     let bankMatchStatus: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted' | 'bank_evidence_not_available' = 'not_attempted';
     let linkedTransactionId: string | null = null;
+    let candidateIds: string[] | null = null;
     if (activity.activityType === 'PAYMENT') {
-      const candidates = await loadBankCandidatesForPayment(userId, activity.activityDate, activity.amount, metadata.institutionName);
+      const candidates = await loadBankCandidatesForPayment(userId, activity.activityDate, activity.amount, metadata.institutionName, metadata.currencyCode);
       const match = matchBankPayment(
         { paymentAmount: activity.amount, paymentDate: activity.activityDate, currencyCode: metadata.currencyCode },
         candidates,
@@ -665,6 +676,9 @@ export async function persistLiabilityStatementEvidence(
         match.outcome === 'multiple_candidates' ? 'multiple_candidates' :
         'bank_evidence_not_available';
       linkedTransactionId = match.matchedTransactionId;
+      // WP-10 (G4): the candidates are KEPT so the review screen can offer a
+      // picker; before, "several possible bank debits" was a dead end.
+      if (match.outcome === 'multiple_candidates') candidateIds = match.candidates.map((c) => c.transactionId);
     }
 
     activityRows.push({
@@ -681,6 +695,8 @@ export async function persistLiabilityStatementEvidence(
       bank_match_status: bankMatchStatus,
       review_status: bankMatchStatus === 'multiple_candidates' ? 'pending' : 'not_required',
       source_row_number: activity.sourceRowNumber ?? null,
+      gst_amount_raw: activity.gstAmountRaw ?? null,
+      bank_match_candidate_ids: candidateIds,
     });
   }
 
