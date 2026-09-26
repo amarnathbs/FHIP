@@ -348,7 +348,10 @@ export function AuInvestmentStatementImportPanel({
         const anyApplied = loaded.positions.some((p) => p.apply_status === 'applied');
         const anyPending = [...loaded.positions, ...loaded.activities].some((r) => r.apply_status === 'pending');
         if (anyApplied && !anyPending) await loadPublishPreview(resumeDocumentId);
-        else setPhase('comparing');
+        else {
+          await loadCompare(resumeDocumentId);
+          setPhase('comparing');
+        }
       }
     })();
     // loadReview/loadPublishPreview are stable closures over setters only.

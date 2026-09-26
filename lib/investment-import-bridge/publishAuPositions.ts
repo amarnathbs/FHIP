@@ -238,17 +238,20 @@ export async function listImportedAuStatements(userId: string, limit = 25): Prom
   const positions = await fetchAllRows<Record<string, unknown>>(() =>
     admin
       .from('fdh_investment_statement_positions')
-      .select('id, statement_id, security_name_raw, ticker_raw, valuation_date, market_value, currency_code, apply_status, apply_rejected_reason, canonical_holding_snapshot_id, matched_instrument_id')
+      .select('id, statement_id, security_name_raw, ticker_raw, valuation_date, market_value, currency_code, apply_status, apply_rejected_reason, canonical_holding_snapshot_id, matched_instrument_id, source_row_number')
       .eq('user_id', userId)
       .in('statement_id', ids)
+      // Statement order (source row), `id` as the unique tie-breaker for paging.
+      .order('source_row_number', { ascending: true })
       .order('id', { ascending: true }),
   );
   const activities = await fetchAllRows<Record<string, unknown>>(() =>
     admin
       .from('fdh_investment_statement_activities')
-      .select('id, statement_id, activity_type, trade_date, amount, apply_status, apply_rejected_reason')
+      .select('id, statement_id, activity_type, trade_date, amount, apply_status, apply_rejected_reason, source_row_number')
       .eq('user_id', userId)
       .in('statement_id', ids)
+      .order('source_row_number', { ascending: true })
       .order('id', { ascending: true }),
   );
 

@@ -171,6 +171,23 @@ describe('first-time AU user: approve -> apply -> Add to Net Worth (INV-G1/G2/G3
     await publishRoute(post({ action: 'publish', decisions: [{ snapshot_id: snapshotId }] }), params);
     expect(db.rows('investments')).toHaveLength(1);
 
+    // UI CONTRACT: every key the panel / Investments tab reads is present in
+    // the exact case the API sends (a camel/snake mismatch renders blank).
+    const keys = (o: object) => Object.keys(o).sort();
+    expect(keys(applied.data)).toEqual(expect.arrayContaining(['applied_count', 'skipped_count', 'activities', 'positions', 'bank_legs', 'bank_leg_error', 'certification']));
+    expect(keys(applied.data.positions[0])).toEqual(expect.arrayContaining(['id', 'ok', 'code', 'reason', 'security_name']));
+    expect(keys(preview.data.holdings[0])).toEqual(expect.arrayContaining(['snapshot_id', 'name', 'as_of_date', 'value', 'currency_code', 'eligibility_status', 'blocking_reasons', 'warning_reasons', 'duplicate_candidates', 'published', 'refreshes_existing', 'error']));
+    expect(keys(published.data.results[0])).toEqual(expect.arrayContaining(['snapshot_id', 'ok', 'reason']));
+    const again = await json(await accountMatch(post({ action: 'resolve', account_type: 'broker', currency_code: 'AUD' }), params));
+    expect(again.data).toMatchObject({ outcome: 'single_match', owner_recorded: true });
+    expect(keys(again.data.candidates[0])).toEqual(['accountId', 'institutionName', 'maskedAccountIdentifier', 'ownerRecorded']);
+    const { GET: importedRoute } = await import('@/app/api/investments/imported-statements/route');
+    const imported = await json(await importedRoute());
+    expect(keys(imported.data)).toEqual(['statements', 'unpublished', 'unpublished_unavailable']);
+    expect(keys(imported.data.unpublished)).toEqual(['count', 'holdings', 'label', 'reporting_currency', 'total']);
+    expect(keys(imported.data.statements[0])).toEqual(expect.arrayContaining(['statementId', 'documentId', 'institutionName', 'statementType', 'importedAt', 'approvalStatus', 'cashBalance', 'warnings', 'counts', 'skipped', 'holdings']));
+    expect(keys(imported.data.statements[0].holdings[0])).toEqual(['applyStatus', 'asOfDate', 'currencyCode', 'inNetWorth', 'name', 'value']);
+
     // Import history (Investments tab): dates, outcome per line, skip reason, broker cash shown only.
     const history = await listImportedAuStatements(USER);
     expect(history[0]).toMatchObject({ statementId, documentId: DOC, approvalStatus: 'approved', cashBalance: 1020 });
